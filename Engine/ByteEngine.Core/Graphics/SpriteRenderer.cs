@@ -17,6 +17,8 @@ public sealed class SpriteRenderer : Component
     public bool Visible { get; set; } =
         true;
 
+    public int OrderInLayer { get; set; }
+
     public SpriteRenderer(
         Texture2D? texture = null,
         AssetReference? textureReference = null)

@@ -39,6 +39,8 @@ public sealed class EditorApplication
     private readonly ConsolePanel _console =
         new();
 
+    private readonly EditorClipboard _clipboard = new();
+
     private ImGuiController? _imgui;
 
     private EditorProjectContext? _projectContext;
@@ -188,7 +190,11 @@ public sealed class EditorApplication
                 () => CreateGameObject(
                     "GameObject"
                 ),
-                DeleteSelectedObject
+                DeleteSelectedObject,
+                DuplicateSelectedObjects,
+                CopySelectedObjects,
+                PasteObjects,
+                CreateChildObject
             );
         }
 
@@ -205,7 +211,11 @@ public sealed class EditorApplication
                 FramebufferSize.X,
                 FramebufferSize.Y,
                 _projectContext!,
-                CreateSpriteFromAsset
+                CreateSpriteFromAsset,
+                position => CreateObjectAtPosition("GameObject", position, null),
+                position => CreateObjectAtPosition("Sprite", position, () => new SpriteRenderer()),
+                position => CreateObjectAtPosition("Camera", position, () => new Camera2D()),
+                PasteObjects
             );
         }
 
@@ -397,19 +407,13 @@ public sealed class EditorApplication
             return;
         }
 
-        ImGui.MenuItem(
-            "Undo",
-            "Ctrl+Z",
-            false,
-            false
-        );
+        bool canUndo = _state?.Mode == EditorMode.Edit && _state.Undo?.CanUndo == true;
+        bool canRedo = _state?.Mode == EditorMode.Edit && _state.Undo?.CanRedo == true;
+        if (ImGui.MenuItem(_state?.Undo?.UndoName is string undo ? $"Undo {undo}" : "Undo", "Ctrl+Z", false, canUndo))
+            _state!.Undo!.Undo(_state);
 
-        ImGui.MenuItem(
-            "Redo",
-            "Ctrl+Y",
-            false,
-            false
-        );
+        if (ImGui.MenuItem(_state?.Undo?.RedoName is string redo ? $"Redo {redo}" : "Redo", "Ctrl+Y", false, canRedo))
+            _state!.Undo!.Redo(_state);
 
         ImGui.EndMenu();
     }
@@ -443,8 +447,7 @@ public sealed class EditorApplication
                 false,
                 canEdit))
         {
-            GameObject sprite = CreateGameObject("Sprite");
-            sprite.AddComponent(new SpriteRenderer());
+            CreateObjectWithComponent("Sprite", () => new SpriteRenderer());
         }
 
         if (ImGui.MenuItem(
@@ -453,15 +456,14 @@ public sealed class EditorApplication
                 false,
                 canEdit))
         {
-            GameObject camera =
-                CreateGameObject(
-                    "Camera"
-                );
-
-            camera.AddComponent(
-                new Camera2D()
-            );
+            CreateObjectWithComponent("Camera", () => new Camera2D());
         }
+
+        ImGui.Separator();
+
+        if (ImGui.MenuItem("Duplicate Selected", "Ctrl+D", false, canEdit && _state.Selection.Count > 0)) DuplicateSelectedObjects();
+        if (ImGui.MenuItem("Copy", "Ctrl+C", false, _state.Selection.Count > 0)) CopySelectedObjects();
+        if (ImGui.MenuItem("Paste", "Ctrl+V", false, canEdit && _clipboard.HasData)) PasteObjects();
 
         ImGui.Separator();
 
@@ -641,6 +643,18 @@ public sealed class EditorApplication
                 SaveScene();
             }
         }
+
+        if (control && ImGui.IsKeyPressed(ImGuiKey.Z))
+        {
+            if (shift) _state.Undo?.Redo(_state);
+            else _state.Undo?.Undo(_state);
+        }
+
+        if (control && ImGui.IsKeyPressed(ImGuiKey.Y)) _state.Undo?.Redo(_state);
+
+        if (control && ImGui.IsKeyPressed(ImGuiKey.C)) CopySelectedObjects();
+        if (control && ImGui.IsKeyPressed(ImGuiKey.V)) PasteObjects();
+        if (control && ImGui.IsKeyPressed(ImGuiKey.D)) DuplicateSelectedObjects();
 
         if (_state.Mode ==
                 EditorMode.Edit &&
@@ -924,6 +938,7 @@ public sealed class EditorApplication
             };
 
         _state.ClearDirty();
+        InitializeUndo(_state, context, true);
 
         EditorPreferences.SaveLastProject(
             context.ProjectFilePath
@@ -968,6 +983,7 @@ public sealed class EditorApplication
             };
 
         _state.MarkDirty();
+        InitializeUndo(_state, _projectContext, false);
 
         _log.Info(
             "Created a new unsaved scene in Edit mode."
@@ -1046,6 +1062,7 @@ public sealed class EditorApplication
                 };
 
             _state.ClearDirty();
+            InitializeUndo(_state, _projectContext, true);
 
             _log.Info(
                 $"Opened scene '{Path.GetFileName(scenePath)}'."
@@ -1152,7 +1169,8 @@ public sealed class EditorApplication
             _state.SceneFilePath =
                 scenePath;
 
-            _state.ClearDirty();
+            if (_state.Undo != null) _state.Undo.MarkSaved(_state);
+            else _state.ClearDirty();
 
             _log.Info(
                 $"Saved scene '{Path.GetFileName(scenePath)}'."
@@ -1315,18 +1333,84 @@ public sealed class EditorApplication
         string baseName)
     {
         if (_state == null) throw new InvalidOperationException("No scene is open.");
-        return EditorSceneCommands.CreateGameObject(_state, baseName, _log);
+        GameObject? created = null;
+        if (_state.Undo != null)
+            _state.Undo.Execute(_state, $"Create {baseName}", () => created = EditorSceneCommands.CreateGameObject(_state, baseName, _log));
+        else
+            created = EditorSceneCommands.CreateGameObject(_state, baseName, _log);
+        return created!;
     }
 
     private void DeleteSelectedObject()
     {
-        if (_state != null) EditorSceneCommands.DeleteSelected(_state, _log);
+        if (_state == null) return;
+        if (_state.Undo != null) _state.Undo.Execute(_state, "Delete Objects", () => EditorSceneCommands.DeleteSelected(_state, _log));
+        else EditorSceneCommands.DeleteSelected(_state, _log);
     }
 
     private void CreateSpriteFromAsset(AssetRecord asset, Vector2 worldPosition)
     {
-        if (_state != null && _projectContext != null)
-            EditorSceneCommands.CreateSprite(_state, _projectContext, asset, worldPosition, _log);
+        if (_state == null || _projectContext == null) return;
+        if (_state.Undo != null)
+            _state.Undo.Execute(_state, "Create Sprite", () => EditorSceneCommands.CreateSprite(_state, _projectContext, asset, worldPosition, _log));
+        else EditorSceneCommands.CreateSprite(_state, _projectContext, asset, worldPosition, _log);
+    }
+
+    private void CopySelectedObjects()
+    {
+        if (_state == null || _projectContext == null || _state.Selection.Count == 0) return;
+        _clipboard.Copy(_state, _projectContext.Scenes);
+        _log.Info($"Copied {_state.Selection.Count} GameObject(s).");
+    }
+
+    private void PasteObjects()
+    {
+        if (_state == null || _projectContext == null || !_clipboard.HasData) return;
+        _state.Undo?.Execute(_state, "Paste Objects", () => _clipboard.Paste(_state, _projectContext.Scenes));
+    }
+
+    private void DuplicateSelectedObjects()
+    {
+        if (_state == null || _projectContext == null || _state.Selection.Count == 0 || _state.Mode != EditorMode.Edit) return;
+        _clipboard.Copy(_state, _projectContext.Scenes);
+        _state.Undo?.Execute(_state, "Duplicate Objects", () => _clipboard.Paste(_state, _projectContext.Scenes));
+    }
+
+    private void CreateChildObject(GameObject parent)
+    {
+        if (_state == null) return;
+        _state.Undo?.Execute(_state, "Create Child", () =>
+        {
+            GameObject child = EditorSceneCommands.CreateGameObject(_state, "GameObject", _log);
+            child.SetParent(parent);
+        });
+    }
+
+    private void CreateObjectWithComponent(string name, Func<ByteEngine.Core.Scene.Component> componentFactory)
+    {
+        if (_state == null) return;
+        _state.Undo?.Execute(_state, $"Create {name}", () =>
+        {
+            GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
+            gameObject.AddComponent(componentFactory());
+        });
+    }
+
+    private void CreateObjectAtPosition(string name, Vector2 position, Func<ByteEngine.Core.Scene.Component>? componentFactory)
+    {
+        if (_state == null) return;
+        _state.Undo?.Execute(_state, $"Create {name}", () =>
+        {
+            GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
+            gameObject.Transform.Position = position;
+            if (componentFactory != null) gameObject.AddComponent(componentFactory());
+        });
+    }
+
+    private void InitializeUndo(EditorState state, EditorProjectContext context, bool isSaved)
+    {
+        state.Undo = new Commands.UndoManager(context.Scenes, scene => Scenes.SetEditorScene(scene));
+        state.Undo.Reset(state, isSaved);
     }
 
     private void UpdateWindowTitle()

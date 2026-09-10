@@ -24,6 +24,8 @@ public sealed class GameObjectData
     public bool Active { get; set; } =
         true;
 
+    public Guid? ParentId { get; set; }
+
     public TransformData Transform { get; set; } =
         new();
 

@@ -107,6 +107,7 @@ public sealed class SceneSerializer
                     Id = gameObject.Id,
                     Name = gameObject.Name,
                     Active = gameObject.Active,
+                    ParentId = gameObject.Parent?.Id,
                     Transform =
                         new TransformData
                         {
@@ -114,19 +115,19 @@ public sealed class SceneSerializer
                                 new Vector2Data
                                 {
                                     X =
-                                        gameObject.Transform.Position.X,
+                                        gameObject.Transform.LocalPosition.X,
                                     Y =
-                                        gameObject.Transform.Position.Y
+                                        gameObject.Transform.LocalPosition.Y
                                 },
                             Rotation =
-                                gameObject.Transform.Rotation,
+                                gameObject.Transform.LocalRotation,
                             Size =
                                 new Vector2Data
                                 {
                                     X =
-                                        gameObject.Transform.Size.X,
+                                        gameObject.Transform.LocalSize.X,
                                     Y =
-                                        gameObject.Transform.Size.Y
+                                        gameObject.Transform.LocalSize.Y
                                 }
                         }
                 };
@@ -175,6 +176,8 @@ public sealed class SceneSerializer
                     : data.Name
             );
 
+        var created = new Dictionary<Guid, GameObject>();
+
         foreach (GameObjectData gameObjectData
                  in data.GameObjects)
         {
@@ -197,16 +200,16 @@ public sealed class SceneSerializer
                         gameObjectData.Active
                 };
 
-            gameObject.Transform.Position =
+            gameObject.Transform.LocalPosition =
                 new Vector2(
                     gameObjectData.Transform.Position.X,
                     gameObjectData.Transform.Position.Y
                 );
 
-            gameObject.Transform.Rotation =
+            gameObject.Transform.LocalRotation =
                 gameObjectData.Transform.Rotation;
 
-            gameObject.Transform.Size =
+            gameObject.Transform.LocalSize =
                 new Vector2(
                     Math.Max(
                         gameObjectData.Transform.Size.X,
@@ -237,6 +240,18 @@ public sealed class SceneSerializer
             scene.AddGameObject(
                 gameObject
             );
+
+            created[gameObject.Id] = gameObject;
+        }
+
+        foreach (GameObjectData gameObjectData in data.GameObjects)
+        {
+            if (gameObjectData.ParentId.HasValue &&
+                created.TryGetValue(gameObjectData.Id, out GameObject? child) &&
+                created.TryGetValue(gameObjectData.ParentId.Value, out GameObject? parent))
+            {
+                child.SetParent(parent, false);
+            }
         }
 
         return scene;

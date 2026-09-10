@@ -237,7 +237,8 @@ internal sealed class SceneFramebuffer
         Renderer2D renderer,
         EditorCamera camera)
     {
-        const float gridSize = 64.0f;
+        float gridSize = 16.0f;
+        while (gridSize * camera.Zoom < 12.0f) gridSize *= 2.0f;
 
         float halfWorldWidth =
             _width /
@@ -324,6 +325,13 @@ internal sealed class SceneFramebuffer
                 gridColor
             );
         }
+
+        Vector4 xAxisColor = new(.24f, .48f, .28f, 1f);
+        Vector4 yAxisColor = new(.52f, .24f, .24f, 1f);
+        if (minimumY <= 0f && maximumY >= 0f)
+            renderer.DrawQuad(new Vector2(camera.Position.X, 0f), new Vector2(halfWorldWidth * 2f, lineWidth * 2f), xAxisColor);
+        if (minimumX <= 0f && maximumX >= 0f)
+            renderer.DrawQuad(new Vector2(0f, camera.Position.Y), new Vector2(lineWidth * 2f, halfWorldHeight * 2f), yAxisColor);
     }
 
     private void DestroyResources()

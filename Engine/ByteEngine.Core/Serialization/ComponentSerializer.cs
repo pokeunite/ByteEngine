@@ -199,7 +199,8 @@ public sealed class ComponentSerializer
                             sprite.Tint.W
                         ),
                     ["visible"] =
-                        sprite.Visible
+                        sprite.Visible,
+                    ["orderInLayer"] = sprite.OrderInLayer
                 };
 
             return new ComponentData
@@ -229,13 +230,16 @@ public sealed class ComponentSerializer
                     .GetValue<bool>() ??
                 true;
 
+            int orderInLayer = data.Properties["orderInLayer"]?.GetValue<int>() ?? 0;
+
             return new SpriteRenderer(
                 texture,
                 reference
             )
             {
                 Tint = tint,
-                Visible = visible
+                Visible = visible,
+                OrderInLayer = orderInLayer
             };
         }
 

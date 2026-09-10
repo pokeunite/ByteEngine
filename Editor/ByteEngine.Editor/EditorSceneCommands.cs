@@ -24,12 +24,13 @@ internal static class EditorSceneCommands
 
     public static void DeleteSelected(EditorState state, EditorLog log)
     {
-        if (state.Mode != EditorMode.Edit || state.SelectedObject == null) return;
-        string name = state.SelectedObject.Name;
-        state.EditorScene.DestroyGameObject(state.SelectedObject);
-        state.SelectedObject = null;
+        if (state.Mode != EditorMode.Edit || state.Selection.Count == 0) return;
+        GameObject[] selected = state.Selection.Objects.ToArray();
+        GameObject[] roots = selected.Where(item => !selected.Any(other => !ReferenceEquals(item, other) && item.IsDescendantOf(other))).ToArray();
+        foreach (GameObject gameObject in roots) state.EditorScene.DestroyGameObject(gameObject);
+        state.Selection.Clear();
         state.MarkDirty();
-        log.Info($"Deleted GameObject '{name}'.");
+        log.Info($"Deleted {selected.Length} GameObject(s).");
     }
 
     public static void CreateSprite(

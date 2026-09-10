@@ -1,5 +1,7 @@
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Editor.Commands;
+using ByteEngine.Editor.Selection;
 
 namespace ByteEngine.Editor;
 
@@ -15,7 +17,7 @@ internal sealed class EditorState
     public EditorMode Mode { get; set; } =
         EditorMode.Edit;
 
-    public required Scene EditorScene { get; init; }
+    public required Scene EditorScene { get; set; }
 
     public required ProjectData Project { get; init; }
 
@@ -31,7 +33,15 @@ internal sealed class EditorState
         RuntimeScene ??
         EditorScene;
 
-    public GameObject? SelectedObject { get; set; }
+    public EditorSelection Selection { get; } = new();
+
+    public GameObject? SelectedObject
+    {
+        get => Selection.Primary;
+        set => Selection.Set(value);
+    }
+
+    public UndoManager? Undo { get; set; }
 
     public Guid? SelectedAssetId { get; set; }
 
@@ -55,4 +65,6 @@ internal sealed class EditorState
         IsDirty =
             false;
     }
+
+    internal void SetDirty(bool value) => IsDirty = value;
 }
