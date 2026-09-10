@@ -1,4 +1,5 @@
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.Scene;
 
@@ -12,6 +13,7 @@ public sealed class Scene
     public IReadOnlyList<GameObject> GameObjects => _gameObjects;
     public int GameObjectCount => _gameObjects.Count;
     public bool IsLoaded => _loaded;
+    public VariableStore Variables { get; } = new();
 
     public Scene(string name) : this(Guid.NewGuid(), name) { }
     public Scene(Guid id, string name)
@@ -77,15 +79,15 @@ public sealed class Scene
         foreach (GameObject gameObject in _gameObjects) gameObject.UpdateInternal();
     }
 
-    internal void RenderInternal(Renderer2D renderer)
+    internal void RenderInternal(RenderContext context)
     {
         if (!_loaded) return;
-        foreach (GameObject gameObject in GetRenderOrder()) gameObject.RenderInternal(renderer);
+        foreach (GameObject gameObject in GetRenderOrder()) gameObject.RenderInternal(context);
     }
 
-    internal void RenderEditorInternal(Renderer2D renderer)
+    internal void RenderEditorInternal(RenderContext context)
     {
-        foreach (GameObject gameObject in GetRenderOrder()) gameObject.RenderEditorInternal(renderer);
+        foreach (GameObject gameObject in GetRenderOrder()) gameObject.RenderEditorInternal(context);
     }
 
     private IEnumerable<GameObject> GetRenderOrder() =>

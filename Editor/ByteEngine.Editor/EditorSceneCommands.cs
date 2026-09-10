@@ -45,8 +45,7 @@ internal static class EditorSceneCommands
         Texture2D texture = project.Assets.LoadTexture(reference);
         GameObject gameObject = CreateGameObject(state, Path.GetFileNameWithoutExtension(asset.ProjectPath), log);
         gameObject.Transform.Position = worldPosition;
-        gameObject.Transform.Size = new Vector2(texture.Width, texture.Height);
-        gameObject.AddComponent(new SpriteRenderer(texture, reference));
+        gameObject.AddComponent(new SpriteRenderer(texture, reference) { Size = new Vector2(texture.Width, texture.Height) });
         state.MarkDirty();
         log.Info($"Created sprite '{gameObject.Name}' from '{asset.ProjectPath}' at native size {texture.Width}x{texture.Height}.");
     }

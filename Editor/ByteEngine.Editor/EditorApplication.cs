@@ -4,6 +4,9 @@ using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Characters;
+using ByteEngine.Core.Variables;
 using ByteEngine.Core.Scene;
 using ByteEngine.Editor.Panels;
 
@@ -148,6 +151,25 @@ public sealed class EditorApplication
         );
     }
 
+    protected override void OnFileDrop(FileDropEventArgs e)
+    {
+        base.OnFileDrop(e);
+        if (_projectContext == null || _state == null)
+        {
+            _log.Warning("Open or create a project before dropping asset files into ByteEngine.");
+            return;
+        }
+
+        IReadOnlyList<AssetRecord> imported = new ExternalAssetImporter(_projectContext, _log).Import(e.FileNames);
+        AssetRecord? selected = imported.FirstOrDefault();
+        if (selected != null)
+        {
+            _state.SelectedObject = null;
+            _state.SelectedAssetId = selected.Guid;
+            _state.SelectedAssetPath = selected.ProjectPath;
+        }
+    }
+
     protected override void OnClosing(
         CancelEventArgs e)
     {
@@ -208,6 +230,7 @@ public sealed class EditorApplication
             _sceneView.Draw(
                 _state,
                 Renderer,
+                Renderer3D,
                 FramebufferSize.X,
                 FramebufferSize.Y,
                 _projectContext!,
@@ -221,7 +244,7 @@ public sealed class EditorApplication
 
         if (_gameView.IsOpen)
         {
-            _gameView.Draw(_state, Renderer, FramebufferSize.X, FramebufferSize.Y);
+            _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
         }
 
         if (_assets?.IsOpen == true)
@@ -441,22 +464,29 @@ public sealed class EditorApplication
             );
         }
 
-        if (ImGui.MenuItem(
-                "Create Sprite",
-                string.Empty,
-                false,
-                canEdit))
+        ImGui.Separator();
+        if (ImGui.BeginMenu("2D", canEdit))
         {
-            CreateObjectWithComponent("Sprite", () => new SpriteRenderer());
+            if (ImGui.MenuItem("Sprite")) CreateObjectWithComponent("Sprite", () => new SpriteRenderer());
+            ImGui.EndMenu();
         }
-
-        if (ImGui.MenuItem(
-                "Create Camera",
-                string.Empty,
-                false,
-                canEdit))
+        if (ImGui.BeginMenu("3D Object", canEdit))
         {
-            CreateObjectWithComponent("Camera", () => new Camera2D());
+            if (ImGui.MenuItem("Cube")) CreateMeshPrimitive("Cube", PrimitiveMeshType.Cube);
+            if (ImGui.MenuItem("Sphere")) CreateMeshPrimitive("Sphere", PrimitiveMeshType.Sphere);
+            if (ImGui.MenuItem("Plane")) CreateMeshPrimitive("Plane", PrimitiveMeshType.Plane);
+            ImGui.EndMenu();
+        }
+        if (ImGui.BeginMenu("Camera", canEdit))
+        {
+            if (ImGui.MenuItem("Camera 2D")) CreateObjectWithComponent("Camera 2D", () => new Camera2D());
+            if (ImGui.MenuItem("Camera 3D")) CreateObjectWithComponent("Camera 3D", () => new Camera3D());
+            ImGui.EndMenu();
+        }
+        if (ImGui.BeginMenu("Light", canEdit))
+        {
+            if (ImGui.MenuItem("Directional Light")) CreateObjectWithComponent("Directional Light", () => new DirectionalLight());
+            ImGui.EndMenu();
         }
 
         ImGui.Separator();
@@ -1003,9 +1033,23 @@ public sealed class EditorApplication
                 "Main Camera"
             );
 
-        camera.AddComponent(
-            new Camera2D()
-        );
+        camera.Transform.LocalPosition = new Vector3(0, 2, 6);
+        camera.Transform.EulerAngles = new Vector3(-18, 0, 0);
+        camera.AddComponent(new Camera3D());
+
+        GameObject cube=scene.CreateGameObject("Cube");
+        cube.AddComponent(new MeshRenderer{Primitive=PrimitiveMeshType.Cube,Material=new Material{BaseColor=new Vector4(.25f,.58f,1f,1f)}});
+
+        GameObject ground=scene.CreateGameObject("Ground");
+        ground.Transform.LocalPosition=new Vector3(0,-1,0);
+        ground.Transform.LocalScale=new Vector3(10,1,10);
+        ground.AddComponent(new MeshRenderer{Primitive=PrimitiveMeshType.Plane,Material=new Material{BaseColor=new Vector4(.32f,.38f,.32f,1f)}});
+        ground.AddComponent(new BoxCollider3D{Size=new Vector3(1,.05f,1)});
+        ground.AddComponent(new GroundSurface());
+
+        GameObject light=scene.CreateGameObject("Directional Light");
+        light.Transform.EulerAngles=new Vector3(45,-35,0);
+        light.AddComponent(new DirectionalLight{Intensity=1.2f});
 
         return scene;
     }
@@ -1165,6 +1209,7 @@ public sealed class EditorApplication
                 _state.EditorScene,
                 scenePath
             );
+            _projectContext.SaveProject();
 
             _state.SceneFilePath =
                 scenePath;
@@ -1244,6 +1289,13 @@ public sealed class EditorApplication
         _state.RuntimeScene =
             runtimeScene;
 
+        _state.RuntimeGlobals = new VariableStore();
+        foreach (var definition in _state.Project.GlobalVariables)
+            _state.RuntimeGlobals.Set(definition.Name, definition.Value.Clone());
+        Scenes.GlobalVariables.Clear();
+        foreach (var variable in _state.RuntimeGlobals)
+            Scenes.GlobalVariables.Set(variable.Key, variable.Value);
+
         _state.Mode =
             EditorMode.Play;
 
@@ -1313,6 +1365,8 @@ public sealed class EditorApplication
 
         _state.RuntimeScene =
             null;
+        _state.RuntimeGlobals = null;
+        Scenes.GlobalVariables.Clear();
 
         _state.Mode =
             EditorMode.Edit;
@@ -1394,6 +1448,11 @@ public sealed class EditorApplication
             GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
             gameObject.AddComponent(componentFactory());
         });
+    }
+
+    private void CreateMeshPrimitive(string name,PrimitiveMeshType primitive)
+    {
+        if(_state==null)return;_state.Undo?.Execute(_state,$"Create {name}",()=>{GameObject gameObject=EditorSceneCommands.CreateGameObject(_state,name,_log);gameObject.AddComponent(new MeshRenderer{Primitive=primitive});if(primitive==PrimitiveMeshType.Plane)gameObject.AddComponent(new BoxCollider3D{Size=new Vector3(1,.05f,1)});});
     }
 
     private void CreateObjectAtPosition(string name, Vector2 position, Func<ByteEngine.Core.Scene.Component>? componentFactory)

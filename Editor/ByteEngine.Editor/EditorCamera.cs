@@ -27,8 +27,7 @@ internal sealed class EditorCamera
         Position =
             gameObject.Transform.Position;
 
-        Vector2 size =
-            gameObject.Transform.Size;
+        Vector2 size = gameObject.GetComponent<ByteEngine.Core.Graphics.SpriteRenderer>()?.Size ?? new Vector2(64f, 64f);
 
         float horizontalZoom =
             viewportSize.X /

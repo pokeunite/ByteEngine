@@ -1,4 +1,5 @@
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 
 using OpenTK.Graphics.OpenGL4;
@@ -11,6 +12,7 @@ namespace ByteEngine.Core;
 public class ByteEngineApplication : GameWindow
 {
     public Renderer2D Renderer { get; }
+    public Renderer3D Renderer3D { get; }
 
     public SceneManager Scenes { get; }
 
@@ -49,6 +51,8 @@ public class ByteEngineApplication : GameWindow
     {
         Renderer =
             new Renderer2D();
+
+        Renderer3D = new Renderer3D();
 
         Scenes =
             new SceneManager();
@@ -98,6 +102,7 @@ public class ByteEngineApplication : GameWindow
             WindowWidth,
             WindowHeight
         );
+        Renderer3D.Initialize();
 
         OnEngineStart();
 
@@ -152,14 +157,14 @@ public class ByteEngineApplication : GameWindow
 
         if (ShouldRenderSceneToWindow)
         {
-            Camera2D? camera =
-                Scenes.ActiveScene?
-                    .FindComponent<Camera2D>();
+            ByteEngine.Core.Scene.Scene? activeScene = Scenes.ActiveScene;
+            Camera3D? camera3D = activeScene?.FindComponent<Camera3D>();
+            Camera2D? camera = camera3D == null ? activeScene?.FindComponent<Camera2D>() : null;
 
             if (camera != null)
             {
                 Renderer.SetCamera(
-                    camera.Transform.Position,
+                    new System.Numerics.Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y),
                     camera.Zoom
                 );
             }
@@ -168,9 +173,9 @@ public class ByteEngineApplication : GameWindow
                 Renderer.ResetCamera();
             }
 
-            Scenes.RenderInternal(
-                Renderer
-            );
+            if (activeScene != null)
+                Scenes.RenderInternal(new RenderContext(Renderer, Renderer3D, activeScene,
+                    WindowWidth, WindowHeight, camera, camera3D));
         }
 
         OnEngineRender();
@@ -215,6 +220,7 @@ public class ByteEngineApplication : GameWindow
         OnEngineShutdown();
 
         Renderer.Dispose();
+        Renderer3D.Dispose();
 
         Console.WriteLine(
             "ByteEngine shutting down."

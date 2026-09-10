@@ -14,9 +14,10 @@ internal static class GameObjectDragDrop
         fixed (byte* pointer = bytes) ImGui.SetDragDropPayload(PayloadType, (nint)pointer, 16, ImGuiCond.Once);
     }
 
-    public static Guid? Accept()
+    public static unsafe Guid? Accept()
     {
         ImGuiPayloadPtr payload = ImGui.AcceptDragDropPayload(PayloadType);
+        if (payload.NativePtr == null) return null;
         if (payload.Data == IntPtr.Zero || payload.DataSize != 16 || !payload.Delivery) return null;
         byte[] bytes = new byte[16];
         Marshal.Copy(payload.Data, bytes, 0, 16);

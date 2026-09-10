@@ -5,7 +5,7 @@ namespace ByteEngine.Sandbox;
 public sealed class CameraFollowComponent
     : Component
 {
-    public Transform2D? Target { get; set; }
+    public Transform? Target { get; set; }
 
     protected override void OnStart()
     {

@@ -31,8 +31,17 @@ internal sealed class EditorClipboard
             item.Name = UniqueName(state.EditorScene, item.Name);
             if (offset && item.ParentId == null)
             {
-                item.Transform.Position.X += 16f;
-                item.Transform.Position.Y += 16f;
+                if (item.Transform.LocalPosition is { } localPosition)
+                {
+                    localPosition.X += 16f;
+                    localPosition.Y += 16f;
+                    item.Transform.LocalPosition = localPosition;
+                }
+                else if (item.Transform.Position != null)
+                {
+                    item.Transform.Position.X += 16f;
+                    item.Transform.Position.Y += 16f;
+                }
             }
         }
 
@@ -44,7 +53,7 @@ internal sealed class EditorClipboard
     }
 
     private static List<GameObjectData> Clone(List<GameObjectData> source) =>
-        JsonSerializer.Deserialize<List<GameObjectData>>(JsonSerializer.Serialize(source)) ?? new();
+        JsonSerializer.Deserialize<List<GameObjectData>>(JsonSerializer.Serialize(source, JsonSerialization.Options), JsonSerialization.Options) ?? new();
 
     private static void AddWithDescendants(GameObject gameObject, HashSet<Guid> result)
     {

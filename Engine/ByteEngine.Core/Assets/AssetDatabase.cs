@@ -327,6 +327,13 @@ public sealed class AssetDatabase : IDisposable
     {
         ".png" => AssetType.Texture2D,
         ".bytescene" => AssetType.Scene,
+        ".fbx" => AssetType.Model3D,
+        ".obj" => AssetType.Model3D,
+        ".gltf" => AssetType.Model3D,
+        ".glb" => AssetType.Model3D,
+        ".byteevents" => AssetType.EventModule,
+        ".byteblueprint" => AssetType.Blueprint,
+        ".byteanimevents" => AssetType.AnimationEvents,
         _ => AssetType.Unknown
     };
 

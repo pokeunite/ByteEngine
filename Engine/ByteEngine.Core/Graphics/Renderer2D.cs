@@ -280,6 +280,7 @@ public sealed class Renderer2D : IDisposable
         float rotation,
         Vector4 color)
     {
+        GL.Disable(EnableCap.DepthTest);
         if (!_initialized ||
             _shader == null)
         {

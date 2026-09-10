@@ -22,6 +22,8 @@ public sealed class ProjectData
 
     public string SceneDirectory { get; set; } =
         "Scenes";
+
+    public List<VariableData> GlobalVariables { get; set; } = new();
 }
 
 public sealed class ProjectWindowData

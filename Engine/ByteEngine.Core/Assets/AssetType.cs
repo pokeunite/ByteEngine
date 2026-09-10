@@ -4,5 +4,9 @@ public enum AssetType
 {
     Unknown,
     Texture2D,
-    Scene
+    Scene,
+    Model3D,
+    EventModule,
+    Blueprint,
+    AnimationEvents
 }

@@ -1,0 +1,240 @@
+{
+  "name": "Main",
+  "sceneId": "14c03d9d-b0d5-4ca8-9170-78398d9b9ff4",
+  "gameObjects": [
+    {
+      "id": "709a1de5-265b-4bba-b09e-788f9211097b",
+      "name": "Main Camera",
+      "active": true,
+      "parentId": null,
+      "transform": {
+        "localPosition": {
+          "x": 0,
+          "y": 2,
+          "z": 6
+        },
+        "localRotation": {
+          "x": -0.15643406,
+          "y": 0,
+          "z": 0,
+          "w": 0.9876884
+        },
+        "localScale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "position": null,
+        "rotation": null,
+        "size": null
+      },
+      "components": [
+        {
+          "type": "Camera3D",
+          "enabled": true,
+          "properties": {
+            "fieldOfView": 60,
+            "nearClip": 0.1,
+            "farClip": 1000
+          }
+        }
+      ],
+      "variables": []
+    },
+    {
+      "id": "173331fd-ae5b-411c-a255-a91c9adc168b",
+      "name": "Cube",
+      "active": true,
+      "parentId": null,
+      "transform": {
+        "localPosition": {
+          "x": 0.41638908,
+          "y": 0.15054892,
+          "z": 0.8479655
+        },
+        "localRotation": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "w": 1
+        },
+        "localScale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "position": null,
+        "rotation": null,
+        "size": null
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "enabled": true,
+          "properties": {
+            "primitive": "Cube",
+            "visible": true,
+            "baseColor": [
+              0.25,
+              0.58,
+              1,
+              1
+            ]
+          }
+        }
+      ],
+      "variables": [
+        {
+          "name": "Health",
+          "value": {
+            "type": "Number",
+            "number": 100,
+            "string": "",
+            "boolean": false,
+            "vector2": {
+              "x": 0,
+              "y": 0
+            },
+            "vector3": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "67f5f4b8-b785-4eab-9fd9-e10de3a8783d",
+      "name": "Ground",
+      "active": true,
+      "parentId": null,
+      "transform": {
+        "localPosition": {
+          "x": 0,
+          "y": -1.062531,
+          "z": 0
+        },
+        "localRotation": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "w": 1
+        },
+        "localScale": {
+          "x": 10,
+          "y": 1,
+          "z": 10
+        },
+        "position": null,
+        "rotation": null,
+        "size": null
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "enabled": true,
+          "properties": {
+            "primitive": "Plane",
+            "visible": true,
+            "baseColor": [
+              0.32,
+              0.38,
+              0.32,
+              1
+            ]
+          }
+        },
+        {
+          "type": "BoxCollider3D",
+          "enabled": true,
+          "properties": {
+            "size": [
+              1,
+              0.05,
+              1
+            ],
+            "center": [
+              0,
+              0,
+              0
+            ],
+            "isTrigger": false
+          }
+        },
+        {
+          "type": "GroundSurface",
+          "enabled": true,
+          "properties": {
+            "walkable": true,
+            "surfaceType": "Default",
+            "friction": 1
+          }
+        }
+      ],
+      "variables": []
+    },
+    {
+      "id": "b855022d-cd24-45b9-acff-bba515f8ea64",
+      "name": "light",
+      "active": true,
+      "parentId": null,
+      "transform": {
+        "localPosition": {
+          "x": 0.07481022,
+          "y": 3,
+          "z": 0
+        },
+        "localRotation": {
+          "x": -0.38268292,
+          "y": 0,
+          "z": 0,
+          "w": 0.92387974
+        },
+        "localScale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "position": null,
+        "rotation": null,
+        "size": null
+      },
+      "components": [
+        {
+          "type": "DirectionalLight",
+          "enabled": true,
+          "properties": {
+            "color": [
+              1,
+              1,
+              1
+            ],
+            "intensity": 1.2
+          }
+        }
+      ],
+      "variables": []
+    }
+  ],
+  "variables": [
+    {
+      "name": "Wave",
+      "value": {
+        "type": "Number",
+        "number": 1,
+        "string": "",
+        "boolean": false,
+        "vector2": {
+          "x": 0,
+          "y": 0
+        },
+        "vector3": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      }
+    }
+  ]
+}

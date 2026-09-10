@@ -17,9 +17,10 @@ internal static class AssetDragDrop
         }
     }
 
-    public static Guid? Accept()
+    public static unsafe Guid? Accept()
     {
         ImGuiPayloadPtr payload = ImGui.AcceptDragDropPayload(PayloadType);
+        if (payload.NativePtr == null) return null;
         if (payload.Data == IntPtr.Zero || payload.DataSize != 16 || !payload.Delivery) return null;
         byte[] bytes = new byte[16];
         Marshal.Copy(payload.Data, bytes, 0, bytes.Length);

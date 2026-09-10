@@ -1,0 +1,11 @@
+using ByteEngine.Core.Characters;
+using ByteEngine.Core.Scene;
+namespace ByteEngine.Core.Animation;
+public enum LocomotionState { Idle, Walk, Run, Jump, Fall, Land }
+public sealed class AnimationController : Component
+{
+    public string Idle{get;set;}="Idle"; public string Walk{get;set;}="Walk"; public string Run{get;set;}="Run";
+    public string Jump{get;set;}="Jump"; public string Fall{get;set;}="Fall"; public string Land{get;set;}="Land";
+    public float RunThreshold{get;set;}=4f; public LocomotionState State{get;private set;}
+    protected override void OnUpdate(){CharacterController3D? c=GameObject.GetComponent<CharacterController3D>();if(c==null)return;State=c.JustLanded?LocomotionState.Land:c.IsFalling?LocomotionState.Fall:!c.IsGrounded?LocomotionState.Jump:c.Speed<.05f?LocomotionState.Idle:c.Speed>=RunThreshold?LocomotionState.Run:LocomotionState.Walk;}
+}

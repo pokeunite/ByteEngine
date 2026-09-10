@@ -127,7 +127,7 @@ internal sealed class GizmoController
         foreach (GameObject item in state.Selection.Objects)
         {
             _startPositions[item.Id] = item.Transform.Position;
-            _startSizes[item.Id] = item.Transform.Size;
+            _startSizes[item.Id] = EditableSize(item);
             _startRotations[item.Id] = item.Transform.Rotation;
         }
         state.Undo?.BeginGesture(state, Mode switch { GizmoMode.Rotate => "Rotate Objects", GizmoMode.Scale => "Scale Objects", _ => "Move Objects" });
@@ -161,7 +161,7 @@ internal sealed class GizmoController
                     _ => start + new Vector2((delta.X - delta.Y) * .5f)
                 };
                 if (snap) value = new Vector2(Snap(value.X, SnapSize), Snap(value.Y, SnapSize));
-                item.Transform.Size = Vector2.Max(value, Vector2.One);
+                SetEditableSize(item, Vector2.Max(value, Vector2.One));
             }
         }
     }
@@ -185,13 +185,13 @@ internal sealed class GizmoController
     private static bool ContainsPoint(GameObject gameObject, Vector2 world)
     {
         Vector2 local = Rotate(world - gameObject.Transform.Position, -gameObject.Transform.Rotation * MathF.PI / 180f);
-        Vector2 half = gameObject.Transform.Size * .5f;
+        Vector2 half = EditableSize(gameObject) * .5f;
         return MathF.Abs(local.X) <= half.X && MathF.Abs(local.Y) <= half.Y;
     }
 
     private static void DrawObjectOutline(GameObject item, EditorCamera camera, Vector2 minimum, Vector2 viewportSize, Vector4 color, float thickness)
     {
-        Vector2 half = item.Transform.Size * .5f;
+        Vector2 half = EditableSize(item) * .5f;
         float radians = item.Transform.Rotation * MathF.PI / 180f;
         Vector2[] local = { new(-half.X, -half.Y), new(half.X, -half.Y), new(half.X, half.Y), new(-half.X, half.Y) };
         Vector2[] points = local.Select(value => WorldToScreen(camera, Rotate(value, radians) + item.Transform.Position, minimum, viewportSize)).ToArray();
@@ -199,6 +199,18 @@ internal sealed class GizmoController
     }
 
     private static Vector2 SelectionPivot(EditorState state) => state.Selection.Objects.Aggregate(Vector2.Zero, (sum, item) => sum + item.Transform.Position) / state.Selection.Count;
+    private static Vector2 EditableSize(GameObject item)
+    {
+        SpriteRenderer? sprite = item.GetComponent<SpriteRenderer>();
+        return sprite?.Size ?? new Vector2(item.Transform.LocalScale.X, item.Transform.LocalScale.Y);
+    }
+
+    private static void SetEditableSize(GameObject item, Vector2 value)
+    {
+        SpriteRenderer? sprite = item.GetComponent<SpriteRenderer>();
+        if (sprite != null) sprite.Size = value;
+        else item.Transform.LocalScale = new Vector3(value.X, value.Y, item.Transform.LocalScale.Z);
+    }
     internal static Vector2 ScreenToWorld(EditorCamera camera, Vector2 screen, Vector2 minimum, Vector2 size) => camera.Position + (screen - minimum - size * .5f) / camera.Zoom;
     internal static Vector2 WorldToScreen(EditorCamera camera, Vector2 world, Vector2 minimum, Vector2 size) => minimum + size * .5f + (world - camera.Position) * camera.Zoom;
     private static Vector2 Rotate(Vector2 value, float radians) => new(value.X * MathF.Cos(radians) - value.Y * MathF.Sin(radians), value.X * MathF.Sin(radians) + value.Y * MathF.Cos(radians));

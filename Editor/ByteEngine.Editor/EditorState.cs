@@ -2,6 +2,7 @@ using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Editor.Commands;
 using ByteEngine.Editor.Selection;
+using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Editor;
 
@@ -28,6 +29,7 @@ internal sealed class EditorState
     public bool IsDirty { get; private set; }
 
     public Scene? RuntimeScene { get; set; }
+    public VariableStore? RuntimeGlobals { get; set; }
 
     public Scene DisplayedScene =>
         RuntimeScene ??
@@ -49,6 +51,8 @@ internal sealed class EditorState
 
     public EditorCamera Camera { get; } =
         new();
+
+    public EditorCamera3D Camera3D { get; } = new();
 
     public void MarkDirty()
     {

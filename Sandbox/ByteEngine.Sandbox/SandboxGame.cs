@@ -54,16 +54,10 @@ public sealed class SandboxGame
                 0.0f
             );
 
-        player.Transform.Size =
-            new Vector2(
-                128.0f,
-                128.0f
-            );
-
         player.AddComponent(
             new SpriteRenderer(
                 _playerTexture
-            )
+            ) { Size = new Vector2(128.0f, 128.0f) }
         );
 
         player.AddComponent(
@@ -113,17 +107,12 @@ public sealed class SandboxGame
                 0.0f
             );
 
-        enemy1.Transform.Size =
-            new Vector2(
-                96.0f,
-                96.0f
-            );
-
         enemy1.AddComponent(
             new SpriteRenderer(
                 _playerTexture
             )
             {
+                Size = new Vector2(96.0f, 96.0f),
                 Tint =
                     new Vector4(
                         1.0f,
@@ -147,17 +136,12 @@ public sealed class SandboxGame
                 -250.0f
             );
 
-        enemy2.Transform.Size =
-            new Vector2(
-                96.0f,
-                96.0f
-            );
-
         enemy2.AddComponent(
             new SpriteRenderer(
                 _playerTexture
             )
             {
+                Size = new Vector2(96.0f, 96.0f),
                 Tint =
                     new Vector4(
                         1.0f,
@@ -181,17 +165,12 @@ public sealed class SandboxGame
                 500.0f
             );
 
-        prop1.Transform.Size =
-            new Vector2(
-                80.0f,
-                80.0f
-            );
-
         prop1.AddComponent(
             new SpriteRenderer(
                 _playerTexture
             )
             {
+                Size = new Vector2(80.0f, 80.0f),
                 Tint =
                     new Vector4(
                         0.25f,
@@ -215,17 +194,12 @@ public sealed class SandboxGame
                 500.0f
             );
 
-        prop2.Transform.Size =
-            new Vector2(
-                80.0f,
-                80.0f
-            );
-
         prop2.AddComponent(
             new SpriteRenderer(
                 _playerTexture
             )
             {
+                Size = new Vector2(80.0f, 80.0f),
                 Tint =
                     new Vector4(
                         0.4f,

@@ -11,10 +11,12 @@ public sealed class GameObject
     public string Name { get; set; }
     public bool Active { get; set; } = true;
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
-    public Transform2D Transform { get; }
+    public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
     public GameObject? Parent { get; private set; }
     public IReadOnlyList<GameObject> Children => _children;
+    public Scene? Scene => _scene;
+    public Variables.VariableStore Variables { get; } = new();
 
     public GameObject(string name = "GameObject") : this(Guid.NewGuid(), name) { }
 
@@ -23,7 +25,7 @@ public sealed class GameObject
         if (id == Guid.Empty) throw new ArgumentException("GameObject ID cannot be empty.", nameof(id));
         Id = id;
         Name = name;
-        Transform = new Transform2D(this);
+        Transform = new Transform(this);
     }
 
     public bool SetParent(GameObject? parent, bool worldPositionStays = true)
@@ -32,17 +34,17 @@ public sealed class GameObject
         if (parent != null && _scene != null && parent._scene != _scene) return false;
         if (ReferenceEquals(Parent, parent)) return true;
 
-        var position = Transform.Position;
-        float rotation = Transform.Rotation;
-        var size = Transform.Size;
+        var position = Transform.WorldPosition;
+        var rotation = Transform.WorldRotation;
+        var scale = Transform.WorldScale;
         Parent?._children.Remove(this);
         Parent = parent;
         Parent?._children.Add(this);
         if (worldPositionStays)
         {
-            Transform.Position = position;
-            Transform.Rotation = rotation;
-            Transform.Size = size;
+            Transform.WorldPosition = position;
+            Transform.WorldRotation = rotation;
+            Transform.WorldScale = scale;
         }
         return true;
     }
@@ -92,17 +94,17 @@ public sealed class GameObject
         foreach (Component component in _components) component.UpdateInternal();
     }
 
-    internal void RenderInternal(Graphics.Renderer2D renderer)
+    internal void RenderInternal(Graphics.RenderContext context)
     {
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
-        foreach (Component component in _components) component.RenderInternal(renderer);
+        foreach (Component component in _components) component.RenderInternal(context);
     }
 
-    internal void RenderEditorInternal(Graphics.Renderer2D renderer)
+    internal void RenderEditorInternal(Graphics.RenderContext context)
     {
         if (!ActiveInHierarchy) return;
-        foreach (Component component in _components) component.RenderEditorInternal(renderer);
+        foreach (Component component in _components) component.RenderEditorInternal(context);
     }
 
     internal void StopInternal()

@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
@@ -9,7 +10,7 @@ internal sealed class GameViewPanel : IDisposable
     private readonly SceneFramebuffer _framebuffer = new();
     public bool IsOpen { get; set; } = true;
 
-    public void Draw(EditorState state, Renderer2D renderer, int windowWidth, int windowHeight)
+    public void Draw(EditorState state, Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight)
     {
         bool isOpen = IsOpen;
         ImGui.Begin("Game View", ref isOpen, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
@@ -26,7 +27,7 @@ internal sealed class GameViewPanel : IDisposable
         Vector2 displaySize = new(renderWidth * scale, renderHeight * scale);
         Vector2 offset = (available - displaySize) * .5f;
 
-        _framebuffer.RenderGame(renderer, state.DisplayedScene, state.Mode,
+        _framebuffer.RenderGame(renderer, renderer3D, state.DisplayedScene, state.Mode,
             renderWidth, renderHeight, windowWidth, windowHeight);
 
         Vector2 cursor = ImGui.GetCursorPos();

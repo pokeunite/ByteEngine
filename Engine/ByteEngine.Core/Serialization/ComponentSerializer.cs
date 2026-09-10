@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 
@@ -41,6 +43,12 @@ public sealed class ComponentSerializer
         Register(
             new SpriteRendererCodec()
         );
+
+        Register(new Camera3DCodec());
+        Register(new DirectionalLightCodec());
+        Register(new MeshRendererCodec());
+        Register(new GroundSurfaceCodec());
+        Register(new BoxCollider3DCodec());
     }
 
     public void Register(
@@ -201,6 +209,7 @@ public sealed class ComponentSerializer
                     ["visible"] =
                         sprite.Visible,
                     ["orderInLayer"] = sprite.OrderInLayer
+                    , ["size"] = new JsonArray(sprite.Size.X, sprite.Size.Y)
                 };
 
             return new ComponentData
@@ -231,6 +240,7 @@ public sealed class ComponentSerializer
                 true;
 
             int orderInLayer = data.Properties["orderInLayer"]?.GetValue<int>() ?? 0;
+            Vector2 size = ReadVector2(data.Properties["size"], new Vector2(64f, 64f));
 
             return new SpriteRenderer(
                 texture,
@@ -239,7 +249,8 @@ public sealed class ComponentSerializer
             {
                 Tint = tint,
                 Visible = visible,
-                OrderInLayer = orderInLayer
+                OrderInLayer = orderInLayer,
+                Size = size
             };
         }
 
@@ -339,5 +350,51 @@ public sealed class ComponentSerializer
                 1.0f
             );
         }
+
+        private static Vector2 ReadVector2(JsonNode? node, Vector2 fallback)
+        {
+            if (node is not JsonArray array || array.Count < 2) return fallback;
+            return new Vector2(array[0]?.GetValue<float>() ?? fallback.X, array[1]?.GetValue<float>() ?? fallback.Y);
+        }
     }
+
+    private sealed class Camera3DCodec : IComponentCodec
+    {
+        public string TypeName=>"Camera3D"; public Type ComponentType=>typeof(Camera3D);
+        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(Camera3D)component;return Data(TypeName,new(){["fieldOfView"]=c.FieldOfView,["nearClip"]=c.NearClip,["farClip"]=c.FarClip});}
+        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new Camera3D{FieldOfView=Float(data,"fieldOfView",60),NearClip=Float(data,"nearClip",.1f),FarClip=Float(data,"farClip",1000)};
+    }
+
+    private sealed class DirectionalLightCodec : IComponentCodec
+    {
+        public string TypeName=>"DirectionalLight"; public Type ComponentType=>typeof(DirectionalLight);
+        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(DirectionalLight)component;return Data(TypeName,new(){["color"]=Array(c.Color),["intensity"]=c.Intensity});}
+        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new DirectionalLight{Color=Vector3(data.Properties["color"],System.Numerics.Vector3.One),Intensity=Float(data,"intensity",1)};
+    }
+
+    private sealed class MeshRendererCodec : IComponentCodec
+    {
+        public string TypeName=>"MeshRenderer"; public Type ComponentType=>typeof(MeshRenderer);
+        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(MeshRenderer)component;return Data(TypeName,new(){["primitive"]=c.Primitive.ToString(),["visible"]=c.Visible,["baseColor"]=new JsonArray(c.Material.BaseColor.X,c.Material.BaseColor.Y,c.Material.BaseColor.Z,c.Material.BaseColor.W)});}
+        public Component Deserialize(ComponentData data,ComponentSerializationContext context){Enum.TryParse(data.Properties["primitive"]?.GetValue<string>(),true,out PrimitiveMeshType primitive);JsonArray? a=data.Properties["baseColor"] as JsonArray;var color=a?.Count>=4?new Vector4(a[0]!.GetValue<float>(),a[1]!.GetValue<float>(),a[2]!.GetValue<float>(),a[3]!.GetValue<float>()):Vector4.One;return new MeshRenderer{Primitive=primitive,Visible=data.Properties["visible"]?.GetValue<bool>()??true,Material=new Material{BaseColor=color}};}
+    }
+
+    private sealed class GroundSurfaceCodec : IComponentCodec
+    {
+        public string TypeName=>"GroundSurface"; public Type ComponentType=>typeof(GroundSurface);
+        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(GroundSurface)component;return Data(TypeName,new(){["walkable"]=c.Walkable,["surfaceType"]=c.SurfaceType,["friction"]=c.Friction});}
+        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new GroundSurface{Walkable=data.Properties["walkable"]?.GetValue<bool>()??true,SurfaceType=data.Properties["surfaceType"]?.GetValue<string>()??"Default",Friction=Float(data,"friction",1)};
+    }
+
+    private sealed class BoxCollider3DCodec : IComponentCodec
+    {
+        public string TypeName=>"BoxCollider3D"; public Type ComponentType=>typeof(BoxCollider3D);
+        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(BoxCollider3D)component;return Data(TypeName,new(){["size"]=Array(c.Size),["center"]=Array(c.Center),["isTrigger"]=c.IsTrigger});}
+        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new BoxCollider3D{Size=Vector3(data.Properties["size"],System.Numerics.Vector3.One),Center=Vector3(data.Properties["center"],System.Numerics.Vector3.Zero),IsTrigger=data.Properties["isTrigger"]?.GetValue<bool>()??false};
+    }
+
+    private static ComponentData Data(string type,JsonObject properties)=>new(){Type=type,Properties=properties};
+    private static float Float(ComponentData data,string name,float fallback)=>data.Properties[name]?.GetValue<float>()??fallback;
+    private static JsonArray Array(System.Numerics.Vector3 value)=>new(value.X,value.Y,value.Z);
+    private static System.Numerics.Vector3 Vector3(JsonNode? node,System.Numerics.Vector3 fallback)=>node is JsonArray a&&a.Count>=3?new(a[0]?.GetValue<float>()??fallback.X,a[1]?.GetValue<float>()??fallback.Y,a[2]?.GetValue<float>()??fallback.Z):fallback;
 }

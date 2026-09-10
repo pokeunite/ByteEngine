@@ -1,11 +1,15 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ByteEngine.Core.Serialization;
 
 internal static class JsonSerialization
 {
-    public static JsonSerializerOptions Options { get; } =
-        new()
+    public static JsonSerializerOptions Options { get; } = CreateOptions();
+
+    private static JsonSerializerOptions CreateOptions()
+    {
+        var options = new JsonSerializerOptions
         {
             PropertyNamingPolicy =
                 JsonNamingPolicy.CamelCase,
@@ -16,8 +20,12 @@ internal static class JsonSerialization
             AllowTrailingCommas =
                 true,
             ReadCommentHandling =
-                JsonCommentHandling.Skip
+                JsonCommentHandling.Skip,
+            IncludeFields = true
         };
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
 
     public static void WriteAtomic<T>(
         string filePath,

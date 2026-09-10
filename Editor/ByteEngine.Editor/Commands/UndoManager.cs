@@ -7,7 +7,7 @@ namespace ByteEngine.Editor.Commands;
 
 internal sealed class UndoManager
 {
-    private sealed record PendingEdit(string Name, SceneData Scene, string Json, Guid[] Selection);
+    private sealed record PendingEdit(string Name, SceneData Scene, List<VariableData> Globals, string Json, Guid[] Selection);
 
     private readonly SceneSerializer _serializer;
     private readonly Action<Scene> _activateScene;
@@ -66,19 +66,21 @@ internal sealed class UndoManager
     {
         if (_pending != null || state.Mode != EditorMode.Edit) return;
         SceneData scene = _serializer.Serialize(state.EditorScene);
-        _pending = new PendingEdit(name, scene, JsonSerializer.Serialize(scene), SelectionIds(state));
+        List<VariableData> globals = CloneGlobals(state.Project.GlobalVariables);
+        _pending = new PendingEdit(name, scene, globals, JsonSerializer.Serialize(new { Scene=scene, Globals=globals }, JsonSerialization.Options), SelectionIds(state));
     }
 
     public void CommitGesture(EditorState state)
     {
         if (_pending == null) return;
         SceneData after = _serializer.Serialize(state.EditorScene);
-        string afterJson = JsonSerializer.Serialize(after);
+        List<VariableData> afterGlobals = CloneGlobals(state.Project.GlobalVariables);
+        string afterJson = JsonSerializer.Serialize(new { Scene=after, Globals=afterGlobals }, JsonSerialization.Options);
         if (_pending.Json != afterJson)
         {
             int next = ++_nextRevision;
             _undo.Push(new SnapshotEditorCommand(
-                _pending.Name, _pending.Scene, after, _pending.Selection, SelectionIds(state), _currentRevision, next));
+                _pending.Name, _pending.Scene, after, _pending.Globals, afterGlobals, _pending.Selection, SelectionIds(state), _currentRevision, next));
             _redo.Clear();
             _currentRevision = next;
         }
@@ -91,7 +93,7 @@ internal sealed class UndoManager
     public void Undo(EditorState state)
     {
         if (state.Mode != EditorMode.Edit || !_undo.TryPop(out IEditorCommand? command)) return;
-        Restore(state, command.Before, command.BeforeSelection);
+        Restore(state, command.Before, command.BeforeGlobals, command.BeforeSelection);
         _currentRevision = command.BeforeRevision;
         _redo.Push(command);
         UpdateDirty(state);
@@ -100,21 +102,24 @@ internal sealed class UndoManager
     public void Redo(EditorState state)
     {
         if (state.Mode != EditorMode.Edit || !_redo.TryPop(out IEditorCommand? command)) return;
-        Restore(state, command.After, command.AfterSelection);
+        Restore(state, command.After, command.AfterGlobals, command.AfterSelection);
         _currentRevision = command.AfterRevision;
         _undo.Push(command);
         UpdateDirty(state);
     }
 
-    private void Restore(EditorState state, SceneData data, Guid[] selection)
+    private void Restore(EditorState state, SceneData data, List<VariableData> globals, Guid[] selection)
     {
         Scene scene = _serializer.Deserialize(data);
         state.EditorScene = scene;
         state.RuntimeScene = null;
+        state.Project.GlobalVariables = CloneGlobals(globals);
         state.Selection.Set(selection.Select(scene.FindGameObject).Where(item => item != null).Cast<GameObject>());
         _activateScene(scene);
     }
 
     private void UpdateDirty(EditorState state) => state.SetDirty(_currentRevision != _savedRevision);
     private static Guid[] SelectionIds(EditorState state) => state.Selection.Objects.Select(item => item.Id).ToArray();
+    private static List<VariableData> CloneGlobals(List<VariableData> values) =>
+        JsonSerializer.Deserialize<List<VariableData>>(JsonSerializer.Serialize(values, JsonSerialization.Options), JsonSerialization.Options) ?? new();
 }

@@ -2,6 +2,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 
 using Vector4 = System.Numerics.Vector4;
+using Vector2 = System.Numerics.Vector2;
 
 namespace ByteEngine.Core.Graphics;
 
@@ -19,6 +20,8 @@ public sealed class SpriteRenderer : Component
 
     public int OrderInLayer { get; set; }
 
+    public Vector2 Size { get; set; } = new(64f, 64f);
+
     public SpriteRenderer(
         Texture2D? texture = null,
         AssetReference? textureReference = null)
@@ -30,18 +33,18 @@ public sealed class SpriteRenderer : Component
     }
 
     protected override void OnRender(
-        Renderer2D renderer)
+        RenderContext context)
     {
-        if (!Visible || Texture == null)
+        if (!Visible || Texture == null || context.Has3DCamera)
         {
             return;
         }
 
-        renderer.DrawSprite(
+        context.Renderer2D.DrawSprite(
             Texture,
-            Transform.Position,
-            Transform.Size,
-            Transform.Rotation,
+            new Vector2(Transform.WorldPosition.X, Transform.WorldPosition.Y),
+            Size * new Vector2(Transform.WorldScale.X, Transform.WorldScale.Y),
+            Transform.EulerAngles.Z,
             Tint
         );
     }

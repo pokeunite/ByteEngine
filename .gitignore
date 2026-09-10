@@ -6,3 +6,5 @@
 *.suo
 imgui.ini
 layout.ini
+/Dist/
+/ByteEngine.Editor.exe

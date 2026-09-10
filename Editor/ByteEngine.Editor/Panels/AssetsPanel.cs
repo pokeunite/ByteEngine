@@ -78,6 +78,7 @@ internal sealed class AssetsPanel
             {
                 AssetType.Texture2D => "[IMG]",
                 AssetType.Scene => "[SCN]",
+                AssetType.Model3D => "[3D]",
                 _ => "[FILE]"
             };
             bool selected = string.Equals(state.SelectedAssetPath, projectPath, StringComparison.OrdinalIgnoreCase);

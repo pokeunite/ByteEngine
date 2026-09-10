@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 
 using OpenTK.Graphics.OpenGL4;
@@ -13,6 +14,7 @@ internal sealed class SceneFramebuffer
     private int _framebuffer;
 
     private int _colorTexture;
+    private int _depthRenderbuffer;
 
     private int _width;
 
@@ -23,9 +25,12 @@ internal sealed class SceneFramebuffer
 
     public void Render(
         Renderer2D renderer,
+        Renderer3D renderer3D,
         Scene scene,
         EditorMode mode,
         EditorCamera camera,
+        EditorCamera3D camera3D,
+        bool is3D,
         int width,
         int height,
         int windowWidth,
@@ -56,7 +61,7 @@ internal sealed class SceneFramebuffer
         );
 
         GL.Clear(
-            ClearBufferMask.ColorBufferBit
+            ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit
         );
 
         renderer.Resize(
@@ -64,27 +69,27 @@ internal sealed class SceneFramebuffer
             _height
         );
 
-        renderer.SetCamera(
-            camera.Position,
-            camera.Zoom
-        );
-
-        DrawGrid(
-            renderer,
-            camera
-        );
-
-        if (mode == EditorMode.Edit)
+        RenderContext context;
+        if (is3D)
         {
-            scene.RenderEditorInternal(
-                renderer
-            );
+            context = new RenderContext(renderer, renderer3D, scene, _width, _height,
+                viewMatrix3D: camera3D.View, projectionMatrix3D: camera3D.Projection((float)_width / _height));
+            DrawGrid3D(renderer3D, camera3D);
         }
         else
         {
-            scene.RenderInternal(
-                renderer
-            );
+            renderer.SetCamera(camera.Position, camera.Zoom);
+            DrawGrid(renderer, camera);
+            context = new RenderContext(renderer, renderer3D, scene, _width, _height);
+        }
+
+        if (mode == EditorMode.Edit)
+        {
+            scene.RenderEditorInternal(context);
+        }
+        else
+        {
+            scene.RenderInternal(context);
         }
 
         GL.BindFramebuffer(
@@ -107,6 +112,7 @@ internal sealed class SceneFramebuffer
 
     public void RenderGame(
         Renderer2D renderer,
+        Renderer3D renderer3D,
         Scene scene,
         EditorMode mode,
         int width,
@@ -118,15 +124,17 @@ internal sealed class SceneFramebuffer
         GL.BindFramebuffer(FramebufferTarget.Framebuffer, _framebuffer);
         GL.Viewport(0, 0, _width, _height);
         GL.ClearColor(0.025f, 0.025f, 0.035f, 1.0f);
-        GL.Clear(ClearBufferMask.ColorBufferBit);
+        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
         renderer.Resize(_width, _height);
 
-        Camera2D? camera = scene.FindComponent<Camera2D>();
+        Camera3D? camera3D = scene.FindComponent<Camera3D>();
+        Camera2D? camera = camera3D == null ? scene.FindComponent<Camera2D>() : null;
         if (camera != null) renderer.SetCamera(camera.Transform.Position, camera.Zoom);
         else renderer.ResetCamera();
 
-        if (mode == EditorMode.Edit) scene.RenderEditorInternal(renderer);
-        else scene.RenderInternal(renderer);
+        var context = new RenderContext(renderer, renderer3D, scene, _width, _height, camera, camera3D);
+        if (mode == EditorMode.Edit) scene.RenderEditorInternal(context);
+        else scene.RenderInternal(context);
 
         GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         GL.Viewport(0, 0, Math.Max(windowWidth, 1), Math.Max(windowHeight, 1));
@@ -208,6 +216,12 @@ internal sealed class SceneFramebuffer
             _colorTexture,
             0
         );
+
+        _depthRenderbuffer = GL.GenRenderbuffer();
+        GL.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _depthRenderbuffer);
+        GL.RenderbufferStorage(RenderbufferTarget.Renderbuffer, RenderbufferStorage.Depth24Stencil8, _width, _height);
+        GL.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment,
+            RenderbufferTarget.Renderbuffer, _depthRenderbuffer);
 
         FramebufferErrorCode status =
             GL.CheckFramebufferStatus(
@@ -334,8 +348,20 @@ internal sealed class SceneFramebuffer
             renderer.DrawQuad(new Vector2(0f, camera.Position.Y), new Vector2(lineWidth * 2f, halfWorldHeight * 2f), yAxisColor);
     }
 
+    private void DrawGrid3D(Renderer3D renderer, EditorCamera3D camera)
+    {
+        Matrix4x4 view=camera.View,projection=camera.Projection((float)_width/_height);Mesh cube=renderer.GetPrimitive(PrimitiveMeshType.Cube);
+        for(int n=-10;n<=10;n++){Vector4 color=n==0?new(.25f,.45f,.9f,1):new(.18f,.2f,.24f,1);renderer.Draw(cube,new Material{BaseColor=color},Matrix4x4.CreateScale(.012f,.005f,20)*Matrix4x4.CreateTranslation(n,0,0),view,projection,new(0,-1,0),Vector3.One,0);color=n==0?new(.9f,.25f,.22f,1):new(.18f,.2f,.24f,1);renderer.Draw(cube,new Material{BaseColor=color},Matrix4x4.CreateScale(20,.005f,.012f)*Matrix4x4.CreateTranslation(0,0,n),view,projection,new(0,-1,0),Vector3.One,0);}
+        renderer.Draw(cube,new Material{BaseColor=new(.2f,1,.3f,1)},Matrix4x4.CreateScale(.012f,2,.012f)*Matrix4x4.CreateTranslation(0,1,0),view,projection,new(0,-1,0),Vector3.One,0);
+    }
+
     private void DestroyResources()
     {
+        if (_depthRenderbuffer != 0)
+        {
+            GL.DeleteRenderbuffer(_depthRenderbuffer);
+            _depthRenderbuffer = 0;
+        }
         if (_colorTexture != 0)
         {
             GL.DeleteTexture(

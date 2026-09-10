@@ -19,7 +19,7 @@ public abstract class Component
         }
     }
 
-    public Transform2D Transform =>
+    public Transform Transform =>
         GameObject.Transform;
 
     public bool Enabled { get; set; } = true;
@@ -65,7 +65,7 @@ public abstract class Component
     }
 
     internal void RenderInternal(
-        Renderer2D renderer)
+        RenderContext context)
     {
         if (!Enabled)
         {
@@ -77,18 +77,18 @@ public abstract class Component
             StartInternal();
         }
 
-        OnRender(renderer);
+        OnRender(context);
     }
 
     internal void RenderEditorInternal(
-        Renderer2D renderer)
+        RenderContext context)
     {
         if (!Enabled)
         {
             return;
         }
 
-        OnRender(renderer);
+        OnRender(context);
     }
 
     internal void StopInternal()
@@ -119,7 +119,7 @@ public abstract class Component
     }
 
     protected virtual void OnRender(
-        Renderer2D renderer)
+        RenderContext context)
     {
     }
 

@@ -4,6 +4,7 @@ namespace ByteEngine.Core.Scene;
 
 public sealed class SceneManager
 {
+    public Variables.VariableStore GlobalVariables { get; } = new();
     public Scene? ActiveScene { get; private set; }
 
     public bool HasActiveScene =>
@@ -76,11 +77,11 @@ public sealed class SceneManager
     }
 
     internal void RenderInternal(
-        Renderer2D renderer)
+        RenderContext context)
     {
         ActiveScene?
             .RenderInternal(
-                renderer
+                context
             );
     }
 

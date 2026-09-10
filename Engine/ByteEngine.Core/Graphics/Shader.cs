@@ -2,6 +2,7 @@ using OpenTK.Graphics.OpenGL4;
 
 using Matrix4 = OpenTK.Mathematics.Matrix4;
 using Vector2 = System.Numerics.Vector2;
+using Vector3 = System.Numerics.Vector3;
 using Vector4 = System.Numerics.Vector4;
 
 namespace ByteEngine.Core.Graphics;
@@ -207,6 +208,11 @@ internal sealed class Shader : IDisposable
             value.Z,
             value.W
         );
+    }
+
+    public void SetVector3(string name, Vector3 value)
+    {
+        GL.Uniform3(GetUniformLocation(name), value.X, value.Y, value.Z);
     }
 
     public void SetMatrix4(

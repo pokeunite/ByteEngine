@@ -98,6 +98,9 @@ public sealed class SceneSerializer
                 SceneId = scene.Id
             };
 
+        foreach (var variable in scene.Variables)
+            data.Variables.Add(new VariableData { Name = variable.Key, Value = variable.Value.Clone() });
+
         foreach (GameObject gameObject
                  in scene.GameObjects)
         {
@@ -111,25 +114,33 @@ public sealed class SceneSerializer
                     Transform =
                         new TransformData
                         {
-                            Position =
-                                new Vector2Data
+                            LocalPosition =
+                                new Vector3Data
                                 {
                                     X =
                                         gameObject.Transform.LocalPosition.X,
                                     Y =
-                                        gameObject.Transform.LocalPosition.Y
+                                        gameObject.Transform.LocalPosition.Y,
+                                    Z = gameObject.Transform.LocalPosition.Z
                                 },
-                            Rotation =
-                                gameObject.Transform.LocalRotation,
-                            Size =
-                                new Vector2Data
+                            LocalRotation =
+                                new QuaternionData
                                 {
-                                    X =
-                                        gameObject.Transform.LocalSize.X,
-                                    Y =
-                                        gameObject.Transform.LocalSize.Y
+                                    X = gameObject.Transform.LocalRotation.X,
+                                    Y = gameObject.Transform.LocalRotation.Y,
+                                    Z = gameObject.Transform.LocalRotation.Z,
+                                    W = gameObject.Transform.LocalRotation.W
+                                },
+                            LocalScale =
+                                new Vector3Data
+                                {
+                                    X = gameObject.Transform.LocalScale.X,
+                                    Y = gameObject.Transform.LocalScale.Y,
+                                    Z = gameObject.Transform.LocalScale.Z
                                 }
-                        }
+                        },
+                    Variables = gameObject.Variables.Select(variable => new VariableData
+                    { Name = variable.Key, Value = variable.Value.Clone() }).ToList()
                 };
 
             foreach (Component component
@@ -176,6 +187,9 @@ public sealed class SceneSerializer
                     : data.Name
             );
 
+        foreach (VariableData variable in data.Variables)
+            scene.Variables.Set(variable.Name, variable.Value.Clone());
+
         var created = new Dictionary<Guid, GameObject>();
 
         foreach (GameObjectData gameObjectData
@@ -200,26 +214,26 @@ public sealed class SceneSerializer
                         gameObjectData.Active
                 };
 
-            gameObject.Transform.LocalPosition =
-                new Vector2(
-                    gameObjectData.Transform.Position.X,
-                    gameObjectData.Transform.Position.Y
-                );
+            foreach (VariableData variable in gameObjectData.Variables)
+                gameObject.Variables.Set(variable.Name, variable.Value.Clone());
 
-            gameObject.Transform.LocalRotation =
-                gameObjectData.Transform.Rotation;
-
-            gameObject.Transform.LocalSize =
-                new Vector2(
-                    Math.Max(
-                        gameObjectData.Transform.Size.X,
-                        1.0f
-                    ),
-                    Math.Max(
-                        gameObjectData.Transform.Size.Y,
-                        1.0f
-                    )
-                );
+            bool legacyTransform = gameObjectData.Transform.LocalPosition == null;
+            if (legacyTransform)
+            {
+                Vector2Data position = gameObjectData.Transform.Position ?? new Vector2Data();
+                gameObject.Transform.LocalPosition = new Vector3(position.X, position.Y, 0f);
+                gameObject.Transform.EulerAngles = new Vector3(0f, 0f, gameObjectData.Transform.Rotation ?? 0f);
+                gameObject.Transform.LocalScale = Vector3.One;
+            }
+            else
+            {
+                Vector3Data position = gameObjectData.Transform.LocalPosition!;
+                QuaternionData rotation = gameObjectData.Transform.LocalRotation ?? new QuaternionData();
+                Vector3Data scale = gameObjectData.Transform.LocalScale ?? new Vector3Data { X = 1f, Y = 1f, Z = 1f };
+                gameObject.Transform.LocalPosition = new Vector3(position.X, position.Y, position.Z);
+                gameObject.Transform.LocalRotation = new Quaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+                gameObject.Transform.LocalScale = new Vector3(scale.X, scale.Y, scale.Z);
+            }
 
             foreach (ComponentData componentData
                      in gameObjectData.Components)
@@ -235,6 +249,12 @@ public sealed class SceneSerializer
                         component
                     );
                 }
+            }
+
+            if (legacyTransform && gameObject.GetComponent<Graphics.SpriteRenderer>() is Graphics.SpriteRenderer legacySprite)
+            {
+                Vector2Data size = gameObjectData.Transform.Size ?? new Vector2Data { X = 64f, Y = 64f };
+                legacySprite.Size = new Vector2(Math.Max(size.X, 1f), Math.Max(size.Y, 1f));
             }
 
             scene.AddGameObject(
