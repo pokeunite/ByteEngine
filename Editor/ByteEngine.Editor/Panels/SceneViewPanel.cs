@@ -15,7 +15,7 @@ internal sealed class SceneViewPanel : IDisposable
     private readonly Gizmo3DController _gizmo3D = new();
     private bool _is3D;
     private Vector2 _lastViewportSize = new(800f, 500f);
-    private Vector2 _contextWorld;
+    private Vector3 _contextWorld;
     public bool IsOpen { get; set; } = true;
 
     public void FrameSelected(EditorState state)
@@ -35,9 +35,9 @@ internal sealed class SceneViewPanel : IDisposable
         int windowHeight,
         EditorProjectContext project,
         Action<AssetRecord, Vector2> createSpriteFromAsset,
-        Action<Vector2> createEmpty,
-        Action<Vector2> createSprite,
-        Action<Vector2> createCamera,
+        Action<Vector3> createEmpty,
+        Action<Vector3> createSprite,
+        Action<Vector3> createCamera,
         Action paste)
     {
         bool isOpen = IsOpen;
@@ -79,7 +79,11 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (hovered && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
         {
-            _contextWorld = GizmoController.ScreenToWorld(state.Camera, ImGui.GetMousePos(), minimum, viewportSize);
+            _contextWorld = _is3D
+                ? Gizmo3DController.ScreenToGroundPlane(ImGui.GetMousePos(), state.Camera3D, minimum, viewportSize)
+                : new Vector3(
+                    GizmoController.ScreenToWorld(state.Camera, ImGui.GetMousePos(), minimum, viewportSize),
+                    0f);
             ImGui.OpenPopup("Scene View Context");
         }
         if (ImGui.BeginPopup("Scene View Context"))
@@ -125,15 +129,44 @@ internal sealed class SceneViewPanel : IDisposable
         if (io.MouseWheel != 0f) state.Camera.Zoom = Math.Clamp(state.Camera.Zoom + io.MouseWheel * .1f, .2f, 4f);
     }
 
-    private static void HandleCamera3DInput(EditorState state,bool hovered)
+    private static void HandleCamera3DInput(EditorState state, bool hovered)
     {
-        if(!hovered)return;ImGuiIOPtr io=ImGui.GetIO();EditorCamera3D camera=state.Camera3D;
-        if(ImGui.IsMouseDragging(ImGuiMouseButton.Right)){camera.Yaw+=io.MouseDelta.X*.18f;camera.Pitch=Math.Clamp(camera.Pitch-io.MouseDelta.Y*.18f,-89f,89f);}
-        float speed=(io.KeyShift?12f:5f)*io.DeltaTime;
-        if(ImGui.IsMouseDown(ImGuiMouseButton.Right)){if(ImGui.IsKeyDown(ImGuiKey.W))camera.Position+=camera.Forward*speed;if(ImGui.IsKeyDown(ImGuiKey.S))camera.Position-=camera.Forward*speed;if(ImGui.IsKeyDown(ImGuiKey.D))camera.Position+=camera.Right*speed;if(ImGui.IsKeyDown(ImGuiKey.A))camera.Position-=camera.Right*speed;if(ImGui.IsKeyDown(ImGuiKey.E))camera.Position+=Vector3.UnitY*speed;if(ImGui.IsKeyDown(ImGuiKey.Q))camera.Position-=Vector3.UnitY*speed;}
-        if(ImGui.IsMouseDragging(ImGuiMouseButton.Middle))camera.Position+=(-camera.Right*io.MouseDelta.X+Vector3.UnitY*io.MouseDelta.Y)*speed*.12f;
-        if(io.MouseWheel!=0)camera.Position+=camera.Forward*io.MouseWheel*Math.Max(Vector3.Distance(camera.Position,state.SelectedObject?.Transform.WorldPosition??Vector3.Zero)*.12f,.35f);
-        if(ImGui.IsKeyPressed(ImGuiKey.F)&&state.SelectedObject!=null)camera.Frame(state.SelectedObject);
+        if (!hovered) return;
+        ImGuiIOPtr io = ImGui.GetIO();
+        EditorCamera3D camera = state.Camera3D;
+
+        if (ImGui.IsMouseDragging(ImGuiMouseButton.Right))
+        {
+            camera.Yaw += io.MouseDelta.X * .18f;
+            camera.Pitch = Math.Clamp(camera.Pitch - io.MouseDelta.Y * .18f, -89f, 89f);
+        }
+
+        float speed = (io.KeyShift ? 12f : 5f) * io.DeltaTime;
+        if (ImGui.IsMouseDown(ImGuiMouseButton.Right))
+        {
+            if (ImGui.IsKeyDown(ImGuiKey.W)) camera.Position += camera.Forward * speed;
+            if (ImGui.IsKeyDown(ImGuiKey.S)) camera.Position -= camera.Forward * speed;
+            if (ImGui.IsKeyDown(ImGuiKey.D)) camera.Position += camera.Right * speed;
+            if (ImGui.IsKeyDown(ImGuiKey.A)) camera.Position -= camera.Right * speed;
+            if (ImGui.IsKeyDown(ImGuiKey.E)) camera.Position += Vector3.UnitY * speed;
+            if (ImGui.IsKeyDown(ImGuiKey.Q)) camera.Position -= Vector3.UnitY * speed;
+        }
+
+        if (ImGui.IsMouseDragging(ImGuiMouseButton.Middle))
+        {
+            camera.Position +=
+                (-camera.Right * io.MouseDelta.X + Vector3.UnitY * io.MouseDelta.Y) * speed * .12f;
+        }
+
+        if (io.MouseWheel != 0f)
+        {
+            Vector3 focus = state.SelectedObject?.Transform.WorldPosition ?? Vector3.Zero;
+            float zoomDistance = Math.Max(Vector3.Distance(camera.Position, focus) * .12f, .35f);
+            camera.Position += camera.Forward * io.MouseWheel * zoomDistance;
+        }
+
+        if (ImGui.IsKeyPressed(ImGuiKey.F) && state.SelectedObject != null)
+            camera.Frame(state.SelectedObject);
     }
 
     private static void DrawCameraViewport(EditorState state, Vector2 minimum, Vector2 viewportSize)

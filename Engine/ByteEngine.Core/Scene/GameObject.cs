@@ -13,6 +13,9 @@ public sealed class GameObject
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
+    internal int RenderOrder =>
+        _components.Select(component => component.RenderOrder)
+            .FirstOrDefault(order => order.HasValue) ?? 0;
     public GameObject? Parent { get; private set; }
     public IReadOnlyList<GameObject> Children => _children;
     public Scene? Scene => _scene;

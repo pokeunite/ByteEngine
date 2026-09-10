@@ -20,6 +20,8 @@ public sealed class SpriteRenderer : Component
 
     public int OrderInLayer { get; set; }
 
+    public override int? RenderOrder => OrderInLayer;
+
     public Vector2 Size { get; set; } = new(64f, 64f);
 
     public SpriteRenderer(

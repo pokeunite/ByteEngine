@@ -92,7 +92,7 @@ public sealed class Scene
 
     private IEnumerable<GameObject> GetRenderOrder() =>
         _gameObjects.Select((gameObject, index) => new { gameObject, index })
-            .OrderBy(item => item.gameObject.GetComponent<SpriteRenderer>()?.OrderInLayer ?? 0)
+            .OrderBy(item => item.gameObject.RenderOrder)
             .ThenBy(item => item.index)
             .Select(item => item.gameObject);
 

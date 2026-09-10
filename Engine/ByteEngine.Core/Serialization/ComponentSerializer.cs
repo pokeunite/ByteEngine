@@ -49,6 +49,7 @@ public sealed class ComponentSerializer
         Register(new MeshRendererCodec());
         Register(new GroundSurfaceCodec());
         Register(new BoxCollider3DCodec());
+        Register(new CharacterController3DCodec());
     }
 
     public void Register(
@@ -360,41 +361,205 @@ public sealed class ComponentSerializer
 
     private sealed class Camera3DCodec : IComponentCodec
     {
-        public string TypeName=>"Camera3D"; public Type ComponentType=>typeof(Camera3D);
-        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(Camera3D)component;return Data(TypeName,new(){["fieldOfView"]=c.FieldOfView,["nearClip"]=c.NearClip,["farClip"]=c.FarClip});}
-        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new Camera3D{FieldOfView=Float(data,"fieldOfView",60),NearClip=Float(data,"nearClip",.1f),FarClip=Float(data,"farClip",1000)};
+        public string TypeName => "Camera3D";
+        public Type ComponentType => typeof(Camera3D);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var camera = (Camera3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["fieldOfView"] = camera.FieldOfView,
+                ["nearClip"] = camera.NearClip,
+                ["farClip"] = camera.FarClip
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new Camera3D
+            {
+                FieldOfView = Float(data, "fieldOfView", 60f),
+                NearClip = Float(data, "nearClip", .1f),
+                FarClip = Float(data, "farClip", 1000f)
+            };
     }
 
     private sealed class DirectionalLightCodec : IComponentCodec
     {
-        public string TypeName=>"DirectionalLight"; public Type ComponentType=>typeof(DirectionalLight);
-        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(DirectionalLight)component;return Data(TypeName,new(){["color"]=Array(c.Color),["intensity"]=c.Intensity});}
-        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new DirectionalLight{Color=Vector3(data.Properties["color"],System.Numerics.Vector3.One),Intensity=Float(data,"intensity",1)};
+        public string TypeName => "DirectionalLight";
+        public Type ComponentType => typeof(DirectionalLight);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var light = (DirectionalLight)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["color"] = Array(light.Color),
+                ["intensity"] = light.Intensity,
+                ["ambientIntensity"] = light.AmbientIntensity
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new DirectionalLight
+            {
+                Color = Vector3(data.Properties["color"], System.Numerics.Vector3.One),
+                Intensity = Float(data, "intensity", 1f),
+                AmbientIntensity = Float(data, "ambientIntensity", .25f)
+            };
     }
 
     private sealed class MeshRendererCodec : IComponentCodec
     {
-        public string TypeName=>"MeshRenderer"; public Type ComponentType=>typeof(MeshRenderer);
-        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(MeshRenderer)component;return Data(TypeName,new(){["primitive"]=c.Primitive.ToString(),["visible"]=c.Visible,["baseColor"]=new JsonArray(c.Material.BaseColor.X,c.Material.BaseColor.Y,c.Material.BaseColor.Z,c.Material.BaseColor.W)});}
-        public Component Deserialize(ComponentData data,ComponentSerializationContext context){Enum.TryParse(data.Properties["primitive"]?.GetValue<string>(),true,out PrimitiveMeshType primitive);JsonArray? a=data.Properties["baseColor"] as JsonArray;var color=a?.Count>=4?new Vector4(a[0]!.GetValue<float>(),a[1]!.GetValue<float>(),a[2]!.GetValue<float>(),a[3]!.GetValue<float>()):Vector4.One;return new MeshRenderer{Primitive=primitive,Visible=data.Properties["visible"]?.GetValue<bool>()??true,Material=new Material{BaseColor=color}};}
+        public string TypeName => "MeshRenderer";
+        public Type ComponentType => typeof(MeshRenderer);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var renderer = (MeshRenderer)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["primitive"] = renderer.Primitive.ToString(),
+                ["visible"] = renderer.Visible,
+                ["baseColor"] = new JsonArray(
+                    renderer.Material.BaseColor.X,
+                    renderer.Material.BaseColor.Y,
+                    renderer.Material.BaseColor.Z,
+                    renderer.Material.BaseColor.W)
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Enum.TryParse(
+                data.Properties["primitive"]?.GetValue<string>(),
+                true,
+                out PrimitiveMeshType primitive);
+            JsonArray? colorData = data.Properties["baseColor"] as JsonArray;
+            Vector4 color = colorData?.Count >= 4
+                ? new Vector4(
+                    colorData[0]!.GetValue<float>(),
+                    colorData[1]!.GetValue<float>(),
+                    colorData[2]!.GetValue<float>(),
+                    colorData[3]!.GetValue<float>())
+                : Vector4.One;
+            return new MeshRenderer
+            {
+                Primitive = primitive,
+                Visible = data.Properties["visible"]?.GetValue<bool>() ?? true,
+                Material = new Material { BaseColor = color }
+            };
+        }
     }
 
     private sealed class GroundSurfaceCodec : IComponentCodec
     {
-        public string TypeName=>"GroundSurface"; public Type ComponentType=>typeof(GroundSurface);
-        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(GroundSurface)component;return Data(TypeName,new(){["walkable"]=c.Walkable,["surfaceType"]=c.SurfaceType,["friction"]=c.Friction});}
-        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new GroundSurface{Walkable=data.Properties["walkable"]?.GetValue<bool>()??true,SurfaceType=data.Properties["surfaceType"]?.GetValue<string>()??"Default",Friction=Float(data,"friction",1)};
+        public string TypeName => "GroundSurface";
+        public Type ComponentType => typeof(GroundSurface);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var surface = (GroundSurface)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["walkable"] = surface.Walkable,
+                ["surfaceType"] = surface.SurfaceType,
+                ["friction"] = surface.Friction
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new GroundSurface
+            {
+                Walkable = data.Properties["walkable"]?.GetValue<bool>() ?? true,
+                SurfaceType = data.Properties["surfaceType"]?.GetValue<string>() ?? "Default",
+                Friction = Float(data, "friction", 1f)
+            };
     }
 
     private sealed class BoxCollider3DCodec : IComponentCodec
     {
-        public string TypeName=>"BoxCollider3D"; public Type ComponentType=>typeof(BoxCollider3D);
-        public ComponentData Serialize(Component component,ComponentSerializationContext context){var c=(BoxCollider3D)component;return Data(TypeName,new(){["size"]=Array(c.Size),["center"]=Array(c.Center),["isTrigger"]=c.IsTrigger});}
-        public Component Deserialize(ComponentData data,ComponentSerializationContext context)=>new BoxCollider3D{Size=Vector3(data.Properties["size"],System.Numerics.Vector3.One),Center=Vector3(data.Properties["center"],System.Numerics.Vector3.Zero),IsTrigger=data.Properties["isTrigger"]?.GetValue<bool>()??false};
+        public string TypeName => "BoxCollider3D";
+        public Type ComponentType => typeof(BoxCollider3D);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var collider = (BoxCollider3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["size"] = Array(collider.Size),
+                ["center"] = Array(collider.Center),
+                ["isTrigger"] = collider.IsTrigger
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new BoxCollider3D
+            {
+                Size = Vector3(data.Properties["size"], System.Numerics.Vector3.One),
+                Center = Vector3(data.Properties["center"], System.Numerics.Vector3.Zero),
+                IsTrigger = data.Properties["isTrigger"]?.GetValue<bool>() ?? false
+            };
     }
 
-    private static ComponentData Data(string type,JsonObject properties)=>new(){Type=type,Properties=properties};
-    private static float Float(ComponentData data,string name,float fallback)=>data.Properties[name]?.GetValue<float>()??fallback;
-    private static JsonArray Array(System.Numerics.Vector3 value)=>new(value.X,value.Y,value.Z);
-    private static System.Numerics.Vector3 Vector3(JsonNode? node,System.Numerics.Vector3 fallback)=>node is JsonArray a&&a.Count>=3?new(a[0]?.GetValue<float>()??fallback.X,a[1]?.GetValue<float>()??fallback.Y,a[2]?.GetValue<float>()??fallback.Z):fallback;
+    private sealed class CharacterController3DCodec : IComponentCodec
+    {
+        public string TypeName => "CharacterController3D";
+        public Type ComponentType => typeof(CharacterController3D);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var controller = (CharacterController3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["moveSpeed"] = controller.MoveSpeed,
+                ["acceleration"] = controller.Acceleration,
+                ["deceleration"] = controller.Deceleration,
+                ["airControl"] = controller.AirControl,
+                ["jumpForce"] = controller.JumpForce,
+                ["gravity"] = controller.Gravity,
+                ["groundDistance"] = controller.GroundDistance,
+                ["maxSlope"] = controller.MaxSlope,
+                ["stepHeight"] = controller.StepHeight,
+                ["coyoteTime"] = controller.CoyoteTime,
+                ["jumpBuffer"] = controller.JumpBuffer,
+                ["snapToGround"] = controller.SnapToGround
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new CharacterController3D
+            {
+                MoveSpeed = Float(data, "moveSpeed", 5f),
+                Acceleration = Float(data, "acceleration", 30f),
+                Deceleration = Float(data, "deceleration", 35f),
+                AirControl = Float(data, "airControl", .35f),
+                JumpForce = Float(data, "jumpForce", 7f),
+                Gravity = Float(data, "gravity", 20f),
+                GroundDistance = Float(data, "groundDistance", .15f),
+                MaxSlope = Float(data, "maxSlope", 50f),
+                StepHeight = Float(data, "stepHeight", .3f),
+                CoyoteTime = Float(data, "coyoteTime", .1f),
+                JumpBuffer = Float(data, "jumpBuffer", .1f),
+                SnapToGround = data.Properties["snapToGround"]?.GetValue<bool>() ?? true
+            };
+    }
+
+    private static ComponentData Data(string type, JsonObject properties) =>
+        new() { Type = type, Properties = properties };
+
+    private static float Float(ComponentData data, string name, float fallback) =>
+        data.Properties[name]?.GetValue<float>() ?? fallback;
+
+    private static JsonArray Array(System.Numerics.Vector3 value) =>
+        new(value.X, value.Y, value.Z);
+
+    private static System.Numerics.Vector3 Vector3(
+        JsonNode? node,
+        System.Numerics.Vector3 fallback) => node is JsonArray array && array.Count >= 3
+            ? new System.Numerics.Vector3(
+                array[0]?.GetValue<float>() ?? fallback.X,
+                array[1]?.GetValue<float>() ?? fallback.Y,
+                array[2]?.GetValue<float>() ?? fallback.Z)
+            : fallback;
 }

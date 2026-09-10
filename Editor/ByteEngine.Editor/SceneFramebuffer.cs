@@ -350,9 +350,46 @@ internal sealed class SceneFramebuffer
 
     private void DrawGrid3D(Renderer3D renderer, EditorCamera3D camera)
     {
-        Matrix4x4 view=camera.View,projection=camera.Projection((float)_width/_height);Mesh cube=renderer.GetPrimitive(PrimitiveMeshType.Cube);
-        for(int n=-10;n<=10;n++){Vector4 color=n==0?new(.25f,.45f,.9f,1):new(.18f,.2f,.24f,1);renderer.Draw(cube,new Material{BaseColor=color},Matrix4x4.CreateScale(.012f,.005f,20)*Matrix4x4.CreateTranslation(n,0,0),view,projection,new(0,-1,0),Vector3.One,0);color=n==0?new(.9f,.25f,.22f,1):new(.18f,.2f,.24f,1);renderer.Draw(cube,new Material{BaseColor=color},Matrix4x4.CreateScale(20,.005f,.012f)*Matrix4x4.CreateTranslation(0,0,n),view,projection,new(0,-1,0),Vector3.One,0);}
-        renderer.Draw(cube,new Material{BaseColor=new(.2f,1,.3f,1)},Matrix4x4.CreateScale(.012f,2,.012f)*Matrix4x4.CreateTranslation(0,1,0),view,projection,new(0,-1,0),Vector3.One,0);
+        Matrix4x4 view = camera.View;
+        Matrix4x4 projection = camera.Projection((float)_width / _height);
+        Mesh cube = renderer.GetPrimitive(PrimitiveMeshType.Cube);
+
+        for (int coordinate = -10; coordinate <= 10; coordinate++)
+        {
+            Vector4 xColor = coordinate == 0
+                ? new Vector4(.25f, .45f, .9f, 1f)
+                : new Vector4(.18f, .2f, .24f, 1f);
+            Matrix4x4 xTransform =
+                Matrix4x4.CreateScale(.012f, .005f, 20f) *
+                Matrix4x4.CreateTranslation(coordinate, 0f, 0f);
+            renderer.Draw(
+                cube, new Material { BaseColor = xColor }, xTransform, view, projection,
+                new Vector3(0f, -1f, 0f), Vector3.One, 0f, 1f);
+
+            Vector4 zColor = coordinate == 0
+                ? new Vector4(.9f, .25f, .22f, 1f)
+                : new Vector4(.18f, .2f, .24f, 1f);
+            Matrix4x4 zTransform =
+                Matrix4x4.CreateScale(20f, .005f, .012f) *
+                Matrix4x4.CreateTranslation(0f, 0f, coordinate);
+            renderer.Draw(
+                cube, new Material { BaseColor = zColor }, zTransform, view, projection,
+                new Vector3(0f, -1f, 0f), Vector3.One, 0f, 1f);
+        }
+
+        Matrix4x4 yTransform =
+            Matrix4x4.CreateScale(.012f, 2f, .012f) *
+            Matrix4x4.CreateTranslation(0f, 1f, 0f);
+        renderer.Draw(
+            cube,
+            new Material { BaseColor = new Vector4(.2f, 1f, .3f, 1f) },
+            yTransform,
+            view,
+            projection,
+            new Vector3(0f, -1f, 0f),
+            Vector3.One,
+            0f,
+            1f);
     }
 
     private void DestroyResources()

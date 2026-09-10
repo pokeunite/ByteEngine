@@ -1348,18 +1348,25 @@ public sealed class EditorApplication
         });
     }
 
-    private void CreateMeshPrimitive(string name,PrimitiveMeshType primitive)
-    {
-        if(_state==null)return;_state.Undo?.Execute(_state,$"Create {name}",()=>{GameObject gameObject=EditorSceneCommands.CreateGameObject(_state,name,_log);gameObject.AddComponent(new MeshRenderer{Primitive=primitive});if(primitive==PrimitiveMeshType.Plane)gameObject.AddComponent(new BoxCollider3D{Size=new Vector3(1,.05f,1)});});
-    }
-
-    private void CreateObjectAtPosition(string name, Vector2 position, Func<ByteEngine.Core.Scene.Component>? componentFactory)
+    private void CreateMeshPrimitive(string name, PrimitiveMeshType primitive)
     {
         if (_state == null) return;
         _state.Undo?.Execute(_state, $"Create {name}", () =>
         {
             GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
-            gameObject.Transform.Position = position;
+            gameObject.AddComponent(new MeshRenderer { Primitive = primitive });
+            if (primitive == PrimitiveMeshType.Plane)
+                gameObject.AddComponent(new BoxCollider3D { Size = new Vector3(1f, .05f, 1f) });
+        });
+    }
+
+    private void CreateObjectAtPosition(string name, Vector3 position, Func<ByteEngine.Core.Scene.Component>? componentFactory)
+    {
+        if (_state == null) return;
+        _state.Undo?.Execute(_state, $"Create {name}", () =>
+        {
+            GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
+            gameObject.Transform.WorldPosition = position;
             if (componentFactory != null) gameObject.AddComponent(componentFactory());
         });
     }
