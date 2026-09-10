@@ -42,6 +42,8 @@ public sealed class EditorApplication
     private readonly ConsolePanel _console =
         new();
 
+    private readonly ProjectBrowserPanel _projectBrowser = new();
+
     private readonly EditorClipboard _clipboard = new();
 
     private ImGuiController? _imgui;
@@ -127,12 +129,13 @@ public sealed class EditorApplication
 
         if (_state == null)
         {
-            DrawProjectSelection();
+            _projectBrowser.DrawLanding(CreateProject, ShowOpenProjectDialog, EditorPreferences.ReadLastProject());
         }
         else
         {
             _projectContext?.AssetDatabase.Update();
             DrawPanels();
+            _projectBrowser.DrawCreateDialog(CreateProject);
         }
 
         DrawUnsavedChangesPopup();
@@ -263,66 +266,6 @@ public sealed class EditorApplication
         }
     }
 
-    private void DrawProjectSelection()
-    {
-        ImGui.SetNextWindowSize(
-            new Vector2(
-                520.0f,
-                240.0f
-            ),
-            ImGuiCond.FirstUseEver
-        );
-
-        ImGui.Begin(
-            "Project Selection",
-            ImGuiWindowFlags.NoCollapse
-        );
-
-        ImGui.Text(
-            "Welcome to ByteEngine"
-        );
-
-        ImGui.TextDisabled(
-            "Create a new project or open an existing .byteproject file."
-        );
-
-        ImGui.Spacing();
-
-        if (ImGui.Button(
-                "New Project",
-                new Vector2(
-                    180.0f,
-                    44.0f
-                )))
-        {
-            ShowNewProjectDialog();
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Open Project",
-                new Vector2(
-                    180.0f,
-                    44.0f
-                )))
-        {
-            ShowOpenProjectDialog();
-        }
-
-        ImGui.Separator();
-
-        foreach (EditorLogEntry entry
-                 in _log.Entries.TakeLast(3))
-        {
-            ImGui.TextWrapped(
-                $"[{entry.Level}] {entry.Message}"
-            );
-        }
-
-        ImGui.End();
-    }
-
     private void DrawMainMenu()
     {
         if (!ImGui.BeginMainMenuBar())
@@ -353,9 +296,7 @@ public sealed class EditorApplication
         if (ImGui.MenuItem(
                 "New Project"))
         {
-            RequestAfterUnsavedCheck(
-                ShowNewProjectDialog
-            );
+            RequestAfterUnsavedCheck(_projectBrowser.OpenCreateDialog);
         }
 
         if (ImGui.MenuItem(
@@ -801,18 +742,15 @@ public sealed class EditorApplication
         Close();
     }
 
-    private void ShowNewProjectDialog()
+    private void CreateProject(NewProjectRequest request)
     {
-        string? projectFile =
-            EditorDialogs.ChooseNewProject();
-
-        if (projectFile == null)
-        {
-            return;
-        }
-
         try
         {
+            string projectDirectory = Path.Combine(request.ParentDirectory, request.Name);
+            if (Directory.Exists(projectDirectory) && Directory.EnumerateFileSystemEntries(projectDirectory).Any())
+                throw new IOException($"The project folder already exists and is not empty: {projectDirectory}");
+
+            string projectFile = Path.Combine(request.ParentDirectory, request.Name + ".byteproject");
             EditorProjectContext context =
                 EditorProjectContext.Create(
                     projectFile,
@@ -821,10 +759,7 @@ public sealed class EditorApplication
                     )
                 );
 
-            Scene scene =
-                CreateDefaultScene(
-                    context
-                );
+            Scene scene = ProjectTemplateFactory.Create(request.Template);
 
             string scenePath =
                 context.ResolveProjectPath(
@@ -845,7 +780,7 @@ public sealed class EditorApplication
             context.SaveProject();
 
             _log.Info(
-                $"Created project '{context.Project.Name}'."
+                $"Created {request.Template} project '{context.Project.Name}' in '{context.ProjectRoot}'."
             );
         }
         catch (Exception exception)
@@ -990,10 +925,7 @@ public sealed class EditorApplication
             StopPlayMode();
         }
 
-        Scene scene =
-            CreateDefaultScene(
-                _projectContext
-            );
+        Scene scene = new("Untitled Scene");
 
         Scenes.SetEditorScene(
             scene
@@ -1018,40 +950,6 @@ public sealed class EditorApplication
         _log.Info(
             "Created a new unsaved scene in Edit mode."
         );
-    }
-
-    private Scene CreateDefaultScene(
-        EditorProjectContext context)
-    {
-        Scene scene =
-            new(
-                "Main"
-            );
-
-        GameObject camera =
-            scene.CreateGameObject(
-                "Main Camera"
-            );
-
-        camera.Transform.LocalPosition = new Vector3(0, 2, 6);
-        camera.Transform.EulerAngles = new Vector3(-18, 0, 0);
-        camera.AddComponent(new Camera3D());
-
-        GameObject cube=scene.CreateGameObject("Cube");
-        cube.AddComponent(new MeshRenderer{Primitive=PrimitiveMeshType.Cube,Material=new Material{BaseColor=new Vector4(.25f,.58f,1f,1f)}});
-
-        GameObject ground=scene.CreateGameObject("Ground");
-        ground.Transform.LocalPosition=new Vector3(0,-1,0);
-        ground.Transform.LocalScale=new Vector3(10,1,10);
-        ground.AddComponent(new MeshRenderer{Primitive=PrimitiveMeshType.Plane,Material=new Material{BaseColor=new Vector4(.32f,.38f,.32f,1f)}});
-        ground.AddComponent(new BoxCollider3D{Size=new Vector3(1,.05f,1)});
-        ground.AddComponent(new GroundSurface());
-
-        GameObject light=scene.CreateGameObject("Directional Light");
-        light.Transform.EulerAngles=new Vector3(45,-35,0);
-        light.AddComponent(new DirectionalLight{Intensity=1.2f});
-
-        return scene;
     }
 
     private void ShowOpenSceneDialog()

@@ -4,6 +4,19 @@ namespace ByteEngine.Editor;
 
 internal static class EditorDialogs
 {
+    public static string? ChooseProjectDirectory(string? initialDirectory = null)
+    {
+        using FolderBrowserDialog dialog = new()
+        {
+            Description = "Choose where ByteEngine should create the project folder",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true,
+            SelectedPath = Directory.Exists(initialDirectory) ? initialDirectory : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+
+        return dialog.ShowDialog() == DialogResult.OK ? dialog.SelectedPath : null;
+    }
+
     public static string? ChooseNewProject()
     {
         using SaveFileDialog dialog =

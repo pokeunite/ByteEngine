@@ -8,6 +8,7 @@ using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.Variables;
 using ByteEngine.Editor;
+using ByteEngine.Editor.Panels;
 
 string root=Path.Combine(Path.GetTempPath(),"ByteEngine-v05-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(Path.Combine(root,"Assets"));Directory.CreateDirectory(Path.Combine(root,"Scenes"));
 try
@@ -36,6 +37,10 @@ try
     IReadOnlyList<AssetRecord> firstImport=externalImporter.Import(new[]{fbx});IReadOnlyList<AssetRecord> secondImport=externalImporter.Import(new[]{fbx});
     Assert(firstImport.Count==1&&firstImport[0].Type==AssetType.Model3D&&File.Exists(firstImport[0].FullPath)&&File.Exists(firstImport[0].MetaPath),"External FBX import and registration");
     Assert(secondImport.Count==1&&!string.Equals(firstImport[0].FullPath,secondImport[0].FullPath,StringComparison.OrdinalIgnoreCase),"External import collision naming");
+
+    Scene cleanTemplate=ProjectTemplateFactory.Create(ProjectTemplate.Clean);Scene starterTemplate=ProjectTemplateFactory.Create(ProjectTemplate.Starter3D);
+    Assert(cleanTemplate.Name=="Main"&&cleanTemplate.GameObjectCount==0,"Clean project template");
+    Assert(starterTemplate.GameObjectCount==4&&starterTemplate.FindComponent<Camera3D>()!=null&&starterTemplate.FindComponent<DirectionalLight>()!=null&&starterTemplate.FindGameObject("Ground")?.GetComponent<GroundSurface>()!=null,"3D starter project template");
     Console.WriteLine("ByteEngine v0.5 tests passed: transform migration, 3D persistence, variables, resolver, play isolation, and external FBX import.");
 }
 finally { try{Directory.Delete(root,true);}catch{} }

@@ -9,13 +9,6 @@ internal static class Program
         string? projectFile =
             args.FirstOrDefault();
 
-        if (string.IsNullOrWhiteSpace(
-                projectFile))
-        {
-            projectFile =
-                EditorPreferences.ReadLastProject();
-        }
-
         using var editor =
             new EditorApplication(
                 projectFile

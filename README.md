@@ -2,6 +2,8 @@
 
 ByteEngine v0.5 is a lightweight, 3D-first C# game engine and editor built on .NET 9, OpenTK, and ImGui.NET. Its workflow combines component-based GameObjects, reusable object definitions, and a future Conditions → Actions visual-logic model while preserving the existing 2D toolset.
 
+Normal editor startup opens the Project Browser instead of automatically reopening the last project. New Project lets you choose a name, parent directory, and either a blank Clean Project or the ready-to-run 3D Starter template. Passing a `.byteproject` path on the command line still opens that project directly.
+
 ## 2D and 3D
 
 - Universal `Transform` uses Vector3 position/scale, quaternion rotation, world/local matrices, and 3D hierarchy composition.
