@@ -37,7 +37,9 @@ internal sealed class EventWorkspacePanel
     {
         None,
         Condition,
-        Action
+        Action,
+        ActionTrue,
+        ActionFalse
     }
 
     private WireDragKind _wireDragKind;
@@ -778,6 +780,20 @@ internal sealed class EventWorkspacePanel
             1.0f,
             0.66f,
             0.22f,
+            1.0f);
+
+    private static readonly Vector4 TrueExecutionWireColor =
+        new(
+            0.30f,
+            0.95f,
+            0.46f,
+            1.0f);
+
+    private static readonly Vector4 FalseExecutionWireColor =
+        new(
+            0.95f,
+            0.30f,
+            0.30f,
             1.0f);
 
     private static readonly Vector4 SelectionColor =
@@ -1757,6 +1773,11 @@ internal sealed class EventWorkspacePanel
             IsLogicGate(
                 instruction);
 
+        bool branchAction =
+            !condition &&
+            IsBranchAction(
+                instruction);
+
         if (!condition ||
             logicGate)
         {
@@ -1764,6 +1785,86 @@ internal sealed class EventWorkspacePanel
                 input,
                 pinColor,
                 6.0f);
+        }
+
+        if (branchAction)
+        {
+            Vector2 trueOutput =
+                GetBranchTrueOutput(
+                    instruction);
+
+            Vector2 falseOutput =
+                GetBranchFalseOutput(
+                    instruction);
+
+            _graphCanvas.DrawPin(
+                trueOutput,
+                TrueExecutionWireColor,
+                6.5f);
+
+            _graphCanvas.DrawPin(
+                falseOutput,
+                FalseExecutionWireColor,
+                6.5f);
+
+            if (ImGui.IsMouseClicked(
+                    ImGuiMouseButton.Right))
+            {
+                if (_graphCanvas.IsPointHovered(
+                        input,
+                        13.0f))
+                {
+                    RecordHistory(
+                        "Disconnect Execution Wire");
+
+                    DisconnectIncomingExecution(
+                        rule,
+                        instruction.InstanceId);
+
+                    _dirty =
+                        true;
+                }
+                else if (_graphCanvas.IsPointHovered(
+                             trueOutput,
+                             13.0f))
+                {
+                    RecordHistory(
+                        "Disconnect True Wire");
+
+                    instruction.TrueActionId =
+                        null;
+
+                    _dirty =
+                        true;
+                }
+                else if (_graphCanvas.IsPointHovered(
+                             falseOutput,
+                             13.0f))
+                {
+                    RecordHistory(
+                        "Disconnect False Wire");
+
+                    instruction.FalseActionId =
+                        null;
+
+                    _dirty =
+                        true;
+                }
+            }
+
+            TryStartWireDrag(
+                rule,
+                WireDragKind.ActionTrue,
+                instruction.InstanceId,
+                trueOutput);
+
+            TryStartWireDrag(
+                rule,
+                WireDragKind.ActionFalse,
+                instruction.InstanceId,
+                falseOutput);
+
+            return remove;
         }
 
         _graphCanvas.DrawPin(
@@ -1965,6 +2066,52 @@ internal sealed class EventWorkspacePanel
             foreach (VisualInstruction action
                      in rule.Actions)
             {
+                if (IsBranchAction(
+                        action))
+                {
+                    if (action.TrueActionId.HasValue)
+                    {
+                        VisualInstruction? trueAction =
+                            FindAction(
+                                rule,
+                                action.TrueActionId.Value);
+
+                        if (trueAction !=
+                            null)
+                        {
+                            _graphCanvas.DrawWire(
+                                GetBranchTrueOutput(
+                                    action),
+                                GetInstructionInput(
+                                    trueAction),
+                                TrueExecutionWireColor,
+                                3.5f);
+                        }
+                    }
+
+                    if (action.FalseActionId.HasValue)
+                    {
+                        VisualInstruction? falseAction =
+                            FindAction(
+                                rule,
+                                action.FalseActionId.Value);
+
+                        if (falseAction !=
+                            null)
+                        {
+                            _graphCanvas.DrawWire(
+                                GetBranchFalseOutput(
+                                    action),
+                                GetInstructionInput(
+                                    falseAction),
+                                FalseExecutionWireColor,
+                                3.5f);
+                        }
+                    }
+
+                    continue;
+                }
+
                 if (!action.NextActionId.HasValue)
                 {
                     continue;
@@ -2004,10 +2151,20 @@ internal sealed class EventWorkspacePanel
             _graphCanvas.MouseGraphPosition;
 
         Vector4 color =
-            _wireDragKind ==
-            WireDragKind.Condition
-                ? ConditionWireColor
-                : ExecutionWireColor;
+            _wireDragKind switch
+            {
+                WireDragKind.Condition =>
+                    ConditionWireColor,
+
+                WireDragKind.ActionTrue =>
+                    TrueExecutionWireColor,
+
+                WireDragKind.ActionFalse =>
+                    FalseExecutionWireColor,
+
+                _ =>
+                    ExecutionWireColor
+            };
 
         if (_wireDragKind ==
                 WireDragKind.Condition &&
@@ -2099,8 +2256,15 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
-        if (_wireDragKind ==
-                WireDragKind.Action &&
+        if (
+            (
+                _wireDragKind ==
+                    WireDragKind.Action ||
+                _wireDragKind ==
+                    WireDragKind.ActionTrue ||
+                _wireDragKind ==
+                    WireDragKind.ActionFalse
+            ) &&
             TryConnectExecutionWireAtMouse())
         {
             CancelWireDrag();
@@ -2174,11 +2338,22 @@ internal sealed class EventWorkspacePanel
                 _pendingWireSourceInstructionId,
                 true);
         }
-        else if (_pendingWireCreateKind ==
-                 WireDragKind.Action)
+        else if (
+            _pendingWireCreateKind ==
+                WireDragKind.Action ||
+            _pendingWireCreateKind ==
+                WireDragKind.ActionTrue ||
+            _pendingWireCreateKind ==
+                WireDragKind.ActionFalse)
         {
             ImGui.TextDisabled(
-                "CREATE ACTION FROM WIRE");
+                _pendingWireCreateKind ==
+                    WireDragKind.ActionTrue
+                    ? "CREATE TRUE ACTION FROM WIRE"
+                    : _pendingWireCreateKind ==
+                        WireDragKind.ActionFalse
+                        ? "CREATE FALSE ACTION FROM WIRE"
+                        : "CREATE ACTION FROM WIRE");
 
             ImGui.Separator();
 
@@ -2356,6 +2531,17 @@ internal sealed class EventWorkspacePanel
         if (condition)
         {
             if (ImGui.BeginMenu(
+                    "Mouse"))
+            {
+                DrawMouseConditionCreateItems(
+                    rule,
+                    position,
+                    insertAfterInstructionId);
+
+                ImGui.EndMenu();
+            }
+
+            if (ImGui.BeginMenu(
                     "Logic"))
             {
                 if (ImGui.MenuItem(
@@ -2453,6 +2639,45 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (ImGui.BeginMenu(
+                "Flow"))
+        {
+            if (ImGui.MenuItem(
+                    "Branch"))
+            {
+                RecordHistory(
+                    "Add Branch");
+
+                VisualInstruction created =
+                    AddInstructionAt(
+                        rule,
+                        "flow.branch",
+                        false,
+                        position,
+                        insertAfterInstructionId,
+                        connectFromWire &&
+                        insertAfterInstructionId ==
+                            Guid.Empty);
+
+                if (connectFromWire)
+                {
+                    ConnectNewActionAfterSource(
+                        rule,
+                        insertAfterInstructionId,
+                        created,
+                        _pendingWireCreateKind);
+                }
+                else
+                {
+                    AppendActionToExecutionFlow(
+                        rule,
+                        created);
+                }
+            }
+
+            ImGui.EndMenu();
+        }
+
         var actionGroups =
             _registry.Actions
                 .OrderBy(
@@ -2499,7 +2724,8 @@ internal sealed class EventWorkspacePanel
                         ConnectNewActionAfterSource(
                             rule,
                             insertAfterInstructionId,
-                            created);
+                            created,
+                            _pendingWireCreateKind);
                     }
                     else
                     {
@@ -2903,8 +3129,30 @@ internal sealed class EventWorkspacePanel
                 if (_graphCanvas.IsPointHovered(
                         GetInstructionInput(
                             action),
-                        16.0f) ||
-                    _graphCanvas.IsPointHovered(
+                        16.0f))
+                {
+                    return true;
+                }
+
+                if (IsBranchAction(
+                        action))
+                {
+                    if (_graphCanvas.IsPointHovered(
+                            GetBranchTrueOutput(
+                                action),
+                            16.0f) ||
+                        _graphCanvas.IsPointHovered(
+                            GetBranchFalseOutput(
+                                action),
+                            16.0f))
+                    {
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (_graphCanvas.IsPointHovered(
                         GetInstructionOutput(
                             action),
                         16.0f))
@@ -3038,6 +3286,121 @@ internal sealed class EventWorkspacePanel
         }
 
         return false;
+    }
+
+    private void DrawMouseConditionCreateItems(
+        EventRuleDefinition rule,
+        Vector2 position,
+        Guid insertAfterInstructionId)
+    {
+        if (ImGui.MenuItem(
+                "Button Is Held"))
+        {
+            RecordHistory(
+                "Add Mouse Condition");
+
+            VisualInstruction created =
+                AddInstructionAt(
+                    rule,
+                    "input.mouseHeld",
+                    true,
+                    position,
+                    insertAfterInstructionId);
+
+            ConnectCondition(
+                rule,
+                created.InstanceId);
+        }
+
+        if (ImGui.MenuItem(
+                "Button Pressed"))
+        {
+            RecordHistory(
+                "Add Mouse Condition");
+
+            VisualInstruction created =
+                AddInstructionAt(
+                    rule,
+                    "input.mousePressed",
+                    true,
+                    position,
+                    insertAfterInstructionId);
+
+            ConnectCondition(
+                rule,
+                created.InstanceId);
+        }
+
+        if (ImGui.MenuItem(
+                "Button Released"))
+        {
+            RecordHistory(
+                "Add Mouse Condition");
+
+            VisualInstruction created =
+                AddInstructionAt(
+                    rule,
+                    "input.mouseReleased",
+                    true,
+                    position,
+                    insertAfterInstructionId);
+
+            ConnectCondition(
+                rule,
+                created.InstanceId);
+        }
+    }
+
+    private bool DrawMouseConditionPickerItems(
+        EventRuleDefinition rule,
+        List<VisualInstruction> conditions)
+    {
+        string? id =
+            null;
+
+        if (ImGui.MenuItem(
+                "Button Is Held"))
+        {
+            id =
+                "input.mouseHeld";
+        }
+        else if (ImGui.MenuItem(
+                     "Button Pressed"))
+        {
+            id =
+                "input.mousePressed";
+        }
+        else if (ImGui.MenuItem(
+                     "Button Released"))
+        {
+            id =
+                "input.mouseReleased";
+        }
+
+        if (id ==
+            null)
+        {
+            return false;
+        }
+
+        RecordHistory(
+            "Add Mouse Condition");
+
+        VisualInstruction created =
+            CreateInstruction(
+                id);
+
+        conditions.Add(
+            created);
+
+        ConnectCondition(
+            rule,
+            created.InstanceId);
+
+        _dirty =
+            true;
+
+        return true;
     }
 
     private void HandleGraphShortcuts()
@@ -4013,6 +4376,45 @@ internal sealed class EventWorkspacePanel
         if (condition)
         {
             if (instruction.Id.Equals(
+                    "input.mouseHeld",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                displayName =
+                    "Mouse Button Is Held";
+
+                category =
+                    "Input";
+
+                return;
+            }
+
+            if (instruction.Id.Equals(
+                    "input.mousePressed",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                displayName =
+                    "Mouse Button Pressed";
+
+                category =
+                    "Input";
+
+                return;
+            }
+
+            if (instruction.Id.Equals(
+                    "input.mouseReleased",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                displayName =
+                    "Mouse Button Released";
+
+                category =
+                    "Input";
+
+                return;
+            }
+
+            if (instruction.Id.Equals(
                     "logic.and",
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -4050,6 +4452,19 @@ internal sealed class EventWorkspacePanel
                 category =
                     definition.Category;
             }
+
+            return;
+        }
+
+        if (instruction.Id.Equals(
+                "flow.branch",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            displayName =
+                "Branch";
+
+            category =
+                "Flow";
 
             return;
         }
@@ -4406,7 +4821,8 @@ internal sealed class EventWorkspacePanel
         ConnectExecution(
             rule,
             _wireDragSourceInstructionId,
-            target.InstanceId);
+            target.InstanceId,
+            _wireDragKind);
 
         _dirty =
             true;
@@ -4425,39 +4841,67 @@ internal sealed class EventWorkspacePanel
             return false;
         }
 
-        Guid? current =
-            targetActionId;
-
         HashSet<Guid> visited =
             new();
 
-        while (current.HasValue)
+        Stack<Guid> pending =
+            new();
+
+        pending.Push(
+            targetActionId);
+
+        while (pending.Count >
+               0)
         {
-            if (current.Value ==
+            Guid currentId =
+                pending.Pop();
+
+            if (currentId ==
                 sourceActionId)
             {
                 return true;
             }
 
             if (!visited.Add(
-                    current.Value))
+                    currentId))
             {
-                return true;
+                continue;
             }
 
             VisualInstruction? action =
                 FindAction(
                     rule,
-                    current.Value);
+                    currentId);
 
             if (action ==
                 null)
             {
-                return false;
+                continue;
             }
 
-            current =
-                action.NextActionId;
+            if (IsBranchAction(
+                    action))
+            {
+                if (action.TrueActionId.HasValue)
+                {
+                    pending.Push(
+                        action.TrueActionId.Value);
+                }
+
+                if (action.FalseActionId.HasValue)
+                {
+                    pending.Push(
+                        action.FalseActionId.Value);
+                }
+
+                continue;
+            }
+
+            if (action.NextActionId.HasValue)
+            {
+                pending.Push(
+                    action.NextActionId.Value);
+            }
         }
 
         return false;
@@ -4466,7 +4910,8 @@ internal sealed class EventWorkspacePanel
     private static void ConnectExecution(
         EventRuleDefinition rule,
         Guid sourceActionId,
-        Guid targetActionId)
+        Guid targetActionId,
+        WireDragKind sourceKind)
     {
         rule.HasExplicitExecutionFlow =
             true;
@@ -4489,11 +4934,28 @@ internal sealed class EventWorkspacePanel
                 rule,
                 sourceActionId);
 
-        if (source !=
+        if (source ==
             null)
         {
-            source.NextActionId =
-                targetActionId;
+            return;
+        }
+
+        switch (sourceKind)
+        {
+            case WireDragKind.ActionTrue:
+                source.TrueActionId =
+                    targetActionId;
+                break;
+
+            case WireDragKind.ActionFalse:
+                source.FalseActionId =
+                    targetActionId;
+                break;
+
+            default:
+                source.NextActionId =
+                    targetActionId;
+                break;
         }
     }
 
@@ -4517,13 +4979,28 @@ internal sealed class EventWorkspacePanel
                 action.NextActionId =
                     null;
             }
+
+            if (action.TrueActionId ==
+                targetActionId)
+            {
+                action.TrueActionId =
+                    null;
+            }
+
+            if (action.FalseActionId ==
+                targetActionId)
+            {
+                action.FalseActionId =
+                    null;
+            }
         }
     }
 
     private static void ConnectNewActionAfterSource(
         EventRuleDefinition rule,
         Guid sourceActionId,
-        VisualInstruction created)
+        VisualInstruction created,
+        WireDragKind sourceKind)
     {
         rule.HasExplicitExecutionFlow =
             true;
@@ -4554,6 +5031,36 @@ internal sealed class EventWorkspacePanel
             AppendActionToExecutionFlow(
                 rule,
                 created);
+
+            return;
+        }
+
+        if (sourceKind ==
+            WireDragKind.ActionTrue)
+        {
+            Guid? previous =
+                source.TrueActionId;
+
+            source.TrueActionId =
+                created.InstanceId;
+
+            created.NextActionId =
+                previous;
+
+            return;
+        }
+
+        if (sourceKind ==
+            WireDragKind.ActionFalse)
+        {
+            Guid? previous =
+                source.FalseActionId;
+
+            source.FalseActionId =
+                created.InstanceId;
+
+            created.NextActionId =
+                previous;
 
             return;
         }
@@ -4609,6 +5116,17 @@ internal sealed class EventWorkspacePanel
                 return;
             }
 
+            /*
+             * Once a Branch is reached, there is no single unambiguous tail.
+             * Leave newly-added Actions disconnected so the user explicitly
+             * wires them to TRUE or FALSE.
+             */
+            if (IsBranchAction(
+                    current))
+            {
+                return;
+            }
+
             if (!current.NextActionId.HasValue)
             {
                 current.NextActionId =
@@ -4620,11 +5138,6 @@ internal sealed class EventWorkspacePanel
             currentId =
                 current.NextActionId.Value;
         }
-
-        /*
-         * A malformed cycle should not make Add Action hang. Leave the new
-         * Action disconnected; the runtime also guards against cycles.
-         */
     }
 
     private static void RemoveActionFromExecutionFlow(
@@ -4637,7 +5150,10 @@ internal sealed class EventWorkspacePanel
         }
 
         Guid? successor =
-            action.NextActionId;
+            IsBranchAction(
+                action)
+                ? null
+                : action.NextActionId;
 
         if (rule.FirstActionId ==
             action.InstanceId)
@@ -4661,9 +5177,29 @@ internal sealed class EventWorkspacePanel
                 candidate.NextActionId =
                     successor;
             }
+
+            if (candidate.TrueActionId ==
+                action.InstanceId)
+            {
+                candidate.TrueActionId =
+                    successor;
+            }
+
+            if (candidate.FalseActionId ==
+                action.InstanceId)
+            {
+                candidate.FalseActionId =
+                    successor;
+            }
         }
 
         action.NextActionId =
+            null;
+
+        action.TrueActionId =
+            null;
+
+        action.FalseActionId =
             null;
     }
 
@@ -4917,6 +5453,14 @@ internal sealed class EventWorkspacePanel
                 "logic.or" =>
                     155.0f,
 
+                "flow.branch" =>
+                    245.0f,
+
+                "input.mouseHeld" or
+                "input.mousePressed" or
+                "input.mouseReleased" =>
+                    170.0f,
+
                 "system.always" or
                 "system.triggerOnce" or
                 "character.isGrounded" or
@@ -5013,6 +5557,50 @@ internal sealed class EventWorkspacePanel
                 GetNodeScale(),
                 size.Y *
                 0.34f));
+    }
+
+    private static bool IsBranchAction(
+        VisualInstruction instruction)
+    {
+        return instruction.Id.Equals(
+            "flow.branch",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Vector2 GetBranchTrueOutput(
+        VisualInstruction instruction)
+    {
+        Vector2 size =
+            GetScaledInstructionNodeSize(
+                instruction);
+
+        return new Vector2(
+            instruction.EditorX +
+            size.X,
+            instruction.EditorY +
+            Math.Min(
+                92.0f *
+                GetNodeScale(),
+                size.Y *
+                0.42f));
+    }
+
+    private Vector2 GetBranchFalseOutput(
+        VisualInstruction instruction)
+    {
+        Vector2 size =
+            GetScaledInstructionNodeSize(
+                instruction);
+
+        return new Vector2(
+            instruction.EditorX +
+            size.X,
+            instruction.EditorY +
+            Math.Min(
+                150.0f *
+                GetNodeScale(),
+                size.Y *
+                0.72f));
     }
 
     private Vector2 GetInstructionInput(
@@ -5267,6 +5855,19 @@ internal sealed class EventWorkspacePanel
         ImGui.Separator();
 
         if (ImGui.BeginMenu(
+                "Mouse"))
+        {
+            if (DrawMouseConditionPickerItems(
+                    rule,
+                    conditions))
+            {
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu(
                 "Logic"))
         {
             if (ImGui.MenuItem(
@@ -5387,6 +5988,35 @@ internal sealed class EventWorkspacePanel
 
         ImGui.Separator();
 
+        if (ImGui.BeginMenu(
+                "Flow"))
+        {
+            if (ImGui.MenuItem(
+                    "Branch"))
+            {
+                RecordHistory(
+                    "Add Branch");
+
+                VisualInstruction created =
+                    CreateInstruction(
+                        "flow.branch");
+
+                actions.Add(
+                    created);
+
+                AppendActionToExecutionFlow(
+                    rule,
+                    created);
+
+                _dirty =
+                    true;
+
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.EndMenu();
+        }
+
         var groups =
             _registry.Actions
                 .OrderBy(
@@ -5456,6 +6086,20 @@ internal sealed class EventWorkspacePanel
 
         switch (id)
         {
+            case "input.mouseHeld":
+            case "input.mousePressed":
+            case "input.mouseReleased":
+                instruction.Arguments["button"] =
+                    EventValue.String(
+                        "Left");
+                break;
+
+            case "flow.branch":
+                instruction.Arguments["condition"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
             case "input.keyHeld":
             case "input.keyPressed":
             case "input.keyReleased":
@@ -5595,6 +6239,38 @@ internal sealed class EventWorkspacePanel
     {
         switch (instruction.Id)
         {
+            case "flow.branch":
+                DrawValueArgument(
+                    instruction,
+                    "condition",
+                    "Condition",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        false),
+                    state,
+                    false);
+
+                ImGui.Separator();
+
+                ImGui.TextColored(
+                    TrueExecutionWireColor,
+                    "TRUE output");
+
+                ImGui.TextColored(
+                    FalseExecutionWireColor,
+                    "FALSE output");
+                break;
+
+            case "input.mouseHeld":
+            case "input.mousePressed":
+            case "input.mouseReleased":
+                DrawMouseButtonArgument(
+                    instruction,
+                    "button",
+                    "Mouse Button",
+                    MouseButton.Left);
+                break;
+
             case "logic.and":
                 ImGui.TextDisabled(
                     "TRUE when every connected input is TRUE.");
@@ -6527,6 +7203,80 @@ internal sealed class EventWorkspacePanel
     // ========================================================
     // KEY ARGUMENT
     // ========================================================
+
+    private void DrawMouseButtonArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        MouseButton fallback)
+    {
+        if (!instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) ||
+            value ==
+                null)
+        {
+            value =
+                EventValue.String(
+                    fallback.ToString());
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        string current =
+            value.Kind ==
+                EventValueKind.Constant &&
+            value.Constant.Type ==
+                VariableType.String
+                ? value.Constant.String
+                : fallback.ToString();
+
+        ImGui.TextDisabled(
+            label);
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (!ImGui.BeginCombo(
+                "##MouseButton",
+                current))
+        {
+            return;
+        }
+
+        foreach (MouseButton button
+                 in Enum.GetValues<MouseButton>())
+        {
+            string name =
+                button.ToString();
+
+            bool selected =
+                string.Equals(
+                    current,
+                    name,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (ImGui.Selectable(
+                    name,
+                    selected))
+            {
+                instruction.Arguments[argumentName] =
+                    EventValue.String(
+                        name);
+
+                _dirty =
+                    true;
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndCombo();
+    }
 
     private void DrawKeyArgument(
         VisualInstruction instruction,

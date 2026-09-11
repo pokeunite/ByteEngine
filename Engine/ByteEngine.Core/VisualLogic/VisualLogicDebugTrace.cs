@@ -54,13 +54,82 @@ public static class VisualLogicDebugTrace
             return;
         }
 
-        _entries[
-            new TraceKey(
+        TraceKey key =
+            new(
                 moduleId,
-                nodeId)] =
+                nodeId);
+
+        long now =
+            Stopwatch.GetTimestamp();
+
+        /*
+         * Edge-triggered Conditions such as Mouse Button Pressed are TRUE
+         * for only one update frame. Without a short positive-state hold,
+         * the very next FALSE evaluation immediately overwrites the TRUE
+         * trace before the editor can visibly render it.
+         *
+         * Keep successful pulses visible briefly:
+         *
+         * ConditionTrue  -> ConditionFalse
+         * EventTriggered -> EventBlocked
+         * ActionExecuted -> ActionSkipped
+         *
+         * Real failures are never delayed.
+         */
+        if (_entries.TryGetValue(
+                key,
+                out TraceEntry previous) &&
+            ShouldHoldPositivePulse(
+                previous.State,
+                state))
+        {
+            long elapsed =
+                now -
+                previous.Timestamp;
+
+            double seconds =
+                elapsed /
+                (double)Stopwatch.Frequency;
+
+            if (seconds <
+                PositivePulseHoldSeconds)
+            {
+                return;
+            }
+        }
+
+        _entries[key] =
             new TraceEntry(
                 state,
-                Stopwatch.GetTimestamp());
+                now);
+    }
+
+    private const double PositivePulseHoldSeconds =
+        0.24;
+
+    private static bool ShouldHoldPositivePulse(
+        VisualLogicTraceState previous,
+        VisualLogicTraceState incoming)
+    {
+        return
+            (
+                previous ==
+                    VisualLogicTraceState.ConditionTrue &&
+                incoming ==
+                    VisualLogicTraceState.ConditionFalse
+            ) ||
+            (
+                previous ==
+                    VisualLogicTraceState.EventTriggered &&
+                incoming ==
+                    VisualLogicTraceState.EventBlocked
+            ) ||
+            (
+                previous ==
+                    VisualLogicTraceState.ActionExecuted &&
+                incoming ==
+                    VisualLogicTraceState.ActionSkipped
+            );
     }
 
     public static bool TryGetRecentState(

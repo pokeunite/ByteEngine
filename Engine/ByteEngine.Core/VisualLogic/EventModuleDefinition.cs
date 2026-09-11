@@ -166,9 +166,14 @@ public sealed class VisualInstruction
     /*
      * Runtime execution-flow data for Action instructions.
      *
-     * Conditions ignore this field.
+     * Ordinary Actions use NextActionId.
+     * Flow Branch uses TrueActionId / FalseActionId.
      */
     public Guid? NextActionId { get; set; }
+
+    public Guid? TrueActionId { get; set; }
+
+    public Guid? FalseActionId { get; set; }
 
     /*
      * ByteGraph editor metadata.

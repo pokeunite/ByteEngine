@@ -355,6 +355,14 @@ public sealed class EventModuleRuntime
             passed =
                 true;
         }
+        else if (TryEvaluateMouseCondition(
+                     condition,
+                     context,
+                     out bool mousePassed))
+        {
+            passed =
+                mousePassed;
+        }
         else if (!_registry.TryGetCondition(
                      condition.Id,
                      out VisualConditionDefinition? definition) ||
@@ -432,8 +440,8 @@ public sealed class EventModuleRuntime
         EventExecutionContext context)
     {
         /*
-         * Compatibility path for Event Modules authored before ByteGraph
-         * execution wires existed.
+         * Compatibility path for Event Modules authored before explicit
+         * ByteGraph execution wires existed.
          */
         if (!rule.HasExplicitExecutionFlow)
         {
@@ -462,8 +470,25 @@ public sealed class EventModuleRuntime
         HashSet<Guid> visited =
             new();
 
+        ExecuteActionFlow(
+            module,
+            rule,
+            rule.FirstActionId,
+            actions,
+            context,
+            visited);
+    }
+
+    private void ExecuteActionFlow(
+        EventModuleDefinition module,
+        EventRuleDefinition rule,
+        Guid? startActionId,
+        IReadOnlyDictionary<Guid, VisualInstruction> actions,
+        EventExecutionContext context,
+        HashSet<Guid> visited)
+    {
         Guid? current =
-            rule.FirstActionId;
+            startActionId;
 
         while (current.HasValue)
         {
@@ -493,6 +518,30 @@ public sealed class EventModuleRuntime
                     context);
 
                 return;
+            }
+
+            if (action.Id.Equals(
+                    "flow.branch",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    action.InstanceId,
+                    VisualLogicTraceState.ActionExecuted);
+
+                bool branchResult =
+                    EventValueResolver.GetBoolean(
+                        action,
+                        "condition",
+                        context,
+                        false);
+
+                current =
+                    branchResult
+                        ? action.TrueActionId
+                        : action.FalseActionId;
+
+                continue;
             }
 
             ExecuteAction(
@@ -542,20 +591,31 @@ public sealed class EventModuleRuntime
         HashSet<Guid> visited =
             new();
 
-        Guid? current =
-            rule.FirstActionId;
+        Stack<Guid> pending =
+            new();
 
-        while (current.HasValue &&
-               visited.Add(
-                   current.Value))
+        pending.Push(
+            rule.FirstActionId.Value);
+
+        while (pending.Count >
+               0)
         {
+            Guid actionId =
+                pending.Pop();
+
+            if (!visited.Add(
+                    actionId))
+            {
+                continue;
+            }
+
             if (!actions.TryGetValue(
-                    current.Value,
+                    actionId,
                     out VisualInstruction? action) ||
                 action ==
                     null)
             {
-                return;
+                continue;
             }
 
             VisualLogicDebugTrace.Mark(
@@ -563,8 +623,30 @@ public sealed class EventModuleRuntime
                 action.InstanceId,
                 state);
 
-            current =
-                action.NextActionId;
+            if (action.Id.Equals(
+                    "flow.branch",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (action.TrueActionId.HasValue)
+                {
+                    pending.Push(
+                        action.TrueActionId.Value);
+                }
+
+                if (action.FalseActionId.HasValue)
+                {
+                    pending.Push(
+                        action.FalseActionId.Value);
+                }
+
+                continue;
+            }
+
+            if (action.NextActionId.HasValue)
+            {
+                pending.Push(
+                    action.NextActionId.Value);
+            }
         }
     }
 
@@ -617,6 +699,63 @@ public sealed class EventModuleRuntime
                 $"Action '{definition.DisplayName}' failed: {exception.Message}",
                 context);
         }
+    }
+
+    private static bool TryEvaluateMouseCondition(
+        VisualInstruction condition,
+        EventExecutionContext context,
+        out bool passed)
+    {
+        passed =
+            false;
+
+        bool isMouseCondition =
+            condition.Id.Equals(
+                "input.mouseHeld",
+                StringComparison.OrdinalIgnoreCase) ||
+            condition.Id.Equals(
+                "input.mousePressed",
+                StringComparison.OrdinalIgnoreCase) ||
+            condition.Id.Equals(
+                "input.mouseReleased",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!isMouseCondition)
+        {
+            return false;
+        }
+
+        string value =
+            EventValueResolver.GetString(
+                condition,
+                "button",
+                context,
+                MouseButton.Left.ToString());
+
+        if (!Enum.TryParse(
+                value,
+                true,
+                out MouseButton button))
+        {
+            button =
+                MouseButton.Left;
+        }
+
+        passed =
+            condition.Id.Equals(
+                "input.mouseHeld",
+                StringComparison.OrdinalIgnoreCase)
+                ? Input.IsMouseButtonDown(
+                    button)
+                : condition.Id.Equals(
+                    "input.mousePressed",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? Input.IsMouseButtonPressed(
+                        button)
+                    : Input.IsMouseButtonReleased(
+                        button);
+
+        return true;
     }
 
     private void ResetLatchTree(

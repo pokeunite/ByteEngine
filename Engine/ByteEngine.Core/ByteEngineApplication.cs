@@ -52,7 +52,8 @@ public class ByteEngineApplication : GameWindow
         Renderer =
             new Renderer2D();
 
-        Renderer3D = new Renderer3D();
+        Renderer3D =
+            new Renderer3D();
 
         Scenes =
             new SceneManager();
@@ -102,6 +103,7 @@ public class ByteEngineApplication : GameWindow
             WindowWidth,
             WindowHeight
         );
+
         Renderer3D.Initialize();
 
         OnEngineStart();
@@ -118,14 +120,16 @@ public class ByteEngineApplication : GameWindow
     protected override void OnUpdateFrame(
         FrameEventArgs args)
     {
-        base.OnUpdateFrame(args);
+        base.OnUpdateFrame(
+            args);
 
         Time.Update(
             args.Time
         );
 
         Input.Update(
-            KeyboardState
+            KeyboardState,
+            MouseState
         );
 
         if (CloseOnEscape &&
@@ -148,7 +152,8 @@ public class ByteEngineApplication : GameWindow
     protected override void OnRenderFrame(
         FrameEventArgs args)
     {
-        base.OnRenderFrame(args);
+        base.OnRenderFrame(
+            args);
 
         GL.Clear(
             ClearBufferMask.ColorBufferBit |
@@ -157,14 +162,27 @@ public class ByteEngineApplication : GameWindow
 
         if (ShouldRenderSceneToWindow)
         {
-            ByteEngine.Core.Scene.Scene? activeScene = Scenes.ActiveScene;
-            Camera3D? camera3D = activeScene?.FindComponent<Camera3D>();
-            Camera2D? camera = camera3D == null ? activeScene?.FindComponent<Camera2D>() : null;
+            ByteEngine.Core.Scene.Scene? activeScene =
+                Scenes.ActiveScene;
 
-            if (camera != null)
+            Camera3D? camera3D =
+                activeScene?
+                    .FindComponent<Camera3D>();
+
+            Camera2D? camera =
+                camera3D ==
+                    null
+                    ? activeScene?
+                        .FindComponent<Camera2D>()
+                    : null;
+
+            if (camera !=
+                null)
             {
                 Renderer.SetCamera(
-                    new System.Numerics.Vector2(camera.Transform.WorldPosition.X, camera.Transform.WorldPosition.Y),
+                    new System.Numerics.Vector2(
+                        camera.Transform.WorldPosition.X,
+                        camera.Transform.WorldPosition.Y),
                     camera.Zoom
                 );
             }
@@ -173,9 +191,20 @@ public class ByteEngineApplication : GameWindow
                 Renderer.ResetCamera();
             }
 
-            if (activeScene != null)
-                Scenes.RenderInternal(new RenderContext(Renderer, Renderer3D, activeScene,
-                    WindowWidth, WindowHeight, camera, camera3D));
+            if (activeScene !=
+                null)
+            {
+                Scenes.RenderInternal(
+                    new RenderContext(
+                        Renderer,
+                        Renderer3D,
+                        activeScene,
+                        WindowWidth,
+                        WindowHeight,
+                        camera,
+                        camera3D)
+                );
+            }
         }
 
         OnEngineRender();
@@ -186,7 +215,8 @@ public class ByteEngineApplication : GameWindow
     protected override void OnResize(
         ResizeEventArgs e)
     {
-        base.OnResize(e);
+        base.OnResize(
+            e);
 
         int width =
             Math.Max(

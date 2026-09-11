@@ -1,5 +1,8 @@
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
+using OpenTkMouseButton =
+    OpenTK.Windowing.GraphicsLibraryFramework.MouseButton;
+
 namespace ByteEngine.Core;
 
 public enum Key
@@ -25,10 +28,20 @@ public enum Key
     Escape
 }
 
+public enum MouseButton
+{
+    Left,
+    Right,
+    Middle
+}
+
 public static class Input
 {
     private static readonly Key[] SupportedKeys =
         Enum.GetValues<Key>();
+
+    private static readonly MouseButton[] SupportedMouseButtons =
+        Enum.GetValues<MouseButton>();
 
     private static readonly HashSet<Key> KeysDown =
         new();
@@ -36,14 +49,22 @@ public static class Input
     private static readonly HashSet<Key> PreviousKeysDown =
         new();
 
+    private static readonly HashSet<MouseButton> MouseButtonsDown =
+        new();
+
+    private static readonly HashSet<MouseButton> PreviousMouseButtonsDown =
+        new();
+
     internal static void Update(
-        KeyboardState keyboardState)
+        KeyboardState keyboardState,
+        MouseState mouseState)
     {
         PreviousKeysDown.Clear();
 
         foreach (Key key in KeysDown)
         {
-            PreviousKeysDown.Add(key);
+            PreviousKeysDown.Add(
+                key);
         }
 
         KeysDown.Clear();
@@ -51,9 +72,34 @@ public static class Input
         foreach (Key key in SupportedKeys)
         {
             if (keyboardState.IsKeyDown(
-                    ToOpenTkKey(key)))
+                    ToOpenTkKey(
+                        key)))
             {
-                KeysDown.Add(key);
+                KeysDown.Add(
+                    key);
+            }
+        }
+
+        PreviousMouseButtonsDown.Clear();
+
+        foreach (MouseButton button
+                 in MouseButtonsDown)
+        {
+            PreviousMouseButtonsDown.Add(
+                button);
+        }
+
+        MouseButtonsDown.Clear();
+
+        foreach (MouseButton button
+                 in SupportedMouseButtons)
+        {
+            if (mouseState.IsButtonDown(
+                    ToOpenTkMouseButton(
+                        button)))
+            {
+                MouseButtonsDown.Add(
+                    button);
             }
         }
     }
@@ -61,23 +107,55 @@ public static class Input
     public static bool IsKeyDown(
         Key key)
     {
-        return KeysDown.Contains(key);
+        return KeysDown.Contains(
+            key);
     }
 
     public static bool IsKeyPressed(
         Key key)
     {
         return
-            KeysDown.Contains(key) &&
-            !PreviousKeysDown.Contains(key);
+            KeysDown.Contains(
+                key) &&
+            !PreviousKeysDown.Contains(
+                key);
     }
 
     public static bool IsKeyReleased(
         Key key)
     {
         return
-            !KeysDown.Contains(key) &&
-            PreviousKeysDown.Contains(key);
+            !KeysDown.Contains(
+                key) &&
+            PreviousKeysDown.Contains(
+                key);
+    }
+
+    public static bool IsMouseButtonDown(
+        MouseButton button)
+    {
+        return MouseButtonsDown.Contains(
+            button);
+    }
+
+    public static bool IsMouseButtonPressed(
+        MouseButton button)
+    {
+        return
+            MouseButtonsDown.Contains(
+                button) &&
+            !PreviousMouseButtonsDown.Contains(
+                button);
+    }
+
+    public static bool IsMouseButtonReleased(
+        MouseButton button)
+    {
+        return
+            !MouseButtonsDown.Contains(
+                button) &&
+            PreviousMouseButtonsDown.Contains(
+                button);
     }
 
     private static Keys ToOpenTkKey(
@@ -109,6 +187,27 @@ public static class Input
                 nameof(key),
                 key,
                 "Unsupported key.")
+        };
+    }
+
+    private static OpenTkMouseButton ToOpenTkMouseButton(
+        MouseButton button)
+    {
+        return button switch
+        {
+            MouseButton.Left =>
+                OpenTkMouseButton.Left,
+
+            MouseButton.Right =>
+                OpenTkMouseButton.Right,
+
+            MouseButton.Middle =>
+                OpenTkMouseButton.Middle,
+
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(button),
+                button,
+                "Unsupported mouse button.")
         };
     }
 }
