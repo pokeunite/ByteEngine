@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Blueprints;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -44,6 +45,26 @@ internal sealed class AssetsPanel
         "New Event Module";
 
     private int _eventModuleTemplate;
+
+    private bool _showCreateFolder;
+
+    private string _newFolderName =
+        "New Folder";
+
+    private bool _showRename;
+
+    private string? _renameTargetPath;
+
+    private bool _renameTargetIsDirectory;
+
+    private string _renameBuffer =
+        string.Empty;
+
+    private bool _showDeleteConfirm;
+
+    private string? _deleteTargetPath;
+
+    private bool _deleteTargetIsDirectory;
 
     public bool IsOpen { get; set; } =
         true;
@@ -103,6 +124,7 @@ internal sealed class AssetsPanel
             EnsureValidDirectory();
 
             DrawToolbar(
+                state,
                 log);
 
             ImGui.Separator();
@@ -121,7 +143,8 @@ internal sealed class AssetsPanel
                     0.0f),
                 ImGuiChildFlags.None);
 
-            DrawFolderTree();
+            DrawFolderTree(
+                log);
 
             ImGui.EndChild();
 
@@ -143,15 +166,21 @@ internal sealed class AssetsPanel
 
             DrawCreateEventModuleDialog(
                 log);
+
+            DrawCreateFolderDialog(
+                log);
+
+            DrawRenameDialog(
+                state,
+                log);
+
+            DrawDeleteDialog(
+                state,
+                log);
         }
 
         ImGui.End();
 
-        /*
-         * Draw all open Event Module documents after the Assets
-         * window so they participate in the main editor dockspace
-         * as independent document tabs.
-         */
         _eventWorkspaces.Draw(
             log);
     }
@@ -161,6 +190,7 @@ internal sealed class AssetsPanel
     // ========================================================
 
     private void DrawToolbar(
+        EditorState state,
         EditorLog log)
     {
         if (ImGui.SmallButton(
@@ -181,6 +211,42 @@ internal sealed class AssetsPanel
 
         ImGui.SameLine();
 
+        if (ImGui.SmallButton(
+                "+ Folder"))
+        {
+            _newFolderName =
+                "New Folder";
+
+            _showCreateFolder =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        bool canCreateFromSelection =
+            state.Mode ==
+                EditorMode.Edit &&
+            state.SelectedObject !=
+                null &&
+            IsInsideDirectory(
+                _currentDirectory,
+                GetAssetsRoot());
+
+        ImGui.BeginDisabled(
+            !canCreateFromSelection);
+
+        if (ImGui.SmallButton(
+                "Blueprint From Selected"))
+        {
+            CreateBlueprintFromSelectedObject(
+                state,
+                log);
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
         ImGui.TextDisabled(
             Breadcrumb());
 
@@ -198,7 +264,8 @@ internal sealed class AssetsPanel
     // FOLDER TREE
     // ========================================================
 
-    private void DrawFolderTree()
+    private void DrawFolderTree(
+        EditorLog log)
     {
         ImGui.TextDisabled(
             "PROJECT");
@@ -208,18 +275,21 @@ internal sealed class AssetsPanel
         DrawFolderTreeNode(
             GetAssetsRoot(),
             "Assets",
-            true);
+            true,
+            log);
 
         DrawFolderTreeNode(
             GetScenesRoot(),
             "Scenes",
-            true);
+            true,
+            log);
     }
 
     private void DrawFolderTreeNode(
         string directory,
         string displayName,
-        bool defaultOpen)
+        bool defaultOpen,
+        EditorLog log)
     {
         if (!Directory.Exists(
                 directory))
@@ -275,6 +345,59 @@ internal sealed class AssetsPanel
                 directory);
         }
 
+        DrawAssetDropTarget(
+            directory,
+            log);
+
+        bool protectedRoot =
+            IsProtectedRoot(
+                directory);
+
+        if (!protectedRoot &&
+            ImGui.BeginPopupContextItem(
+                $"FolderTreeContext##{directory}"))
+        {
+            if (ImGui.MenuItem(
+                    "Open"))
+            {
+                SelectDirectory(
+                    directory);
+            }
+
+            if (ImGui.MenuItem(
+                    "New Folder Here"))
+            {
+                SelectDirectory(
+                    directory);
+
+                _newFolderName =
+                    "New Folder";
+
+                _showCreateFolder =
+                    true;
+            }
+
+            ImGui.Separator();
+
+            if (ImGui.MenuItem(
+                    "Rename"))
+            {
+                BeginRename(
+                    directory,
+                    true);
+            }
+
+            if (ImGui.MenuItem(
+                    "Delete"))
+            {
+                BeginDelete(
+                    directory,
+                    true);
+            }
+
+            ImGui.EndPopup();
+        }
+
         if (!hasChildren ||
             !open)
         {
@@ -288,7 +411,8 @@ internal sealed class AssetsPanel
                 child,
                 Path.GetFileName(
                     child),
-                false);
+                false,
+                log);
         }
 
         ImGui.TreePop();
@@ -339,34 +463,90 @@ internal sealed class AssetsPanel
 
         ImGui.Separator();
 
-        DrawDirectories();
+        DrawDirectories(
+            log);
 
         DrawFiles(
             state,
             log);
 
-        DrawWindowContextMenu();
+        DrawWindowContextMenu(
+            state,
+            log);
     }
 
-    private void DrawDirectories()
+    private void DrawDirectories(
+        EditorLog log)
     {
         foreach (string directory
-                 in _directories)
+                 in _directories.ToArray())
         {
             string folderName =
                 Path.GetFileName(
                     directory);
 
-            bool clicked =
-                ImGui.Selectable(
-                    $"[DIR] {folderName}##content-folder:{directory}");
+            ImGui.Selectable(
+                $"[DIR] {folderName}##content-folder:{directory}");
 
-            if (clicked &&
+            /*
+             * Double-click detection must not depend on Selectable() returning
+             * true on the second click. ImGui can consume the second click as
+             * part of the double-click sequence, which made folders look dead.
+             */
+            if (ImGui.IsItemHovered() &&
                 ImGui.IsMouseDoubleClicked(
                     ImGuiMouseButton.Left))
             {
                 SelectDirectory(
                     directory);
+            }
+
+            DrawAssetDropTarget(
+                directory,
+                log);
+
+            if (ImGui.BeginPopupContextItem(
+                    $"FolderContext##{directory}"))
+            {
+                if (ImGui.MenuItem(
+                        "Open"))
+                {
+                    SelectDirectory(
+                        directory);
+                }
+
+                if (ImGui.MenuItem(
+                        "New Folder Here"))
+                {
+                    SelectDirectory(
+                        directory);
+
+                    _newFolderName =
+                        "New Folder";
+
+                    _showCreateFolder =
+                        true;
+                }
+
+                ImGui.Separator();
+
+                if (ImGui.MenuItem(
+                        "Rename"))
+                {
+                    BeginRename(
+                        directory,
+                        true);
+                }
+
+                if (ImGui.MenuItem(
+                        "Delete"))
+                {
+                    BeginDelete(
+                        directory,
+                        true);
+                }
+
+                ImGui.EndPopup();
             }
         }
     }
@@ -380,7 +560,7 @@ internal sealed class AssetsPanel
         EditorLog log)
     {
         foreach (string file
-                 in _files)
+                 in _files.ToArray())
         {
             string projectPath =
                 Path.GetRelativePath(
@@ -421,14 +601,8 @@ internal sealed class AssetsPanel
                     null;
             }
 
-            /*
-             * Keep double-click detection separate from the
-             * Selectable() return value. ImGui's click/double-click
-             * timing can otherwise make the second click fail to
-             * enter this block, which is why Event Modules sometimes
-             * refused to open.
-             */
-            if (asset != null &&
+            if (asset !=
+                    null &&
                 ImGui.IsItemHovered() &&
                 ImGui.IsMouseDoubleClicked(
                     ImGuiMouseButton.Left))
@@ -506,18 +680,15 @@ internal sealed class AssetsPanel
         AssetRecord? asset,
         string file)
     {
-        if (asset == null)
-        {
-            return;
-        }
-
         if (!ImGui.BeginPopupContextItem(
                 $"AssetContext##{file}"))
         {
             return;
         }
 
-        if (ImGui.MenuItem(
+        if (asset !=
+                null &&
+            ImGui.MenuItem(
                 "Open"))
         {
             OpenAsset(
@@ -525,7 +696,7 @@ internal sealed class AssetsPanel
                 log);
         }
 
-        if (asset.Type ==
+        if (asset?.Type ==
             AssetType.EventModule)
         {
             ImGui.Separator();
@@ -557,6 +728,24 @@ internal sealed class AssetsPanel
             }
         }
 
+        ImGui.Separator();
+
+        if (ImGui.MenuItem(
+                "Rename"))
+        {
+            BeginRename(
+                file,
+                false);
+        }
+
+        if (ImGui.MenuItem(
+                "Delete"))
+        {
+            BeginDelete(
+                file,
+                false);
+        }
+
         ImGui.EndPopup();
     }
 
@@ -564,19 +753,8 @@ internal sealed class AssetsPanel
         AssetRecord? asset,
         string file)
     {
-        if (asset == null)
-        {
-            return;
-        }
-
-        bool draggable =
-            asset.Type is
-                AssetType.Texture2D or
-                AssetType.Model3D or
-                AssetType.Blueprint or
-                AssetType.EventModule;
-
-        if (!draggable)
+        if (asset ==
+            null)
         {
             return;
         }
@@ -590,9 +768,39 @@ internal sealed class AssetsPanel
             asset.Guid);
 
         ImGui.Text(
-            $"{asset.Type}: {Path.GetFileName(file)}");
+            $"Move {Path.GetFileName(file)}");
 
         ImGui.EndDragDropSource();
+    }
+
+    private void DrawAssetDropTarget(
+        string destinationDirectory,
+        EditorLog log)
+    {
+        if (!ImGui.BeginDragDropTarget())
+        {
+            return;
+        }
+
+        Guid? assetGuid =
+            AssetDragDrop.Accept();
+
+        if (assetGuid.HasValue &&
+            assetGuid.Value !=
+                Guid.Empty &&
+            _project.AssetDatabase.TryGetAsset(
+                assetGuid.Value,
+                out AssetRecord? asset) &&
+            asset !=
+                null)
+        {
+            MoveAssetToFolder(
+                asset,
+                destinationDirectory,
+                log);
+        }
+
+        ImGui.EndDragDropTarget();
     }
 
     // ========================================================
@@ -607,7 +815,8 @@ internal sealed class AssetsPanel
         GameObject? target =
             state.SelectedObject;
 
-        if (target == null)
+        if (target ==
+            null)
         {
             log.Warning(
                 "Select a GameObject before attaching an Event Module.");
@@ -618,7 +827,8 @@ internal sealed class AssetsPanel
         EventModuleComponent? existing =
             target.GetComponent<EventModuleComponent>();
 
-        if (existing != null &&
+        if (existing !=
+                null &&
             existing.Modules.Any(
                 reference =>
                     reference.Guid ==
@@ -664,7 +874,8 @@ internal sealed class AssetsPanel
                 definition);
         }
 
-        if (state.Undo != null)
+        if (state.Undo !=
+            null)
         {
             state.Undo.Execute(
                 state,
@@ -686,7 +897,9 @@ internal sealed class AssetsPanel
     // CONTENT CONTEXT MENU
     // ========================================================
 
-    private void DrawWindowContextMenu()
+    private void DrawWindowContextMenu(
+        EditorState state,
+        EditorLog log)
     {
         if (!ImGui.BeginPopupContextWindow(
                 "ProjectContentContext",
@@ -700,11 +913,43 @@ internal sealed class AssetsPanel
                 "Create"))
         {
             if (ImGui.MenuItem(
+                    "Folder"))
+            {
+                _newFolderName =
+                    "New Folder";
+
+                _showCreateFolder =
+                    true;
+            }
+
+            if (ImGui.MenuItem(
                     "Byte Blueprint"))
             {
                 _showCreateBlueprint =
                     true;
             }
+
+            bool canCreateFromSelection =
+                state.Mode ==
+                    EditorMode.Edit &&
+                state.SelectedObject !=
+                    null &&
+                IsInsideDirectory(
+                    _currentDirectory,
+                    GetAssetsRoot());
+
+            ImGui.BeginDisabled(
+                !canCreateFromSelection);
+
+            if (ImGui.MenuItem(
+                    "Blueprint From Selected Object"))
+            {
+                CreateBlueprintFromSelectedObject(
+                    state,
+                    log);
+            }
+
+            ImGui.EndDisabled();
 
             if (ImGui.MenuItem(
                     "Event Module"))
@@ -930,13 +1175,166 @@ internal sealed class AssetsPanel
         SelectDirectory(
             directory);
 
-        _project.AssetDatabase.Scan();
-
-        _listingDirty =
-            true;
+        RefreshAfterFileOperation();
 
         log.Info(
             $"Created {type} Blueprint '{Path.GetFileName(path)}'.");
+    }
+
+    private void CreateBlueprintFromSelectedObject(
+        EditorState state,
+        EditorLog log)
+    {
+        GameObject? selected =
+            state.SelectedObject;
+
+        if (state.Mode !=
+                EditorMode.Edit ||
+            selected ==
+                null)
+        {
+            log.Warning(
+                "Select a GameObject in Edit mode first.");
+
+            return;
+        }
+
+        string directory =
+            GetAssetCreationDirectory();
+
+        string safeName =
+            MakeSafeFileName(
+                selected.Name);
+
+        string path =
+            GetUniqueAssetPath(
+                directory,
+                safeName,
+                ".byteblueprint");
+
+        SceneData serializedScene =
+            _project.Scenes.Serialize(
+                state.EditorScene);
+
+        HashSet<Guid> hierarchyIds =
+            new();
+
+        CollectHierarchyIds(
+            selected,
+            hierarchyIds);
+
+        GameObjectData? root =
+            serializedScene.GameObjects
+                .FirstOrDefault(
+                    data =>
+                        data.Id ==
+                        selected.Id);
+
+        if (root ==
+            null)
+        {
+            log.Error(
+                $"Could not serialize selected GameObject '{selected.Name}'.");
+
+            return;
+        }
+
+        root.ParentId =
+            null;
+
+        List<GameObjectData> children =
+            serializedScene.GameObjects
+                .Where(
+                    data =>
+                        data.Id !=
+                            selected.Id &&
+                        hierarchyIds.Contains(
+                            data.Id))
+                .ToList();
+
+        BlueprintType type =
+            selected.GetComponent<CharacterController3D>() !=
+                null
+                ? BlueprintType.Character
+                : BlueprintType.GenericObject;
+
+        List<Guid> eventModules =
+            selected
+                .GetComponent<EventModuleComponent>()?
+                .Modules
+                .Where(
+                    reference =>
+                        reference.Guid !=
+                        Guid.Empty)
+                .Select(
+                    reference =>
+                        reference.Guid)
+                .Distinct()
+                .ToList()
+            ?? new List<Guid>();
+
+        var blueprint =
+            new BlueprintDefinition
+            {
+                Name =
+                    Path.GetFileNameWithoutExtension(
+                        path),
+
+                Type =
+                    type,
+
+                Root =
+                    root,
+
+                Children =
+                    children,
+
+                Variables =
+                    root.Variables
+                        .Select(
+                            variable =>
+                                new VariableData
+                                {
+                                    Name =
+                                        variable.Name,
+
+                                    Value =
+                                        variable.Value.Clone()
+                                })
+                        .ToList(),
+
+                EventModules =
+                    eventModules
+            };
+
+        new BlueprintSerializer()
+            .Save(
+                blueprint,
+                path);
+
+        RefreshAfterFileOperation();
+
+        log.Info(
+            $"Created Blueprint '{Path.GetFileName(path)}' from '{selected.Name}' with {children.Count + 1} GameObject(s).");
+    }
+
+    private static void CollectHierarchyIds(
+        GameObject gameObject,
+        ISet<Guid> ids)
+    {
+        if (!ids.Add(
+                gameObject.Id))
+        {
+            return;
+        }
+
+        foreach (GameObject child
+                 in gameObject.Children)
+        {
+            CollectHierarchyIds(
+                child,
+                ids);
+        }
     }
 
     // ========================================================
@@ -1063,10 +1461,7 @@ internal sealed class AssetsPanel
         SelectDirectory(
             directory);
 
-        _project.AssetDatabase.Scan();
-
-        _listingDirty =
-            true;
+        RefreshAfterFileOperation();
 
         log.Info(
             $"Created Event Module '{Path.GetFileName(path)}'.");
@@ -1076,6 +1471,620 @@ internal sealed class AssetsPanel
         {
             log.Info(
                 "Character Movement template: W/S move forward/back, A/D strafe, Space jumps while grounded.");
+        }
+    }
+
+    // ========================================================
+    // FOLDER CREATION
+    // ========================================================
+
+    private void DrawCreateFolderDialog(
+        EditorLog log)
+    {
+        if (_showCreateFolder)
+        {
+            ImGui.OpenPopup(
+                "Create Folder");
+
+            _showCreateFolder =
+                false;
+        }
+
+        if (!ImGui.BeginPopupModal(
+                "Create Folder",
+                ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        ImGui.InputText(
+            "Name",
+            ref _newFolderName,
+            128);
+
+        bool valid =
+            !string.IsNullOrWhiteSpace(
+                _newFolderName);
+
+        ImGui.BeginDisabled(
+            !valid);
+
+        if (ImGui.Button(
+                "Create",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            try
+            {
+                string safeName =
+                    MakeSafeFileName(
+                        _newFolderName);
+
+                string path =
+                    Path.Combine(
+                        _currentDirectory,
+                        safeName);
+
+                if (Directory.Exists(
+                        path) ||
+                    File.Exists(
+                        path))
+                {
+                    throw new IOException(
+                        $"'{safeName}' already exists.");
+                }
+
+                Directory.CreateDirectory(
+                    path);
+
+                RefreshAfterFileOperation();
+
+                log.Info(
+                    $"Created folder '{safeName}'.");
+            }
+            catch (Exception exception)
+            {
+                log.Error(
+                    $"Could not create folder: {exception.Message}");
+            }
+
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Cancel",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    // ========================================================
+    // RENAME
+    // ========================================================
+
+    private void BeginRename(
+        string path,
+        bool isDirectory)
+    {
+        _renameTargetPath =
+            path;
+
+        _renameTargetIsDirectory =
+            isDirectory;
+
+        _renameBuffer =
+            isDirectory
+                ? Path.GetFileName(
+                    path)
+                : Path.GetFileNameWithoutExtension(
+                    path);
+
+        _showRename =
+            true;
+    }
+
+    private void DrawRenameDialog(
+        EditorState state,
+        EditorLog log)
+    {
+        if (_showRename)
+        {
+            ImGui.OpenPopup(
+                "Rename Asset");
+
+            _showRename =
+                false;
+        }
+
+        if (!ImGui.BeginPopupModal(
+                "Rename Asset",
+                ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        string? target =
+            _renameTargetPath;
+
+        ImGui.InputText(
+            "Name",
+            ref _renameBuffer,
+            256);
+
+        bool valid =
+            target !=
+                null &&
+            !string.IsNullOrWhiteSpace(
+                _renameBuffer);
+
+        ImGui.BeginDisabled(
+            !valid);
+
+        if (ImGui.Button(
+                "Rename",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            if (target !=
+                null)
+            {
+                try
+                {
+                    string newPath =
+                        RenamePath(
+                            target,
+                            _renameTargetIsDirectory,
+                            _renameBuffer);
+
+                    if (!_renameTargetIsDirectory &&
+                        state.SelectedAssetPath !=
+                            null &&
+                        PathsEqualProjectPath(
+                            state.SelectedAssetPath,
+                            target))
+                    {
+                        state.SelectedAssetPath =
+                            ToProjectPath(
+                                newPath);
+                    }
+
+                    log.Info(
+                        $"Renamed '{Path.GetFileName(target)}' to '{Path.GetFileName(newPath)}'.");
+                }
+                catch (Exception exception)
+                {
+                    log.Error(
+                        $"Could not rename: {exception.Message}");
+                }
+            }
+
+            _renameTargetPath =
+                null;
+
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Cancel",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            _renameTargetPath =
+                null;
+
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private string RenamePath(
+        string path,
+        bool isDirectory,
+        string requestedName)
+    {
+        if (!File.Exists(
+                path) &&
+            !Directory.Exists(
+                path))
+        {
+            throw new FileNotFoundException(
+                "The item no longer exists.",
+                path);
+        }
+
+        if (isDirectory &&
+            IsProtectedRoot(
+                path))
+        {
+            throw new InvalidOperationException(
+                "Project root content folders cannot be renamed.");
+        }
+
+        string safeName =
+            MakeSafeFileName(
+                requestedName);
+
+        string parent =
+            Path.GetDirectoryName(
+                path)
+            ?? throw new InvalidOperationException(
+                "Item has no parent folder.");
+
+        string destination;
+
+        if (isDirectory)
+        {
+            destination =
+                Path.Combine(
+                    parent,
+                    safeName);
+
+            if (Directory.Exists(
+                    destination) ||
+                File.Exists(
+                    destination))
+            {
+                throw new IOException(
+                    $"'{safeName}' already exists.");
+            }
+
+            Directory.Move(
+                path,
+                destination);
+
+            if (IsInsideDirectory(
+                    _currentDirectory,
+                    path))
+            {
+                string relative =
+                    Path.GetRelativePath(
+                        path,
+                        _currentDirectory);
+
+                _currentDirectory =
+                    relative ==
+                    "."
+                        ? destination
+                        : Path.Combine(
+                            destination,
+                            relative);
+            }
+        }
+        else
+        {
+            string extension =
+                Path.GetExtension(
+                    path);
+
+            destination =
+                Path.Combine(
+                    parent,
+                    safeName +
+                    extension);
+
+            if (File.Exists(
+                    destination) ||
+                Directory.Exists(
+                    destination))
+            {
+                throw new IOException(
+                    $"'{Path.GetFileName(destination)}' already exists.");
+            }
+
+            MoveAssetFileAndMeta(
+                path,
+                destination);
+        }
+
+        RefreshAfterFileOperation();
+
+        return destination;
+    }
+
+    // ========================================================
+    // DELETE
+    // ========================================================
+
+    private void BeginDelete(
+        string path,
+        bool isDirectory)
+    {
+        if (isDirectory &&
+            IsProtectedRoot(
+                path))
+        {
+            return;
+        }
+
+        _deleteTargetPath =
+            path;
+
+        _deleteTargetIsDirectory =
+            isDirectory;
+
+        _showDeleteConfirm =
+            true;
+    }
+
+    private void DrawDeleteDialog(
+        EditorState state,
+        EditorLog log)
+    {
+        if (_showDeleteConfirm)
+        {
+            ImGui.OpenPopup(
+                "Delete Asset");
+
+            _showDeleteConfirm =
+                false;
+        }
+
+        if (!ImGui.BeginPopupModal(
+                "Delete Asset",
+                ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        string? target =
+            _deleteTargetPath;
+
+        if (target !=
+            null)
+        {
+            ImGui.TextWrapped(
+                _deleteTargetIsDirectory
+                    ? $"Delete folder '{Path.GetFileName(target)}' and everything inside it?"
+                    : $"Delete asset '{Path.GetFileName(target)}'?");
+        }
+
+        ImGui.TextColored(
+            new Vector4(
+                1.0f,
+                0.45f,
+                0.30f,
+                1.0f),
+            "This cannot be undone.");
+
+        bool canDelete =
+            target !=
+                null;
+
+        ImGui.BeginDisabled(
+            !canDelete);
+
+        if (ImGui.Button(
+                "Delete",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            if (target !=
+                null)
+            {
+                try
+                {
+                    DeletePath(
+                        target,
+                        _deleteTargetIsDirectory);
+
+                    if (!_deleteTargetIsDirectory &&
+                        state.SelectedAssetPath !=
+                            null &&
+                        PathsEqualProjectPath(
+                            state.SelectedAssetPath,
+                            target))
+                    {
+                        state.SelectedAssetId =
+                            null;
+
+                        state.SelectedAssetPath =
+                            null;
+                    }
+
+                    log.Info(
+                        $"Deleted '{Path.GetFileName(target)}'.");
+                }
+                catch (Exception exception)
+                {
+                    log.Error(
+                        $"Could not delete: {exception.Message}");
+                }
+            }
+
+            _deleteTargetPath =
+                null;
+
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Cancel",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            _deleteTargetPath =
+                null;
+
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DeletePath(
+        string path,
+        bool isDirectory)
+    {
+        if (isDirectory)
+        {
+            if (IsProtectedRoot(
+                    path))
+            {
+                throw new InvalidOperationException(
+                    "Project root content folders cannot be deleted.");
+            }
+
+            if (IsInsideDirectory(
+                    _currentDirectory,
+                    path))
+            {
+                string? parent =
+                    Path.GetDirectoryName(
+                        path);
+
+                _currentDirectory =
+                    parent !=
+                        null &&
+                    (
+                        IsInsideDirectory(
+                            parent,
+                            GetAssetsRoot()) ||
+                        IsInsideDirectory(
+                            parent,
+                            GetScenesRoot())
+                    )
+                        ? parent
+                        : GetAssetsRoot();
+            }
+
+            if (Directory.Exists(
+                    path))
+            {
+                Directory.Delete(
+                    path,
+                    true);
+            }
+        }
+        else
+        {
+            if (File.Exists(
+                    path))
+            {
+                File.Delete(
+                    path);
+            }
+
+            string meta =
+                path +
+                ".meta";
+
+            if (File.Exists(
+                    meta))
+            {
+                File.Delete(
+                    meta);
+            }
+        }
+
+        RefreshAfterFileOperation();
+    }
+
+    // ========================================================
+    // MOVE ASSETS
+    // ========================================================
+
+    private void MoveAssetToFolder(
+        AssetRecord asset,
+        string destinationDirectory,
+        EditorLog log)
+    {
+        try
+        {
+            if (!Directory.Exists(
+                    destinationDirectory))
+            {
+                throw new DirectoryNotFoundException(
+                    destinationDirectory);
+            }
+
+            string source =
+                asset.FullPath;
+
+            string destination =
+                Path.Combine(
+                    destinationDirectory,
+                    Path.GetFileName(
+                        source));
+
+            if (PathsEqual(
+                    source,
+                    destination))
+            {
+                return;
+            }
+
+            if (File.Exists(
+                    destination) ||
+                Directory.Exists(
+                    destination))
+            {
+                throw new IOException(
+                    $"'{Path.GetFileName(destination)}' already exists in '{GetDisplayFolderName(destinationDirectory)}'.");
+            }
+
+            MoveAssetFileAndMeta(
+                source,
+                destination);
+
+            RefreshAfterFileOperation();
+
+            log.Info(
+                $"Moved '{Path.GetFileName(source)}' to '{ToProjectPath(destinationDirectory)}'.");
+        }
+        catch (Exception exception)
+        {
+            log.Error(
+                $"Could not move asset: {exception.Message}");
+        }
+    }
+
+    private static void MoveAssetFileAndMeta(
+        string source,
+        string destination)
+    {
+        string sourceMeta =
+            source +
+            ".meta";
+
+        string destinationMeta =
+            destination +
+            ".meta";
+
+        File.Move(
+            source,
+            destination);
+
+        if (File.Exists(
+                sourceMeta) &&
+            !File.Exists(
+                destinationMeta))
+        {
+            File.Move(
+                sourceMeta,
+                destinationMeta);
         }
     }
 
@@ -1138,6 +2147,14 @@ internal sealed class AssetsPanel
             false;
     }
 
+    private void RefreshAfterFileOperation()
+    {
+        _project.AssetDatabase.Scan();
+
+        _listingDirty =
+            true;
+    }
+
     private void SelectDirectory(
         string directory)
     {
@@ -1198,6 +2215,18 @@ internal sealed class AssetsPanel
         return assetsRoot;
     }
 
+    private bool IsProtectedRoot(
+        string path)
+    {
+        return
+            PathsEqual(
+                path,
+                GetAssetsRoot()) ||
+            PathsEqual(
+                path,
+                GetScenesRoot());
+    }
+
     private static bool IsInsideDirectory(
         string path,
         string root)
@@ -1250,6 +2279,34 @@ internal sealed class AssetsPanel
                     Path.AltDirectorySeparatorChar),
 
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool PathsEqualProjectPath(
+        string projectPath,
+        string fullPath)
+    {
+        return string.Equals(
+            projectPath
+                .Replace(
+                    '\\',
+                    '/')
+                .TrimStart(
+                    '/'),
+            ToProjectPath(
+                fullPath),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string ToProjectPath(
+        string fullPath)
+    {
+        return Path
+            .GetRelativePath(
+                _project.ProjectRoot,
+                fullPath)
+            .Replace(
+                '\\',
+                '/');
     }
 
     private string Breadcrumb()
@@ -1312,6 +2369,43 @@ internal sealed class AssetsPanel
 
         return Path.GetFileName(
             directory);
+    }
+
+    private static string GetUniqueAssetPath(
+        string directory,
+        string baseName,
+        string extension)
+    {
+        string path =
+            Path.Combine(
+                directory,
+                baseName +
+                extension);
+
+        if (!File.Exists(
+                path))
+        {
+            return path;
+        }
+
+        int suffix =
+            2;
+
+        while (true)
+        {
+            path =
+                Path.Combine(
+                    directory,
+                    $"{baseName} {suffix}{extension}");
+
+            if (!File.Exists(
+                    path))
+            {
+                return path;
+            }
+
+            suffix++;
+        }
     }
 
     private static string MakeSafeFileName(

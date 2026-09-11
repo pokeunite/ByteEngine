@@ -2,14 +2,19 @@ using ByteEngine.Core;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Core.VisualLogic;
 
 namespace ByteEngine.Editor;
 
 internal sealed class EditorProjectContext
     : IDisposable
 {
+    public static EditorProjectContext? Active { get; private set; }
+
     private readonly ProjectSerializer _projectSerializer =
         new();
+
+    private readonly Guid _runtimeSpawnRegistration;
 
     public ProjectData Project { get; }
 
@@ -46,11 +51,18 @@ internal sealed class EditorProjectContext
 
         AssetDatabase = new AssetDatabase(
             ProjectRoot,
-            new[] { Project.AssetDirectory, Project.SceneDirectory },
+            new[]
+            {
+                Project.AssetDirectory,
+                Project.SceneDirectory
+            },
             warningSink,
             warningSink);
 
-        Assets = new AssetManager(AssetDatabase, warningSink);
+        Assets =
+            new AssetManager(
+                AssetDatabase,
+                warningSink);
 
         ComponentSerializer components =
             new(
@@ -64,6 +76,29 @@ internal sealed class EditorProjectContext
             new SceneSerializer(
                 components
             );
+
+        /*
+         * Configure the live runtime Blueprint spawner for this project.
+         *
+         * A registration token prevents disposing an old project context
+         * from accidentally clearing the newer project's runtime bridge.
+         */
+        Active =
+            this;
+
+        _runtimeSpawnRegistration =
+            RuntimeSpawnService.ConfigureBlueprintSpawner(
+                (
+                    scene,
+                    blueprint,
+                    worldPosition
+                ) =>
+                    RuntimeBlueprintSpawner.Spawn(
+                        scene,
+                        blueprint,
+                        worldPosition,
+                        this,
+                        warningSink));
     }
 
     public static EditorProjectContext Open(
@@ -159,14 +194,21 @@ internal sealed class EditorProjectContext
         ProjectData project =
             new()
             {
-                Name = projectName,
-                ProjectId = Guid.NewGuid(),
+                Name =
+                    projectName,
+
+                ProjectId =
+                    Guid.NewGuid(),
+
                 EngineVersion =
                     ByteEngineInfo.Version,
+
                 StartupScene =
                     "Scenes/Main.bytescene",
+
                 AssetDirectory =
                     "Assets",
+
                 SceneDirectory =
                     "Scenes"
             };
@@ -207,6 +249,17 @@ internal sealed class EditorProjectContext
 
     public void Dispose()
     {
+        RuntimeSpawnService.ClearBlueprintSpawner(
+            _runtimeSpawnRegistration);
+
+        if (ReferenceEquals(
+                Active,
+                this))
+        {
+            Active =
+                null;
+        }
+
         Assets.Dispose();
         AssetDatabase.Dispose();
     }

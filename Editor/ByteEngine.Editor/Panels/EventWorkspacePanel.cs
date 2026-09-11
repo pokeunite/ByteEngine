@@ -94,6 +94,8 @@ internal sealed class EventWorkspacePanel
 
     private AssetRecord? _asset;
 
+    private EditorProjectContext? _project;
+
     private EventModuleDefinition? _module;
 
     private bool _open;
@@ -209,6 +211,9 @@ internal sealed class EventWorkspacePanel
     {
         ArgumentNullException.ThrowIfNull(
             asset);
+
+        _project =
+            EditorProjectContext.Active;
 
         if (_asset?.Guid ==
                 asset.Guid &&
@@ -2792,6 +2797,79 @@ internal sealed class EventWorkspacePanel
                 continue;
             }
 
+            if (group.Key.Equals(
+                    "Object",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (ImGui.MenuItem(
+                        "Spawn Empty Object"))
+                {
+                    RecordHistory(
+                        "Add Spawn Empty Object");
+
+                    VisualInstruction created =
+                        AddInstructionAt(
+                            rule,
+                            "object.spawnEmpty",
+                            false,
+                            position,
+                            insertAfterInstructionId,
+                            connectFromWire &&
+                            insertAfterInstructionId ==
+                                Guid.Empty);
+
+                    if (connectFromWire)
+                    {
+                        ConnectNewActionAfterSource(
+                            rule,
+                            insertAfterInstructionId,
+                            created,
+                            _pendingWireCreateKind);
+                    }
+                    else
+                    {
+                        AppendActionToExecutionFlow(
+                            rule,
+                            created);
+                    }
+                }
+
+                if (ImGui.MenuItem(
+                        "Spawn Blueprint"))
+                {
+                    RecordHistory(
+                        "Add Spawn Blueprint");
+
+                    VisualInstruction created =
+                        AddInstructionAt(
+                            rule,
+                            "object.spawnBlueprint",
+                            false,
+                            position,
+                            insertAfterInstructionId,
+                            connectFromWire &&
+                            insertAfterInstructionId ==
+                                Guid.Empty);
+
+                    if (connectFromWire)
+                    {
+                        ConnectNewActionAfterSource(
+                            rule,
+                            insertAfterInstructionId,
+                            created,
+                            _pendingWireCreateKind);
+                    }
+                    else
+                    {
+                        AppendActionToExecutionFlow(
+                            rule,
+                            created);
+                    }
+                }
+
+                ImGui.Separator();
+            }
+
             foreach (VisualActionDefinition definition
                      in group)
             {
@@ -4562,6 +4640,32 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (instruction.Id.Equals(
+                "object.spawnEmpty",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            displayName =
+                "Spawn Empty Object";
+
+            category =
+                "Object";
+
+            return;
+        }
+
+        if (instruction.Id.Equals(
+                "object.spawnBlueprint",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            displayName =
+                "Spawn Blueprint";
+
+            category =
+                "Object";
+
+            return;
+        }
+
         if (_registry.TryGetAction(
                 instruction.Id,
                 out VisualActionDefinition? actionDefinition) &&
@@ -5577,6 +5681,12 @@ internal sealed class EventWorkspacePanel
                 "object.setActive" =>
                     285.0f,
 
+                "object.spawnEmpty" =>
+                    395.0f,
+
+                "object.spawnBlueprint" =>
+                    430.0f,
+
                 "character.moveForward" or
                 "character.moveRight" =>
                     205.0f,
@@ -6131,6 +6241,59 @@ internal sealed class EventWorkspacePanel
                 continue;
             }
 
+            if (group.Key.Equals(
+                    "Object",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (ImGui.MenuItem(
+                        "Spawn Empty Object"))
+                {
+                    RecordHistory(
+                        "Add Spawn Empty Object");
+
+                    VisualInstruction created =
+                        CreateInstruction(
+                            "object.spawnEmpty");
+
+                    actions.Add(
+                        created);
+
+                    AppendActionToExecutionFlow(
+                        rule,
+                        created);
+
+                    _dirty =
+                        true;
+
+                    ImGui.CloseCurrentPopup();
+                }
+
+                if (ImGui.MenuItem(
+                        "Spawn Blueprint"))
+                {
+                    RecordHistory(
+                        "Add Spawn Blueprint");
+
+                    VisualInstruction created =
+                        CreateInstruction(
+                            "object.spawnBlueprint");
+
+                    actions.Add(
+                        created);
+
+                    AppendActionToExecutionFlow(
+                        rule,
+                        created);
+
+                    _dirty =
+                        true;
+
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.Separator();
+            }
+
             foreach (VisualActionDefinition definition
                      in group)
             {
@@ -6216,6 +6379,46 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["active"] =
                     EventValue.Boolean(
                         true);
+                break;
+
+            case "object.spawnEmpty":
+                instruction.Arguments["name"] =
+                    EventValue.String(
+                        "GameObject");
+
+                instruction.Arguments["position"] =
+                    EventValue.FromReference(
+                        new VariableReference
+                        {
+                            Scope =
+                                VariableScope.Component,
+
+                            ComponentType =
+                                "Transform",
+
+                            MemberName =
+                                "WorldPosition"
+                        });
+                break;
+
+            case "object.spawnBlueprint":
+                instruction.Arguments["blueprint"] =
+                    EventValue.String(
+                        string.Empty);
+
+                instruction.Arguments["position"] =
+                    EventValue.FromReference(
+                        new VariableReference
+                        {
+                            Scope =
+                                VariableScope.Component,
+
+                            ComponentType =
+                                "Transform",
+
+                            MemberName =
+                                "WorldPosition"
+                        });
                 break;
 
             case "character.moveForward":
@@ -6414,6 +6617,45 @@ internal sealed class EventWorkspacePanel
                     VariableType.Boolean,
                     EventValue.Boolean(
                         true),
+                    state,
+                    false);
+                break;
+
+            case "object.spawnEmpty":
+                DrawValueArgument(
+                    instruction,
+                    "name",
+                    "Object Name",
+                    VariableType.String,
+                    EventValue.String(
+                        "GameObject"),
+                    state,
+                    false);
+
+                DrawValueArgument(
+                    instruction,
+                    "position",
+                    "Spawn Position",
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
+                break;
+
+            case "object.spawnBlueprint":
+                DrawBlueprintAssetArgument(
+                    instruction,
+                    "blueprint",
+                    "Blueprint Asset");
+
+                DrawValueArgument(
+                    instruction,
+                    "position",
+                    "Spawn Position",
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
                     state,
                     false);
                 break;
@@ -7055,6 +7297,204 @@ internal sealed class EventWorkspacePanel
             _dirty =
                 true;
         }
+    }
+
+    // ========================================================
+    // BLUEPRINT ASSET
+    // ========================================================
+
+    private void DrawBlueprintAssetArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label)
+    {
+        if (!instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) ||
+            value ==
+                null ||
+            value.Kind !=
+                EventValueKind.Constant ||
+            value.Constant.Type !=
+                VariableType.String)
+        {
+            value =
+                EventValue.String(
+                    string.Empty);
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        string token =
+            value.Constant.String;
+
+        AssetRecord? selectedAsset =
+            ResolveBlueprintAsset(
+                token);
+
+        string preview =
+            selectedAsset !=
+                null
+                ? Path.GetFileNameWithoutExtension(
+                    selectedAsset.ProjectPath)
+                : string.IsNullOrWhiteSpace(
+                    token)
+                    ? "Select Blueprint..."
+                    : "Missing Blueprint";
+
+        ImGui.TextDisabled(
+            label);
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##BlueprintAsset",
+                preview))
+        {
+            bool noneSelected =
+                selectedAsset ==
+                    null &&
+                string.IsNullOrWhiteSpace(
+                    token);
+
+            if (ImGui.Selectable(
+                    "<None>",
+                    noneSelected))
+            {
+                RecordHistory(
+                    "Change Blueprint Asset");
+
+                instruction.Arguments[argumentName] =
+                    EventValue.String(
+                        string.Empty);
+
+                _dirty =
+                    true;
+            }
+
+            if (_project !=
+                null)
+            {
+                AssetRecord[] blueprints =
+                    _project.AssetDatabase.Assets
+                        .Where(
+                            asset =>
+                                asset.Type ==
+                                AssetType.Blueprint)
+                        .OrderBy(
+                            asset =>
+                                asset.ProjectPath,
+                            StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+
+                if (blueprints.Length >
+                    0)
+                {
+                    ImGui.Separator();
+                }
+
+                foreach (AssetRecord blueprint
+                         in blueprints)
+                {
+                    bool selected =
+                        selectedAsset?.Guid ==
+                        blueprint.Guid;
+
+                    string displayName =
+                        Path.GetFileNameWithoutExtension(
+                            blueprint.ProjectPath);
+
+                    string labelText =
+                        $"{displayName}##blueprint:{blueprint.Guid}";
+
+                    if (ImGui.Selectable(
+                            labelText,
+                            selected))
+                    {
+                        RecordHistory(
+                            "Change Blueprint Asset");
+
+                        instruction.Arguments[argumentName] =
+                            EventValue.String(
+                                blueprint.Guid.ToString());
+
+                        _dirty =
+                            true;
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(
+                            blueprint.ProjectPath);
+                    }
+
+                    if (selected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (selectedAsset !=
+            null)
+        {
+            ImGui.TextDisabled(
+                selectedAsset.ProjectPath);
+        }
+        else if (!string.IsNullOrWhiteSpace(
+                     token))
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.38f,
+                    0.30f,
+                    1.0f),
+                "Blueprint asset could not be resolved.");
+        }
+
+        ImGui.TextDisabled(
+            "Tip: Self.Transform.WorldPosition spawns directly on top of Self.");
+    }
+
+    private AssetRecord? ResolveBlueprintAsset(
+        string token)
+    {
+        if (_project ==
+                null ||
+            string.IsNullOrWhiteSpace(
+                token))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(
+                token,
+                out Guid guid) &&
+            _project.AssetDatabase.TryGetAsset(
+                guid,
+                out AssetRecord? byGuid) &&
+            byGuid?.Type ==
+                AssetType.Blueprint)
+        {
+            return byGuid;
+        }
+
+        if (_project.AssetDatabase.TryGetAsset(
+                token,
+                out AssetRecord? byPath) &&
+            byPath?.Type ==
+                AssetType.Blueprint)
+        {
+            return byPath;
+        }
+
+        return null;
     }
 
     // ========================================================

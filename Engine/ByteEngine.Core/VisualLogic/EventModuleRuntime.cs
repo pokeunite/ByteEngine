@@ -1,3 +1,6 @@
+using System.Numerics;
+
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 
@@ -665,26 +668,8 @@ public sealed class EventModuleRuntime
         VisualInstruction action,
         EventExecutionContext context)
     {
-        if (!_registry.TryGetAction(
-                action.Id,
-                out VisualActionDefinition? definition))
-        {
-            WarnOnce(
-                $"{module.Id}:{action.InstanceId}",
-                $"Unknown visual action '{action.Id}' in '{module.Name}'.",
-                context);
-
-            return;
-        }
-
-        if (definition ==
-            null)
-        {
-            return;
-        }
-
         /*
-         * Orange means this Action actually executed.
+         * Orange means execution reached this Action node.
          */
         VisualLogicDebugTrace.Mark(
             module.Id,
@@ -693,6 +678,42 @@ public sealed class EventModuleRuntime
 
         try
         {
+            if (TryExecuteSpecialAction(
+                    module,
+                    action,
+                    context,
+                    out bool specialSucceeded))
+            {
+                if (!specialSucceeded)
+                {
+                    VisualLogicDebugTrace.Mark(
+                        module.Id,
+                        action.InstanceId,
+                        VisualLogicTraceState.ActionFailed);
+                }
+
+                return;
+            }
+
+            if (!_registry.TryGetAction(
+                    action.Id,
+                    out VisualActionDefinition? definition) ||
+                definition ==
+                    null)
+            {
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    action.InstanceId,
+                    VisualLogicTraceState.ActionFailed);
+
+                WarnOnce(
+                    $"{module.Id}:{action.InstanceId}",
+                    $"Unknown visual action '{action.Id}' in '{module.Name}'.",
+                    context);
+
+                return;
+            }
+
             definition.Execute(
                 action,
                 context);
@@ -706,9 +727,173 @@ public sealed class EventModuleRuntime
 
             WarnOnce(
                 $"{module.Id}:{action.InstanceId}:exception",
-                $"Action '{definition.DisplayName}' failed: {exception.Message}",
+                $"Action '{GetActionDisplayName(action)}' failed: {exception.Message}",
                 context);
         }
+    }
+
+    private bool TryExecuteSpecialAction(
+        EventModuleDefinition module,
+        VisualInstruction action,
+        EventExecutionContext context,
+        out bool succeeded)
+    {
+        succeeded =
+            true;
+
+        if (action.Id.Equals(
+                "object.spawnEmpty",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            string name =
+                EventValueResolver.GetString(
+                    action,
+                    "name",
+                    context,
+                    "GameObject");
+
+            if (string.IsNullOrWhiteSpace(
+                    name))
+            {
+                name =
+                    "GameObject";
+            }
+
+            Vector3 position =
+                EventValueResolver.GetVector3(
+                    action,
+                    "position",
+                    context);
+
+            GameObject created =
+                context.Scene.CreateGameObject(
+                    name);
+
+            created.Transform.WorldPosition =
+                position;
+
+            return true;
+        }
+
+        if (!action.Id.Equals(
+                "object.spawnBlueprint",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string token =
+            EventValueResolver.GetString(
+                action,
+                "blueprint",
+                context,
+                string.Empty)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                token))
+        {
+            succeeded =
+                false;
+
+            WarnOnce(
+                $"{module.Id}:{action.InstanceId}:missing-blueprint",
+                "Spawn Blueprint requires a Blueprint asset.",
+                context);
+
+            return true;
+        }
+
+        AssetReference reference;
+
+        if (Guid.TryParse(
+                token,
+                out Guid blueprintGuid))
+        {
+            reference =
+                new AssetReference(
+                    blueprintGuid);
+        }
+        else
+        {
+            try
+            {
+                reference =
+                    new AssetReference(
+                        token);
+            }
+            catch (ArgumentException)
+            {
+                succeeded =
+                    false;
+
+                WarnOnce(
+                    $"{module.Id}:{action.InstanceId}:invalid-blueprint",
+                    $"Spawn Blueprint asset reference '{token}' is invalid.",
+                    context);
+
+                return true;
+            }
+        }
+
+        if (!RuntimeSpawnService.IsBlueprintSpawnerConfigured)
+        {
+            succeeded =
+                false;
+
+            WarnOnce(
+                $"{module.Id}:{action.InstanceId}:spawn-service",
+                "Spawn Blueprint runtime service is not configured.",
+                context);
+
+            return true;
+        }
+
+        Vector3 worldPosition =
+            EventValueResolver.GetVector3(
+                action,
+                "position",
+                context);
+
+        GameObject? spawned =
+            RuntimeSpawnService.SpawnBlueprint(
+                context.Scene,
+                reference,
+                worldPosition);
+
+        if (spawned ==
+            null)
+        {
+            succeeded =
+                false;
+
+            WarnOnce(
+                $"{module.Id}:{action.InstanceId}:spawn-failed",
+                $"Spawn Blueprint could not instantiate '{token}'.",
+                context);
+        }
+
+        return true;
+    }
+
+    private static string GetActionDisplayName(
+        VisualInstruction action)
+    {
+        if (action.Id.Equals(
+                "object.spawnEmpty",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Spawn Empty Object";
+        }
+
+        if (action.Id.Equals(
+                "object.spawnBlueprint",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Spawn Blueprint";
+        }
+
+        return action.Id;
     }
 
     private static bool TryEvaluateMouseCondition(
