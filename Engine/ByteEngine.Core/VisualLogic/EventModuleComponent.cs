@@ -10,7 +10,7 @@ public sealed class EventModuleComponent
     {
         public required AssetReference Reference { get; init; }
 
-        public required EventModuleDefinition Definition { get; init; }
+        public required EventModuleDefinition Definition { get; set; }
 
         public EventModuleRuntime Runtime { get; } =
             new();
@@ -45,7 +45,8 @@ public sealed class EventModuleComponent
             return;
         }
 
-        if (ContainsReference(reference))
+        if (ContainsReference(
+                reference))
         {
             return;
         }
@@ -68,9 +69,10 @@ public sealed class EventModuleComponent
             reference);
 
         _runtimeModules.RemoveAll(
-            item => SameReference(
-                item.Reference,
-                reference));
+            item =>
+                SameReference(
+                    item.Reference,
+                    reference));
 
         _runtimeModules.Add(
             new RuntimeModule
@@ -83,6 +85,70 @@ public sealed class EventModuleComponent
             });
     }
 
+    /// <summary>
+    /// Replaces the runtime definition for an Event Module that is already
+    /// attached to this GameObject.
+    ///
+    /// Used by the ByteEngine editor for live ByteGraph hot reload while
+    /// Play mode is running.
+    /// </summary>
+    public bool TryReloadResolvedModule(
+        AssetReference reference,
+        EventModuleDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(
+            reference);
+
+        ArgumentNullException.ThrowIfNull(
+            definition);
+
+        if (!ContainsReference(
+                reference))
+        {
+            return false;
+        }
+
+        RuntimeModule? runtimeModule =
+            _runtimeModules.FirstOrDefault(
+                item =>
+                    SameReference(
+                        item.Reference,
+                        reference));
+
+        if (runtimeModule ==
+            null)
+        {
+            _runtimeModules.Add(
+                new RuntimeModule
+                {
+                    Reference =
+                        reference,
+
+                    Definition =
+                        definition
+                });
+
+            ValidateDefinition(
+                definition);
+
+            return true;
+        }
+
+        runtimeModule.Definition =
+            definition;
+
+        /*
+         * Reset rule-local transient state such as Trigger Once latches.
+         * The next runtime update begins cleanly against the new graph.
+         */
+        runtimeModule.Runtime.Reset();
+
+        ValidateDefinition(
+            definition);
+
+        return true;
+    }
+
     public bool RemoveModule(
         AssetReference reference)
     {
@@ -91,14 +157,17 @@ public sealed class EventModuleComponent
 
         bool removed =
             _modules.RemoveAll(
-                item => SameReference(
-                    item,
-                    reference)) > 0;
+                item =>
+                    SameReference(
+                        item,
+                        reference)) >
+            0;
 
         _runtimeModules.RemoveAll(
-            item => SameReference(
-                item.Reference,
-                reference));
+            item =>
+                SameReference(
+                    item.Reference,
+                    reference));
 
         return removed;
     }
@@ -121,16 +190,8 @@ public sealed class EventModuleComponent
         foreach (RuntimeModule module
                  in _runtimeModules)
         {
-            IReadOnlyList<string> problems =
-                module.Definition.Validate(
-                    GameObject);
-
-            foreach (string problem
-                     in problems)
-            {
-                Warn(
-                    problem);
-            }
+            ValidateDefinition(
+                module.Definition);
         }
     }
 
@@ -139,8 +200,10 @@ public sealed class EventModuleComponent
         ByteEngine.Core.Scene.Scene? scene =
             GameObject.Scene;
 
-        if (scene == null ||
-            scene.RuntimeGlobals == null)
+        if (scene ==
+                null ||
+            scene.RuntimeGlobals ==
+                null)
         {
             return;
         }
@@ -170,17 +233,20 @@ public sealed class EventModuleComponent
         AssetReference reference)
     {
         return _modules.Any(
-            item => SameReference(
-                item,
-                reference));
+            item =>
+                SameReference(
+                    item,
+                    reference));
     }
 
     private static bool SameReference(
         AssetReference left,
         AssetReference right)
     {
-        if (left.Guid != Guid.Empty &&
-            right.Guid != Guid.Empty)
+        if (left.Guid !=
+                Guid.Empty &&
+            right.Guid !=
+                Guid.Empty)
         {
             return left.Guid ==
                    right.Guid;
@@ -192,10 +258,26 @@ public sealed class EventModuleComponent
             StringComparison.OrdinalIgnoreCase);
     }
 
+    private void ValidateDefinition(
+        EventModuleDefinition definition)
+    {
+        IReadOnlyList<string> problems =
+            definition.Validate(
+                GameObject);
+
+        foreach (string problem
+                 in problems)
+        {
+            Warn(
+                problem);
+        }
+    }
+
     private void Warn(
         string message)
     {
-        if (_warningSink != null)
+        if (_warningSink !=
+            null)
         {
             _warningSink(
                 $"Visual Logic [{GameObject.Name}]: {message}");

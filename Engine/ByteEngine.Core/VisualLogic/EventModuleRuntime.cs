@@ -103,8 +103,18 @@ public sealed class EventModuleRuntime
         HashSet<Guid> evaluated =
             new();
 
+        /*
+         * Once a rule has explicit ByteGraph condition wiring, zero root
+         * Conditions means "nothing is connected to the Event" and therefore
+         * the Event must NOT fire.
+         *
+         * Legacy rules without explicit wiring keep their previous behavior
+         * for backwards compatibility.
+         */
         bool allPassed =
-            true;
+            !rule.HasExplicitConditionFlow ||
+            rootConditionIds.Count >
+                0;
 
         foreach (Guid conditionId
                  in rootConditionIds)

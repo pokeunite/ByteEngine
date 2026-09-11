@@ -394,6 +394,25 @@ internal sealed class EventWorkspacePanel
         DrawGraphCanvas(
             state);
 
+        /*
+         * Event Modules are runtime assets, not scene-local scratch data.
+         *
+         * Keep the on-disk .byteevents file synchronized with ByteGraph so
+         * entering Play mode can never execute an older saved graph while
+         * the editor shows a newer one.
+         *
+         * We wait until the user is no longer actively dragging/clicking an
+         * editor control so node movement and sliders do not write every
+         * frame.
+         */
+        if (_dirty &&
+            CanAutoSave())
+        {
+            Save(
+                log,
+                false);
+        }
+
         ImGui.PopStyleVar(
             2);
 
@@ -638,14 +657,74 @@ internal sealed class EventWorkspacePanel
                 $"{_selectedGraphNodes.Count} selected");
         }
 
+        EditorState? toolbarState =
+            EditorState.Active;
+
+        if (toolbarState?.Mode ==
+            EditorMode.Play)
+        {
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                new Vector4(
+                    0.30f,
+                    0.95f,
+                    0.46f,
+                    1.0f),
+                "LIVE HOT RELOAD");
+        }
+        else if (toolbarState?.Mode ==
+                 EditorMode.Paused)
+        {
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.72f,
+                    0.25f,
+                    1.0f),
+                "PAUSED HOT RELOAD");
+        }
+
         ImGui.SameLine();
 
         ImGui.TextDisabled(
             _asset!.ProjectPath);
     }
 
+    private bool CanAutoSave()
+    {
+        if (_wireDragKind !=
+                WireDragKind.None ||
+            _draggingGraphNodeId !=
+                Guid.Empty ||
+            _marqueeSelecting)
+        {
+            return false;
+        }
+
+        if (ImGui.IsMouseDown(
+                ImGuiMouseButton.Left) ||
+            ImGui.IsMouseDown(
+                ImGuiMouseButton.Middle) ||
+            ImGui.IsMouseDown(
+                ImGuiMouseButton.Right))
+        {
+            return false;
+        }
+
+        if (ImGui.IsAnyItemActive())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private void Save(
-        EditorLog log)
+        EditorLog log,
+        bool logSuccess = true)
     {
         if (_module == null ||
             _asset == null)
@@ -673,8 +752,22 @@ internal sealed class EventWorkspacePanel
             _dirty =
                 false;
 
-            log.Info(
-                $"Saved Event Module '{_asset.ProjectPath}'.");
+            int hotReloaded =
+                EventModuleLiveReload.Apply(
+                    _asset,
+                    log);
+
+            if (logSuccess)
+            {
+                string runtimeSuffix =
+                    hotReloaded >
+                    0
+                        ? $" | hot reloaded {hotReloaded} runtime instance(s)"
+                        : string.Empty;
+
+                log.Info(
+                    $"Saved Event Module '{_asset.ProjectPath}'{runtimeSuffix}.");
+            }
         }
         catch (Exception exception)
         {
