@@ -17,6 +17,9 @@ internal sealed class AssetsPanel
 
     private readonly Action<AssetRecord> _openAsset;
 
+    private readonly EventWorkspaceCollection _eventWorkspaces =
+        new();
+
     private readonly List<string> _directories =
         new();
 
@@ -55,10 +58,6 @@ internal sealed class AssetsPanel
         _openAsset =
             openAsset;
 
-        /*
-         * Unity-style behavior:
-         * open directly inside Assets.
-         */
         _currentDirectory =
             GetAssetsRoot();
 
@@ -81,8 +80,7 @@ internal sealed class AssetsPanel
             true;
 
         log.Info(
-            $"Asset database contains {_project.AssetDatabase.Assets.Count} asset(s)."
-        );
+            $"Asset database contains {_project.AssetDatabase.Assets.Count} asset(s).");
     }
 
     public void Draw(
@@ -92,72 +90,70 @@ internal sealed class AssetsPanel
         bool isOpen =
             IsOpen;
 
-        ImGui.Begin(
-            "Assets",
-            ref isOpen
-        );
+        bool visible =
+            ImGui.Begin(
+                "Assets",
+                ref isOpen);
 
         IsOpen =
             isOpen;
 
-        EnsureValidDirectory();
+        if (visible)
+        {
+            EnsureValidDirectory();
 
-        DrawToolbar(
-            log
-        );
+            DrawToolbar(
+                log);
 
-        ImGui.Separator();
+            ImGui.Separator();
 
-        /*
-         * Unity-style Project browser:
-         *
-         * LEFT  = folders
-         * RIGHT = folder contents/assets
-         */
-        float folderPaneWidth =
-            Math.Clamp(
-                ImGui.GetContentRegionAvail().X * 0.25f,
-                180.0f,
-                300.0f
-            );
+            float folderPaneWidth =
+                Math.Clamp(
+                    ImGui.GetContentRegionAvail().X *
+                    0.25f,
+                    180.0f,
+                    300.0f);
 
-        ImGui.BeginChild(
-            "ProjectFolderTree",
-            new Vector2(
-                folderPaneWidth,
-                0.0f
-            ),
-            ImGuiChildFlags.None
-        );
+            ImGui.BeginChild(
+                "ProjectFolderTree",
+                new Vector2(
+                    folderPaneWidth,
+                    0.0f),
+                ImGuiChildFlags.None);
 
-        DrawFolderTree();
+            DrawFolderTree();
 
-        ImGui.EndChild();
+            ImGui.EndChild();
 
-        ImGui.SameLine();
+            ImGui.SameLine();
 
-        ImGui.BeginChild(
-            "ProjectFolderContents",
-            Vector2.Zero,
-            ImGuiChildFlags.None
-        );
+            ImGui.BeginChild(
+                "ProjectFolderContents",
+                Vector2.Zero,
+                ImGuiChildFlags.None);
 
-        DrawCurrentFolder(
-            state,
-            log
-        );
+            DrawCurrentFolder(
+                state,
+                log);
 
-        ImGui.EndChild();
+            ImGui.EndChild();
 
-        DrawCreateBlueprintDialog(
-            log
-        );
+            DrawCreateBlueprintDialog(
+                log);
 
-        DrawCreateEventModuleDialog(
-            log
-        );
+            DrawCreateEventModuleDialog(
+                log);
+        }
 
         ImGui.End();
+
+        /*
+         * Draw all open Event Module documents after the Assets
+         * window so they participate in the main editor dockspace
+         * as independent document tabs.
+         */
+        _eventWorkspaces.Draw(
+            log);
     }
 
     // ========================================================
@@ -171,8 +167,7 @@ internal sealed class AssetsPanel
                 "Assets"))
         {
             SelectDirectory(
-                GetAssetsRoot()
-            );
+                GetAssetsRoot());
         }
 
         ImGui.SameLine();
@@ -181,15 +176,13 @@ internal sealed class AssetsPanel
                 "Scenes"))
         {
             SelectDirectory(
-                GetScenesRoot()
-            );
+                GetScenesRoot());
         }
 
         ImGui.SameLine();
 
         ImGui.TextDisabled(
-            Breadcrumb()
-        );
+            Breadcrumb());
 
         ImGui.SameLine();
 
@@ -197,8 +190,7 @@ internal sealed class AssetsPanel
                 "Refresh"))
         {
             Refresh(
-                log
-            );
+                log);
         }
     }
 
@@ -209,22 +201,19 @@ internal sealed class AssetsPanel
     private void DrawFolderTree()
     {
         ImGui.TextDisabled(
-            "PROJECT"
-        );
+            "PROJECT");
 
         ImGui.Separator();
 
         DrawFolderTreeNode(
             GetAssetsRoot(),
             "Assets",
-            true
-        );
+            true);
 
         DrawFolderTreeNode(
             GetScenesRoot(),
             "Scenes",
-            true
-        );
+            true);
     }
 
     private void DrawFolderTreeNode(
@@ -240,8 +229,7 @@ internal sealed class AssetsPanel
 
         string[] children =
             GetDirectoriesSafe(
-                directory
-            );
+                directory);
 
         bool hasChildren =
             children.Length >
@@ -250,8 +238,7 @@ internal sealed class AssetsPanel
         bool selected =
             PathsEqual(
                 directory,
-                _currentDirectory
-            );
+                _currentDirectory);
 
         ImGuiTreeNodeFlags flags =
             ImGuiTreeNodeFlags.OpenOnArrow |
@@ -279,15 +266,13 @@ internal sealed class AssetsPanel
         bool open =
             ImGui.TreeNodeEx(
                 $"{displayName}##folder:{directory}",
-                flags
-            );
+                flags);
 
         if (ImGui.IsItemClicked(
                 ImGuiMouseButton.Left))
         {
             SelectDirectory(
-                directory
-            );
+                directory);
         }
 
         if (!hasChildren ||
@@ -302,10 +287,8 @@ internal sealed class AssetsPanel
             DrawFolderTreeNode(
                 child,
                 Path.GetFileName(
-                    child
-                ),
-                false
-            );
+                    child),
+                false);
         }
 
         ImGui.TreePop();
@@ -318,15 +301,12 @@ internal sealed class AssetsPanel
         {
             return Directory
                 .EnumerateDirectories(
-                    directory
-                )
+                    directory)
                 .OrderBy(
                     path =>
                         Path.GetFileName(
-                            path
-                        ),
-                    StringComparer.OrdinalIgnoreCase
-                )
+                            path),
+                    StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
         catch
@@ -336,7 +316,7 @@ internal sealed class AssetsPanel
     }
 
     // ========================================================
-    // CURRENT FOLDER
+    // FOLDER CONTENTS
     // ========================================================
 
     private void DrawCurrentFolder(
@@ -347,18 +327,15 @@ internal sealed class AssetsPanel
 
         string folderName =
             GetDisplayFolderName(
-                _currentDirectory
-            );
+                _currentDirectory);
 
         ImGui.Text(
-            folderName
-        );
+            folderName);
 
         ImGui.SameLine();
 
         ImGui.TextDisabled(
-            $"{_directories.Count} folder(s), {_files.Count} asset(s)"
-        );
+            $"{_directories.Count} folder(s), {_files.Count} asset(s)");
 
         ImGui.Separator();
 
@@ -366,8 +343,7 @@ internal sealed class AssetsPanel
 
         DrawFiles(
             state,
-            log
-        );
+            log);
 
         DrawWindowContextMenu();
     }
@@ -379,27 +355,24 @@ internal sealed class AssetsPanel
         {
             string folderName =
                 Path.GetFileName(
-                    directory
-                );
+                    directory);
 
             bool clicked =
                 ImGui.Selectable(
-                    $"[DIR] {folderName}##content-folder:{directory}"
-                );
+                    $"[DIR] {folderName}##content-folder:{directory}");
 
             if (clicked &&
                 ImGui.IsMouseDoubleClicked(
                     ImGuiMouseButton.Left))
             {
                 SelectDirectory(
-                    directory
-                );
+                    directory);
             }
         }
     }
 
     // ========================================================
-    // ASSET FILES
+    // FILES
     // ========================================================
 
     private void DrawFiles(
@@ -412,35 +385,29 @@ internal sealed class AssetsPanel
             string projectPath =
                 Path.GetRelativePath(
                         _project.ProjectRoot,
-                        file
-                    )
+                        file)
                     .Replace(
                         '\\',
-                        '/'
-                    );
+                        '/');
 
             _project.AssetDatabase.TryGetAsset(
                 projectPath,
-                out AssetRecord? asset
-            );
+                out AssetRecord? asset);
 
             string icon =
                 GetAssetIcon(
-                    asset?.Type
-                );
+                    asset?.Type);
 
             bool selected =
                 string.Equals(
                     state.SelectedAssetPath,
                     projectPath,
-                    StringComparison.OrdinalIgnoreCase
-                );
+                    StringComparison.OrdinalIgnoreCase);
 
             bool clicked =
                 ImGui.Selectable(
                     $"{icon} {Path.GetFileName(file)}##asset:{file}",
-                    selected
-                );
+                    selected);
 
             if (clicked)
             {
@@ -452,29 +419,53 @@ internal sealed class AssetsPanel
 
                 state.SelectedObject =
                     null;
+            }
 
-                if (asset != null &&
-                    ImGui.IsMouseDoubleClicked(
-                        ImGuiMouseButton.Left))
-                {
-                    _openAsset(
-                        asset
-                    );
-                }
+            /*
+             * Keep double-click detection separate from the
+             * Selectable() return value. ImGui's click/double-click
+             * timing can otherwise make the second click fail to
+             * enter this block, which is why Event Modules sometimes
+             * refused to open.
+             */
+            if (asset != null &&
+                ImGui.IsItemHovered() &&
+                ImGui.IsMouseDoubleClicked(
+                    ImGuiMouseButton.Left))
+            {
+                OpenAsset(
+                    asset,
+                    log);
             }
 
             DrawAssetContextMenu(
                 state,
                 log,
                 asset,
-                file
-            );
+                file);
 
             DrawAssetDragSource(
                 asset,
-                file
-            );
+                file);
         }
+    }
+
+    private void OpenAsset(
+        AssetRecord asset,
+        EditorLog log)
+    {
+        if (asset.Type ==
+            AssetType.EventModule)
+        {
+            _eventWorkspaces.Open(
+                asset,
+                log);
+
+            return;
+        }
+
+        _openAsset(
+            asset);
     }
 
     private static string GetAssetIcon(
@@ -529,9 +520,9 @@ internal sealed class AssetsPanel
         if (ImGui.MenuItem(
                 "Open"))
         {
-            _openAsset(
-                asset
-            );
+            OpenAsset(
+                asset,
+                log);
         }
 
         if (asset.Type ==
@@ -546,8 +537,7 @@ internal sealed class AssetsPanel
                     null;
 
             ImGui.BeginDisabled(
-                !canAttach
-            );
+                !canAttach);
 
             if (ImGui.MenuItem(
                     "Attach to Selected GameObject"))
@@ -555,8 +545,7 @@ internal sealed class AssetsPanel
                 AttachEventModule(
                     state,
                     log,
-                    asset
-                );
+                    asset);
             }
 
             ImGui.EndDisabled();
@@ -564,8 +553,7 @@ internal sealed class AssetsPanel
             if (!canAttach)
             {
                 ImGui.TextDisabled(
-                    "Select a GameObject in the Hierarchy first."
-                );
+                    "Select a GameObject in the Hierarchy first.");
             }
         }
 
@@ -599,12 +587,10 @@ internal sealed class AssetsPanel
         }
 
         AssetDragDrop.Set(
-            asset.Guid
-        );
+            asset.Guid);
 
         ImGui.Text(
-            $"{asset.Type}: {Path.GetFileName(file)}"
-        );
+            $"{asset.Type}: {Path.GetFileName(file)}");
 
         ImGui.EndDragDropSource();
     }
@@ -624,8 +610,7 @@ internal sealed class AssetsPanel
         if (target == null)
         {
             log.Warning(
-                "Select a GameObject before attaching an Event Module."
-            );
+                "Select a GameObject before attaching an Event Module.");
 
             return;
         }
@@ -640,8 +625,7 @@ internal sealed class AssetsPanel
                     asset.Guid))
         {
             log.Warning(
-                $"'{asset.ProjectPath}' is already attached to '{target.Name}'."
-            );
+                $"'{asset.ProjectPath}' is already attached to '{target.Name}'.");
 
             return;
         }
@@ -653,14 +637,12 @@ internal sealed class AssetsPanel
             definition =
                 new EventModuleSerializer()
                     .Load(
-                        asset.FullPath
-                    );
+                        asset.FullPath);
         }
         catch (Exception exception)
         {
             log.Error(
-                $"Could not load Event Module '{asset.ProjectPath}': {exception.Message}"
-            );
+                $"Could not load Event Module '{asset.ProjectPath}': {exception.Message}");
 
             return;
         }
@@ -668,21 +650,18 @@ internal sealed class AssetsPanel
         var reference =
             new AssetReference(
                 asset.Guid,
-                asset.ProjectPath
-            );
+                asset.ProjectPath);
 
         void Attach()
         {
             EventModuleComponent component =
                 target.GetComponent<EventModuleComponent>()
                 ?? target.AddComponent(
-                    new EventModuleComponent()
-                );
+                    new EventModuleComponent());
 
             component.AddResolvedModule(
                 reference,
-                definition
-            );
+                definition);
         }
 
         if (state.Undo != null)
@@ -690,8 +669,7 @@ internal sealed class AssetsPanel
             state.Undo.Execute(
                 state,
                 "Attach Event Module",
-                Attach
-            );
+                Attach);
         }
         else
         {
@@ -701,12 +679,11 @@ internal sealed class AssetsPanel
         }
 
         log.Info(
-            $"Attached Event Module '{definition.Name}' to '{target.Name}'."
-        );
+            $"Attached Event Module '{definition.Name}' to '{target.Name}'.");
     }
 
     // ========================================================
-    // EMPTY AREA CONTEXT MENU
+    // CONTENT CONTEXT MENU
     // ========================================================
 
     private void DrawWindowContextMenu()
@@ -752,8 +729,7 @@ internal sealed class AssetsPanel
         if (_showCreateBlueprint)
         {
             ImGui.OpenPopup(
-                "Create Byte Blueprint"
-            );
+                "Create Byte Blueprint");
 
             _showCreateBlueprint =
                 false;
@@ -769,44 +745,37 @@ internal sealed class AssetsPanel
         ImGui.InputText(
             "Name",
             ref _blueprintName,
-            128
-        );
+            128);
 
         ImGui.Combo(
             "Type",
             ref _blueprintType,
-            "Generic Object\0Character\0"
-        );
+            "Generic Object\0Character\0");
 
         bool valid =
             !string.IsNullOrWhiteSpace(
-                _blueprintName
-            );
+                _blueprintName);
 
         ImGui.BeginDisabled(
-            !valid
-        );
+            !valid);
 
         if (ImGui.Button(
                 "Create",
                 new Vector2(
                     100.0f,
-                    0.0f
-                )))
+                    0.0f)))
         {
             try
             {
                 CreateBlueprint(
-                    log
-                );
+                    log);
 
                 ImGui.CloseCurrentPopup();
             }
             catch (Exception exception)
             {
                 log.Error(
-                    $"Could not create Blueprint: {exception.Message}"
-                );
+                    $"Could not create Blueprint: {exception.Message}");
             }
         }
 
@@ -818,8 +787,7 @@ internal sealed class AssetsPanel
                 "Cancel",
                 new Vector2(
                     100.0f,
-                    0.0f
-                )))
+                    0.0f)))
         {
             ImGui.CloseCurrentPopup();
         }
@@ -835,22 +803,19 @@ internal sealed class AssetsPanel
 
         string safeName =
             MakeSafeFileName(
-                _blueprintName
-            );
+                _blueprintName);
 
         string path =
             Path.Combine(
                 directory,
                 safeName +
-                ".byteblueprint"
-            );
+                ".byteblueprint");
 
         if (File.Exists(
                 path))
         {
             throw new IOException(
-                "A Blueprint with that name already exists."
-            );
+                "A Blueprint with that name already exists.");
         }
 
         BlueprintType type =
@@ -874,8 +839,7 @@ internal sealed class AssetsPanel
                 {
                     Type =
                         "CharacterController3D"
-                }
-            );
+                });
 
             root.Components.Add(
                 new ComponentData
@@ -892,16 +856,14 @@ internal sealed class AssetsPanel
                             ["height"] =
                                 2.0f
                         }
-                }
-            );
+                });
 
             root.Components.Add(
                 new ComponentData
                 {
                     Type =
                         "AnimationController"
-                }
-            );
+                });
         }
 
         var blueprint =
@@ -930,8 +892,7 @@ internal sealed class AssetsPanel
                                     ByteEngine.Core.Variables
                                         .VariableValue
                                         .FromNumber(
-                                            100
-                                        )
+                                            100)
                             },
 
                             new()
@@ -943,8 +904,7 @@ internal sealed class AssetsPanel
                                     ByteEngine.Core.Variables
                                         .VariableValue
                                         .FromNumber(
-                                            6
-                                        )
+                                            6)
                             },
 
                             new()
@@ -956,8 +916,7 @@ internal sealed class AssetsPanel
                                     ByteEngine.Core.Variables
                                         .VariableValue
                                         .FromString(
-                                            "Player"
-                                        )
+                                            "Player")
                             }
                         }
                         : new List<VariableData>()
@@ -966,12 +925,10 @@ internal sealed class AssetsPanel
         new BlueprintSerializer()
             .Save(
                 blueprint,
-                path
-            );
+                path);
 
         SelectDirectory(
-            directory
-        );
+            directory);
 
         _project.AssetDatabase.Scan();
 
@@ -979,8 +936,7 @@ internal sealed class AssetsPanel
             true;
 
         log.Info(
-            $"Created {type} Blueprint '{Path.GetFileName(path)}'."
-        );
+            $"Created {type} Blueprint '{Path.GetFileName(path)}'.");
     }
 
     // ========================================================
@@ -993,8 +949,7 @@ internal sealed class AssetsPanel
         if (_showCreateEventModule)
         {
             ImGui.OpenPopup(
-                "Create Event Module"
-            );
+                "Create Event Module");
 
             _showCreateEventModule =
                 false;
@@ -1010,52 +965,44 @@ internal sealed class AssetsPanel
         ImGui.InputText(
             "Name",
             ref _eventModuleName,
-            128
-        );
+            128);
 
         ImGui.Combo(
             "Template",
             ref _eventModuleTemplate,
-            "Empty\0Character Movement\0"
-        );
+            "Empty\0Character Movement\0");
 
         if (_eventModuleTemplate ==
             1)
         {
             ImGui.TextDisabled(
-                "Creates WASD + Space movement using CharacterController3D."
-            );
+                "Creates WASD + Space movement using CharacterController3D.");
         }
 
         bool valid =
             !string.IsNullOrWhiteSpace(
-                _eventModuleName
-            );
+                _eventModuleName);
 
         ImGui.BeginDisabled(
-            !valid
-        );
+            !valid);
 
         if (ImGui.Button(
                 "Create",
                 new Vector2(
                     100.0f,
-                    0.0f
-                )))
+                    0.0f)))
         {
             try
             {
                 CreateEventModule(
-                    log
-                );
+                    log);
 
                 ImGui.CloseCurrentPopup();
             }
             catch (Exception exception)
             {
                 log.Error(
-                    $"Could not create Event Module: {exception.Message}"
-                );
+                    $"Could not create Event Module: {exception.Message}");
             }
         }
 
@@ -1067,8 +1014,7 @@ internal sealed class AssetsPanel
                 "Cancel",
                 new Vector2(
                     100.0f,
-                    0.0f
-                )))
+                    0.0f)))
         {
             ImGui.CloseCurrentPopup();
         }
@@ -1084,22 +1030,19 @@ internal sealed class AssetsPanel
 
         string safeName =
             MakeSafeFileName(
-                _eventModuleName
-            );
+                _eventModuleName);
 
         string path =
             Path.Combine(
                 directory,
                 safeName +
-                ".byteevents"
-            );
+                ".byteevents");
 
         if (File.Exists(
                 path))
         {
             throw new IOException(
-                "An Event Module with that name already exists."
-            );
+                "An Event Module with that name already exists.");
         }
 
         EventModuleDefinition module =
@@ -1107,22 +1050,18 @@ internal sealed class AssetsPanel
             1
                 ? EventModuleTemplates
                     .CreateCharacterMovement(
-                        safeName
-                    )
+                        safeName)
                 : EventModuleTemplates
                     .CreateEmpty(
-                        safeName
-                    );
+                        safeName);
 
         new EventModuleSerializer()
             .Save(
                 module,
-                path
-            );
+                path);
 
         SelectDirectory(
-            directory
-        );
+            directory);
 
         _project.AssetDatabase.Scan();
 
@@ -1130,15 +1069,13 @@ internal sealed class AssetsPanel
             true;
 
         log.Info(
-            $"Created Event Module '{Path.GetFileName(path)}'."
-        );
+            $"Created Event Module '{Path.GetFileName(path)}'.");
 
         if (_eventModuleTemplate ==
             1)
         {
             log.Info(
-                "Character Movement template: W/S move forward/back, A/D strafe, Space jumps while grounded."
-            );
+                "Character Movement template: W/S move forward/back, A/D strafe, Space jumps while grounded.");
         }
     }
 
@@ -1168,47 +1105,33 @@ internal sealed class AssetsPanel
             _directories.AddRange(
                 Directory
                     .EnumerateDirectories(
-                        _currentDirectory
-                    )
+                        _currentDirectory)
                     .OrderBy(
                         path =>
                             Path.GetFileName(
-                                path
-                            ),
-                        StringComparer.OrdinalIgnoreCase
-                    )
-            );
+                                path),
+                        StringComparer.OrdinalIgnoreCase));
 
             _files.AddRange(
                 Directory
                     .EnumerateFiles(
-                        _currentDirectory
-                    )
+                        _currentDirectory)
                     .Where(
                         path =>
                             !path.EndsWith(
                                 ".meta",
-                                StringComparison.OrdinalIgnoreCase
-                            ) &&
+                                StringComparison.OrdinalIgnoreCase) &&
                             !path.EndsWith(
                                 ".tmp",
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                    )
+                                StringComparison.OrdinalIgnoreCase))
                     .OrderBy(
                         path =>
                             Path.GetFileName(
-                                path
-                            ),
-                        StringComparer.OrdinalIgnoreCase
-                    )
-            );
+                                path),
+                        StringComparer.OrdinalIgnoreCase));
         }
         catch
         {
-            /*
-             * File system may change between frames.
-             */
         }
 
         _listingDirty =
@@ -1220,18 +1143,7 @@ internal sealed class AssetsPanel
     {
         string fullPath =
             Path.GetFullPath(
-                directory
-            );
-
-        if (PathsEqual(
-                fullPath,
-                _currentDirectory))
-        {
-            _listingDirty =
-                true;
-
-            return;
-        }
+                directory);
 
         _currentDirectory =
             fullPath;
@@ -1262,15 +1174,13 @@ internal sealed class AssetsPanel
     private string GetAssetsRoot()
     {
         return _project.ResolveProjectPath(
-            _project.Project.AssetDirectory
-        );
+            _project.Project.AssetDirectory);
     }
 
     private string GetScenesRoot()
     {
         return _project.ResolveProjectPath(
-            _project.Project.SceneDirectory
-        );
+            _project.Project.SceneDirectory);
     }
 
     private string GetAssetCreationDirectory()
@@ -1294,21 +1204,17 @@ internal sealed class AssetsPanel
     {
         string fullPath =
             Path.GetFullPath(
-                path
-            )
+                path)
             .TrimEnd(
                 Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar
-            );
+                Path.AltDirectorySeparatorChar);
 
         string fullRoot =
             Path.GetFullPath(
-                root
-            )
+                root)
             .TrimEnd(
                 Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar
-            );
+                Path.AltDirectorySeparatorChar);
 
         if (PathsEqual(
                 fullPath,
@@ -1323,8 +1229,7 @@ internal sealed class AssetsPanel
 
         return fullPath.StartsWith(
             prefix,
-            StringComparison.OrdinalIgnoreCase
-        );
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool PathsEqual(
@@ -1333,23 +1238,18 @@ internal sealed class AssetsPanel
     {
         return string.Equals(
             Path.GetFullPath(
-                    left
-                )
+                    left)
                 .TrimEnd(
                     Path.DirectorySeparatorChar,
-                    Path.AltDirectorySeparatorChar
-                ),
+                    Path.AltDirectorySeparatorChar),
 
             Path.GetFullPath(
-                    right
-                )
+                    right)
                 .TrimEnd(
                     Path.DirectorySeparatorChar,
-                    Path.AltDirectorySeparatorChar
-                ),
+                    Path.AltDirectorySeparatorChar),
 
-            StringComparison.OrdinalIgnoreCase
-        );
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private string Breadcrumb()
@@ -1367,8 +1267,7 @@ internal sealed class AssetsPanel
             string relative =
                 Path.GetRelativePath(
                     assetsRoot,
-                    _currentDirectory
-                );
+                    _currentDirectory);
 
             return relative ==
                    "."
@@ -1383,8 +1282,7 @@ internal sealed class AssetsPanel
             string relative =
                 Path.GetRelativePath(
                     scenesRoot,
-                    _currentDirectory
-                );
+                    _currentDirectory);
 
             return relative ==
                    "."
@@ -1413,8 +1311,7 @@ internal sealed class AssetsPanel
         }
 
         return Path.GetFileName(
-            directory
-        );
+            directory);
     }
 
     private static string MakeSafeFileName(
@@ -1431,9 +1328,7 @@ internal sealed class AssetsPanel
                             .Contains(
                                 character)
                             ? '_'
-                            : character
-                )
-            );
+                            : character));
 
         return string.IsNullOrWhiteSpace(
             safeName)
