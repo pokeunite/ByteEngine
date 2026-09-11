@@ -64,6 +64,9 @@ internal sealed class EventWorkspacePanel
 
     private bool _anyGraphNodeHovered;
 
+    private Guid _hoveredGraphNodeId =
+        Guid.Empty;
+
     private bool _marqueeSelecting;
 
     private bool _marqueeAdditive;
@@ -71,6 +74,9 @@ internal sealed class EventWorkspacePanel
     private Vector2 _marqueeStart;
 
     private Vector2 _marqueeCurrent;
+
+    private Guid _draggingGraphNodeId =
+        Guid.Empty;
 
     private Guid _dragHistoryNodeId =
         Guid.Empty;
@@ -804,6 +810,9 @@ internal sealed class EventWorkspacePanel
                 false;
         }
 
+        UpdateGraphPointerInteraction();
+        HandleGraphShortcuts();
+
         DrawGraphGroupBackgrounds();
         DrawGraphWires();
         DrawWireDragPreview();
@@ -979,10 +988,6 @@ internal sealed class EventWorkspacePanel
         _anyGraphNodeHovered |=
             nodeHovered;
 
-        HandleNodeWindowSelection(
-            rule.Id,
-            nodeHovered);
-
         bool remove =
             false;
 
@@ -1122,25 +1127,6 @@ internal sealed class EventWorkspacePanel
                     24.0f *
                     GetNodeVisualScale()));
 
-            if (ImGui.IsItemActive() &&
-                ImGui.IsMouseDragging(
-                    ImGuiMouseButton.Left))
-            {
-                BeginNodeDragHistory(
-                    rule.Id,
-                    "Move Event Node");
-
-                Vector2 delta =
-                    _graphCanvas.ScreenDeltaToGraph(
-                        ImGui.GetIO().MouseDelta);
-
-                MoveRuleAndChildren(
-                    rule,
-                    delta);
-
-                _dirty =
-                    true;
-            }
         }
 
         ImGui.EndChild();
@@ -1353,10 +1339,6 @@ internal sealed class EventWorkspacePanel
         _anyGraphNodeHovered |=
             nodeHovered;
 
-        HandleNodeWindowSelection(
-            instruction.InstanceId,
-            nodeHovered);
-
         bool remove =
             false;
 
@@ -1399,29 +1381,6 @@ internal sealed class EventWorkspacePanel
                     28.0f *
                     GetNodeVisualScale()));
 
-            if (ImGui.IsItemActive() &&
-                ImGui.IsMouseDragging(
-                    ImGuiMouseButton.Left))
-            {
-                BeginNodeDragHistory(
-                    instruction.InstanceId,
-                    condition
-                        ? "Move Condition Node"
-                        : "Move Action Node");
-
-                Vector2 delta =
-                    _graphCanvas.ScreenDeltaToGraph(
-                        ImGui.GetIO().MouseDelta);
-
-                instruction.EditorX +=
-                    delta.X;
-
-                instruction.EditorY +=
-                    delta.Y;
-
-                _dirty =
-                    true;
-            }
 
             ImGui.TextDisabled(
                 category);
@@ -1717,27 +1676,11 @@ internal sealed class EventWorkspacePanel
     private void HandleGraphBackgroundContext()
     {
         /*
-         * Use direct canvas bounds instead of relying on the old
-         * full-canvas ImGui item hover state. This keeps the context
-         * menu reliable even when the graph contains overlapping
-         * child windows.
+         * Context-menu opening is handled in
+         * UpdateGraphPointerInteraction before node windows are drawn.
+         * Keeping this method preserves DrawGraphCanvas ordering while
+         * avoiding duplicate popup-open requests.
          */
-        if (!_graphCanvas.IsMouseInsideCanvas ||
-            _anyGraphNodeHovered ||
-            _marqueeSelecting ||
-            _wireDragKind !=
-                WireDragKind.None ||
-            !ImGui.IsMouseClicked(
-                ImGuiMouseButton.Right))
-        {
-            return;
-        }
-
-        _graphContextPosition =
-            _graphCanvas.MouseGraphPosition;
-
-        ImGui.OpenPopup(
-            "ByteGraph Context");
     }
 
     private void DrawGraphContextPopup()
@@ -2077,28 +2020,340 @@ internal sealed class EventWorkspacePanel
             : rule.EditorTitle;
     }
 
-    private void HandleNodeWindowSelection(
-        Guid nodeId,
-        bool nodeHovered)
+    private void UpdateGraphPointerInteraction()
     {
-        /*
-         * Selection is deliberately based on the whole node window,
-         * not on a tiny Selectable/drag label inside the node.
-         *
-         * This means clicking the node body, title, parameter area,
-         * checkbox, etc. selects the node just like Unreal/Unity graph
-         * editors do.
-         */
-        if (!nodeHovered ||
-            _marqueeSelecting ||
-            _wireDragKind !=
-                WireDragKind.None ||
-            !ImGui.IsMouseClicked(
+        Vector2 mouseGraphPosition =
+            _graphCanvas.MouseGraphPosition;
+
+        _hoveredGraphNodeId =
+            HitTestGraphNode(
+                mouseGraphPosition);
+
+        _anyGraphNodeHovered =
+            _hoveredGraphNodeId !=
+            Guid.Empty;
+
+        if (!ImGui.IsMouseDown(
                 ImGuiMouseButton.Left))
+        {
+            _draggingGraphNodeId =
+                Guid.Empty;
+
+            _dragHistoryNodeId =
+                Guid.Empty;
+        }
+
+        /*
+         * Selection and drag candidates are geometry based.
+         *
+         * Clicking anywhere on a node selects it. Dragging begins only
+         * when the click started in the node's header strip. This keeps
+         * parameter controls usable while making node movement reliable.
+         */
+        if (_wireDragKind ==
+                WireDragKind.None &&
+            !_marqueeSelecting &&
+            _graphCanvas.IsMouseInsideCanvas &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left))
+        {
+            if (_hoveredGraphNodeId !=
+                Guid.Empty)
+            {
+                SelectGraphNodeFromClick(
+                    _hoveredGraphNodeId);
+
+                if (PointInsideNodeDragArea(
+                        mouseGraphPosition,
+                        _hoveredGraphNodeId))
+                {
+                    _draggingGraphNodeId =
+                        _hoveredGraphNodeId;
+                }
+            }
+            else
+            {
+                _draggingGraphNodeId =
+                    Guid.Empty;
+
+                _marqueeSelecting =
+                    true;
+
+                _marqueeAdditive =
+                    ImGui.IsKeyDown(
+                        ImGuiKey.ModCtrl) ||
+                    ImGui.IsKeyDown(
+                        ImGuiKey.ModShift);
+
+                _marqueeStart =
+                    mouseGraphPosition;
+
+                _marqueeCurrent =
+                    _marqueeStart;
+            }
+        }
+
+        if (_draggingGraphNodeId !=
+                Guid.Empty &&
+            ImGui.IsMouseDown(
+                ImGuiMouseButton.Left) &&
+            ImGui.IsMouseDragging(
+                ImGuiMouseButton.Left))
+        {
+            BeginNodeDragHistory(
+                _draggingGraphNodeId,
+                _selectedGraphNodes.Count >
+                    1
+                    ? "Move Selected Nodes"
+                    : "Move Graph Node");
+
+            Vector2 delta =
+                _graphCanvas.ScreenDeltaToGraph(
+                    ImGui.GetIO().MouseDelta);
+
+            MoveSelectedGraphNodes(
+                _draggingGraphNodeId,
+                delta);
+
+            _dirty =
+                true;
+        }
+
+        /*
+         * Open the graph context menu from raw canvas hit testing.
+         * Do this before drawing node child windows so no later ImGui
+         * item can swallow the right-click.
+         */
+        if (_graphCanvas.IsMouseInsideCanvas &&
+            _hoveredGraphNodeId ==
+                Guid.Empty &&
+            !_marqueeSelecting &&
+            _wireDragKind ==
+                WireDragKind.None &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right))
+        {
+            _graphContextPosition =
+                mouseGraphPosition;
+
+            ImGui.OpenPopup(
+                "ByteGraph Context");
+        }
+    }
+
+    private void HandleGraphShortcuts()
+    {
+        if (_module ==
+                null ||
+            _selectedGraphNodes.Count ==
+                0 ||
+            ImGui.GetIO().WantTextInput ||
+            !ImGui.IsWindowFocused(
+                ImGuiFocusedFlags.RootAndChildWindows))
         {
             return;
         }
 
+        bool hasModifier =
+            ImGui.IsKeyDown(
+                ImGuiKey.ModCtrl) ||
+            ImGui.IsKeyDown(
+                ImGuiKey.ModShift) ||
+            ImGui.IsKeyDown(
+                ImGuiKey.ModAlt);
+
+        if (!hasModifier &&
+            ImGui.IsKeyPressed(
+                ImGuiKey.C))
+        {
+            CreateGroupFromSelection();
+        }
+    }
+
+    private Guid HitTestGraphNode(
+        Vector2 graphPoint)
+    {
+        if (_module ==
+            null)
+        {
+            return Guid.Empty;
+        }
+
+        Guid result =
+            Guid.Empty;
+
+        /*
+         * Iterate in the same broad order that nodes are drawn.
+         * If nodes overlap, the later node wins, matching what the
+         * user visually perceives as being on top.
+         */
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (PointInsideNode(
+                    graphPoint,
+                    rule.Id))
+            {
+                result =
+                    rule.Id;
+            }
+
+            if (rule.EditorCollapsed)
+            {
+                continue;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions)
+            {
+                if (PointInsideNode(
+                        graphPoint,
+                        instruction.InstanceId))
+                {
+                    result =
+                        instruction.InstanceId;
+                }
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Actions)
+            {
+                if (PointInsideNode(
+                        graphPoint,
+                        instruction.InstanceId))
+                {
+                    result =
+                        instruction.InstanceId;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private bool PointInsideNode(
+        Vector2 graphPoint,
+        Guid nodeId)
+    {
+        if (!TryGetNodeBounds(
+                nodeId,
+                out Vector2 minimum,
+                out Vector2 maximum))
+        {
+            return false;
+        }
+
+        return graphPoint.X >=
+                   minimum.X &&
+               graphPoint.Y >=
+                   minimum.Y &&
+               graphPoint.X <=
+                   maximum.X &&
+               graphPoint.Y <=
+                   maximum.Y;
+    }
+
+    private bool PointInsideNodeDragArea(
+        Vector2 graphPoint,
+        Guid nodeId)
+    {
+        if (!TryGetNodeBounds(
+                nodeId,
+                out Vector2 minimum,
+                out Vector2 maximum))
+        {
+            return false;
+        }
+
+        bool insideHorizontalBounds =
+            graphPoint.X >=
+                minimum.X &&
+            graphPoint.X <=
+                maximum.X;
+
+        if (!insideHorizontalBounds)
+        {
+            return false;
+        }
+
+        float nodeHeight =
+            Math.Max(
+                maximum.Y -
+                minimum.Y,
+                1.0f);
+
+        bool isEventNode =
+            _module?.Rules.Any(
+                rule =>
+                    rule.Id ==
+                    nodeId) ==
+            true;
+
+        if (isEventNode)
+        {
+            /*
+             * Event nodes are laid out differently from Condition/Action
+             * nodes. Their visible "Drag / Select Event" handle lives near
+             * the bottom of the card, while the previous geometry hit test
+             * only accepted the top strip. That made Event nodes selectable
+             * but effectively impossible to drag from the visible handle.
+             *
+             * Accept both:
+             *  - the small EVENT header strip at the top
+             *  - the explicit drag handle strip at the bottom
+             *
+             * The middle remains reserved for title/buttons/parameters.
+             */
+            float topDragHeight =
+                Math.Min(
+                    44.0f *
+                    GetNodeScale(),
+                    nodeHeight);
+
+            float bottomDragHeight =
+                Math.Min(
+                    54.0f *
+                    GetNodeScale(),
+                    nodeHeight);
+
+            bool insideTopDragArea =
+                graphPoint.Y >=
+                    minimum.Y &&
+                graphPoint.Y <=
+                    minimum.Y +
+                    topDragHeight;
+
+            bool insideBottomDragArea =
+                graphPoint.Y >=
+                    maximum.Y -
+                    bottomDragHeight &&
+                graphPoint.Y <=
+                    maximum.Y;
+
+            return insideTopDragArea ||
+                   insideBottomDragArea;
+        }
+
+        /*
+         * Condition and Action nodes keep the compact title/header drag
+         * area that is already working.
+         */
+        float headerHeight =
+            Math.Min(
+                56.0f *
+                GetNodeScale(),
+                nodeHeight);
+
+        return graphPoint.Y >=
+                   minimum.Y &&
+               graphPoint.Y <=
+                   minimum.Y +
+                   headerHeight;
+    }
+
+    private void SelectGraphNodeFromClick(
+        Guid nodeId)
+    {
         bool multiSelect =
             ImGui.IsKeyDown(
                 ImGuiKey.ModCtrl) ||
@@ -2107,6 +2362,17 @@ internal sealed class EventWorkspacePanel
 
         if (!multiSelect)
         {
+            /*
+             * If the user clicks a node that is already part of a
+             * multi-selection, keep the entire selection intact so the
+             * selection can be dragged as one group.
+             */
+            if (_selectedGraphNodes.Contains(
+                    nodeId))
+            {
+                return;
+            }
+
             _selectedGraphNodes.Clear();
 
             _selectedGraphNodes.Add(
@@ -2126,40 +2392,8 @@ internal sealed class EventWorkspacePanel
     private void HandleGraphMarquee()
     {
         if (_module ==
-            null)
-        {
-            return;
-        }
-
-        /*
-         * Start a box-selection only from empty graph space.
-         * Ctrl/Shift keeps the current selection and adds to it.
-         */
-        if (!_marqueeSelecting &&
-            _wireDragKind ==
-                WireDragKind.None &&
-            _graphCanvas.IsMouseInsideCanvas &&
-            !_anyGraphNodeHovered &&
-            ImGui.IsMouseClicked(
-                ImGuiMouseButton.Left))
-        {
-            _marqueeSelecting =
-                true;
-
-            _marqueeAdditive =
-                ImGui.IsKeyDown(
-                    ImGuiKey.ModCtrl) ||
-                ImGui.IsKeyDown(
-                    ImGuiKey.ModShift);
-
-            _marqueeStart =
-                _graphCanvas.MouseGraphPosition;
-
-            _marqueeCurrent =
-                _marqueeStart;
-        }
-
-        if (!_marqueeSelecting)
+                null ||
+            !_marqueeSelecting)
         {
             return;
         }
@@ -3105,6 +3339,85 @@ internal sealed class EventWorkspacePanel
 
         _dragHistoryNodeId =
             nodeId;
+    }
+
+    private void MoveSelectedGraphNodes(
+        Guid anchorNodeId,
+        Vector2 delta)
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        if (_selectedGraphNodes.Count ==
+            0)
+        {
+            _selectedGraphNodes.Add(
+                anchorNodeId);
+        }
+
+        HashSet<Guid> selectedRules =
+            _module.Rules
+                .Where(
+                    rule =>
+                        _selectedGraphNodes.Contains(
+                            rule.Id))
+                .Select(
+                    rule =>
+                        rule.Id)
+                .ToHashSet();
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (selectedRules.Contains(
+                    rule.Id))
+            {
+                /*
+                 * Moving an Event moves its conditions/actions as a unit.
+                 * Child nodes are not moved again below.
+                 */
+                MoveRuleAndChildren(
+                    rule,
+                    delta);
+
+                continue;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions)
+            {
+                if (!_selectedGraphNodes.Contains(
+                        instruction.InstanceId))
+                {
+                    continue;
+                }
+
+                instruction.EditorX +=
+                    delta.X;
+
+                instruction.EditorY +=
+                    delta.Y;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Actions)
+            {
+                if (!_selectedGraphNodes.Contains(
+                        instruction.InstanceId))
+                {
+                    continue;
+                }
+
+                instruction.EditorX +=
+                    delta.X;
+
+                instruction.EditorY +=
+                    delta.Y;
+            }
+        }
     }
 
     private static void MoveRuleAndChildren(
