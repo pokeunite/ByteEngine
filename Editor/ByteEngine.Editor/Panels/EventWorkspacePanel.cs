@@ -2,6 +2,7 @@ using System.Numerics;
 
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.VisualLogic;
 
@@ -16,6 +17,12 @@ internal sealed class EventWorkspacePanel
 
     private readonly VisualLogicRegistry _registry =
         VisualLogicRegistry.CreateDefault();
+
+    private readonly VariableReferencePicker _referencePicker =
+        new();
+
+    private readonly EventModuleHistory _history =
+        new();
 
     private AssetRecord? _asset;
 
@@ -34,30 +41,101 @@ internal sealed class EventWorkspacePanel
         _asset?.Guid ??
         Guid.Empty;
 
+    internal bool CanUndo =>
+        _history.CanUndo;
+
+    internal bool CanRedo =>
+        _history.CanRedo;
+
+    internal string? UndoName =>
+        _history.UndoName;
+
+    internal string? RedoName =>
+        _history.RedoName;
+
+    internal bool Undo()
+    {
+        if (_module ==
+            null)
+        {
+            return false;
+        }
+
+        if (!_history.TryUndo(
+                _module,
+                out EventModuleDefinition restored))
+        {
+            return false;
+        }
+
+        _module =
+            restored;
+
+        _dirty =
+            _history.IsDirty(
+                _module);
+
+        return true;
+    }
+
+    internal bool Redo()
+    {
+        if (_module ==
+            null)
+        {
+            return false;
+        }
+
+        if (!_history.TryRedo(
+                _module,
+                out EventModuleDefinition restored))
+        {
+            return false;
+        }
+
+        _module =
+            restored;
+
+        _dirty =
+            _history.IsDirty(
+                _module);
+
+        return true;
+    }
+
+    private void RecordHistory(
+        string name)
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        _history.Record(
+            name,
+            _module);
+    }
+
+    // ========================================================
+    // OPEN
+    // ========================================================
+
     public void Open(
         AssetRecord asset,
         EditorLog log)
     {
         ArgumentNullException.ThrowIfNull(
-            asset
-        );
+            asset);
 
-        /*
-         * If this document is already loaded, just reopen/focus it.
-         *
-         * This preserves unsaved changes if the user closes the
-         * tab and immediately opens it again.
-         */
         if (_asset?.Guid ==
                 asset.Guid &&
             _module !=
                 null)
         {
-            _open =
-                true;
+            _open = true;
 
-            _requestFocus =
-                true;
+            _requestFocus = true;
 
             return;
         }
@@ -66,11 +144,13 @@ internal sealed class EventWorkspacePanel
         {
             _module =
                 _serializer.Load(
-                    asset.FullPath
-                );
+                    asset.FullPath);
 
             _asset =
                 asset;
+
+            _history.Reset(
+                _module);
 
             _open =
                 true;
@@ -82,56 +162,47 @@ internal sealed class EventWorkspacePanel
                 true;
 
             log.Info(
-                $"Opened Event Module '{asset.ProjectPath}'."
-            );
+                $"Opened Event Module '{asset.ProjectPath}'.");
         }
         catch (Exception exception)
         {
             log.Error(
-                $"Could not open Event Module '{asset.ProjectPath}': {exception.Message}"
-            );
+                $"Could not open Event Module '{asset.ProjectPath}': {exception.Message}");
         }
     }
+
+    // ========================================================
+    // DRAW
+    // ========================================================
 
     public void Draw(
         EditorLog log)
     {
         if (!_open ||
-            _module ==
-                null ||
-            _asset ==
-                null)
+            _module == null ||
+            _asset == null)
         {
             return;
         }
 
+        EditorState? state =
+            EditorState.Active;
+
         uint sceneDockId =
             EditorWorkspaceDocking.SceneDocumentDockId;
 
-        /*
-         * First time an Event Module is shown, dock it into the
-         * same document node as Scene View.
-         *
-         * FirstUseEver is important:
-         * after the user drags this tab elsewhere, ImGui remembers
-         * their layout and we do NOT force it back.
-         */
-        if (sceneDockId !=
-            0)
+        if (sceneDockId != 0)
         {
             ImGui.SetNextWindowDockID(
                 sceneDockId,
-                ImGuiCond.FirstUseEver
-            );
+                ImGuiCond.FirstUseEver);
         }
 
         ImGui.SetNextWindowSize(
             new Vector2(
                 1100.0f,
-                720.0f
-            ),
-            ImGuiCond.FirstUseEver
-        );
+                720.0f),
+            ImGuiCond.FirstUseEver);
 
         if (_requestFocus)
         {
@@ -149,21 +220,31 @@ internal sealed class EventWorkspacePanel
         bool open =
             _open;
 
-        /*
-         * Visible title:
-         * CharacterMovement *
-         *
-         * Internal ID includes GUID so many Event Modules can
-         * be open as individual dock tabs.
-         */
         bool visible =
             ImGui.Begin(
                 $"{_module.Name}{dirtyMarker}##EventWorkspace:{_asset.Guid}",
-                ref open
-            );
+                ref open);
 
         _open =
             open;
+
+        if (ImGui.IsWindowFocused(
+                ImGuiFocusedFlags.RootAndChildWindows))
+        {
+            EventWorkspaceUndoRouter.SetFocused(
+                this);
+        }
+        else
+        {
+            EventWorkspaceUndoRouter.ClearFocused(
+                this);
+        }
+
+        if (!_open)
+        {
+            EventWorkspaceUndoRouter.ClearFocused(
+                this);
+        }
 
         if (!visible)
         {
@@ -176,78 +257,93 @@ internal sealed class EventWorkspacePanel
             ImGuiStyleVar.ItemSpacing,
             new Vector2(
                 10.0f,
-                9.0f
-            )
-        );
+                10.0f));
 
         ImGui.PushStyleVar(
             ImGuiStyleVar.FramePadding,
             new Vector2(
                 8.0f,
-                6.0f
-            )
-        );
+                6.0f));
 
         DrawDocumentToolbar(
-            log
-        );
+            log);
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                4.0f
-            )
-        );
+                5.0f));
 
         DrawModuleSettings();
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                8.0f
-            )
-        );
+                10.0f));
 
-        DrawRules();
+        DrawRules(
+            state);
 
         ImGui.PopStyleVar(
-            2
-        );
+            2);
 
         ImGui.End();
     }
+
+    // ========================================================
+    // TOOLBAR
+    // ========================================================
 
     private void DrawDocumentToolbar(
         EditorLog log)
     {
         ImGui.TextDisabled(
-            "EVENT MODULE"
-        );
+            "EVENT MODULE");
 
         ImGui.SameLine();
 
         ImGui.Text(
-            _module!.Name
-        );
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            "   "
-        );
+            _module!.Name);
 
         ImGui.SameLine();
 
         ImGui.BeginDisabled(
-            !_dirty
-        );
+            !CanUndo);
+
+        if (ImGui.Button(
+                UndoName is string undoName
+                    ? $"Undo {undoName}"
+                    : "Undo"))
+        {
+            Undo();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        ImGui.BeginDisabled(
+            !CanRedo);
+
+        if (ImGui.Button(
+                RedoName is string redoName
+                    ? $"Redo {redoName}"
+                    : "Redo"))
+        {
+            Redo();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        ImGui.BeginDisabled(
+            !_dirty);
 
         if (ImGui.Button(
                 "Save"))
         {
             Save(
-                log
-            );
+                log);
         }
 
         ImGui.EndDisabled();
@@ -257,9 +353,11 @@ internal sealed class EventWorkspacePanel
         if (ImGui.Button(
                 "+ Add Event"))
         {
+            RecordHistory(
+                "Add Event");
+
             _module.Rules.Add(
-                new EventRuleDefinition()
-            );
+                new EventRuleDefinition());
 
             _dirty =
                 true;
@@ -268,17 +366,14 @@ internal sealed class EventWorkspacePanel
         ImGui.SameLine();
 
         ImGui.TextDisabled(
-            _asset!.ProjectPath
-        );
+            _asset!.ProjectPath);
     }
 
     private void Save(
         EditorLog log)
     {
-        if (_module ==
-                null ||
-            _asset ==
-                null)
+        if (_module == null ||
+            _asset == null)
         {
             return;
         }
@@ -290,27 +385,26 @@ internal sealed class EventWorkspacePanel
             {
                 _module.Name =
                     Path.GetFileNameWithoutExtension(
-                        _asset.FullPath
-                    );
+                        _asset.FullPath);
             }
 
             _serializer.Save(
                 _module,
-                _asset.FullPath
-            );
+                _asset.FullPath);
+
+            _history.MarkSaved(
+                _module);
 
             _dirty =
                 false;
 
             log.Info(
-                $"Saved Event Module '{_asset.ProjectPath}'."
-            );
+                $"Saved Event Module '{_asset.ProjectPath}'.");
         }
         catch (Exception exception)
         {
             log.Error(
-                $"Could not save Event Module '{_asset.ProjectPath}': {exception.Message}"
-            );
+                $"Could not save Event Module '{_asset.ProjectPath}': {exception.Message}");
         }
     }
 
@@ -320,18 +414,11 @@ internal sealed class EventWorkspacePanel
 
     private void DrawModuleSettings()
     {
-        if (_module ==
-            null)
+        if (_module == null)
         {
             return;
         }
 
-        /*
-         * Keep metadata collapsed by default.
-         *
-         * Most of the screen should belong to gameplay logic,
-         * not technical asset information.
-         */
         if (!ImGui.CollapsingHeader(
                 "Module Settings"))
         {
@@ -339,8 +426,7 @@ internal sealed class EventWorkspacePanel
         }
 
         ImGui.Indent(
-            12.0f
-        );
+            12.0f);
 
         string name =
             _module.Name;
@@ -358,36 +444,30 @@ internal sealed class EventWorkspacePanel
         }
 
         ImGui.TextDisabled(
-            $"Asset ID: {_module.Id}"
-        );
+            $"Asset ID: {_module.Id}");
 
         ImGui.TextDisabled(
-            $"Format Version: {_module.Version}"
-        );
+            $"Format Version: {_module.Version}");
 
         if (_module.TargetBlueprintGuid.HasValue)
         {
             ImGui.Text(
-                $"Target Blueprint: {_module.TargetBlueprintGuid.Value}"
-            );
+                $"Target Blueprint: {_module.TargetBlueprintGuid}");
         }
         else
         {
             ImGui.TextDisabled(
-                "Target Blueprint: Generic"
-            );
+                "Target Blueprint: Generic");
         }
 
         ImGui.SeparatorText(
-            "Required Components"
-        );
+            "Required Components");
 
         if (_module.RequiredComponents.Count ==
             0)
         {
             ImGui.TextDisabled(
-                "None"
-            );
+                "None");
         }
         else
         {
@@ -395,24 +475,22 @@ internal sealed class EventWorkspacePanel
                      in _module.RequiredComponents)
             {
                 ImGui.BulletText(
-                    component
-                );
+                    component);
             }
         }
 
         ImGui.Unindent(
-            12.0f
-        );
+            12.0f);
     }
 
     // ========================================================
-    // EVENTS
+    // RULES
     // ========================================================
 
-    private void DrawRules()
+    private void DrawRules(
+        EditorState? state)
     {
-        if (_module ==
-            null)
+        if (_module == null)
         {
             return;
         }
@@ -423,17 +501,13 @@ internal sealed class EventWorkspacePanel
             ImGui.Dummy(
                 new Vector2(
                     0.0f,
-                    30.0f
-                )
-            );
+                    25.0f));
 
             ImGui.TextDisabled(
-                "This module has no events."
-            );
+                "This module has no events.");
 
             ImGui.TextDisabled(
-                "Click '+ Add Event' above to begin."
-            );
+                "Click '+ Add Event' to begin.");
 
             return;
         }
@@ -446,22 +520,23 @@ internal sealed class EventWorkspacePanel
                 _module.Rules[index];
 
             ImGui.PushID(
-                rule.Id.ToString()
-            );
+                rule.Id.ToString());
 
             bool remove =
                 DrawRule(
                     rule,
-                    index
-                );
+                    index,
+                    state);
 
             ImGui.PopID();
 
             if (remove)
             {
+                RecordHistory(
+                    "Delete Event");
+
                 _module.Rules.RemoveAt(
-                    index
-                );
+                    index);
 
                 _dirty =
                     true;
@@ -472,29 +547,22 @@ internal sealed class EventWorkspacePanel
             ImGui.Dummy(
                 new Vector2(
                     0.0f,
-                    12.0f
-                )
-            );
+                    18.0f));
         }
     }
 
     private bool DrawRule(
         EventRuleDefinition rule,
-        int index)
+        int index,
+        EditorState? state)
     {
-        /*
-         * Large event separator/header.
-         */
         ImGui.SeparatorText(
-            $"EVENT {index + 1}"
-        );
+            $"EVENT {index + 1}");
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                3.0f
-            )
-        );
+                4.0f));
 
         bool enabled =
             rule.Enabled;
@@ -503,6 +571,11 @@ internal sealed class EventWorkspacePanel
                 "Enabled",
                 ref enabled))
         {
+            RecordHistory(
+                enabled
+                    ? "Enable Event"
+                    : "Disable Event");
+
             rule.Enabled =
                 enabled;
 
@@ -513,36 +586,28 @@ internal sealed class EventWorkspacePanel
         ImGui.SameLine();
 
         ImGui.TextDisabled(
-            $"Event ID: {rule.Id.ToString()[..8]}"
-        );
-
-        float deleteWidth =
-            110.0f;
+            $"ID: {rule.Id.ToString()[..8]}");
 
         float available =
             ImGui.GetContentRegionAvail().X;
 
         if (available >
-            deleteWidth)
+            120.0f)
         {
             ImGui.SameLine(
                 ImGui.GetCursorPosX() +
                 available -
-                deleteWidth
-            );
+                110.0f);
         }
 
-        bool removeRule =
+        bool remove =
             ImGui.Button(
-                "Delete Event"
-            );
+                "Delete Event");
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                5.0f
-            )
-        );
+                6.0f));
 
         if (rule.Conditions.Count ==
             0)
@@ -552,17 +617,13 @@ internal sealed class EventWorkspacePanel
                     1.0f,
                     0.75f,
                     0.25f,
-                    1.0f
-                ),
-                "No conditions - this event executes every frame."
-            );
+                    1.0f),
+                "No conditions - this event executes every frame.");
 
             ImGui.Dummy(
                 new Vector2(
                     0.0f,
-                    4.0f
-                )
-            );
+                    5.0f));
         }
 
         if (ImGui.BeginTable(
@@ -574,46 +635,38 @@ internal sealed class EventWorkspacePanel
         {
             ImGui.TableSetupColumn(
                 "Conditions",
-                ImGuiTableColumnFlags.WidthStretch,
-                1.0f
-            );
+                ImGuiTableColumnFlags.WidthStretch);
 
             ImGui.TableSetupColumn(
                 "Actions",
-                ImGuiTableColumnFlags.WidthStretch,
-                1.0f
-            );
+                ImGuiTableColumnFlags.WidthStretch);
 
             ImGui.TableNextRow();
 
-            // CONDITIONS
             ImGui.TableNextColumn();
 
             DrawColumnHeader(
                 "CONDITIONS",
-                "When all conditions are true..."
-            );
+                "When all conditions are true...");
 
             DrawConditionList(
-                rule.Conditions
-            );
+                rule.Conditions,
+                state);
 
-            // ACTIONS
             ImGui.TableNextColumn();
 
             DrawColumnHeader(
                 "ACTIONS",
-                "...run these actions in order."
-            );
+                "...run these actions in order.");
 
             DrawActionList(
-                rule.Actions
-            );
+                rule.Actions,
+                state);
 
             ImGui.EndTable();
         }
 
-        return removeRule;
+        return remove;
     }
 
     private static void DrawColumnHeader(
@@ -621,19 +674,15 @@ internal sealed class EventWorkspacePanel
         string description)
     {
         ImGui.Text(
-            title
-        );
+            title);
 
         ImGui.TextDisabled(
-            description
-        );
+            description);
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                5.0f
-            )
-        );
+                7.0f));
     }
 
     // ========================================================
@@ -641,7 +690,8 @@ internal sealed class EventWorkspacePanel
     // ========================================================
 
     private void DrawConditionList(
-        List<VisualInstruction> conditions)
+        List<VisualInstruction> conditions,
+        EditorState? state)
     {
         for (int index = 0;
              index < conditions.Count;
@@ -651,23 +701,24 @@ internal sealed class EventWorkspacePanel
                 conditions[index];
 
             ImGui.PushID(
-                instruction.InstanceId.ToString()
-            );
+                instruction.InstanceId.ToString());
 
             bool remove =
                 DrawInstructionCard(
                     instruction,
                     true,
-                    index
-                );
+                    index,
+                    state);
 
             ImGui.PopID();
 
             if (remove)
             {
+                RecordHistory(
+                    "Delete Condition");
+
                 conditions.RemoveAt(
-                    index
-                );
+                    index);
 
                 _dirty =
                     true;
@@ -680,33 +731,21 @@ internal sealed class EventWorkspacePanel
             ImGui.Dummy(
                 new Vector2(
                     0.0f,
-                    7.0f
-                )
-            );
+                    8.0f));
         }
-
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                3.0f
-            )
-        );
 
         if (ImGui.Button(
                 "+ Add Condition",
                 new Vector2(
                     -1.0f,
-                    34.0f
-                )))
+                    36.0f)))
         {
             ImGui.OpenPopup(
-                "Add Condition"
-            );
+                "Add Condition");
         }
 
         DrawConditionPicker(
-            conditions
-        );
+            conditions);
     }
 
     // ========================================================
@@ -714,7 +753,8 @@ internal sealed class EventWorkspacePanel
     // ========================================================
 
     private void DrawActionList(
-        List<VisualInstruction> actions)
+        List<VisualInstruction> actions,
+        EditorState? state)
     {
         for (int index = 0;
              index < actions.Count;
@@ -724,23 +764,24 @@ internal sealed class EventWorkspacePanel
                 actions[index];
 
             ImGui.PushID(
-                instruction.InstanceId.ToString()
-            );
+                instruction.InstanceId.ToString());
 
             bool remove =
                 DrawInstructionCard(
                     instruction,
                     false,
-                    index
-                );
+                    index,
+                    state);
 
             ImGui.PopID();
 
             if (remove)
             {
+                RecordHistory(
+                    "Delete Action");
+
                 actions.RemoveAt(
-                    index
-                );
+                    index);
 
                 _dirty =
                     true;
@@ -753,43 +794,32 @@ internal sealed class EventWorkspacePanel
             ImGui.Dummy(
                 new Vector2(
                     0.0f,
-                    7.0f
-                )
-            );
+                    8.0f));
         }
-
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                3.0f
-            )
-        );
 
         if (ImGui.Button(
                 "+ Add Action",
                 new Vector2(
                     -1.0f,
-                    34.0f
-                )))
+                    36.0f)))
         {
             ImGui.OpenPopup(
-                "Add Action"
-            );
+                "Add Action");
         }
 
         DrawActionPicker(
-            actions
-        );
+            actions);
     }
 
     // ========================================================
-    // INSTRUCTION CARD
+    // INSTRUCTION CARDS
     // ========================================================
 
     private bool DrawInstructionCard(
         VisualInstruction instruction,
         bool condition,
-        int index)
+        int index,
+        EditorState? state)
     {
         string displayName =
             instruction.Id;
@@ -802,8 +832,7 @@ internal sealed class EventWorkspacePanel
             if (_registry.TryGetCondition(
                     instruction.Id,
                     out VisualConditionDefinition? definition) &&
-                definition !=
-                null)
+                definition != null)
             {
                 displayName =
                     definition.DisplayName;
@@ -817,8 +846,7 @@ internal sealed class EventWorkspacePanel
             if (_registry.TryGetAction(
                     instruction.Id,
                     out VisualActionDefinition? definition) &&
-                definition !=
-                null)
+                definition != null)
             {
                 displayName =
                     definition.DisplayName;
@@ -831,53 +859,48 @@ internal sealed class EventWorkspacePanel
         ImGui.Separator();
 
         ImGui.TextDisabled(
-            $"{index + 1:00}"
-        );
+            $"{index + 1:00}");
 
         ImGui.SameLine();
 
         ImGui.Text(
-            displayName
-        );
+            displayName);
 
-        float available =
-            ImGui.GetContentRegionAvail().X;
+        /*
+         * Keep the remove control directly beside the instruction
+         * title instead of trying to right-align it inside the event
+         * table cell. The previous right-edge calculation could place
+         * the Actions-side X outside the visible column, making actions
+         * appear impossible to delete.
+         */
+        ImGui.SameLine();
 
-        if (available >
-            35.0f)
-        {
-            ImGui.SameLine(
-                ImGui.GetCursorPosX() +
-                available -
-                30.0f
-            );
-        }
+        string removeLabel =
+            condition
+                ? "Remove Condition"
+                : "Remove Action";
 
         bool remove =
             ImGui.SmallButton(
-                "X"
-            );
+                removeLabel);
 
         ImGui.TextDisabled(
-            category
-        );
+            category);
 
         ImGui.Dummy(
             new Vector2(
                 0.0f,
-                2.0f
-            )
-        );
+                5.0f));
 
         DrawInstructionArguments(
-            instruction
-        );
+            instruction,
+            state);
 
         return remove;
     }
 
     // ========================================================
-    // PICKERS
+    // ADD CONDITION / ACTION
     // ========================================================
 
     private void DrawConditionPicker(
@@ -890,37 +913,23 @@ internal sealed class EventWorkspacePanel
         }
 
         ImGui.TextDisabled(
-            "ADD CONDITION"
-        );
+            "ADD CONDITION");
 
         ImGui.Separator();
 
-        IEnumerable<IGrouping<
-            string,
-            VisualConditionDefinition>> groups =
-                _registry.Conditions
-                    .Where(
-                        definition =>
-                            CanAuthorCondition(
-                                definition.Id
-                            )
-                    )
-                    .OrderBy(
-                        definition =>
-                            definition.Category
-                    )
-                    .ThenBy(
-                        definition =>
-                            definition.DisplayName
-                    )
-                    .GroupBy(
-                        definition =>
-                            definition.Category
-                    );
+        var groups =
+            _registry.Conditions
+                .OrderBy(
+                    definition =>
+                        definition.Category)
+                .ThenBy(
+                    definition =>
+                        definition.DisplayName)
+                .GroupBy(
+                    definition =>
+                        definition.Category);
 
-        foreach (IGrouping<
-                     string,
-                     VisualConditionDefinition> group
+        foreach (var group
                  in groups)
         {
             if (!ImGui.BeginMenu(
@@ -935,11 +944,12 @@ internal sealed class EventWorkspacePanel
                 if (ImGui.MenuItem(
                         definition.DisplayName))
                 {
+                    RecordHistory(
+                        "Add Condition");
+
                     conditions.Add(
                         CreateInstruction(
-                            definition.Id
-                        )
-                    );
+                            definition.Id));
 
                     _dirty =
                         true;
@@ -964,37 +974,23 @@ internal sealed class EventWorkspacePanel
         }
 
         ImGui.TextDisabled(
-            "ADD ACTION"
-        );
+            "ADD ACTION");
 
         ImGui.Separator();
 
-        IEnumerable<IGrouping<
-            string,
-            VisualActionDefinition>> groups =
-                _registry.Actions
-                    .Where(
-                        definition =>
-                            CanAuthorAction(
-                                definition.Id
-                            )
-                    )
-                    .OrderBy(
-                        definition =>
-                            definition.Category
-                    )
-                    .ThenBy(
-                        definition =>
-                            definition.DisplayName
-                    )
-                    .GroupBy(
-                        definition =>
-                            definition.Category
-                    );
+        var groups =
+            _registry.Actions
+                .OrderBy(
+                    definition =>
+                        definition.Category)
+                .ThenBy(
+                    definition =>
+                        definition.DisplayName)
+                .GroupBy(
+                    definition =>
+                        definition.Category);
 
-        foreach (IGrouping<
-                     string,
-                     VisualActionDefinition> group
+        foreach (var group
                  in groups)
         {
             if (!ImGui.BeginMenu(
@@ -1009,11 +1005,12 @@ internal sealed class EventWorkspacePanel
                 if (ImGui.MenuItem(
                         definition.DisplayName))
                 {
+                    RecordHistory(
+                        "Add Action");
+
                     actions.Add(
                         CreateInstruction(
-                            definition.Id
-                        )
-                    );
+                            definition.Id));
 
                     _dirty =
                         true;
@@ -1028,26 +1025,8 @@ internal sealed class EventWorkspacePanel
         ImGui.EndPopup();
     }
 
-    private static bool CanAuthorCondition(
-        string id)
-    {
-        return !id.StartsWith(
-            "variable.",
-            StringComparison.OrdinalIgnoreCase
-        );
-    }
-
-    private static bool CanAuthorAction(
-        string id)
-    {
-        return !id.StartsWith(
-            "variable.",
-            StringComparison.OrdinalIgnoreCase
-        );
-    }
-
     // ========================================================
-    // DEFAULT INSTRUCTION CREATION
+    // INSTRUCTION DEFAULTS
     // ========================================================
 
     private static VisualInstruction CreateInstruction(
@@ -1056,8 +1035,7 @@ internal sealed class EventWorkspacePanel
         var instruction =
             new VisualInstruction
             {
-                Id =
-                    id
+                Id = id
             };
 
         switch (id)
@@ -1068,8 +1046,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["key"] =
                     EventValue.String(
-                        "W"
-                    );
+                        "W");
 
                 break;
 
@@ -1078,8 +1055,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["amount"] =
                     EventValue.Number(
-                        1.0
-                    );
+                        1.0);
 
                 break;
 
@@ -1087,8 +1063,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["velocity"] =
                     EventValue.Vector3(
-                        Vector3.Zero
-                    );
+                        Vector3.Zero);
 
                 break;
 
@@ -1096,8 +1071,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["impulse"] =
                     EventValue.Vector3(
-                        Vector3.Zero
-                    );
+                        Vector3.Zero);
 
                 break;
 
@@ -1105,8 +1079,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["position"] =
                     EventValue.Vector3(
-                        Vector3.Zero
-                    );
+                        Vector3.Zero);
 
                 break;
 
@@ -1114,8 +1087,7 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["amount"] =
                     EventValue.Vector3(
-                        Vector3.Zero
-                    );
+                        Vector3.Zero);
 
                 break;
 
@@ -1125,8 +1097,40 @@ internal sealed class EventWorkspacePanel
 
                 instruction.Arguments["value"] =
                     EventValue.Number(
-                        0.0
-                    );
+                        0.0);
+
+                break;
+
+            case "variable.compare":
+
+                instruction.Arguments["left"] =
+                    EventValue.Number(
+                        0.0);
+
+                instruction.Arguments["operator"] =
+                    EventValue.String(
+                        "==");
+
+                instruction.Arguments["right"] =
+                    EventValue.Number(
+                        0.0);
+
+                break;
+
+            case "variable.set":
+
+                instruction.Arguments["value"] =
+                    EventValue.Number(
+                        0.0);
+
+                break;
+
+            case "variable.add":
+            case "variable.subtract":
+
+                instruction.Arguments["amount"] =
+                    EventValue.Number(
+                        1.0);
 
                 break;
         }
@@ -1139,7 +1143,8 @@ internal sealed class EventWorkspacePanel
     // ========================================================
 
     private void DrawInstructionArguments(
-        VisualInstruction instruction)
+        VisualInstruction instruction,
+        EditorState? state)
     {
         switch (instruction.Id)
         {
@@ -1151,64 +1156,78 @@ internal sealed class EventWorkspacePanel
                     instruction,
                     "key",
                     "Key",
-                    Key.W
-                );
+                    Key.W);
 
                 break;
 
             case "character.moveForward":
             case "character.moveRight":
 
-                DrawNumberArgument(
+                DrawValueArgument(
                     instruction,
                     "amount",
                     "Amount",
-                    1.0f
-                );
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
 
                 break;
 
             case "character.setVelocity":
 
-                DrawVector3Argument(
+                DrawValueArgument(
                     instruction,
                     "velocity",
                     "Velocity",
-                    Vector3.Zero
-                );
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
 
                 break;
 
             case "character.addImpulse":
 
-                DrawVector3Argument(
+                DrawValueArgument(
                     instruction,
                     "impulse",
                     "Impulse",
-                    Vector3.Zero
-                );
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
 
                 break;
 
             case "transform.setPosition":
 
-                DrawVector3Argument(
+                DrawValueArgument(
                     instruction,
                     "position",
                     "Position",
-                    Vector3.Zero
-                );
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
 
                 break;
 
             case "transform.move":
 
-                DrawVector3Argument(
+                DrawValueArgument(
                     instruction,
                     "amount",
                     "Amount",
-                    Vector3.Zero
-                );
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
 
                 break;
 
@@ -1216,16 +1235,695 @@ internal sealed class EventWorkspacePanel
             case "transform.setY":
             case "transform.setZ":
 
-                DrawNumberArgument(
+                DrawValueArgument(
                     instruction,
                     "value",
                     "Value",
-                    0.0f
-                );
+                    VariableType.Number,
+                    EventValue.Number(
+                        0.0),
+                    state,
+                    false);
+
+                break;
+
+            // --------------------------------------------
+            // VARIABLE / PROPERTY CONDITIONS
+            // --------------------------------------------
+
+            case "variable.compare":
+
+                DrawValueArgument(
+                    instruction,
+                    "left",
+                    "Left",
+                    null,
+                    EventValue.Number(
+                        0.0),
+                    state,
+                    false);
+
+                DrawComparisonOperator(
+                    instruction);
+
+                DrawValueArgument(
+                    instruction,
+                    "right",
+                    "Right",
+                    null,
+                    EventValue.Number(
+                        0.0),
+                    state,
+                    false);
+
+                break;
+
+            // --------------------------------------------
+            // VARIABLE / PROPERTY ACTIONS
+            // --------------------------------------------
+
+            case "variable.set":
+
+                DrawTargetReference(
+                    instruction,
+                    "target",
+                    "Target",
+                    null,
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "value",
+                    "Value",
+                    null,
+                    EventValue.Number(
+                        0.0),
+                    state,
+                    false);
+
+                break;
+
+            case "variable.add":
+
+                DrawTargetReference(
+                    instruction,
+                    "target",
+                    "Target",
+                    VariableType.Number,
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "amount",
+                    "Amount",
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
+
+                break;
+
+            case "variable.subtract":
+
+                DrawTargetReference(
+                    instruction,
+                    "target",
+                    "Target",
+                    VariableType.Number,
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "amount",
+                    "Amount",
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
 
                 break;
         }
     }
+
+    // ========================================================
+    // GENERIC VALUE EDITOR
+    // ========================================================
+
+    private void DrawValueArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        VariableType? expectedType,
+        EventValue fallback,
+        EditorState? state,
+        bool writableReference)
+    {
+        if (!instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) ||
+            value == null)
+        {
+            value =
+                fallback;
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        ImGui.PushID(
+            argumentName);
+
+        ImGui.TextDisabled(
+            label);
+
+        string source =
+            value.Kind ==
+            EventValueKind.Reference
+                ? "Reference"
+                : "Constant";
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##Source",
+                source))
+        {
+            if (ImGui.Selectable(
+                    "Constant",
+                    value.Kind ==
+                    EventValueKind.Constant))
+            {
+                VariableType type =
+                    expectedType ??
+                    value.Constant?.Type ??
+                    VariableType.Number;
+
+                value =
+                    CreateConstant(
+                        type);
+
+                instruction.Arguments[argumentName] =
+                    value;
+
+                _dirty =
+                    true;
+            }
+
+            if (ImGui.Selectable(
+                    "Reference",
+                    value.Kind ==
+                    EventValueKind.Reference))
+            {
+                value =
+                    new EventValue
+                    {
+                        Kind =
+                            EventValueKind.Reference
+                    };
+
+                instruction.Arguments[argumentName] =
+                    value;
+
+                _dirty =
+                    true;
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.Dummy(
+            new Vector2(
+                0.0f,
+                2.0f));
+
+        if (value.Kind ==
+            EventValueKind.Reference)
+        {
+            DrawReferenceValue(
+                instruction,
+                argumentName,
+                value,
+                expectedType,
+                state,
+                writableReference);
+
+            ImGui.PopID();
+
+            return;
+        }
+
+        DrawConstantValue(
+            instruction,
+            argumentName,
+            value,
+            expectedType);
+
+        ImGui.PopID();
+    }
+
+    // ========================================================
+    // CONSTANT VALUES
+    // ========================================================
+
+    private void DrawConstantValue(
+        VisualInstruction instruction,
+        string argumentName,
+        EventValue value,
+        VariableType? expectedType)
+    {
+        if (expectedType.HasValue &&
+            value.Constant.Type !=
+            expectedType.Value)
+        {
+            value =
+                CreateConstant(
+                    expectedType.Value);
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        if (!expectedType.HasValue)
+        {
+            VariableType currentType =
+                value.Constant.Type;
+
+            ImGui.SetNextItemWidth(
+                -1.0f);
+
+            if (ImGui.BeginCombo(
+                    "Type",
+                    currentType.ToString()))
+            {
+                foreach (VariableType type
+                         in Enum.GetValues<VariableType>())
+                {
+                    bool selected =
+                        currentType ==
+                        type;
+
+                    if (ImGui.Selectable(
+                            type.ToString(),
+                            selected))
+                    {
+                        value =
+                            CreateConstant(
+                                type);
+
+                        instruction.Arguments[argumentName] =
+                            value;
+
+                        _dirty =
+                            true;
+
+                        currentType =
+                            type;
+                    }
+
+                    if (selected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui.EndCombo();
+            }
+        }
+
+        VariableValue constant =
+            value.Constant;
+
+        switch (constant.Type)
+        {
+            case VariableType.Number:
+            {
+                float number =
+                    (float)constant.Number;
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                if (ImGui.DragFloat(
+                        "Value",
+                        ref number,
+                        0.05f))
+                {
+                    instruction.Arguments[argumentName] =
+                        EventValue.Number(
+                            number);
+
+                    _dirty =
+                        true;
+                }
+
+                break;
+            }
+
+            case VariableType.String:
+            {
+                string text =
+                    constant.String;
+
+                if (ImGui.InputText(
+                        "Value",
+                        ref text,
+                        256))
+                {
+                    instruction.Arguments[argumentName] =
+                        EventValue.String(
+                            text);
+
+                    _dirty =
+                        true;
+                }
+
+                break;
+            }
+
+            case VariableType.Boolean:
+            {
+                bool boolean =
+                    constant.Boolean;
+
+                if (ImGui.Checkbox(
+                        "Value",
+                        ref boolean))
+                {
+                    instruction.Arguments[argumentName] =
+                        EventValue.Boolean(
+                            boolean);
+
+                    _dirty =
+                        true;
+                }
+
+                break;
+            }
+
+            case VariableType.Vector2:
+            {
+                Vector2 vector =
+                    constant.Vector2;
+
+                float x =
+                    vector.X;
+
+                float y =
+                    vector.Y;
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                bool changed =
+                    ImGui.DragFloat(
+                        "X",
+                        ref x,
+                        0.05f);
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                changed |=
+                    ImGui.DragFloat(
+                        "Y",
+                        ref y,
+                        0.05f);
+
+                if (changed)
+                {
+                    instruction.Arguments[argumentName] =
+                        EventValue.Vector2(
+                            new Vector2(
+                                x,
+                                y));
+
+                    _dirty =
+                        true;
+                }
+
+                break;
+            }
+
+            case VariableType.Vector3:
+            {
+                Vector3 vector =
+                    constant.Vector3;
+
+                float x =
+                    vector.X;
+
+                float y =
+                    vector.Y;
+
+                float z =
+                    vector.Z;
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                bool changed =
+                    ImGui.DragFloat(
+                        "X",
+                        ref x,
+                        0.05f);
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                changed |=
+                    ImGui.DragFloat(
+                        "Y",
+                        ref y,
+                        0.05f);
+
+                ImGui.SetNextItemWidth(
+                    -1.0f);
+
+                changed |=
+                    ImGui.DragFloat(
+                        "Z",
+                        ref z,
+                        0.05f);
+
+                if (changed)
+                {
+                    instruction.Arguments[argumentName] =
+                        EventValue.Vector3(
+                            new Vector3(
+                                x,
+                                y,
+                                z));
+
+                    _dirty =
+                        true;
+                }
+
+                break;
+            }
+        }
+    }
+
+    // ========================================================
+    // REFERENCE VALUES
+    // ========================================================
+
+    private void DrawReferenceValue(
+        VisualInstruction instruction,
+        string argumentName,
+        EventValue value,
+        VariableType? expectedType,
+        EditorState? state,
+        bool writableOnly)
+    {
+        string display =
+            value.Reference != null
+                ? FormatReference(
+                    value.Reference)
+                : "Choose Reference...";
+
+        if (ImGui.Button(
+                display,
+                new Vector2(
+                    -1.0f,
+                    36.0f)))
+        {
+            ImGui.OpenPopup(
+                "ReferencePicker");
+        }
+
+        if (state == null)
+        {
+            ImGui.TextDisabled(
+                "No active editor state.");
+
+            return;
+        }
+
+        GameObject? self =
+            ResolveSelfContext(
+                state);
+
+        if (_referencePicker.DrawPopup(
+                "ReferencePicker",
+                state,
+                self,
+                expectedType,
+                writableOnly,
+                out VariableReference? selected) &&
+            selected != null)
+        {
+            instruction.Arguments[argumentName] =
+                EventValue.FromReference(
+                    selected);
+
+            _dirty =
+                true;
+        }
+    }
+
+    // ========================================================
+    // TARGET REFERENCES
+    // ========================================================
+
+    private void DrawTargetReference(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        VariableType? expectedType,
+        EditorState? state)
+    {
+        ImGui.PushID(
+            argumentName);
+
+        ImGui.TextDisabled(
+            label);
+
+        VariableReference? reference =
+            null;
+
+        if (instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) &&
+            value?.Kind ==
+            EventValueKind.Reference)
+        {
+            reference =
+                value.Reference;
+        }
+
+        string display =
+            reference != null
+                ? FormatReference(
+                    reference)
+                : "Choose Target...";
+
+        if (ImGui.Button(
+                display,
+                new Vector2(
+                    -1.0f,
+                    36.0f)))
+        {
+            ImGui.OpenPopup(
+                "TargetReferencePicker");
+        }
+
+        if (state != null)
+        {
+            GameObject? self =
+                ResolveSelfContext(
+                    state);
+
+            if (_referencePicker.DrawPopup(
+                    "TargetReferencePicker",
+                    state,
+                    self,
+                    expectedType,
+                    true,
+                    out VariableReference? selected) &&
+                selected != null)
+            {
+                instruction.Arguments[argumentName] =
+                    EventValue.FromReference(
+                        selected);
+
+                _dirty =
+                    true;
+            }
+        }
+
+        ImGui.PopID();
+    }
+
+    // ========================================================
+    // COMPARISON OPERATOR
+    // ========================================================
+
+    private void DrawComparisonOperator(
+        VisualInstruction instruction)
+    {
+        EventValue value;
+
+        if (!instruction.Arguments.TryGetValue(
+                "operator",
+                out EventValue? existing) ||
+            existing == null)
+        {
+            value =
+                EventValue.String(
+                    "==");
+
+            instruction.Arguments["operator"] =
+                value;
+        }
+        else
+        {
+            value =
+                existing;
+        }
+
+        string current =
+            value.Kind ==
+                EventValueKind.Constant &&
+            value.Constant.Type ==
+                VariableType.String
+                ? value.Constant.String
+                : "==";
+
+        string[] operators =
+        {
+            "==",
+            "!=",
+            "<",
+            "<=",
+            ">",
+            ">="
+        };
+
+        ImGui.TextDisabled(
+            "Operator");
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##ComparisonOperator",
+                current))
+        {
+            foreach (string operation
+                     in operators)
+            {
+                bool selected =
+                    current ==
+                    operation;
+
+                if (ImGui.Selectable(
+                        operation,
+                        selected))
+                {
+                    instruction.Arguments["operator"] =
+                        EventValue.String(
+                            operation);
+
+                    _dirty =
+                        true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+    }
+
+    // ========================================================
+    // KEY ARGUMENT
+    // ========================================================
 
     private void DrawKeyArgument(
         VisualInstruction instruction,
@@ -1233,40 +1931,35 @@ internal sealed class EventWorkspacePanel
         string label,
         Key fallback)
     {
-        EventValue value =
-            GetOrCreateStringArgument(
-                instruction,
+        if (!instruction.Arguments.TryGetValue(
                 argumentName,
-                fallback.ToString()
-            );
-
-        if (value.Kind ==
-            EventValueKind.Reference)
+                out EventValue? value) ||
+            value == null)
         {
-            DrawReferencePlaceholder(
-                instruction,
-                argumentName,
-                value,
+            value =
                 EventValue.String(
-                    fallback.ToString()
-                )
-            );
+                    fallback.ToString());
 
-            return;
+            instruction.Arguments[argumentName] =
+                value;
         }
 
         string current =
+            value.Kind ==
+                EventValueKind.Constant &&
             value.Constant.Type ==
-            VariableType.String
+                VariableType.String
                 ? value.Constant.String
                 : fallback.ToString();
 
+        ImGui.TextDisabled(
+            label);
+
         ImGui.SetNextItemWidth(
-            -1.0f
-        );
+            -1.0f);
 
         if (!ImGui.BeginCombo(
-                label,
+                "##Key",
                 current))
         {
             return;
@@ -1282,8 +1975,7 @@ internal sealed class EventWorkspacePanel
                 string.Equals(
                     current,
                     name,
-                    StringComparison.OrdinalIgnoreCase
-                );
+                    StringComparison.OrdinalIgnoreCase);
 
             if (ImGui.Selectable(
                     name,
@@ -1291,8 +1983,7 @@ internal sealed class EventWorkspacePanel
             {
                 instruction.Arguments[argumentName] =
                     EventValue.String(
-                        name
-                    );
+                        name);
 
                 _dirty =
                     true;
@@ -1307,290 +1998,107 @@ internal sealed class EventWorkspacePanel
         ImGui.EndCombo();
     }
 
-    private void DrawNumberArgument(
-        VisualInstruction instruction,
-        string argumentName,
-        string label,
-        float fallback)
+    // ========================================================
+    // SELF CONTEXT
+    // ========================================================
+
+    private GameObject? ResolveSelfContext(
+        EditorState state)
     {
-        EventValue value =
-            GetOrCreateNumberArgument(
-                instruction,
-                argumentName,
-                fallback
-            );
-
-        if (value.Kind ==
-            EventValueKind.Reference)
+        /*
+         * First try to find the GameObject that actually has this
+         * Event Module attached.
+         *
+         * This is important because clicking the .byteevents file
+         * in the Assets browser normally clears hierarchy selection.
+         */
+        if (_asset != null)
         {
-            DrawReferencePlaceholder(
-                instruction,
-                argumentName,
-                value,
-                EventValue.Number(
-                    fallback
-                )
-            );
+            foreach (GameObject gameObject
+                     in state.EditorScene.GameObjects)
+            {
+                EventModuleComponent? component =
+                    gameObject.GetComponent<EventModuleComponent>();
 
-            return;
+                if (component == null)
+                {
+                    continue;
+                }
+
+                bool attached =
+                    component.Modules.Any(
+                        reference =>
+                            reference.Guid ==
+                            _asset.Guid);
+
+                if (attached)
+                {
+                    return gameObject;
+                }
+            }
         }
 
-        float current =
-            value.Constant.Type ==
-            VariableType.Number
-                ? (float)value.Constant.Number
-                : fallback;
-
-        ImGui.SetNextItemWidth(
-            -1.0f
-        );
-
-        if (ImGui.DragFloat(
-                label,
-                ref current,
-                0.05f))
-        {
-            instruction.Arguments[argumentName] =
-                EventValue.Number(
-                    current
-                );
-
-            _dirty =
-                true;
-        }
-    }
-
-    private void DrawVector3Argument(
-        VisualInstruction instruction,
-        string argumentName,
-        string label,
-        Vector3 fallback)
-    {
-        EventValue value =
-            GetOrCreateVector3Argument(
-                instruction,
-                argumentName,
-                fallback
-            );
-
-        if (value.Kind ==
-            EventValueKind.Reference)
-        {
-            DrawReferencePlaceholder(
-                instruction,
-                argumentName,
-                value,
-                EventValue.Vector3(
-                    fallback
-                )
-            );
-
-            return;
-        }
-
-        Vector3 current =
-            value.Constant.Type ==
-            VariableType.Vector3
-                ? value.Constant.Vector3
-                : fallback;
-
-        ImGui.TextDisabled(
-            label
-        );
-
-        ImGui.PushID(
-            argumentName
-        );
-
-        float x =
-            current.X;
-
-        float y =
-            current.Y;
-
-        float z =
-            current.Z;
-
-        ImGui.SetNextItemWidth(
-            -1.0f
-        );
-
-        bool changed =
-            ImGui.DragFloat(
-                "X",
-                ref x,
-                0.05f
-            );
-
-        ImGui.SetNextItemWidth(
-            -1.0f
-        );
-
-        changed |=
-            ImGui.DragFloat(
-                "Y",
-                ref y,
-                0.05f
-            );
-
-        ImGui.SetNextItemWidth(
-            -1.0f
-        );
-
-        changed |=
-            ImGui.DragFloat(
-                "Z",
-                ref z,
-                0.05f
-            );
-
-        ImGui.PopID();
-
-        if (changed)
-        {
-            instruction.Arguments[argumentName] =
-                EventValue.Vector3(
-                    new Vector3(
-                        x,
-                        y,
-                        z
-                    )
-                );
-
-            _dirty =
-                true;
-        }
-    }
-
-    private void DrawReferencePlaceholder(
-        VisualInstruction instruction,
-        string argumentName,
-        EventValue value,
-        EventValue constantFallback)
-    {
-        string referenceText =
-            value.Reference ==
-            null
-                ? "Invalid Reference"
-                : FormatReference(
-                    value.Reference
-                );
-
-        ImGui.TextDisabled(
-            $"Reference: {referenceText}"
-        );
-
-        if (ImGui.Button(
-                "Use Constant"))
-        {
-            instruction.Arguments[argumentName] =
-                constantFallback;
-
-            _dirty =
-                true;
-        }
+        return state.SelectedObject;
     }
 
     // ========================================================
-    // VALUE HELPERS
+    // EVENT VALUE HELPERS
     // ========================================================
+
+    private static EventValue CreateConstant(
+        VariableType type)
+    {
+        return type switch
+        {
+            VariableType.String =>
+                EventValue.String(
+                    string.Empty),
+
+            VariableType.Boolean =>
+                EventValue.Boolean(
+                    false),
+
+            VariableType.Vector2 =>
+                EventValue.Vector2(
+                    Vector2.Zero),
+
+            VariableType.Vector3 =>
+                EventValue.Vector3(
+                    Vector3.Zero),
+
+            _ =>
+                EventValue.Number(
+                    0.0)
+        };
+    }
 
     private static string FormatReference(
         VariableReference reference)
     {
-        string prefix =
-            reference.Scope.ToString();
-
-        if (!string.IsNullOrWhiteSpace(
-                reference.ObjectName))
+        return reference.Scope switch
         {
-            prefix +=
-                $".{reference.ObjectName}";
-        }
+            VariableScope.Global =>
+                $"Global.{reference.MemberName}",
 
-        if (!string.IsNullOrWhiteSpace(
-                reference.ComponentType))
-        {
-            prefix +=
-                $".{reference.ComponentType}";
-        }
+            VariableScope.Scene =>
+                $"Scene.{reference.MemberName}",
 
-        if (!string.IsNullOrWhiteSpace(
-                reference.MemberName))
-        {
-            prefix +=
-                $".{reference.MemberName}";
-        }
+            VariableScope.Self =>
+                $"Self.{reference.MemberName}",
 
-        return prefix;
-    }
+            VariableScope.Object =>
+                $"{reference.ObjectName}.{reference.MemberName}",
 
-    private static EventValue GetOrCreateStringArgument(
-        VisualInstruction instruction,
-        string name,
-        string fallback)
-    {
-        if (instruction.Arguments.TryGetValue(
-                name,
-                out EventValue? value))
-        {
-            return value;
-        }
+            VariableScope.Component
+                when string.IsNullOrWhiteSpace(
+                    reference.ObjectName) =>
+                $"Self.{reference.ComponentType}.{reference.MemberName}",
 
-        value =
-            EventValue.String(
-                fallback
-            );
+            VariableScope.Component =>
+                $"{reference.ObjectName}.{reference.ComponentType}.{reference.MemberName}",
 
-        instruction.Arguments[name] =
-            value;
-
-        return value;
-    }
-
-    private static EventValue GetOrCreateNumberArgument(
-        VisualInstruction instruction,
-        string name,
-        double fallback)
-    {
-        if (instruction.Arguments.TryGetValue(
-                name,
-                out EventValue? value))
-        {
-            return value;
-        }
-
-        value =
-            EventValue.Number(
-                fallback
-            );
-
-        instruction.Arguments[name] =
-            value;
-
-        return value;
-    }
-
-    private static EventValue GetOrCreateVector3Argument(
-        VisualInstruction instruction,
-        string name,
-        Vector3 fallback)
-    {
-        if (instruction.Arguments.TryGetValue(
-                name,
-                out EventValue? value))
-        {
-            return value;
-        }
-
-        value =
-            EventValue.Vector3(
-                fallback
-            );
-
-        instruction.Arguments[name] =
-            value;
-
-        return value;
+            _ =>
+                reference.MemberName
+        };
     }
 }

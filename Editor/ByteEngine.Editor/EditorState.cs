@@ -1,8 +1,9 @@
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Core.Variables;
+
 using ByteEngine.Editor.Commands;
 using ByteEngine.Editor.Selection;
-using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Editor;
 
@@ -15,6 +16,21 @@ internal enum EditorMode
 
 internal sealed class EditorState
 {
+    /*
+     * The editor only has one active state at a time.
+     *
+     * This gives docked document editors such as EventWorkspacePanel
+     * access to the currently active scene/project without forcing the
+     * AssetsPanel and every document collection to pass EditorState
+     * through several layers.
+     */
+    public static EditorState? Active { get; private set; }
+
+    public EditorState()
+    {
+        Active = this;
+    }
+
     public EditorMode Mode { get; set; } =
         EditorMode.Edit;
 
@@ -29,13 +45,15 @@ internal sealed class EditorState
     public bool IsDirty { get; private set; }
 
     public Scene? RuntimeScene { get; set; }
+
     public VariableStore? RuntimeGlobals { get; set; }
 
     public Scene DisplayedScene =>
         RuntimeScene ??
         EditorScene;
 
-    public EditorSelection Selection { get; } = new();
+    public EditorSelection Selection { get; } =
+        new();
 
     public GameObject? SelectedObject
     {
@@ -52,23 +70,26 @@ internal sealed class EditorState
     public EditorCamera Camera { get; } =
         new();
 
-    public EditorCamera3D Camera3D { get; } = new();
+    public EditorCamera3D Camera3D { get; } =
+        new();
 
     public void MarkDirty()
     {
         if (Mode ==
             EditorMode.Edit)
         {
-            IsDirty =
-                true;
+            IsDirty = true;
         }
     }
 
     public void ClearDirty()
     {
-        IsDirty =
-            false;
+        IsDirty = false;
     }
 
-    internal void SetDirty(bool value) => IsDirty = value;
+    internal void SetDirty(
+        bool value)
+    {
+        IsDirty = value;
+    }
 }

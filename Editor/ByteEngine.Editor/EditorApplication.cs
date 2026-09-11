@@ -42,6 +42,9 @@ public sealed class EditorApplication
     private readonly ConsolePanel _console =
         new();
 
+    private readonly PerformancePanel _performance =
+        new();
+
     private readonly ProjectBrowserPanel _projectBrowser = new();
 
     private readonly BlueprintWorkspacePanel _blueprintWorkspace = new();
@@ -270,6 +273,15 @@ public sealed class EditorApplication
             );
         }
 
+        if (_performance.IsOpen)
+        {
+            _performance.Draw(
+                _state,
+                _sceneView.IsOpen,
+                _gameView.IsOpen
+            );
+        }
+
         _blueprintWorkspace.Draw(
             Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
     }
@@ -379,13 +391,76 @@ public sealed class EditorApplication
             return;
         }
 
-        bool canUndo = _state?.Mode == EditorMode.Edit && _state.Undo?.CanUndo == true;
-        bool canRedo = _state?.Mode == EditorMode.Edit && _state.Undo?.CanRedo == true;
-        if (ImGui.MenuItem(_state?.Undo?.UndoName is string undo ? $"Undo {undo}" : "Undo", "Ctrl+Z", false, canUndo))
-            _state!.Undo!.Undo(_state);
+        bool eventFocused =
+            EventWorkspaceUndoRouter.HasFocusedWorkspace;
 
-        if (ImGui.MenuItem(_state?.Undo?.RedoName is string redo ? $"Redo {redo}" : "Redo", "Ctrl+Y", false, canRedo))
-            _state!.Undo!.Redo(_state);
+        bool canUndo =
+            eventFocused
+                ? EventWorkspaceUndoRouter.CanUndo
+                : _state?.Mode ==
+                      EditorMode.Edit &&
+                  _state.Undo?.CanUndo ==
+                      true;
+
+        bool canRedo =
+            eventFocused
+                ? EventWorkspaceUndoRouter.CanRedo
+                : _state?.Mode ==
+                      EditorMode.Edit &&
+                  _state.Undo?.CanRedo ==
+                      true;
+
+        string undoLabel =
+            eventFocused
+                ? EventWorkspaceUndoRouter.UndoName is string eventUndo
+                    ? $"Undo {eventUndo}"
+                    : "Undo"
+                : _state?.Undo?.UndoName is string sceneUndo
+                    ? $"Undo {sceneUndo}"
+                    : "Undo";
+
+        string redoLabel =
+            eventFocused
+                ? EventWorkspaceUndoRouter.RedoName is string eventRedo
+                    ? $"Redo {eventRedo}"
+                    : "Redo"
+                : _state?.Undo?.RedoName is string sceneRedo
+                    ? $"Redo {sceneRedo}"
+                    : "Redo";
+
+        if (ImGui.MenuItem(
+                undoLabel,
+                "Ctrl+Z",
+                false,
+                canUndo))
+        {
+            if (eventFocused)
+            {
+                EventWorkspaceUndoRouter.TryUndo();
+            }
+            else
+            {
+                _state!.Undo!.Undo(
+                    _state);
+            }
+        }
+
+        if (ImGui.MenuItem(
+                redoLabel,
+                "Ctrl+Y",
+                false,
+                canRedo))
+        {
+            if (eventFocused)
+            {
+                EventWorkspaceUndoRouter.TryRedo();
+            }
+            else
+            {
+                _state!.Undo!.Redo(
+                    _state);
+            }
+        }
 
         ImGui.EndMenu();
     }
@@ -498,6 +573,11 @@ public sealed class EditorApplication
         DrawPanelToggle(
             "Console",
             _console
+        );
+
+        DrawPanelToggle(
+            "Performance",
+            _performance
         );
 
         ImGui.Separator();
@@ -623,13 +703,47 @@ public sealed class EditorApplication
             }
         }
 
-        if (control && ImGui.IsKeyPressed(ImGuiKey.Z))
+        if (control &&
+            ImGui.IsKeyPressed(
+                ImGuiKey.Z))
         {
-            if (shift) _state.Undo?.Redo(_state);
-            else _state.Undo?.Undo(_state);
+            if (EventWorkspaceUndoRouter.HasFocusedWorkspace)
+            {
+                if (shift)
+                {
+                    EventWorkspaceUndoRouter.TryRedo();
+                }
+                else
+                {
+                    EventWorkspaceUndoRouter.TryUndo();
+                }
+            }
+            else if (shift)
+            {
+                _state.Undo?.Redo(
+                    _state);
+            }
+            else
+            {
+                _state.Undo?.Undo(
+                    _state);
+            }
         }
 
-        if (control && ImGui.IsKeyPressed(ImGuiKey.Y)) _state.Undo?.Redo(_state);
+        if (control &&
+            ImGui.IsKeyPressed(
+                ImGuiKey.Y))
+        {
+            if (EventWorkspaceUndoRouter.HasFocusedWorkspace)
+            {
+                EventWorkspaceUndoRouter.TryRedo();
+            }
+            else
+            {
+                _state.Undo?.Redo(
+                    _state);
+            }
+        }
 
         if (control && ImGui.IsKeyPressed(ImGuiKey.C)) CopySelectedObjects();
         if (control && ImGui.IsKeyPressed(ImGuiKey.V)) PasteObjects();
@@ -1533,6 +1647,8 @@ public sealed class EditorApplication
                     value.IsOpen,
                 ConsolePanel value =>
                     value.IsOpen,
+                PerformancePanel value =>
+                    value.IsOpen,
                 _ => false
             };
 
@@ -1564,6 +1680,9 @@ public sealed class EditorApplication
             case ConsolePanel value:
                 value.IsOpen = !isOpen;
                 break;
+            case PerformancePanel value:
+                value.IsOpen = !isOpen;
+                break;
         }
     }
 
@@ -1574,6 +1693,7 @@ public sealed class EditorApplication
         _sceneView.IsOpen = true;
         _gameView.IsOpen = true;
         _console.IsOpen = true;
+        _performance.IsOpen = true;
 
         if (_assets != null)
         {
