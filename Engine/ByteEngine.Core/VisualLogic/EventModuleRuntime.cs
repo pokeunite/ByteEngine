@@ -79,20 +79,25 @@ public sealed class EventModuleRuntime
     {
         if (!rule.Enabled)
         {
-            ResetLatchTree(rule);
+            ResetLatchTree(
+                rule);
 
             return false;
         }
 
+        IReadOnlyList<VisualInstruction> activeConditions =
+            GetActiveConditions(
+                rule);
+
         bool triggerOnce =
-            rule.Conditions.Any(
+            activeConditions.Any(
                 condition =>
                     condition.Id.Equals(
                         "system.triggerOnce",
                         StringComparison.OrdinalIgnoreCase));
 
         foreach (VisualInstruction condition
-                 in rule.Conditions)
+                 in activeConditions)
         {
             /*
              * Trigger Once is handled at rule level.
@@ -113,14 +118,17 @@ public sealed class EventModuleRuntime
                     $"Unknown visual condition '{condition.Id}' in '{module.Name}'.",
                     context);
 
-                ResetLatchTree(rule);
+                ResetLatchTree(
+                    rule);
 
                 return false;
             }
 
-            if (definition == null)
+            if (definition ==
+                null)
             {
-                ResetLatchTree(rule);
+                ResetLatchTree(
+                    rule);
 
                 return false;
             }
@@ -147,10 +155,18 @@ public sealed class EventModuleRuntime
 
             if (!passed)
             {
-                ResetLatchTree(rule);
+                ResetLatchTree(
+                    rule);
 
                 return false;
             }
+
+            /*
+             * A Condition lights while it is actually true.
+             */
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                condition.InstanceId);
         }
 
         if (triggerOnce)
@@ -160,42 +176,31 @@ public sealed class EventModuleRuntime
             {
                 return false;
             }
-        }
 
-        foreach (VisualInstruction action
-                 in rule.Actions)
-        {
-            if (!_registry.TryGetAction(
-                    action.Id,
-                    out VisualActionDefinition? definition))
+            foreach (VisualInstruction condition
+                     in activeConditions.Where(
+                         condition =>
+                             condition.Id.Equals(
+                                 "system.triggerOnce",
+                                 StringComparison.OrdinalIgnoreCase)))
             {
-                WarnOnce(
-                    $"{module.Id}:{action.InstanceId}",
-                    $"Unknown visual action '{action.Id}' in '{module.Name}'.",
-                    context);
-
-                continue;
-            }
-
-            if (definition == null)
-            {
-                continue;
-            }
-
-            try
-            {
-                definition.Execute(
-                    action,
-                    context);
-            }
-            catch (Exception exception)
-            {
-                WarnOnce(
-                    $"{module.Id}:{action.InstanceId}:exception",
-                    $"Action '{definition.DisplayName}' failed: {exception.Message}",
-                    context);
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    condition.InstanceId);
             }
         }
+
+        /*
+         * The Event card itself lights only when the complete rule fires.
+         */
+        VisualLogicDebugTrace.Mark(
+            module.Id,
+            rule.Id);
+
+        ExecuteActions(
+            module,
+            rule,
+            context);
 
         foreach (EventRuleDefinition child
                  in rule.SubEvents)
@@ -207,6 +212,156 @@ public sealed class EventModuleRuntime
         }
 
         return true;
+    }
+
+    private static IReadOnlyList<VisualInstruction> GetActiveConditions(
+        EventRuleDefinition rule)
+    {
+        if (!rule.HasExplicitConditionFlow)
+        {
+            return rule.Conditions;
+        }
+
+        if (rule.ConnectedConditionIds.Count ==
+            0)
+        {
+            return Array.Empty<VisualInstruction>();
+        }
+
+        HashSet<Guid> connected =
+            rule.ConnectedConditionIds.ToHashSet();
+
+        return rule.Conditions
+            .Where(
+                condition =>
+                    connected.Contains(
+                        condition.InstanceId))
+            .ToList();
+    }
+
+    private void ExecuteActions(
+        EventModuleDefinition module,
+        EventRuleDefinition rule,
+        EventExecutionContext context)
+    {
+        /*
+         * Compatibility path for Event Modules authored before ByteGraph
+         * execution wires existed.
+         */
+        if (!rule.HasExplicitExecutionFlow)
+        {
+            foreach (VisualInstruction action
+                     in rule.Actions)
+            {
+                ExecuteAction(
+                    module,
+                    action,
+                    context);
+            }
+
+            return;
+        }
+
+        if (!rule.FirstActionId.HasValue)
+        {
+            return;
+        }
+
+        Dictionary<Guid, VisualInstruction> actions =
+            rule.Actions.ToDictionary(
+                action =>
+                    action.InstanceId);
+
+        HashSet<Guid> visited =
+            new();
+
+        Guid? current =
+            rule.FirstActionId;
+
+        while (current.HasValue)
+        {
+            Guid actionId =
+                current.Value;
+
+            if (!visited.Add(
+                    actionId))
+            {
+                WarnOnce(
+                    $"{module.Id}:{rule.Id}:execution-cycle",
+                    $"Execution flow in '{module.Name}' contains a cycle. Execution stopped.",
+                    context);
+
+                return;
+            }
+
+            if (!actions.TryGetValue(
+                    actionId,
+                    out VisualInstruction? action) ||
+                action ==
+                    null)
+            {
+                WarnOnce(
+                    $"{module.Id}:{rule.Id}:missing-action:{actionId}",
+                    $"Execution flow in '{module.Name}' points to a missing Action.",
+                    context);
+
+                return;
+            }
+
+            ExecuteAction(
+                module,
+                action,
+                context);
+
+            current =
+                action.NextActionId;
+        }
+    }
+
+    private void ExecuteAction(
+        EventModuleDefinition module,
+        VisualInstruction action,
+        EventExecutionContext context)
+    {
+        if (!_registry.TryGetAction(
+                action.Id,
+                out VisualActionDefinition? definition))
+        {
+            WarnOnce(
+                $"{module.Id}:{action.InstanceId}",
+                $"Unknown visual action '{action.Id}' in '{module.Name}'.",
+                context);
+
+            return;
+        }
+
+        if (definition ==
+            null)
+        {
+            return;
+        }
+
+        /*
+         * Mark before execution so a node still lights if the Action itself
+         * throws and the warning is shown to the developer.
+         */
+        VisualLogicDebugTrace.Mark(
+            module.Id,
+            action.InstanceId);
+
+        try
+        {
+            definition.Execute(
+                action,
+                context);
+        }
+        catch (Exception exception)
+        {
+            WarnOnce(
+                $"{module.Id}:{action.InstanceId}:exception",
+                $"Action '{definition.DisplayName}' failed: {exception.Message}",
+                context);
+        }
     }
 
     private void ResetLatchTree(
@@ -228,7 +383,8 @@ public sealed class EventModuleRuntime
         string message,
         EventExecutionContext context)
     {
-        if (_reportedWarnings.Add(key))
+        if (_reportedWarnings.Add(
+                key))
         {
             context.WarningSink?.Invoke(
                 message);

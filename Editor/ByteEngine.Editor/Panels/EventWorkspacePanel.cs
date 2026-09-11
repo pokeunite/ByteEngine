@@ -531,6 +531,14 @@ internal sealed class EventWorkspacePanel
             CreateGroupFromSelection();
         }
 
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Delete Selected"))
+        {
+            DeleteSelectedGraphNodes();
+        }
+
         ImGui.EndDisabled();
 
         ImGui.SameLine();
@@ -547,6 +555,24 @@ internal sealed class EventWorkspacePanel
 
         ImGui.TextDisabled(
             $"Zoom {_graphCanvas.Zoom * 100.0f:0}%");
+
+        ImGui.SameLine();
+
+        bool liveTrace =
+            VisualLogicDebugTrace.Enabled;
+
+        if (ImGui.Checkbox(
+                "Live Trace",
+                ref liveTrace))
+        {
+            VisualLogicDebugTrace.Enabled =
+                liveTrace;
+
+            if (!liveTrace)
+            {
+                VisualLogicDebugTrace.Clear();
+            }
+        }
 
         if (_selectedGraphNodes.Count >
             0)
@@ -751,6 +777,44 @@ internal sealed class EventWorkspacePanel
             1.65f);
     }
 
+    private bool IsLiveTraceNode(
+        Guid nodeId)
+    {
+        if (_module ==
+                null ||
+            !VisualLogicDebugTrace.Enabled)
+        {
+            return false;
+        }
+
+        EditorState? state =
+            EditorState.Active;
+
+        if (state ==
+                null ||
+            state.Mode ==
+                EditorMode.Edit)
+        {
+            return false;
+        }
+
+        /*
+         * In normal Play mode the highlight is a quick pulse.
+         * When paused, keep the most recent hits visible long enough to
+         * inspect the graph.
+         */
+        double windowSeconds =
+            state.Mode ==
+                EditorMode.Paused
+                ? 60.0
+                : 0.22;
+
+        return VisualLogicDebugTrace.WasTriggered(
+            _module.Id,
+            nodeId,
+            windowSeconds);
+    }
+
     private void PushGraphNodeStyle()
     {
         float scale =
@@ -953,29 +1017,45 @@ internal sealed class EventWorkspacePanel
             _selectedGraphNodes.Contains(
                 rule.Id);
 
+        bool liveTriggered =
+            IsLiveTraceNode(
+                rule.Id);
+
         ImGui.PushStyleColor(
             ImGuiCol.ChildBg,
-            new Vector4(
-                0.075f,
-                0.095f,
-                0.13f,
-                0.98f));
+            liveTriggered
+                ? new Vector4(
+                    0.08f,
+                    0.24f,
+                    0.13f,
+                    0.99f)
+                : new Vector4(
+                    0.075f,
+                    0.095f,
+                    0.13f,
+                    0.98f));
 
         ImGui.PushStyleColor(
             ImGuiCol.Border,
             selected
                 ? SelectionColor
-                : rule.Enabled
+                : liveTriggered
                     ? new Vector4(
-                        0.23f,
-                        0.52f,
-                        0.88f,
+                        0.28f,
+                        1.0f,
+                        0.48f,
                         1.0f)
-                    : new Vector4(
-                        0.33f,
-                        0.35f,
-                        0.39f,
-                        1.0f));
+                    : rule.Enabled
+                        ? new Vector4(
+                            0.23f,
+                            0.52f,
+                            0.88f,
+                            1.0f)
+                        : new Vector4(
+                            0.33f,
+                            0.35f,
+                            0.39f,
+                            1.0f));
 
         PushGraphNodeStyle();
 
@@ -1117,9 +1197,11 @@ internal sealed class EventWorkspacePanel
             }
 
             DrawConditionPicker(
+                rule,
                 rule.Conditions);
 
             DrawActionPicker(
+                rule,
                 rule.Actions);
 
             ImGui.Separator();
@@ -1159,6 +1241,42 @@ internal sealed class EventWorkspacePanel
             executionPin,
             ExecutionWireColor,
             7.0f);
+
+        if (ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right) &&
+            _graphCanvas.IsPointHovered(
+                conditionPin,
+                13.0f))
+        {
+            RecordHistory(
+                "Disconnect Conditions");
+
+            rule.HasExplicitConditionFlow =
+                true;
+
+            rule.ConnectedConditionIds.Clear();
+
+            _dirty =
+                true;
+        }
+        else if (ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right) &&
+            _graphCanvas.IsPointHovered(
+                executionPin,
+                13.0f))
+        {
+            RecordHistory(
+                "Disconnect Execution Wire");
+
+            rule.HasExplicitExecutionFlow =
+                true;
+
+            rule.FirstActionId =
+                null;
+
+            _dirty =
+                true;
+        }
 
         TryStartWireDrag(
             rule,
@@ -1210,6 +1328,10 @@ internal sealed class EventWorkspacePanel
                 _selectedGraphNodes.Remove(
                     instruction.InstanceId);
 
+                DisconnectCondition(
+                    rule,
+                    instruction.InstanceId);
+
                 rule.Conditions.RemoveAt(
                     index);
 
@@ -1256,6 +1378,10 @@ internal sealed class EventWorkspacePanel
                 _selectedGraphNodes.Remove(
                     instruction.InstanceId);
 
+                RemoveActionFromExecutionFlow(
+                    rule,
+                    instruction);
+
                 rule.Actions.RemoveAt(
                     index);
 
@@ -1297,35 +1423,51 @@ internal sealed class EventWorkspacePanel
             _selectedGraphNodes.Contains(
                 instruction.InstanceId);
 
+        bool liveTriggered =
+            IsLiveTraceNode(
+                instruction.InstanceId);
+
         ImGui.PushStyleColor(
             ImGuiCol.ChildBg,
-            condition
+            liveTriggered
                 ? new Vector4(
-                    0.065f,
-                    0.11f,
-                    0.14f,
-                    0.98f)
-                : new Vector4(
-                    0.14f,
-                    0.095f,
-                    0.055f,
-                    0.98f));
+                    0.08f,
+                    0.24f,
+                    0.13f,
+                    0.99f)
+                : condition
+                    ? new Vector4(
+                        0.065f,
+                        0.11f,
+                        0.14f,
+                        0.98f)
+                    : new Vector4(
+                        0.14f,
+                        0.095f,
+                        0.055f,
+                        0.98f));
 
         ImGui.PushStyleColor(
             ImGuiCol.Border,
             selected
                 ? SelectionColor
-                : condition
+                : liveTriggered
                     ? new Vector4(
-                        0.20f,
-                        0.62f,
-                        0.88f,
+                        0.28f,
+                        1.0f,
+                        0.48f,
                         1.0f)
-                    : new Vector4(
-                        0.95f,
-                        0.57f,
-                        0.16f,
-                        1.0f));
+                    : condition
+                        ? new Vector4(
+                            0.20f,
+                            0.62f,
+                            0.88f,
+                            1.0f)
+                        : new Vector4(
+                            0.95f,
+                            0.57f,
+                            0.16f,
+                            1.0f));
 
         PushGraphNodeStyle();
 
@@ -1367,7 +1509,7 @@ internal sealed class EventWorkspacePanel
                         1.0f),
                 condition
                     ? $"CONDITION {index + 1:00}"
-                    : $"ACTION {index + 1:00}");
+                    : "ACTION");
 
             ImGui.SameLine();
 
@@ -1428,6 +1570,55 @@ internal sealed class EventWorkspacePanel
             pinColor,
             6.0f);
 
+        if (ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right))
+        {
+            if (condition &&
+                _graphCanvas.IsPointHovered(
+                    output,
+                    13.0f))
+            {
+                RecordHistory(
+                    "Disconnect Condition Wire");
+
+                DisconnectCondition(
+                    rule,
+                    instruction.InstanceId);
+
+                _dirty =
+                    true;
+            }
+            else if (!condition &&
+                     _graphCanvas.IsPointHovered(
+                         input,
+                         13.0f))
+            {
+                RecordHistory(
+                    "Disconnect Execution Wire");
+
+                DisconnectIncomingExecution(
+                    rule,
+                    instruction.InstanceId);
+
+                _dirty =
+                    true;
+            }
+            else if (!condition &&
+                     _graphCanvas.IsPointHovered(
+                         output,
+                         13.0f))
+            {
+                RecordHistory(
+                    "Disconnect Execution Wire");
+
+                instruction.NextActionId =
+                    null;
+
+                _dirty =
+                    true;
+            }
+        }
+
         TryStartWireDrag(
             rule,
             condition
@@ -1455,12 +1646,16 @@ internal sealed class EventWorkspacePanel
                 continue;
             }
 
+            /*
+             * Conditions remain simple AND inputs into the Event.
+             */
             Vector2 eventConditionInput =
                 GetEventConditionInput(
                     rule);
 
             foreach (VisualInstruction condition
-                     in rule.Conditions)
+                     in GetConnectedConditions(
+                         rule))
             {
                 _graphCanvas.DrawWire(
                     GetInstructionOutput(
@@ -1470,26 +1665,83 @@ internal sealed class EventWorkspacePanel
                     3.0f);
             }
 
-            Vector2 previousOutput =
-                GetEventExecutionOutput(
-                    rule);
+            /*
+             * Orange wires are now real execution-flow links rather than
+             * being inferred from Actions list order.
+             */
+            if (!rule.HasExplicitExecutionFlow)
+            {
+                Vector2 previousOutput =
+                    GetEventExecutionOutput(
+                        rule);
+
+                foreach (VisualInstruction action
+                         in rule.Actions)
+                {
+                    Vector2 actionInput =
+                        GetInstructionInput(
+                            action);
+
+                    _graphCanvas.DrawWire(
+                        previousOutput,
+                        actionInput,
+                        ExecutionWireColor,
+                        3.5f);
+
+                    previousOutput =
+                        GetInstructionOutput(
+                            action);
+                }
+
+                continue;
+            }
+
+            if (rule.FirstActionId.HasValue)
+            {
+                VisualInstruction? firstAction =
+                    FindAction(
+                        rule,
+                        rule.FirstActionId.Value);
+
+                if (firstAction !=
+                    null)
+                {
+                    _graphCanvas.DrawWire(
+                        GetEventExecutionOutput(
+                            rule),
+                        GetInstructionInput(
+                            firstAction),
+                        ExecutionWireColor,
+                        3.5f);
+                }
+            }
 
             foreach (VisualInstruction action
                      in rule.Actions)
             {
-                Vector2 actionInput =
-                    GetInstructionInput(
-                        action);
+                if (!action.NextActionId.HasValue)
+                {
+                    continue;
+                }
+
+                VisualInstruction? next =
+                    FindAction(
+                        rule,
+                        action.NextActionId.Value);
+
+                if (next ==
+                    null)
+                {
+                    continue;
+                }
 
                 _graphCanvas.DrawWire(
-                    previousOutput,
-                    actionInput,
+                    GetInstructionOutput(
+                        action),
+                    GetInstructionInput(
+                        next),
                     ExecutionWireColor,
                     3.5f);
-
-                previousOutput =
-                    GetInstructionOutput(
-                        action);
             }
         }
     }
@@ -1549,6 +1801,12 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        _draggingGraphNodeId =
+            Guid.Empty;
+
+        _graphNodeDragStarted =
+            false;
+
         _wireDragKind =
             kind;
 
@@ -1580,6 +1838,26 @@ internal sealed class EventWorkspacePanel
         if (!ImGui.IsMouseReleased(
                 ImGuiMouseButton.Left))
         {
+            return;
+        }
+
+        /*
+         * Drop directly onto a compatible pin to connect immediately.
+         * Releasing in empty space keeps the existing create-from-wire flow.
+         */
+        if (_wireDragKind ==
+                WireDragKind.Condition &&
+            TryConnectConditionWireAtMouse())
+        {
+            CancelWireDrag();
+            return;
+        }
+
+        if (_wireDragKind ==
+                WireDragKind.Action &&
+            TryConnectExecutionWireAtMouse())
+        {
+            CancelWireDrag();
             return;
         }
 
@@ -1647,7 +1925,8 @@ internal sealed class EventWorkspacePanel
                 rule,
                 true,
                 _pendingWireCreatePosition,
-                _pendingWireSourceInstructionId);
+                _pendingWireSourceInstructionId,
+                true);
         }
         else if (_pendingWireCreateKind ==
                  WireDragKind.Action)
@@ -1661,7 +1940,8 @@ internal sealed class EventWorkspacePanel
                 rule,
                 false,
                 _pendingWireCreatePosition,
-                _pendingWireSourceInstructionId);
+                _pendingWireSourceInstructionId,
+                true);
         }
 
         ImGui.Separator();
@@ -1777,6 +2057,12 @@ internal sealed class EventWorkspacePanel
             CreateGroupFromSelection();
         }
 
+        if (ImGui.MenuItem(
+                "Delete Selected"))
+        {
+            DeleteSelectedGraphNodes();
+        }
+
         ImGui.EndDisabled();
 
         if (_selectedGraphNodes.Count >
@@ -1818,7 +2104,8 @@ internal sealed class EventWorkspacePanel
         EventRuleDefinition rule,
         bool condition,
         Vector2 position,
-        Guid insertAfterInstructionId)
+        Guid insertAfterInstructionId,
+        bool connectFromWire = false)
     {
         if (condition)
         {
@@ -1852,12 +2139,17 @@ internal sealed class EventWorkspacePanel
                         RecordHistory(
                             "Add Condition");
 
-                        AddInstructionAt(
+                        VisualInstruction created =
+                            AddInstructionAt(
+                                rule,
+                                definition.Id,
+                                true,
+                                position,
+                                insertAfterInstructionId);
+
+                        ConnectCondition(
                             rule,
-                            definition.Id,
-                            true,
-                            position,
-                            insertAfterInstructionId);
+                            created.InstanceId);
                     }
                 }
 
@@ -1897,12 +2189,30 @@ internal sealed class EventWorkspacePanel
                     RecordHistory(
                         "Add Action");
 
-                    AddInstructionAt(
-                        rule,
-                        definition.Id,
-                        false,
-                        position,
-                        insertAfterInstructionId);
+                    VisualInstruction created =
+                        AddInstructionAt(
+                            rule,
+                            definition.Id,
+                            false,
+                            position,
+                            insertAfterInstructionId,
+                            connectFromWire &&
+                            insertAfterInstructionId ==
+                                Guid.Empty);
+
+                    if (connectFromWire)
+                    {
+                        ConnectNewActionAfterSource(
+                            rule,
+                            insertAfterInstructionId,
+                            created);
+                    }
+                    else
+                    {
+                        AppendActionToExecutionFlow(
+                            rule,
+                            created);
+                    }
                 }
             }
 
@@ -1910,12 +2220,13 @@ internal sealed class EventWorkspacePanel
         }
     }
 
-    private void AddInstructionAt(
+    private VisualInstruction AddInstructionAt(
         EventRuleDefinition rule,
         string definitionId,
         bool condition,
         Vector2 position,
-        Guid insertAfterInstructionId)
+        Guid insertAfterInstructionId,
+        bool insertAtBeginningWhenNoSource = false)
     {
         VisualInstruction instruction =
             CreateInstruction(
@@ -1936,7 +2247,11 @@ internal sealed class EventWorkspacePanel
                 : rule.Actions;
 
         int insertIndex =
-            list.Count;
+            insertAtBeginningWhenNoSource &&
+            insertAfterInstructionId ==
+                Guid.Empty
+                ? 0
+                : list.Count;
 
         if (insertAfterInstructionId !=
             Guid.Empty)
@@ -1967,6 +2282,8 @@ internal sealed class EventWorkspacePanel
 
         _dirty =
             true;
+
+        return instruction;
     }
 
     private void AddEventAt(
@@ -2042,6 +2359,9 @@ internal sealed class EventWorkspacePanel
             _hoveredGraphNodeId !=
             Guid.Empty;
 
+        bool pointerOnGraphPin =
+            IsPointerOnAnyGraphPin();
+
         /*
          * Reset the drag state as soon as the left button is released.
          */
@@ -2074,8 +2394,20 @@ internal sealed class EventWorkspacePanel
             ImGui.IsMouseClicked(
                 ImGuiMouseButton.Left))
         {
-            if (_hoveredGraphNodeId !=
-                Guid.Empty)
+            if (pointerOnGraphPin)
+            {
+                /*
+                 * Pin gestures are handled later when the nodes draw.
+                 * Do not arm node dragging or marquee selection here.
+                 */
+                _draggingGraphNodeId =
+                    Guid.Empty;
+
+                _graphNodeDragStarted =
+                    false;
+            }
+            else if (_hoveredGraphNodeId !=
+                     Guid.Empty)
             {
                 SelectGraphNodeFromClick(
                     _hoveredGraphNodeId);
@@ -2208,6 +2540,7 @@ internal sealed class EventWorkspacePanel
         if (_graphCanvas.IsMouseInsideCanvas &&
             _hoveredGraphNodeId ==
                 Guid.Empty &&
+            !pointerOnGraphPin &&
             !_marqueeSelecting &&
             _wireDragKind ==
                 WireDragKind.None &&
@@ -2220,6 +2553,136 @@ internal sealed class EventWorkspacePanel
             ImGui.OpenPopup(
                 "ByteGraph Context");
         }
+    }
+
+    private bool IsPointerOnAnyGraphPin()
+    {
+        if (_module ==
+            null)
+        {
+            return false;
+        }
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (_graphCanvas.IsPointHovered(
+                    GetEventConditionInput(
+                        rule),
+                    16.0f) ||
+                _graphCanvas.IsPointHovered(
+                    GetEventExecutionOutput(
+                        rule),
+                    16.0f))
+            {
+                return true;
+            }
+
+            if (rule.EditorCollapsed)
+            {
+                continue;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions.Concat(
+                         rule.Actions))
+            {
+                if (_graphCanvas.IsPointHovered(
+                        GetInstructionInput(
+                            instruction),
+                        16.0f) ||
+                    _graphCanvas.IsPointHovered(
+                        GetInstructionOutput(
+                            instruction),
+                        16.0f))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryConnectConditionWireAtMouse()
+    {
+        EventRuleDefinition? rule =
+            FindRule(
+                _wireDragRuleId);
+
+        if (rule ==
+            null)
+        {
+            return false;
+        }
+
+        /*
+         * Dragging from a Condition output to the Event's blue input.
+         */
+        if (_wireDragSourceInstructionId !=
+            Guid.Empty)
+        {
+            if (!_graphCanvas.IsPointHovered(
+                    GetEventConditionInput(
+                        rule),
+                    18.0f))
+            {
+                return false;
+            }
+
+            VisualInstruction? source =
+                rule.Conditions.FirstOrDefault(
+                    condition =>
+                        condition.InstanceId ==
+                        _wireDragSourceInstructionId);
+
+            if (source ==
+                null)
+            {
+                return false;
+            }
+
+            RecordHistory(
+                "Connect Condition Wire");
+
+            ConnectCondition(
+                rule,
+                source.InstanceId);
+
+            _dirty =
+                true;
+
+            return true;
+        }
+
+        /*
+         * Dragging from the Event's blue input back onto a Condition output.
+         */
+        foreach (VisualInstruction condition
+                 in rule.Conditions)
+        {
+            if (!_graphCanvas.IsPointHovered(
+                    GetInstructionOutput(
+                        condition),
+                    18.0f))
+            {
+                continue;
+            }
+
+            RecordHistory(
+                "Connect Condition Wire");
+
+            ConnectCondition(
+                rule,
+                condition.InstanceId);
+
+            _dirty =
+                true;
+
+            return true;
+        }
+
+        return false;
     }
 
     private void HandleGraphShortcuts()
@@ -2248,6 +2711,15 @@ internal sealed class EventWorkspacePanel
                 ImGuiKey.C))
         {
             CreateGroupFromSelection();
+
+            return;
+        }
+
+        if (!hasModifier &&
+            ImGui.IsKeyPressed(
+                ImGuiKey.Delete))
+        {
+            DeleteSelectedGraphNodes();
         }
     }
 
@@ -2620,6 +3092,161 @@ internal sealed class EventWorkspacePanel
             _selectedGraphNodes.Add(
                 nodeId);
         }
+    }
+
+    private void DeleteSelectedGraphNodes()
+    {
+        if (_module ==
+                null ||
+            _selectedGraphNodes.Count ==
+                0)
+        {
+            return;
+        }
+
+        /*
+         * Take a snapshot before mutating anything. Deleting several
+         * selected nodes is one undoable editor operation.
+         */
+        RecordHistory(
+            _selectedGraphNodes.Count >
+                1
+                ? "Delete Selected Nodes"
+                : "Delete Graph Node");
+
+        HashSet<Guid> selected =
+            _selectedGraphNodes
+                .ToHashSet();
+
+        /*
+         * Delete whole Events first. Their child Conditions/Actions belong
+         * to the Event, so they must not also be processed independently.
+         */
+        for (int ruleIndex =
+                 _module.Rules.Count -
+                 1;
+             ruleIndex >=
+                 0;
+             ruleIndex--)
+        {
+            EventRuleDefinition rule =
+                _module.Rules[ruleIndex];
+
+            if (!selected.Contains(
+                    rule.Id))
+            {
+                continue;
+            }
+
+            RemoveNodeFromGroups(
+                rule.Id);
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions.Concat(
+                         rule.Actions))
+            {
+                RemoveNodeFromGroups(
+                    instruction.InstanceId);
+
+                selected.Remove(
+                    instruction.InstanceId);
+            }
+
+            _module.Rules.RemoveAt(
+                ruleIndex);
+
+            selected.Remove(
+                rule.Id);
+        }
+
+        /*
+         * Delete selected Conditions and Actions from Events that remain.
+         * Work backwards so list indices remain valid while removing.
+         */
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            for (int conditionIndex =
+                     rule.Conditions.Count -
+                     1;
+                 conditionIndex >=
+                     0;
+                 conditionIndex--)
+            {
+                VisualInstruction condition =
+                    rule.Conditions[
+                        conditionIndex];
+
+                if (!selected.Contains(
+                        condition.InstanceId))
+                {
+                    continue;
+                }
+
+                DisconnectCondition(
+                    rule,
+                    condition.InstanceId);
+
+                RemoveNodeFromGroups(
+                    condition.InstanceId);
+
+                rule.Conditions.RemoveAt(
+                    conditionIndex);
+            }
+
+            for (int actionIndex =
+                     rule.Actions.Count -
+                     1;
+                 actionIndex >=
+                     0;
+                 actionIndex--)
+            {
+                VisualInstruction action =
+                    rule.Actions[
+                        actionIndex];
+
+                if (!selected.Contains(
+                        action.InstanceId))
+                {
+                    continue;
+                }
+
+                /*
+                 * Preserve the surrounding execution chain when possible.
+                 *
+                 * Example:
+                 *     A -> B -> C
+                 *
+                 * Delete B:
+                 *     A ------> C
+                 */
+                RemoveActionFromExecutionFlow(
+                    rule,
+                    action);
+
+                RemoveNodeFromGroups(
+                    action.InstanceId);
+
+                rule.Actions.RemoveAt(
+                    actionIndex);
+            }
+        }
+
+        _selectedGraphNodes.Clear();
+
+        _draggingGraphNodeId =
+            Guid.Empty;
+
+        _graphNodeDragStarted =
+            false;
+
+        _marqueeSelecting =
+            false;
+
+        CancelWireDrag();
+
+        _dirty =
+            true;
     }
 
     private void CreateGroupFromSelection()
@@ -3060,6 +3687,437 @@ internal sealed class EventWorkspacePanel
         }
     }
 
+    private static IReadOnlyList<VisualInstruction> GetConnectedConditions(
+        EventRuleDefinition rule)
+    {
+        if (!rule.HasExplicitConditionFlow)
+        {
+            return rule.Conditions;
+        }
+
+        if (rule.ConnectedConditionIds.Count ==
+            0)
+        {
+            return Array.Empty<VisualInstruction>();
+        }
+
+        HashSet<Guid> connected =
+            rule.ConnectedConditionIds.ToHashSet();
+
+        return rule.Conditions
+            .Where(
+                condition =>
+                    connected.Contains(
+                        condition.InstanceId))
+            .ToList();
+    }
+
+    private static void EnsureConditionFlowInitialized(
+        EventRuleDefinition rule)
+    {
+        if (rule.HasExplicitConditionFlow)
+        {
+            return;
+        }
+
+        rule.HasExplicitConditionFlow =
+            true;
+
+        rule.ConnectedConditionIds =
+            rule.Conditions
+                .Select(
+                    condition =>
+                        condition.InstanceId)
+                .ToList();
+    }
+
+    private static void ConnectCondition(
+        EventRuleDefinition rule,
+        Guid conditionId)
+    {
+        rule.HasExplicitConditionFlow =
+            true;
+
+        if (!rule.ConnectedConditionIds.Contains(
+                conditionId))
+        {
+            rule.ConnectedConditionIds.Add(
+                conditionId);
+        }
+    }
+
+    private static void DisconnectCondition(
+        EventRuleDefinition rule,
+        Guid conditionId)
+    {
+        rule.HasExplicitConditionFlow =
+            true;
+
+        rule.ConnectedConditionIds.RemoveAll(
+            id =>
+                id ==
+                conditionId);
+    }
+
+    private static VisualInstruction? FindAction(
+        EventRuleDefinition rule,
+        Guid actionId)
+    {
+        return rule.Actions.FirstOrDefault(
+            action =>
+                action.InstanceId ==
+                actionId);
+    }
+
+    private void EnsureExecutionFlowInitialized(
+        EventRuleDefinition rule)
+    {
+        if (rule.HasExplicitExecutionFlow)
+        {
+            return;
+        }
+
+        rule.HasExplicitExecutionFlow =
+            true;
+
+        rule.FirstActionId =
+            rule.Actions.Count >
+                0
+                ? rule.Actions[0].InstanceId
+                : null;
+
+        for (int index = 0;
+             index < rule.Actions.Count;
+             index++)
+        {
+            rule.Actions[index].NextActionId =
+                index +
+                1 <
+                rule.Actions.Count
+                    ? rule.Actions[index + 1].InstanceId
+                    : null;
+        }
+    }
+
+    private bool TryConnectExecutionWireAtMouse()
+    {
+        EventRuleDefinition? rule =
+            FindRule(
+                _wireDragRuleId);
+
+        if (rule ==
+            null)
+        {
+            return false;
+        }
+
+        VisualInstruction? target =
+            null;
+
+        foreach (VisualInstruction action
+                 in rule.Actions)
+        {
+            if (!_graphCanvas.IsPointHovered(
+                    GetInstructionInput(
+                        action),
+                    16.0f))
+            {
+                continue;
+            }
+
+            target =
+                action;
+
+            break;
+        }
+
+        if (target ==
+            null)
+        {
+            return false;
+        }
+
+        if (_wireDragSourceInstructionId ==
+            target.InstanceId)
+        {
+            return true;
+        }
+
+        if (WouldCreateExecutionCycle(
+                rule,
+                _wireDragSourceInstructionId,
+                target.InstanceId))
+        {
+            return true;
+        }
+
+        RecordHistory(
+            "Connect Execution Wire");
+
+        ConnectExecution(
+            rule,
+            _wireDragSourceInstructionId,
+            target.InstanceId);
+
+        _dirty =
+            true;
+
+        return true;
+    }
+
+    private static bool WouldCreateExecutionCycle(
+        EventRuleDefinition rule,
+        Guid sourceActionId,
+        Guid targetActionId)
+    {
+        if (sourceActionId ==
+            Guid.Empty)
+        {
+            return false;
+        }
+
+        Guid? current =
+            targetActionId;
+
+        HashSet<Guid> visited =
+            new();
+
+        while (current.HasValue)
+        {
+            if (current.Value ==
+                sourceActionId)
+            {
+                return true;
+            }
+
+            if (!visited.Add(
+                    current.Value))
+            {
+                return true;
+            }
+
+            VisualInstruction? action =
+                FindAction(
+                    rule,
+                    current.Value);
+
+            if (action ==
+                null)
+            {
+                return false;
+            }
+
+            current =
+                action.NextActionId;
+        }
+
+        return false;
+    }
+
+    private static void ConnectExecution(
+        EventRuleDefinition rule,
+        Guid sourceActionId,
+        Guid targetActionId)
+    {
+        rule.HasExplicitExecutionFlow =
+            true;
+
+        DisconnectIncomingExecution(
+            rule,
+            targetActionId);
+
+        if (sourceActionId ==
+            Guid.Empty)
+        {
+            rule.FirstActionId =
+                targetActionId;
+
+            return;
+        }
+
+        VisualInstruction? source =
+            FindAction(
+                rule,
+                sourceActionId);
+
+        if (source !=
+            null)
+        {
+            source.NextActionId =
+                targetActionId;
+        }
+    }
+
+    private static void DisconnectIncomingExecution(
+        EventRuleDefinition rule,
+        Guid targetActionId)
+    {
+        if (rule.FirstActionId ==
+            targetActionId)
+        {
+            rule.FirstActionId =
+                null;
+        }
+
+        foreach (VisualInstruction action
+                 in rule.Actions)
+        {
+            if (action.NextActionId ==
+                targetActionId)
+            {
+                action.NextActionId =
+                    null;
+            }
+        }
+    }
+
+    private static void ConnectNewActionAfterSource(
+        EventRuleDefinition rule,
+        Guid sourceActionId,
+        VisualInstruction created)
+    {
+        rule.HasExplicitExecutionFlow =
+            true;
+
+        if (sourceActionId ==
+            Guid.Empty)
+        {
+            Guid? previousFirst =
+                rule.FirstActionId;
+
+            rule.FirstActionId =
+                created.InstanceId;
+
+            created.NextActionId =
+                previousFirst;
+
+            return;
+        }
+
+        VisualInstruction? source =
+            FindAction(
+                rule,
+                sourceActionId);
+
+        if (source ==
+            null)
+        {
+            AppendActionToExecutionFlow(
+                rule,
+                created);
+
+            return;
+        }
+
+        Guid? previousNext =
+            source.NextActionId;
+
+        source.NextActionId =
+            created.InstanceId;
+
+        created.NextActionId =
+            previousNext;
+    }
+
+    private static void AppendActionToExecutionFlow(
+        EventRuleDefinition rule,
+        VisualInstruction action)
+    {
+        rule.HasExplicitExecutionFlow =
+            true;
+
+        action.NextActionId =
+            null;
+
+        if (!rule.FirstActionId.HasValue)
+        {
+            rule.FirstActionId =
+                action.InstanceId;
+
+            return;
+        }
+
+        HashSet<Guid> visited =
+            new();
+
+        Guid currentId =
+            rule.FirstActionId.Value;
+
+        while (visited.Add(
+                   currentId))
+        {
+            VisualInstruction? current =
+                FindAction(
+                    rule,
+                    currentId);
+
+            if (current ==
+                null)
+            {
+                rule.FirstActionId =
+                    action.InstanceId;
+
+                return;
+            }
+
+            if (!current.NextActionId.HasValue)
+            {
+                current.NextActionId =
+                    action.InstanceId;
+
+                return;
+            }
+
+            currentId =
+                current.NextActionId.Value;
+        }
+
+        /*
+         * A malformed cycle should not make Add Action hang. Leave the new
+         * Action disconnected; the runtime also guards against cycles.
+         */
+    }
+
+    private static void RemoveActionFromExecutionFlow(
+        EventRuleDefinition rule,
+        VisualInstruction action)
+    {
+        if (!rule.HasExplicitExecutionFlow)
+        {
+            return;
+        }
+
+        Guid? successor =
+            action.NextActionId;
+
+        if (rule.FirstActionId ==
+            action.InstanceId)
+        {
+            rule.FirstActionId =
+                successor;
+        }
+
+        foreach (VisualInstruction candidate
+                 in rule.Actions)
+        {
+            if (candidate.InstanceId ==
+                action.InstanceId)
+            {
+                continue;
+            }
+
+            if (candidate.NextActionId ==
+                action.InstanceId)
+            {
+                candidate.NextActionId =
+                    successor;
+            }
+        }
+
+        action.NextActionId =
+            null;
+    }
+
     private void InitializeMissingGraphLayout()
     {
         if (_module ==
@@ -3104,6 +4162,12 @@ internal sealed class EventWorkspacePanel
             }
 
             InitializeMissingInstructionLayout(
+                rule);
+
+            EnsureConditionFlowInitialized(
+                rule);
+
+            EnsureExecutionFlowInitialized(
                 rule);
         }
     }
@@ -3628,6 +4692,7 @@ internal sealed class EventWorkspacePanel
     // ========================================================
 
     private void DrawConditionPicker(
+        EventRuleDefinition rule,
         List<VisualInstruction> conditions)
     {
         if (!ImGui.BeginPopup(
@@ -3671,9 +4736,16 @@ internal sealed class EventWorkspacePanel
                     RecordHistory(
                         "Add Condition");
 
-                    conditions.Add(
+                    VisualInstruction created =
                         CreateInstruction(
-                            definition.Id));
+                            definition.Id);
+
+                    conditions.Add(
+                        created);
+
+                    ConnectCondition(
+                        rule,
+                        created.InstanceId);
 
                     _dirty =
                         true;
@@ -3689,6 +4761,7 @@ internal sealed class EventWorkspacePanel
     }
 
     private void DrawActionPicker(
+        EventRuleDefinition rule,
         List<VisualInstruction> actions)
     {
         if (!ImGui.BeginPopup(
@@ -3732,9 +4805,16 @@ internal sealed class EventWorkspacePanel
                     RecordHistory(
                         "Add Action");
 
-                    actions.Add(
+                    VisualInstruction created =
                         CreateInstruction(
-                            definition.Id));
+                            definition.Id);
+
+                    actions.Add(
+                        created);
+
+                    AppendActionToExecutionFlow(
+                        rule,
+                        created);
 
                     _dirty =
                         true;

@@ -95,6 +95,33 @@ public sealed class EventRuleDefinition
         new();
 
     /*
+     * Runtime condition-flow data.
+     *
+     * Older Event Modules treated every Condition in Conditions as connected
+     * to the Event. Once ByteGraph initializes explicit condition flow, only
+     * ids in ConnectedConditionIds participate in the Event's AND test.
+     */
+    public bool HasExplicitConditionFlow { get; set; }
+
+    public List<Guid> ConnectedConditionIds { get; set; } =
+        new();
+
+    /*
+     * Runtime execution-flow data.
+     *
+     * Old Event Modules did not store explicit action links. When this is
+     * false, runtime execution falls back to Actions list order so existing
+     * .byteevents files remain compatible.
+     *
+     * ByteGraph initializes an explicit chain the first time an older module
+     * is opened. From then on, FirstActionId and each action's NextActionId
+     * define the orange execution flow.
+     */
+    public bool HasExplicitExecutionFlow { get; set; }
+
+    public Guid? FirstActionId { get; set; }
+
+    /*
      * ByteGraph editor metadata.
      */
     public string EditorTitle { get; set; } =
@@ -126,6 +153,13 @@ public sealed class VisualInstruction
 
     public Dictionary<string, EventValue> Arguments { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /*
+     * Runtime execution-flow data for Action instructions.
+     *
+     * Conditions ignore this field.
+     */
+    public Guid? NextActionId { get; set; }
 
     /*
      * ByteGraph editor metadata.
