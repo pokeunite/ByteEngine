@@ -27,6 +27,57 @@ internal sealed class EventWorkspacePanel
     private readonly EventModuleHistory _history =
         new();
 
+    private readonly ByteGraphCanvas _graphCanvas =
+        new();
+
+    private readonly HashSet<Guid> _selectedGraphNodes =
+        new();
+
+    private enum WireDragKind
+    {
+        None,
+        Condition,
+        Action
+    }
+
+    private WireDragKind _wireDragKind;
+
+    private WireDragKind _pendingWireCreateKind;
+
+    private Guid _wireDragRuleId =
+        Guid.Empty;
+
+    private Guid _wireDragSourceInstructionId =
+        Guid.Empty;
+
+    private Guid _pendingWireRuleId =
+        Guid.Empty;
+
+    private Guid _pendingWireSourceInstructionId =
+        Guid.Empty;
+
+    private Vector2 _wireDragStart;
+
+    private Vector2 _pendingWireCreatePosition;
+
+    private Vector2 _graphContextPosition;
+
+    private bool _anyGraphNodeHovered;
+
+    private bool _marqueeSelecting;
+
+    private bool _marqueeAdditive;
+
+    private Vector2 _marqueeStart;
+
+    private Vector2 _marqueeCurrent;
+
+    private Guid _dragHistoryNodeId =
+        Guid.Empty;
+
+    private bool _requestFrameGraph =
+        true;
+
     private AssetRecord? _asset;
 
     private EventModuleDefinition? _module;
@@ -74,6 +125,13 @@ internal sealed class EventWorkspacePanel
         _module =
             restored;
 
+        _selectedGraphNodes.Clear();
+
+        InitializeMissingGraphLayout();
+
+        _requestFrameGraph =
+            true;
+
         _dirty =
             _history.IsDirty(
                 _module);
@@ -98,6 +156,13 @@ internal sealed class EventWorkspacePanel
 
         _module =
             restored;
+
+        _selectedGraphNodes.Clear();
+
+        InitializeMissingGraphLayout();
+
+        _requestFrameGraph =
+            true;
 
         _dirty =
             _history.IsDirty(
@@ -151,6 +216,13 @@ internal sealed class EventWorkspacePanel
 
             _asset =
                 asset;
+
+            InitializeMissingGraphLayout();
+
+            _graphCanvas.ResetView();
+
+            _requestFrameGraph =
+                true;
 
             _history.Reset(
                 _module);
@@ -283,7 +355,7 @@ internal sealed class EventWorkspacePanel
                 0.0f,
                 10.0f));
 
-        DrawRules(
+        DrawGraphCanvas(
             state);
 
         ImGui.PopStyleVar(
@@ -359,11 +431,118 @@ internal sealed class EventWorkspacePanel
             RecordHistory(
                 "Add Event");
 
-            _module.Rules.Add(
-                new EventRuleDefinition());
+            Vector2 position =
+                GetDefaultRulePosition(
+                    _module.Rules.Count);
+
+            AddEventAt(
+                position);
+
+            _requestFrameGraph =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Auto Arrange"))
+        {
+            RecordHistory(
+                "Auto Arrange Graph");
+
+            AutoArrangeGraph();
+
+            _requestFrameGraph =
+                true;
 
             _dirty =
                 true;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Frame Graph"))
+        {
+            _requestFrameGraph =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Reset View"))
+        {
+            _graphCanvas.ResetView();
+        }
+
+        ImGui.SameLine();
+
+        float nodeScale =
+            GetNodeScale();
+
+        ImGui.SetNextItemWidth(
+            115.0f);
+
+        bool nodeScaleChanged =
+            ImGui.SliderFloat(
+                "Node Scale",
+                ref nodeScale,
+                0.55f,
+                1.15f,
+                "%.2fx");
+
+        if (ImGui.IsItemActivated())
+        {
+            RecordHistory(
+                "Change Node Scale");
+        }
+
+        if (nodeScaleChanged)
+        {
+            _module.EditorNodeScale =
+                nodeScale;
+
+            _dirty =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        ImGui.BeginDisabled(
+            _selectedGraphNodes.Count ==
+            0);
+
+        if (ImGui.Button(
+                "Comment Box"))
+        {
+            CreateGroupFromSelection();
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (_selectedGraphNodes.Count >
+            0 &&
+            ImGui.Button(
+                "Clear Selection"))
+        {
+            _selectedGraphNodes.Clear();
+        }
+
+        ImGui.SameLine();
+
+        ImGui.TextDisabled(
+            $"Zoom {_graphCanvas.Zoom * 100.0f:0}%");
+
+        if (_selectedGraphNodes.Count >
+            0)
+        {
+            ImGui.SameLine();
+
+            ImGui.TextDisabled(
+                $"{_selectedGraphNodes.Count} selected");
         }
 
         ImGui.SameLine();
@@ -486,228 +665,541 @@ internal sealed class EventWorkspacePanel
             12.0f);
     }
 
+
     // ========================================================
-    // RULES
+    // BYTEGRAPH
     // ========================================================
 
-    private void DrawRules(
+    private static readonly Vector2 BaseEventGraphNodeSize =
+        new(
+            300.0f,
+            205.0f);
+
+    private static readonly Vector4 ConditionWireColor =
+        new(
+            0.25f,
+            0.72f,
+            1.0f,
+            1.0f);
+
+    private static readonly Vector4 ExecutionWireColor =
+        new(
+            1.0f,
+            0.66f,
+            0.22f,
+            1.0f);
+
+    private static readonly Vector4 SelectionColor =
+        new(
+            1.0f,
+            0.86f,
+            0.28f,
+            1.0f);
+
+    private float GetNodeScale()
+    {
+        if (_module ==
+            null)
+        {
+            return 0.72f;
+        }
+
+        if (_module.EditorNodeScale <
+                0.55f ||
+            _module.EditorNodeScale >
+                1.15f)
+        {
+            _module.EditorNodeScale =
+                0.72f;
+        }
+
+        return _module.EditorNodeScale;
+    }
+
+    private Vector2 GetEventGraphNodeSize()
+    {
+        return BaseEventGraphNodeSize *
+               GetNodeScale();
+    }
+
+    private Vector2 GetScaledInstructionNodeSize(
+        VisualInstruction instruction)
+    {
+        return GetInstructionNodeBaseSize(
+                   instruction) *
+               GetNodeScale();
+    }
+
+    private float GetNodeVisualScale()
+    {
+        return Math.Clamp(
+            _graphCanvas.Zoom *
+            GetNodeScale(),
+            0.25f,
+            1.65f);
+    }
+
+    private void PushGraphNodeStyle()
+    {
+        float scale =
+            GetNodeVisualScale();
+
+        ImGui.PushStyleVar(
+            ImGuiStyleVar.ItemSpacing,
+            new Vector2(
+                8.0f,
+                7.0f) *
+            scale);
+
+        ImGui.PushStyleVar(
+            ImGuiStyleVar.FramePadding,
+            new Vector2(
+                6.0f,
+                4.0f) *
+            scale);
+    }
+
+    private static void PopGraphNodeStyle()
+    {
+        ImGui.PopStyleVar(
+            2);
+    }
+
+    private void DrawGraphCanvas(
         EditorState? state)
     {
-        if (_module == null)
+        if (_module ==
+            null)
         {
             return;
         }
+
+        InitializeMissingGraphLayout();
+
+        _anyGraphNodeHovered =
+            false;
+
+        if (!ImGui.IsMouseDown(
+                ImGuiMouseButton.Left))
+        {
+            _dragHistoryNodeId =
+                Guid.Empty;
+        }
+
+        bool visible =
+            _graphCanvas.Begin(
+                "##ByteGraphCanvas");
+
+        if (!visible)
+        {
+            _graphCanvas.End();
+            return;
+        }
+
+        if (_requestFrameGraph)
+        {
+            FrameEntireGraph();
+
+            _requestFrameGraph =
+                false;
+        }
+
+        DrawGraphGroupBackgrounds();
+        DrawGraphWires();
+        DrawWireDragPreview();
 
         if (_module.Rules.Count ==
             0)
         {
-            ImGui.Dummy(
+            ImGui.SetCursorScreenPos(
+                _graphCanvas.ToScreen(
+                    new Vector2(
+                        80.0f,
+                        80.0f)));
+
+            ImGui.BeginChild(
+                "##EmptyGraphHint",
                 new Vector2(
-                    0.0f,
-                    25.0f));
+                    430.0f,
+                    125.0f),
+                ImGuiChildFlags.Borders,
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoScrollWithMouse);
+
+            ImGui.Text(
+                "ByteGraph is empty.");
 
             ImGui.TextDisabled(
-                "This module has no events.");
+                "Right-click the canvas or use '+ Add Event'.");
 
             ImGui.TextDisabled(
-                "Click '+ Add Event' to begin.");
+                "Middle mouse pans. Mouse wheel zooms from 25% to 200%.");
 
-            return;
+            ImGui.TextDisabled(
+                "Ctrl-click node headers to multi-select.");
+
+            ImGui.EndChild();
+        }
+        else
+        {
+            for (int ruleIndex = 0;
+                 ruleIndex < _module.Rules.Count;
+                 ruleIndex++)
+            {
+                EventRuleDefinition rule =
+                    _module.Rules[ruleIndex];
+
+                ImGui.PushID(
+                    rule.Id.ToString());
+
+                bool deleteRule =
+                    DrawEventGraphNode(
+                        rule,
+                        ruleIndex);
+
+                if (!rule.EditorCollapsed)
+                {
+                    DrawConditionGraphNodes(
+                        rule,
+                        state);
+
+                    DrawActionGraphNodes(
+                        rule,
+                        state);
+                }
+
+                ImGui.PopID();
+
+                if (deleteRule)
+                {
+                    RecordHistory(
+                        "Delete Event");
+
+                    RemoveNodeFromGroups(
+                        rule.Id);
+
+                    foreach (VisualInstruction instruction
+                             in rule.Conditions.Concat(
+                                 rule.Actions))
+                    {
+                        RemoveNodeFromGroups(
+                            instruction.InstanceId);
+                    }
+
+                    _selectedGraphNodes.Remove(
+                        rule.Id);
+
+                    _module.Rules.RemoveAt(
+                        ruleIndex);
+
+                    _dirty =
+                        true;
+
+                    ruleIndex--;
+                }
+            }
         }
 
-        for (int index = 0;
-             index < _module.Rules.Count;
-             index++)
+        DrawGraphGroupHeaders();
+
+        HandleGraphMarquee();
+        FinishWireDrag();
+        HandleGraphBackgroundContext();
+        DrawWireCreatePopup();
+        DrawGraphContextPopup();
+
+        _graphCanvas.End();
+    }
+
+    private bool DrawEventGraphNode(
+        EventRuleDefinition rule,
+        int ruleIndex)
+    {
+        Vector2 logicalPosition =
+            new(
+                rule.EditorX,
+                rule.EditorY);
+
+        Vector2 screenPosition =
+            _graphCanvas.ToScreen(
+                logicalPosition);
+
+        Vector2 logicalSize =
+            GetEventGraphNodeSize();
+
+        Vector2 screenSize =
+            _graphCanvas.ScaleSize(
+                logicalSize);
+
+        ImGui.SetCursorScreenPos(
+            screenPosition);
+
+        bool selected =
+            _selectedGraphNodes.Contains(
+                rule.Id);
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ChildBg,
+            new Vector4(
+                0.075f,
+                0.095f,
+                0.13f,
+                0.98f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.Border,
+            selected
+                ? SelectionColor
+                : rule.Enabled
+                    ? new Vector4(
+                        0.23f,
+                        0.52f,
+                        0.88f,
+                        1.0f)
+                    : new Vector4(
+                        0.33f,
+                        0.35f,
+                        0.39f,
+                        1.0f));
+
+        PushGraphNodeStyle();
+
+        bool visible =
+            ImGui.BeginChild(
+                $"EventGraphNode##{rule.Id}",
+                screenSize,
+                ImGuiChildFlags.Borders,
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoScrollWithMouse);
+
+        bool nodeHovered =
+            ImGui.IsWindowHovered(
+                ImGuiHoveredFlags.RootAndChildWindows);
+
+        _anyGraphNodeHovered |=
+            nodeHovered;
+
+        HandleNodeWindowSelection(
+            rule.Id,
+            nodeHovered);
+
+        bool remove =
+            false;
+
+        if (visible)
         {
-            EventRuleDefinition rule =
-                _module.Rules[index];
+            ImGui.SetWindowFontScale(
+                GetNodeVisualScale());
 
-            ImGui.PushID(
-                rule.Id.ToString());
+            ImGui.TextColored(
+                new Vector4(
+                    0.45f,
+                    0.72f,
+                    1.0f,
+                    1.0f),
+                $"EVENT {ruleIndex + 1:00}");
 
-            bool remove =
-                DrawRule(
-                    rule,
-                    index,
-                    state);
+            ImGui.SameLine();
 
-            ImGui.PopID();
+            bool enabled =
+                rule.Enabled;
 
-            if (remove)
+            if (ImGui.Checkbox(
+                    "##Enabled",
+                    ref enabled))
             {
                 RecordHistory(
-                    "Delete Event");
+                    enabled
+                        ? "Enable Event"
+                        : "Disable Event");
 
-                _module.Rules.RemoveAt(
-                    index);
+                rule.Enabled =
+                    enabled;
 
                 _dirty =
                     true;
-
-                index--;
             }
 
-            ImGui.Dummy(
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    rule.EditorCollapsed
+                        ? "Expand"
+                        : "Collapse"))
+            {
+                RecordHistory(
+                    rule.EditorCollapsed
+                        ? "Expand Event"
+                        : "Collapse Event");
+
+                rule.EditorCollapsed =
+                    !rule.EditorCollapsed;
+
+                _dirty =
+                    true;
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    "X##DeleteEvent"))
+            {
+                remove =
+                    true;
+            }
+
+            string title =
+                string.IsNullOrWhiteSpace(
+                    rule.EditorTitle)
+                    ? $"Event {ruleIndex + 1}"
+                    : rule.EditorTitle;
+
+            ImGui.SetNextItemWidth(
+                -1.0f);
+
+            if (ImGui.InputText(
+                    "##EventTitle",
+                    ref title,
+                    96))
+            {
+                rule.EditorTitle =
+                    title;
+
+                _dirty =
+                    true;
+            }
+
+            ImGui.TextDisabled(
+                $"{rule.Conditions.Count} condition(s) | {rule.Actions.Count} action(s)");
+
+            if (rule.Conditions.Count ==
+                0)
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.72f,
+                        0.24f,
+                        1.0f),
+                    "Every Frame");
+            }
+            else
+            {
+                ImGui.TextDisabled(
+                    "ALL conditions must be true");
+            }
+
+            if (ImGui.Button(
+                    "+ Condition"))
+            {
+                ImGui.OpenPopup(
+                    "Add Condition");
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button(
+                    "+ Action"))
+            {
+                ImGui.OpenPopup(
+                    "Add Action");
+            }
+
+            DrawConditionPicker(
+                rule.Conditions);
+
+            DrawActionPicker(
+                rule.Actions);
+
+            ImGui.Separator();
+
+            ImGui.Selectable(
+                "Drag / Select Event##MoveHandle",
+                false,
+                ImGuiSelectableFlags.None,
                 new Vector2(
-                    0.0f,
-                    18.0f));
-        }
-    }
+                    -1.0f,
+                    24.0f *
+                    GetNodeVisualScale()));
 
-    private bool DrawRule(
-        EventRuleDefinition rule,
-        int index,
-        EditorState? state)
-    {
-        ImGui.SeparatorText(
-            $"EVENT {index + 1}");
+            if (ImGui.IsItemActive() &&
+                ImGui.IsMouseDragging(
+                    ImGuiMouseButton.Left))
+            {
+                BeginNodeDragHistory(
+                    rule.Id,
+                    "Move Event Node");
 
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                4.0f));
+                Vector2 delta =
+                    _graphCanvas.ScreenDeltaToGraph(
+                        ImGui.GetIO().MouseDelta);
 
-        bool enabled =
-            rule.Enabled;
+                MoveRuleAndChildren(
+                    rule,
+                    delta);
 
-        if (ImGui.Checkbox(
-                "Enabled",
-                ref enabled))
-        {
-            RecordHistory(
-                enabled
-                    ? "Enable Event"
-                    : "Disable Event");
-
-            rule.Enabled =
-                enabled;
-
-            _dirty =
-                true;
+                _dirty =
+                    true;
+            }
         }
 
-        ImGui.SameLine();
+        ImGui.EndChild();
 
-        ImGui.TextDisabled(
-            $"ID: {rule.Id.ToString()[..8]}");
+        PopGraphNodeStyle();
 
-        float available =
-            ImGui.GetContentRegionAvail().X;
+        ImGui.PopStyleColor(
+            2);
 
-        if (available >
-            120.0f)
-        {
-            ImGui.SameLine(
-                ImGui.GetCursorPosX() +
-                available -
-                110.0f);
-        }
+        Vector2 conditionPin =
+            GetEventConditionInput(
+                rule);
 
-        bool remove =
-            ImGui.Button(
-                "Delete Event");
+        Vector2 executionPin =
+            GetEventExecutionOutput(
+                rule);
 
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                6.0f));
+        _graphCanvas.DrawPin(
+            conditionPin,
+            ConditionWireColor,
+            7.0f);
 
-        if (rule.Conditions.Count ==
-            0)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.75f,
-                    0.25f,
-                    1.0f),
-                "No conditions - this event executes every frame.");
+        _graphCanvas.DrawPin(
+            executionPin,
+            ExecutionWireColor,
+            7.0f);
 
-            ImGui.Dummy(
-                new Vector2(
-                    0.0f,
-                    5.0f));
-        }
+        TryStartWireDrag(
+            rule,
+            WireDragKind.Condition,
+            Guid.Empty,
+            conditionPin);
 
-        if (ImGui.BeginTable(
-                "EventColumns",
-                2,
-                ImGuiTableFlags.BordersInnerV |
-                ImGuiTableFlags.Resizable |
-                ImGuiTableFlags.SizingStretchSame))
-        {
-            ImGui.TableSetupColumn(
-                "Conditions",
-                ImGuiTableColumnFlags.WidthStretch);
-
-            ImGui.TableSetupColumn(
-                "Actions",
-                ImGuiTableColumnFlags.WidthStretch);
-
-            ImGui.TableNextRow();
-
-            ImGui.TableNextColumn();
-
-            DrawColumnHeader(
-                "CONDITIONS",
-                "When all conditions are true...");
-
-            DrawConditionList(
-                rule.Conditions,
-                state);
-
-            ImGui.TableNextColumn();
-
-            DrawColumnHeader(
-                "ACTIONS",
-                "...run these actions in order.");
-
-            DrawActionList(
-                rule.Actions,
-                state);
-
-            ImGui.EndTable();
-        }
+        TryStartWireDrag(
+            rule,
+            WireDragKind.Action,
+            Guid.Empty,
+            executionPin);
 
         return remove;
     }
 
-    private static void DrawColumnHeader(
-        string title,
-        string description)
-    {
-        ImGui.Text(
-            title);
-
-        ImGui.TextDisabled(
-            description);
-
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                7.0f));
-    }
-
-    // ========================================================
-    // CONDITIONS
-    // ========================================================
-
-    private void DrawConditionList(
-        List<VisualInstruction> conditions,
+    private void DrawConditionGraphNodes(
+        EventRuleDefinition rule,
         EditorState? state)
     {
         for (int index = 0;
-             index < conditions.Count;
+             index < rule.Conditions.Count;
              index++)
         {
             VisualInstruction instruction =
-                conditions[index];
+                rule.Conditions[index];
 
             ImGui.PushID(
                 instruction.InstanceId.ToString());
 
             bool remove =
-                DrawInstructionCard(
+                DrawInstructionGraphNode(
+                    rule,
                     instruction,
                     true,
                     index,
@@ -720,57 +1212,40 @@ internal sealed class EventWorkspacePanel
                 RecordHistory(
                     "Delete Condition");
 
-                conditions.RemoveAt(
+                RemoveNodeFromGroups(
+                    instruction.InstanceId);
+
+                _selectedGraphNodes.Remove(
+                    instruction.InstanceId);
+
+                rule.Conditions.RemoveAt(
                     index);
 
                 _dirty =
                     true;
 
                 index--;
-
-                continue;
             }
-
-            ImGui.Dummy(
-                new Vector2(
-                    0.0f,
-                    8.0f));
         }
-
-        if (ImGui.Button(
-                "+ Add Condition",
-                new Vector2(
-                    -1.0f,
-                    36.0f)))
-        {
-            ImGui.OpenPopup(
-                "Add Condition");
-        }
-
-        DrawConditionPicker(
-            conditions);
     }
 
-    // ========================================================
-    // ACTIONS
-    // ========================================================
-
-    private void DrawActionList(
-        List<VisualInstruction> actions,
+    private void DrawActionGraphNodes(
+        EventRuleDefinition rule,
         EditorState? state)
     {
         for (int index = 0;
-             index < actions.Count;
+             index < rule.Actions.Count;
              index++)
         {
             VisualInstruction instruction =
-                actions[index];
+                rule.Actions[index];
 
             ImGui.PushID(
                 instruction.InstanceId.ToString());
 
             bool remove =
-                DrawInstructionCard(
+                DrawInstructionGraphNode(
+                    rule,
                     instruction,
                     false,
                     index,
@@ -783,51 +1258,1438 @@ internal sealed class EventWorkspacePanel
                 RecordHistory(
                     "Delete Action");
 
-                actions.RemoveAt(
+                RemoveNodeFromGroups(
+                    instruction.InstanceId);
+
+                _selectedGraphNodes.Remove(
+                    instruction.InstanceId);
+
+                rule.Actions.RemoveAt(
                     index);
 
                 _dirty =
                     true;
 
                 index--;
-
-                continue;
             }
-
-            ImGui.Dummy(
-                new Vector2(
-                    0.0f,
-                    8.0f));
         }
-
-        if (ImGui.Button(
-                "+ Add Action",
-                new Vector2(
-                    -1.0f,
-                    36.0f)))
-        {
-            ImGui.OpenPopup(
-                "Add Action");
-        }
-
-        DrawActionPicker(
-            actions);
     }
 
-    // ========================================================
-    // INSTRUCTION CARDS
-    // ========================================================
-
-    private bool DrawInstructionCard(
+    private bool DrawInstructionGraphNode(
+        EventRuleDefinition rule,
         VisualInstruction instruction,
         bool condition,
         int index,
         EditorState? state)
     {
-        string displayName =
+        GetInstructionPresentation(
+            instruction,
+            condition,
+            out string displayName,
+            out string category);
+
+        Vector2 logicalSize =
+            GetScaledInstructionNodeSize(
+                instruction);
+
+        Vector2 logicalPosition =
+            new(
+                instruction.EditorX,
+                instruction.EditorY);
+
+        ImGui.SetCursorScreenPos(
+            _graphCanvas.ToScreen(
+                logicalPosition));
+
+        bool selected =
+            _selectedGraphNodes.Contains(
+                instruction.InstanceId);
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ChildBg,
+            condition
+                ? new Vector4(
+                    0.065f,
+                    0.11f,
+                    0.14f,
+                    0.98f)
+                : new Vector4(
+                    0.14f,
+                    0.095f,
+                    0.055f,
+                    0.98f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.Border,
+            selected
+                ? SelectionColor
+                : condition
+                    ? new Vector4(
+                        0.20f,
+                        0.62f,
+                        0.88f,
+                        1.0f)
+                    : new Vector4(
+                        0.95f,
+                        0.57f,
+                        0.16f,
+                        1.0f));
+
+        PushGraphNodeStyle();
+
+        bool visible =
+            ImGui.BeginChild(
+                $"InstructionGraphNode##{instruction.InstanceId}",
+                _graphCanvas.ScaleSize(
+                    logicalSize),
+                ImGuiChildFlags.Borders,
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoScrollWithMouse);
+
+        bool nodeHovered =
+            ImGui.IsWindowHovered(
+                ImGuiHoveredFlags.RootAndChildWindows);
+
+        _anyGraphNodeHovered |=
+            nodeHovered;
+
+        HandleNodeWindowSelection(
+            instruction.InstanceId,
+            nodeHovered);
+
+        bool remove =
+            false;
+
+        if (visible)
+        {
+            ImGui.SetWindowFontScale(
+                GetNodeVisualScale());
+
+            ImGui.TextColored(
+                condition
+                    ? new Vector4(
+                        0.35f,
+                        0.78f,
+                        1.0f,
+                        1.0f)
+                    : new Vector4(
+                        1.0f,
+                        0.68f,
+                        0.25f,
+                        1.0f),
+                condition
+                    ? $"CONDITION {index + 1:00}"
+                    : $"ACTION {index + 1:00}");
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    "X##RemoveInstruction"))
+            {
+                remove =
+                    true;
+            }
+
+            ImGui.Selectable(
+                $"{displayName}##NodeMoveHandle",
+                false,
+                ImGuiSelectableFlags.None,
+                new Vector2(
+                    -1.0f,
+                    28.0f *
+                    GetNodeVisualScale()));
+
+            if (ImGui.IsItemActive() &&
+                ImGui.IsMouseDragging(
+                    ImGuiMouseButton.Left))
+            {
+                BeginNodeDragHistory(
+                    instruction.InstanceId,
+                    condition
+                        ? "Move Condition Node"
+                        : "Move Action Node");
+
+                Vector2 delta =
+                    _graphCanvas.ScreenDeltaToGraph(
+                        ImGui.GetIO().MouseDelta);
+
+                instruction.EditorX +=
+                    delta.X;
+
+                instruction.EditorY +=
+                    delta.Y;
+
+                _dirty =
+                    true;
+            }
+
+            ImGui.TextDisabled(
+                category);
+
+            ImGui.Separator();
+
+            DrawInstructionArguments(
+                instruction,
+                state);
+        }
+
+        ImGui.EndChild();
+
+        PopGraphNodeStyle();
+
+        ImGui.PopStyleColor(
+            2);
+
+        Vector4 pinColor =
+            condition
+                ? ConditionWireColor
+                : ExecutionWireColor;
+
+        Vector2 input =
+            GetInstructionInput(
+                instruction);
+
+        Vector2 output =
+            GetInstructionOutput(
+                instruction);
+
+        _graphCanvas.DrawPin(
+            input,
+            pinColor,
+            6.0f);
+
+        _graphCanvas.DrawPin(
+            output,
+            pinColor,
+            6.0f);
+
+        TryStartWireDrag(
+            rule,
+            condition
+                ? WireDragKind.Condition
+                : WireDragKind.Action,
+            instruction.InstanceId,
+            output);
+
+        return remove;
+    }
+
+    private void DrawGraphWires()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (rule.EditorCollapsed)
+            {
+                continue;
+            }
+
+            Vector2 eventConditionInput =
+                GetEventConditionInput(
+                    rule);
+
+            foreach (VisualInstruction condition
+                     in rule.Conditions)
+            {
+                _graphCanvas.DrawWire(
+                    GetInstructionOutput(
+                        condition),
+                    eventConditionInput,
+                    ConditionWireColor,
+                    3.0f);
+            }
+
+            Vector2 previousOutput =
+                GetEventExecutionOutput(
+                    rule);
+
+            foreach (VisualInstruction action
+                     in rule.Actions)
+            {
+                Vector2 actionInput =
+                    GetInstructionInput(
+                        action);
+
+                _graphCanvas.DrawWire(
+                    previousOutput,
+                    actionInput,
+                    ExecutionWireColor,
+                    3.5f);
+
+                previousOutput =
+                    GetInstructionOutput(
+                        action);
+            }
+        }
+    }
+
+    private void DrawWireDragPreview()
+    {
+        if (_wireDragKind ==
+            WireDragKind.None)
+        {
+            return;
+        }
+
+        Vector2 mouse =
+            _graphCanvas.MouseGraphPosition;
+
+        Vector4 color =
+            _wireDragKind ==
+            WireDragKind.Condition
+                ? ConditionWireColor
+                : ExecutionWireColor;
+
+        if (_wireDragKind ==
+                WireDragKind.Condition &&
+            _wireDragSourceInstructionId ==
+                Guid.Empty)
+        {
+            _graphCanvas.DrawWire(
+                mouse,
+                _wireDragStart,
+                color,
+                3.0f);
+        }
+        else
+        {
+            _graphCanvas.DrawWire(
+                _wireDragStart,
+                mouse,
+                color,
+                3.0f);
+        }
+    }
+
+    private void TryStartWireDrag(
+        EventRuleDefinition rule,
+        WireDragKind kind,
+        Guid sourceInstructionId,
+        Vector2 pin)
+    {
+        if (_wireDragKind !=
+                WireDragKind.None ||
+            !_graphCanvas.IsPointHovered(
+                pin,
+                13.0f) ||
+            !ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        _wireDragKind =
+            kind;
+
+        _wireDragRuleId =
+            rule.Id;
+
+        _wireDragSourceInstructionId =
+            sourceInstructionId;
+
+        _wireDragStart =
+            pin;
+    }
+
+    private void FinishWireDrag()
+    {
+        if (_wireDragKind ==
+            WireDragKind.None)
+        {
+            return;
+        }
+
+        if (ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right))
+        {
+            CancelWireDrag();
+            return;
+        }
+
+        if (!ImGui.IsMouseReleased(
+                ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        _pendingWireCreateKind =
+            _wireDragKind;
+
+        _pendingWireRuleId =
+            _wireDragRuleId;
+
+        _pendingWireSourceInstructionId =
+            _wireDragSourceInstructionId;
+
+        _pendingWireCreatePosition =
+            _graphCanvas.MouseGraphPosition;
+
+        CancelWireDrag();
+
+        ImGui.OpenPopup(
+            "Create From Wire");
+    }
+
+    private void CancelWireDrag()
+    {
+        _wireDragKind =
+            WireDragKind.None;
+
+        _wireDragRuleId =
+            Guid.Empty;
+
+        _wireDragSourceInstructionId =
+            Guid.Empty;
+    }
+
+    private void DrawWireCreatePopup()
+    {
+        if (!ImGui.BeginPopup(
+                "Create From Wire"))
+        {
+            return;
+        }
+
+        EventRuleDefinition? rule =
+            FindRule(
+                _pendingWireRuleId);
+
+        if (rule ==
+            null)
+        {
+            ImGui.TextDisabled(
+                "The source event no longer exists.");
+
+            ImGui.EndPopup();
+            return;
+        }
+
+        if (_pendingWireCreateKind ==
+            WireDragKind.Condition)
+        {
+            ImGui.TextDisabled(
+                "CREATE CONDITION FROM WIRE");
+
+            ImGui.Separator();
+
+            DrawDefinitionCreateMenu(
+                rule,
+                true,
+                _pendingWireCreatePosition,
+                _pendingWireSourceInstructionId);
+        }
+        else if (_pendingWireCreateKind ==
+                 WireDragKind.Action)
+        {
+            ImGui.TextDisabled(
+                "CREATE ACTION FROM WIRE");
+
+            ImGui.Separator();
+
+            DrawDefinitionCreateMenu(
+                rule,
+                false,
+                _pendingWireCreatePosition,
+                _pendingWireSourceInstructionId);
+        }
+
+        ImGui.Separator();
+
+        if (ImGui.MenuItem(
+                "New Event Here (Independent)"))
+        {
+            RecordHistory(
+                "Add Event");
+
+            AddEventAt(
+                _pendingWireCreatePosition);
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void HandleGraphBackgroundContext()
+    {
+        /*
+         * Use direct canvas bounds instead of relying on the old
+         * full-canvas ImGui item hover state. This keeps the context
+         * menu reliable even when the graph contains overlapping
+         * child windows.
+         */
+        if (!_graphCanvas.IsMouseInsideCanvas ||
+            _anyGraphNodeHovered ||
+            _marqueeSelecting ||
+            _wireDragKind !=
+                WireDragKind.None ||
+            !ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right))
+        {
+            return;
+        }
+
+        _graphContextPosition =
+            _graphCanvas.MouseGraphPosition;
+
+        ImGui.OpenPopup(
+            "ByteGraph Context");
+    }
+
+    private void DrawGraphContextPopup()
+    {
+        if (_module ==
+                null ||
+            !ImGui.BeginPopup(
+                "ByteGraph Context"))
+        {
+            return;
+        }
+
+        if (ImGui.MenuItem(
+                "Add Event Here"))
+        {
+            RecordHistory(
+                "Add Event");
+
+            AddEventAt(
+                _graphContextPosition);
+        }
+
+        if (_module.Rules.Count >
+            0)
+        {
+            if (ImGui.BeginMenu(
+                    "Add Condition To"))
+            {
+                foreach (EventRuleDefinition rule
+                         in _module.Rules)
+                {
+                    string label =
+                        GetRuleDisplayName(
+                            rule);
+
+                    if (ImGui.BeginMenu(
+                            label))
+                    {
+                        DrawDefinitionCreateMenu(
+                            rule,
+                            true,
+                            _graphContextPosition,
+                            Guid.Empty);
+
+                        ImGui.EndMenu();
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+
+            if (ImGui.BeginMenu(
+                    "Add Action To"))
+            {
+                foreach (EventRuleDefinition rule
+                         in _module.Rules)
+                {
+                    string label =
+                        GetRuleDisplayName(
+                            rule);
+
+                    if (ImGui.BeginMenu(
+                            label))
+                    {
+                        DrawDefinitionCreateMenu(
+                            rule,
+                            false,
+                            _graphContextPosition,
+                            Guid.Empty);
+
+                        ImGui.EndMenu();
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+        }
+
+        ImGui.Separator();
+
+        ImGui.BeginDisabled(
+            _selectedGraphNodes.Count ==
+            0);
+
+        if (ImGui.MenuItem(
+                "Comment Box Around Selection"))
+        {
+            CreateGroupFromSelection();
+        }
+
+        ImGui.EndDisabled();
+
+        if (_selectedGraphNodes.Count >
+                0 &&
+            ImGui.MenuItem(
+                "Clear Selection"))
+        {
+            _selectedGraphNodes.Clear();
+        }
+
+        ImGui.Separator();
+
+        if (ImGui.MenuItem(
+                "Auto Arrange"))
+        {
+            RecordHistory(
+                "Auto Arrange Graph");
+
+            AutoArrangeGraph();
+
+            _requestFrameGraph =
+                true;
+
+            _dirty =
+                true;
+        }
+
+        if (ImGui.MenuItem(
+                "Frame Graph"))
+        {
+            _requestFrameGraph =
+                true;
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawDefinitionCreateMenu(
+        EventRuleDefinition rule,
+        bool condition,
+        Vector2 position,
+        Guid insertAfterInstructionId)
+    {
+        if (condition)
+        {
+            var groups =
+                _registry.Conditions
+                    .OrderBy(
+                        definition =>
+                            definition.Category)
+                    .ThenBy(
+                        definition =>
+                            definition.DisplayName)
+                    .GroupBy(
+                        definition =>
+                            definition.Category);
+
+            foreach (var group
+                     in groups)
+            {
+                if (!ImGui.BeginMenu(
+                        group.Key))
+                {
+                    continue;
+                }
+
+                foreach (VisualConditionDefinition definition
+                         in group)
+                {
+                    if (ImGui.MenuItem(
+                            definition.DisplayName))
+                    {
+                        RecordHistory(
+                            "Add Condition");
+
+                        AddInstructionAt(
+                            rule,
+                            definition.Id,
+                            true,
+                            position,
+                            insertAfterInstructionId);
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+
+            return;
+        }
+
+        var actionGroups =
+            _registry.Actions
+                .OrderBy(
+                    definition =>
+                        definition.Category)
+                .ThenBy(
+                    definition =>
+                        definition.DisplayName)
+                .GroupBy(
+                    definition =>
+                        definition.Category);
+
+        foreach (var group
+                 in actionGroups)
+        {
+            if (!ImGui.BeginMenu(
+                    group.Key))
+            {
+                continue;
+            }
+
+            foreach (VisualActionDefinition definition
+                     in group)
+            {
+                if (ImGui.MenuItem(
+                        definition.DisplayName))
+                {
+                    RecordHistory(
+                        "Add Action");
+
+                    AddInstructionAt(
+                        rule,
+                        definition.Id,
+                        false,
+                        position,
+                        insertAfterInstructionId);
+                }
+            }
+
+            ImGui.EndMenu();
+        }
+    }
+
+    private void AddInstructionAt(
+        EventRuleDefinition rule,
+        string definitionId,
+        bool condition,
+        Vector2 position,
+        Guid insertAfterInstructionId)
+    {
+        VisualInstruction instruction =
+            CreateInstruction(
+                definitionId);
+
+        instruction.EditorX =
+            position.X;
+
+        instruction.EditorY =
+            position.Y;
+
+        instruction.EditorLayoutInitialized =
+            true;
+
+        List<VisualInstruction> list =
+            condition
+                ? rule.Conditions
+                : rule.Actions;
+
+        int insertIndex =
+            list.Count;
+
+        if (insertAfterInstructionId !=
+            Guid.Empty)
+        {
+            int sourceIndex =
+                list.FindIndex(
+                    item =>
+                        item.InstanceId ==
+                        insertAfterInstructionId);
+
+            if (sourceIndex >=
+                0)
+            {
+                insertIndex =
+                    sourceIndex +
+                    1;
+            }
+        }
+
+        list.Insert(
+            insertIndex,
+            instruction);
+
+        _selectedGraphNodes.Clear();
+
+        _selectedGraphNodes.Add(
+            instruction.InstanceId);
+
+        _dirty =
+            true;
+    }
+
+    private void AddEventAt(
+        Vector2 position)
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        var rule =
+            new EventRuleDefinition
+            {
+                EditorLayoutInitialized =
+                    true,
+
+                EditorX =
+                    position.X,
+
+                EditorY =
+                    position.Y,
+
+                EditorTitle =
+                    $"Event {_module.Rules.Count + 1}"
+            };
+
+        _module.Rules.Add(
+            rule);
+
+        _selectedGraphNodes.Clear();
+
+        _selectedGraphNodes.Add(
+            rule.Id);
+
+        _dirty =
+            true;
+    }
+
+    private EventRuleDefinition? FindRule(
+        Guid id)
+    {
+        return _module?
+            .Rules
+            .FirstOrDefault(
+                rule =>
+                    rule.Id ==
+                    id);
+    }
+
+    private static string GetRuleDisplayName(
+        EventRuleDefinition rule)
+    {
+        return string.IsNullOrWhiteSpace(
+                   rule.EditorTitle)
+            ? $"Event {rule.Id.ToString()[..8]}"
+            : rule.EditorTitle;
+    }
+
+    private void HandleNodeWindowSelection(
+        Guid nodeId,
+        bool nodeHovered)
+    {
+        /*
+         * Selection is deliberately based on the whole node window,
+         * not on a tiny Selectable/drag label inside the node.
+         *
+         * This means clicking the node body, title, parameter area,
+         * checkbox, etc. selects the node just like Unreal/Unity graph
+         * editors do.
+         */
+        if (!nodeHovered ||
+            _marqueeSelecting ||
+            _wireDragKind !=
+                WireDragKind.None ||
+            !ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        bool multiSelect =
+            ImGui.IsKeyDown(
+                ImGuiKey.ModCtrl) ||
+            ImGui.IsKeyDown(
+                ImGuiKey.ModShift);
+
+        if (!multiSelect)
+        {
+            _selectedGraphNodes.Clear();
+
+            _selectedGraphNodes.Add(
+                nodeId);
+
+            return;
+        }
+
+        if (!_selectedGraphNodes.Add(
+                nodeId))
+        {
+            _selectedGraphNodes.Remove(
+                nodeId);
+        }
+    }
+
+    private void HandleGraphMarquee()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        /*
+         * Start a box-selection only from empty graph space.
+         * Ctrl/Shift keeps the current selection and adds to it.
+         */
+        if (!_marqueeSelecting &&
+            _wireDragKind ==
+                WireDragKind.None &&
+            _graphCanvas.IsMouseInsideCanvas &&
+            !_anyGraphNodeHovered &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left))
+        {
+            _marqueeSelecting =
+                true;
+
+            _marqueeAdditive =
+                ImGui.IsKeyDown(
+                    ImGuiKey.ModCtrl) ||
+                ImGui.IsKeyDown(
+                    ImGuiKey.ModShift);
+
+            _marqueeStart =
+                _graphCanvas.MouseGraphPosition;
+
+            _marqueeCurrent =
+                _marqueeStart;
+        }
+
+        if (!_marqueeSelecting)
+        {
+            return;
+        }
+
+        _marqueeCurrent =
+            _graphCanvas.MouseGraphPosition;
+
+        _graphCanvas.DrawSelectionRectangle(
+            _marqueeStart,
+            _marqueeCurrent);
+
+        if (!ImGui.IsMouseReleased(
+                ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        Vector2 screenDelta =
+            _graphCanvas.ToScreen(
+                _marqueeCurrent) -
+            _graphCanvas.ToScreen(
+                _marqueeStart);
+
+        bool dragged =
+            screenDelta.LengthSquared() >=
+            16.0f;
+
+        if (!_marqueeAdditive)
+        {
+            _selectedGraphNodes.Clear();
+        }
+
+        if (dragged)
+        {
+            SelectNodesInRectangle(
+                _marqueeStart,
+                _marqueeCurrent);
+        }
+
+        _marqueeSelecting =
+            false;
+    }
+
+    private void SelectNodesInRectangle(
+        Vector2 a,
+        Vector2 b)
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        Vector2 selectionMinimum =
+            new(
+                Math.Min(
+                    a.X,
+                    b.X),
+                Math.Min(
+                    a.Y,
+                    b.Y));
+
+        Vector2 selectionMaximum =
+            new(
+                Math.Max(
+                    a.X,
+                    b.X),
+                Math.Max(
+                    a.Y,
+                    b.Y));
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            TrySelectNodeFromRectangle(
+                rule.Id,
+                selectionMinimum,
+                selectionMaximum);
+
+            if (rule.EditorCollapsed)
+            {
+                continue;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions.Concat(
+                         rule.Actions))
+            {
+                TrySelectNodeFromRectangle(
+                    instruction.InstanceId,
+                    selectionMinimum,
+                    selectionMaximum);
+            }
+        }
+    }
+
+    private void TrySelectNodeFromRectangle(
+        Guid nodeId,
+        Vector2 selectionMinimum,
+        Vector2 selectionMaximum)
+    {
+        if (!TryGetNodeBounds(
+                nodeId,
+                out Vector2 nodeMinimum,
+                out Vector2 nodeMaximum))
+        {
+            return;
+        }
+
+        bool intersects =
+            nodeMaximum.X >=
+                selectionMinimum.X &&
+            nodeMinimum.X <=
+                selectionMaximum.X &&
+            nodeMaximum.Y >=
+                selectionMinimum.Y &&
+            nodeMinimum.Y <=
+                selectionMaximum.Y;
+
+        if (intersects)
+        {
+            _selectedGraphNodes.Add(
+                nodeId);
+        }
+    }
+
+    private void CreateGroupFromSelection()
+    {
+        if (_module ==
+                null ||
+            _selectedGraphNodes.Count ==
+                0)
+        {
+            return;
+        }
+
+        List<Guid> members =
+            _selectedGraphNodes
+                .Where(
+                    NodeExists)
+                .ToList();
+
+        if (members.Count ==
+            0)
+        {
+            return;
+        }
+
+        RecordHistory(
+            "Create Comment Box");
+
+        _module.EditorGroups.Add(
+            new EventGraphGroupDefinition
+            {
+                Title =
+                    "Comment",
+
+                MemberIds =
+                    members
+            });
+
+        _dirty =
+            true;
+    }
+
+    private bool NodeExists(
+        Guid id)
+    {
+        if (_module ==
+            null)
+        {
+            return false;
+        }
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (rule.Id ==
+                id)
+            {
+                return true;
+            }
+
+            if (rule.Conditions.Any(
+                    instruction =>
+                        instruction.InstanceId ==
+                        id) ||
+                rule.Actions.Any(
+                    instruction =>
+                        instruction.InstanceId ==
+                        id))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RemoveNodeFromGroups(
+        Guid id)
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        foreach (EventGraphGroupDefinition group
+                 in _module.EditorGroups)
+        {
+            group.MemberIds.RemoveAll(
+                memberId =>
+                    memberId ==
+                    id);
+        }
+
+        _module.EditorGroups.RemoveAll(
+            group =>
+                group.MemberIds.Count ==
+                0);
+    }
+
+    private void DrawGraphGroupBackgrounds()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        foreach (EventGraphGroupDefinition group
+                 in _module.EditorGroups)
+        {
+            if (!TryGetGroupBounds(
+                    group,
+                    out Vector2 minimum,
+                    out Vector2 maximum))
+            {
+                continue;
+            }
+
+            _graphCanvas.DrawGroupBox(
+                minimum,
+                maximum,
+                new Vector4(
+                    0.12f,
+                    0.14f,
+                    0.18f,
+                    0.30f),
+                new Vector4(
+                    0.48f,
+                    0.52f,
+                    0.62f,
+                    0.70f));
+        }
+    }
+
+    private void DrawGraphGroupHeaders()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        for (int index = 0;
+             index < _module.EditorGroups.Count;
+             index++)
+        {
+            EventGraphGroupDefinition group =
+                _module.EditorGroups[index];
+
+            if (!TryGetGroupBounds(
+                    group,
+                    out Vector2 minimum,
+                    out _))
+            {
+                continue;
+            }
+
+            Vector2 headerPosition =
+                _graphCanvas.ToScreen(
+                    minimum +
+                    new Vector2(
+                        12.0f,
+                        8.0f));
+
+            Vector2 headerSize =
+                new(
+                    Math.Max(
+                        245.0f *
+                        _graphCanvas.Zoom,
+                        120.0f),
+                    Math.Max(
+                        36.0f *
+                        _graphCanvas.Zoom,
+                        26.0f));
+
+            ImGui.SetCursorScreenPos(
+                headerPosition);
+
+            ImGui.PushStyleColor(
+                ImGuiCol.ChildBg,
+                new Vector4(
+                    0.10f,
+                    0.12f,
+                    0.16f,
+                    0.96f));
+
+            bool visible =
+                ImGui.BeginChild(
+                    $"GraphGroupHeader##{group.Id}",
+                    headerSize,
+                    ImGuiChildFlags.Borders,
+                    ImGuiWindowFlags.NoScrollbar |
+                    ImGuiWindowFlags.NoScrollWithMouse);
+
+            _anyGraphNodeHovered |=
+                ImGui.IsWindowHovered(
+                    ImGuiHoveredFlags.RootAndChildWindows);
+
+            bool remove =
+                false;
+
+            if (visible)
+            {
+                ImGui.SetWindowFontScale(
+                    Math.Clamp(
+                        _graphCanvas.Zoom,
+                        0.35f,
+                        1.5f));
+
+                string title =
+                    string.IsNullOrWhiteSpace(
+                        group.Title)
+                        ? "Comment"
+                        : group.Title;
+
+                ImGui.SetNextItemWidth(
+                    Math.Max(
+                        headerSize.X -
+                        52.0f,
+                        60.0f));
+
+                if (ImGui.InputText(
+                        "##GroupTitle",
+                        ref title,
+                        96))
+                {
+                    group.Title =
+                        title;
+
+                    _dirty =
+                        true;
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.SmallButton(
+                        "X##DeleteGroup"))
+                {
+                    remove =
+                        true;
+                }
+            }
+
+            ImGui.EndChild();
+
+            ImGui.PopStyleColor();
+
+            if (remove)
+            {
+                RecordHistory(
+                    "Delete Comment Box");
+
+                _module.EditorGroups.RemoveAt(
+                    index);
+
+                _dirty =
+                    true;
+
+                index--;
+            }
+        }
+    }
+
+    private bool TryGetGroupBounds(
+        EventGraphGroupDefinition group,
+        out Vector2 minimum,
+        out Vector2 maximum)
+    {
+        minimum =
+            new Vector2(
+                float.MaxValue,
+                float.MaxValue);
+
+        maximum =
+            new Vector2(
+                float.MinValue,
+                float.MinValue);
+
+        bool any =
+            false;
+
+        foreach (Guid id
+                 in group.MemberIds)
+        {
+            if (!TryGetNodeBounds(
+                    id,
+                    out Vector2 nodeMinimum,
+                    out Vector2 nodeMaximum))
+            {
+                continue;
+            }
+
+            minimum.X =
+                Math.Min(
+                    minimum.X,
+                    nodeMinimum.X);
+
+            minimum.Y =
+                Math.Min(
+                    minimum.Y,
+                    nodeMinimum.Y);
+
+            maximum.X =
+                Math.Max(
+                    maximum.X,
+                    nodeMaximum.X);
+
+            maximum.Y =
+                Math.Max(
+                    maximum.Y,
+                    nodeMaximum.Y);
+
+            any =
+                true;
+        }
+
+        if (!any)
+        {
+            return false;
+        }
+
+        minimum -=
+            new Vector2(
+                42.0f,
+                72.0f);
+
+        maximum +=
+            new Vector2(
+                42.0f,
+                42.0f);
+
+        return true;
+    }
+
+    private bool TryGetNodeBounds(
+        Guid id,
+        out Vector2 minimum,
+        out Vector2 maximum)
+    {
+        minimum =
+            default;
+
+        maximum =
+            default;
+
+        if (_module ==
+            null)
+        {
+            return false;
+        }
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            if (rule.Id ==
+                id)
+            {
+                minimum =
+                    new Vector2(
+                        rule.EditorX,
+                        rule.EditorY);
+
+                maximum =
+                    minimum +
+                    GetEventGraphNodeSize();
+
+                return true;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions.Concat(
+                         rule.Actions))
+            {
+                if (instruction.InstanceId !=
+                    id)
+                {
+                    continue;
+                }
+
+                minimum =
+                    new Vector2(
+                        instruction.EditorX,
+                        instruction.EditorY);
+
+                maximum =
+                    minimum +
+                    GetScaledInstructionNodeSize(
+                        instruction);
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void GetInstructionPresentation(
+        VisualInstruction instruction,
+        bool condition,
+        out string displayName,
+        out string category)
+    {
+        displayName =
             instruction.Id;
 
-        string category =
+        category =
             "Unknown";
 
         if (condition)
@@ -835,7 +2697,8 @@ internal sealed class EventWorkspacePanel
             if (_registry.TryGetCondition(
                     instruction.Id,
                     out VisualConditionDefinition? definition) &&
-                definition != null)
+                definition !=
+                null)
             {
                 displayName =
                     definition.DisplayName;
@@ -843,63 +2706,541 @@ internal sealed class EventWorkspacePanel
                 category =
                     definition.Category;
             }
+
+            return;
         }
-        else
+
+        if (_registry.TryGetAction(
+                instruction.Id,
+                out VisualActionDefinition? actionDefinition) &&
+            actionDefinition !=
+            null)
         {
-            if (_registry.TryGetAction(
-                    instruction.Id,
-                    out VisualActionDefinition? definition) &&
-                definition != null)
-            {
-                displayName =
-                    definition.DisplayName;
+            displayName =
+                actionDefinition.DisplayName;
 
-                category =
-                    definition.Category;
+            category =
+                actionDefinition.Category;
+        }
+    }
+
+    private void InitializeMissingGraphLayout()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        if (_module.EditorNodeScale <
+                0.55f ||
+            _module.EditorNodeScale >
+                1.15f)
+        {
+            _module.EditorNodeScale =
+                0.72f;
+        }
+
+        _module.EditorGroups ??=
+            new List<EventGraphGroupDefinition>();
+
+        for (int ruleIndex = 0;
+             ruleIndex < _module.Rules.Count;
+             ruleIndex++)
+        {
+            EventRuleDefinition rule =
+                _module.Rules[ruleIndex];
+
+            if (!rule.EditorLayoutInitialized)
+            {
+                Vector2 position =
+                    GetDefaultRulePosition(
+                        ruleIndex);
+
+                rule.EditorX =
+                    position.X;
+
+                rule.EditorY =
+                    position.Y;
+
+                rule.EditorLayoutInitialized =
+                    true;
+            }
+
+            InitializeMissingInstructionLayout(
+                rule);
+        }
+    }
+
+    private void InitializeMissingInstructionLayout(
+        EventRuleDefinition rule)
+    {
+        float conditionY =
+            rule.EditorY;
+
+        for (int index = 0;
+             index < rule.Conditions.Count;
+             index++)
+        {
+            VisualInstruction instruction =
+                rule.Conditions[index];
+
+            Vector2 size =
+                GetScaledInstructionNodeSize(
+                    instruction);
+
+            if (!instruction.EditorLayoutInitialized)
+            {
+                instruction.EditorX =
+                    rule.EditorX -
+                    size.X -
+                    120.0f;
+
+                instruction.EditorY =
+                    conditionY;
+
+                instruction.EditorLayoutInitialized =
+                    true;
+            }
+
+            conditionY +=
+                size.Y +
+                36.0f;
+        }
+
+        float actionX =
+            rule.EditorX +
+            GetEventGraphNodeSize().X +
+            120.0f;
+
+        for (int index = 0;
+             index < rule.Actions.Count;
+             index++)
+        {
+            VisualInstruction instruction =
+                rule.Actions[index];
+
+            Vector2 size =
+                GetScaledInstructionNodeSize(
+                    instruction);
+
+            if (!instruction.EditorLayoutInitialized)
+            {
+                instruction.EditorX =
+                    actionX;
+
+                instruction.EditorY =
+                    rule.EditorY;
+
+                instruction.EditorLayoutInitialized =
+                    true;
+            }
+
+            actionX +=
+                size.X +
+                90.0f;
+        }
+    }
+
+    private void AutoArrangeGraph()
+    {
+        if (_module ==
+            null)
+        {
+            return;
+        }
+
+        float nextY =
+            100.0f;
+
+        for (int ruleIndex = 0;
+             ruleIndex < _module.Rules.Count;
+             ruleIndex++)
+        {
+            EventRuleDefinition rule =
+                _module.Rules[ruleIndex];
+
+            rule.EditorX =
+                470.0f;
+
+            rule.EditorY =
+                nextY;
+
+            rule.EditorLayoutInitialized =
+                true;
+
+            float conditionY =
+                rule.EditorY;
+
+            float conditionTotalHeight =
+                0.0f;
+
+            for (int index = 0;
+                 index < rule.Conditions.Count;
+                 index++)
+            {
+                VisualInstruction instruction =
+                    rule.Conditions[index];
+
+                Vector2 size =
+                    GetScaledInstructionNodeSize(
+                        instruction);
+
+                instruction.EditorX =
+                    rule.EditorX -
+                    size.X -
+                    120.0f;
+
+                instruction.EditorY =
+                    conditionY;
+
+                instruction.EditorLayoutInitialized =
+                    true;
+
+                conditionY +=
+                    size.Y +
+                    36.0f;
+
+                conditionTotalHeight +=
+                    size.Y +
+                    36.0f;
+            }
+
+            float actionX =
+                rule.EditorX +
+                GetEventGraphNodeSize().X +
+                120.0f;
+
+            foreach (VisualInstruction instruction
+                     in rule.Actions)
+            {
+                Vector2 size =
+                    GetScaledInstructionNodeSize(
+                        instruction);
+
+                instruction.EditorX =
+                    actionX;
+
+                instruction.EditorY =
+                    rule.EditorY;
+
+                instruction.EditorLayoutInitialized =
+                    true;
+
+                actionX +=
+                    size.X +
+                    90.0f;
+            }
+
+            nextY +=
+                Math.Max(
+                    470.0f *
+                    GetNodeScale(),
+                    conditionTotalHeight +
+                    100.0f);
+        }
+    }
+
+    private static Vector2 GetDefaultRulePosition(
+        int index)
+    {
+        return new Vector2(
+            470.0f,
+            100.0f +
+            index *
+            560.0f);
+    }
+
+    private static Vector2 GetInstructionNodeBaseSize(
+        VisualInstruction instruction)
+    {
+        float height =
+            instruction.Id switch
+            {
+                "system.always" or
+                "system.triggerOnce" or
+                "character.isGrounded" or
+                "character.isFalling" or
+                "character.isMoving" or
+                "character.justLanded" or
+                "character.jump" or
+                "object.destroySelf" =>
+                    125.0f,
+
+                "input.keyHeld" or
+                "input.keyPressed" or
+                "input.keyReleased" =>
+                    170.0f,
+
+                "object.exists" or
+                "object.isActive" or
+                "object.destroy" =>
+                    190.0f,
+
+                "object.setActive" =>
+                    285.0f,
+
+                "character.moveForward" or
+                "character.moveRight" =>
+                    205.0f,
+
+                "character.setVelocity" or
+                "character.addImpulse" =>
+                    270.0f,
+
+                "transform.setPosition" or
+                "transform.move" or
+                "transform.setRotation" or
+                "transform.rotateBy" or
+                "transform.setScale" =>
+                    350.0f,
+
+                "transform.setX" or
+                "transform.setY" or
+                "transform.setZ" =>
+                    295.0f,
+
+                "variable.compare" =>
+                    510.0f,
+
+                "variable.set" =>
+                    390.0f,
+
+                "variable.add" or
+                "variable.subtract" =>
+                    355.0f,
+
+                "variable.toggle" =>
+                    230.0f,
+
+                _ =>
+                    220.0f
+            };
+
+        return new Vector2(
+            300.0f,
+            height);
+    }
+
+    private Vector2 GetEventConditionInput(
+        EventRuleDefinition rule)
+    {
+        Vector2 size =
+            GetEventGraphNodeSize();
+
+        return new Vector2(
+            rule.EditorX,
+            rule.EditorY +
+            Math.Min(
+                62.0f *
+                GetNodeScale(),
+                size.Y *
+                0.34f));
+    }
+
+    private Vector2 GetEventExecutionOutput(
+        EventRuleDefinition rule)
+    {
+        Vector2 size =
+            GetEventGraphNodeSize();
+
+        return new Vector2(
+            rule.EditorX +
+            size.X,
+            rule.EditorY +
+            Math.Min(
+                62.0f *
+                GetNodeScale(),
+                size.Y *
+                0.34f));
+    }
+
+    private Vector2 GetInstructionInput(
+        VisualInstruction instruction)
+    {
+        Vector2 size =
+            GetScaledInstructionNodeSize(
+                instruction);
+
+        return new Vector2(
+            instruction.EditorX,
+            instruction.EditorY +
+            Math.Min(
+                52.0f *
+                GetNodeScale(),
+                size.Y *
+                0.32f));
+    }
+
+    private Vector2 GetInstructionOutput(
+        VisualInstruction instruction)
+    {
+        Vector2 size =
+            GetScaledInstructionNodeSize(
+                instruction);
+
+        return new Vector2(
+            instruction.EditorX +
+            size.X,
+            instruction.EditorY +
+            Math.Min(
+                52.0f *
+                GetNodeScale(),
+                size.Y *
+                0.32f));
+    }
+
+    private void BeginNodeDragHistory(
+        Guid nodeId,
+        string label)
+    {
+        if (_dragHistoryNodeId ==
+            nodeId)
+        {
+            return;
+        }
+
+        RecordHistory(
+            label);
+
+        _dragHistoryNodeId =
+            nodeId;
+    }
+
+    private static void MoveRuleAndChildren(
+        EventRuleDefinition rule,
+        Vector2 delta)
+    {
+        rule.EditorX +=
+            delta.X;
+
+        rule.EditorY +=
+            delta.Y;
+
+        foreach (VisualInstruction instruction
+                 in rule.Conditions)
+        {
+            instruction.EditorX +=
+                delta.X;
+
+            instruction.EditorY +=
+                delta.Y;
+        }
+
+        foreach (VisualInstruction instruction
+                 in rule.Actions)
+        {
+            instruction.EditorX +=
+                delta.X;
+
+            instruction.EditorY +=
+                delta.Y;
+        }
+    }
+
+    private void FrameEntireGraph()
+    {
+        if (_module ==
+                null ||
+            _module.Rules.Count ==
+                0)
+        {
+            _graphCanvas.ResetView();
+            return;
+        }
+
+        Vector2 minimum =
+            new(
+                float.MaxValue,
+                float.MaxValue);
+
+        Vector2 maximum =
+            new(
+                float.MinValue,
+                float.MinValue);
+
+        foreach (EventRuleDefinition rule
+                 in _module.Rules)
+        {
+            IncludeGraphRect(
+                ref minimum,
+                ref maximum,
+                new Vector2(
+                    rule.EditorX,
+                    rule.EditorY),
+                GetEventGraphNodeSize());
+
+            if (rule.EditorCollapsed)
+            {
+                continue;
+            }
+
+            foreach (VisualInstruction instruction
+                     in rule.Conditions.Concat(
+                         rule.Actions))
+            {
+                IncludeGraphRect(
+                    ref minimum,
+                    ref maximum,
+                    new Vector2(
+                        instruction.EditorX,
+                        instruction.EditorY),
+                    GetScaledInstructionNodeSize(
+                        instruction));
             }
         }
 
-        ImGui.Separator();
+        foreach (EventGraphGroupDefinition group
+                 in _module.EditorGroups)
+        {
+            if (!TryGetGroupBounds(
+                    group,
+                    out Vector2 groupMinimum,
+                    out Vector2 groupMaximum))
+            {
+                continue;
+            }
 
-        ImGui.TextDisabled(
-            $"{index + 1:00}");
+            IncludeGraphRect(
+                ref minimum,
+                ref maximum,
+                groupMinimum,
+                groupMaximum -
+                groupMinimum);
+        }
 
-        ImGui.SameLine();
+        _graphCanvas.FrameBounds(
+            minimum,
+            maximum);
+    }
 
-        ImGui.Text(
-            displayName);
+    private static void IncludeGraphRect(
+        ref Vector2 minimum,
+        ref Vector2 maximum,
+        Vector2 position,
+        Vector2 size)
+    {
+        minimum.X =
+            Math.Min(
+                minimum.X,
+                position.X);
 
-        /*
-         * Keep the remove control directly beside the instruction
-         * title instead of trying to right-align it inside the event
-         * table cell. The previous right-edge calculation could place
-         * the Actions-side X outside the visible column, making actions
-         * appear impossible to delete.
-         */
-        ImGui.SameLine();
+        minimum.Y =
+            Math.Min(
+                minimum.Y,
+                position.Y);
 
-        string removeLabel =
-            condition
-                ? "Remove Condition"
-                : "Remove Action";
+        maximum.X =
+            Math.Max(
+                maximum.X,
+                position.X +
+                size.X);
 
-        bool remove =
-            ImGui.SmallButton(
-                removeLabel);
-
-        ImGui.TextDisabled(
-            category);
-
-        ImGui.Dummy(
-            new Vector2(
-                0.0f,
-                5.0f));
-
-        DrawInstructionArguments(
-            instruction,
-            state);
-
-        return remove;
+        maximum.Y =
+            Math.Max(
+                maximum.Y,
+                position.Y +
+                size.Y);
     }
 
     // ========================================================

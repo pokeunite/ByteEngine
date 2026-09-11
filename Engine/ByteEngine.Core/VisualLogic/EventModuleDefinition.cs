@@ -27,6 +27,17 @@ public sealed class EventModuleDefinition
     public List<EventRuleDefinition> Rules { get; set; } =
         new();
 
+    /*
+     * ByteGraph editor metadata.
+     *
+     * This does not affect runtime execution.
+     */
+    public float EditorNodeScale { get; set; } =
+        0.72f;
+
+    public List<EventGraphGroupDefinition> EditorGroups { get; set; } =
+        new();
+
     public IReadOnlyList<string> Validate(
         GameObject target)
     {
@@ -82,6 +93,20 @@ public sealed class EventRuleDefinition
 
     public List<EventRuleDefinition> SubEvents { get; set; } =
         new();
+
+    /*
+     * ByteGraph editor metadata.
+     */
+    public string EditorTitle { get; set; } =
+        string.Empty;
+
+    public bool EditorCollapsed { get; set; }
+
+    public bool EditorLayoutInitialized { get; set; }
+
+    public float EditorX { get; set; }
+
+    public float EditorY { get; set; }
 }
 
 public sealed class VisualInstruction
@@ -101,4 +126,30 @@ public sealed class VisualInstruction
 
     public Dictionary<string, EventValue> Arguments { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /*
+     * ByteGraph editor metadata.
+     */
+    public bool EditorLayoutInitialized { get; set; }
+
+    public float EditorX { get; set; }
+
+    public float EditorY { get; set; }
+}
+
+public sealed class EventGraphGroupDefinition
+{
+    public Guid Id { get; set; } =
+        Guid.NewGuid();
+
+    public string Title { get; set; } =
+        "Comment";
+
+    /*
+     * A group tracks node ids rather than storing a fixed box.
+     * The editor recomputes the box from its member nodes, so the
+     * comment box follows nodes when they are moved.
+     */
+    public List<Guid> MemberIds { get; set; } =
+        new();
 }
