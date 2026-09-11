@@ -3,7 +3,7 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public sealed class Mesh : IDisposable
 {
-    private readonly float[] _vertices; private readonly uint[] _indices;
+    private float[] _vertices; private uint[] _indices;
     private int _vertexArray, _vertexBuffer, _elementBuffer;
     public int IndexCount => _indices.Length;
     public bool IsUploaded => _vertexArray != 0;
@@ -14,6 +14,15 @@ public sealed class Mesh : IDisposable
         _vertices=vertices; _indices=indices;
     }
     internal void Bind() { if (!IsUploaded) Upload(); GL.BindVertexArray(_vertexArray); }
+    internal void ReplaceData(float[] vertices, uint[] indices)
+    {
+        ArgumentNullException.ThrowIfNull(vertices);
+        ArgumentNullException.ThrowIfNull(indices);
+        if (vertices.Length % 8 != 0) throw new ArgumentException("Vertices must use position/normal/UV layout.", nameof(vertices));
+        DisposeGpuResources();
+        _vertices = vertices;
+        _indices = indices;
+    }
     private void Upload()
     {
         _vertexArray=GL.GenVertexArray(); _vertexBuffer=GL.GenBuffer(); _elementBuffer=GL.GenBuffer();
@@ -26,5 +35,13 @@ public sealed class Mesh : IDisposable
         GL.EnableVertexAttribArray(1); GL.VertexAttribPointer(1,3,VertexAttribPointerType.Float,false,stride,3*sizeof(float));
         GL.EnableVertexAttribArray(2); GL.VertexAttribPointer(2,2,VertexAttribPointerType.Float,false,stride,6*sizeof(float)); GL.BindVertexArray(0);
     }
-    public void Dispose() { if(_elementBuffer!=0)GL.DeleteBuffer(_elementBuffer); if(_vertexBuffer!=0)GL.DeleteBuffer(_vertexBuffer); if(_vertexArray!=0)GL.DeleteVertexArray(_vertexArray); _elementBuffer=_vertexBuffer=_vertexArray=0; }
+    public void Dispose() => DisposeGpuResources();
+
+    private void DisposeGpuResources()
+    {
+        if (_elementBuffer != 0) GL.DeleteBuffer(_elementBuffer);
+        if (_vertexBuffer != 0) GL.DeleteBuffer(_vertexBuffer);
+        if (_vertexArray != 0) GL.DeleteVertexArray(_vertexArray);
+        _elementBuffer = _vertexBuffer = _vertexArray = 0;
+    }
 }

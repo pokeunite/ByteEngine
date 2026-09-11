@@ -210,6 +210,19 @@ public sealed class AssetDatabase : IDisposable
         Scan();
     }
 
+    public void SetModelImporterSettings(
+        Guid guid,
+        float importScale,
+        bool generateNormals,
+        bool preferEmbeddedMaterials)
+    {
+        if (!TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D) return;
+        record.Metadata.ModelImporter.ImportScale = Math.Max(importScale, .0001f);
+        record.Metadata.ModelImporter.GenerateNormals = generateNormals;
+        record.Metadata.ModelImporter.PreferEmbeddedMaterials = preferEmbeddedMaterials;
+        WriteMetadata(record.MetaPath, record.Metadata);
+    }
+
     public string ResolveProjectPath(string projectPath)
     {
         string fullPath = Path.GetFullPath(Path.Combine(_projectRoot, projectPath.Replace('/', Path.DirectorySeparatorChar)));

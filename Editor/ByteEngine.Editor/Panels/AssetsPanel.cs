@@ -1,4 +1,7 @@
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Blueprints;
+using ByteEngine.Core.Serialization.SerializationModels;
+using System.Text.Json.Nodes;
 using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
@@ -10,12 +13,17 @@ internal sealed class AssetsPanel
     private readonly List<string> _directories = new();
     private readonly List<string> _files = new();
     private bool _listingDirty = true;
+    private readonly Action<AssetRecord> _openAsset;
+    private bool _showCreateBlueprint;
+    private string _blueprintName = "New Blueprint";
+    private int _blueprintType;
 
     public bool IsOpen { get; set; } = true;
 
-    public AssetsPanel(EditorProjectContext project)
+    public AssetsPanel(EditorProjectContext project, Action<AssetRecord> openAsset)
     {
         _project = project;
+        _openAsset = openAsset;
         _project.AssetDatabase.DatabaseChanged += () => _listingDirty = true;
     }
 
@@ -79,6 +87,9 @@ internal sealed class AssetsPanel
                 AssetType.Texture2D => "[IMG]",
                 AssetType.Scene => "[SCN]",
                 AssetType.Model3D => "[3D]",
+                AssetType.Blueprint => "[BP]",
+                AssetType.EventModule => "[EVT]",
+                AssetType.AnimationEvents => "[ANIM]",
                 _ => "[FILE]"
             };
             bool selected = string.Equals(state.SelectedAssetPath, projectPath, StringComparison.OrdinalIgnoreCase);
@@ -87,17 +98,97 @@ internal sealed class AssetsPanel
                 state.SelectedAssetId = asset?.Guid;
                 state.SelectedAssetPath = projectPath;
                 state.SelectedObject = null;
+                if (asset != null && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                    _openAsset(asset);
             }
 
-            if (asset?.Type == AssetType.Texture2D && ImGui.BeginDragDropSource())
+            if (asset != null &&
+                asset.Type is AssetType.Texture2D or AssetType.Model3D or AssetType.Blueprint &&
+                ImGui.BeginDragDropSource())
             {
                 AssetDragDrop.Set(asset.Guid);
-                ImGui.Text($"Texture: {Path.GetFileName(file)}");
+                ImGui.Text($"{asset.Type}: {Path.GetFileName(file)}");
                 ImGui.EndDragDropSource();
             }
         }
 
+        if (ImGui.BeginPopupContextWindow("Assets Context", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
+        {
+            if (ImGui.BeginMenu("Create"))
+            {
+                if (ImGui.MenuItem("Byte Blueprint")) _showCreateBlueprint = true;
+                ImGui.EndMenu();
+            }
+            ImGui.EndPopup();
+        }
+
+        DrawCreateBlueprintDialog(log);
+
         ImGui.End();
+    }
+
+    private void DrawCreateBlueprintDialog(EditorLog log)
+    {
+        if (_showCreateBlueprint)
+        {
+            ImGui.OpenPopup("Create Byte Blueprint");
+            _showCreateBlueprint = false;
+        }
+        if (!ImGui.BeginPopupModal("Create Byte Blueprint", ImGuiWindowFlags.AlwaysAutoResize)) return;
+
+        ImGui.InputText("Name", ref _blueprintName, 128);
+        ImGui.Combo("Type", ref _blueprintType, "Generic Object\0Character\0");
+        bool valid = !string.IsNullOrWhiteSpace(_blueprintName);
+        ImGui.BeginDisabled(!valid);
+        if (ImGui.Button("Create", new System.Numerics.Vector2(100f, 0f)))
+        {
+            try
+            {
+                string directory = _currentDirectory ?? _project.ResolveProjectPath(_project.Project.AssetDirectory);
+                string safeName = string.Concat(_blueprintName.Trim().Select(character =>
+                    Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
+                string path = Path.Combine(directory, safeName + ".byteblueprint");
+                if (File.Exists(path)) throw new IOException("A Blueprint with that name already exists.");
+                BlueprintType type = (BlueprintType)_blueprintType;
+                var root = new GameObjectData { Id = Guid.NewGuid(), Name = safeName };
+                if (type == BlueprintType.Character)
+                {
+                    root.Components.Add(new ComponentData { Type = "CharacterController3D" });
+                    root.Components.Add(new ComponentData
+                    {
+                        Type = "CapsuleCollider3D",
+                        Properties = new JsonObject { ["radius"] = .5f, ["height"] = 2f }
+                    });
+                    root.Components.Add(new ComponentData { Type = "AnimationController" });
+                }
+                var blueprint = new BlueprintDefinition
+                {
+                    Name = safeName,
+                    Type = type,
+                    Root = root,
+                    Variables = type == BlueprintType.Character
+                        ? new List<VariableData>
+                        {
+                            new() { Name = "Health", Value = ByteEngine.Core.Variables.VariableValue.FromNumber(100) },
+                            new() { Name = "MoveSpeed", Value = ByteEngine.Core.Variables.VariableValue.FromNumber(6) },
+                            new() { Name = "Team", Value = ByteEngine.Core.Variables.VariableValue.FromString("Player") }
+                        }
+                        : new List<VariableData>()
+                };
+                new BlueprintSerializer().Save(blueprint, path);
+                _project.AssetDatabase.Scan();
+                log.Info($"Created {type} Blueprint '{Path.GetFileName(path)}'.");
+                ImGui.CloseCurrentPopup();
+            }
+            catch (Exception exception)
+            {
+                log.Error($"Could not create Blueprint: {exception.Message}");
+            }
+        }
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel", new System.Numerics.Vector2(100f, 0f))) ImGui.CloseCurrentPopup();
+        ImGui.EndPopup();
     }
 
     private void DrawRootFolder(string relativePath)

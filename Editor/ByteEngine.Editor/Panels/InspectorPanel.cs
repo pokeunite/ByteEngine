@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;
@@ -110,8 +111,11 @@ internal sealed class InspectorPanel
             DrawAddComponentItem<Camera3D>("Camera3D", selected, state, () => new Camera3D());
             DrawAddComponentItem<DirectionalLight>("DirectionalLight", selected, state, () => new DirectionalLight());
             DrawAddComponentItem<BoxCollider3D>("BoxCollider3D", selected, state, () => new BoxCollider3D());
+            DrawAddComponentItem<CapsuleCollider3D>("CapsuleCollider3D", selected, state, () => new CapsuleCollider3D());
             DrawAddComponentItem<GroundSurface>("GroundSurface", selected, state, () => new GroundSurface());
             DrawAddComponentItem<CharacterController3D>("CharacterController3D", selected, state, () => new CharacterController3D());
+            DrawAddComponentItem<AnimationController>("AnimationController", selected, state, () => new AnimationController());
+            DrawAddComponentItem<SkeletalMeshRenderer>("SkeletalMeshRenderer", selected, state, () => new SkeletalMeshRenderer());
             ImGui.EndPopup();
         }
 
@@ -283,6 +287,23 @@ internal sealed class InspectorPanel
             DrawBooleanProperty(state, $"Is Trigger##{component.GetHashCode()}", "Set Collider Trigger",
                 () => collider.IsTrigger, value => collider.IsTrigger = value);
         }
+        else if (component is CapsuleCollider3D capsule)
+        {
+            DrawFloatProperty(state, $"Radius##{component.GetHashCode()}", "Change Capsule Radius",
+                () => capsule.Radius, value => capsule.Radius = value, .01f, .001f, 1000f);
+            DrawFloatProperty(state, $"Height##{component.GetHashCode()}", "Change Capsule Height",
+                () => capsule.Height, value => capsule.Height = value, .02f, .002f, 1000f);
+
+            Vector3 oldCenter = capsule.Center;
+            Vector3 center = oldCenter;
+            bool centerChanged = ImGui.DragFloat3(
+                $"Center##capsule{component.GetHashCode()}", ref center, .02f);
+            if (centerChanged) capsule.Center = center;
+            TrackItem(state, "Change Capsule Center", centerChanged,
+                () => capsule.Center = oldCenter, () => capsule.Center = center);
+            DrawBooleanProperty(state, $"Is Trigger##capsule{component.GetHashCode()}", "Set Capsule Trigger",
+                () => capsule.IsTrigger, value => capsule.IsTrigger = value);
+        }
         else if (component is CharacterController3D controller)
         {
             DrawFloatProperty(state, $"Move Speed##{component.GetHashCode()}", "Change Move Speed",
@@ -309,6 +330,30 @@ internal sealed class InspectorPanel
                 () => controller.JumpBuffer, value => controller.JumpBuffer = value, .01f, 0f, 10f);
             DrawBooleanProperty(state, $"Snap To Ground##{component.GetHashCode()}", "Set Snap To Ground",
                 () => controller.SnapToGround, value => controller.SnapToGround = value);
+        }
+        else if (component is AnimationController animation)
+        {
+            DrawStringProperty(state, $"Idle##{component.GetHashCode()}", "Change Idle Animation",
+                () => animation.Idle, value => animation.Idle = value, 128);
+            DrawStringProperty(state, $"Walk##{component.GetHashCode()}", "Change Walk Animation",
+                () => animation.Walk, value => animation.Walk = value, 128);
+            DrawStringProperty(state, $"Run##{component.GetHashCode()}", "Change Run Animation",
+                () => animation.Run, value => animation.Run = value, 128);
+            DrawStringProperty(state, $"Jump##{component.GetHashCode()}", "Change Jump Animation",
+                () => animation.Jump, value => animation.Jump = value, 128);
+            DrawStringProperty(state, $"Fall##{component.GetHashCode()}", "Change Fall Animation",
+                () => animation.Fall, value => animation.Fall = value, 128);
+            DrawStringProperty(state, $"Land##{component.GetHashCode()}", "Change Land Animation",
+                () => animation.Land, value => animation.Land = value, 128);
+            DrawFloatProperty(state, $"Run Threshold##{component.GetHashCode()}", "Change Run Threshold",
+                () => animation.RunThreshold, value => animation.RunThreshold = value, .05f, 0f, 1000f);
+        }
+        else if (component is SkeletalMeshRenderer skeletal)
+        {
+            ImGui.TextDisabled($"Model: {skeletal.Model}");
+            ImGui.TextDisabled($"Skeleton: {skeletal.SkeletonKey ?? "None"}");
+            DrawBooleanProperty(state, $"Visible##skeletal{component.GetHashCode()}", "Set Skeletal Mesh Visibility",
+                () => skeletal.Visible, value => skeletal.Visible = value);
         }
         ImGui.Unindent();
     }
@@ -545,8 +590,32 @@ internal sealed class InspectorPanel
         ImGui.TextDisabled($"GUID: {asset.Guid}");
         if (asset.Type == AssetType.Model3D)
         {
-            ImGui.SeparatorText("3D Model");
-            ImGui.TextWrapped("The source model is registered in the project. FBX/GLB mesh conversion and scene placement are not implemented yet.");
+            ImGui.SeparatorText("MODEL IMPORT SETTINGS");
+            try
+            {
+                ModelAsset model = project.Assets.LoadModel(new AssetReference(asset.Guid, asset.ProjectPath));
+                ImGui.Text($"Source: {Path.GetFileName(asset.ProjectPath)}");
+                ImGui.Text($"Meshes: {model.Meshes.Count}");
+                ImGui.Text($"Materials: {model.Materials.Count}");
+                ImGui.Text($"Skeleton: {model.Skeleton?.Name ?? "None"}");
+                ImGui.Text($"Animations: {model.Animations.Count}");
+
+                float scale = asset.Metadata.ModelImporter.ImportScale;
+                bool generateNormals = asset.Metadata.ModelImporter.GenerateNormals;
+                bool embeddedMaterials = asset.Metadata.ModelImporter.PreferEmbeddedMaterials;
+                bool changed = ImGui.DragFloat("Import Scale", ref scale, .01f, .0001f, 1000f);
+                changed |= ImGui.Checkbox("Generate Normals", ref generateNormals);
+                changed |= ImGui.Checkbox("Prefer Embedded Materials", ref embeddedMaterials);
+                if (changed)
+                    project.AssetDatabase.SetModelImporterSettings(
+                        asset.Guid, scale, generateNormals, embeddedMaterials);
+                if (ImGui.Button("Reimport")) project.Assets.ReimportModel(asset.Guid);
+            }
+            catch (Exception exception)
+            {
+                ImGui.TextColored(new Vector4(1f, .35f, .35f, 1f), "Model import failed");
+                ImGui.TextWrapped(exception.Message);
+            }
             return;
         }
         if (asset.Type != AssetType.Texture2D) return;

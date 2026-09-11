@@ -2,6 +2,5 @@ namespace ByteEngine.Core;
 
 public static class ByteEngineInfo
 {
-    public const string Version =
-        "0.5.0";
+    public const string Version = "0.6.0";
 }

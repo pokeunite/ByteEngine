@@ -44,6 +44,8 @@ public sealed class EditorApplication
 
     private readonly ProjectBrowserPanel _projectBrowser = new();
 
+    private readonly BlueprintWorkspacePanel _blueprintWorkspace = new();
+
     private readonly EditorClipboard _clipboard = new();
 
     private ImGuiController? _imgui;
@@ -194,6 +196,7 @@ public sealed class EditorApplication
     {
         _sceneView.Dispose();
         _gameView.Dispose();
+        _blueprintWorkspace.Dispose();
         _projectContext?.Dispose();
         _projectContext = null;
 
@@ -238,6 +241,8 @@ public sealed class EditorApplication
                 FramebufferSize.Y,
                 _projectContext!,
                 CreateSpriteFromAsset,
+                CreateModelFromAsset,
+                CreateBlueprintFromAsset,
                 position => CreateObjectAtPosition("GameObject", position, null),
                 position => CreateObjectAtPosition("Sprite", position, () => new SpriteRenderer()),
                 position => CreateObjectAtPosition("Camera", position, () => new Camera2D()),
@@ -264,6 +269,9 @@ public sealed class EditorApplication
                 _log
             );
         }
+
+        _blueprintWorkspace.Draw(
+            Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
     }
 
     private void DrawMainMenu()
@@ -883,7 +891,7 @@ public sealed class EditorApplication
         _projectContext =
             context;
 
-        _assets = new AssetsPanel(context);
+        _assets = new AssetsPanel(context, OpenAsset);
 
         _assets.Refresh(
             _log
@@ -1017,6 +1025,50 @@ public sealed class EditorApplication
                 exception
             );
         }
+    }
+
+    private void OpenAsset(AssetRecord asset)
+    {
+        if (_projectContext == null) return;
+        try
+        {
+            if (asset.Type == AssetType.Blueprint)
+            {
+                _blueprintWorkspace.Open(asset, _projectContext);
+                _log.Info($"Opened Blueprint '{asset.ProjectPath}'.");
+            }
+            else if (asset.Type == AssetType.Scene)
+            {
+                RequestAfterUnsavedCheck(() => OpenSceneAsset(asset));
+            }
+            else if (asset.Type == AssetType.Model3D && _state != null)
+            {
+                _state.SelectedObject = null;
+                _state.SelectedAssetId = asset.Guid;
+                _state.SelectedAssetPath = asset.ProjectPath;
+            }
+        }
+        catch (Exception exception)
+        {
+            ReportError($"Could not open '{asset.ProjectPath}'", exception);
+        }
+    }
+
+    private void OpenSceneAsset(AssetRecord asset)
+    {
+        if (_projectContext == null) return;
+        Scene scene = _projectContext.Scenes.Load(asset.FullPath);
+        Scenes.SetEditorScene(scene);
+        _state = new EditorState
+        {
+            EditorScene = scene,
+            Project = _projectContext.Project,
+            ProjectFilePath = _projectContext.ProjectFilePath,
+            SceneFilePath = asset.FullPath,
+            SelectedObject = scene.GameObjects.FirstOrDefault()
+        };
+        InitializeUndo(_state, _projectContext, true);
+        _log.Info($"Opened scene '{asset.ProjectPath}'.");
     }
 
     private bool SaveScene()
@@ -1306,6 +1358,43 @@ public sealed class EditorApplication
         if (_state.Undo != null)
             _state.Undo.Execute(_state, "Create Sprite", () => EditorSceneCommands.CreateSprite(_state, _projectContext, asset, worldPosition, _log));
         else EditorSceneCommands.CreateSprite(_state, _projectContext, asset, worldPosition, _log);
+    }
+
+    private void CreateModelFromAsset(AssetRecord asset, Vector3 worldPosition)
+    {
+        if (_state == null || _projectContext == null) return;
+        try
+        {
+            if (_state.Undo != null)
+                _state.Undo.Execute(
+                    _state,
+                    "Instantiate Model",
+                    () => EditorSceneCommands.CreateModel(
+                        _state, _projectContext, asset, worldPosition, _log));
+            else
+                EditorSceneCommands.CreateModel(
+                    _state, _projectContext, asset, worldPosition, _log);
+        }
+        catch (Exception exception)
+        {
+            _log.Error($"Could not instantiate model '{asset.ProjectPath}': {exception.Message}");
+        }
+    }
+
+    private void CreateBlueprintFromAsset(AssetRecord asset, Vector3 worldPosition)
+    {
+        if (_state == null || _projectContext == null) return;
+        try
+        {
+            Action create = () => EditorSceneCommands.CreateBlueprintInstance(
+                _state, _projectContext, asset, worldPosition, _log);
+            if (_state.Undo != null) _state.Undo.Execute(_state, "Instantiate Blueprint", create);
+            else create();
+        }
+        catch (Exception exception)
+        {
+            _log.Error($"Could not instantiate Blueprint '{asset.ProjectPath}': {exception.Message}");
+        }
     }
 
     private void CopySelectedObjects()

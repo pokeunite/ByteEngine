@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
@@ -6,6 +7,8 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 public sealed class MeshRenderer : Component
 {
     public Mesh? Mesh { get; set; }
+    public ModelMeshReference? MeshReference { get; set; }
+    public ModelMaterialReference? MaterialReference { get; set; }
     public PrimitiveMeshType Primitive { get; set; } = PrimitiveMeshType.Cube;
     public Material Material { get; set; } = new();
     public bool Visible { get; set; } = true;

@@ -144,11 +144,26 @@ public sealed class Texture2D
         );
     }
 
+    internal static Texture2D FromEncodedBytes(byte[] encodedData, TextureFilter filter = TextureFilter.Linear)
+    {
+        ArgumentNullException.ThrowIfNull(encodedData);
+        using var stream = new MemoryStream(encodedData, false);
+        ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+        return new Texture2D(image.Width, image.Height, image.Data, filter);
+    }
+
     internal void Reload(string filePath, TextureFilter filter)
     {
         using FileStream stream = File.OpenRead(filePath);
         ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
         ReplacePixels(image.Width, image.Height, image.Data, filter, Path.GetFullPath(filePath));
+    }
+
+    internal void ReloadEncoded(byte[] encodedData, TextureFilter filter = TextureFilter.Linear)
+    {
+        using var stream = new MemoryStream(encodedData, false);
+        ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+        ReplacePixels(image.Width, image.Height, image.Data, filter, null);
     }
 
     internal void ReplaceWithMissing()

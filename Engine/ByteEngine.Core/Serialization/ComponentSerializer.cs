@@ -2,6 +2,8 @@ using System.Numerics;
 using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Animation;
+using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;
@@ -50,6 +52,10 @@ public sealed class ComponentSerializer
         Register(new GroundSurfaceCodec());
         Register(new BoxCollider3DCodec());
         Register(new CharacterController3DCodec());
+        Register(new CapsuleCollider3DCodec());
+        Register(new AnimationControllerCodec());
+        Register(new BlueprintInstanceCodec());
+        Register(new SkeletalMeshRendererCodec());
     }
 
     public void Register(
@@ -417,16 +423,27 @@ public sealed class ComponentSerializer
         public ComponentData Serialize(Component component, ComponentSerializationContext context)
         {
             var renderer = (MeshRenderer)component;
-            return Data(TypeName, new JsonObject
+            var properties = new JsonObject
             {
                 ["primitive"] = renderer.Primitive.ToString(),
                 ["visible"] = renderer.Visible,
+                ["metallic"] = renderer.Material.Metallic,
+                ["roughness"] = renderer.Material.Roughness,
                 ["baseColor"] = new JsonArray(
                     renderer.Material.BaseColor.X,
                     renderer.Material.BaseColor.Y,
                     renderer.Material.BaseColor.Z,
                     renderer.Material.BaseColor.W)
-            });
+            };
+            if (renderer.MeshReference != null)
+            {
+                properties["modelGuid"] = renderer.MeshReference.Model.Guid.ToString();
+                properties["modelPath"] = renderer.MeshReference.Model.CachedProjectPath;
+                properties["meshKey"] = renderer.MeshReference.SubAssetKey;
+            }
+            if (renderer.MaterialReference != null)
+                properties["materialKey"] = renderer.MaterialReference.SubAssetKey;
+            return Data(TypeName, properties);
         }
 
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -443,12 +460,40 @@ public sealed class ComponentSerializer
                     colorData[2]!.GetValue<float>(),
                     colorData[3]!.GetValue<float>())
                 : Vector4.One;
-            return new MeshRenderer
+            var material = new Material
+            {
+                BaseColor = color,
+                Metallic = Float(data, "metallic", 0f),
+                Roughness = Float(data, "roughness", 1f)
+            };
+            var renderer = new MeshRenderer
             {
                 Primitive = primitive,
                 Visible = data.Properties["visible"]?.GetValue<bool>() ?? true,
-                Material = new Material { BaseColor = color }
+                Material = material
             };
+            string? meshKey = data.Properties["meshKey"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(meshKey))
+            {
+                Guid.TryParse(data.Properties["modelGuid"]?.GetValue<string>(), out Guid modelGuid);
+                string? modelPath = data.Properties["modelPath"]?.GetValue<string>();
+                var modelReference = new AssetReference(modelGuid, modelPath);
+                renderer.MeshReference = new ModelMeshReference(modelReference, meshKey);
+                string? materialKey = data.Properties["materialKey"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(materialKey))
+                    renderer.MaterialReference = new ModelMaterialReference(modelReference, materialKey);
+                try
+                {
+                    renderer.Mesh = context.Assets.GetModelMesh(modelReference, meshKey);
+                    if (renderer.MaterialReference != null)
+                        renderer.Material = context.Assets.GetModelMaterial(modelReference, renderer.MaterialReference.SubAssetKey);
+                }
+                catch (Exception exception)
+                {
+                    context.WarningSink?.Invoke($"Could not resolve imported mesh '{meshKey}': {exception.Message}");
+                }
+            }
+            return renderer;
         }
     }
 
@@ -545,11 +590,138 @@ public sealed class ComponentSerializer
             };
     }
 
+    private sealed class CapsuleCollider3DCodec : IComponentCodec
+    {
+        public string TypeName => "CapsuleCollider3D";
+        public Type ComponentType => typeof(CapsuleCollider3D);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var collider = (CapsuleCollider3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["radius"] = collider.Radius,
+                ["height"] = collider.Height,
+                ["center"] = Array(collider.Center),
+                ["isTrigger"] = collider.IsTrigger
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new CapsuleCollider3D
+            {
+                Radius = Float(data, "radius", .5f),
+                Height = Float(data, "height", 2f),
+                Center = Vector3(data.Properties["center"], System.Numerics.Vector3.Zero),
+                IsTrigger = data.Properties["isTrigger"]?.GetValue<bool>() ?? false
+            };
+    }
+
+    private sealed class AnimationControllerCodec : IComponentCodec
+    {
+        public string TypeName => "AnimationController";
+        public Type ComponentType => typeof(AnimationController);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var controller = (AnimationController)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["idle"] = controller.Idle,
+                ["walk"] = controller.Walk,
+                ["run"] = controller.Run,
+                ["jump"] = controller.Jump,
+                ["fall"] = controller.Fall,
+                ["land"] = controller.Land,
+                ["runThreshold"] = controller.RunThreshold
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new AnimationController
+            {
+                Idle = Text(data, "idle", "Idle"),
+                Walk = Text(data, "walk", "Walk"),
+                Run = Text(data, "run", "Run"),
+                Jump = Text(data, "jump", "Jump"),
+                Fall = Text(data, "fall", "Fall"),
+                Land = Text(data, "land", "Land"),
+                RunThreshold = Float(data, "runThreshold", 4f)
+            };
+    }
+
+    private sealed class BlueprintInstanceCodec : IComponentCodec
+    {
+        public string TypeName => "BlueprintInstance";
+        public Type ComponentType => typeof(BlueprintInstance);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var instance = (BlueprintInstance)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["blueprintGuid"] = instance.Blueprint.Guid.ToString(),
+                ["blueprintPath"] = instance.Blueprint.CachedProjectPath,
+                ["instanceId"] = instance.InstanceId.ToString()
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(data.Properties["blueprintGuid"]?.GetValue<string>(), out Guid blueprintGuid);
+            Guid.TryParse(data.Properties["instanceId"]?.GetValue<string>(), out Guid instanceId);
+            return new BlueprintInstance
+            {
+                Blueprint = new AssetReference(
+                    blueprintGuid, data.Properties["blueprintPath"]?.GetValue<string>()),
+                InstanceId = instanceId == Guid.Empty ? Guid.NewGuid() : instanceId
+            };
+        }
+    }
+
+    private sealed class SkeletalMeshRendererCodec : IComponentCodec
+    {
+        public string TypeName => "SkeletalMeshRenderer";
+        public Type ComponentType => typeof(SkeletalMeshRenderer);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var renderer = (SkeletalMeshRenderer)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["modelGuid"] = renderer.Model.Guid.ToString(),
+                ["modelPath"] = renderer.Model.CachedProjectPath,
+                ["skeletonKey"] = renderer.SkeletonKey,
+                ["materialKeys"] = new JsonArray(
+                    renderer.MaterialKeys.Select(key => (JsonNode?)JsonValue.Create(key)).ToArray()),
+                ["visible"] = renderer.Visible
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(data.Properties["modelGuid"]?.GetValue<string>(), out Guid modelGuid);
+            var materials = data.Properties["materialKeys"] is JsonArray array
+                ? array.Select(node => node?.GetValue<string>()).Where(value => value != null).Cast<string>().ToList()
+                : new List<string>();
+            return new SkeletalMeshRenderer
+            {
+                Model = new AssetReference(modelGuid, data.Properties["modelPath"]?.GetValue<string>()),
+                SkeletonKey = data.Properties["skeletonKey"]?.GetValue<string>(),
+                MaterialKeys = materials,
+                Visible = data.Properties["visible"]?.GetValue<bool>() ?? true
+            };
+        }
+    }
+
     private static ComponentData Data(string type, JsonObject properties) =>
         new() { Type = type, Properties = properties };
 
     private static float Float(ComponentData data, string name, float fallback) =>
         data.Properties[name]?.GetValue<float>() ?? fallback;
+
+    private static string Text(ComponentData data, string name, string fallback) =>
+        data.Properties[name]?.GetValue<string>() ?? fallback;
 
     private static JsonArray Array(System.Numerics.Vector3 value) =>
         new(value.X, value.Y, value.Z);

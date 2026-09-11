@@ -13,3 +13,31 @@ public sealed class BoxCollider3D : Collider3D
 {
     public override Vector3 Size { get; set; } = Vector3.One;
 }
+
+public sealed class CapsuleCollider3D : Collider3D
+{
+    private float _radius = .5f;
+    private float _height = 2f;
+
+    public float Radius
+    {
+        get => _radius;
+        set => _radius = Math.Max(value, .001f);
+    }
+
+    public float Height
+    {
+        get => _height;
+        set => _height = Math.Max(value, Radius * 2f);
+    }
+
+    public override Vector3 Size
+    {
+        get => new(Radius * 2f, Height, Radius * 2f);
+        set
+        {
+            Radius = Math.Max(value.X, value.Z) * .5f;
+            Height = value.Y;
+        }
+    }
+}

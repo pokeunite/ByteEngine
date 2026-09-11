@@ -9,6 +9,8 @@ public sealed class AssetMetadata
     public AssetType Type { get; set; }
 
     public TextureImporterSettings Importer { get; set; } = new();
+
+    public Importers.ModelImporterSettings ModelImporter { get; set; } = new();
 }
 
 public sealed class TextureImporterSettings

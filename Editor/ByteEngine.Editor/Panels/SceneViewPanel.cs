@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -35,6 +36,8 @@ internal sealed class SceneViewPanel : IDisposable
         int windowHeight,
         EditorProjectContext project,
         Action<AssetRecord, Vector2> createSpriteFromAsset,
+        Action<AssetRecord, Vector3> createModelFromAsset,
+        Action<AssetRecord, Vector3> createBlueprintFromAsset,
         Action<Vector3> createEmpty,
         Action<Vector3> createSprite,
         Action<Vector3> createCamera,
@@ -59,14 +62,22 @@ internal sealed class SceneViewPanel : IDisposable
         if (ImGui.BeginDragDropTarget())
         {
             Guid? guid = AssetDragDrop.Accept();
-            if (!_is3D && guid.HasValue && project.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Texture2D)
-                createSpriteFromAsset(asset, GizmoController.ScreenToWorld(state.Camera, ImGui.GetMousePos(), minimum, viewportSize));
+            if (guid.HasValue && project.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset != null)
+            {
+                if (!_is3D && asset.Type == AssetType.Texture2D)
+                    createSpriteFromAsset(asset, GizmoController.ScreenToWorld(state.Camera, ImGui.GetMousePos(), minimum, viewportSize));
+                else if (_is3D && asset.Type == AssetType.Model3D)
+                    createModelFromAsset(asset, Gizmo3DController.ScreenToGroundPlane(ImGui.GetMousePos(), state.Camera3D, minimum, viewportSize));
+                else if (_is3D && asset.Type == AssetType.Blueprint)
+                    createBlueprintFromAsset(asset, Gizmo3DController.ScreenToGroundPlane(ImGui.GetMousePos(), state.Camera3D, minimum, viewportSize));
+            }
             ImGui.EndDragDropTarget();
         }
 
         if (_is3D)
         {
             HandleCamera3DInput(state, hovered);
+            DrawColliderOutlines(state, minimum, viewportSize);
             _gizmo3D.UpdateAndDraw(state, state.Camera3D, hovered, minimum, viewportSize);
         }
         else
@@ -167,6 +178,93 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (ImGui.IsKeyPressed(ImGuiKey.F) && state.SelectedObject != null)
             camera.Frame(state.SelectedObject);
+    }
+
+    private static void DrawColliderOutlines(EditorState state, Vector2 minimum, Vector2 size)
+    {
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        foreach (GameObject gameObject in state.DisplayedScene.GameObjects)
+        {
+            if (!gameObject.ActiveInHierarchy) continue;
+            Collider3D? collider = gameObject.Components.OfType<Collider3D>().FirstOrDefault();
+            if (collider == null || !collider.Enabled) continue;
+            uint color = ImGui.GetColorU32(ReferenceEquals(state.SelectedObject, gameObject)
+                ? new Vector4(1f, .75f, .15f, 1f)
+                : new Vector4(.25f, .9f, .45f, .75f));
+            if (collider is CapsuleCollider3D capsule)
+                DrawCapsule(drawList, gameObject, capsule, state.Camera3D, minimum, size, color);
+            else
+                DrawBox(drawList, gameObject, collider, state.Camera3D, minimum, size, color);
+        }
+    }
+
+    private static void DrawBox(
+        ImDrawListPtr drawList,
+        GameObject gameObject,
+        Collider3D collider,
+        EditorCamera3D camera,
+        Vector2 minimum,
+        Vector2 size,
+        uint color)
+    {
+        Vector3 half = collider.Size * .5f;
+        Vector3[] local =
+        {
+            collider.Center + new Vector3(-half.X, -half.Y, -half.Z),
+            collider.Center + new Vector3( half.X, -half.Y, -half.Z),
+            collider.Center + new Vector3( half.X,  half.Y, -half.Z),
+            collider.Center + new Vector3(-half.X,  half.Y, -half.Z),
+            collider.Center + new Vector3(-half.X, -half.Y,  half.Z),
+            collider.Center + new Vector3( half.X, -half.Y,  half.Z),
+            collider.Center + new Vector3( half.X,  half.Y,  half.Z),
+            collider.Center + new Vector3(-half.X,  half.Y,  half.Z)
+        };
+        Vector2[] points = local.Select(point => Gizmo3DController.Project(
+            Vector3.Transform(point, gameObject.Transform.WorldMatrix), camera, minimum, size)).ToArray();
+        int[] edges = { 0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7 };
+        for (int index = 0; index < edges.Length; index += 2)
+            drawList.AddLine(points[edges[index]], points[edges[index + 1]], color, 2f);
+    }
+
+    private static void DrawCapsule(
+        ImDrawListPtr drawList,
+        GameObject gameObject,
+        CapsuleCollider3D capsule,
+        EditorCamera3D camera,
+        Vector2 minimum,
+        Vector2 size,
+        uint color)
+    {
+        float halfLine = Math.Max(capsule.Height * .5f - capsule.Radius, 0f);
+        const int segments = 24;
+        for (int plane = 0; plane < 2; plane++)
+        {
+            Vector2? previous = null;
+            Vector2 first = default;
+            for (int index = 0; index <= segments; index++)
+            {
+                float angle = index * MathF.Tau / segments;
+                Vector3 local = plane == 0
+                    ? capsule.Center + new Vector3(MathF.Cos(angle) * capsule.Radius, halfLine, MathF.Sin(angle) * capsule.Radius)
+                    : capsule.Center + new Vector3(MathF.Cos(angle) * capsule.Radius, -halfLine, MathF.Sin(angle) * capsule.Radius);
+                Vector2 point = Gizmo3DController.Project(
+                    Vector3.Transform(local, gameObject.Transform.WorldMatrix), camera, minimum, size);
+                if (index == 0) first = point;
+                if (previous.HasValue) drawList.AddLine(previous.Value, point, color, 2f);
+                previous = point;
+            }
+            if (previous.HasValue) drawList.AddLine(previous.Value, first, color, 2f);
+        }
+        foreach (Vector3 axis in new[] { Vector3.UnitX, -Vector3.UnitX, Vector3.UnitZ, -Vector3.UnitZ })
+        {
+            Vector3 bottom = capsule.Center + axis * capsule.Radius - Vector3.UnitY * halfLine;
+            Vector3 top = capsule.Center + axis * capsule.Radius + Vector3.UnitY * halfLine;
+            drawList.AddLine(
+                Gizmo3DController.Project(Vector3.Transform(bottom, gameObject.Transform.WorldMatrix), camera, minimum, size),
+                Gizmo3DController.Project(Vector3.Transform(top, gameObject.Transform.WorldMatrix), camera, minimum, size),
+                color,
+                2f);
+        }
     }
 
     private static void DrawCameraViewport(EditorState state, Vector2 minimum, Vector2 viewportSize)

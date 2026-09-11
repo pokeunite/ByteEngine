@@ -46,6 +46,10 @@ public sealed class Renderer3D : IDisposable
         _shader.SetVector3("uLightColor", lightColor);
         _shader.SetFloat("uLightIntensity", intensity);
         _shader.SetFloat("uAmbientIntensity", ambientIntensity);
+        _shader.SetFloat("uMetallic", Math.Clamp(material.Metallic, 0f, 1f));
+        _shader.SetFloat("uRoughness", Math.Clamp(material.Roughness, .04f, 1f));
+        if (Matrix4x4.Invert(view, out Matrix4x4 inverseView))
+            _shader.SetVector3("uCameraPosition", inverseView.Translation);
 
         if (material.MainTexture != null)
         {
@@ -56,6 +60,17 @@ public sealed class Renderer3D : IDisposable
         else
         {
             _shader.SetInt("uUseTexture", 0);
+        }
+
+        if (material.NormalTexture != null)
+        {
+            material.NormalTexture.Bind(1);
+            _shader.SetInt("uNormalTexture", 1);
+            _shader.SetInt("uUseNormalTexture", 1);
+        }
+        else
+        {
+            _shader.SetInt("uUseNormalTexture", 0);
         }
 
         mesh.Bind();

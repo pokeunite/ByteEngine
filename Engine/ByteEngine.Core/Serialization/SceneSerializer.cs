@@ -276,4 +276,37 @@ public sealed class SceneSerializer
 
         return scene;
     }
+
+    public IReadOnlyList<GameObject> InstantiateHierarchy(
+        RuntimeScene target,
+        IReadOnlyList<GameObjectData> sourceObjects)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(sourceObjects);
+        var idMap = sourceObjects.ToDictionary(
+            item => item.Id,
+            _ => Guid.NewGuid());
+        var clones = new List<GameObjectData>();
+        foreach (GameObjectData source in sourceObjects)
+        {
+            GameObjectData clone = JsonSerializer.Deserialize<GameObjectData>(
+                JsonSerializer.Serialize(source, JsonSerialization.Options),
+                JsonSerialization.Options) ?? throw new InvalidDataException("Could not clone Blueprint object data.");
+            clone.Id = idMap[source.Id];
+            clone.ParentId = source.ParentId.HasValue && idMap.TryGetValue(source.ParentId.Value, out Guid parentId)
+                ? parentId
+                : null;
+            clones.Add(clone);
+        }
+
+        RuntimeScene temporary = Deserialize(new SceneData
+        {
+            Name = "Blueprint Instance",
+            SceneId = Guid.NewGuid(),
+            GameObjects = clones
+        });
+        GameObject[] roots = temporary.GameObjects.Where(item => item.Parent == null).ToArray();
+        foreach (GameObject gameObject in temporary.GameObjects) target.AddGameObject(gameObject);
+        return roots;
+    }
 }
