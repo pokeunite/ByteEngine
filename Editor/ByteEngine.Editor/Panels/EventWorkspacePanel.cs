@@ -78,6 +78,12 @@ internal sealed class EventWorkspacePanel
     private Guid _draggingGraphNodeId =
         Guid.Empty;
 
+    private bool _graphNodeDragStarted;
+
+    private Vector2 _graphNodeDragStartMouse;
+
+    private Vector2 _graphNodeDragPreviousMouse;
+
     private Guid _dragHistoryNodeId =
         Guid.Empty;
 
@@ -2025,6 +2031,9 @@ internal sealed class EventWorkspacePanel
         Vector2 mouseGraphPosition =
             _graphCanvas.MouseGraphPosition;
 
+        Vector2 mouseScreenPosition =
+            ImGui.GetIO().MousePos;
+
         _hoveredGraphNodeId =
             HitTestGraphNode(
                 mouseGraphPosition);
@@ -2033,22 +2042,30 @@ internal sealed class EventWorkspacePanel
             _hoveredGraphNodeId !=
             Guid.Empty;
 
+        /*
+         * Reset the drag state as soon as the left button is released.
+         */
         if (!ImGui.IsMouseDown(
                 ImGuiMouseButton.Left))
         {
             _draggingGraphNodeId =
                 Guid.Empty;
 
+            _graphNodeDragStarted =
+                false;
+
             _dragHistoryNodeId =
                 Guid.Empty;
         }
 
         /*
-         * Selection and drag candidates are geometry based.
+         * Selection and drag arming are geometry based.
          *
-         * Clicking anywhere on a node selects it. Dragging begins only
-         * when the click started in the node's header strip. This keeps
-         * parameter controls usable while making node movement reliable.
+         * A node is armed for dragging on the FIRST mouse-down when that
+         * mouse-down occurs in its drag region. We then use our own tiny
+         * 2-pixel threshold instead of Dear ImGui's normal drag threshold.
+         * This makes dragging feel immediate instead of requiring several
+         * click/drag attempts.
          */
         if (_wireDragKind ==
                 WireDragKind.None &&
@@ -2069,12 +2086,29 @@ internal sealed class EventWorkspacePanel
                 {
                     _draggingGraphNodeId =
                         _hoveredGraphNodeId;
+
+                    _graphNodeDragStarted =
+                        false;
+
+                    _graphNodeDragStartMouse =
+                        mouseScreenPosition;
+
+                    _graphNodeDragPreviousMouse =
+                        mouseScreenPosition;
+                }
+                else
+                {
+                    _draggingGraphNodeId =
+                        Guid.Empty;
                 }
             }
             else
             {
                 _draggingGraphNodeId =
                     Guid.Empty;
+
+                _graphNodeDragStarted =
+                    false;
 
                 _marqueeSelecting =
                     true;
@@ -2096,27 +2130,74 @@ internal sealed class EventWorkspacePanel
         if (_draggingGraphNodeId !=
                 Guid.Empty &&
             ImGui.IsMouseDown(
-                ImGuiMouseButton.Left) &&
-            ImGui.IsMouseDragging(
                 ImGuiMouseButton.Left))
         {
-            BeginNodeDragHistory(
-                _draggingGraphNodeId,
-                _selectedGraphNodes.Count >
-                    1
-                    ? "Move Selected Nodes"
-                    : "Move Graph Node");
+            /*
+             * Use a deliberately small drag threshold.
+             *
+             * Dear ImGui's normal IsMouseDragging threshold is useful for
+             * buttons, but it makes graph nodes feel sticky. Two pixels is
+             * enough to distinguish a click from an intentional node move.
+             */
+            if (!_graphNodeDragStarted)
+            {
+                Vector2 dragFromStart =
+                    mouseScreenPosition -
+                    _graphNodeDragStartMouse;
 
-            Vector2 delta =
-                _graphCanvas.ScreenDeltaToGraph(
-                    ImGui.GetIO().MouseDelta);
+                if (dragFromStart.LengthSquared() >=
+                    4.0f)
+                {
+                    _graphNodeDragStarted =
+                        true;
 
-            MoveSelectedGraphNodes(
-                _draggingGraphNodeId,
-                delta);
+                    BeginNodeDragHistory(
+                        _draggingGraphNodeId,
+                        _selectedGraphNodes.Count >
+                            1
+                            ? "Move Selected Nodes"
+                            : "Move Graph Node");
 
-            _dirty =
-                true;
+                    Vector2 initialDelta =
+                        _graphCanvas.ScreenDeltaToGraph(
+                            mouseScreenPosition -
+                            _graphNodeDragPreviousMouse);
+
+                    MoveSelectedGraphNodes(
+                        _draggingGraphNodeId,
+                        initialDelta);
+
+                    _graphNodeDragPreviousMouse =
+                        mouseScreenPosition;
+
+                    _dirty =
+                        true;
+                }
+            }
+            else
+            {
+                Vector2 screenDelta =
+                    mouseScreenPosition -
+                    _graphNodeDragPreviousMouse;
+
+                if (screenDelta.LengthSquared() >
+                    0.0f)
+                {
+                    Vector2 delta =
+                        _graphCanvas.ScreenDeltaToGraph(
+                            screenDelta);
+
+                    MoveSelectedGraphNodes(
+                        _draggingGraphNodeId,
+                        delta);
+
+                    _graphNodeDragPreviousMouse =
+                        mouseScreenPosition;
+
+                    _dirty =
+                        true;
+                }
+            }
         }
 
         /*
@@ -2282,6 +2363,18 @@ internal sealed class EventWorkspacePanel
                 minimum.Y,
                 1.0f);
 
+        /*
+         * Keep drag handles usable even when the graph or node scale is
+         * small. The minimum is expressed in SCREEN pixels and converted
+         * back to graph units, so zooming out does not make the draggable
+         * area microscopic.
+         */
+        float minimumHeaderHeight =
+            28.0f /
+            Math.Max(
+                _graphCanvas.Zoom,
+                0.25f);
+
         bool isEventNode =
             _module?.Rules.Any(
                 rule =>
@@ -2292,29 +2385,33 @@ internal sealed class EventWorkspacePanel
         if (isEventNode)
         {
             /*
-             * Event nodes are laid out differently from Condition/Action
-             * nodes. Their visible "Drag / Select Event" handle lives near
-             * the bottom of the card, while the previous geometry hit test
-             * only accepted the top strip. That made Event nodes selectable
-             * but effectively impossible to drag from the visible handle.
+             * Event cards contain several interactive controls in the
+             * middle, so keep those controls safe and make the clearly
+             * non-parameter areas generous:
              *
-             * Accept both:
-             *  - the small EVENT header strip at the top
-             *  - the explicit drag handle strip at the bottom
+             *   - a larger top EVENT strip
+             *   - a larger bottom "Drag / Select Event" strip
              *
-             * The middle remains reserved for title/buttons/parameters.
+             * At low zoom the screen-space minimum keeps these regions
+             * easy to grab.
              */
             float topDragHeight =
                 Math.Min(
-                    44.0f *
-                    GetNodeScale(),
-                    nodeHeight);
+                    Math.Max(
+                        50.0f *
+                        GetNodeScale(),
+                        minimumHeaderHeight),
+                    nodeHeight *
+                    0.34f);
 
             float bottomDragHeight =
                 Math.Min(
-                    54.0f *
-                    GetNodeScale(),
-                    nodeHeight);
+                    Math.Max(
+                        68.0f *
+                        GetNodeScale(),
+                        minimumHeaderHeight),
+                    nodeHeight *
+                    0.42f);
 
             bool insideTopDragArea =
                 graphPoint.Y >=
@@ -2335,14 +2432,19 @@ internal sealed class EventWorkspacePanel
         }
 
         /*
-         * Condition and Action nodes keep the compact title/header drag
-         * area that is already working.
+         * Condition / Action nodes have their title and category at the
+         * top, with parameter editors below. Make roughly the upper third
+         * draggable while keeping the parameter controls out of the drag
+         * region.
          */
         float headerHeight =
             Math.Min(
-                56.0f *
-                GetNodeScale(),
-                nodeHeight);
+                Math.Max(
+                    82.0f *
+                    GetNodeScale(),
+                    minimumHeaderHeight),
+                nodeHeight *
+                0.42f);
 
         return graphPoint.Y >=
                    minimum.Y &&
@@ -3358,32 +3460,28 @@ internal sealed class EventWorkspacePanel
                 anchorNodeId);
         }
 
-        HashSet<Guid> selectedRules =
-            _module.Rules
-                .Where(
-                    rule =>
-                        _selectedGraphNodes.Contains(
-                            rule.Id))
-                .Select(
-                    rule =>
-                        rule.Id)
-                .ToHashSet();
-
+        /*
+         * Every graph node moves independently.
+         *
+         * An Event owns Conditions/Actions logically at runtime, but their
+         * ByteGraph editor positions are independent. Moving an Event must
+         * therefore only move the Event card itself and let the wires stretch
+         * to the existing Condition/Action positions.
+         *
+         * If the user actually wants several nodes to move together, they can
+         * multi-select them (Ctrl/Shift or marquee) and drag the selection.
+         */
         foreach (EventRuleDefinition rule
                  in _module.Rules)
         {
-            if (selectedRules.Contains(
+            if (_selectedGraphNodes.Contains(
                     rule.Id))
             {
-                /*
-                 * Moving an Event moves its conditions/actions as a unit.
-                 * Child nodes are not moved again below.
-                 */
-                MoveRuleAndChildren(
-                    rule,
-                    delta);
+                rule.EditorX +=
+                    delta.X;
 
-                continue;
+                rule.EditorY +=
+                    delta.Y;
             }
 
             foreach (VisualInstruction instruction
@@ -3417,37 +3515,6 @@ internal sealed class EventWorkspacePanel
                 instruction.EditorY +=
                     delta.Y;
             }
-        }
-    }
-
-    private static void MoveRuleAndChildren(
-        EventRuleDefinition rule,
-        Vector2 delta)
-    {
-        rule.EditorX +=
-            delta.X;
-
-        rule.EditorY +=
-            delta.Y;
-
-        foreach (VisualInstruction instruction
-                 in rule.Conditions)
-        {
-            instruction.EditorX +=
-                delta.X;
-
-            instruction.EditorY +=
-                delta.Y;
-        }
-
-        foreach (VisualInstruction instruction
-                 in rule.Actions)
-        {
-            instruction.EditorX +=
-                delta.X;
-
-            instruction.EditorY +=
-                delta.Y;
         }
     }
 
