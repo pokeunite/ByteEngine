@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.VisualLogic;
@@ -8,11 +9,8 @@ namespace ByteEngine.Core.VisualLogic;
 public sealed class VisualConditionDefinition
 {
     public required string Id { get; init; }
-
     public required string Category { get; init; }
-
     public required string DisplayName { get; init; }
-
     public string? TargetComponent { get; init; }
 
     public required Func<
@@ -24,11 +22,8 @@ public sealed class VisualConditionDefinition
 public sealed class VisualActionDefinition
 {
     public required string Id { get; init; }
-
     public required string Category { get; init; }
-
     public required string DisplayName { get; init; }
-
     public string? TargetComponent { get; init; }
 
     public required Action<
@@ -38,42 +33,32 @@ public sealed class VisualActionDefinition
 
 public sealed class VisualLogicRegistry
 {
-    private readonly Dictionary<
-        string,
-        VisualConditionDefinition> _conditions =
+    private const string SelfTarget = "Self";
+
+    private readonly Dictionary<string, VisualConditionDefinition> _conditions =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly Dictionary<
-        string,
-        VisualActionDefinition> _actions =
+    private readonly Dictionary<string, VisualActionDefinition> _actions =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public IReadOnlyCollection<VisualConditionDefinition>
-        Conditions =>
-            _conditions.Values;
+    public IReadOnlyCollection<VisualConditionDefinition> Conditions =>
+        _conditions.Values;
 
-    public IReadOnlyCollection<VisualActionDefinition>
-        Actions =>
-            _actions.Values;
+    public IReadOnlyCollection<VisualActionDefinition> Actions =>
+        _actions.Values;
 
     public void RegisterCondition(
         VisualConditionDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(
-            definition);
-
-        _conditions[definition.Id] =
-            definition;
+        ArgumentNullException.ThrowIfNull(definition);
+        _conditions[definition.Id] = definition;
     }
 
     public void RegisterAction(
         VisualActionDefinition definition)
     {
-        ArgumentNullException.ThrowIfNull(
-            definition);
-
-        _actions[definition.Id] =
-            definition;
+        ArgumentNullException.ThrowIfNull(definition);
+        _actions[definition.Id] = definition;
     }
 
     public bool TryGetCondition(
@@ -101,6 +86,7 @@ public sealed class VisualLogicRegistry
 
         RegisterSystem(registry);
         RegisterInput(registry);
+        RegisterObjects(registry);
         RegisterCharacter(registry);
         RegisterTransform(registry);
         RegisterVariables(registry);
@@ -114,37 +100,22 @@ public sealed class VisualLogicRegistry
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "system.always",
-
-                Category =
-                    "System",
-
-                DisplayName =
-                    "Always",
-
-                Evaluate =
-                    (_, _) => true
+                Id = "system.always",
+                Category = "System",
+                DisplayName = "Always",
+                Evaluate = (_, _) => true
             });
 
         /*
-         * Trigger Once is handled specially by
-         * EventModuleRuntime.
+         * Trigger Once is handled specially by EventModuleRuntime.
          */
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "system.triggerOnce",
-
-                Category =
-                    "System",
-
-                DisplayName =
-                    "Trigger Once",
-
-                Evaluate =
-                    (_, _) => true
+                Id = "system.triggerOnce",
+                Category = "System",
+                DisplayName = "Trigger Once",
+                Evaluate = (_, _) => true
             });
     }
 
@@ -154,72 +125,140 @@ public sealed class VisualLogicRegistry
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "input.keyHeld",
-
-                Category =
-                    "Input",
-
-                DisplayName =
-                    "Key Is Held",
-
+                Id = "input.keyHeld",
+                Category = "Input",
+                DisplayName = "Key Is Held",
                 Evaluate =
                     (instruction, context) =>
-                    {
-                        return
-                            TryGetKey(
-                                instruction,
-                                context,
-                                out Key key) &&
-                            Input.IsKeyDown(key);
-                    }
+                        TryGetKey(
+                            instruction,
+                            context,
+                            out Key key) &&
+                        Input.IsKeyDown(key)
             });
 
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "input.keyPressed",
-
-                Category =
-                    "Input",
-
-                DisplayName =
-                    "Key Pressed",
-
+                Id = "input.keyPressed",
+                Category = "Input",
+                DisplayName = "Key Pressed",
                 Evaluate =
                     (instruction, context) =>
-                    {
-                        return
-                            TryGetKey(
-                                instruction,
-                                context,
-                                out Key key) &&
-                            Input.IsKeyPressed(key);
-                    }
+                        TryGetKey(
+                            instruction,
+                            context,
+                            out Key key) &&
+                        Input.IsKeyPressed(key)
             });
 
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "input.keyReleased",
-
-                Category =
-                    "Input",
-
-                DisplayName =
-                    "Key Released",
-
+                Id = "input.keyReleased",
+                Category = "Input",
+                DisplayName = "Key Released",
                 Evaluate =
                     (instruction, context) =>
+                        TryGetKey(
+                            instruction,
+                            context,
+                            out Key key) &&
+                        Input.IsKeyReleased(key)
+            });
+    }
+
+    private static void RegisterObjects(
+        VisualLogicRegistry registry)
+    {
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "object.exists",
+                Category = "Object",
+                DisplayName = "Object Exists",
+                Evaluate =
+                    (instruction, context) =>
+                        ResolveObjectTarget(
+                            instruction,
+                            context,
+                            warnIfMissing: false) != null
+            });
+
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "object.isActive",
+                Category = "Object",
+                DisplayName = "Object Is Active",
+                Evaluate =
+                    (instruction, context) =>
+                        ResolveObjectTarget(
+                            instruction,
+                            context,
+                            warnIfMissing: false)?
+                            .ActiveInHierarchy == true
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "object.destroySelf",
+                Category = "Object",
+                DisplayName = "Destroy Self",
+                Execute =
+                    (_, context) =>
+                        context.Scene.DestroyGameObject(
+                            context.Self)
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "object.destroy",
+                Category = "Object",
+                DisplayName = "Destroy Object",
+                Execute =
+                    (instruction, context) =>
                     {
-                        return
-                            TryGetKey(
+                        GameObject? target =
+                            ResolveObjectTarget(
                                 instruction,
+                                context);
+
+                        if (target != null)
+                        {
+                            context.Scene.DestroyGameObject(
+                                target);
+                        }
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "object.setActive",
+                Category = "Object",
+                DisplayName = "Set Object Active",
+                Execute =
+                    (instruction, context) =>
+                    {
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Active =
+                            EventValueResolver.GetBoolean(
+                                instruction,
+                                "active",
                                 context,
-                                out Key key) &&
-                            Input.IsKeyReleased(key);
+                                true);
                     }
             });
     }
@@ -258,18 +297,10 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "character.moveForward",
-
-                Category =
-                    "Character Controller 3D",
-
-                DisplayName =
-                    "Move Forward",
-
-                TargetComponent =
-                    nameof(CharacterController3D),
-
+                Id = "character.moveForward",
+                Category = "Character Controller 3D",
+                DisplayName = "Move Forward",
+                TargetComponent = nameof(CharacterController3D),
                 Execute =
                     (instruction, context) =>
                     {
@@ -281,37 +312,25 @@ public sealed class VisualLogicRegistry
                         {
                             context.WarningSink?.Invoke(
                                 $"{context.Self.Name} has no CharacterController3D.");
-
                             return;
                         }
-
-                        float amount =
-                            (float)EventValueResolver.GetNumber(
-                                instruction,
-                                "amount",
-                                context,
-                                1.0);
 
                         controller.MoveForward(
-                            amount);
+                            (float)EventValueResolver.GetNumber(
+                                instruction,
+                                "amount",
+                                context,
+                                1.0));
                     }
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "character.moveRight",
-
-                Category =
-                    "Character Controller 3D",
-
-                DisplayName =
-                    "Move Right",
-
-                TargetComponent =
-                    nameof(CharacterController3D),
-
+                Id = "character.moveRight",
+                Category = "Character Controller 3D",
+                DisplayName = "Move Right",
+                TargetComponent = nameof(CharacterController3D),
                 Execute =
                     (instruction, context) =>
                     {
@@ -323,37 +342,25 @@ public sealed class VisualLogicRegistry
                         {
                             context.WarningSink?.Invoke(
                                 $"{context.Self.Name} has no CharacterController3D.");
-
                             return;
                         }
 
-                        float amount =
+                        controller.MoveRight(
                             (float)EventValueResolver.GetNumber(
                                 instruction,
                                 "amount",
                                 context,
-                                1.0);
-
-                        controller.MoveRight(
-                            amount);
+                                1.0));
                     }
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "character.jump",
-
-                Category =
-                    "Character Controller 3D",
-
-                DisplayName =
-                    "Jump",
-
-                TargetComponent =
-                    nameof(CharacterController3D),
-
+                Id = "character.jump",
+                Category = "Character Controller 3D",
+                DisplayName = "Jump",
+                TargetComponent = nameof(CharacterController3D),
                 Execute =
                     (_, context) =>
                     {
@@ -365,7 +372,6 @@ public sealed class VisualLogicRegistry
                         {
                             context.WarningSink?.Invoke(
                                 $"{context.Self.Name} has no CharacterController3D.");
-
                             return;
                         }
 
@@ -376,18 +382,10 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "character.setVelocity",
-
-                Category =
-                    "Character Controller 3D",
-
-                DisplayName =
-                    "Set Velocity",
-
-                TargetComponent =
-                    nameof(CharacterController3D),
-
+                Id = "character.setVelocity",
+                Category = "Character Controller 3D",
+                DisplayName = "Set Velocity",
+                TargetComponent = nameof(CharacterController3D),
                 Execute =
                     (instruction, context) =>
                     {
@@ -399,36 +397,24 @@ public sealed class VisualLogicRegistry
                         {
                             context.WarningSink?.Invoke(
                                 $"{context.Self.Name} has no CharacterController3D.");
-
                             return;
                         }
 
-                        Vector3 velocity =
+                        controller.SetVelocity(
                             EventValueResolver.GetVector3(
                                 instruction,
                                 "velocity",
-                                context);
-
-                        controller.SetVelocity(
-                            velocity);
+                                context));
                     }
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "character.addImpulse",
-
-                Category =
-                    "Character Controller 3D",
-
-                DisplayName =
-                    "Add Impulse",
-
-                TargetComponent =
-                    nameof(CharacterController3D),
-
+                Id = "character.addImpulse",
+                Category = "Character Controller 3D",
+                DisplayName = "Add Impulse",
+                TargetComponent = nameof(CharacterController3D),
                 Execute =
                     (instruction, context) =>
                     {
@@ -440,18 +426,14 @@ public sealed class VisualLogicRegistry
                         {
                             context.WarningSink?.Invoke(
                                 $"{context.Self.Name} has no CharacterController3D.");
-
                             return;
                         }
 
-                        Vector3 impulse =
+                        controller.AddImpulse(
                             EventValueResolver.GetVector3(
                                 instruction,
                                 "impulse",
-                                context);
-
-                        controller.AddImpulse(
-                            impulse);
+                                context));
                     }
             });
     }
@@ -464,18 +446,10 @@ public sealed class VisualLogicRegistry
     {
         return new VisualConditionDefinition
         {
-            Id =
-                id,
-
-            Category =
-                "Character Controller 3D",
-
-            DisplayName =
-                displayName,
-
-            TargetComponent =
-                nameof(CharacterController3D),
-
+            Id = id,
+            Category = "Character Controller 3D",
+            DisplayName = displayName,
+            TargetComponent = nameof(CharacterController3D),
             Evaluate =
                 (_, context) =>
                 {
@@ -496,49 +470,53 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "transform.setPosition",
-
-                Category =
-                    "Transform",
-
-                DisplayName =
-                    "Set Position",
-
-                TargetComponent =
-                    "Transform",
-
+                Id = "transform.setPosition",
+                Category = "Transform",
+                DisplayName = "Set Position",
+                TargetComponent = "Transform",
                 Execute =
                     (instruction, context) =>
                     {
-                        context.Self.Transform.WorldPosition =
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Transform.WorldPosition =
                             EventValueResolver.GetVector3(
                                 instruction,
                                 "position",
                                 context,
-                                context.Self.Transform.WorldPosition);
+                                target.Transform.WorldPosition);
                     }
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "transform.move",
-
-                Category =
-                    "Transform",
-
-                DisplayName =
-                    "Move",
-
-                TargetComponent =
-                    "Transform",
-
+                Id = "transform.move",
+                Category = "Transform",
+                DisplayName = "Move",
+                TargetComponent = "Transform",
                 Execute =
                     (instruction, context) =>
                     {
-                        context.Self.Transform.WorldPosition +=
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Transform.WorldPosition +=
                             EventValueResolver.GetVector3(
                                 instruction,
                                 "amount",
@@ -563,6 +541,92 @@ public sealed class VisualLogicRegistry
                 "transform.setZ",
                 "Set Z",
                 2));
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "transform.setRotation",
+                Category = "Transform",
+                DisplayName = "Set Rotation",
+                TargetComponent = "Transform",
+                Execute =
+                    (instruction, context) =>
+                    {
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Transform.EulerAngles =
+                            EventValueResolver.GetVector3(
+                                instruction,
+                                "rotation",
+                                context,
+                                target.Transform.EulerAngles);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "transform.rotateBy",
+                Category = "Transform",
+                DisplayName = "Rotate By",
+                TargetComponent = "Transform",
+                Execute =
+                    (instruction, context) =>
+                    {
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Transform.EulerAngles +=
+                            EventValueResolver.GetVector3(
+                                instruction,
+                                "amount",
+                                context);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "transform.setScale",
+                Category = "Transform",
+                DisplayName = "Set Scale",
+                TargetComponent = "Transform",
+                Execute =
+                    (instruction, context) =>
+                    {
+                        GameObject? target =
+                            ResolveObjectTarget(
+                                instruction,
+                                context);
+
+                        if (target == null)
+                        {
+                            return;
+                        }
+
+                        target.Transform.LocalScale =
+                            EventValueResolver.GetVector3(
+                                instruction,
+                                "scale",
+                                context,
+                                target.Transform.LocalScale);
+                    }
+            });
     }
 
     private static VisualActionDefinition
@@ -573,23 +637,25 @@ public sealed class VisualLogicRegistry
     {
         return new VisualActionDefinition
         {
-            Id =
-                id,
-
-            Category =
-                "Transform",
-
-            DisplayName =
-                displayName,
-
-            TargetComponent =
-                "Transform",
-
+            Id = id,
+            Category = "Transform",
+            DisplayName = displayName,
+            TargetComponent = "Transform",
             Execute =
                 (instruction, context) =>
                 {
+                    GameObject? target =
+                        ResolveObjectTarget(
+                            instruction,
+                            context);
+
+                    if (target == null)
+                    {
+                        return;
+                    }
+
                     Vector3 position =
-                        context.Self.Transform.WorldPosition;
+                        target.Transform.WorldPosition;
 
                     float value =
                         (float)EventValueResolver.GetNumber(
@@ -597,7 +663,7 @@ public sealed class VisualLogicRegistry
                             "value",
                             context);
 
-                    context.Self.Transform.WorldPosition =
+                    target.Transform.WorldPosition =
                         axis switch
                         {
                             0 =>
@@ -628,26 +694,16 @@ public sealed class VisualLogicRegistry
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
-                Id =
-                    "variable.compare",
-
-                Category =
-                    "Variables",
-
-                DisplayName =
-                    "Compare Variable / Value",
-
+                Id = "variable.compare",
+                Category = "Variables",
+                DisplayName = "Compare Variable / Value",
                 Evaluate =
                     (instruction, context) =>
                     {
                         if (!instruction.Arguments.TryGetValue(
                                 "left",
-                                out EventValue? leftValue))
-                        {
-                            return false;
-                        }
-
-                        if (!instruction.Arguments.TryGetValue(
+                                out EventValue? leftValue) ||
+                            !instruction.Arguments.TryGetValue(
                                 "right",
                                 out EventValue? rightValue))
                         {
@@ -657,12 +713,8 @@ public sealed class VisualLogicRegistry
                         if (!EventValueResolver.TryResolve(
                                 leftValue,
                                 context,
-                                out object? left))
-                        {
-                            return false;
-                        }
-
-                        if (!EventValueResolver.TryResolve(
+                                out object? left) ||
+                            !EventValueResolver.TryResolve(
                                 rightValue,
                                 context,
                                 out object? right))
@@ -670,51 +722,34 @@ public sealed class VisualLogicRegistry
                             return false;
                         }
 
-                        string operation =
+                        return Compare(
+                            left,
+                            right,
                             EventValueResolver.GetString(
                                 instruction,
                                 "operator",
                                 context,
-                                "==");
-
-                        return Compare(
-                            left,
-                            right,
-                            operation);
+                                "=="));
                     }
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "variable.set",
-
-                Category =
-                    "Variables",
-
-                DisplayName =
-                    "Set Variable",
-
+                Id = "variable.set",
+                Category = "Variables",
+                DisplayName = "Set Variable",
                 Execute =
                     (instruction, context) =>
                     {
                         if (!TryGetVariableTarget(
                                 instruction,
                                 context,
-                                out VariableReference? target))
-                        {
-                            return;
-                        }
-
-                        if (!instruction.Arguments.TryGetValue(
+                                out VariableReference? target) ||
+                            !instruction.Arguments.TryGetValue(
                                 "value",
-                                out EventValue? value))
-                        {
-                            return;
-                        }
-
-                        if (!EventValueResolver.TryResolve(
+                                out EventValue? value) ||
+                            !EventValueResolver.TryResolve(
                                 value,
                                 context,
                                 out object? resolved))
@@ -733,44 +768,76 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "variable.add",
-
-                Category =
-                    "Variables",
-
-                DisplayName =
-                    "Add To Variable",
-
+                Id = "variable.add",
+                Category = "Variables",
+                DisplayName = "Add To Variable",
                 Execute =
                     (instruction, context) =>
-                    {
                         ChangeNumberVariable(
                             instruction,
                             context,
-                            1.0);
-                    }
+                            1.0)
             });
 
         registry.RegisterAction(
             new VisualActionDefinition
             {
-                Id =
-                    "variable.subtract",
-
-                Category =
-                    "Variables",
-
-                DisplayName =
-                    "Subtract From Variable",
-
+                Id = "variable.subtract",
+                Category = "Variables",
+                DisplayName = "Subtract From Variable",
                 Execute =
                     (instruction, context) =>
-                    {
                         ChangeNumberVariable(
                             instruction,
                             context,
-                            -1.0);
+                            -1.0)
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "variable.toggle",
+                Category = "Variables",
+                DisplayName = "Toggle Boolean",
+                Execute =
+                    (instruction, context) =>
+                    {
+                        if (!TryGetVariableTarget(
+                                instruction,
+                                context,
+                                out VariableReference? target))
+                        {
+                            return;
+                        }
+
+                        VariableResolutionContext variableContext =
+                            EventValueResolver.CreateVariableContext(
+                                context);
+
+                        if (!VariableResolver.TryGet(
+                                target!,
+                                variableContext,
+                                out object? existing))
+                        {
+                            return;
+                        }
+
+                        try
+                        {
+                            bool current =
+                                Convert.ToBoolean(
+                                    existing);
+
+                            VariableResolver.TrySet(
+                                target!,
+                                variableContext,
+                                !current);
+                        }
+                        catch
+                        {
+                            context.WarningSink?.Invoke(
+                                "Toggle Boolean requires a Boolean target.");
+                        }
                     }
             });
     }
@@ -809,8 +876,10 @@ public sealed class VisualLogicRegistry
         try
         {
             double result =
-                Convert.ToDouble(existing) +
-                amount * sign;
+                Convert.ToDouble(
+                    existing) +
+                amount *
+                sign;
 
             VariableResolver.TrySet(
                 target!,
@@ -841,6 +910,63 @@ public sealed class VisualLogicRegistry
             "Variable action has no target VariableReference.");
 
         return false;
+    }
+
+    private static GameObject? ResolveObjectTarget(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        bool warnIfMissing = true)
+    {
+        string token =
+            EventValueResolver.GetString(
+                instruction,
+                "target",
+                context,
+                SelfTarget);
+
+        if (string.IsNullOrWhiteSpace(
+                token) ||
+            string.Equals(
+                token,
+                SelfTarget,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return context.Self;
+        }
+
+        GameObject? target =
+            null;
+
+        if (token.StartsWith(
+                "id:",
+                StringComparison.OrdinalIgnoreCase) &&
+            Guid.TryParse(
+                token[3..],
+                out Guid objectId))
+        {
+            target =
+                context.Scene.FindGameObject(
+                    objectId);
+        }
+        else
+        {
+            /*
+             * Name lookup is intentionally retained as a fallback
+             * for manually-authored/older Event Modules.
+             */
+            target =
+                context.Scene.FindGameObject(
+                    token);
+        }
+
+        if (target == null &&
+            warnIfMissing)
+        {
+            context.WarningSink?.Invoke(
+                $"Event target '{token}' was not found in scene '{context.Scene.Name}'.");
+        }
+
+        return target;
     }
 
     private static bool Compare(
@@ -892,8 +1018,10 @@ public sealed class VisualLogicRegistry
 
         int comparison =
             string.Compare(
-                Convert.ToString(left),
-                Convert.ToString(right),
+                Convert.ToString(
+                    left),
+                Convert.ToString(
+                    right),
                 StringComparison.OrdinalIgnoreCase);
 
         return operation switch
@@ -936,7 +1064,8 @@ public sealed class VisualLogicRegistry
             }
 
             number =
-                Convert.ToDouble(value);
+                Convert.ToDouble(
+                    value);
 
             return true;
         }

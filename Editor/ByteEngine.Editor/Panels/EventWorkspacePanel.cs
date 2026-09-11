@@ -21,6 +21,9 @@ internal sealed class EventWorkspacePanel
     private readonly VariableReferencePicker _referencePicker =
         new();
 
+    private readonly GameObjectReferencePicker _objectPicker =
+        new();
+
     private readonly EventModuleHistory _history =
         new();
 
@@ -1043,95 +1046,126 @@ internal sealed class EventWorkspacePanel
             case "input.keyHeld":
             case "input.keyPressed":
             case "input.keyReleased":
-
                 instruction.Arguments["key"] =
                     EventValue.String(
                         "W");
+                break;
 
+            case "object.exists":
+            case "object.isActive":
+            case "object.destroy":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                break;
+
+            case "object.setActive":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["active"] =
+                    EventValue.Boolean(
+                        true);
                 break;
 
             case "character.moveForward":
             case "character.moveRight":
-
                 instruction.Arguments["amount"] =
                     EventValue.Number(
                         1.0);
-
                 break;
 
             case "character.setVelocity":
-
                 instruction.Arguments["velocity"] =
                     EventValue.Vector3(
                         Vector3.Zero);
-
                 break;
 
             case "character.addImpulse":
-
                 instruction.Arguments["impulse"] =
                     EventValue.Vector3(
                         Vector3.Zero);
-
                 break;
 
             case "transform.setPosition":
-
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
                 instruction.Arguments["position"] =
                     EventValue.Vector3(
                         Vector3.Zero);
-
                 break;
 
             case "transform.move":
-
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
                 instruction.Arguments["amount"] =
                     EventValue.Vector3(
                         Vector3.Zero);
-
                 break;
 
             case "transform.setX":
             case "transform.setY":
             case "transform.setZ":
-
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
                 instruction.Arguments["value"] =
                     EventValue.Number(
                         0.0);
+                break;
 
+            case "transform.setRotation":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["rotation"] =
+                    EventValue.Vector3(
+                        Vector3.Zero);
+                break;
+
+            case "transform.rotateBy":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["amount"] =
+                    EventValue.Vector3(
+                        Vector3.Zero);
+                break;
+
+            case "transform.setScale":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["scale"] =
+                    EventValue.Vector3(
+                        Vector3.One);
                 break;
 
             case "variable.compare":
-
                 instruction.Arguments["left"] =
                     EventValue.Number(
                         0.0);
-
                 instruction.Arguments["operator"] =
                     EventValue.String(
                         "==");
-
                 instruction.Arguments["right"] =
                     EventValue.Number(
                         0.0);
-
                 break;
 
             case "variable.set":
-
                 instruction.Arguments["value"] =
                     EventValue.Number(
                         0.0);
-
                 break;
 
             case "variable.add":
             case "variable.subtract":
-
                 instruction.Arguments["amount"] =
                     EventValue.Number(
                         1.0);
-
                 break;
         }
 
@@ -1151,18 +1185,43 @@ internal sealed class EventWorkspacePanel
             case "input.keyHeld":
             case "input.keyPressed":
             case "input.keyReleased":
-
                 DrawKeyArgument(
                     instruction,
                     "key",
                     "Key",
                     Key.W);
+                break;
 
+            case "object.exists":
+            case "object.isActive":
+            case "object.destroy":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+                break;
+
+            case "object.setActive":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "active",
+                    "Active",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        true),
+                    state,
+                    false);
                 break;
 
             case "character.moveForward":
             case "character.moveRight":
-
                 DrawValueArgument(
                     instruction,
                     "amount",
@@ -1172,11 +1231,9 @@ internal sealed class EventWorkspacePanel
                         1.0),
                     state,
                     false);
-
                 break;
 
             case "character.setVelocity":
-
                 DrawValueArgument(
                     instruction,
                     "velocity",
@@ -1186,11 +1243,9 @@ internal sealed class EventWorkspacePanel
                         Vector3.Zero),
                     state,
                     false);
-
                 break;
 
             case "character.addImpulse":
-
                 DrawValueArgument(
                     instruction,
                     "impulse",
@@ -1200,10 +1255,14 @@ internal sealed class EventWorkspacePanel
                         Vector3.Zero),
                     state,
                     false);
-
                 break;
 
             case "transform.setPosition":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
 
                 DrawValueArgument(
                     instruction,
@@ -1214,10 +1273,14 @@ internal sealed class EventWorkspacePanel
                         Vector3.Zero),
                     state,
                     false);
-
                 break;
 
             case "transform.move":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
 
                 DrawValueArgument(
                     instruction,
@@ -1228,12 +1291,16 @@ internal sealed class EventWorkspacePanel
                         Vector3.Zero),
                     state,
                     false);
-
                 break;
 
             case "transform.setX":
             case "transform.setY":
             case "transform.setZ":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
 
                 DrawValueArgument(
                     instruction,
@@ -1244,15 +1311,63 @@ internal sealed class EventWorkspacePanel
                         0.0),
                     state,
                     false);
-
                 break;
 
-            // --------------------------------------------
-            // VARIABLE / PROPERTY CONDITIONS
-            // --------------------------------------------
+            case "transform.setRotation":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "rotation",
+                    "Rotation (Degrees)",
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
+                break;
+
+            case "transform.rotateBy":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "amount",
+                    "Degrees",
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.Zero),
+                    state,
+                    false);
+                break;
+
+            case "transform.setScale":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "scale",
+                    "Scale",
+                    VariableType.Vector3,
+                    EventValue.Vector3(
+                        Vector3.One),
+                    state,
+                    false);
+                break;
 
             case "variable.compare":
-
                 DrawValueArgument(
                     instruction,
                     "left",
@@ -1275,15 +1390,9 @@ internal sealed class EventWorkspacePanel
                         0.0),
                     state,
                     false);
-
                 break;
 
-            // --------------------------------------------
-            // VARIABLE / PROPERTY ACTIONS
-            // --------------------------------------------
-
             case "variable.set":
-
                 DrawTargetReference(
                     instruction,
                     "target",
@@ -1300,11 +1409,10 @@ internal sealed class EventWorkspacePanel
                         0.0),
                     state,
                     false);
-
                 break;
 
             case "variable.add":
-
+            case "variable.subtract":
                 DrawTargetReference(
                     instruction,
                     "target",
@@ -1321,28 +1429,15 @@ internal sealed class EventWorkspacePanel
                         1.0),
                     state,
                     false);
-
                 break;
 
-            case "variable.subtract":
-
+            case "variable.toggle":
                 DrawTargetReference(
                     instruction,
                     "target",
                     "Target",
-                    VariableType.Number,
+                    VariableType.Boolean,
                     state);
-
-                DrawValueArgument(
-                    instruction,
-                    "amount",
-                    "Amount",
-                    VariableType.Number,
-                    EventValue.Number(
-                        1.0),
-                    state,
-                    false);
-
                 break;
         }
     }
@@ -1762,6 +1857,85 @@ internal sealed class EventWorkspacePanel
             _dirty =
                 true;
         }
+    }
+
+    // ========================================================
+    // OBJECT TARGETS
+    // ========================================================
+
+    private void DrawObjectTargetArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        EditorState? state)
+    {
+        ImGui.PushID(
+            $"ObjectTarget:{argumentName}");
+
+        string token =
+            "Self";
+
+        if (instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) &&
+            value != null &&
+            value.Kind ==
+                EventValueKind.Constant &&
+            value.Constant.Type ==
+                VariableType.String &&
+            !string.IsNullOrWhiteSpace(
+                value.Constant.String))
+        {
+            token =
+                value.Constant.String;
+        }
+
+        GameObject? self =
+            state != null
+                ? ResolveSelfContext(
+                    state)
+                : null;
+
+        string display =
+            GameObjectReferencePicker.GetDisplayName(
+                token,
+                state,
+                self);
+
+        ImGui.TextDisabled(
+            label);
+
+        if (ImGui.Button(
+                display,
+                new Vector2(
+                    -1.0f,
+                    36.0f)))
+        {
+            ImGui.OpenPopup(
+                "ObjectTargetPicker");
+        }
+
+        if (state != null &&
+            _objectPicker.DrawPopup(
+                "ObjectTargetPicker",
+                state,
+                self,
+                out string? selectedToken) &&
+            !string.IsNullOrWhiteSpace(
+                selectedToken))
+        {
+            RecordHistory(
+                "Change Object Target");
+
+            instruction.Arguments[argumentName] =
+                EventValue.String(
+                    selectedToken);
+
+            _dirty =
+                true;
+        }
+
+        ImGui.PopID();
     }
 
     // ========================================================
