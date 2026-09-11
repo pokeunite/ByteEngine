@@ -14,6 +14,7 @@ public sealed class Scene
     public int GameObjectCount => _gameObjects.Count;
     public bool IsLoaded => _loaded;
     public VariableStore Variables { get; } = new();
+	internal VariableStore? RuntimeGlobals { get; set; }
 
     public Scene(string name) : this(Guid.NewGuid(), name) { }
     public Scene(Guid id, string name)

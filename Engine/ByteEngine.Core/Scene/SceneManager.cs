@@ -4,7 +4,9 @@ namespace ByteEngine.Core.Scene;
 
 public sealed class SceneManager
 {
-    public Variables.VariableStore GlobalVariables { get; } = new();
+    public Variables.VariableStore GlobalVariables { get; } =
+        new();
+
     public Scene? ActiveScene { get; private set; }
 
     public bool HasActiveScene =>
@@ -14,8 +16,7 @@ public sealed class SceneManager
         Scene scene)
     {
         ArgumentNullException.ThrowIfNull(
-            scene
-        );
+            scene);
 
         if (ReferenceEquals(
                 ActiveScene,
@@ -28,16 +29,35 @@ public sealed class SceneManager
         {
             ActiveScene
                 .UnloadInternal();
+
+            ActiveScene.RuntimeGlobals =
+                null;
         }
 
-        ActiveScene = scene;
+        ActiveScene =
+            scene;
+
+        /*
+         * Runtime Scenes receive access to the SceneManager's
+         * global variable store.
+         *
+         * This lets runtime systems such as EventModuleComponent
+         * resolve:
+         *
+         * Global.Score
+         * Global.Difficulty
+         * Global.PlayerName
+         *
+         * without making global variables belong to the Scene.
+         */
+        ActiveScene.RuntimeGlobals =
+            GlobalVariables;
 
         ActiveScene
             .LoadInternal();
 
         Console.WriteLine(
-            $"Active scene: {scene.Name}"
-        );
+            $"Active scene: {scene.Name}");
     }
 
     public void UnloadScene()
@@ -50,15 +70,18 @@ public sealed class SceneManager
         ActiveScene
             .UnloadInternal();
 
-        ActiveScene = null;
+        ActiveScene.RuntimeGlobals =
+            null;
+
+        ActiveScene =
+            null;
     }
 
     internal void SetEditorScene(
         Scene scene)
     {
         ArgumentNullException.ThrowIfNull(
-            scene
-        );
+            scene);
 
         if (ActiveScene?.IsLoaded == true)
         {
@@ -66,8 +89,23 @@ public sealed class SceneManager
                 .UnloadInternal();
         }
 
+        if (ActiveScene != null)
+        {
+            ActiveScene.RuntimeGlobals =
+                null;
+        }
+
         ActiveScene =
             scene;
+
+        /*
+         * Editor scenes must NOT have runtime global state.
+         *
+         * Visual Event Modules execute only when the runtime
+         * scene is loaded in Play Mode.
+         */
+        ActiveScene.RuntimeGlobals =
+            null;
     }
 
     internal void UpdateInternal()
@@ -81,8 +119,7 @@ public sealed class SceneManager
     {
         ActiveScene?
             .RenderInternal(
-                context
-            );
+                context);
     }
 
     internal void ShutdownInternal()

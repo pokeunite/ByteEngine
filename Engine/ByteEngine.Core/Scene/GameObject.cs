@@ -91,12 +91,24 @@ public sealed class GameObject
     }
 
     internal void UpdateInternal()
+{
+    if (!ActiveInHierarchy)
     {
-        if (!ActiveInHierarchy) return;
-        if (!_started) StartInternal();
-        foreach (Component component in _components) component.UpdateInternal();
+        return;
     }
 
+    if (!_started)
+    {
+        StartInternal();
+    }
+
+    foreach (Component component
+             in _components.OrderBy(
+                 component => component.UpdateOrder))
+    {
+        component.UpdateInternal();
+    }
+}
     internal void RenderInternal(Graphics.RenderContext context)
     {
         if (!ActiveInHierarchy) return;

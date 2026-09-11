@@ -25,6 +25,7 @@ public abstract class Component
     public bool Enabled { get; set; } = true;
 
     public virtual int? RenderOrder => null;
+	public virtual int UpdateOrder => 0;
 
     internal void Attach(
         GameObject gameObject)
