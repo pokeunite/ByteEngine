@@ -155,6 +155,15 @@ public sealed class VisualInstruction
         new(StringComparer.OrdinalIgnoreCase);
 
     /*
+     * Runtime condition-graph inputs.
+     *
+     * Used by advanced logic Conditions such as logic.and and logic.or.
+     * Ordinary Conditions leave this list empty.
+     */
+    public List<Guid> ConditionInputIds { get; set; } =
+        new();
+
+    /*
      * Runtime execution-flow data for Action instructions.
      *
      * Conditions ignore this field.

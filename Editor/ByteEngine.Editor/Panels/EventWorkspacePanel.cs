@@ -307,10 +307,32 @@ internal sealed class EventWorkspacePanel
         bool open =
             _open;
 
+        bool graphPointerInteraction =
+            _graphCanvas.IsMouseInsideCanvas &&
+            (
+                ImGui.IsMouseDown(
+                    ImGuiMouseButton.Left) ||
+                ImGui.IsMouseDown(
+                    ImGuiMouseButton.Middle) ||
+                ImGui.IsMouseDown(
+                    ImGuiMouseButton.Right) ||
+                _draggingGraphNodeId !=
+                    Guid.Empty ||
+                _wireDragKind !=
+                    WireDragKind.None ||
+                _marqueeSelecting
+            );
+
+        ImGuiWindowFlags workspaceFlags =
+            graphPointerInteraction
+                ? ImGuiWindowFlags.NoMove
+                : ImGuiWindowFlags.None;
+
         bool visible =
             ImGui.Begin(
                 $"{_module.Name}{dirtyMarker}##EventWorkspace:{_asset.Guid}",
-                ref open);
+                ref open,
+                workspaceFlags);
 
         _open =
             open;
@@ -574,6 +596,37 @@ internal sealed class EventWorkspacePanel
             }
         }
 
+        if (liveTrace)
+        {
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                GetTraceColor(
+                    VisualLogicTraceState.ConditionTrue),
+                "TRUE / FIRED");
+
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                GetTraceColor(
+                    VisualLogicTraceState.ConditionFalse),
+                "FALSE / BLOCKED");
+
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                GetTraceColor(
+                    VisualLogicTraceState.ActionExecuted),
+                "ACTION");
+
+            ImGui.SameLine();
+
+            ImGui.TextColored(
+                GetTraceColor(
+                    VisualLogicTraceState.ActionSkipped),
+                "SKIPPED");
+        }
+
         if (_selectedGraphNodes.Count >
             0)
         {
@@ -777,14 +830,14 @@ internal sealed class EventWorkspacePanel
             1.65f);
     }
 
-    private bool IsLiveTraceNode(
+    private VisualLogicTraceState GetLiveTraceState(
         Guid nodeId)
     {
         if (_module ==
                 null ||
             !VisualLogicDebugTrace.Enabled)
         {
-            return false;
+            return VisualLogicTraceState.None;
         }
 
         EditorState? state =
@@ -795,13 +848,13 @@ internal sealed class EventWorkspacePanel
             state.Mode ==
                 EditorMode.Edit)
         {
-            return false;
+            return VisualLogicTraceState.None;
         }
 
         /*
-         * In normal Play mode the highlight is a quick pulse.
-         * When paused, keep the most recent hits visible long enough to
-         * inspect the graph.
+         * During Play mode, states pulse briefly.
+         * When paused, keep the last observed state visible so the graph can
+         * be inspected without the trace disappearing immediately.
          */
         double windowSeconds =
             state.Mode ==
@@ -809,10 +862,131 @@ internal sealed class EventWorkspacePanel
                 ? 60.0
                 : 0.22;
 
-        return VisualLogicDebugTrace.WasTriggered(
-            _module.Id,
-            nodeId,
-            windowSeconds);
+        return VisualLogicDebugTrace.TryGetRecentState(
+                _module.Id,
+                nodeId,
+                out VisualLogicTraceState traceState,
+                windowSeconds)
+            ? traceState
+            : VisualLogicTraceState.None;
+    }
+
+    private static Vector4 GetTraceColor(
+        VisualLogicTraceState state)
+    {
+        return state switch
+        {
+            VisualLogicTraceState.ConditionTrue or
+            VisualLogicTraceState.EventTriggered =>
+                new Vector4(
+                    0.28f,
+                    1.0f,
+                    0.48f,
+                    1.0f),
+
+            VisualLogicTraceState.ConditionFalse or
+            VisualLogicTraceState.EventBlocked or
+            VisualLogicTraceState.ActionFailed =>
+                new Vector4(
+                    1.0f,
+                    0.28f,
+                    0.28f,
+                    1.0f),
+
+            VisualLogicTraceState.ActionExecuted =>
+                new Vector4(
+                    1.0f,
+                    0.70f,
+                    0.20f,
+                    1.0f),
+
+            VisualLogicTraceState.ActionSkipped =>
+                new Vector4(
+                    0.58f,
+                    0.62f,
+                    0.68f,
+                    1.0f),
+
+            _ =>
+                new Vector4(
+                    0.65f,
+                    0.65f,
+                    0.65f,
+                    1.0f)
+        };
+    }
+
+    private static Vector4 GetTraceBackgroundColor(
+        VisualLogicTraceState state,
+        Vector4 fallback)
+    {
+        return state switch
+        {
+            VisualLogicTraceState.ConditionTrue or
+            VisualLogicTraceState.EventTriggered =>
+                new Vector4(
+                    0.08f,
+                    0.24f,
+                    0.13f,
+                    0.99f),
+
+            VisualLogicTraceState.ConditionFalse or
+            VisualLogicTraceState.EventBlocked or
+            VisualLogicTraceState.ActionFailed =>
+                new Vector4(
+                    0.26f,
+                    0.075f,
+                    0.075f,
+                    0.99f),
+
+            VisualLogicTraceState.ActionExecuted =>
+                new Vector4(
+                    0.27f,
+                    0.17f,
+                    0.055f,
+                    0.99f),
+
+            VisualLogicTraceState.ActionSkipped =>
+                new Vector4(
+                    0.12f,
+                    0.13f,
+                    0.15f,
+                    0.99f),
+
+            _ =>
+                fallback
+        };
+    }
+
+    private static string GetTraceLabel(
+        VisualLogicTraceState state)
+    {
+        return state switch
+        {
+            VisualLogicTraceState.ConditionTrue =>
+                "TRUE",
+
+            VisualLogicTraceState.ConditionFalse =>
+                "FALSE",
+
+            VisualLogicTraceState.EventTriggered =>
+                "FIRED",
+
+            VisualLogicTraceState.EventBlocked =>
+                "BLOCKED",
+
+            VisualLogicTraceState.ActionExecuted =>
+                "EXECUTED",
+
+            VisualLogicTraceState.ActionSkipped =>
+                "SKIPPED",
+
+            VisualLogicTraceState.ActionFailed =>
+                "FAILED",
+
+            _ =>
+                string.Empty
+        };
     }
 
     private void PushGraphNodeStyle()
@@ -1017,34 +1191,31 @@ internal sealed class EventWorkspacePanel
             _selectedGraphNodes.Contains(
                 rule.Id);
 
-        bool liveTriggered =
-            IsLiveTraceNode(
+        VisualLogicTraceState liveState =
+            GetLiveTraceState(
                 rule.Id);
+
+        Vector4 defaultEventBackground =
+            new(
+                0.075f,
+                0.095f,
+                0.13f,
+                0.98f);
 
         ImGui.PushStyleColor(
             ImGuiCol.ChildBg,
-            liveTriggered
-                ? new Vector4(
-                    0.08f,
-                    0.24f,
-                    0.13f,
-                    0.99f)
-                : new Vector4(
-                    0.075f,
-                    0.095f,
-                    0.13f,
-                    0.98f));
+            GetTraceBackgroundColor(
+                liveState,
+                defaultEventBackground));
 
         ImGui.PushStyleColor(
             ImGuiCol.Border,
             selected
                 ? SelectionColor
-                : liveTriggered
-                    ? new Vector4(
-                        0.28f,
-                        1.0f,
-                        0.48f,
-                        1.0f)
+                : liveState !=
+                    VisualLogicTraceState.None
+                    ? GetTraceColor(
+                        liveState)
                     : rule.Enabled
                         ? new Vector4(
                             0.23f,
@@ -1089,6 +1260,18 @@ internal sealed class EventWorkspacePanel
                     1.0f,
                     1.0f),
                 $"EVENT {ruleIndex + 1:00}");
+
+            if (liveState !=
+                VisualLogicTraceState.None)
+            {
+                ImGui.SameLine();
+
+                ImGui.TextColored(
+                    GetTraceColor(
+                        liveState),
+                    GetTraceLabel(
+                        liveState));
+            }
 
             ImGui.SameLine();
 
@@ -1328,7 +1511,7 @@ internal sealed class EventWorkspacePanel
                 _selectedGraphNodes.Remove(
                     instruction.InstanceId);
 
-                DisconnectCondition(
+                DisconnectConditionEverywhere(
                     rule,
                     instruction.InstanceId);
 
@@ -1423,40 +1606,37 @@ internal sealed class EventWorkspacePanel
             _selectedGraphNodes.Contains(
                 instruction.InstanceId);
 
-        bool liveTriggered =
-            IsLiveTraceNode(
+        VisualLogicTraceState liveState =
+            GetLiveTraceState(
                 instruction.InstanceId);
+
+        Vector4 defaultInstructionBackground =
+            condition
+                ? new Vector4(
+                    0.065f,
+                    0.11f,
+                    0.14f,
+                    0.98f)
+                : new Vector4(
+                    0.14f,
+                    0.095f,
+                    0.055f,
+                    0.98f);
 
         ImGui.PushStyleColor(
             ImGuiCol.ChildBg,
-            liveTriggered
-                ? new Vector4(
-                    0.08f,
-                    0.24f,
-                    0.13f,
-                    0.99f)
-                : condition
-                    ? new Vector4(
-                        0.065f,
-                        0.11f,
-                        0.14f,
-                        0.98f)
-                    : new Vector4(
-                        0.14f,
-                        0.095f,
-                        0.055f,
-                        0.98f));
+            GetTraceBackgroundColor(
+                liveState,
+                defaultInstructionBackground));
 
         ImGui.PushStyleColor(
             ImGuiCol.Border,
             selected
                 ? SelectionColor
-                : liveTriggered
-                    ? new Vector4(
-                        0.28f,
-                        1.0f,
-                        0.48f,
-                        1.0f)
+                : liveState !=
+                    VisualLogicTraceState.None
+                    ? GetTraceColor(
+                        liveState)
                     : condition
                         ? new Vector4(
                             0.20f,
@@ -1511,6 +1691,18 @@ internal sealed class EventWorkspacePanel
                     ? $"CONDITION {index + 1:00}"
                     : "ACTION");
 
+            if (liveState !=
+                VisualLogicTraceState.None)
+            {
+                ImGui.SameLine();
+
+                ImGui.TextColored(
+                    GetTraceColor(
+                        liveState),
+                    GetTraceLabel(
+                        liveState));
+            }
+
             ImGui.SameLine();
 
             if (ImGui.SmallButton(
@@ -1560,10 +1752,19 @@ internal sealed class EventWorkspacePanel
             GetInstructionOutput(
                 instruction);
 
-        _graphCanvas.DrawPin(
-            input,
-            pinColor,
-            6.0f);
+        bool logicGate =
+            condition &&
+            IsLogicGate(
+                instruction);
+
+        if (!condition ||
+            logicGate)
+        {
+            _graphCanvas.DrawPin(
+                input,
+                pinColor,
+                6.0f);
+        }
 
         _graphCanvas.DrawPin(
             output,
@@ -1574,14 +1775,28 @@ internal sealed class EventWorkspacePanel
                 ImGuiMouseButton.Right))
         {
             if (condition &&
+                logicGate &&
                 _graphCanvas.IsPointHovered(
-                    output,
+                    input,
                     13.0f))
+            {
+                RecordHistory(
+                    "Disconnect Logic Inputs");
+
+                instruction.ConditionInputIds.Clear();
+
+                _dirty =
+                    true;
+            }
+            else if (condition &&
+                     _graphCanvas.IsPointHovered(
+                         output,
+                         13.0f))
             {
                 RecordHistory(
                     "Disconnect Condition Wire");
 
-                DisconnectCondition(
+                DisconnectConditionEverywhere(
                     rule,
                     instruction.InstanceId);
 
@@ -1647,8 +1862,39 @@ internal sealed class EventWorkspacePanel
             }
 
             /*
-             * Conditions remain simple AND inputs into the Event.
+             * Advanced Condition graph.
+             *
+             * Ordinary Condition outputs may feed AND/OR gate inputs.
+             * Root Conditions (ordinary or gate outputs) feed the Event.
              */
+            foreach (VisualInstruction gate
+                     in rule.Conditions.Where(
+                         IsLogicGate))
+            {
+                foreach (Guid inputId
+                         in gate.ConditionInputIds)
+                {
+                    VisualInstruction? source =
+                        FindCondition(
+                            rule,
+                            inputId);
+
+                    if (source ==
+                        null)
+                    {
+                        continue;
+                    }
+
+                    _graphCanvas.DrawWire(
+                        GetInstructionOutput(
+                            source),
+                        GetInstructionInput(
+                            gate),
+                        ConditionWireColor,
+                        3.0f);
+                }
+            }
+
             Vector2 eventConditionInput =
                 GetEventConditionInput(
                     rule);
@@ -2109,6 +2355,54 @@ internal sealed class EventWorkspacePanel
     {
         if (condition)
         {
+            if (ImGui.BeginMenu(
+                    "Logic"))
+            {
+                if (ImGui.MenuItem(
+                        "AND"))
+                {
+                    RecordHistory(
+                        "Add AND");
+
+                    VisualInstruction created =
+                        AddInstructionAt(
+                            rule,
+                            "logic.and",
+                            true,
+                            position,
+                            insertAfterInstructionId);
+
+                    ConfigureCreatedLogicGate(
+                        rule,
+                        created,
+                        insertAfterInstructionId,
+                        connectFromWire);
+                }
+
+                if (ImGui.MenuItem(
+                        "OR"))
+                {
+                    RecordHistory(
+                        "Add OR");
+
+                    VisualInstruction created =
+                        AddInstructionAt(
+                            rule,
+                            "logic.or",
+                            true,
+                            position,
+                            insertAfterInstructionId);
+
+                    ConfigureCreatedLogicGate(
+                        rule,
+                        created,
+                        insertAfterInstructionId,
+                        connectFromWire);
+                }
+
+                ImGui.EndMenu();
+            }
+
             var groups =
                 _registry.Conditions
                     .OrderBy(
@@ -2583,17 +2877,36 @@ internal sealed class EventWorkspacePanel
                 continue;
             }
 
-            foreach (VisualInstruction instruction
-                     in rule.Conditions.Concat(
-                         rule.Actions))
+            foreach (VisualInstruction condition
+                     in rule.Conditions)
+            {
+                if (_graphCanvas.IsPointHovered(
+                        GetInstructionOutput(
+                            condition),
+                        16.0f) ||
+                    (
+                        IsLogicGate(
+                            condition) &&
+                        _graphCanvas.IsPointHovered(
+                            GetInstructionInput(
+                                condition),
+                            16.0f)
+                    ))
+                {
+                    return true;
+                }
+            }
+
+            foreach (VisualInstruction action
+                     in rule.Actions)
             {
                 if (_graphCanvas.IsPointHovered(
                         GetInstructionInput(
-                            instruction),
+                            action),
                         16.0f) ||
                     _graphCanvas.IsPointHovered(
                         GetInstructionOutput(
-                            instruction),
+                            action),
                         16.0f))
                 {
                     return true;
@@ -2617,24 +2930,15 @@ internal sealed class EventWorkspacePanel
         }
 
         /*
-         * Dragging from a Condition output to the Event's blue input.
+         * Dragging from a Condition/gate output.
          */
         if (_wireDragSourceInstructionId !=
             Guid.Empty)
         {
-            if (!_graphCanvas.IsPointHovered(
-                    GetEventConditionInput(
-                        rule),
-                    18.0f))
-            {
-                return false;
-            }
-
             VisualInstruction? source =
-                rule.Conditions.FirstOrDefault(
-                    condition =>
-                        condition.InstanceId ==
-                        _wireDragSourceInstructionId);
+                FindCondition(
+                    rule,
+                    _wireDragSourceInstructionId);
 
             if (source ==
                 null)
@@ -2642,21 +2946,72 @@ internal sealed class EventWorkspacePanel
                 return false;
             }
 
-            RecordHistory(
-                "Connect Condition Wire");
+            /*
+             * Output -> Event input makes the source a root expression.
+             */
+            if (_graphCanvas.IsPointHovered(
+                    GetEventConditionInput(
+                        rule),
+                    18.0f))
+            {
+                RecordHistory(
+                    "Connect Condition Wire");
 
-            ConnectCondition(
-                rule,
-                source.InstanceId);
+                ConnectCondition(
+                    rule,
+                    source.InstanceId);
 
-            _dirty =
-                true;
+                _dirty =
+                    true;
 
-            return true;
+                return true;
+            }
+
+            /*
+             * Output -> AND/OR input adds the source to that gate.
+             */
+            foreach (VisualInstruction gate
+                     in rule.Conditions.Where(
+                         IsLogicGate))
+            {
+                if (!_graphCanvas.IsPointHovered(
+                        GetInstructionInput(
+                            gate),
+                        18.0f))
+                {
+                    continue;
+                }
+
+                if (gate.InstanceId ==
+                        source.InstanceId ||
+                    WouldCreateConditionCycle(
+                        rule,
+                        source.InstanceId,
+                        gate.InstanceId))
+                {
+                    return true;
+                }
+
+                RecordHistory(
+                    "Connect Logic Wire");
+
+                ConnectConditionToGate(
+                    rule,
+                    gate,
+                    source.InstanceId);
+
+                _dirty =
+                    true;
+
+                return true;
+            }
+
+            return false;
         }
 
         /*
-         * Dragging from the Event's blue input back onto a Condition output.
+         * Dragging backwards from the Event's blue input onto a Condition
+         * output still creates a root connection.
          */
         foreach (VisualInstruction condition
                  in rule.Conditions)
@@ -3183,7 +3538,7 @@ internal sealed class EventWorkspacePanel
                     continue;
                 }
 
-                DisconnectCondition(
+                DisconnectConditionEverywhere(
                     rule,
                     condition.InstanceId);
 
@@ -3657,6 +4012,32 @@ internal sealed class EventWorkspacePanel
 
         if (condition)
         {
+            if (instruction.Id.Equals(
+                    "logic.and",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                displayName =
+                    "AND";
+
+                category =
+                    "Logic";
+
+                return;
+            }
+
+            if (instruction.Id.Equals(
+                    "logic.or",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                displayName =
+                    "OR";
+
+                category =
+                    "Logic";
+
+                return;
+            }
+
             if (_registry.TryGetCondition(
                     instruction.Id,
                     out VisualConditionDefinition? definition) &&
@@ -3746,6 +4127,27 @@ internal sealed class EventWorkspacePanel
         }
     }
 
+    private static bool IsLogicGate(
+        VisualInstruction instruction)
+    {
+        return instruction.Id.Equals(
+                   "logic.and",
+                   StringComparison.OrdinalIgnoreCase) ||
+               instruction.Id.Equals(
+                   "logic.or",
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static VisualInstruction? FindCondition(
+        EventRuleDefinition rule,
+        Guid conditionId)
+    {
+        return rule.Conditions.FirstOrDefault(
+            condition =>
+                condition.InstanceId ==
+                conditionId);
+    }
+
     private static void DisconnectCondition(
         EventRuleDefinition rule,
         Guid conditionId)
@@ -3757,6 +4159,153 @@ internal sealed class EventWorkspacePanel
             id =>
                 id ==
                 conditionId);
+    }
+
+    private static void DisconnectConditionEverywhere(
+        EventRuleDefinition rule,
+        Guid conditionId)
+    {
+        DisconnectCondition(
+            rule,
+            conditionId);
+
+        foreach (VisualInstruction gate
+                 in rule.Conditions.Where(
+                     IsLogicGate))
+        {
+            gate.ConditionInputIds.RemoveAll(
+                id =>
+                    id ==
+                    conditionId);
+        }
+    }
+
+    private static void ConnectConditionToGate(
+        EventRuleDefinition rule,
+        VisualInstruction gate,
+        Guid conditionId)
+    {
+        if (!IsLogicGate(
+                gate))
+        {
+            return;
+        }
+
+        /*
+         * Routing a Condition into a gate removes its direct Event-root
+         * connection. This makes the visual graph match runtime meaning:
+         *
+         *     A ----\
+         *            OR ----> Event
+         *     B ----/
+         *
+         * rather than accidentally keeping A/B wired directly to Event too.
+         * A Condition can still fan out to multiple gates.
+         */
+        DisconnectCondition(
+            rule,
+            conditionId);
+
+        if (!gate.ConditionInputIds.Contains(
+                conditionId))
+        {
+            gate.ConditionInputIds.Add(
+                conditionId);
+        }
+    }
+
+    private static bool WouldCreateConditionCycle(
+        EventRuleDefinition rule,
+        Guid sourceConditionId,
+        Guid targetGateId)
+    {
+        VisualInstruction? source =
+            FindCondition(
+                rule,
+                sourceConditionId);
+
+        if (source ==
+                null ||
+            !IsLogicGate(
+                source))
+        {
+            return false;
+        }
+
+        HashSet<Guid> visited =
+            new();
+
+        Stack<Guid> pending =
+            new();
+
+        pending.Push(
+            sourceConditionId);
+
+        while (pending.Count >
+               0)
+        {
+            Guid currentId =
+                pending.Pop();
+
+            if (!visited.Add(
+                    currentId))
+            {
+                continue;
+            }
+
+            if (currentId ==
+                targetGateId)
+            {
+                return true;
+            }
+
+            VisualInstruction? current =
+                FindCondition(
+                    rule,
+                    currentId);
+
+            if (current ==
+                    null ||
+                !IsLogicGate(
+                    current))
+            {
+                continue;
+            }
+
+            foreach (Guid inputId
+                     in current.ConditionInputIds)
+            {
+                pending.Push(
+                    inputId);
+            }
+        }
+
+        return false;
+    }
+
+    private static void ConfigureCreatedLogicGate(
+        EventRuleDefinition rule,
+        VisualInstruction gate,
+        Guid sourceConditionId,
+        bool connectFromWire)
+    {
+        if (connectFromWire &&
+            sourceConditionId !=
+                Guid.Empty)
+        {
+            ConnectConditionToGate(
+                rule,
+                gate,
+                sourceConditionId);
+        }
+
+        /*
+         * A newly created gate becomes a root expression by default so its
+         * output reaches the Event immediately.
+         */
+        ConnectCondition(
+            rule,
+            gate.InstanceId);
     }
 
     private static VisualInstruction? FindAction(
@@ -4164,6 +4713,13 @@ internal sealed class EventWorkspacePanel
             InitializeMissingInstructionLayout(
                 rule);
 
+            foreach (VisualInstruction condition
+                     in rule.Conditions)
+            {
+                condition.ConditionInputIds ??=
+                    new List<Guid>();
+            }
+
             EnsureConditionFlowInitialized(
                 rule);
 
@@ -4357,6 +4913,10 @@ internal sealed class EventWorkspacePanel
         float height =
             instruction.Id switch
             {
+                "logic.and" or
+                "logic.or" =>
+                    155.0f,
+
                 "system.always" or
                 "system.triggerOnce" or
                 "character.isGrounded" or
@@ -4706,6 +5266,58 @@ internal sealed class EventWorkspacePanel
 
         ImGui.Separator();
 
+        if (ImGui.BeginMenu(
+                "Logic"))
+        {
+            if (ImGui.MenuItem(
+                    "AND"))
+            {
+                RecordHistory(
+                    "Add AND");
+
+                VisualInstruction created =
+                    CreateInstruction(
+                        "logic.and");
+
+                conditions.Add(
+                    created);
+
+                ConnectCondition(
+                    rule,
+                    created.InstanceId);
+
+                _dirty =
+                    true;
+
+                ImGui.CloseCurrentPopup();
+            }
+
+            if (ImGui.MenuItem(
+                    "OR"))
+            {
+                RecordHistory(
+                    "Add OR");
+
+                VisualInstruction created =
+                    CreateInstruction(
+                        "logic.or");
+
+                conditions.Add(
+                    created);
+
+                ConnectCondition(
+                    rule,
+                    created.InstanceId);
+
+                _dirty =
+                    true;
+
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.EndMenu();
+        }
+
         var groups =
             _registry.Conditions
                 .OrderBy(
@@ -4983,6 +5595,22 @@ internal sealed class EventWorkspacePanel
     {
         switch (instruction.Id)
         {
+            case "logic.and":
+                ImGui.TextDisabled(
+                    "TRUE when every connected input is TRUE.");
+
+                ImGui.TextDisabled(
+                    "Connect Condition outputs to the left pin.");
+                break;
+
+            case "logic.or":
+                ImGui.TextDisabled(
+                    "TRUE when any connected input is TRUE.");
+
+                ImGui.TextDisabled(
+                    "Connect Condition outputs to the left pin.");
+                break;
+
             case "input.keyHeld":
             case "input.keyPressed":
             case "input.keyReleased":

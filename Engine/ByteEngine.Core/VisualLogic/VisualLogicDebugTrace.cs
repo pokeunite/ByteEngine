@@ -3,12 +3,24 @@ using System.Diagnostics;
 
 namespace ByteEngine.Core.VisualLogic;
 
+public enum VisualLogicTraceState
+{
+    None,
+    ConditionTrue,
+    ConditionFalse,
+    EventTriggered,
+    EventBlocked,
+    ActionExecuted,
+    ActionSkipped,
+    ActionFailed
+}
+
 /// <summary>
 /// Lightweight runtime trace used by the ByteGraph editor.
 ///
-/// Runtime visual logic writes only the most recent timestamp for each
-/// Event/Condition/Action node. The editor can then briefly highlight nodes
-/// that actually evaluated true or executed while Play mode is running.
+/// Runtime visual logic stores the most recent state and timestamp for each
+/// Event/Condition/Action node. The editor can then show meaningful live
+/// execution feedback while Play mode is running.
 /// </summary>
 public static class VisualLogicDebugTrace
 {
@@ -16,7 +28,11 @@ public static class VisualLogicDebugTrace
         Guid ModuleId,
         Guid NodeId);
 
-    private static readonly ConcurrentDictionary<TraceKey, long> _hits =
+    private readonly record struct TraceEntry(
+        VisualLogicTraceState State,
+        long Timestamp);
+
+    private static readonly ConcurrentDictionary<TraceKey, TraceEntry> _entries =
         new();
 
     public static bool Enabled { get; set; } =
@@ -24,29 +40,38 @@ public static class VisualLogicDebugTrace
 
     public static void Mark(
         Guid moduleId,
-        Guid nodeId)
+        Guid nodeId,
+        VisualLogicTraceState state)
     {
         if (!Enabled ||
             moduleId ==
                 Guid.Empty ||
             nodeId ==
-                Guid.Empty)
+                Guid.Empty ||
+            state ==
+                VisualLogicTraceState.None)
         {
             return;
         }
 
-        _hits[
+        _entries[
             new TraceKey(
                 moduleId,
                 nodeId)] =
-            Stopwatch.GetTimestamp();
+            new TraceEntry(
+                state,
+                Stopwatch.GetTimestamp());
     }
 
-    public static bool WasTriggered(
+    public static bool TryGetRecentState(
         Guid moduleId,
         Guid nodeId,
+        out VisualLogicTraceState state,
         double withinSeconds = 0.20)
     {
+        state =
+            VisualLogicTraceState.None;
+
         if (!Enabled ||
             moduleId ==
                 Guid.Empty ||
@@ -58,29 +83,37 @@ public static class VisualLogicDebugTrace
             return false;
         }
 
-        if (!_hits.TryGetValue(
+        if (!_entries.TryGetValue(
                 new TraceKey(
                     moduleId,
                     nodeId),
-                out long timestamp))
+                out TraceEntry entry))
         {
             return false;
         }
 
         long elapsed =
             Stopwatch.GetTimestamp() -
-            timestamp;
+            entry.Timestamp;
 
         double seconds =
             elapsed /
             (double)Stopwatch.Frequency;
 
-        return seconds <=
-               withinSeconds;
+        if (seconds >
+            withinSeconds)
+        {
+            return false;
+        }
+
+        state =
+            entry.State;
+
+        return true;
     }
 
     public static void Clear()
     {
-        _hits.Clear();
+        _entries.Clear();
     }
 }

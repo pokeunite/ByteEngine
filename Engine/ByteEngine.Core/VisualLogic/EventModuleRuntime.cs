@@ -85,117 +85,135 @@ public sealed class EventModuleRuntime
             return false;
         }
 
-        IReadOnlyList<VisualInstruction> activeConditions =
-            GetActiveConditions(
+        Dictionary<Guid, VisualInstruction> conditionMap =
+            rule.Conditions.ToDictionary(
+                condition =>
+                    condition.InstanceId);
+
+        IReadOnlyList<Guid> rootConditionIds =
+            GetActiveConditionIds(
                 rule);
 
-        bool triggerOnce =
-            activeConditions.Any(
-                condition =>
-                    condition.Id.Equals(
-                        "system.triggerOnce",
-                        StringComparison.OrdinalIgnoreCase));
+        Dictionary<Guid, bool> results =
+            new();
 
-        foreach (VisualInstruction condition
-                 in activeConditions)
+        HashSet<Guid> evaluating =
+            new();
+
+        HashSet<Guid> evaluated =
+            new();
+
+        bool allPassed =
+            true;
+
+        foreach (Guid conditionId
+                 in rootConditionIds)
         {
-            /*
-             * Trigger Once is handled at rule level.
-             */
-            if (condition.Id.Equals(
-                    "system.triggerOnce",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!_registry.TryGetCondition(
-                    condition.Id,
-                    out VisualConditionDefinition? definition))
-            {
-                WarnOnce(
-                    $"{module.Id}:{condition.InstanceId}",
-                    $"Unknown visual condition '{condition.Id}' in '{module.Name}'.",
-                    context);
-
-                ResetLatchTree(
-                    rule);
-
-                return false;
-            }
-
-            if (definition ==
-                null)
-            {
-                ResetLatchTree(
-                    rule);
-
-                return false;
-            }
-
-            bool passed;
-
-            try
-            {
-                passed =
-                    definition.Evaluate(
-                        condition,
-                        context);
-            }
-            catch (Exception exception)
-            {
-                WarnOnce(
-                    $"{module.Id}:{condition.InstanceId}:exception",
-                    $"Condition '{definition.DisplayName}' failed: {exception.Message}",
-                    context);
-
-                passed =
-                    false;
-            }
+            bool passed =
+                EvaluateConditionNode(
+                    module,
+                    rule,
+                    conditionId,
+                    conditionMap,
+                    context,
+                    results,
+                    evaluating,
+                    evaluated);
 
             if (!passed)
             {
-                ResetLatchTree(
-                    rule);
-
-                return false;
+                allPassed =
+                    false;
             }
-
-            /*
-             * A Condition lights while it is actually true.
-             */
-            VisualLogicDebugTrace.Mark(
-                module.Id,
-                condition.InstanceId);
         }
 
-        if (triggerOnce)
-        {
-            if (!_triggerOnceLatched.Add(
-                    rule.Id))
-            {
-                return false;
-            }
+        List<VisualInstruction> triggerOnceConditions =
+            evaluated
+                .Select(
+                    id =>
+                        conditionMap.TryGetValue(
+                            id,
+                            out VisualInstruction? condition)
+                            ? condition
+                            : null)
+                .Where(
+                    condition =>
+                        condition != null &&
+                        condition.Id.Equals(
+                            "system.triggerOnce",
+                            StringComparison.OrdinalIgnoreCase))
+                .Cast<VisualInstruction>()
+                .ToList();
 
-            foreach (VisualInstruction condition
-                     in activeConditions.Where(
-                         condition =>
-                             condition.Id.Equals(
-                                 "system.triggerOnce",
-                                 StringComparison.OrdinalIgnoreCase)))
+        if (!allPassed)
+        {
+            /*
+             * Any ordinary false condition resets Trigger Once, so the Event
+             * can fire again after the complete expression becomes true.
+             */
+            ResetLatchTree(
+                rule);
+
+            foreach (VisualInstruction triggerOnce
+                     in triggerOnceConditions)
             {
                 VisualLogicDebugTrace.Mark(
                     module.Id,
-                    condition.InstanceId);
+                    triggerOnce.InstanceId,
+                    VisualLogicTraceState.ConditionTrue);
+            }
+
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                rule.Id,
+                VisualLogicTraceState.EventBlocked);
+
+            MarkActionChainState(
+                module,
+                rule,
+                VisualLogicTraceState.ActionSkipped);
+
+            return false;
+        }
+
+        if (triggerOnceConditions.Count >
+            0)
+        {
+            bool triggerAllowed =
+                _triggerOnceLatched.Add(
+                    rule.Id);
+
+            foreach (VisualInstruction triggerOnce
+                     in triggerOnceConditions)
+            {
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    triggerOnce.InstanceId,
+                    triggerAllowed
+                        ? VisualLogicTraceState.ConditionTrue
+                        : VisualLogicTraceState.ConditionFalse);
+            }
+
+            if (!triggerAllowed)
+            {
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    rule.Id,
+                    VisualLogicTraceState.EventBlocked);
+
+                MarkActionChainState(
+                    module,
+                    rule,
+                    VisualLogicTraceState.ActionSkipped);
+
+                return false;
             }
         }
 
-        /*
-         * The Event card itself lights only when the complete rule fires.
-         */
         VisualLogicDebugTrace.Mark(
             module.Id,
-            rule.Id);
+            rule.Id,
+            VisualLogicTraceState.EventTriggered);
 
         ExecuteActions(
             module,
@@ -214,29 +232,198 @@ public sealed class EventModuleRuntime
         return true;
     }
 
-    private static IReadOnlyList<VisualInstruction> GetActiveConditions(
+    private bool EvaluateConditionNode(
+        EventModuleDefinition module,
+        EventRuleDefinition rule,
+        Guid conditionId,
+        IReadOnlyDictionary<Guid, VisualInstruction> conditionMap,
+        EventExecutionContext context,
+        Dictionary<Guid, bool> results,
+        HashSet<Guid> evaluating,
+        HashSet<Guid> evaluated)
+    {
+        if (results.TryGetValue(
+                conditionId,
+                out bool cached))
+        {
+            return cached;
+        }
+
+        if (!conditionMap.TryGetValue(
+                conditionId,
+                out VisualInstruction? condition) ||
+            condition ==
+                null)
+        {
+            WarnOnce(
+                $"{module.Id}:{rule.Id}:missing-condition:{conditionId}",
+                $"Condition flow in '{module.Name}' points to a missing Condition.",
+                context);
+
+            return false;
+        }
+
+        evaluated.Add(
+            conditionId);
+
+        if (!evaluating.Add(
+                conditionId))
+        {
+            WarnOnce(
+                $"{module.Id}:{rule.Id}:condition-cycle",
+                $"Condition flow in '{module.Name}' contains a cycle. The cycle was treated as false.",
+                context);
+
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                condition.InstanceId,
+                VisualLogicTraceState.ConditionFalse);
+
+            results[conditionId] =
+                false;
+
+            return false;
+        }
+
+        bool passed;
+
+        if (condition.Id.Equals(
+                "logic.and",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            passed =
+                condition.ConditionInputIds.Count >
+                0;
+
+            foreach (Guid inputId
+                     in condition.ConditionInputIds)
+            {
+                bool inputPassed =
+                    EvaluateConditionNode(
+                        module,
+                        rule,
+                        inputId,
+                        conditionMap,
+                        context,
+                        results,
+                        evaluating,
+                        evaluated);
+
+                if (!inputPassed)
+                {
+                    passed =
+                        false;
+                }
+            }
+        }
+        else if (condition.Id.Equals(
+                     "logic.or",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            passed =
+                false;
+
+            foreach (Guid inputId
+                     in condition.ConditionInputIds)
+            {
+                bool inputPassed =
+                    EvaluateConditionNode(
+                        module,
+                        rule,
+                        inputId,
+                        conditionMap,
+                        context,
+                        results,
+                        evaluating,
+                        evaluated);
+
+                if (inputPassed)
+                {
+                    passed =
+                        true;
+                }
+            }
+        }
+        else if (condition.Id.Equals(
+                     "system.triggerOnce",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            /*
+             * Trigger Once is applied after the complete Condition graph
+             * passes. Treat it as logically true while evaluating the graph.
+             */
+            passed =
+                true;
+        }
+        else if (!_registry.TryGetCondition(
+                     condition.Id,
+                     out VisualConditionDefinition? definition) ||
+                 definition ==
+                     null)
+        {
+            WarnOnce(
+                $"{module.Id}:{condition.InstanceId}",
+                $"Unknown visual condition '{condition.Id}' in '{module.Name}'.",
+                context);
+
+            passed =
+                false;
+        }
+        else
+        {
+            try
+            {
+                passed =
+                    definition.Evaluate(
+                        condition,
+                        context);
+            }
+            catch (Exception exception)
+            {
+                WarnOnce(
+                    $"{module.Id}:{condition.InstanceId}:exception",
+                    $"Condition '{definition.DisplayName}' failed: {exception.Message}",
+                    context);
+
+                passed =
+                    false;
+            }
+        }
+
+        evaluating.Remove(
+            conditionId);
+
+        results[conditionId] =
+            passed;
+
+        if (!condition.Id.Equals(
+                "system.triggerOnce",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                condition.InstanceId,
+                passed
+                    ? VisualLogicTraceState.ConditionTrue
+                    : VisualLogicTraceState.ConditionFalse);
+        }
+
+        return passed;
+    }
+
+    private static IReadOnlyList<Guid> GetActiveConditionIds(
         EventRuleDefinition rule)
     {
         if (!rule.HasExplicitConditionFlow)
         {
-            return rule.Conditions;
+            return rule.Conditions
+                .Select(
+                    condition =>
+                        condition.InstanceId)
+                .ToList();
         }
 
-        if (rule.ConnectedConditionIds.Count ==
-            0)
-        {
-            return Array.Empty<VisualInstruction>();
-        }
-
-        HashSet<Guid> connected =
-            rule.ConnectedConditionIds.ToHashSet();
-
-        return rule.Conditions
-            .Where(
-                condition =>
-                    connected.Contains(
-                        condition.InstanceId))
-            .ToList();
+        return rule.ConnectedConditionIds;
     }
 
     private void ExecuteActions(
@@ -318,6 +505,69 @@ public sealed class EventModuleRuntime
         }
     }
 
+    private static void MarkActionChainState(
+        EventModuleDefinition module,
+        EventRuleDefinition rule,
+        VisualLogicTraceState state)
+    {
+        if (!VisualLogicDebugTrace.Enabled)
+        {
+            return;
+        }
+
+        if (!rule.HasExplicitExecutionFlow)
+        {
+            foreach (VisualInstruction action
+                     in rule.Actions)
+            {
+                VisualLogicDebugTrace.Mark(
+                    module.Id,
+                    action.InstanceId,
+                    state);
+            }
+
+            return;
+        }
+
+        if (!rule.FirstActionId.HasValue)
+        {
+            return;
+        }
+
+        Dictionary<Guid, VisualInstruction> actions =
+            rule.Actions.ToDictionary(
+                action =>
+                    action.InstanceId);
+
+        HashSet<Guid> visited =
+            new();
+
+        Guid? current =
+            rule.FirstActionId;
+
+        while (current.HasValue &&
+               visited.Add(
+                   current.Value))
+        {
+            if (!actions.TryGetValue(
+                    current.Value,
+                    out VisualInstruction? action) ||
+                action ==
+                    null)
+            {
+                return;
+            }
+
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                action.InstanceId,
+                state);
+
+            current =
+                action.NextActionId;
+        }
+    }
+
     private void ExecuteAction(
         EventModuleDefinition module,
         VisualInstruction action,
@@ -342,12 +592,12 @@ public sealed class EventModuleRuntime
         }
 
         /*
-         * Mark before execution so a node still lights if the Action itself
-         * throws and the warning is shown to the developer.
+         * Orange means this Action actually executed.
          */
         VisualLogicDebugTrace.Mark(
             module.Id,
-            action.InstanceId);
+            action.InstanceId,
+            VisualLogicTraceState.ActionExecuted);
 
         try
         {
@@ -357,6 +607,11 @@ public sealed class EventModuleRuntime
         }
         catch (Exception exception)
         {
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                action.InstanceId,
+                VisualLogicTraceState.ActionFailed);
+
             WarnOnce(
                 $"{module.Id}:{action.InstanceId}:exception",
                 $"Action '{definition.DisplayName}' failed: {exception.Message}",
