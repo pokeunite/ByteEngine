@@ -219,6 +219,22 @@ internal sealed class BlueprintWorkspacePanel
         ImGui.SameLine();
 
         if (ImGui.Button(
+                "Normalize Models"))
+        {
+            NormalizeExistingModelScales();
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Reimport Models"))
+        {
+            ReimportReferencedModels();
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
                 "Write Debug Dump"))
         {
             WriteDebugDump(
@@ -1400,14 +1416,27 @@ internal sealed class BlueprintWorkspacePanel
                     false);
             }
 
-            float appliedScale =
-                ModelImportScaleUtility.Resolve(
+            ModelScaleAnalysis scaleAnalysis =
+                ModelImportScaleUtility.Analyze(
                     asset,
                     model);
+
+            float appliedScale =
+                scaleAnalysis.AppliedScale;
 
             container.Transform.LocalScale =
                 Vector3.One *
                 appliedScale;
+
+            container.AddComponent(
+                new ModelHierarchyInstance
+                {
+                    Model =
+                        reference,
+
+                    AppliedImportScale =
+                        appliedScale
+                });
 
             var objects =
                 new Dictionary<string, GameObject>();
@@ -1513,8 +1542,13 @@ internal sealed class BlueprintWorkspacePanel
             _selectedPreviewObjectId =
                 container.Id;
 
+            string scaleNote =
+                scaleAnalysis.Normalized
+                    ? $" | {scaleAnalysis.Summary}"
+                    : string.Empty;
+
             _statusMessage =
-                $"Added {Path.GetFileName(asset.ProjectPath)} ({model.Meshes.Count} mesh(es))";
+                $"Added {Path.GetFileName(asset.ProjectPath)} ({model.Meshes.Count} mesh(es)){scaleNote}";
 
             _statusIsError =
                 false;
@@ -1807,6 +1841,156 @@ internal sealed class BlueprintWorkspacePanel
 
         gameObject.Transform.LocalScale =
             scale;
+    }
+
+    // ========================================================
+    // MODEL REIMPORT / NORMALIZATION
+    // ========================================================
+
+    private void NormalizeExistingModelScales()
+    {
+        if (_project ==
+                null ||
+            _preview ==
+                null)
+        {
+            return;
+        }
+
+        int changed =
+            0;
+
+        foreach (ModelHierarchyInstance instance
+                 in _preview.GameObjects
+                     .SelectMany(
+                         gameObject =>
+                             gameObject.Components
+                                 .OfType<ModelHierarchyInstance>()))
+        {
+            if (!_project.AssetDatabase.TryGetAsset(
+                    instance.Model.Guid,
+                    out AssetRecord? asset) ||
+                asset ==
+                    null ||
+                asset.Type !=
+                    AssetType.Model3D)
+            {
+                continue;
+            }
+
+            var reference =
+                new AssetReference(
+                    asset.Guid,
+                    asset.ProjectPath);
+
+            ModelAsset model =
+                _project.Assets.LoadModel(
+                    reference);
+
+            ModelScaleAnalysis analysis =
+                ModelImportScaleUtility.Analyze(
+                    asset,
+                    model);
+
+            Vector3 desired =
+                Vector3.One *
+                analysis.AppliedScale;
+
+            GameObject container =
+                instance.GameObject;
+
+            if (Vector3.DistanceSquared(
+                    container.Transform.LocalScale,
+                    desired) <
+                0.0000001f)
+            {
+                continue;
+            }
+
+            container.Transform.LocalScale =
+                desired;
+
+            instance.AppliedImportScale =
+                analysis.AppliedScale;
+
+            changed++;
+        }
+
+        RefreshPreviewBoundsFromScene();
+
+        FramePreviewBounds();
+
+        if (changed >
+            0)
+        {
+            MarkDirty();
+
+            _statusMessage =
+                $"Normalized {changed} model hierarchy(s). Save Blueprint to keep the correction.";
+        }
+        else
+        {
+            _statusMessage =
+                "No model scale changes were needed.";
+        }
+
+        _statusIsError =
+            false;
+    }
+
+    private void ReimportReferencedModels()
+    {
+        if (_project ==
+                null ||
+            _preview ==
+                null)
+        {
+            return;
+        }
+
+        Guid[] modelGuids =
+            _preview.GameObjects
+                .SelectMany(
+                    gameObject =>
+                        gameObject.Components
+                            .OfType<MeshRenderer>())
+                .Select(
+                    renderer =>
+                        renderer.MeshReference?
+                            .Model
+                            .Guid ??
+                        Guid.Empty)
+                .Where(
+                    guid =>
+                        guid !=
+                        Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+        int refreshed =
+            0;
+
+        foreach (Guid guid
+                 in modelGuids)
+        {
+            _project.Assets.ReimportModel(
+                guid);
+
+            refreshed++;
+        }
+
+        RefreshPreviewBoundsFromScene();
+
+        FramePreviewBounds();
+
+        _statusMessage =
+            refreshed ==
+                0
+                ? "No referenced models found."
+                : $"Reimported {refreshed} model asset(s).";
+
+        _statusIsError =
+            false;
     }
 
     // ========================================================

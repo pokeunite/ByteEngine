@@ -84,6 +84,10 @@ public sealed class ComponentSerializer
         );
 
         Register(
+            new ModelHierarchyInstanceCodec()
+        );
+
+        Register(
             new SkeletalMeshRendererCodec()
         );
 
@@ -1476,6 +1480,63 @@ public sealed class ComponentSerializer
                     data.Properties["visible"]?
                         .GetValue<bool>() ??
                     true
+            };
+        }
+    }
+
+    private sealed class ModelHierarchyInstanceCodec
+        : IComponentCodec
+    {
+        public string TypeName =>
+            "ModelHierarchyInstance";
+
+        public Type ComponentType =>
+            typeof(ModelHierarchyInstance);
+
+        public ComponentData Serialize(
+            Component component,
+            ComponentSerializationContext context)
+        {
+            var instance =
+                (ModelHierarchyInstance)component;
+
+            return Data(
+                TypeName,
+                new JsonObject
+                {
+                    ["modelGuid"] =
+                        instance.Model.Guid.ToString(),
+
+                    ["modelPath"] =
+                        instance.Model.CachedProjectPath,
+
+                    ["appliedImportScale"] =
+                        instance.AppliedImportScale
+                });
+        }
+
+        public Component Deserialize(
+            ComponentData data,
+            ComponentSerializationContext context)
+        {
+            Guid.TryParse(
+                data.Properties["modelGuid"]?
+                    .GetValue<string>(),
+                out Guid modelGuid);
+
+            return new ModelHierarchyInstance
+            {
+                Model =
+                    new AssetReference(
+                        modelGuid,
+                        data.Properties["modelPath"]?
+                            .GetValue<string>()),
+
+                AppliedImportScale =
+                    Float(
+                        data,
+                        "appliedImportScale",
+                        1.0f)
             };
         }
     }

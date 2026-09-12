@@ -13,6 +13,11 @@ public sealed class CharacterController3D
 
     private bool _wasGrounded;
 
+    private float _timeSinceGrounded =
+        float.PositiveInfinity;
+
+    private float _jumpBufferRemaining;
+
     public bool IsGrounded { get; private set; }
 
     public bool IsFalling =>
@@ -145,6 +150,11 @@ public sealed class CharacterController3D
     {
         _jumpQueued =
             true;
+
+        _jumpBufferRemaining =
+            Math.Max(
+                JumpBuffer,
+                0.0f);
     }
 
     public void SetVelocity(
@@ -170,6 +180,17 @@ public sealed class CharacterController3D
             false;
 
         DetectGround();
+
+        if (IsGrounded)
+        {
+            _timeSinceGrounded =
+                0.0f;
+        }
+        else
+        {
+            _timeSinceGrounded +=
+                deltaTime;
+        }
 
         Vector3 target =
             _moveInput;
@@ -221,22 +242,7 @@ public sealed class CharacterController3D
                 )
             );
 
-        if (_jumpQueued &&
-            IsGrounded)
-        {
-            Velocity =
-                new Vector3(
-                    Velocity.X,
-                    JumpForce,
-                    Velocity.Z
-                );
-
-            IsGrounded =
-                false;
-
-            GroundObject =
-                null;
-        }
+        TryConsumeJump();
 
         if (!IsGrounded)
         {
@@ -260,7 +266,21 @@ public sealed class CharacterController3D
             0.0f)
         {
             DetectGround();
+
+            if (IsGrounded)
+            {
+                _timeSinceGrounded =
+                    0.0f;
+
+                TryConsumeJump();
+            }
         }
+
+        _jumpBufferRemaining =
+            Math.Max(
+                0.0f,
+                _jumpBufferRemaining -
+                deltaTime);
 
         _moveInput =
             Vector3.Zero;
@@ -282,6 +302,9 @@ public sealed class CharacterController3D
 
         float bestHeight =
             float.NegativeInfinity;
+
+        Vector3 bestNormal =
+            Vector3.UnitY;
 
         ByteEngine.Core.Scene.Scene? scene =
             GameObject.Scene;
@@ -321,10 +344,32 @@ public sealed class CharacterController3D
                 continue;
             }
 
-            float surfaceHeight =
-                GetGroundTop(
-                    item
-                );
+            if (!TryGetGroundContact(
+                    item,
+                    Transform.WorldPosition.X,
+                    Transform.WorldPosition.Z,
+                    out float surfaceHeight,
+                    out Vector3 surfaceNormal))
+            {
+                continue;
+            }
+
+            float slope =
+                MathF.Acos(
+                    Math.Clamp(
+                        Vector3.Dot(
+                            surfaceNormal,
+                            Vector3.UnitY),
+                        -1.0f,
+                        1.0f)) *
+                180.0f /
+                MathF.PI;
+
+            if (slope >
+                MaxSlope)
+            {
+                continue;
+            }
 
             /*
              * Temporary v0.7 grounding.
@@ -356,6 +401,9 @@ public sealed class CharacterController3D
 
                 GroundObject =
                     item;
+
+                bestNormal =
+                    surfaceNormal;
             }
         }
 
@@ -367,6 +415,11 @@ public sealed class CharacterController3D
 
         IsGrounded =
             grounded;
+
+        GroundNormal =
+            grounded
+                ? bestNormal
+                : Vector3.UnitY;
 
         if (IsGrounded &&
             SnapToGround)
@@ -402,7 +455,8 @@ public sealed class CharacterController3D
                 .OfType<Collider3D>()
                 .FirstOrDefault(
                     component =>
-                        component.Enabled
+                        component.Enabled &&
+                        !component.IsTrigger
                 );
 
         if (collider ==
@@ -436,49 +490,152 @@ public sealed class CharacterController3D
                centerOffset;
     }
 
-    private static float GetGroundTop(
-        GameObject groundObject)
+    private static bool TryGetGroundContact(
+        GameObject groundObject,
+        float worldX,
+        float worldZ,
+        out float surfaceHeight,
+        out Vector3 surfaceNormal)
     {
+        surfaceHeight =
+            0.0f;
+
+        surfaceNormal =
+            groundObject.Transform.Up;
+
+        if (surfaceNormal.Y <
+            0.0f)
+        {
+            surfaceNormal =
+                -surfaceNormal;
+        }
+
+        if (MathF.Abs(
+                surfaceNormal.Y) <
+            0.0001f)
+        {
+            return false;
+        }
+
         Collider3D? collider =
             groundObject.Components
                 .OfType<Collider3D>()
                 .FirstOrDefault(
                     component =>
-                        component.Enabled
+                        component.Enabled &&
+                        !component.IsTrigger
                 );
+
+        Vector3 localSurfacePoint =
+            collider ==
+                null
+                ? Vector3.Zero
+                : collider.Center +
+                  Vector3.UnitY *
+                  collider.Size.Y *
+                  0.5f;
+
+        Vector3 worldSurfacePoint =
+            Vector3.Transform(
+                localSurfacePoint,
+                groundObject.Transform.WorldMatrix);
+
+        surfaceHeight =
+            worldSurfacePoint.Y -
+            (
+                surfaceNormal.X *
+                (worldX -
+                 worldSurfacePoint.X) +
+                surfaceNormal.Z *
+                (worldZ -
+                 worldSurfacePoint.Z)
+            ) /
+            surfaceNormal.Y;
 
         if (collider ==
             null)
         {
-            return groundObject
-                .Transform
-                .WorldPosition
-                .Y;
+            return true;
         }
 
-        float halfHeight =
-            collider.Size.Y *
-            0.5f *
+        if (!Matrix4x4.Invert(
+                groundObject.Transform.WorldMatrix,
+                out Matrix4x4 inverse))
+        {
+            return false;
+        }
+
+        Vector3 localContact =
+            Vector3.Transform(
+                new Vector3(
+                    worldX,
+                    surfaceHeight,
+                    worldZ),
+                inverse);
+
+        Vector3 halfSize =
+            collider.Size *
+            0.5f;
+
+        const float boundsTolerance =
+            0.001f;
+
+        return
             MathF.Abs(
-                groundObject
-                    .Transform
-                    .WorldScale
-                    .Y
-            );
+                localContact.X -
+                collider.Center.X) <=
+            halfSize.X +
+            boundsTolerance &&
+            MathF.Abs(
+                localContact.Z -
+                collider.Center.Z) <=
+            halfSize.Z +
+            boundsTolerance;
+    }
 
-        float centerOffset =
-            collider.Center.Y *
-            groundObject
-                .Transform
-                .WorldScale
-                .Y;
+    private void TryConsumeJump()
+    {
+        bool hasBufferedJump =
+            _jumpQueued ||
+            _jumpBufferRemaining >
+                0.0f;
 
-        return groundObject
-                   .Transform
-                   .WorldPosition
-                   .Y +
-               centerOffset +
-               halfHeight;
+        bool canJump =
+            IsGrounded ||
+            _timeSinceGrounded <=
+                Math.Max(
+                    CoyoteTime,
+                    0.0f);
+
+        if (!hasBufferedJump ||
+            !canJump)
+        {
+            return;
+        }
+
+        Velocity =
+            new Vector3(
+                Velocity.X,
+                JumpForce,
+                Velocity.Z);
+
+        IsGrounded =
+            false;
+
+        GroundObject =
+            null;
+
+        GroundNormal =
+            Vector3.UnitY;
+
+        _timeSinceGrounded =
+            float.PositiveInfinity;
+
+        _jumpQueued =
+            false;
+
+        _jumpBufferRemaining =
+            0.0f;
     }
 
     private static float Approach(

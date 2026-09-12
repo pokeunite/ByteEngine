@@ -13,6 +13,7 @@ using ByteEngine.Core.Variables;
 using ByteEngine.Editor;
 using ByteEngine.Editor.Gizmos;
 using ByteEngine.Editor.Panels;
+using ByteEngine.Tests;
 
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
@@ -57,7 +58,8 @@ try
     WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset(stableModelGuid, out AssetRecord? rescanned) && rescanned != null, "Model GUID stable after source change"); Assert(assets.ReimportModel(stableModelGuid).Guid == stableModelGuid, "Model reimport preserves GUID");
 
     string blueprintPath = Path.Combine(root, "Assets", "Player.byteblueprint"); var blueprint = new BlueprintDefinition { Name = "Player", Type = BlueprintType.Character, Root = new GameObjectData { Id = Guid.NewGuid(), Name = "Player" }, Variables = { new VariableData { Name = "Health", Value = VariableValue.FromNumber(100) } }, Sockets = { new SocketDefinition { Name = "RightHandSocket", Bone = "hand_r", Position = new Vector3(1, 2, 3), PreviewAssetGuid = stableModelGuid } }, EventModules = { Guid.NewGuid() } }; var blueprintSerializer = new BlueprintSerializer(); blueprintSerializer.Save(blueprint, blueprintPath); BlueprintDefinition loadedBlueprint = blueprintSerializer.Load(blueprintPath); Assert(loadedBlueprint.Type == BlueprintType.Character && loadedBlueprint.Variables[0].Value.Number == 100, "Blueprint variables serialization"); Assert(loadedBlueprint.Sockets[0].Bone == "hand_r" && loadedBlueprint.Sockets[0].PreviewAssetGuid == stableModelGuid, "Blueprint socket serialization"); Assert(loadedBlueprint.EventModules.Count == 1, "Blueprint logic module relationship");
-    Console.WriteLine("ByteEngine v0.6 tests passed: GLTF/GLB models, hierarchy/materials, GUID reimport, blueprints/sockets, 3D persistence, variables, and asset import.");
+    V07RegressionTests.Run(root, database, assets);
+    Console.WriteLine("ByteEngine v0.7 tests passed: visual logic, controller assists, finite grounding, generated FBX import/scale analysis, model instances, GLTF/GLB models, persistence, and asset import.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }
 

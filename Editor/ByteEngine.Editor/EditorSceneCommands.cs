@@ -197,14 +197,27 @@ internal static class EditorSceneCommands
         root.Transform.WorldPosition =
             worldPosition;
 
-        float appliedScale =
-            ModelImportScaleUtility.Resolve(
+        ModelScaleAnalysis scaleAnalysis =
+            ModelImportScaleUtility.Analyze(
                 asset,
                 model);
+
+        float appliedScale =
+            scaleAnalysis.AppliedScale;
 
         root.Transform.LocalScale =
             Vector3.One *
             appliedScale;
+
+        root.AddComponent(
+            new ModelHierarchyInstance
+            {
+                Model =
+                    reference,
+
+                AppliedImportScale =
+                    appliedScale
+            });
 
         var objects =
             new Dictionary<string, GameObject>();
@@ -313,19 +326,9 @@ internal static class EditorSceneCommands
 
         state.MarkDirty();
 
-        float requestedScale =
-            Math.Max(
-                asset.Metadata
-                    .ModelImporter
-                    .ImportScale,
-                0.0001f);
-
         string scaleNote =
-            Math.Abs(
-                requestedScale -
-                appliedScale) >
-            0.000001f
-                ? $" Normalized FBX scale {requestedScale:0.####} -> {appliedScale:0.####}."
+            scaleAnalysis.Normalized
+                ? $" {scaleAnalysis.Summary}."
                 : string.Empty;
 
         log.Info(

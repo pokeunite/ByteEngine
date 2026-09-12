@@ -1,0 +1,32 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore ByteEngine.sln
+
+      - name: Build
+        run: dotnet build ByteEngine.sln --configuration Release --no-restore
+
+      - name: Run regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore
