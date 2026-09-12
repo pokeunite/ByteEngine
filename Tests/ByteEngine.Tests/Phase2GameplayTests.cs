@@ -56,6 +56,8 @@ internal static class Phase2GameplayTests
             TargetName = "Wrong Name",
             Distance = 5f,
             Height = 3f,
+            Pitch = 0f,
+            ShoulderOffset = 0f,
             LookAtHeight = 1f,
             FollowSmoothing = 0f
         });
@@ -66,7 +68,7 @@ internal static class Phase2GameplayTests
         var nameScene = new Scene("Camera Name Follow");
         GameObject namedTarget = nameScene.CreateGameObject("Named Player");
         GameObject namedCamera = nameScene.CreateGameObject("Camera");
-        namedCamera.AddComponent(new ThirdPersonCamera3D { TargetName = namedTarget.Name, Distance = 2f, Height = 1f, FollowSmoothing = 0f });
+        namedCamera.AddComponent(new ThirdPersonCamera3D { TargetName = namedTarget.Name, Distance = 2f, Height = 1f, Pitch = 0f, ShoulderOffset = 0f, FollowSmoothing = 0f });
         nameScene.LoadInternal();
         Assert(Vector3.Distance(namedCamera.Transform.WorldPosition, new Vector3(0f, 1f, 2f)) < .001f,
             "ThirdPersonCamera3D safely resolves target name");

@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 
@@ -16,7 +17,8 @@ public sealed class VisualConditionDefinition
     public required Func<
         VisualInstruction,
         EventExecutionContext,
-        bool> Evaluate { get; init; }
+        bool> Evaluate
+    { get; init; }
 }
 
 public sealed class VisualActionDefinition
@@ -28,7 +30,8 @@ public sealed class VisualActionDefinition
 
     public required Action<
         VisualInstruction,
-        EventExecutionContext> Execute { get; init; }
+        EventExecutionContext> Execute
+    { get; init; }
 }
 
 public sealed class VisualLogicRegistry
@@ -90,6 +93,7 @@ public sealed class VisualLogicRegistry
         RegisterCharacter(registry);
         RegisterTransform(registry);
         RegisterVariables(registry);
+        RegisterGameplay(registry);
 
         return registry;
     }
@@ -166,6 +170,77 @@ public sealed class VisualLogicRegistry
                             out Key key) &&
                         Input.IsKeyReleased(key)
             });
+    }
+
+    private static void RegisterGameplay(VisualLogicRegistry registry)
+    {
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "health.isDead",
+            Category = "Gameplay",
+            DisplayName = "Health Is Dead",
+            TargetComponent = nameof(HealthComponent),
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<HealthComponent>()?.IsDead == true
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "health.percentAtMost",
+            Category = "Gameplay",
+            DisplayName = "Health Percent <= Value",
+            TargetComponent = nameof(HealthComponent),
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<HealthComponent>() is { } health &&
+                health.HealthPercent <= EventValueResolver.GetNumber(instruction, "value", context, 1.0)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "arena.won",
+            Category = "Gameplay",
+            DisplayName = "Arena Won",
+            TargetComponent = nameof(ArenaGameManager),
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<ArenaGameManager>()?.GameState == ArenaGameState.Won
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "arena.lost",
+            Category = "Gameplay",
+            DisplayName = "Arena Lost",
+            TargetComponent = nameof(ArenaGameManager),
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<ArenaGameManager>()?.GameState == ArenaGameState.Lost
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "health.damage",
+            Category = "Gameplay",
+            DisplayName = "Damage Object",
+            TargetComponent = nameof(HealthComponent),
+            Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<HealthComponent>()?
+                .Damage((float)EventValueResolver.GetNumber(instruction, "amount", context, 10.0))
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "health.heal",
+            Category = "Gameplay",
+            DisplayName = "Heal Object",
+            TargetComponent = nameof(HealthComponent),
+            Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<HealthComponent>()?
+                .Heal((float)EventValueResolver.GetNumber(instruction, "amount", context, 10.0))
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "projectile.fire",
+            Category = "Gameplay",
+            DisplayName = "Fire Projectile",
+            TargetComponent = nameof(ProjectileLauncher3D),
+            Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<ProjectileLauncher3D>()?.Fire()
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "arena.restart",
+            Category = "Gameplay",
+            DisplayName = "Restart Arena",
+            TargetComponent = nameof(ArenaGameManager),
+            Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<ArenaGameManager>()?.Restart()
+        });
     }
 
     private static void RegisterObjects(

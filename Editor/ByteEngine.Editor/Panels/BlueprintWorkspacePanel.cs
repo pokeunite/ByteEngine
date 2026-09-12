@@ -1065,6 +1065,12 @@ internal sealed class BlueprintWorkspacePanel
             BlueprintFloat("Height", followCamera.Height, value => followCamera.Height = value, .05f, -10000f, 10000f);
             BlueprintFloat("Look At Height", followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
             BlueprintFloat("Follow Smoothing", followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
+            BlueprintFloat("Yaw", followCamera.Yaw, value => followCamera.Yaw = value, .25f, -100000f, 100000f);
+            BlueprintFloat("Pitch", followCamera.Pitch, value => followCamera.Pitch = value, .25f, followCamera.MinPitch, followCamera.MaxPitch);
+            BlueprintFloat("Min Pitch", followCamera.MinPitch, value => followCamera.MinPitch = value, .25f, -89f, 89f);
+            BlueprintFloat("Max Pitch", followCamera.MaxPitch, value => followCamera.MaxPitch = value, .25f, -89f, 89f);
+            BlueprintFloat("Mouse Sensitivity", followCamera.MouseSensitivity, value => followCamera.MouseSensitivity = value, .01f, 0f, 10f);
+            BlueprintFloat("Shoulder Offset", followCamera.ShoulderOffset, value => followCamera.ShoulderOffset = value, .02f, -100f, 100f);
         }
         else if (component is ArenaGameManager manager)
         {

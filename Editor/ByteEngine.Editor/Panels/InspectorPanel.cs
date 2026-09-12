@@ -437,6 +437,18 @@ internal sealed class InspectorPanel
                 () => followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
             DrawFloatProperty(state, $"Follow Smoothing##{component.GetHashCode()}", "Change Camera Smoothing",
                 () => followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
+            DrawFloatProperty(state, $"Yaw##{component.GetHashCode()}", "Change Camera Yaw",
+                () => followCamera.Yaw, value => followCamera.Yaw = value, .25f, -100000f, 100000f);
+            DrawFloatProperty(state, $"Pitch##{component.GetHashCode()}", "Change Camera Pitch",
+                () => followCamera.Pitch, value => followCamera.Pitch = value, .25f, followCamera.MinPitch, followCamera.MaxPitch);
+            DrawFloatProperty(state, $"Min Pitch##{component.GetHashCode()}", "Change Minimum Pitch",
+                () => followCamera.MinPitch, value => followCamera.MinPitch = value, .25f, -89f, 89f);
+            DrawFloatProperty(state, $"Max Pitch##{component.GetHashCode()}", "Change Maximum Pitch",
+                () => followCamera.MaxPitch, value => followCamera.MaxPitch = value, .25f, -89f, 89f);
+            DrawFloatProperty(state, $"Mouse Sensitivity##{component.GetHashCode()}", "Change Mouse Sensitivity",
+                () => followCamera.MouseSensitivity, value => followCamera.MouseSensitivity = value, .01f, 0f, 10f);
+            DrawFloatProperty(state, $"Shoulder Offset##{component.GetHashCode()}", "Change Shoulder Offset",
+                () => followCamera.ShoulderOffset, value => followCamera.ShoulderOffset = value, .02f, -100f, 100f);
         }
         else if (component is ArenaGameManager manager)
         {

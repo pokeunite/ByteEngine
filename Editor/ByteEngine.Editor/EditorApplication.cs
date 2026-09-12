@@ -942,6 +942,11 @@ public sealed class EditorApplication
 
             Scene scene = ProjectTemplateFactory.Create(request.Template);
 
+            if (request.Template == ProjectTemplate.ByteArena)
+            {
+                ByteArenaAssetFactory.Generate(context, scene);
+            }
+
             string scenePath =
                 context.ResolveProjectPath(
                     context.Project.StartupScene

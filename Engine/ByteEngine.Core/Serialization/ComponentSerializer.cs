@@ -977,7 +977,13 @@ public sealed class ComponentSerializer
                 ["distance"] = camera.Distance,
                 ["height"] = camera.Height,
                 ["lookAtHeight"] = camera.LookAtHeight,
-                ["followSmoothing"] = camera.FollowSmoothing
+                ["followSmoothing"] = camera.FollowSmoothing,
+                ["yaw"] = camera.Yaw,
+                ["pitch"] = camera.Pitch,
+                ["minPitch"] = camera.MinPitch,
+                ["maxPitch"] = camera.MaxPitch,
+                ["mouseSensitivity"] = camera.MouseSensitivity,
+                ["shoulderOffset"] = camera.ShoulderOffset
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -990,7 +996,13 @@ public sealed class ComponentSerializer
                 Distance = Float(data, "distance", 7f),
                 Height = Float(data, "height", 4f),
                 LookAtHeight = Float(data, "lookAtHeight", 1f),
-                FollowSmoothing = Float(data, "followSmoothing", 10f)
+                FollowSmoothing = Float(data, "followSmoothing", 10f),
+                MinPitch = Float(data, "minPitch", -10f),
+                MaxPitch = Float(data, "maxPitch", 55f),
+                Yaw = Float(data, "yaw", 0f),
+                Pitch = Float(data, "pitch", 20f),
+                MouseSensitivity = Float(data, "mouseSensitivity", .15f),
+                ShoulderOffset = Float(data, "shoulderOffset", .5f)
             };
         }
     }
