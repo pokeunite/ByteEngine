@@ -1049,6 +1049,28 @@ internal sealed class BlueprintWorkspacePanel
             BlueprintFloat("Attack Cooldown", ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
             BlueprintFloat("Stop Distance", ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
         }
+        else if (component is PlayerController3D playerController)
+        {
+            BlueprintBool("Use Local Orientation", playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
+        }
+        else if (component is PlayerShooter3D playerShooter)
+        {
+            BlueprintBool("Automatic Fire", playerShooter.Automatic, value => playerShooter.Automatic = value);
+        }
+        else if (component is ThirdPersonCamera3D followCamera)
+        {
+            BlueprintString("Target Name", followCamera.TargetName, value => followCamera.TargetName = value);
+            ImGui.TextDisabled($"Target ID: {(followCamera.TargetId == Guid.Empty ? "None" : followCamera.TargetId)}");
+            BlueprintFloat("Distance", followCamera.Distance, value => followCamera.Distance = value, .05f, 0f, 10000f);
+            BlueprintFloat("Height", followCamera.Height, value => followCamera.Height = value, .05f, -10000f, 10000f);
+            BlueprintFloat("Look At Height", followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
+            BlueprintFloat("Follow Smoothing", followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
+        }
+        else if (component is ArenaGameManager manager)
+        {
+            BlueprintString("Player Name", manager.PlayerName, value => manager.PlayerName = value);
+            ImGui.TextDisabled($"Player ID: {(manager.PlayerId == Guid.Empty ? "None" : manager.PlayerId)}");
+        }
         else if (component is AnimationController animationController)
         {
             float threshold =
@@ -1352,6 +1374,10 @@ internal sealed class BlueprintWorkspacePanel
         DrawAddComponentItem<Projectile3D>("Projectile3D", selected, () => new Projectile3D());
         DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, () => new ProjectileLauncher3D());
         DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, () => new SimpleEnemyAI3D());
+        DrawAddComponentItem<PlayerController3D>("PlayerController3D", selected, () => new PlayerController3D());
+        DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, () => new PlayerShooter3D());
+        DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, () => new ThirdPersonCamera3D());
+        DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, () => new ArenaGameManager());
 
         ImGui.EndPopup();
     }

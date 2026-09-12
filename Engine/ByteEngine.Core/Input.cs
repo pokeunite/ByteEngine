@@ -15,6 +15,7 @@ public enum Key
     Q,
     E,
     F,
+    R,
 
     Space,
 
@@ -171,6 +172,7 @@ public static class Input
             Key.Q => Keys.Q,
             Key.E => Keys.E,
             Key.F => Keys.F,
+            Key.R => Keys.R,
 
             Key.Space => Keys.Space,
 

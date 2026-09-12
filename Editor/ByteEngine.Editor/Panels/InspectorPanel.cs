@@ -122,6 +122,10 @@ internal sealed class InspectorPanel
             DrawAddComponentItem<Projectile3D>("Projectile3D", selected, state, () => new Projectile3D());
             DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, state, () => new ProjectileLauncher3D());
             DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, state, () => new SimpleEnemyAI3D());
+            DrawAddComponentItem<PlayerController3D>("PlayerController3D", selected, state, () => new PlayerController3D());
+            DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, state, () => new PlayerShooter3D());
+            DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, state, () => new ThirdPersonCamera3D());
+            DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, state, () => new ArenaGameManager());
             ImGui.EndPopup();
         }
 
@@ -409,6 +413,38 @@ internal sealed class InspectorPanel
                 () => ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
             DrawFloatProperty(state, $"Stop Distance##{component.GetHashCode()}", "Change Stop Distance",
                 () => ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
+        }
+        else if (component is PlayerController3D playerController)
+        {
+            DrawBooleanProperty(state, $"Use Local Orientation##{component.GetHashCode()}", "Set Player Movement Orientation",
+                () => playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
+        }
+        else if (component is PlayerShooter3D playerShooter)
+        {
+            DrawBooleanProperty(state, $"Automatic Fire##{component.GetHashCode()}", "Set Automatic Fire",
+                () => playerShooter.Automatic, value => playerShooter.Automatic = value);
+        }
+        else if (component is ThirdPersonCamera3D followCamera)
+        {
+            DrawStringProperty(state, $"Target Name##camera{component.GetHashCode()}", "Change Camera Target",
+                () => followCamera.TargetName, value => followCamera.TargetName = value, 128);
+            ImGui.TextDisabled($"Target ID: {(followCamera.TargetId == Guid.Empty ? "None" : followCamera.TargetId)}");
+            DrawFloatProperty(state, $"Distance##camera{component.GetHashCode()}", "Change Camera Distance",
+                () => followCamera.Distance, value => followCamera.Distance = value, .05f, 0f, 10000f);
+            DrawFloatProperty(state, $"Height##camera{component.GetHashCode()}", "Change Camera Height",
+                () => followCamera.Height, value => followCamera.Height = value, .05f, -10000f, 10000f);
+            DrawFloatProperty(state, $"Look At Height##{component.GetHashCode()}", "Change Camera Look Height",
+                () => followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
+            DrawFloatProperty(state, $"Follow Smoothing##{component.GetHashCode()}", "Change Camera Smoothing",
+                () => followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
+        }
+        else if (component is ArenaGameManager manager)
+        {
+            DrawStringProperty(state, $"Player Name##manager{component.GetHashCode()}", "Change Arena Player",
+                () => manager.PlayerName, value => manager.PlayerName = value, 128);
+            ImGui.TextDisabled($"Player ID: {(manager.PlayerId == Guid.Empty ? "None" : manager.PlayerId)}");
+            ImGui.TextDisabled($"State: {manager.GameState}");
+            ImGui.TextDisabled($"Remaining Enemies: {manager.RemainingEnemies}");
         }
         else if (component is AnimationController animation)
         {

@@ -101,6 +101,10 @@ public sealed class ComponentSerializer
         Register(new Projectile3DCodec());
         Register(new ProjectileLauncher3DCodec());
         Register(new SimpleEnemyAI3DCodec());
+        Register(new PlayerController3DCodec());
+        Register(new PlayerShooter3DCodec());
+        Register(new ThirdPersonCamera3DCodec());
+        Register(new ArenaGameManagerCodec());
     }
 
     public void Register(
@@ -932,6 +936,78 @@ public sealed class ComponentSerializer
                         1.0f
                     )
             };
+        }
+    }
+
+    private sealed class PlayerController3DCodec : IComponentCodec
+    {
+        public string TypeName => "PlayerController3D";
+        public Type ComponentType => typeof(PlayerController3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context) =>
+            Data(TypeName, new JsonObject { ["useLocalOrientation"] = ((PlayerController3D)component).UseLocalOrientation });
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerController3D
+        {
+            UseLocalOrientation = data.Properties["useLocalOrientation"]?.GetValue<bool>() ?? true
+        };
+    }
+
+    private sealed class PlayerShooter3DCodec : IComponentCodec
+    {
+        public string TypeName => "PlayerShooter3D";
+        public Type ComponentType => typeof(PlayerShooter3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context) =>
+            Data(TypeName, new JsonObject { ["automatic"] = ((PlayerShooter3D)component).Automatic });
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerShooter3D
+        {
+            Automatic = data.Properties["automatic"]?.GetValue<bool>() ?? true
+        };
+    }
+
+    private sealed class ThirdPersonCamera3DCodec : IComponentCodec
+    {
+        public string TypeName => "ThirdPersonCamera3D";
+        public Type ComponentType => typeof(ThirdPersonCamera3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var camera = (ThirdPersonCamera3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["targetId"] = camera.TargetId.ToString(),
+                ["targetName"] = camera.TargetName,
+                ["distance"] = camera.Distance,
+                ["height"] = camera.Height,
+                ["lookAtHeight"] = camera.LookAtHeight,
+                ["followSmoothing"] = camera.FollowSmoothing
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "targetId", string.Empty), out Guid targetId);
+            return new ThirdPersonCamera3D
+            {
+                TargetId = targetId,
+                TargetName = Text(data, "targetName", string.Empty),
+                Distance = Float(data, "distance", 7f),
+                Height = Float(data, "height", 4f),
+                LookAtHeight = Float(data, "lookAtHeight", 1f),
+                FollowSmoothing = Float(data, "followSmoothing", 10f)
+            };
+        }
+    }
+
+    private sealed class ArenaGameManagerCodec : IComponentCodec
+    {
+        public string TypeName => "ArenaGameManager";
+        public Type ComponentType => typeof(ArenaGameManager);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var manager = (ArenaGameManager)component;
+            return Data(TypeName, new JsonObject { ["playerId"] = manager.PlayerId.ToString(), ["playerName"] = manager.PlayerName });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "playerId", string.Empty), out Guid playerId);
+            return new ArenaGameManager { PlayerId = playerId, PlayerName = Text(data, "playerName", "Player") };
         }
     }
 

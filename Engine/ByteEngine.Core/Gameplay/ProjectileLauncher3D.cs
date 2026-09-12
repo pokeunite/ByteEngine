@@ -1,5 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.VisualLogic;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
@@ -17,6 +19,8 @@ public sealed class ProjectileLauncher3D : Component
     public Vector3 MuzzleOffset { get; set; }
     public bool CanFire => _cooldownRemaining <= 0f;
 
+    public void ResetCooldown() => _cooldownRemaining = 0f;
+
     public GameObject? Fire()
     {
         GameObject? shooter = AttachedGameObject;
@@ -30,6 +34,12 @@ public sealed class ProjectileLauncher3D : Component
         {
             root = scene.CreateGameObject("Projectile");
             root.Transform.WorldPosition = muzzle;
+            root.Transform.LocalScale = new Vector3(.15f);
+            root.AddComponent(new MeshRenderer
+            {
+                Primitive = PrimitiveMeshType.Sphere,
+                Material = new Material { BaseColor = new Vector4(1f, .75f, .08f, 1f) }
+            });
             root.AddComponent(new Projectile3D());
             root.AddComponent(new LifetimeComponent());
         }

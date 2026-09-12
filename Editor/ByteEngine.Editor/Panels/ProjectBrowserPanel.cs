@@ -6,7 +6,8 @@ namespace ByteEngine.Editor.Panels;
 internal enum ProjectTemplate
 {
     Clean,
-    Starter3D
+    Starter3D,
+    ByteArena
 }
 
 internal sealed record NewProjectRequest(string Name, string ParentDirectory, ProjectTemplate Template);
@@ -102,6 +103,9 @@ internal sealed class ProjectBrowserPanel
         if (ImGui.RadioButton("3D Starter", ref template, (int)ProjectTemplate.Starter3D))
             _template = ProjectTemplate.Starter3D;
         ImGui.TextDisabled("    Camera, lit cube, ground plane, collider and directional light.");
+        if (ImGui.RadioButton("ByteArena", ref template, (int)ProjectTemplate.ByteArena))
+            _template = ProjectTemplate.ByteArena;
+        ImGui.TextDisabled("    Playable arena shooter with player, camera, enemies and game manager.");
 
         bool valid = IsValidName(safeName) && Directory.Exists(_parentDirectory);
         if (!valid)

@@ -19,6 +19,8 @@ public sealed class SimpleEnemyAI3D : Component
     public float AttackCooldown { get => _attackCooldown; set => _attackCooldown = Safe(value); }
     public float StopDistance { get => _stopDistance; set => _stopDistance = Safe(value); }
 
+    public void ResetCombatState() => _cooldownRemaining = 0f;
+
     protected override void OnUpdate()
     {
         _cooldownRemaining = Math.Max(0f, _cooldownRemaining - (float)Time.DeltaTime);
