@@ -84,13 +84,16 @@ internal static class RuntimeBlueprintSpawner
             blueprint.Children);
 
         IReadOnlyList<GameObject> roots;
+        IReadOnlyDictionary<Guid, Guid> objectMap;
 
         try
         {
             roots =
                 project.Scenes.InstantiateHierarchy(
                     scene,
-                    sourceObjects);
+                    sourceObjects,
+                    null,
+                    out objectMap);
         }
         catch (Exception exception)
         {
@@ -141,6 +144,7 @@ internal static class RuntimeBlueprintSpawner
                         Guid.NewGuid()
                 });
         }
+
         else
         {
             existingInstance.Blueprint =
@@ -151,6 +155,8 @@ internal static class RuntimeBlueprintSpawner
             existingInstance.InstanceId =
                 Guid.NewGuid();
         }
+
+        BlueprintInstanceSynchronizer.Initialize(existingInstance ?? root.GetComponent<BlueprintInstance>()!, blueprint, objectMap);
 
         AttachBlueprintEventModules(
             root,

@@ -367,7 +367,9 @@ internal static class EditorSceneCommands
         IReadOnlyList<GameObject> roots =
             project.Scenes.InstantiateHierarchy(
                 state.EditorScene,
-                data
+                data,
+                null,
+                out IReadOnlyDictionary<Guid, Guid> objectMap
             );
 
         GameObject root =
@@ -388,7 +390,7 @@ internal static class EditorSceneCommands
             );
         }
 
-        root.AddComponent(
+        BlueprintInstance instance = root.AddComponent(
             new BlueprintInstance
             {
                 Blueprint =
@@ -399,8 +401,9 @@ internal static class EditorSceneCommands
 
                 InstanceId =
                     Guid.NewGuid()
-            }
-        );
+            });
+
+        BlueprintInstanceSynchronizer.Initialize(instance, blueprint, objectMap);
 
         AttachBlueprintEventModules(
             root,

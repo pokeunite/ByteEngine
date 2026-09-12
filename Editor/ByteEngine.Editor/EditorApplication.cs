@@ -241,7 +241,11 @@ public sealed class EditorApplication
 
         if (_inspector.IsOpen)
         {
-            _inspector.Draw(_state, _projectContext!);
+            _inspector.Draw(_state, _projectContext!, reference =>
+            {
+                AssetRecord? asset = _projectContext!.AssetDatabase.Resolve(reference);
+                if (asset != null) _blueprintWorkspace.Open(asset, _projectContext);
+            });
         }
 
         if (_sceneView.IsOpen)

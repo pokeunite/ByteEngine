@@ -63,6 +63,7 @@ try
     Phase2GameplayTests.Run(root, database, assets);
     Phase3IntegrationTests.Run(root);
     TpsCameraSystemTests.Run(root, database, assets);
+    AuthoringUxTests.Run(root, database, assets);
     Console.WriteLine("ByteEngine tests passed: v0.7 regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }

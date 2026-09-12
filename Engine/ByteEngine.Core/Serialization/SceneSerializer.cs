@@ -281,11 +281,23 @@ public sealed class SceneSerializer
         RuntimeScene target,
         IReadOnlyList<GameObjectData> sourceObjects)
     {
+        return InstantiateHierarchy(target, sourceObjects, null, out _);
+    }
+
+    public IReadOnlyList<GameObject> InstantiateHierarchy(
+        RuntimeScene target,
+        IReadOnlyList<GameObjectData> sourceObjects,
+        IReadOnlyDictionary<Guid, Guid>? preferredIds,
+        out IReadOnlyDictionary<Guid, Guid> sourceToInstanceIds)
+    {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(sourceObjects);
         var idMap = sourceObjects.ToDictionary(
             item => item.Id,
-            _ => Guid.NewGuid());
+            item => preferredIds != null && preferredIds.TryGetValue(item.Id, out Guid preferred) && preferred != Guid.Empty
+                ? preferred
+                : Guid.NewGuid());
+        sourceToInstanceIds = idMap;
         var clones = new List<GameObjectData>();
         foreach (GameObjectData source in sourceObjects)
         {

@@ -1630,7 +1630,18 @@ public sealed class ComponentSerializer
 
                     ["instanceId"] =
                         instance.InstanceId
-                            .ToString()
+                            .ToString(),
+
+                    ["sourceSnapshot"] = instance.SourceSnapshot,
+                    ["objectMap"] = new JsonObject(instance.ObjectMap.ToDictionary(
+                        pair => pair.Key.ToString(),
+                        pair => (JsonNode?)JsonValue.Create(pair.Value.ToString()))),
+                    ["modifiedProperties"] = (float)instance.ModifiedPropertyCount,
+                    ["addedComponents"] = (float)instance.AddedComponentCount,
+                    ["removedComponents"] = (float)instance.RemovedComponentCount,
+                    ["addedChildren"] = (float)instance.AddedChildCount,
+                    ["removedChildren"] = (float)instance.RemovedChildCount,
+                    ["lastPropagation"] = instance.LastPropagation
                 }
             );
         }
@@ -1651,7 +1662,7 @@ public sealed class ComponentSerializer
                 out Guid instanceId
             );
 
-            return new BlueprintInstance
+            var instance = new BlueprintInstance
             {
                 Blueprint =
                     new AssetReference(
@@ -1664,8 +1675,25 @@ public sealed class ComponentSerializer
                     instanceId ==
                     Guid.Empty
                         ? Guid.NewGuid()
-                        : instanceId
+                        : instanceId,
+                SourceSnapshot = Text(data, "sourceSnapshot", string.Empty),
+                ModifiedPropertyCount = (int)Float(data, "modifiedProperties", 0f),
+                AddedComponentCount = (int)Float(data, "addedComponents", 0f),
+                RemovedComponentCount = (int)Float(data, "removedComponents", 0f),
+                AddedChildCount = (int)Float(data, "addedChildren", 0f),
+                RemovedChildCount = (int)Float(data, "removedChildren", 0f),
+                LastPropagation = Text(data, "lastPropagation", "Not synchronized")
             };
+
+            if (data.Properties["objectMap"] is JsonObject map)
+            {
+                foreach ((string sourceText, JsonNode? instanceNode) in map)
+                    if (Guid.TryParse(sourceText, out Guid sourceId) &&
+                        Guid.TryParse(instanceNode?.GetValue<string>(), out Guid mappedId))
+                        instance.ObjectMap[sourceId] = mappedId;
+            }
+
+            return instance;
         }
     }
 

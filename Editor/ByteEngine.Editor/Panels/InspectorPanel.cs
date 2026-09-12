@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
@@ -15,8 +16,12 @@ namespace ByteEngine.Editor.Panels;
 internal sealed class InspectorPanel
 {
     public bool IsOpen { get; set; } = true;
+    private string _search = string.Empty;
+    private bool? _setExpansion;
+    private bool _showAdvanced;
+    private string _addSearch = string.Empty;
 
-    public void Draw(EditorState state, EditorProjectContext project)
+    public void Draw(EditorState state, EditorProjectContext project, Action<AssetReference> openBlueprint)
     {
         bool isOpen = IsOpen;
         ImGui.Begin("Inspector", ref isOpen);
@@ -50,6 +55,48 @@ internal sealed class InspectorPanel
         ImGui.BeginDisabled(readOnly);
 
         GameObject selected = state.SelectedObject;
+
+        if (selected.GetComponent<BlueprintInstance>() is { } blueprintInstance)
+        {
+            BlueprintOverrideSummary summary = BlueprintInstanceSynchronizer.Analyze(selected, project);
+            ImGui.SeparatorText("Blueprint Instance");
+            ImGui.TextUnformatted(blueprintInstance.Blueprint.CachedProjectPath ?? blueprintInstance.Blueprint.Guid.ToString());
+            ImGui.TextDisabled($"INSTANCE OF {Path.GetFileNameWithoutExtension(blueprintInstance.Blueprint.CachedProjectPath ?? "Blueprint")}");
+            if (ImGui.Button("Open Blueprint")) openBlueprint(blueprintInstance.Blueprint);
+            ImGui.TextUnformatted($"Overrides: {summary.Total}");
+            if (summary.ModifiedProperties > 0) ImGui.TextDisabled($"● Properties modified: {summary.ModifiedProperties}");
+            if (summary.AddedComponents > 0) ImGui.TextDisabled($"● Components added: {summary.AddedComponents}");
+            if (summary.RemovedComponents > 0) ImGui.TextDisabled($"● Components removed: {summary.RemovedComponents}");
+            if (summary.AddedChildren > 0) ImGui.TextDisabled($"● Children added: {summary.AddedChildren}");
+            if (summary.RemovedChildren > 0) ImGui.TextDisabled($"● Children removed: {summary.RemovedChildren}");
+            if (ImGui.Button("Apply Changes"))
+            {
+                GameObject? replacement = BlueprintInstanceSynchronizer.Apply(selected, project);
+                if (replacement != null) state.SelectedObject = replacement;
+                state.MarkDirty();
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Revert Changes"))
+            {
+                GameObject? replacement = BlueprintInstanceSynchronizer.Revert(selected, project);
+                if (replacement != null) state.SelectedObject = replacement;
+                state.MarkDirty();
+            }
+            ImGui.Separator();
+        }
+
+        ImGui.SetNextItemWidth(-38f);
+        ImGui.InputTextWithHint("##InspectorSearch", "Search properties...", ref _search, 128);
+        ImGui.SameLine();
+        if (ImGui.Button("...")) ImGui.OpenPopup("Inspector Options");
+        if (ImGui.BeginPopup("Inspector Options"))
+        {
+            if (ImGui.MenuItem("Collapse All")) _setExpansion = false;
+            if (ImGui.MenuItem("Expand All")) _setExpansion = true;
+            ImGui.MenuItem("Show Advanced", string.Empty, ref _showAdvanced);
+            ImGui.EndPopup();
+        }
+
         string oldName = selected.Name;
         string name = oldName;
         bool nameChanged = ImGui.InputText("Name", ref name, 256);
@@ -63,7 +110,10 @@ internal sealed class InspectorPanel
         if (activeChanged) selected.Active = active;
         TrackItem(state, "Set Active", activeChanged, () => selected.Active = oldActive, () => selected.Active = active);
 
-        ImGui.SeparatorText("Transform");
+        if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
+        bool showTransform = string.IsNullOrWhiteSpace(_search) || "Transform Position Rotation Scale".Contains(_search, StringComparison.OrdinalIgnoreCase);
+        if (showTransform && ImGui.CollapsingHeader("Transform", ImGuiTreeNodeFlags.DefaultOpen))
+        {
         Vector3 oldPosition = selected.Transform.LocalPosition;
         Vector3 position = oldPosition;
         bool positionChanged = ImGui.DragFloat3("Position", ref position, .05f);
@@ -82,12 +132,19 @@ internal sealed class InspectorPanel
         Vector3 nextScale = Vector3.Max(scale, new Vector3(.001f));
         if (scaleChanged) selected.Transform.LocalScale = nextScale;
         TrackItem(state, "Scale GameObject", scaleChanged, () => selected.Transform.LocalScale = oldScale, () => selected.Transform.LocalScale = nextScale);
+        }
 
         DrawStoreVariables("OBJECT VARIABLES", selected.Variables, state);
 
         foreach (Component component in selected.Components.ToArray())
         {
-            ImGui.SeparatorText(component.GetType().Name);
+            if (!ComponentMetadataRegistry.Matches(component.GetType(), _search)) continue;
+            ComponentMetadata metadata = ComponentMetadataRegistry.Get(component.GetType());
+            if (!metadata.BeginnerVisible && !_showAdvanced) continue;
+            if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.None;
+            if (!ImGui.CollapsingHeader($"{metadata.DisplayName}##{component.GetHashCode()}", flags)) continue;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(metadata.Description);
             bool oldEnabled = component.Enabled;
             bool enabled = oldEnabled;
             bool enabledChanged = ImGui.Checkbox($"Enabled##{component.GetHashCode()}", ref enabled);
@@ -102,10 +159,17 @@ internal sealed class InspectorPanel
             DrawComponentProperties(state, project, component);
         }
 
+        _setExpansion = null;
+
         ImGui.Separator();
         if (ImGui.Button("Add Component")) ImGui.OpenPopup("Add Component Popup");
         if (ImGui.BeginPopup("Add Component Popup"))
         {
+            ImGui.InputTextWithHint("##AddComponentSearch", "Search components...", ref _addSearch, 96);
+            ImGui.SeparatorText("Recommended");
+            if (ImGui.MenuItem("Third Person Character"))
+                ExecutePersistent(state, "Setup Third Person Character", () => BlueprintAuthoringService.SetupThirdPersonCharacter(selected));
+            ImGui.SeparatorText("Components");
             DrawAddComponentItem<Camera2D>("Camera2D", selected, state, () => new Camera2D());
             DrawAddComponentItem<SpriteRenderer>("SpriteRenderer", selected, state, () => new SpriteRenderer());
             DrawAddComponentItem<MeshRenderer>("MeshRenderer", selected, state, () => new MeshRenderer());
@@ -114,18 +178,18 @@ internal sealed class InspectorPanel
             DrawAddComponentItem<BoxCollider3D>("BoxCollider3D", selected, state, () => new BoxCollider3D());
             DrawAddComponentItem<CapsuleCollider3D>("CapsuleCollider3D", selected, state, () => new CapsuleCollider3D());
             DrawAddComponentItem<GroundSurface>("GroundSurface", selected, state, () => new GroundSurface());
-            DrawAddComponentItem<CharacterController3D>("CharacterController3D", selected, state, () => new CharacterController3D());
+            DrawAddComponentItem<CharacterController3D>("Character Movement", selected, state, () => new CharacterController3D());
             DrawAddComponentItem<AnimationController>("AnimationController", selected, state, () => new AnimationController());
             DrawAddComponentItem<SkeletalMeshRenderer>("SkeletalMeshRenderer", selected, state, () => new SkeletalMeshRenderer());
-            DrawAddComponentItem<HealthComponent>("HealthComponent", selected, state, () => new HealthComponent());
+            DrawAddComponentItem<HealthComponent>("Health", selected, state, () => new HealthComponent());
             DrawAddComponentItem<LifetimeComponent>("LifetimeComponent", selected, state, () => new LifetimeComponent());
             DrawAddComponentItem<Projectile3D>("Projectile3D", selected, state, () => new Projectile3D());
             DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, state, () => new ProjectileLauncher3D());
             DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, state, () => new SimpleEnemyAI3D());
-            DrawAddComponentItem<PlayerController3D>("PlayerController3D", selected, state, () => new PlayerController3D());
+            DrawAddComponentItem<PlayerController3D>("Player Input", selected, state, () => new PlayerController3D());
             DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, state, () => new PlayerShooter3D());
             DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, state, () => new ThirdPersonCamera3D());
-            DrawAddComponentItem<CameraBoom3D>("CameraBoom3D", selected, state, () => new CameraBoom3D());
+            DrawAddComponentItem<CameraBoom3D>("Third Person Camera", selected, state, () => new CameraBoom3D());
             DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, state, () => new ArenaGameManager());
             ImGui.EndPopup();
         }
@@ -134,11 +198,12 @@ internal sealed class InspectorPanel
         ImGui.End();
     }
 
-    private static void DrawAddComponentItem<T>(string name, GameObject target, EditorState state, Func<T> factory) where T : Component
+    private void DrawAddComponentItem<T>(string name, GameObject target, EditorState state, Func<T> factory) where T : Component
     {
+        if (!string.IsNullOrWhiteSpace(_addSearch) && !name.Contains(_addSearch, StringComparison.OrdinalIgnoreCase)) return;
         bool exists = target.HasComponent<T>();
         if (ImGui.MenuItem(name, string.Empty, false, !exists))
-            ExecutePersistent(state, $"Add {name}", () => target.AddComponent(factory()));
+            ExecutePersistent(state, $"Add {name}", () => BlueprintAuthoringService.AddComponent(target, factory()));
         if (exists && ImGui.IsItemHovered()) ImGui.SetTooltip("This component is already attached.");
     }
 
@@ -419,7 +484,13 @@ internal sealed class InspectorPanel
         }
         else if (component is PlayerController3D playerController)
         {
-            DrawBooleanProperty(state, $"Use Local Orientation##{component.GetHashCode()}", "Set Player Movement Orientation",
+            if (!component.GameObject.HasComponent<CharacterController3D>())
+            {
+                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Player Input requires Character Movement.");
+                if (ImGui.SmallButton($"Add Character Movement##{component.GetHashCode()}"))
+                    ExecutePersistent(state, "Add Character Movement", () => component.GameObject.AddComponent(new CharacterController3D()));
+            }
+            DrawBooleanProperty(state, $"Use Character Direction##{component.GetHashCode()}", "Set Player Movement Orientation",
                 () => playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
         }
         else if (component is PlayerShooter3D playerShooter)
@@ -455,22 +526,29 @@ internal sealed class InspectorPanel
         }
         else if (component is CameraBoom3D boom)
         {
+            bool hasCamera = component.GameObject.Children.Any(child => child.GetComponent<Camera3D>() != null);
+            if (!hasCamera)
+            {
+                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Third Person Camera has no Camera.");
+                if (ImGui.SmallButton($"Create Camera##{component.GetHashCode()}"))
+                    ExecutePersistent(state, "Create Camera Rig", () => BlueprintAuthoringService.SetupThirdPersonCharacter(component.GameObject));
+            }
             ImGui.TextDisabled($"Camera Child ID: {(boom.CameraObjectId == Guid.Empty ? "Auto-detect" : boom.CameraObjectId)}");
-            DrawFloatProperty(state, $"Arm Length##{component.GetHashCode()}", "Change Camera Arm Length",
+            DrawFloatProperty(state, $"Camera Distance##{component.GetHashCode()}", "Change Camera Arm Length",
                 () => boom.ArmLength, value => boom.ArmLength = value, .05f, 0f, 1000f);
-            DrawFloatProperty(state, $"Pivot Height##{component.GetHashCode()}", "Change Camera Pivot Height",
+            DrawFloatProperty(state, $"Camera Height##{component.GetHashCode()}", "Change Camera Pivot Height",
                 () => boom.PivotHeight, value => boom.PivotHeight = value, .02f, -100f, 100f);
             DrawFloatProperty(state, $"Yaw##boom{component.GetHashCode()}", "Change Camera Boom Yaw",
                 () => boom.Yaw, value => boom.Yaw = value, .25f, -100000f, 100000f);
             DrawFloatProperty(state, $"Pitch##boom{component.GetHashCode()}", "Change Camera Boom Pitch",
                 () => boom.Pitch, value => boom.Pitch = value, .25f, boom.MinPitch, boom.MaxPitch);
-            DrawFloatProperty(state, $"Min Pitch##boom{component.GetHashCode()}", "Change Camera Minimum Pitch",
+            DrawFloatProperty(state, $"Minimum Vertical Angle##boom{component.GetHashCode()}", "Change Camera Minimum Pitch",
                 () => boom.MinPitch, value => boom.MinPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Max Pitch##boom{component.GetHashCode()}", "Change Camera Maximum Pitch",
+            DrawFloatProperty(state, $"Maximum Vertical Angle##boom{component.GetHashCode()}", "Change Camera Maximum Pitch",
                 () => boom.MaxPitch, value => boom.MaxPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Sensitivity X##{component.GetHashCode()}", "Change Horizontal Mouse Sensitivity",
+            DrawFloatProperty(state, $"Horizontal Sensitivity##{component.GetHashCode()}", "Change Horizontal Mouse Sensitivity",
                 () => boom.MouseSensitivityX, value => boom.MouseSensitivityX = value, .005f, 0f, 10f);
-            DrawFloatProperty(state, $"Sensitivity Y##{component.GetHashCode()}", "Change Vertical Mouse Sensitivity",
+            DrawFloatProperty(state, $"Vertical Sensitivity##{component.GetHashCode()}", "Change Vertical Mouse Sensitivity",
                 () => boom.MouseSensitivityY, value => boom.MouseSensitivityY = value, .005f, 0f, 10f);
             DrawFloatProperty(state, $"Position Smoothness##{component.GetHashCode()}", "Change Camera Position Smoothness",
                 () => boom.PositionSmoothness, value => boom.PositionSmoothness = value, .1f, 0f, 1000f);
