@@ -7,6 +7,7 @@ using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -996,6 +997,58 @@ internal sealed class BlueprintWorkspacePanel
                 MarkDirty();
             }
         }
+        else if (component is HealthComponent health)
+        {
+            BlueprintFloat("Max Health", health.MaxHealth, value => health.MaxHealth = value, .5f, 0f, 100000f);
+            BlueprintFloat("Current Health", health.CurrentHealth, value => health.CurrentHealth = value, .5f, 0f, health.MaxHealth);
+            BlueprintBool("Invulnerable", health.Invulnerable, value => health.Invulnerable = value);
+            BlueprintBool("Destroy On Death", health.DestroyOnDeath, value => health.DestroyOnDeath = value);
+        }
+        else if (component is LifetimeComponent lifetime)
+        {
+            BlueprintFloat("Lifetime Seconds", lifetime.LifetimeSeconds, value => lifetime.LifetimeSeconds = value, .05f, 0f, 100000f);
+        }
+        else if (component is Projectile3D projectile)
+        {
+            BlueprintVector3("Velocity", projectile.Velocity, value => projectile.Velocity = value, .1f);
+            BlueprintFloat("Damage", projectile.Damage, value => projectile.Damage = value, .25f, 0f, 100000f);
+            BlueprintFloat("Radius", projectile.Radius, value => projectile.Radius = value, .01f, 0f, 10000f);
+            BlueprintBool("Destroy On Hit", projectile.DestroyOnHit, value => projectile.DestroyOnHit = value);
+            ImGui.TextDisabled($"Owner: {(projectile.OwnerId == Guid.Empty ? "None" : projectile.OwnerId)}");
+        }
+        else if (component is ProjectileLauncher3D launcher)
+        {
+            string label = launcher.ProjectileBlueprint.IsEmpty ? "None" :
+                launcher.ProjectileBlueprint.CachedProjectPath ?? launcher.ProjectileBlueprint.Guid.ToString();
+            ImGui.Button($"Projectile Blueprint: {label}", new Vector2(-30f, 0f));
+            if (ImGui.BeginDragDropTarget())
+            {
+                Guid? guid = AssetDragDrop.Accept();
+                if (guid.HasValue && _project!.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Blueprint)
+                {
+                    launcher.ProjectileBlueprint = new AssetReference(asset.Guid, asset.ProjectPath);
+                    MarkDirty();
+                }
+                ImGui.EndDragDropTarget();
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("X##ProjectileBlueprint")) { launcher.ProjectileBlueprint = AssetReference.Empty; MarkDirty(); }
+            BlueprintFloat("Projectile Speed", launcher.ProjectileSpeed, value => launcher.ProjectileSpeed = value, .25f, 0f, 100000f);
+            BlueprintFloat("Damage", launcher.Damage, value => launcher.Damage = value, .25f, 0f, 100000f);
+            BlueprintFloat("Fire Cooldown", launcher.FireCooldown, value => launcher.FireCooldown = value, .01f, 0f, 10000f);
+            BlueprintVector3("Muzzle Offset", launcher.MuzzleOffset, value => launcher.MuzzleOffset = value, .02f);
+        }
+        else if (component is SimpleEnemyAI3D ai)
+        {
+            BlueprintString("Target Name", ai.TargetName, value => ai.TargetName = value);
+            ImGui.TextDisabled($"Target ID: {(ai.TargetId == Guid.Empty ? "Auto" : ai.TargetId)}");
+            BlueprintFloat("Move Speed", ai.MoveSpeed, value => ai.MoveSpeed = value, .05f, 0f, 10000f);
+            BlueprintFloat("Detection Range", ai.DetectionRange, value => ai.DetectionRange = value, .1f, 0f, 100000f);
+            BlueprintFloat("Attack Range", ai.AttackRange, value => ai.AttackRange = value, .05f, 0f, 100000f);
+            BlueprintFloat("Damage", ai.Damage, value => ai.Damage = value, .25f, 0f, 100000f);
+            BlueprintFloat("Attack Cooldown", ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
+            BlueprintFloat("Stop Distance", ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
+        }
         else if (component is AnimationController animationController)
         {
             float threshold =
@@ -1016,6 +1069,26 @@ internal sealed class BlueprintWorkspacePanel
         }
 
         ImGui.Unindent();
+    }
+
+    private void BlueprintFloat(string label, float value, Action<float> write, float speed, float minimum, float maximum)
+    {
+        if (ImGui.DragFloat(label, ref value, speed, minimum, maximum)) { write(value); MarkDirty(); }
+    }
+
+    private void BlueprintBool(string label, bool value, Action<bool> write)
+    {
+        if (ImGui.Checkbox(label, ref value)) { write(value); MarkDirty(); }
+    }
+
+    private void BlueprintString(string label, string value, Action<string> write)
+    {
+        if (ImGui.InputText(label, ref value, 128)) { write(value); MarkDirty(); }
+    }
+
+    private void BlueprintVector3(string label, Vector3 value, Action<Vector3> write, float speed)
+    {
+        if (ImGui.DragFloat3(label, ref value, speed)) { write(value); MarkDirty(); }
     }
 
     // ========================================================
@@ -1273,6 +1346,12 @@ internal sealed class BlueprintWorkspacePanel
             selected,
             () =>
                 new SkeletalMeshRenderer());
+
+        DrawAddComponentItem<HealthComponent>("HealthComponent", selected, () => new HealthComponent());
+        DrawAddComponentItem<LifetimeComponent>("LifetimeComponent", selected, () => new LifetimeComponent());
+        DrawAddComponentItem<Projectile3D>("Projectile3D", selected, () => new Projectile3D());
+        DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, () => new ProjectileLauncher3D());
+        DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, () => new SimpleEnemyAI3D());
 
         ImGui.EndPopup();
     }

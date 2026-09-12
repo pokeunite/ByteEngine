@@ -22,10 +22,12 @@ public abstract class Component
     public Transform Transform =>
         GameObject.Transform;
 
+    protected GameObject? AttachedGameObject => _gameObject;
+
     public bool Enabled { get; set; } = true;
 
     public virtual int? RenderOrder => null;
-	public virtual int UpdateOrder => 0;
+    public virtual int UpdateOrder => 0;
 
     internal void Attach(
         GameObject gameObject)

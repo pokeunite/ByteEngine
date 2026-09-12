@@ -3,6 +3,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
@@ -116,6 +117,11 @@ internal sealed class InspectorPanel
             DrawAddComponentItem<CharacterController3D>("CharacterController3D", selected, state, () => new CharacterController3D());
             DrawAddComponentItem<AnimationController>("AnimationController", selected, state, () => new AnimationController());
             DrawAddComponentItem<SkeletalMeshRenderer>("SkeletalMeshRenderer", selected, state, () => new SkeletalMeshRenderer());
+            DrawAddComponentItem<HealthComponent>("HealthComponent", selected, state, () => new HealthComponent());
+            DrawAddComponentItem<LifetimeComponent>("LifetimeComponent", selected, state, () => new LifetimeComponent());
+            DrawAddComponentItem<Projectile3D>("Projectile3D", selected, state, () => new Projectile3D());
+            DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, state, () => new ProjectileLauncher3D());
+            DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, state, () => new SimpleEnemyAI3D());
             ImGui.EndPopup();
         }
 
@@ -331,6 +337,79 @@ internal sealed class InspectorPanel
             DrawBooleanProperty(state, $"Snap To Ground##{component.GetHashCode()}", "Set Snap To Ground",
                 () => controller.SnapToGround, value => controller.SnapToGround = value);
         }
+        else if (component is HealthComponent health)
+        {
+            DrawFloatProperty(state, $"Max Health##{component.GetHashCode()}", "Change Max Health",
+                () => health.MaxHealth, value => health.MaxHealth = value, .5f, 0f, 100000f);
+            DrawFloatProperty(state, $"Current Health##{component.GetHashCode()}", "Change Current Health",
+                () => health.CurrentHealth, value => health.CurrentHealth = value, .5f, 0f, health.MaxHealth);
+            DrawBooleanProperty(state, $"Invulnerable##{component.GetHashCode()}", "Set Invulnerable",
+                () => health.Invulnerable, value => health.Invulnerable = value);
+            DrawBooleanProperty(state, $"Destroy On Death##{component.GetHashCode()}", "Set Destroy On Death",
+                () => health.DestroyOnDeath, value => health.DestroyOnDeath = value);
+            ImGui.TextDisabled($"Health: {health.HealthPercent:P0} | Dead: {health.IsDead}");
+        }
+        else if (component is LifetimeComponent lifetime)
+        {
+            DrawFloatProperty(state, $"Lifetime Seconds##{component.GetHashCode()}", "Change Lifetime",
+                () => lifetime.LifetimeSeconds, value => lifetime.LifetimeSeconds = value, .05f, 0f, 100000f);
+            ImGui.TextDisabled($"Remaining: {lifetime.RemainingSeconds:0.00}s");
+        }
+        else if (component is Projectile3D projectile)
+        {
+            DrawVector3Property(state, $"Velocity##{component.GetHashCode()}", "Change Projectile Velocity",
+                () => projectile.Velocity, value => projectile.Velocity = value, .1f);
+            DrawFloatProperty(state, $"Damage##{component.GetHashCode()}", "Change Projectile Damage",
+                () => projectile.Damage, value => projectile.Damage = value, .25f, 0f, 100000f);
+            DrawFloatProperty(state, $"Radius##{component.GetHashCode()}", "Change Projectile Radius",
+                () => projectile.Radius, value => projectile.Radius = value, .01f, 0f, 10000f);
+            DrawBooleanProperty(state, $"Destroy On Hit##{component.GetHashCode()}", "Set Destroy On Hit",
+                () => projectile.DestroyOnHit, value => projectile.DestroyOnHit = value);
+            ImGui.TextDisabled($"Owner: {(projectile.OwnerId == Guid.Empty ? "None" : projectile.OwnerId)}");
+        }
+        else if (component is ProjectileLauncher3D launcher)
+        {
+            string blueprintLabel = launcher.ProjectileBlueprint.IsEmpty ? "None" :
+                launcher.ProjectileBlueprint.CachedProjectPath ?? launcher.ProjectileBlueprint.Guid.ToString();
+            ImGui.Button($"Projectile Blueprint: {blueprintLabel}##{component.GetHashCode()}", new Vector2(-30f, 0f));
+            if (ImGui.BeginDragDropTarget())
+            {
+                Guid? guid = AssetDragDrop.Accept();
+                if (guid.HasValue && project.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Blueprint)
+                    ExecutePersistent(state, "Change Projectile Blueprint", () =>
+                        launcher.ProjectileBlueprint = new AssetReference(asset.Guid, asset.ProjectPath));
+                ImGui.EndDragDropTarget();
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"X##projectileBlueprint{component.GetHashCode()}"))
+                ExecutePersistent(state, "Clear Projectile Blueprint", () => launcher.ProjectileBlueprint = AssetReference.Empty);
+            DrawFloatProperty(state, $"Projectile Speed##{component.GetHashCode()}", "Change Projectile Speed",
+                () => launcher.ProjectileSpeed, value => launcher.ProjectileSpeed = value, .25f, 0f, 100000f);
+            DrawFloatProperty(state, $"Damage##{component.GetHashCode()}", "Change Launcher Damage",
+                () => launcher.Damage, value => launcher.Damage = value, .25f, 0f, 100000f);
+            DrawFloatProperty(state, $"Fire Cooldown##{component.GetHashCode()}", "Change Fire Cooldown",
+                () => launcher.FireCooldown, value => launcher.FireCooldown = value, .01f, 0f, 10000f);
+            DrawVector3Property(state, $"Muzzle Offset##{component.GetHashCode()}", "Change Muzzle Offset",
+                () => launcher.MuzzleOffset, value => launcher.MuzzleOffset = value, .02f);
+        }
+        else if (component is SimpleEnemyAI3D ai)
+        {
+            DrawStringProperty(state, $"Target Name##{component.GetHashCode()}", "Change AI Target",
+                () => ai.TargetName, value => ai.TargetName = value, 128);
+            ImGui.TextDisabled($"Target ID: {(ai.TargetId == Guid.Empty ? "Auto" : ai.TargetId)}");
+            DrawFloatProperty(state, $"Move Speed##ai{component.GetHashCode()}", "Change AI Move Speed",
+                () => ai.MoveSpeed, value => ai.MoveSpeed = value, .05f, 0f, 10000f);
+            DrawFloatProperty(state, $"Detection Range##{component.GetHashCode()}", "Change Detection Range",
+                () => ai.DetectionRange, value => ai.DetectionRange = value, .1f, 0f, 100000f);
+            DrawFloatProperty(state, $"Attack Range##{component.GetHashCode()}", "Change Attack Range",
+                () => ai.AttackRange, value => ai.AttackRange = value, .05f, 0f, 100000f);
+            DrawFloatProperty(state, $"Damage##ai{component.GetHashCode()}", "Change AI Damage",
+                () => ai.Damage, value => ai.Damage = value, .25f, 0f, 100000f);
+            DrawFloatProperty(state, $"Attack Cooldown##{component.GetHashCode()}", "Change Attack Cooldown",
+                () => ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
+            DrawFloatProperty(state, $"Stop Distance##{component.GetHashCode()}", "Change Stop Distance",
+                () => ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
+        }
         else if (component is AnimationController animation)
         {
             DrawStringProperty(state, $"Idle##{component.GetHashCode()}", "Change Idle Animation",
@@ -371,6 +450,16 @@ internal sealed class InspectorPanel
         float oldValue = read();
         float value = oldValue;
         bool changed = ImGui.DragFloat(label, ref value, speed, minimum, maximum);
+        if (changed) write(value);
+        TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
+    }
+
+    private static void DrawVector3Property(EditorState state, string label, string undoName,
+        Func<Vector3> read, Action<Vector3> write, float speed)
+    {
+        Vector3 oldValue = read();
+        Vector3 value = oldValue;
+        bool changed = ImGui.DragFloat3(label, ref value, speed);
         if (changed) write(value);
         TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
     }

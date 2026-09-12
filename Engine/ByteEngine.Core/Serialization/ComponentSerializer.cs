@@ -7,6 +7,7 @@ using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -94,6 +95,12 @@ public sealed class ComponentSerializer
         Register(
             new EventModuleComponentCodec()
         );
+
+        Register(new HealthComponentCodec());
+        Register(new LifetimeComponentCodec());
+        Register(new Projectile3DCodec());
+        Register(new ProjectileLauncher3DCodec());
+        Register(new SimpleEnemyAI3DCodec());
     }
 
     public void Register(
@@ -924,6 +931,140 @@ public sealed class ComponentSerializer
                         "friction",
                         1.0f
                     )
+            };
+        }
+    }
+
+    private sealed class HealthComponentCodec : IComponentCodec
+    {
+        public string TypeName => "HealthComponent";
+        public Type ComponentType => typeof(HealthComponent);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var health = (HealthComponent)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["maxHealth"] = health.MaxHealth,
+                ["currentHealth"] = health.CurrentHealth,
+                ["invulnerable"] = health.Invulnerable,
+                ["destroyOnDeath"] = health.DestroyOnDeath
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new HealthComponent
+        {
+            MaxHealth = Float(data, "maxHealth", 100f),
+            CurrentHealth = Float(data, "currentHealth", 100f),
+            Invulnerable = data.Properties["invulnerable"]?.GetValue<bool>() ?? false,
+            DestroyOnDeath = data.Properties["destroyOnDeath"]?.GetValue<bool>() ?? false
+        };
+    }
+
+    private sealed class LifetimeComponentCodec : IComponentCodec
+    {
+        public string TypeName => "LifetimeComponent";
+        public Type ComponentType => typeof(LifetimeComponent);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context) =>
+            Data(TypeName, new JsonObject { ["lifetimeSeconds"] = ((LifetimeComponent)component).LifetimeSeconds });
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new LifetimeComponent { LifetimeSeconds = Float(data, "lifetimeSeconds", 5f) };
+    }
+
+    private sealed class Projectile3DCodec : IComponentCodec
+    {
+        public string TypeName => "Projectile3D";
+        public Type ComponentType => typeof(Projectile3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var projectile = (Projectile3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["velocity"] = Array(projectile.Velocity),
+                ["damage"] = projectile.Damage,
+                ["radius"] = projectile.Radius,
+                ["destroyOnHit"] = projectile.DestroyOnHit,
+                ["ownerId"] = projectile.OwnerId.ToString()
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "ownerId", string.Empty), out Guid ownerId);
+            return new Projectile3D
+            {
+                Velocity = Vector3(data.Properties["velocity"], System.Numerics.Vector3.Zero),
+                Damage = Float(data, "damage", 10f),
+                Radius = Float(data, "radius", .05f),
+                DestroyOnHit = data.Properties["destroyOnHit"]?.GetValue<bool>() ?? true,
+                OwnerId = ownerId
+            };
+        }
+    }
+
+    private sealed class ProjectileLauncher3DCodec : IComponentCodec
+    {
+        public string TypeName => "ProjectileLauncher3D";
+        public Type ComponentType => typeof(ProjectileLauncher3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var launcher = (ProjectileLauncher3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["projectileBlueprintGuid"] = launcher.ProjectileBlueprint.Guid.ToString(),
+                ["projectileBlueprintPath"] = launcher.ProjectileBlueprint.CachedProjectPath,
+                ["projectileSpeed"] = launcher.ProjectileSpeed,
+                ["damage"] = launcher.Damage,
+                ["fireCooldown"] = launcher.FireCooldown,
+                ["muzzleOffset"] = Array(launcher.MuzzleOffset)
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "projectileBlueprintGuid", string.Empty), out Guid guid);
+            string path = Text(data, "projectileBlueprintPath", string.Empty);
+            AssetReference reference = guid != Guid.Empty ? new AssetReference(guid, path) :
+                string.IsNullOrWhiteSpace(path) ? AssetReference.Empty : new AssetReference(path);
+            return new ProjectileLauncher3D
+            {
+                ProjectileBlueprint = reference,
+                ProjectileSpeed = Float(data, "projectileSpeed", 30f),
+                Damage = Float(data, "damage", 10f),
+                FireCooldown = Float(data, "fireCooldown", .2f),
+                MuzzleOffset = Vector3(data.Properties["muzzleOffset"], System.Numerics.Vector3.Zero)
+            };
+        }
+    }
+
+    private sealed class SimpleEnemyAI3DCodec : IComponentCodec
+    {
+        public string TypeName => "SimpleEnemyAI3D";
+        public Type ComponentType => typeof(SimpleEnemyAI3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var ai = (SimpleEnemyAI3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["targetId"] = ai.TargetId.ToString(),
+                ["targetName"] = ai.TargetName,
+                ["moveSpeed"] = ai.MoveSpeed,
+                ["detectionRange"] = ai.DetectionRange,
+                ["attackRange"] = ai.AttackRange,
+                ["damage"] = ai.Damage,
+                ["attackCooldown"] = ai.AttackCooldown,
+                ["stopDistance"] = ai.StopDistance
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "targetId", string.Empty), out Guid targetId);
+            return new SimpleEnemyAI3D
+            {
+                TargetId = targetId,
+                TargetName = Text(data, "targetName", string.Empty),
+                MoveSpeed = Float(data, "moveSpeed", 3f),
+                DetectionRange = Float(data, "detectionRange", 20f),
+                AttackRange = Float(data, "attackRange", 1.5f),
+                Damage = Float(data, "damage", 10f),
+                AttackCooldown = Float(data, "attackCooldown", 1f),
+                StopDistance = Float(data, "stopDistance", 1f)
             };
         }
     }
