@@ -1,7 +1,16 @@
+using System.Text.Json;
+
 namespace ByteEngine.Editor;
 
 internal static class EditorPreferences
 {
+    private sealed class SettingsData
+    {
+        public bool Enable2DEditor { get; set; }
+
+        public int LayoutVersion { get; set; }
+    }
+
     private static readonly string DirectoryPath =
         Path.Combine(
             Environment.GetFolderPath(
@@ -10,6 +19,18 @@ internal static class EditorPreferences
             "ByteEngine",
             "Editor"
         );
+
+    private static readonly JsonSerializerOptions JsonOptions =
+        new()
+        {
+            WriteIndented =
+                true,
+
+            PropertyNameCaseInsensitive =
+                true
+        };
+
+    private static SettingsData? _settings;
 
     public static string LayoutPath =>
         Path.Combine(
@@ -22,6 +43,36 @@ internal static class EditorPreferences
             DirectoryPath,
             "last-project.txt"
         );
+
+    private static string SettingsPath =>
+        Path.Combine(
+            DirectoryPath,
+            "preferences.json"
+        );
+
+    public static bool Enable2DEditor
+    {
+        get =>
+            Settings.Enable2DEditor;
+
+        set
+        {
+            if (Settings.Enable2DEditor ==
+                value)
+            {
+                return;
+            }
+
+            Settings.Enable2DEditor =
+                value;
+
+            SaveSettings();
+        }
+    }
+
+    private static SettingsData Settings =>
+        _settings ??=
+            LoadSettings();
 
     public static string? ReadLastProject()
     {
@@ -55,5 +106,108 @@ internal static class EditorPreferences
                 projectFilePath
             )
         );
+    }
+
+    /// <summary>
+    /// Returns true once when ByteEngine's built-in default layout version
+    /// changes. The caller can then rebuild the dock layout exactly once,
+    /// while preserving the user's layout on normal future launches.
+    /// </summary>
+    public static bool EnsureLayoutVersion(
+        int version)
+    {
+        if (Settings.LayoutVersion ==
+            version)
+        {
+            return false;
+        }
+
+        Settings.LayoutVersion =
+            version;
+
+        SaveSettings();
+
+        return true;
+    }
+
+    private static SettingsData LoadSettings()
+    {
+        try
+        {
+            if (!File.Exists(
+                    SettingsPath))
+            {
+                return new SettingsData
+                {
+                    /*
+                     * ByteEngine is 3D-first by default.
+                     * Users can opt into the 2D editor from Preferences.
+                     */
+                    Enable2DEditor =
+                        false,
+
+                    LayoutVersion =
+                        0
+                };
+            }
+
+            SettingsData? loaded =
+                JsonSerializer.Deserialize<SettingsData>(
+                    File.ReadAllText(
+                        SettingsPath),
+                    JsonOptions);
+
+            return loaded ??
+                   new SettingsData();
+        }
+        catch
+        {
+            /*
+             * A corrupt preferences file should never stop the editor
+             * launching. Fall back to the safe 3D-first defaults.
+             */
+            return new SettingsData
+            {
+                Enable2DEditor =
+                    false,
+
+                LayoutVersion =
+                    0
+            };
+        }
+    }
+
+    private static void SaveSettings()
+    {
+        try
+        {
+            Directory.CreateDirectory(
+                DirectoryPath
+            );
+
+            string temporary =
+                SettingsPath +
+                ".tmp";
+
+            File.WriteAllText(
+                temporary,
+                JsonSerializer.Serialize(
+                    Settings,
+                    JsonOptions)
+            );
+
+            File.Move(
+                temporary,
+                SettingsPath,
+                true
+            );
+        }
+        catch
+        {
+            /*
+             * Preferences are convenience data. A write failure should not
+             * crash the editor or block the user from working.
+             */
+        }
     }
 }

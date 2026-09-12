@@ -66,6 +66,9 @@ internal sealed class AssetsPanel
 
     private bool _deleteTargetIsDirectory;
 
+    private bool _focusNextDraw =
+        true;
+
     public bool IsOpen { get; set; } =
         true;
 
@@ -110,6 +113,14 @@ internal sealed class AssetsPanel
     {
         bool isOpen =
             IsOpen;
+
+        if (_focusNextDraw)
+        {
+            ImGui.SetNextWindowFocus();
+
+            _focusNextDraw =
+                false;
+        }
 
         bool visible =
             ImGui.Begin(

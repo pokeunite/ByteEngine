@@ -34,7 +34,8 @@ internal sealed class SceneFramebuffer
         int width,
         int height,
         int windowWidth,
-        int windowHeight)
+        int windowHeight,
+        bool drawGrid3D = true)
     {
         Resize(
             width,
@@ -61,7 +62,8 @@ internal sealed class SceneFramebuffer
         );
 
         GL.Clear(
-            ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit
+            ClearBufferMask.ColorBufferBit |
+            ClearBufferMask.DepthBufferBit
         );
 
         renderer.Resize(
@@ -70,26 +72,66 @@ internal sealed class SceneFramebuffer
         );
 
         RenderContext context;
+
         if (is3D)
         {
-            context = new RenderContext(renderer, renderer3D, scene, _width, _height,
-                viewMatrix3D: camera3D.View, projectionMatrix3D: camera3D.Projection((float)_width / _height));
-            DrawGrid3D(renderer3D, camera3D);
+            context =
+                new RenderContext(
+                    renderer,
+                    renderer3D,
+                    scene,
+                    _width,
+                    _height,
+                    viewMatrix3D:
+                        camera3D.View,
+                    projectionMatrix3D:
+                        camera3D.Projection(
+                            (float)_width /
+                            _height)
+                );
+
+            if (drawGrid3D)
+            {
+                DrawGrid3D(
+                    renderer3D,
+                    camera3D
+                );
+            }
         }
         else
         {
-            renderer.SetCamera(camera.Position, camera.Zoom);
-            DrawGrid(renderer, camera);
-            context = new RenderContext(renderer, renderer3D, scene, _width, _height);
+            renderer.SetCamera(
+                camera.Position,
+                camera.Zoom
+            );
+
+            DrawGrid(
+                renderer,
+                camera
+            );
+
+            context =
+                new RenderContext(
+                    renderer,
+                    renderer3D,
+                    scene,
+                    _width,
+                    _height
+                );
         }
 
-        if (mode == EditorMode.Edit)
+        if (mode ==
+            EditorMode.Edit)
         {
-            scene.RenderEditorInternal(context);
+            scene.RenderEditorInternal(
+                context
+            );
         }
         else
         {
-            scene.RenderInternal(context);
+            scene.RenderInternal(
+                context
+            );
         }
 
         GL.BindFramebuffer(
@@ -100,13 +142,21 @@ internal sealed class SceneFramebuffer
         GL.Viewport(
             0,
             0,
-            Math.Max(windowWidth, 1),
-            Math.Max(windowHeight, 1)
+            Math.Max(
+                windowWidth,
+                1),
+            Math.Max(
+                windowHeight,
+                1)
         );
 
         renderer.Resize(
-            Math.Max(windowWidth, 1),
-            Math.Max(windowHeight, 1)
+            Math.Max(
+                windowWidth,
+                1),
+            Math.Max(
+                windowHeight,
+                1)
         );
     }
 
@@ -120,25 +170,111 @@ internal sealed class SceneFramebuffer
         int windowWidth,
         int windowHeight)
     {
-        Resize(width, height);
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _framebuffer);
-        GL.Viewport(0, 0, _width, _height);
-        GL.ClearColor(0.025f, 0.025f, 0.035f, 1.0f);
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-        renderer.Resize(_width, _height);
+        Resize(
+            width,
+            height
+        );
 
-        Camera3D? camera3D = scene.FindComponent<Camera3D>();
-        Camera2D? camera = camera3D == null ? scene.FindComponent<Camera2D>() : null;
-        if (camera != null) renderer.SetCamera(camera.Transform.Position, camera.Zoom);
-        else renderer.ResetCamera();
+        GL.BindFramebuffer(
+            FramebufferTarget.Framebuffer,
+            _framebuffer
+        );
 
-        var context = new RenderContext(renderer, renderer3D, scene, _width, _height, camera, camera3D);
-        if (mode == EditorMode.Edit) scene.RenderEditorInternal(context);
-        else scene.RenderInternal(context);
+        GL.Viewport(
+            0,
+            0,
+            _width,
+            _height
+        );
 
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        GL.Viewport(0, 0, Math.Max(windowWidth, 1), Math.Max(windowHeight, 1));
-        renderer.Resize(Math.Max(windowWidth, 1), Math.Max(windowHeight, 1));
+        GL.ClearColor(
+            0.025f,
+            0.025f,
+            0.035f,
+            1.0f
+        );
+
+        GL.Clear(
+            ClearBufferMask.ColorBufferBit |
+            ClearBufferMask.DepthBufferBit
+        );
+
+        renderer.Resize(
+            _width,
+            _height
+        );
+
+        Camera3D? camera3D =
+            scene.FindComponent<Camera3D>();
+
+        Camera2D? camera =
+            camera3D ==
+            null
+                ? scene.FindComponent<Camera2D>()
+                : null;
+
+        if (camera !=
+            null)
+        {
+            renderer.SetCamera(
+                camera.Transform.Position,
+                camera.Zoom
+            );
+        }
+        else
+        {
+            renderer.ResetCamera();
+        }
+
+        var context =
+            new RenderContext(
+                renderer,
+                renderer3D,
+                scene,
+                _width,
+                _height,
+                camera,
+                camera3D
+            );
+
+        if (mode ==
+            EditorMode.Edit)
+        {
+            scene.RenderEditorInternal(
+                context
+            );
+        }
+        else
+        {
+            scene.RenderInternal(
+                context
+            );
+        }
+
+        GL.BindFramebuffer(
+            FramebufferTarget.Framebuffer,
+            0
+        );
+
+        GL.Viewport(
+            0,
+            0,
+            Math.Max(
+                windowWidth,
+                1),
+            Math.Max(
+                windowHeight,
+                1)
+        );
+
+        renderer.Resize(
+            Math.Max(
+                windowWidth,
+                1),
+            Math.Max(
+                windowHeight,
+                1)
+        );
     }
 
     private void Resize(
@@ -157,17 +293,23 @@ internal sealed class SceneFramebuffer
                 1
             );
 
-        if (_framebuffer != 0 &&
-            width == _width &&
-            height == _height)
+        if (_framebuffer !=
+                0 &&
+            width ==
+                _width &&
+            height ==
+                _height)
         {
             return;
         }
 
         DestroyResources();
 
-        _width = width;
-        _height = height;
+        _width =
+            width;
+
+        _height =
+            height;
 
         _framebuffer =
             GL.GenFramebuffer();
@@ -217,11 +359,27 @@ internal sealed class SceneFramebuffer
             0
         );
 
-        _depthRenderbuffer = GL.GenRenderbuffer();
-        GL.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _depthRenderbuffer);
-        GL.RenderbufferStorage(RenderbufferTarget.Renderbuffer, RenderbufferStorage.Depth24Stencil8, _width, _height);
-        GL.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment,
-            RenderbufferTarget.Renderbuffer, _depthRenderbuffer);
+        _depthRenderbuffer =
+            GL.GenRenderbuffer();
+
+        GL.BindRenderbuffer(
+            RenderbufferTarget.Renderbuffer,
+            _depthRenderbuffer
+        );
+
+        GL.RenderbufferStorage(
+            RenderbufferTarget.Renderbuffer,
+            RenderbufferStorage.Depth24Stencil8,
+            _width,
+            _height
+        );
+
+        GL.FramebufferRenderbuffer(
+            FramebufferTarget.Framebuffer,
+            FramebufferAttachment.DepthStencilAttachment,
+            RenderbufferTarget.Renderbuffer,
+            _depthRenderbuffer
+        );
 
         FramebufferErrorCode status =
             GL.CheckFramebufferStatus(
@@ -251,8 +409,16 @@ internal sealed class SceneFramebuffer
         Renderer2D renderer,
         EditorCamera camera)
     {
-        float gridSize = 16.0f;
-        while (gridSize * camera.Zoom < 12.0f) gridSize *= 2.0f;
+        float gridSize =
+            16.0f;
+
+        while (gridSize *
+               camera.Zoom <
+               12.0f)
+        {
+            gridSize *=
+                2.0f;
+        }
 
         float halfWorldWidth =
             _width /
@@ -299,9 +465,12 @@ internal sealed class SceneFramebuffer
             ) *
             gridSize;
 
-        for (float x = firstX;
-             x <= maximumX;
-             x += gridSize)
+        for (float x =
+                 firstX;
+             x <=
+             maximumX;
+             x +=
+             gridSize)
         {
             renderer.DrawQuad(
                 new Vector2(
@@ -310,7 +479,8 @@ internal sealed class SceneFramebuffer
                 ),
                 new Vector2(
                     lineWidth,
-                    halfWorldHeight * 2.0f
+                    halfWorldHeight *
+                    2.0f
                 ),
                 gridColor
             );
@@ -323,9 +493,12 @@ internal sealed class SceneFramebuffer
             ) *
             gridSize;
 
-        for (float y = firstY;
-             y <= maximumY;
-             y += gridSize)
+        for (float y =
+                 firstY;
+             y <=
+             maximumY;
+             y +=
+             gridSize)
         {
             renderer.DrawQuad(
                 new Vector2(
@@ -333,88 +506,263 @@ internal sealed class SceneFramebuffer
                     y
                 ),
                 new Vector2(
-                    halfWorldWidth * 2.0f,
+                    halfWorldWidth *
+                    2.0f,
                     lineWidth
                 ),
                 gridColor
             );
         }
 
-        Vector4 xAxisColor = new(.24f, .48f, .28f, 1f);
-        Vector4 yAxisColor = new(.52f, .24f, .24f, 1f);
-        if (minimumY <= 0f && maximumY >= 0f)
-            renderer.DrawQuad(new Vector2(camera.Position.X, 0f), new Vector2(halfWorldWidth * 2f, lineWidth * 2f), xAxisColor);
-        if (minimumX <= 0f && maximumX >= 0f)
-            renderer.DrawQuad(new Vector2(0f, camera.Position.Y), new Vector2(lineWidth * 2f, halfWorldHeight * 2f), yAxisColor);
+        Vector4 xAxisColor =
+            new(
+                .24f,
+                .48f,
+                .28f,
+                1f
+            );
+
+        Vector4 yAxisColor =
+            new(
+                .52f,
+                .24f,
+                .24f,
+                1f
+            );
+
+        if (minimumY <=
+                0f &&
+            maximumY >=
+                0f)
+        {
+            renderer.DrawQuad(
+                new Vector2(
+                    camera.Position.X,
+                    0f
+                ),
+                new Vector2(
+                    halfWorldWidth *
+                    2f,
+                    lineWidth *
+                    2f
+                ),
+                xAxisColor
+            );
+        }
+
+        if (minimumX <=
+                0f &&
+            maximumX >=
+                0f)
+        {
+            renderer.DrawQuad(
+                new Vector2(
+                    0f,
+                    camera.Position.Y
+                ),
+                new Vector2(
+                    lineWidth *
+                    2f,
+                    halfWorldHeight *
+                    2f
+                ),
+                yAxisColor
+            );
+        }
     }
 
-    private void DrawGrid3D(Renderer3D renderer, EditorCamera3D camera)
+    private void DrawGrid3D(
+        Renderer3D renderer,
+        EditorCamera3D camera)
     {
-        Matrix4x4 view = camera.View;
-        Matrix4x4 projection = camera.Projection((float)_width / _height);
-        Mesh cube = renderer.GetPrimitive(PrimitiveMeshType.Cube);
+        Matrix4x4 view =
+            camera.View;
 
-        for (int coordinate = -10; coordinate <= 10; coordinate++)
+        Matrix4x4 projection =
+            camera.Projection(
+                (float)_width /
+                _height
+            );
+
+        Mesh cube =
+            renderer.GetPrimitive(
+                PrimitiveMeshType.Cube
+            );
+
+        for (int coordinate =
+                 -10;
+             coordinate <=
+             10;
+             coordinate++)
         {
-            Vector4 xColor = coordinate == 0
-                ? new Vector4(.25f, .45f, .9f, 1f)
-                : new Vector4(.18f, .2f, .24f, 1f);
-            Matrix4x4 xTransform =
-                Matrix4x4.CreateScale(.012f, .005f, 20f) *
-                Matrix4x4.CreateTranslation(coordinate, 0f, 0f);
-            renderer.Draw(
-                cube, new Material { BaseColor = xColor }, xTransform, view, projection,
-                new Vector3(0f, -1f, 0f), Vector3.One, 0f, 1f);
+            Vector4 xColor =
+                coordinate ==
+                0
+                    ? new Vector4(
+                        .25f,
+                        .45f,
+                        .9f,
+                        1f
+                    )
+                    : new Vector4(
+                        .18f,
+                        .2f,
+                        .24f,
+                        1f
+                    );
 
-            Vector4 zColor = coordinate == 0
-                ? new Vector4(.9f, .25f, .22f, 1f)
-                : new Vector4(.18f, .2f, .24f, 1f);
-            Matrix4x4 zTransform =
-                Matrix4x4.CreateScale(20f, .005f, .012f) *
-                Matrix4x4.CreateTranslation(0f, 0f, coordinate);
+            Matrix4x4 xTransform =
+                Matrix4x4.CreateScale(
+                    .012f,
+                    .005f,
+                    20f
+                ) *
+                Matrix4x4.CreateTranslation(
+                    coordinate,
+                    0f,
+                    0f
+                );
+
             renderer.Draw(
-                cube, new Material { BaseColor = zColor }, zTransform, view, projection,
-                new Vector3(0f, -1f, 0f), Vector3.One, 0f, 1f);
+                cube,
+                new Material
+                {
+                    BaseColor =
+                        xColor
+                },
+                xTransform,
+                view,
+                projection,
+                new Vector3(
+                    0f,
+                    -1f,
+                    0f
+                ),
+                Vector3.One,
+                0f,
+                1f
+            );
+
+            Vector4 zColor =
+                coordinate ==
+                0
+                    ? new Vector4(
+                        .9f,
+                        .25f,
+                        .22f,
+                        1f
+                    )
+                    : new Vector4(
+                        .18f,
+                        .2f,
+                        .24f,
+                        1f
+                    );
+
+            Matrix4x4 zTransform =
+                Matrix4x4.CreateScale(
+                    20f,
+                    .005f,
+                    .012f
+                ) *
+                Matrix4x4.CreateTranslation(
+                    0f,
+                    0f,
+                    coordinate
+                );
+
+            renderer.Draw(
+                cube,
+                new Material
+                {
+                    BaseColor =
+                        zColor
+                },
+                zTransform,
+                view,
+                projection,
+                new Vector3(
+                    0f,
+                    -1f,
+                    0f
+                ),
+                Vector3.One,
+                0f,
+                1f
+            );
         }
 
         Matrix4x4 yTransform =
-            Matrix4x4.CreateScale(.012f, 2f, .012f) *
-            Matrix4x4.CreateTranslation(0f, 1f, 0f);
+            Matrix4x4.CreateScale(
+                .012f,
+                2f,
+                .012f
+            ) *
+            Matrix4x4.CreateTranslation(
+                0f,
+                1f,
+                0f
+            );
+
         renderer.Draw(
             cube,
-            new Material { BaseColor = new Vector4(.2f, 1f, .3f, 1f) },
+            new Material
+            {
+                BaseColor =
+                    new Vector4(
+                        .2f,
+                        1f,
+                        .3f,
+                        1f
+                    )
+            },
             yTransform,
             view,
             projection,
-            new Vector3(0f, -1f, 0f),
+            new Vector3(
+                0f,
+                -1f,
+                0f
+            ),
             Vector3.One,
             0f,
-            1f);
+            1f
+        );
     }
 
     private void DestroyResources()
     {
-        if (_depthRenderbuffer != 0)
+        if (_depthRenderbuffer !=
+            0)
         {
-            GL.DeleteRenderbuffer(_depthRenderbuffer);
-            _depthRenderbuffer = 0;
+            GL.DeleteRenderbuffer(
+                _depthRenderbuffer
+            );
+
+            _depthRenderbuffer =
+                0;
         }
-        if (_colorTexture != 0)
+
+        if (_colorTexture !=
+            0)
         {
             GL.DeleteTexture(
                 _colorTexture
             );
 
-            _colorTexture = 0;
+            _colorTexture =
+                0;
         }
 
-        if (_framebuffer != 0)
+        if (_framebuffer !=
+            0)
         {
             GL.DeleteFramebuffer(
                 _framebuffer
             );
 
-            _framebuffer = 0;
+            _framebuffer =
+                0;
         }
     }
 

@@ -33,9 +33,15 @@ public sealed class Renderer3D : IDisposable
         float ambientIntensity)
     {
         Initialize();
+
         GL.Enable(EnableCap.DepthTest);
-        GL.Enable(EnableCap.CullFace);
-        GL.CullFace(TriangleFace.Back);
+
+        /*
+         * Imported FBX files do not all agree on front-face winding.
+         * Until materials expose an explicit DoubleSided option, render 3D
+         * meshes double-sided so a valid FBX cannot disappear completely.
+         */
+        GL.Disable(EnableCap.CullFace);
 
         _shader!.Use();
         _shader.SetMatrix("uModel", model);
@@ -48,8 +54,11 @@ public sealed class Renderer3D : IDisposable
         _shader.SetFloat("uAmbientIntensity", ambientIntensity);
         _shader.SetFloat("uMetallic", Math.Clamp(material.Metallic, 0f, 1f));
         _shader.SetFloat("uRoughness", Math.Clamp(material.Roughness, .04f, 1f));
+
         if (Matrix4x4.Invert(view, out Matrix4x4 inverseView))
+        {
             _shader.SetVector3("uCameraPosition", inverseView.Translation);
+        }
 
         if (material.MainTexture != null)
         {
@@ -74,13 +83,21 @@ public sealed class Renderer3D : IDisposable
         }
 
         mesh.Bind();
-        GL.DrawElements(BeginMode.Triangles, mesh.IndexCount, DrawElementsType.UnsignedInt, 0);
+        GL.DrawElements(
+            BeginMode.Triangles,
+            mesh.IndexCount,
+            DrawElementsType.UnsignedInt,
+            0);
         GL.BindVertexArray(0);
     }
 
     public void Dispose()
     {
-        foreach (Mesh mesh in _primitives.Values) mesh.Dispose();
+        foreach (Mesh mesh in _primitives.Values)
+        {
+            mesh.Dispose();
+        }
+
         _primitives.Clear();
         _shader?.Dispose();
         _shader = null;

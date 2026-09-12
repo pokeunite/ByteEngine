@@ -197,14 +197,14 @@ internal static class EditorSceneCommands
         root.Transform.WorldPosition =
             worldPosition;
 
+        float appliedScale =
+            ModelImportScaleUtility.Resolve(
+                asset,
+                model);
+
         root.Transform.LocalScale =
             Vector3.One *
-            Math.Max(
-                asset.Metadata
-                    .ModelImporter
-                    .ImportScale,
-                0.0001f
-            );
+            appliedScale;
 
         var objects =
             new Dictionary<string, GameObject>();
@@ -313,8 +313,23 @@ internal static class EditorSceneCommands
 
         state.MarkDirty();
 
+        float requestedScale =
+            Math.Max(
+                asset.Metadata
+                    .ModelImporter
+                    .ImportScale,
+                0.0001f);
+
+        string scaleNote =
+            Math.Abs(
+                requestedScale -
+                appliedScale) >
+            0.000001f
+                ? $" Normalized FBX scale {requestedScale:0.####} -> {appliedScale:0.####}."
+                : string.Empty;
+
         log.Info(
-            $"Instantiated model '{asset.ProjectPath}' with {model.Meshes.Count} mesh(es) at {worldPosition}."
+            $"Instantiated model '{asset.ProjectPath}' with {model.Meshes.Count} mesh(es) at {worldPosition}.{scaleNote}"
         );
 
         return root;
@@ -438,11 +453,6 @@ internal static class EditorSceneCommands
                     out AssetRecord? asset) ||
                 asset == null)
             {
-                /*
-                 * Keep unresolved GUID so the relationship is not
-                 * silently destroyed if the asset is temporarily
-                 * unavailable.
-                 */
                 runner.AddModuleReference(
                     new AssetReference(
                         moduleGuid

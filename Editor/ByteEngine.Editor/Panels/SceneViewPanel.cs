@@ -23,7 +23,8 @@ internal sealed class SceneViewPanel : IDisposable
     private readonly Gizmo3DController _gizmo3D =
         new();
 
-    private bool _is3D;
+    private bool _is3D =
+        true;
 
     private Vector2 _lastViewportSize =
         new(
@@ -75,6 +76,12 @@ internal sealed class SceneViewPanel : IDisposable
         Action<Vector3> createCamera,
         Action paste)
     {
+        if (!EditorPreferences.Enable2DEditor)
+        {
+            _is3D =
+                true;
+        }
+
         bool isOpen =
             IsOpen;
 
@@ -319,26 +326,30 @@ internal sealed class SceneViewPanel : IDisposable
                 );
             }
 
-            if (ImGui.MenuItem(
-                    "Create Sprite",
-                    string.Empty,
-                    false,
-                    editable))
+            if (EditorPreferences.Enable2DEditor &&
+                !_is3D)
             {
-                createSprite(
-                    _contextWorld
-                );
-            }
+                if (ImGui.MenuItem(
+                        "Create Sprite",
+                        string.Empty,
+                        false,
+                        editable))
+                {
+                    createSprite(
+                        _contextWorld
+                    );
+                }
 
-            if (ImGui.MenuItem(
-                    "Create Camera",
-                    string.Empty,
-                    false,
-                    editable))
-            {
-                createCamera(
-                    _contextWorld
-                );
+                if (ImGui.MenuItem(
+                        "Create Camera 2D",
+                        string.Empty,
+                        false,
+                        editable))
+                {
+                    createCamera(
+                        _contextWorld
+                    );
+                }
             }
 
             ImGui.Separator();
@@ -361,27 +372,37 @@ internal sealed class SceneViewPanel : IDisposable
     private void DrawToolbar(
         EditorState state)
     {
-        if (ImGui.SmallButton(
-                _is3D
-                    ? "2D"
-                    : "[2D]"))
+        if (EditorPreferences.Enable2DEditor)
         {
-            _is3D =
-                false;
+            if (ImGui.SmallButton(
+                    _is3D
+                        ? "2D"
+                        : "[2D]"))
+            {
+                _is3D =
+                    false;
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    _is3D
+                        ? "[3D]"
+                        : "3D"))
+            {
+                _is3D =
+                    true;
+            }
+
+            ImGui.SameLine();
         }
-
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                _is3D
-                    ? "[3D]"
-                    : "3D"))
+        else
         {
-            _is3D =
-                true;
-        }
+            ImGui.TextDisabled(
+                "[3D]");
 
-        ImGui.SameLine();
+            ImGui.SameLine();
+        }
 
         if (!_is3D)
         {

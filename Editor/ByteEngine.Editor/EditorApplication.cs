@@ -100,6 +100,12 @@ public sealed class EditorApplication
                 EditorPreferences.LayoutPath
             );
 
+        if (EditorPreferences.EnsureLayoutVersion(
+                3))
+        {
+            _layout.RequestReset();
+        }
+
         if (_startupProjectFile != null)
         {
             OpenProject(
@@ -258,11 +264,15 @@ public sealed class EditorApplication
             _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
         }
 
-        if (_assets?.IsOpen == true)
+        // Draw background bottom-workspace tabs first. Assets is drawn last
+        // so its one-shot startup focus request is not immediately stolen by
+        // Console or Performance in the same dock node.
+        if (_performance.IsOpen)
         {
-            _assets.Draw(
+            _performance.Draw(
                 _state,
-                _log
+                _sceneView.IsOpen,
+                _gameView.IsOpen
             );
         }
 
@@ -273,12 +283,11 @@ public sealed class EditorApplication
             );
         }
 
-        if (_performance.IsOpen)
+        if (_assets?.IsOpen == true)
         {
-            _performance.Draw(
+            _assets.Draw(
                 _state,
-                _sceneView.IsOpen,
-                _gameView.IsOpen
+                _log
             );
         }
 
@@ -298,6 +307,12 @@ public sealed class EditorApplication
         if (_state != null)
         {
             DrawEditMenu();
+        }
+
+        DrawPreferencesMenu();
+
+        if (_state != null)
+        {
             DrawGameObjectMenu();
             DrawWindowMenu();
             DrawPlayControls();
@@ -465,6 +480,34 @@ public sealed class EditorApplication
         ImGui.EndMenu();
     }
 
+    private void DrawPreferencesMenu()
+    {
+        if (!ImGui.BeginMenu(
+                "Preferences"))
+        {
+            return;
+        }
+
+        bool enable2D =
+            EditorPreferences.Enable2DEditor;
+
+        if (ImGui.MenuItem(
+                "Enable 2D Editor",
+                string.Empty,
+                enable2D))
+        {
+            EditorPreferences.Enable2DEditor =
+                !enable2D;
+        }
+
+        ImGui.Separator();
+
+        ImGui.TextDisabled(
+            "3D editor is the default workspace.");
+
+        ImGui.EndMenu();
+    }
+
     private void DrawGameObjectMenu()
     {
         if (_state == null ||
@@ -489,11 +532,14 @@ public sealed class EditorApplication
         }
 
         ImGui.Separator();
-        if (ImGui.BeginMenu("2D", canEdit))
+
+        if (EditorPreferences.Enable2DEditor &&
+            ImGui.BeginMenu("2D", canEdit))
         {
             if (ImGui.MenuItem("Sprite")) CreateObjectWithComponent("Sprite", () => new SpriteRenderer());
             ImGui.EndMenu();
         }
+
         if (ImGui.BeginMenu("3D Object", canEdit))
         {
             if (ImGui.MenuItem("Cube")) CreateMeshPrimitive("Cube", PrimitiveMeshType.Cube);
@@ -503,8 +549,21 @@ public sealed class EditorApplication
         }
         if (ImGui.BeginMenu("Camera", canEdit))
         {
-            if (ImGui.MenuItem("Camera 2D")) CreateObjectWithComponent("Camera 2D", () => new Camera2D());
-            if (ImGui.MenuItem("Camera 3D")) CreateObjectWithComponent("Camera 3D", () => new Camera3D());
+            if (EditorPreferences.Enable2DEditor &&
+                ImGui.MenuItem("Camera 2D"))
+            {
+                CreateObjectWithComponent(
+                    "Camera 2D",
+                    () => new Camera2D());
+            }
+
+            if (ImGui.MenuItem("Camera 3D"))
+            {
+                CreateObjectWithComponent(
+                    "Camera 3D",
+                    () => new Camera3D());
+            }
+
             ImGui.EndMenu();
         }
         if (ImGui.BeginMenu("Light", canEdit))

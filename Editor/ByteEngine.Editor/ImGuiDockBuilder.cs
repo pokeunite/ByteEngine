@@ -13,7 +13,8 @@ internal static class ImGuiDockBuilder
     public static bool NodeExists(
         uint nodeId)
     {
-        return GetNode(nodeId) !=
+        return GetNode(
+                   nodeId) !=
                IntPtr.Zero;
     }
 
@@ -22,131 +23,141 @@ internal static class ImGuiDockBuilder
         Vector2 size)
     {
         RemoveNode(
-            dockSpaceId
-        );
+            dockSpaceId);
 
         AddNode(
             dockSpaceId,
-            DockSpaceNodeFlag
-        );
+            DockSpaceNodeFlag);
 
         SetNodeSize(
             dockSpaceId,
-            size
-        );
+            size);
+
+        /*
+         * Default ByteEngine workspace:
+         *
+         *  +-----------+---------------------------+-------------+
+         *  | Hierarchy |       Scene View          | Inspector   |
+         *  |           |                           |             |
+         *  |           +---------------------------+             |
+         *  |           | Assets / Console / Perf   |             |
+         *  +-----------+---------------------------+-------------+
+         *  | Game View |
+         *  +-----------+
+         *
+         * This intentionally matches the 3D-first authoring layout and puts
+         * Assets in the main bottom workspace instead of the left column.
+         */
 
         SplitNode(
             dockSpaceId,
             ImGuiDir.Left,
-            0.20f,
+            0.11f,
             out uint leftColumn,
-            out uint centerAndRight
-        );
+            out uint centerAndRight);
 
         SplitNode(
             centerAndRight,
             ImGuiDir.Right,
-            0.24f,
+            0.23f,
             out uint rightColumn,
-            out uint centerColumn
-        );
+            out uint centerColumn);
 
         SplitNode(
             leftColumn,
             ImGuiDir.Down,
-            0.28f,
-            out uint assetsPanel,
-            out uint hierarchyPanel
-        );
+            0.14f,
+            out uint gameViewPanel,
+            out uint hierarchyPanel);
 
         SplitNode(
             centerColumn,
             ImGuiDir.Down,
-            0.28f,
-            out uint consolePanel,
-            out uint sceneViewPanel
-        );
+            0.34f,
+            out uint bottomWorkspace,
+            out uint sceneViewPanel);
 
         DockWindow(
             "Hierarchy",
-            hierarchyPanel
-        );
-
-        DockWindow(
-            "Assets",
-            assetsPanel
-        );
-
-        DockWindow(
-            "Scene View",
-            sceneViewPanel
-        );
+            hierarchyPanel);
 
         DockWindow(
             "Game View",
-            sceneViewPanel
-        );
+            gameViewPanel);
 
         DockWindow(
-            "Console",
-            consolePanel
-        );
+            "Scene View",
+            sceneViewPanel);
 
         DockWindow(
             "Inspector",
-            rightColumn
-        );
+            rightColumn);
+
+        /*
+         * Assets is docked last so it becomes the selected tab in the bottom
+         * workspace on a freshly-created/default layout.
+         */
+        DockWindow(
+            "Console",
+            bottomWorkspace);
+
+        DockWindow(
+            "Performance",
+            bottomWorkspace);
+
+        DockWindow(
+            "Assets",
+            bottomWorkspace);
 
         Finish(
-            dockSpaceId
-        );
+            dockSpaceId);
     }
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderGetNode",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderGetNode")]
     private static extern IntPtr GetNode(
         uint nodeId);
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderRemoveNode",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderRemoveNode")]
     private static extern void RemoveNode(
         uint nodeId);
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderAddNode",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderAddNode")]
     private static extern uint AddNode(
         uint nodeId,
         ImGuiDockNodeFlags flags);
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderSetNodeSize",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderSetNodeSize")]
     private static extern void SetNodeSize(
         uint nodeId,
         Vector2 size);
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderSplitNode",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderSplitNode")]
     private static extern uint SplitNode(
         uint nodeId,
-        ImGuiDir direction,
-        float ratio,
-        out uint nodeAtDirection,
-        out uint nodeAtOppositeDirection);
+        ImGuiDir splitDirection,
+        float sizeRatioForNodeAtDirection,
+        out uint outIdAtDirection,
+        out uint outIdAtOppositeDirection);
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderDockWindow",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderDockWindow")]
     private static extern void DockWindow(
         [MarshalAs(UnmanagedType.LPUTF8Str)]
         string windowName,
@@ -154,8 +165,8 @@ internal static class ImGuiDockBuilder
 
     [DllImport(
         "cimgui",
-        EntryPoint = "igDockBuilderFinish",
-        CallingConvention = CallingConvention.Cdecl)]
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "igDockBuilderFinish")]
     private static extern void Finish(
         uint nodeId);
 }
