@@ -103,16 +103,17 @@ public sealed class EventModuleSerializer
                     : group.Title;
         }
 
-        foreach (EventRuleDefinition rule
-                 in module.Rules)
+        for (int index = 0; index < module.Rules.Count; index++)
         {
             NormalizeRule(
-                rule);
+                module.Rules[index],
+                $"Event {index + 1}");
         }
     }
 
     private static void NormalizeRule(
-        EventRuleDefinition rule)
+        EventRuleDefinition rule,
+        string fallbackName)
     {
         if (rule.Id ==
             Guid.Empty)
@@ -120,6 +121,17 @@ public sealed class EventModuleSerializer
             rule.Id =
                 Guid.NewGuid();
         }
+
+        rule.DisplayName =
+            !string.IsNullOrWhiteSpace(rule.DisplayName) &&
+            !rule.DisplayName.Equals("New Event", StringComparison.Ordinal)
+                ? rule.DisplayName.Trim()
+                : !string.IsNullOrWhiteSpace(rule.EditorTitle)
+                    ? rule.EditorTitle.Trim()
+                    : fallbackName;
+
+        // EditorTitle is retained only for backward compatibility with v0.8 files.
+        rule.EditorTitle = rule.DisplayName;
 
         rule.Conditions ??=
             new List<VisualInstruction>();
@@ -226,11 +238,11 @@ public sealed class EventModuleSerializer
             }
         }
 
-        foreach (EventRuleDefinition child
-                 in rule.SubEvents)
+        for (int index = 0; index < rule.SubEvents.Count; index++)
         {
             NormalizeRule(
-                child);
+                rule.SubEvents[index],
+                $"{rule.DisplayName} Event {index + 1}");
         }
     }
 }

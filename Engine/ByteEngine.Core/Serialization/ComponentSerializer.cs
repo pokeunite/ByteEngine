@@ -951,10 +951,26 @@ public sealed class ComponentSerializer
         public string TypeName => "PlayerController3D";
         public Type ComponentType => typeof(PlayerController3D);
         public ComponentData Serialize(Component component, ComponentSerializationContext context) =>
-            Data(TypeName, new JsonObject { ["useLocalOrientation"] = ((PlayerController3D)component).UseLocalOrientation });
+            Data(TypeName, new JsonObject
+            {
+                ["useLocalOrientation"] = ((PlayerController3D)component).UseLocalOrientation,
+                ["characterRotation"] = ((PlayerController3D)component).CharacterRotation.ToString(),
+                ["turnSpeed"] = ((PlayerController3D)component).TurnSpeed,
+                ["controlYaw"] = ((PlayerController3D)component).ControlYaw,
+                ["controlPitch"] = ((PlayerController3D)component).ControlPitch
+            });
         public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerController3D
         {
-            UseLocalOrientation = data.Properties["useLocalOrientation"]?.GetValue<bool>() ?? true
+            UseLocalOrientation = data.Properties["useLocalOrientation"]?.GetValue<bool>() ?? true,
+            CharacterRotation = Enum.TryParse(
+                Text(data, "characterRotation", nameof(CharacterRotationMode.FaceCamera)),
+                true,
+                out CharacterRotationMode rotationMode)
+                    ? rotationMode
+                    : CharacterRotationMode.FaceCamera,
+            TurnSpeed = Float(data, "turnSpeed", 540f),
+            ControlYaw = Float(data, "controlYaw", 0f),
+            ControlPitch = Float(data, "controlPitch", 12f)
         };
     }
 
@@ -1025,6 +1041,7 @@ public sealed class ComponentSerializer
             return Data(TypeName, new JsonObject
             {
                 ["cameraObjectId"] = boom.CameraObjectId.ToString(),
+                ["useControlRotation"] = boom.UseControlRotation,
                 ["armLength"] = boom.ArmLength,
                 ["pivotHeight"] = boom.PivotHeight,
                 ["yaw"] = boom.Yaw,
@@ -1035,9 +1052,15 @@ public sealed class ComponentSerializer
                 ["mouseSensitivityY"] = boom.MouseSensitivityY,
                 ["positionSmoothness"] = boom.PositionSmoothness,
                 ["rotationSmoothness"] = boom.RotationSmoothness,
+                ["cameraLagEnabled"] = boom.CameraLagEnabled,
+                ["rotationLagEnabled"] = boom.RotationLagEnabled,
+                ["lagSubstepping"] = boom.LagSubstepping,
+                ["maximumLagDistance"] = boom.MaximumLagDistance,
+                ["maxLagTimeStep"] = boom.MaxLagTimeStep,
                 ["shoulderOffset"] = boom.ShoulderOffset,
                 ["enableCameraCollision"] = boom.EnableCameraCollision,
-                ["collisionRadius"] = boom.CollisionRadius
+                ["collisionRadius"] = boom.CollisionRadius,
+                ["collisionReturnSpeed"] = boom.CollisionReturnSpeed
             });
         }
 
@@ -1047,19 +1070,26 @@ public sealed class ComponentSerializer
             return new CameraBoom3D
             {
                 CameraObjectId = cameraObjectId,
-                ArmLength = Float(data, "armLength", 5f),
-                PivotHeight = Float(data, "pivotHeight", 1.5f),
-                MinPitch = Float(data, "minPitch", -10f),
-                MaxPitch = Float(data, "maxPitch", 50f),
+                UseControlRotation = data.Properties["useControlRotation"]?.GetValue<bool>() ?? true,
+                ArmLength = Float(data, "armLength", 4.75f),
+                PivotHeight = Float(data, "pivotHeight", 1.6f),
+                MinPitch = Float(data, "minPitch", -40f),
+                MaxPitch = Float(data, "maxPitch", 65f),
                 Yaw = Float(data, "yaw", 0f),
                 Pitch = Float(data, "pitch", 12f),
                 MouseSensitivityX = Float(data, "mouseSensitivityX", .12f),
                 MouseSensitivityY = Float(data, "mouseSensitivityY", .1f),
                 PositionSmoothness = Float(data, "positionSmoothness", 14f),
-                RotationSmoothness = Float(data, "rotationSmoothness", 18f),
+                RotationSmoothness = Float(data, "rotationSmoothness", 20f),
+                CameraLagEnabled = data.Properties["cameraLagEnabled"]?.GetValue<bool>() ?? true,
+                RotationLagEnabled = data.Properties["rotationLagEnabled"]?.GetValue<bool>() ?? true,
+                LagSubstepping = data.Properties["lagSubstepping"]?.GetValue<bool>() ?? true,
+                MaximumLagDistance = Float(data, "maximumLagDistance", 1.5f),
+                MaxLagTimeStep = Float(data, "maxLagTimeStep", 1f / 60f),
                 ShoulderOffset = Float(data, "shoulderOffset", 0f),
                 EnableCameraCollision = data.Properties["enableCameraCollision"]?.GetValue<bool>() ?? false,
-                CollisionRadius = Float(data, "collisionRadius", .2f)
+                CollisionRadius = Float(data, "collisionRadius", .2f),
+                CollisionReturnSpeed = Float(data, "collisionReturnSpeed", 8f)
             };
         }
     }

@@ -9,19 +9,37 @@ internal static class BlueprintAuthoringService
 {
     public static T AddComponent<T>(GameObject target, T component) where T : Component
     {
-        foreach (Type requirement in ComponentMetadataRegistry.Get(typeof(T)).RequiresComponents ?? Array.Empty<Type>())
+        AddDependencies(target, component.GetType());
+        return target.AddComponent(component);
+    }
+
+    public static Component AddComponent(GameObject target, Component component)
+    {
+        AddDependencies(target, component.GetType());
+        return target.AddComponent(component);
+    }
+
+    private static void AddDependencies(GameObject target, Type componentType)
+    {
+        foreach (Type requirement in ComponentMetadataRegistry.Get(componentType).RequiresComponents ?? Array.Empty<Type>())
         {
             if (target.Components.Any(existing => existing.GetType() == requirement)) continue;
             if (requirement == typeof(CharacterController3D)) target.AddComponent(new CharacterController3D());
         }
-        return target.AddComponent(component);
     }
 
     public static CameraBoom3D SetupThirdPersonCharacter(GameObject player)
     {
         if (!player.HasComponent<CapsuleCollider3D>()) player.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f });
         if (!player.HasComponent<CharacterController3D>()) player.AddComponent(new CharacterController3D());
-        if (!player.HasComponent<PlayerController3D>()) player.AddComponent(new PlayerController3D { UseLocalOrientation = false });
+        if (!player.HasComponent<PlayerController3D>())
+            player.AddComponent(new PlayerController3D
+            {
+                UseLocalOrientation = false,
+                CharacterRotation = CharacterRotationMode.FaceCamera,
+                TurnSpeed = 540f,
+                ControlPitch = 12f
+            });
         CameraBoom3D boom = player.GetComponent<CameraBoom3D>() ?? player.AddComponent(new CameraBoom3D());
         GameObject? cameraObject = Descendants(player).FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
         if (cameraObject == null)

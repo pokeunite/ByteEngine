@@ -92,6 +92,12 @@ internal sealed class EventWorkspacePanel
     private bool _requestFrameGraph =
         true;
 
+    private bool _openEventNamePopup;
+    private bool _focusEventName;
+    private Guid _renameEventId = Guid.Empty;
+    private Vector2 _pendingEventPosition;
+    private string _eventNameBuffer = "New Event";
+
     private AssetRecord? _asset;
 
     private EditorProjectContext? _project;
@@ -399,6 +405,16 @@ internal sealed class EventWorkspacePanel
         DrawGraphCanvas(
             state);
 
+        DrawEventNamePopup();
+
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            ImGui.IsKeyPressed(ImGuiKey.F2))
+        {
+            EventRuleDefinition? selectedRule = _module.Rules
+                .FirstOrDefault(rule => _selectedGraphNodes.Contains(rule.Id));
+            if (selectedRule != null) RequestRenameEvent(selectedRule);
+        }
+
         /*
          * Event Modules are runtime assets, not scene-local scratch data.
          *
@@ -431,271 +447,118 @@ internal sealed class EventWorkspacePanel
     private void DrawDocumentToolbar(
         EditorLog log)
     {
-        ImGui.TextDisabled(
-            "EVENT MODULE");
-
+        ByteGraphToolbarLayout layout = ByteGraphToolbarLayout.ForWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.TextDisabled("EVENT MODULE");
+        ImGui.SameLine();
+        ImGui.Text(_module!.Name);
         ImGui.SameLine();
 
-        ImGui.Text(
-            _module!.Name);
-
-        ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            !CanUndo);
-
-        if (ImGui.Button(
-                UndoName is string undoName
-                    ? $"Undo {undoName}"
-                    : "Undo"))
-        {
-            Undo();
-        }
-
+        ImGui.BeginDisabled(!CanUndo);
+        if (ImGui.Button("Undo")) Undo();
+        if (ImGui.IsItemHovered() && UndoName != null) ImGui.SetTooltip($"Undo {UndoName}");
         ImGui.EndDisabled();
-
         ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            !CanRedo);
-
-        if (ImGui.Button(
-                RedoName is string redoName
-                    ? $"Redo {redoName}"
-                    : "Redo"))
-        {
-            Redo();
-        }
-
+        ImGui.BeginDisabled(!CanRedo);
+        if (ImGui.Button("Redo")) Redo();
+        if (ImGui.IsItemHovered() && RedoName != null) ImGui.SetTooltip($"Redo {RedoName}");
         ImGui.EndDisabled();
-
         ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            !_dirty);
-
-        if (ImGui.Button(
-                "Save"))
-        {
-            Save(
-                log);
-        }
-
+        ImGui.BeginDisabled(!_dirty);
+        if (ImGui.Button("Save")) Save(log);
         ImGui.EndDisabled();
-
         ImGui.SameLine();
 
-        if (ImGui.Button(
-                "+ Add Event"))
-        {
-            RecordHistory(
-                "Add Event");
-
-            Vector2 position =
-                GetDefaultRulePosition(
-                    _module.Rules.Count);
-
-            AddEventAt(
-                position);
-
-            _requestFrameGraph =
-                true;
-        }
-
+        if (ImGui.Button("+ Event"))
+            RequestAddEvent(GetDefaultRulePosition(_module.Rules.Count));
         ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Auto Arrange"))
-        {
-            RecordHistory(
-                "Auto Arrange Graph");
-
-            AutoArrangeGraph();
-
-            _requestFrameGraph =
-                true;
-
-            _dirty =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Frame Graph"))
-        {
-            _requestFrameGraph =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Reset View"))
-        {
-            _graphCanvas.ResetView();
-        }
-
-        ImGui.SameLine();
-
-        float nodeScale =
-            GetNodeScale();
-
-        ImGui.SetNextItemWidth(
-            115.0f);
-
-        bool nodeScaleChanged =
-            ImGui.SliderFloat(
-                "Node Scale",
-                ref nodeScale,
-                0.55f,
-                1.15f,
-                "%.2fx");
-
-        if (ImGui.IsItemActivated())
-        {
-            RecordHistory(
-                "Change Node Scale");
-        }
-
-        if (nodeScaleChanged)
-        {
-            _module.EditorNodeScale =
-                nodeScale;
-
-            _dirty =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            _selectedGraphNodes.Count ==
-            0);
-
-        if (ImGui.Button(
-                "Comment Box"))
-        {
-            CreateGroupFromSelection();
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Delete Selected"))
-        {
-            DeleteSelectedGraphNodes();
-        }
-
+        ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
+        if (ImGui.Button("+ Comment")) CreateGroupFromSelection();
         ImGui.EndDisabled();
-
         ImGui.SameLine();
 
-        if (_selectedGraphNodes.Count >
-            0 &&
-            ImGui.Button(
-                "Clear Selection"))
+        if (!layout.CollapseSecondary)
         {
-            _selectedGraphNodes.Clear();
-        }
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            $"Zoom {_graphCanvas.Zoom * 100.0f:0}%");
-
-        ImGui.SameLine();
-
-        bool liveTrace =
-            VisualLogicDebugTrace.Enabled;
-
-        if (ImGui.Checkbox(
-                "Live Trace",
-                ref liveTrace))
-        {
-            VisualLogicDebugTrace.Enabled =
-                liveTrace;
-
-            if (!liveTrace)
+            if (ImGui.Button("Arrange"))
             {
-                VisualLogicDebugTrace.Clear();
+                RecordHistory("Auto Arrange Graph");
+                AutoArrangeGraph();
+                _requestFrameGraph = true;
+                _dirty = true;
             }
+            ImGui.SameLine();
+            if (ImGui.Button("Frame")) _requestFrameGraph = true;
+            ImGui.SameLine();
         }
 
-        if (liveTrace)
-        {
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                GetTraceColor(
-                    VisualLogicTraceState.ConditionTrue),
-                "TRUE / FIRED");
-
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                GetTraceColor(
-                    VisualLogicTraceState.ConditionFalse),
-                "FALSE / BLOCKED");
-
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                GetTraceColor(
-                    VisualLogicTraceState.ActionExecuted),
-                "ACTION");
-
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                GetTraceColor(
-                    VisualLogicTraceState.ActionSkipped),
-                "SKIPPED");
-        }
-
-        if (_selectedGraphNodes.Count >
-            0)
-        {
-            ImGui.SameLine();
-
-            ImGui.TextDisabled(
-                $"{_selectedGraphNodes.Count} selected");
-        }
-
-        EditorState? toolbarState =
-            EditorState.Active;
-
-        if (toolbarState?.Mode ==
-            EditorMode.Play)
-        {
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                new Vector4(
-                    0.30f,
-                    0.95f,
-                    0.46f,
-                    1.0f),
-                "LIVE HOT RELOAD");
-        }
-        else if (toolbarState?.Mode ==
-                 EditorMode.Paused)
-        {
-            ImGui.SameLine();
-
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.72f,
-                    0.25f,
-                    1.0f),
-                "PAUSED HOT RELOAD");
-        }
-
+        if (ImGui.Button("-")) _graphCanvas.SetZoom(_graphCanvas.Zoom - .1f);
+        ImGui.SameLine();
+        ImGui.TextDisabled($"{_graphCanvas.Zoom * 100f:0}%");
+        ImGui.SameLine();
+        if (ImGui.Button("+")) _graphCanvas.SetZoom(_graphCanvas.Zoom + .1f);
         ImGui.SameLine();
 
-        ImGui.TextDisabled(
-            _asset!.ProjectPath);
+        if (ImGui.Button("...")) ImGui.OpenPopup("ByteGraph Toolbar More");
+        if (ImGui.BeginPopup("ByteGraph Toolbar More"))
+        {
+            if (layout.CollapseSecondary && ImGui.MenuItem("Arrange"))
+            {
+                RecordHistory("Auto Arrange Graph");
+                AutoArrangeGraph();
+                _requestFrameGraph = true;
+                _dirty = true;
+            }
+            if (layout.CollapseSecondary && ImGui.MenuItem("Frame")) _requestFrameGraph = true;
+            if (ImGui.MenuItem("Reset View")) _graphCanvas.ResetView();
+            ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
+            if (ImGui.MenuItem("Delete")) DeleteSelectedGraphNodes();
+            ImGui.EndDisabled();
+            float nodeScale = GetNodeScale();
+            ImGui.SetNextItemWidth(150f);
+            if (ImGui.SliderFloat("Node Scale", ref nodeScale, .55f, 1.15f, "%.2fx"))
+            {
+                _module.EditorNodeScale = nodeScale;
+                _dirty = true;
+            }
+            ImGui.EndPopup();
+        }
+
+        if (layout.TraceOnSecondRow)
+        {
+            ImGui.NewLine();
+        }
+        else
+        {
+            ImGui.SameLine();
+        }
+
+        DrawTraceLegend();
+    }
+
+    private static void DrawTraceChip(string label, VisualLogicTraceState state)
+    {
+        ImGui.TextColored(GetTraceColor(state), $"● {label}");
+    }
+
+    private static void DrawTraceLegend()
+    {
+        bool liveTrace = VisualLogicDebugTrace.Enabled;
+        if (ImGui.Checkbox("Live", ref liveTrace))
+        {
+            VisualLogicDebugTrace.Enabled = liveTrace;
+            if (!liveTrace) VisualLogicDebugTrace.Clear();
+        }
+        ImGui.SameLine();
+        DrawTraceChip("TRUE", VisualLogicTraceState.ConditionTrue);
+        ImGui.SameLine();
+        DrawTraceChip("FIRED", VisualLogicTraceState.EventTriggered);
+        ImGui.SameLine();
+        DrawTraceChip("FALSE", VisualLogicTraceState.ConditionFalse);
+        ImGui.SameLine();
+        DrawTraceChip("BLOCKED", VisualLogicTraceState.EventBlocked);
+        ImGui.SameLine();
+        DrawTraceChip("ACTION", VisualLogicTraceState.ActionExecuted);
+        ImGui.SameLine();
+        DrawTraceChip("SKIPPED", VisualLogicTraceState.ActionSkipped);
     }
 
     private bool CanAutoSave()
@@ -1436,11 +1299,7 @@ internal sealed class EventWorkspacePanel
                     true;
             }
 
-            string title =
-                string.IsNullOrWhiteSpace(
-                    rule.EditorTitle)
-                    ? $"Event {ruleIndex + 1}"
-                    : rule.EditorTitle;
+            string title = GetRuleDisplayName(rule);
 
             ImGui.SetNextItemWidth(
                 -1.0f);
@@ -1450,8 +1309,10 @@ internal sealed class EventWorkspacePanel
                     ref title,
                     96))
             {
-                rule.EditorTitle =
-                    title;
+                rule.DisplayName = string.IsNullOrWhiteSpace(title)
+                    ? $"Event {ruleIndex + 1}"
+                    : title;
+                rule.EditorTitle = rule.DisplayName;
 
                 _dirty =
                     true;
@@ -2468,10 +2329,7 @@ internal sealed class EventWorkspacePanel
         if (ImGui.MenuItem(
                 "New Event Here (Independent)"))
         {
-            RecordHistory(
-                "Add Event");
-
-            AddEventAt(
+            RequestAddEvent(
                 _pendingWireCreatePosition);
         }
 
@@ -2499,12 +2357,9 @@ internal sealed class EventWorkspacePanel
         }
 
         if (ImGui.MenuItem(
-                "Add Event Here"))
+                "Add Event"))
         {
-            RecordHistory(
-                "Add Event");
-
-            AddEventAt(
+            RequestAddEvent(
                 _graphContextPosition);
         }
 
@@ -2514,13 +2369,9 @@ internal sealed class EventWorkspacePanel
             if (ImGui.BeginMenu(
                     "Add Condition To"))
             {
-                foreach (EventRuleDefinition rule
-                         in _module.Rules)
+                foreach ((EventRuleDefinition rule, string label)
+                         in GetRuleMenuEntries())
                 {
-                    string label =
-                        GetRuleDisplayName(
-                            rule);
-
                     if (ImGui.BeginMenu(
                             label))
                     {
@@ -2540,13 +2391,9 @@ internal sealed class EventWorkspacePanel
             if (ImGui.BeginMenu(
                     "Add Action To"))
             {
-                foreach (EventRuleDefinition rule
-                         in _module.Rules)
+                foreach ((EventRuleDefinition rule, string label)
+                         in GetRuleMenuEntries())
                 {
-                    string label =
-                        GetRuleDisplayName(
-                            rule);
-
                     if (ImGui.BeginMenu(
                             label))
                     {
@@ -2566,18 +2413,25 @@ internal sealed class EventWorkspacePanel
 
         ImGui.Separator();
 
+        EventRuleDefinition? selectedEvent = _module.Rules
+            .FirstOrDefault(rule => _selectedGraphNodes.Contains(rule.Id));
+        if (selectedEvent != null && ImGui.MenuItem("Rename", "F2"))
+            RequestRenameEvent(selectedEvent);
+
+        ImGui.Separator();
+
         ImGui.BeginDisabled(
             _selectedGraphNodes.Count ==
             0);
 
         if (ImGui.MenuItem(
-                "Comment Box Around Selection"))
+                "Add Comment"))
         {
             CreateGroupFromSelection();
         }
 
         if (ImGui.MenuItem(
-                "Delete Selected"))
+                "Delete"))
         {
             DeleteSelectedGraphNodes();
         }
@@ -2595,7 +2449,7 @@ internal sealed class EventWorkspacePanel
         ImGui.Separator();
 
         if (ImGui.MenuItem(
-                "Auto Arrange"))
+                _selectedGraphNodes.Count > 0 ? "Arrange Selection" : "Arrange Graph"))
         {
             RecordHistory(
                 "Auto Arrange Graph");
@@ -2610,7 +2464,7 @@ internal sealed class EventWorkspacePanel
         }
 
         if (ImGui.MenuItem(
-                "Frame Graph"))
+                _selectedGraphNodes.Count > 0 ? "Frame Selection" : "Frame Graph"))
         {
             _requestFrameGraph =
                 true;
@@ -2977,8 +2831,80 @@ internal sealed class EventWorkspacePanel
         return instruction;
     }
 
+    private void RequestAddEvent(Vector2 position)
+    {
+        _renameEventId = Guid.Empty;
+        _pendingEventPosition = position;
+        _eventNameBuffer = "New Event";
+        _openEventNamePopup = true;
+        _focusEventName = true;
+    }
+
+    private void RequestRenameEvent(EventRuleDefinition rule)
+    {
+        _renameEventId = rule.Id;
+        _eventNameBuffer = GetRuleDisplayName(rule);
+        _openEventNamePopup = true;
+        _focusEventName = true;
+    }
+
+    private void DrawEventNamePopup()
+    {
+        string popupName = _renameEventId == Guid.Empty ? "Create Event" : "Rename Event";
+        if (_openEventNamePopup)
+        {
+            ImGui.OpenPopup(popupName);
+            _openEventNamePopup = false;
+        }
+
+        bool open = true;
+        if (!ImGui.BeginPopupModal(popupName, ref open, ImGuiWindowFlags.AlwaysAutoResize)) return;
+
+        ImGui.TextUnformatted("Name:");
+        ImGui.SetNextItemWidth(320f);
+        if (_focusEventName)
+        {
+            ImGui.SetKeyboardFocusHere();
+            _focusEventName = false;
+        }
+        ImGui.InputText("##EventDisplayName", ref _eventNameBuffer, 128);
+
+        bool confirm = ImGui.Button(_renameEventId == Guid.Empty ? "Create" : "Rename") ||
+            ImGui.IsKeyPressed(ImGuiKey.Enter);
+        ImGui.SameLine();
+        bool cancel = ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape) || !open;
+
+        if (confirm && !string.IsNullOrWhiteSpace(_eventNameBuffer))
+        {
+            string displayName = _eventNameBuffer.Trim();
+            if (_renameEventId == Guid.Empty)
+            {
+                RecordHistory("Add Event");
+                AddEventAt(_pendingEventPosition, displayName);
+                _requestFrameGraph = true;
+            }
+            else if (FindRule(_renameEventId) is { } rule)
+            {
+                RecordHistory("Rename Event");
+                rule.DisplayName = displayName;
+                rule.EditorTitle = displayName;
+                _dirty = true;
+            }
+            _renameEventId = Guid.Empty;
+            ImGui.CloseCurrentPopup();
+        }
+        else if (cancel)
+        {
+            _renameEventId = Guid.Empty;
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
     private void AddEventAt(
-        Vector2 position)
+        Vector2 position,
+        string displayName)
     {
         if (_module ==
             null)
@@ -2998,8 +2924,8 @@ internal sealed class EventWorkspacePanel
                 EditorY =
                     position.Y,
 
-                EditorTitle =
-                    $"Event {_module.Rules.Count + 1}"
+                DisplayName = displayName,
+                EditorTitle = displayName
             };
 
         _module.Rules.Add(
@@ -3028,10 +2954,26 @@ internal sealed class EventWorkspacePanel
     private static string GetRuleDisplayName(
         EventRuleDefinition rule)
     {
-        return string.IsNullOrWhiteSpace(
-                   rule.EditorTitle)
-            ? $"Event {rule.Id.ToString()[..8]}"
-            : rule.EditorTitle;
+        return !string.IsNullOrWhiteSpace(rule.DisplayName)
+            ? rule.DisplayName
+            : !string.IsNullOrWhiteSpace(rule.EditorTitle)
+                ? rule.EditorTitle
+                : "New Event";
+    }
+
+    private IEnumerable<(EventRuleDefinition Rule, string Label)> GetRuleMenuEntries()
+    {
+        if (_module == null) yield break;
+        Dictionary<string, int> totals = _module.Rules
+            .GroupBy(GetRuleDisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> seen = new(StringComparer.OrdinalIgnoreCase);
+        foreach (EventRuleDefinition rule in _module.Rules)
+        {
+            string name = GetRuleDisplayName(rule);
+            seen[name] = seen.GetValueOrDefault(name) + 1;
+            yield return (rule, totals[name] > 1 ? $"{name} ({seen[name]})" : name);
+        }
     }
 
     private void UpdateGraphPointerInteraction()

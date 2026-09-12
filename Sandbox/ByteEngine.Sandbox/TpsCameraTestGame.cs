@@ -35,22 +35,34 @@ public sealed class TpsCameraTestGame : ByteEngineApplication
         });
         player.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f });
         player.AddComponent(new CharacterController3D { MoveSpeed = 5f });
-        player.AddComponent(new PlayerController3D { UseLocalOrientation = false });
+        player.AddComponent(new PlayerController3D
+        {
+            UseLocalOrientation = false,
+            CharacterRotation = CharacterRotationMode.FaceCamera,
+            TurnSpeed = 540f,
+            ControlPitch = 12f
+        });
         CameraBoom3D boom = player.AddComponent(new CameraBoom3D
         {
-            ArmLength = 5f,
-            PivotHeight = 1.5f,
+            ArmLength = 4.75f,
+            PivotHeight = 1.6f,
             Yaw = 0f,
             Pitch = 12f,
-            MinPitch = -10f,
-            MaxPitch = 50f,
+            MinPitch = -40f,
+            MaxPitch = 65f,
             MouseSensitivityX = .12f,
-            MouseSensitivityY = .1f,
+            MouseSensitivityY = .09f,
             PositionSmoothness = 14f,
-            RotationSmoothness = 18f,
+            RotationSmoothness = 20f,
+            CameraLagEnabled = true,
+            RotationLagEnabled = true,
+            LagSubstepping = true,
+            MaximumLagDistance = 1.5f,
+            MaxLagTimeStep = 1f / 60f,
             ShoulderOffset = 0f,
             EnableCameraCollision = true,
-            CollisionRadius = .2f
+            CollisionRadius = .2f,
+            CollisionReturnSpeed = 8f
         });
 
         GameObject camera = scene.CreateGameObject("Main Camera");

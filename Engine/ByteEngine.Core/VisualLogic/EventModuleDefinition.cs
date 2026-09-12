@@ -82,6 +82,12 @@ public sealed class EventRuleDefinition
     public Guid Id { get; set; } =
         Guid.NewGuid();
 
+    /// <summary>
+    /// Human-readable event name. This never participates in graph identity.
+    /// </summary>
+    public string DisplayName { get; set; } =
+        "New Event";
+
     public bool Enabled { get; set; } =
         true;
 

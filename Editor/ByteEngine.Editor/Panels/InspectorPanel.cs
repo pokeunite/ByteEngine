@@ -156,7 +156,7 @@ internal sealed class InspectorPanel
                     state,
                     $"Remove {component.GetType().Name}",
                     () => selected.RemoveComponent(component));
-            DrawComponentProperties(state, project, component);
+            DrawComponentProperties(state, project, component, _showAdvanced);
         }
 
         _setExpansion = null;
@@ -166,31 +166,21 @@ internal sealed class InspectorPanel
         if (ImGui.BeginPopup("Add Component Popup"))
         {
             ImGui.InputTextWithHint("##AddComponentSearch", "Search components...", ref _addSearch, 96);
-            ImGui.SeparatorText("Recommended");
-            if (ImGui.MenuItem("Third Person Character"))
-                ExecutePersistent(state, "Setup Third Person Character", () => BlueprintAuthoringService.SetupThirdPersonCharacter(selected));
-            ImGui.SeparatorText("Components");
-            DrawAddComponentItem<Camera2D>("Camera2D", selected, state, () => new Camera2D());
-            DrawAddComponentItem<SpriteRenderer>("SpriteRenderer", selected, state, () => new SpriteRenderer());
-            DrawAddComponentItem<MeshRenderer>("MeshRenderer", selected, state, () => new MeshRenderer());
-            DrawAddComponentItem<Camera3D>("Camera3D", selected, state, () => new Camera3D());
-            DrawAddComponentItem<DirectionalLight>("DirectionalLight", selected, state, () => new DirectionalLight());
-            DrawAddComponentItem<BoxCollider3D>("BoxCollider3D", selected, state, () => new BoxCollider3D());
-            DrawAddComponentItem<CapsuleCollider3D>("CapsuleCollider3D", selected, state, () => new CapsuleCollider3D());
-            DrawAddComponentItem<GroundSurface>("GroundSurface", selected, state, () => new GroundSurface());
-            DrawAddComponentItem<CharacterController3D>("Character Movement", selected, state, () => new CharacterController3D());
-            DrawAddComponentItem<AnimationController>("AnimationController", selected, state, () => new AnimationController());
-            DrawAddComponentItem<SkeletalMeshRenderer>("SkeletalMeshRenderer", selected, state, () => new SkeletalMeshRenderer());
-            DrawAddComponentItem<HealthComponent>("Health", selected, state, () => new HealthComponent());
-            DrawAddComponentItem<LifetimeComponent>("LifetimeComponent", selected, state, () => new LifetimeComponent());
-            DrawAddComponentItem<Projectile3D>("Projectile3D", selected, state, () => new Projectile3D());
-            DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, state, () => new ProjectileLauncher3D());
-            DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, state, () => new SimpleEnemyAI3D());
-            DrawAddComponentItem<PlayerController3D>("Player Input", selected, state, () => new PlayerController3D());
-            DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, state, () => new PlayerShooter3D());
-            DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, state, () => new ThirdPersonCamera3D());
-            DrawAddComponentItem<CameraBoom3D>("Third Person Camera", selected, state, () => new CameraBoom3D());
-            DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, state, () => new ArenaGameManager());
+            if (string.IsNullOrWhiteSpace(_addSearch))
+            {
+                ImGui.SeparatorText("Recommended");
+                if (ImGui.MenuItem("Third Person Character"))
+                    ExecutePersistent(state, "Setup Third Person Character", () => BlueprintAuthoringService.SetupThirdPersonCharacter(selected));
+                if (ImGui.MenuItem("Health", string.Empty, false, !selected.HasComponent<HealthComponent>()))
+                    ExecutePersistent(state, "Add Health", () => BlueprintAuthoringService.AddComponent(selected, new HealthComponent()));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Adds reusable damage, healing and death state.");
+                if (ImGui.MenuItem("Model", string.Empty, false, !selected.HasComponent<ModelHierarchyInstance>()))
+                    ExecutePersistent(state, "Add Model", () => BlueprintAuthoringService.AddComponent(selected, new ModelHierarchyInstance()));
+                ImGui.Separator();
+            }
+
+            ComponentAddMenu.Draw(selected, _addSearch, (component, displayName) =>
+                ExecutePersistent(state, $"Add {displayName}", () => BlueprintAuthoringService.AddComponent(selected, component)));
             ImGui.EndPopup();
         }
 
@@ -198,16 +188,7 @@ internal sealed class InspectorPanel
         ImGui.End();
     }
 
-    private void DrawAddComponentItem<T>(string name, GameObject target, EditorState state, Func<T> factory) where T : Component
-    {
-        if (!string.IsNullOrWhiteSpace(_addSearch) && !name.Contains(_addSearch, StringComparison.OrdinalIgnoreCase)) return;
-        bool exists = target.HasComponent<T>();
-        if (ImGui.MenuItem(name, string.Empty, false, !exists))
-            ExecutePersistent(state, $"Add {name}", () => BlueprintAuthoringService.AddComponent(target, factory()));
-        if (exists && ImGui.IsItemHovered()) ImGui.SetTooltip("This component is already attached.");
-    }
-
-    private static void DrawComponentProperties(EditorState state, EditorProjectContext project, Component component)
+    private static void DrawComponentProperties(EditorState state, EditorProjectContext project, Component component, bool showAdvanced)
     {
         ImGui.Indent();
         if (component is Camera2D camera)
@@ -490,8 +471,23 @@ internal sealed class InspectorPanel
                 if (ImGui.SmallButton($"Add Character Movement##{component.GetHashCode()}"))
                     ExecutePersistent(state, "Add Character Movement", () => component.GameObject.AddComponent(new CharacterController3D()));
             }
-            DrawBooleanProperty(state, $"Use Character Direction##{component.GetHashCode()}", "Set Player Movement Orientation",
-                () => playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
+            int oldMode = (int)playerController.CharacterRotation;
+            int mode = oldMode;
+            string[] modes = { "Face Movement", "Face Camera", "Independent" };
+            bool modeChanged = ImGui.Combo($"Character Rotation##{component.GetHashCode()}", ref mode, modes, modes.Length);
+            if (modeChanged) playerController.CharacterRotation = (CharacterRotationMode)mode;
+            TrackItem(state, "Change Character Rotation", modeChanged,
+                () => playerController.CharacterRotation = (CharacterRotationMode)oldMode,
+                () => playerController.CharacterRotation = (CharacterRotationMode)mode);
+            DrawFloatProperty(state, $"Turn Speed##{component.GetHashCode()}", "Change Character Turn Speed",
+                () => playerController.TurnSpeed, value => playerController.TurnSpeed = value, 5f, 0f, 3600f);
+            DrawFloatProperty(state, $"Control Yaw##{component.GetHashCode()}", "Change Control Yaw",
+                () => playerController.ControlYaw, value => playerController.ControlYaw = value, .25f, -180f, 180f);
+            DrawFloatProperty(state, $"Control Pitch##{component.GetHashCode()}", "Change Control Pitch",
+                () => playerController.ControlPitch, value => playerController.ControlPitch = value, .25f, -89f, 89f);
+            if (showAdvanced)
+                DrawBooleanProperty(state, $"Use Character Direction##{component.GetHashCode()}", "Set Player Movement Orientation",
+                    () => playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
         }
         else if (component is PlayerShooter3D playerShooter)
         {
@@ -560,6 +556,24 @@ internal sealed class InspectorPanel
                 () => boom.EnableCameraCollision, value => boom.EnableCameraCollision = value);
             DrawFloatProperty(state, $"Collision Radius##{component.GetHashCode()}", "Change Camera Collision Radius",
                 () => boom.CollisionRadius, value => boom.CollisionRadius = value, .01f, 0f, 10f);
+            DrawFloatProperty(state, $"Collision Return Speed##{component.GetHashCode()}", "Change Camera Collision Return Speed",
+                () => boom.CollisionReturnSpeed, value => boom.CollisionReturnSpeed = value, .1f, 0f, 1000f);
+            if (showAdvanced)
+            {
+                ImGui.SeparatorText("Advanced");
+                DrawBooleanProperty(state, $"Use Control Rotation##{component.GetHashCode()}", "Set Camera Control Rotation",
+                    () => boom.UseControlRotation, value => boom.UseControlRotation = value);
+                DrawBooleanProperty(state, $"Position Lag##{component.GetHashCode()}", "Set Camera Position Lag",
+                    () => boom.CameraLagEnabled, value => boom.CameraLagEnabled = value);
+                DrawBooleanProperty(state, $"Rotation Lag##{component.GetHashCode()}", "Set Camera Rotation Lag",
+                    () => boom.RotationLagEnabled, value => boom.RotationLagEnabled = value);
+                DrawBooleanProperty(state, $"Lag Substepping##{component.GetHashCode()}", "Set Camera Lag Substepping",
+                    () => boom.LagSubstepping, value => boom.LagSubstepping = value);
+                DrawFloatProperty(state, $"Maximum Lag Distance##{component.GetHashCode()}", "Change Maximum Camera Lag",
+                    () => boom.MaximumLagDistance, value => boom.MaximumLagDistance = value, .05f, 0f, 100f);
+                DrawFloatProperty(state, $"Maximum Lag Time Step##{component.GetHashCode()}", "Change Camera Lag Time Step",
+                    () => boom.MaxLagTimeStep, value => boom.MaxLagTimeStep = value, .001f, .001f, .1f);
+            }
         }
         else if (component is ArenaGameManager manager)
         {

@@ -39,6 +39,7 @@ internal sealed class BlueprintWorkspacePanel
 
     private Component? _selectedComponent;
     private string _componentSearch = string.Empty;
+    private string _addComponentSearch = string.Empty;
     private readonly BlueprintTransformGizmo3D _transformGizmo = new();
 
     private bool _open;
@@ -615,7 +616,9 @@ internal sealed class BlueprintWorkspacePanel
             _preview!,
             _camera,
             ImGui.GetItemRectMin(),
-            viewport);
+            viewport,
+            GetSelectedPreviewObject(),
+            _selectedComponent);
 
         bool viewportHovered = ImGui.IsItemHovered();
         bool gizmoConsumed = _transformGizmo.UpdateAndDraw(
@@ -1144,6 +1147,16 @@ internal sealed class BlueprintWorkspacePanel
                     MarkDirty();
                 }
             }
+            int rotationMode = (int)playerController.CharacterRotation;
+            string[] rotationModes = { "Face Movement", "Face Camera", "Independent" };
+            if (ImGui.Combo("Character Rotation", ref rotationMode, rotationModes, rotationModes.Length))
+            {
+                playerController.CharacterRotation = (CharacterRotationMode)rotationMode;
+                MarkDirty();
+            }
+            BlueprintFloat("Turn Speed", playerController.TurnSpeed, value => playerController.TurnSpeed = value, 5f, 0f, 3600f);
+            BlueprintFloat("Control Yaw", playerController.ControlYaw, value => playerController.ControlYaw = value, .25f, -180f, 180f);
+            BlueprintFloat("Control Pitch", playerController.ControlPitch, value => playerController.ControlPitch = value, .25f, -89f, 89f);
             BlueprintBool("Use Character Direction", playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
         }
         else if (component is PlayerShooter3D playerShooter)
@@ -1199,7 +1212,14 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.SeparatorText("COLLISION");
             BlueprintBool("Enable Camera Collision", boom.EnableCameraCollision, value => boom.EnableCameraCollision = value);
             BlueprintFloat("Collision Radius", boom.CollisionRadius, value => boom.CollisionRadius = value, .01f, 0f, 10f);
+            BlueprintFloat("Collision Return Speed", boom.CollisionReturnSpeed, value => boom.CollisionReturnSpeed = value, .1f, 0f, 1000f);
             ImGui.SeparatorText("ADVANCED");
+            BlueprintBool("Use Control Rotation", boom.UseControlRotation, value => boom.UseControlRotation = value);
+            BlueprintBool("Position Lag", boom.CameraLagEnabled, value => boom.CameraLagEnabled = value);
+            BlueprintBool("Rotation Lag", boom.RotationLagEnabled, value => boom.RotationLagEnabled = value);
+            BlueprintBool("Lag Substepping", boom.LagSubstepping, value => boom.LagSubstepping = value);
+            BlueprintFloat("Maximum Lag Distance", boom.MaximumLagDistance, value => boom.MaximumLagDistance = value, .05f, 0f, 100f);
+            BlueprintFloat("Maximum Lag Time Step", boom.MaxLagTimeStep, value => boom.MaxLagTimeStep = value, .001f, .001f, .1f);
             BlueprintFloat("Shoulder Offset", boom.ShoulderOffset, value => boom.ShoulderOffset = value, .02f, -100f, 100f);
         }
         else if (component is ArenaGameManager manager)
@@ -1439,116 +1459,40 @@ internal sealed class BlueprintWorkspacePanel
             return;
         }
 
-        DrawAddComponentItem<Camera2D>(
-            "Camera2D",
-            selected,
-            () =>
-                new Camera2D());
+        ImGui.InputTextWithHint(
+            "##BlueprintAddComponentSearch",
+            "Search components...",
+            ref _addComponentSearch,
+            96);
 
-        DrawAddComponentItem<SpriteRenderer>(
-            "SpriteRenderer",
-            selected,
-            () =>
-                new SpriteRenderer());
+        if (string.IsNullOrWhiteSpace(_addComponentSearch))
+        {
+            ImGui.SeparatorText("Recommended");
+            if (ImGui.MenuItem("Third Person Character"))
+            {
+                BlueprintAuthoringService.SetupThirdPersonCharacter(selected);
+                MarkDirty();
+            }
+            if (ImGui.MenuItem("Health", string.Empty, false, !selected.HasComponent<HealthComponent>()))
+            {
+                BlueprintAuthoringService.AddComponent(selected, new HealthComponent());
+                MarkDirty();
+            }
+            if (ImGui.MenuItem("Model", string.Empty, false, !selected.HasComponent<ModelHierarchyInstance>()))
+            {
+                BlueprintAuthoringService.AddComponent(selected, new ModelHierarchyInstance());
+                MarkDirty();
+            }
+            ImGui.Separator();
+        }
 
-        DrawAddComponentItem<MeshRenderer>(
-            "MeshRenderer",
-            selected,
-            () =>
-                new MeshRenderer());
-
-        DrawAddComponentItem<Camera3D>(
-            "Camera3D",
-            selected,
-            () =>
-                new Camera3D());
-
-        DrawAddComponentItem<DirectionalLight>(
-            "DirectionalLight",
-            selected,
-            () =>
-                new DirectionalLight());
-
-        DrawAddComponentItem<BoxCollider3D>(
-            "BoxCollider3D",
-            selected,
-            () =>
-                new BoxCollider3D());
-
-        DrawAddComponentItem<CapsuleCollider3D>(
-            "CapsuleCollider3D",
-            selected,
-            () =>
-                new CapsuleCollider3D());
-
-        DrawAddComponentItem<GroundSurface>(
-            "GroundSurface",
-            selected,
-            () =>
-                new GroundSurface());
-
-        DrawAddComponentItem<CharacterController3D>(
-            "Character Movement",
-            selected,
-            () =>
-                new CharacterController3D());
-
-        DrawAddComponentItem<AnimationController>(
-            "AnimationController",
-            selected,
-            () =>
-                new AnimationController());
-
-        DrawAddComponentItem<SkeletalMeshRenderer>(
-            "SkeletalMeshRenderer",
-            selected,
-            () =>
-                new SkeletalMeshRenderer());
-
-        DrawAddComponentItem<HealthComponent>("Health", selected, () => new HealthComponent());
-        DrawAddComponentItem<LifetimeComponent>("LifetimeComponent", selected, () => new LifetimeComponent());
-        DrawAddComponentItem<Projectile3D>("Projectile3D", selected, () => new Projectile3D());
-        DrawAddComponentItem<ProjectileLauncher3D>("ProjectileLauncher3D", selected, () => new ProjectileLauncher3D());
-        DrawAddComponentItem<SimpleEnemyAI3D>("SimpleEnemyAI3D", selected, () => new SimpleEnemyAI3D());
-        DrawAddComponentItem<PlayerController3D>("Player Input", selected, () => new PlayerController3D());
-        DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, () => new PlayerShooter3D());
-        DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, () => new ThirdPersonCamera3D());
-        DrawAddComponentItem<CameraBoom3D>("Third Person Camera", selected, () => new CameraBoom3D());
-        DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, () => new ArenaGameManager());
+        ComponentAddMenu.Draw(selected, _addComponentSearch, (component, _) =>
+        {
+            BlueprintAuthoringService.AddComponent(selected, component);
+            MarkDirty();
+        });
 
         ImGui.EndPopup();
-    }
-
-    private void DrawAddComponentItem<T>(
-        string name,
-        GameObject selected,
-        Func<T> factory)
-        where T : Component
-    {
-        if (!string.IsNullOrWhiteSpace(_componentSearch) &&
-            !name.Contains(_componentSearch, StringComparison.OrdinalIgnoreCase)) return;
-        bool exists =
-            selected.HasComponent<T>();
-
-        ImGui.BeginDisabled(
-            exists);
-
-        if (ImGui.MenuItem(
-                name))
-        {
-            BlueprintAuthoringService.AddComponent(selected, factory());
-
-            MarkDirty();
-        }
-
-        ImGui.EndDisabled();
-
-        if (exists &&
-            ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "Already attached.");
-        }
     }
 
     // ========================================================

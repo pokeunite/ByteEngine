@@ -106,7 +106,11 @@ internal static class TpsCameraSystemTests
             "ActiveCamera", "CameraOwner", "MatchesActiveCamera", "Captured", "MouseDelta", "Yaw", "Pitch",
             "ArmLength", "PivotHeight", "ShoulderOffset", "DesiredSocketPosition", "ActualSocketPosition",
             "RootPosition", "RootRotation", "Position", "Rotation", "Forward", "FOV", "Collision.Enabled",
-            "Collision.Hit", "Collision.HitObject", "Collision.DesiredLength", "Collision.ActualLength"
+            "Collision.Hit", "Collision.HitObject", "Collision.DesiredLength", "Collision.ActualLength",
+            "ControlYaw", "ControlPitch", "DesiredBoomYaw", "DesiredBoomPitch", "SmoothedBoomYaw",
+            "SmoothedBoomPitch", "CharacterRotationMode", "DesiredCharacterYaw", "ActualCharacterYaw",
+            "TurnSpeed", "CameraLagEnabled", "RotationLagEnabled", "LagSubsteps",
+            "DesiredArmLength", "ActualArmLength"
         };
         Assert(required.All(dump.Contains) && dump.Contains("MatchesActiveCamera: True"),
             "Camera boom diagnostics identify active camera and complete rig state");
