@@ -5,6 +5,19 @@ namespace ByteEngine.Core.Graphics;
 
 public sealed class Camera3D : Component
 {
+    private bool _activeGameCamera;
+
+    public bool ActiveGameCamera
+    {
+        get => _activeGameCamera;
+        set
+        {
+            _activeGameCamera = value;
+            if (value && AttachedGameObject?.Scene is { } scene) scene.SetActiveCamera(this);
+        }
+    }
+
+    internal void SetActiveGameCameraWithoutNotification(bool value) => _activeGameCamera = value;
     public float FieldOfView { get; set; } = 60f;
     public float NearClip { get; set; } = .1f;
     public float FarClip { get; set; } = 1000f;

@@ -37,12 +37,10 @@ internal static class ImGuiDockBuilder
          * Default ByteEngine workspace:
          *
          *  +-----------+---------------------------+-------------+
-         *  | Hierarchy |       Scene View          | Inspector   |
+         *  | Hierarchy |  Scene View | Game View   | Inspector   |
          *  |           |                           |             |
          *  |           +---------------------------+             |
          *  |           | Assets / Console / Perf   |             |
-         *  +-----------+---------------------------+-------------+
-         *  | Game View |
          *  +-----------+
          *
          * This intentionally matches the 3D-first authoring layout and puts
@@ -64,30 +62,23 @@ internal static class ImGuiDockBuilder
             out uint centerColumn);
 
         SplitNode(
-            leftColumn,
-            ImGuiDir.Down,
-            0.14f,
-            out uint gameViewPanel,
-            out uint hierarchyPanel);
-
-        SplitNode(
             centerColumn,
             ImGuiDir.Down,
             0.34f,
             out uint bottomWorkspace,
-            out uint sceneViewPanel);
+            out uint centralWorkspace);
 
         DockWindow(
             "Hierarchy",
-            hierarchyPanel);
+            leftColumn);
 
         DockWindow(
             "Game View",
-            gameViewPanel);
+            centralWorkspace);
 
         DockWindow(
             "Scene View",
-            sceneViewPanel);
+            centralWorkspace);
 
         DockWindow(
             "Inspector",

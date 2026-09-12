@@ -125,6 +125,7 @@ internal sealed class InspectorPanel
             DrawAddComponentItem<PlayerController3D>("PlayerController3D", selected, state, () => new PlayerController3D());
             DrawAddComponentItem<PlayerShooter3D>("PlayerShooter3D", selected, state, () => new PlayerShooter3D());
             DrawAddComponentItem<ThirdPersonCamera3D>("ThirdPersonCamera3D", selected, state, () => new ThirdPersonCamera3D());
+            DrawAddComponentItem<CameraBoom3D>("CameraBoom3D", selected, state, () => new CameraBoom3D());
             DrawAddComponentItem<ArenaGameManager>("ArenaGameManager", selected, state, () => new ArenaGameManager());
             ImGui.EndPopup();
         }
@@ -241,6 +242,8 @@ internal sealed class InspectorPanel
         }
         else if (component is Camera3D camera3D)
         {
+            DrawBooleanProperty(state, $"Active Game Camera##{component.GetHashCode()}", "Set Active Game Camera",
+                () => camera3D.ActiveGameCamera, value => camera3D.ActiveGameCamera = value);
             DrawFloatProperty(state, $"Field of View##{component.GetHashCode()}", "Change Field of View",
                 () => camera3D.FieldOfView, value => camera3D.FieldOfView = value, .25f, 1f, 179f);
             DrawFloatProperty(state, $"Near Clip##{component.GetHashCode()}", "Change Near Clip",
@@ -449,6 +452,36 @@ internal sealed class InspectorPanel
                 () => followCamera.MouseSensitivity, value => followCamera.MouseSensitivity = value, .01f, 0f, 10f);
             DrawFloatProperty(state, $"Shoulder Offset##{component.GetHashCode()}", "Change Shoulder Offset",
                 () => followCamera.ShoulderOffset, value => followCamera.ShoulderOffset = value, .02f, -100f, 100f);
+        }
+        else if (component is CameraBoom3D boom)
+        {
+            ImGui.TextDisabled($"Camera Child ID: {(boom.CameraObjectId == Guid.Empty ? "Auto-detect" : boom.CameraObjectId)}");
+            DrawFloatProperty(state, $"Arm Length##{component.GetHashCode()}", "Change Camera Arm Length",
+                () => boom.ArmLength, value => boom.ArmLength = value, .05f, 0f, 1000f);
+            DrawFloatProperty(state, $"Pivot Height##{component.GetHashCode()}", "Change Camera Pivot Height",
+                () => boom.PivotHeight, value => boom.PivotHeight = value, .02f, -100f, 100f);
+            DrawFloatProperty(state, $"Yaw##boom{component.GetHashCode()}", "Change Camera Boom Yaw",
+                () => boom.Yaw, value => boom.Yaw = value, .25f, -100000f, 100000f);
+            DrawFloatProperty(state, $"Pitch##boom{component.GetHashCode()}", "Change Camera Boom Pitch",
+                () => boom.Pitch, value => boom.Pitch = value, .25f, boom.MinPitch, boom.MaxPitch);
+            DrawFloatProperty(state, $"Min Pitch##boom{component.GetHashCode()}", "Change Camera Minimum Pitch",
+                () => boom.MinPitch, value => boom.MinPitch = value, .25f, -89f, 89f);
+            DrawFloatProperty(state, $"Max Pitch##boom{component.GetHashCode()}", "Change Camera Maximum Pitch",
+                () => boom.MaxPitch, value => boom.MaxPitch = value, .25f, -89f, 89f);
+            DrawFloatProperty(state, $"Sensitivity X##{component.GetHashCode()}", "Change Horizontal Mouse Sensitivity",
+                () => boom.MouseSensitivityX, value => boom.MouseSensitivityX = value, .005f, 0f, 10f);
+            DrawFloatProperty(state, $"Sensitivity Y##{component.GetHashCode()}", "Change Vertical Mouse Sensitivity",
+                () => boom.MouseSensitivityY, value => boom.MouseSensitivityY = value, .005f, 0f, 10f);
+            DrawFloatProperty(state, $"Position Smoothness##{component.GetHashCode()}", "Change Camera Position Smoothness",
+                () => boom.PositionSmoothness, value => boom.PositionSmoothness = value, .1f, 0f, 1000f);
+            DrawFloatProperty(state, $"Rotation Smoothness##{component.GetHashCode()}", "Change Camera Rotation Smoothness",
+                () => boom.RotationSmoothness, value => boom.RotationSmoothness = value, .1f, 0f, 1000f);
+            DrawFloatProperty(state, $"Shoulder Offset##boom{component.GetHashCode()}", "Change Camera Shoulder Offset",
+                () => boom.ShoulderOffset, value => boom.ShoulderOffset = value, .02f, -100f, 100f);
+            DrawBooleanProperty(state, $"Enable Camera Collision##{component.GetHashCode()}", "Set Camera Collision",
+                () => boom.EnableCameraCollision, value => boom.EnableCameraCollision = value);
+            DrawFloatProperty(state, $"Collision Radius##{component.GetHashCode()}", "Change Camera Collision Radius",
+                () => boom.CollisionRadius, value => boom.CollisionRadius = value, .01f, 0f, 10f);
         }
         else if (component is ArenaGameManager manager)
         {

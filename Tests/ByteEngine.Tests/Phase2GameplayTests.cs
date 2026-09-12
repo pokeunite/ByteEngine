@@ -89,7 +89,13 @@ internal static class Phase2GameplayTests
             Distance = 9f,
             Height = 5f,
             LookAtHeight = 1.5f,
-            FollowSmoothing = 6f
+            FollowSmoothing = 6f,
+            Yaw = 35f,
+            Pitch = 25f,
+            MinPitch = -20f,
+            MaxPitch = 60f,
+            MouseSensitivity = .22f,
+            ShoulderOffset = .75f
         });
         item.AddComponent(new ArenaGameManager { PlayerId = target.Id, PlayerName = target.Name });
 
@@ -102,7 +108,9 @@ internal static class Phase2GameplayTests
         Assert(!controller.UseLocalOrientation, "PlayerController3D serialization");
         Assert(!shooter.Automatic, "PlayerShooter3D serialization");
         Assert(camera.TargetId == target.Id && camera.TargetName == target.Name && Near(camera.Distance, 9f) &&
-            Near(camera.Height, 5f) && Near(camera.LookAtHeight, 1.5f) && Near(camera.FollowSmoothing, 6f),
+            Near(camera.Height, 5f) && Near(camera.LookAtHeight, 1.5f) && Near(camera.FollowSmoothing, 6f) &&
+            Near(camera.Yaw, 35f) && Near(camera.Pitch, 25f) && Near(camera.MinPitch, -20f) &&
+            Near(camera.MaxPitch, 60f) && Near(camera.MouseSensitivity, .22f) && Near(camera.ShoulderOffset, .75f),
             "ThirdPersonCamera3D serialization");
         Assert(manager.PlayerId == target.Id && manager.PlayerName == target.Name, "ArenaGameManager serialization");
 

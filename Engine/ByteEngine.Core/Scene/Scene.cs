@@ -26,6 +26,31 @@ public sealed class Scene
     public bool IsLoaded =>
         _loaded;
 
+    public Camera3D? ActiveCamera
+    {
+        get
+        {
+            Camera3D? selected = _gameObjects
+                .Where(item => item.ActiveInHierarchy)
+                .SelectMany(item => item.Components.OfType<Camera3D>())
+                .FirstOrDefault(camera => camera.Enabled && camera.ActiveGameCamera);
+
+            return selected ?? _gameObjects
+                .Where(item => item.ActiveInHierarchy)
+                .SelectMany(item => item.Components.OfType<Camera3D>())
+                .FirstOrDefault(camera => camera.Enabled);
+        }
+    }
+
+    public void SetActiveCamera(Camera3D? camera)
+    {
+        if (camera != null && camera.GameObject.Scene != this)
+            throw new InvalidOperationException("The active camera must belong to this scene.");
+
+        foreach (Camera3D candidate in _gameObjects.SelectMany(item => item.Components.OfType<Camera3D>()))
+            candidate.SetActiveGameCameraWithoutNotification(ReferenceEquals(candidate, camera));
+    }
+
     public VariableStore Variables { get; } =
         new();
 
@@ -92,6 +117,10 @@ public sealed class Scene
 
         gameObject.AttachToScene(
             this);
+
+        Camera3D? requestedCamera = gameObject.Components.OfType<Camera3D>()
+            .FirstOrDefault(camera => camera.ActiveGameCamera);
+        if (requestedCamera != null) SetActiveCamera(requestedCamera);
 
         if (_loaded)
         {

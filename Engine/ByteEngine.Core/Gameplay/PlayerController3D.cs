@@ -41,7 +41,7 @@ public sealed class PlayerController3D : Component
         }
         else
         {
-            Camera3D? camera = player.Scene?.FindComponent<Camera3D>();
+            Camera3D? camera = player.Scene?.ActiveCamera;
 
             if (camera != null)
             {

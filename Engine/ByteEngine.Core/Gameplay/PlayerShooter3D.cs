@@ -15,77 +15,46 @@ public sealed class PlayerShooter3D : Component
     {
         GameObject? player = AttachedGameObject;
         RuntimeScene? scene = player?.Scene;
+        if (player == null || scene == null || !Input.IsGameInputCaptured) return;
+        Camera3D? camera = scene.ActiveCamera;
+        if (camera == null) return;
 
-        if (player == null || scene == null)
-        {
-            return;
-        }
+        Vector3 aimDirection = CalculateAimDirection(player, camera, scene,
+            Input.GameViewSize.X / Math.Max(Input.GameViewSize.Y, 1f));
+        FaceAimDirection(player, camera.Transform.Forward);
 
-        if (Input.IsGameViewHovered && Input.IsGameViewFocused)
-        {
-            AimAtGameViewPointer(player, scene);
-        }
-
-        bool fire =
-            Automatic
-                ? Input.IsMouseButtonDown(MouseButton.Left)
-                : Input.IsMouseButtonPressed(MouseButton.Left);
-
-        if (!fire || !Input.IsGameViewHovered || !Input.IsGameViewFocused)
-        {
-            return;
-        }
-
-        player.GetComponent<ProjectileLauncher3D>()?.Fire();
+        bool fire = Automatic
+            ? Input.IsMouseButtonDown(MouseButton.Left)
+            : Input.IsMouseButtonPressed(MouseButton.Left);
+        if (fire) player.GetComponent<ProjectileLauncher3D>()?.Fire(aimDirection);
     }
 
-    private static void AimAtGameViewPointer(
-        GameObject player,
-        RuntimeScene scene)
+    public static Vector3 CalculateAimDirection(GameObject player, Camera3D camera, RuntimeScene scene, float aspectRatio)
     {
-        Camera3D? camera = scene.FindComponent<Camera3D>();
+        (Vector3 rayOrigin, Vector3 rayDirection) = camera.ScreenPointToRay(new Vector2(.5f), aspectRatio);
+        Vector3 muzzle = player.Transform.WorldPosition;
+        ProjectileLauncher3D? launcher = player.GetComponent<ProjectileLauncher3D>();
+        if (launcher != null) muzzle = Vector3.Transform(launcher.MuzzleOffset, player.Transform.WorldMatrix);
 
-        if (camera == null)
+        if (GameplayQuery3D.Raycast(scene, rayOrigin, rayDirection, out RaycastHit3D hit, 1000f, player) &&
+            hit.GameObject.GetComponent<ByteEngine.Core.Characters.GroundSurface>() == null)
         {
-            return;
+            Vector3 towardHit = hit.Point - muzzle;
+            if (towardHit.LengthSquared() > .000001f) return Vector3.Normalize(towardHit);
         }
 
-        float aspect = Input.GameViewSize.X / Math.Max(Input.GameViewSize.Y, 1f);
-        (Vector3 rayOrigin, Vector3 rayDirection) = camera.ScreenPointToRay(Input.GameViewPointerNormalized, aspect);
-        float aimPlaneY = player.Transform.WorldPosition.Y;
-        Vector3 aimPoint;
-        if (GameplayQuery3D.Raycast(scene, rayOrigin, rayDirection, out RaycastHit3D hit, 1000f, player))
-            aimPoint = hit.Point;
-        else
-        {
-            if (MathF.Abs(rayDirection.Y) <= .0001f) return;
-            float distance = (aimPlaneY - rayOrigin.Y) / rayDirection.Y;
-            if (distance <= 0f) return;
-            aimPoint = rayOrigin + rayDirection * distance;
-        }
+        Vector3 distantPoint = rayOrigin + rayDirection * 1000f;
+        Vector3 fallback = distantPoint - muzzle;
+        return fallback.LengthSquared() > .000001f ? Vector3.Normalize(fallback) : rayDirection;
+    }
 
-        Vector3 direction =
-            aimPoint -
-            player.Transform.WorldPosition;
-
-        direction.Y = 0f;
-
-        if (direction.LengthSquared() <= .0001f)
-        {
-            return;
-        }
-
-        direction = Vector3.Normalize(direction);
-
+    private static void FaceAimDirection(GameObject player, Vector3 cameraForward)
+    {
+        cameraForward.Y = 0f;
+        if (cameraForward.LengthSquared() <= .0001f) return;
+        cameraForward = Vector3.Normalize(cameraForward);
         Vector3 euler = player.Transform.EulerAngles;
-
-        euler.Y =
-            MathF.Atan2(
-                -direction.X,
-                -direction.Z) *
-            180f /
-            MathF.PI;
-
+        euler.Y = MathF.Atan2(-cameraForward.X, -cameraForward.Z) * 180f / MathF.PI;
         player.Transform.EulerAngles = euler;
     }
 }

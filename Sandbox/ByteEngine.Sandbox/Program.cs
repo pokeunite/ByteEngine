@@ -1,5 +1,5 @@
 ﻿using ByteEngine.Sandbox;
 
-using var game = new SandboxGame();
+using var game = new TpsCameraTestGame();
 
 game.Run();

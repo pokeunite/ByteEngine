@@ -104,6 +104,7 @@ public sealed class ComponentSerializer
         Register(new PlayerController3DCodec());
         Register(new PlayerShooter3DCodec());
         Register(new ThirdPersonCamera3DCodec());
+        Register(new CameraBoom3DCodec());
         Register(new ArenaGameManagerCodec());
     }
 
@@ -570,7 +571,10 @@ public sealed class ComponentSerializer
                         camera.NearClip,
 
                     ["farClip"] =
-                        camera.FarClip
+                        camera.FarClip,
+
+                    ["activeGameCamera"] =
+                        camera.ActiveGameCamera
                 }
             );
         }
@@ -600,7 +604,10 @@ public sealed class ComponentSerializer
                         data,
                         "farClip",
                         1000.0f
-                    )
+                    ),
+
+                ActiveGameCamera =
+                    data.Properties["activeGameCamera"]?.GetValue<bool>() ?? false
             };
         }
     }
@@ -1003,6 +1010,56 @@ public sealed class ComponentSerializer
                 Pitch = Float(data, "pitch", 20f),
                 MouseSensitivity = Float(data, "mouseSensitivity", .15f),
                 ShoulderOffset = Float(data, "shoulderOffset", .5f)
+            };
+        }
+    }
+
+    private sealed class CameraBoom3DCodec : IComponentCodec
+    {
+        public string TypeName => "CameraBoom3D";
+        public Type ComponentType => typeof(CameraBoom3D);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var boom = (CameraBoom3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["cameraObjectId"] = boom.CameraObjectId.ToString(),
+                ["armLength"] = boom.ArmLength,
+                ["pivotHeight"] = boom.PivotHeight,
+                ["yaw"] = boom.Yaw,
+                ["pitch"] = boom.Pitch,
+                ["minPitch"] = boom.MinPitch,
+                ["maxPitch"] = boom.MaxPitch,
+                ["mouseSensitivityX"] = boom.MouseSensitivityX,
+                ["mouseSensitivityY"] = boom.MouseSensitivityY,
+                ["positionSmoothness"] = boom.PositionSmoothness,
+                ["rotationSmoothness"] = boom.RotationSmoothness,
+                ["shoulderOffset"] = boom.ShoulderOffset,
+                ["enableCameraCollision"] = boom.EnableCameraCollision,
+                ["collisionRadius"] = boom.CollisionRadius
+            });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "cameraObjectId", string.Empty), out Guid cameraObjectId);
+            return new CameraBoom3D
+            {
+                CameraObjectId = cameraObjectId,
+                ArmLength = Float(data, "armLength", 5f),
+                PivotHeight = Float(data, "pivotHeight", 1.5f),
+                MinPitch = Float(data, "minPitch", -10f),
+                MaxPitch = Float(data, "maxPitch", 50f),
+                Yaw = Float(data, "yaw", 0f),
+                Pitch = Float(data, "pitch", 12f),
+                MouseSensitivityX = Float(data, "mouseSensitivityX", .12f),
+                MouseSensitivityY = Float(data, "mouseSensitivityY", .1f),
+                PositionSmoothness = Float(data, "positionSmoothness", 14f),
+                RotationSmoothness = Float(data, "rotationSmoothness", 18f),
+                ShoulderOffset = Float(data, "shoulderOffset", 0f),
+                EnableCameraCollision = data.Properties["enableCameraCollision"]?.GetValue<bool>() ?? false,
+                CollisionRadius = Float(data, "collisionRadius", .2f)
             };
         }
     }

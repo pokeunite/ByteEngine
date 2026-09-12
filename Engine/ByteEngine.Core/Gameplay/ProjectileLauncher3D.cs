@@ -46,7 +46,9 @@ public sealed class ProjectileLauncher3D : Component
         _cooldownRemaining =
             0f;
 
-    public GameObject? Fire()
+    public GameObject? Fire() => Fire(AttachedGameObject?.Transform.Forward ?? Vector3.Zero);
+
+    public GameObject? Fire(Vector3 direction)
     {
         GameObject? shooter =
             AttachedGameObject;
@@ -56,7 +58,8 @@ public sealed class ProjectileLauncher3D : Component
 
         if (shooter == null ||
             scene == null ||
-            !CanFire)
+            !CanFire ||
+            !IsUsableDirection(direction))
         {
             return null;
         }
@@ -147,9 +150,7 @@ public sealed class ProjectileLauncher3D : Component
         projectile.Damage =
             Damage;
 
-        projectile.Velocity =
-            shooter.Transform.Forward *
-            ProjectileSpeed;
+        projectile.Velocity = Vector3.Normalize(direction) * ProjectileSpeed;
 
         _cooldownRemaining =
             FireCooldown;
@@ -202,4 +203,8 @@ public sealed class ProjectileLauncher3D : Component
                 0f,
                 value)
             : 0f;
+
+    private static bool IsUsableDirection(Vector3 direction) =>
+        float.IsFinite(direction.X) && float.IsFinite(direction.Y) && float.IsFinite(direction.Z) &&
+        direction.LengthSquared() > .000001f;
 }

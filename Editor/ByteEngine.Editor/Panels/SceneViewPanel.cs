@@ -34,8 +34,16 @@ internal sealed class SceneViewPanel : IDisposable
 
     private Vector3 _contextWorld;
 
+    private bool _focusRequested;
+
     public bool IsOpen { get; set; } =
         true;
+
+    public void RequestFocus()
+    {
+        IsOpen = true;
+        _focusRequested = true;
+    }
 
     public void FrameSelected(
         EditorState state)
@@ -84,6 +92,12 @@ internal sealed class SceneViewPanel : IDisposable
 
         bool isOpen =
             IsOpen;
+
+        if (_focusRequested)
+        {
+            ImGui.SetNextWindowFocus();
+            _focusRequested = false;
+        }
 
         bool visible =
             ImGui.Begin(
@@ -171,6 +185,11 @@ internal sealed class SceneViewPanel : IDisposable
 
         Vector2 minimum =
             ImGui.GetItemRectMin();
+
+        if (_is3D)
+        {
+            CameraRigGizmoRenderer.Draw(state.DisplayedScene, state.Camera3D, minimum, viewportSize);
+        }
 
         bool hovered =
             ImGui.IsItemHovered();

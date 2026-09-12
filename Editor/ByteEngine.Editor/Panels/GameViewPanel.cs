@@ -9,17 +9,32 @@ namespace ByteEngine.Editor.Panels;
 internal sealed class GameViewPanel : IDisposable
 {
     private readonly SceneFramebuffer _framebuffer = new();
+    private bool _focusRequested;
 
     public bool IsOpen { get; set; } = true;
+
+    public void RequestFocus()
+    {
+        IsOpen = true;
+        _focusRequested = true;
+    }
 
     public void Draw(
         EditorState state,
         Renderer2D renderer,
         Renderer3D renderer3D,
         int windowWidth,
-        int windowHeight)
+        int windowHeight,
+        Action captureInput,
+        Action releaseInput)
     {
         bool isOpen = IsOpen;
+
+        if (_focusRequested)
+        {
+            ImGui.SetNextWindowFocus();
+            _focusRequested = false;
+        }
 
         bool visible = ImGui.Begin(
             "Game View",
@@ -31,6 +46,7 @@ internal sealed class GameViewPanel : IDisposable
 
         if (!visible)
         {
+            if (Input.IsGameInputCaptured) releaseInput();
             Input.SetGameViewPointer(
                 Input.GameViewPointerNormalized,
                 Input.GameViewSize,
@@ -48,6 +64,10 @@ internal sealed class GameViewPanel : IDisposable
         ImGui.TextDisabled(
             $"{renderWidth} x {renderHeight} | " +
             (state.Mode == EditorMode.Edit ? "Game camera preview" : "Runtime game camera"));
+        if (state.Mode == EditorMode.Play)
+            ImGui.TextDisabled(Input.IsGameInputCaptured
+                ? "Mouse captured — Esc to release"
+                : "Click Game View to capture mouse");
 
         Vector2 available = ImGui.GetContentRegionAvail();
         available.X = Math.Max(available.X, 1f);
@@ -95,6 +115,16 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y >= imageMin.Y &&
             mouse.Y <= imageMax.Y;
 
+        if (state.Mode == EditorMode.Play && !Input.IsGameInputCaptured && pointerInside &&
+            ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        {
+            captureInput();
+        }
+        else if (state.Mode != EditorMode.Play && Input.IsGameInputCaptured)
+        {
+            releaseInput();
+        }
+
         Vector2 normalizedPointer = new(
             displaySize.X > 0f ? (mouse.X - imageMin.X) / displaySize.X : .5f,
             displaySize.Y > 0f ? (mouse.Y - imageMin.Y) / displaySize.Y : .5f);
@@ -112,13 +142,14 @@ internal sealed class GameViewPanel : IDisposable
             new Vector2(0f, 1f),
             new Vector2(1f, 0f));
 
-        if (state.Mode == EditorMode.Play && pointerInside)
+        if (state.Mode == EditorMode.Play && Input.IsGameInputCaptured)
         {
             const float radius = 8f;
             uint color = ImGui.GetColorU32(new Vector4(1f, 1f, 1f, .95f));
+            Vector2 crosshair = imageMin + displaySize * .5f;
             ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-            drawList.AddLine(mouse - new Vector2(radius, 0f), mouse + new Vector2(radius, 0f), color, 1.5f);
-            drawList.AddLine(mouse - new Vector2(0f, radius), mouse + new Vector2(0f, radius), color, 1.5f);
+            drawList.AddLine(crosshair - new Vector2(radius, 0f), crosshair + new Vector2(radius, 0f), color, 1.5f);
+            drawList.AddLine(crosshair - new Vector2(0f, radius), crosshair + new Vector2(0f, radius), color, 1.5f);
         }
 
         ImGui.End();

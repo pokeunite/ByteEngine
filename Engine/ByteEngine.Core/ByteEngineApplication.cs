@@ -22,6 +22,22 @@ public class ByteEngineApplication : GameWindow
     public int WindowHeight =>
         ClientSize.Y;
 
+    public bool IsGameInputCaptured => Input.IsGameInputCaptured;
+
+    public void CaptureGameInput()
+    {
+        if (Input.IsGameInputCaptured) return;
+        CursorState = CursorState.Grabbed;
+        Input.SetGameInputCaptured(true);
+    }
+
+    public void ReleaseGameInput()
+    {
+        if (!Input.IsGameInputCaptured) return;
+        CursorState = CursorState.Normal;
+        Input.SetGameInputCaptured(false);
+    }
+
     protected virtual bool CloseOnEscape =>
         true;
 
@@ -132,6 +148,12 @@ public class ByteEngineApplication : GameWindow
             MouseState
         );
 
+        if (Input.IsGameInputCaptured && Input.IsKeyPressed(Key.Escape))
+        {
+            ReleaseGameInput();
+            return;
+        }
+
         if (CloseOnEscape &&
             Input.IsKeyDown(
                 Key.Escape))
@@ -165,9 +187,7 @@ public class ByteEngineApplication : GameWindow
             ByteEngine.Core.Scene.Scene? activeScene =
                 Scenes.ActiveScene;
 
-            Camera3D? camera3D =
-                activeScene?
-                    .FindComponent<Camera3D>();
+            Camera3D? camera3D = activeScene?.ActiveCamera;
 
             Camera2D? camera =
                 camera3D ==

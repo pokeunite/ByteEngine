@@ -6,6 +6,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Scene;
 using ByteEngine.Editor.Panels;
@@ -100,8 +101,10 @@ public sealed class EditorApplication
                 EditorPreferences.LayoutPath
             );
 
+        RuntimeDiagnostics.OutputSink = message => _log.Info(message);
+
         if (EditorPreferences.EnsureLayoutVersion(
-                3))
+                4))
         {
             _layout.RequestReset();
         }
@@ -203,6 +206,7 @@ public sealed class EditorApplication
 
     protected override void OnEngineShutdown()
     {
+        RuntimeDiagnostics.OutputSink = null;
         _sceneView.Dispose();
         _gameView.Dispose();
         _blueprintWorkspace.Dispose();
@@ -261,7 +265,8 @@ public sealed class EditorApplication
 
         if (_gameView.IsOpen)
         {
-            _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
+            _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y,
+                CaptureGameInput, ReleaseGameInput);
         }
 
         // Draw background bottom-workspace tabs first. Assets is drawn last
@@ -1427,6 +1432,8 @@ public sealed class EditorApplication
         _state.Mode =
             EditorMode.Play;
 
+        _gameView.RequestFocus();
+
         _state.SelectedObject =
             selectedId.HasValue
                 ? runtimeScene.FindGameObject(
@@ -1453,6 +1460,8 @@ public sealed class EditorApplication
 
         _state.Mode =
             EditorMode.Paused;
+
+        ReleaseGameInput();
 
         _log.Info(
             "Play mode paused."
@@ -1484,6 +1493,8 @@ public sealed class EditorApplication
             return;
         }
 
+        ReleaseGameInput();
+
         Guid? selectedId =
             _state.SelectedObject?.Id;
 
@@ -1498,6 +1509,8 @@ public sealed class EditorApplication
 
         _state.Mode =
             EditorMode.Edit;
+
+        _sceneView.RequestFocus();
 
         _state.SelectedObject =
             selectedId.HasValue

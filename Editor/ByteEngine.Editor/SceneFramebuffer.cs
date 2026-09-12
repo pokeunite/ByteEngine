@@ -204,8 +204,7 @@ internal sealed class SceneFramebuffer
             _height
         );
 
-        Camera3D? camera3D =
-            scene.FindComponent<Camera3D>();
+        Camera3D? camera3D = scene.ActiveCamera;
 
         Camera2D? camera =
             camera3D ==

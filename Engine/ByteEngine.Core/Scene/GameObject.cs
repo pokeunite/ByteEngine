@@ -1,3 +1,5 @@
+using ByteEngine.Core.Graphics;
+
 namespace ByteEngine.Core.Scene;
 
 public sealed class GameObject
@@ -67,6 +69,8 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
+        if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
+            _scene.SetActiveCamera(camera);
         if (_started) component.StartInternal();
         return component;
     }

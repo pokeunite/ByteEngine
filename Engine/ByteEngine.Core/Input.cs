@@ -7,7 +7,7 @@ namespace ByteEngine.Core;
 public enum Key
 {
     W, A, S, D,
-    Q, E, F, R,
+    Q, E, F, R, F8,
     Space,
     Up, Down, Left, Right,
     LeftShift,
@@ -37,6 +37,8 @@ public static class Input
     public static Vector2 GameViewMouseDelta { get; private set; }
     public static bool IsGameViewHovered => IsPointerOverGameView;
     public static bool IsGameViewFocused { get; private set; }
+    public static bool IsGameInputCaptured { get; private set; }
+    public static Vector2 MouseDelta { get; private set; }
     private static Vector2 _lastGameViewDisplayPosition;
     private static bool _hadFocusedGameViewPointer;
 
@@ -59,6 +61,18 @@ public static class Input
         {
             if (mouseState.IsButtonDown(ToOpenTkMouseButton(button))) MouseButtonsDown.Add(button);
         }
+
+        MouseDelta = IsGameInputCaptured
+            ? new Vector2(mouseState.Delta.X, mouseState.Delta.Y)
+            : Vector2.Zero;
+    }
+
+    internal static void SetGameInputCaptured(bool captured)
+    {
+        IsGameInputCaptured = captured;
+        MouseDelta = Vector2.Zero;
+        GameViewMouseDelta = Vector2.Zero;
+        _hadFocusedGameViewPointer = false;
     }
 
     public static void SetGameViewPointer(Vector2 normalizedPosition, Vector2 gameViewSize, bool isInside)
@@ -113,6 +127,7 @@ public static class Input
         Key.E => Keys.E,
         Key.F => Keys.F,
         Key.R => Keys.R,
+        Key.F8 => Keys.F8,
         Key.Space => Keys.Space,
         Key.Up => Keys.Up,
         Key.Down => Keys.Down,
