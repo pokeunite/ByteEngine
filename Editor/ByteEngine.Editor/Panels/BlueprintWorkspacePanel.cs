@@ -5,6 +5,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Classification;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Gameplay;
@@ -634,6 +635,9 @@ internal sealed class BlueprintWorkspacePanel
         DrawObjectHeader(
             selected);
 
+        DrawClassification(
+            selected);
+
         DrawTransform(selected);
 
         DrawComponents(
@@ -700,6 +704,145 @@ internal sealed class BlueprintWorkspacePanel
                 null
                 ? "Blueprint Root"
                 : $"Child of {selected.Parent.Name}");
+    }
+
+    private void DrawClassification(
+        GameObject selected)
+    {
+        if (_project ==
+            null)
+        {
+            return;
+        }
+
+        ClassificationSettings settings =
+            _project.Project.Classification;
+
+        ImGui.SeparatorText(
+            "CLASSIFICATION");
+
+        ImGui.TextUnformatted(
+            "Tags");
+
+        Guid[] assignedTags =
+            selected.Tags.ToArray();
+
+        if (assignedTags.Length ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "None");
+        }
+
+        foreach (Guid tagId
+                 in assignedTags)
+        {
+            TagDefinition? tag =
+                settings.FindTag(
+                    tagId);
+
+            if (tag ==
+                null)
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.65f,
+                        0.20f,
+                        1.0f),
+                    $"Missing Tag: {tagId}");
+            }
+            else
+            {
+                ImGui.TextUnformatted(
+                    tag.Name);
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    $"x##BlueprintRemoveTag:{tagId}"))
+            {
+                ApplyClassificationChange(
+                    () =>
+                        selected.RemoveTag(
+                            tagId));
+            }
+        }
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##BlueprintAddTag",
+                "+ Add Tag"))
+        {
+            TagDefinition[] available =
+                settings.Tags
+                    .Where(
+                        tag =>
+                            !selected.HasTag(
+                                tag.Id))
+                    .OrderBy(
+                        tag =>
+                            tag.Name,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+            if (available.Length ==
+                0)
+            {
+                ImGui.TextDisabled(
+                    "No unassigned Tags.");
+            }
+
+            foreach (TagDefinition tag
+                     in available)
+            {
+                if (ImGui.Selectable(
+                        $"{tag.Name}##BlueprintAddTag:{tag.Id}"))
+                {
+                    Guid tagId =
+                        tag.Id;
+
+                    ApplyClassificationChange(
+                        () =>
+                            selected.AddTag(
+                                tagId));
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        int layer =
+            selected.Layer;
+
+        if (ClassificationPickers.DrawLayer(
+                "Layer",
+                settings,
+                ref layer))
+        {
+            int selectedLayer =
+                layer;
+
+            ApplyClassificationChange(
+                () =>
+                    selected.Layer =
+                        selectedLayer);
+        }
+    }
+
+    private void ApplyClassificationChange(
+        Action change)
+    {
+        BeginPropertyEdit();
+
+        change();
+
+        MarkDirty();
+
+        CommitPropertyEdit();
     }
 
     private void DrawTransform(
