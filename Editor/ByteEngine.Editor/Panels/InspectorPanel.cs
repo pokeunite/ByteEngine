@@ -20,6 +20,8 @@ internal sealed class InspectorPanel
     private bool? _setExpansion;
     private bool _showAdvanced;
     private string _addSearch = string.Empty;
+    private CameraActivationRequest? _cameraActivationRequest;
+    private bool _openCameraActivationPrompt;
 
     public void Draw(EditorState state, EditorProjectContext project, Action<AssetReference> openBlueprint)
     {
@@ -170,7 +172,19 @@ internal sealed class InspectorPanel
             {
                 ImGui.SeparatorText("Recommended");
                 if (ImGui.MenuItem("Third Person Character"))
-                    ExecutePersistent(state, "Setup Third Person Character", () => BlueprintAuthoringService.SetupThirdPersonCharacter(selected));
+                {
+                    Camera3D? previousActive = selected.Scene?.ActiveCamera;
+                    ExecutePersistent(state, "Setup Third Person Character", () =>
+                    {
+                        CameraBoom3D boom = BlueprintAuthoringService.SetupThirdPersonCharacter(selected, project.Assets);
+                        Camera3D? camera = selected.Scene?.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
+                        if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
+                        {
+                            _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
+                            _openCameraActivationPrompt = true;
+                        }
+                    });
+                }
                 if (ImGui.MenuItem("Health", string.Empty, false, !selected.HasComponent<HealthComponent>()))
                     ExecutePersistent(state, "Add Health", () => BlueprintAuthoringService.AddComponent(selected, new HealthComponent()));
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip("Adds reusable damage, healing and death state.");
@@ -180,12 +194,61 @@ internal sealed class InspectorPanel
             }
 
             ComponentAddMenu.Draw(selected, _addSearch, (component, displayName) =>
-                ExecutePersistent(state, $"Add {displayName}", () => BlueprintAuthoringService.AddComponent(selected, component)));
+            {
+                Camera3D? previousActive = component is Camera3D ? selected.Scene?.ActiveCamera : null;
+                ExecutePersistent(state, $"Add {displayName}", () =>
+                {
+                    Component added = BlueprintAuthoringService.AddComponent(selected, component);
+                    if (added is Camera3D camera)
+                    {
+                        _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
+                        _openCameraActivationPrompt = true;
+                    }
+                });
+            });
             ImGui.EndPopup();
         }
 
+        DrawCameraActivationPrompt(state);
+
         ImGui.EndDisabled();
         ImGui.End();
+    }
+
+    private void DrawCameraActivationPrompt(EditorState state)
+    {
+        if (_openCameraActivationPrompt)
+        {
+            ImGui.OpenPopup("Active Game Camera");
+            _openCameraActivationPrompt = false;
+        }
+        if (_cameraActivationRequest is not { } request ||
+            !ImGui.BeginPopupModal("Active Game Camera", ImGuiWindowFlags.AlwaysAutoResize)) return;
+
+        if (request.Kind == CameraActivationPromptKind.UseAsFirstCamera)
+            ImGui.TextWrapped("Use this Camera as the Active Game Camera?");
+        else
+        {
+            ImGui.TextUnformatted($"Active Game Camera: {request.PreviousActiveCamera?.GameObject.Name ?? "None"}");
+            ImGui.TextWrapped("Make this Camera active instead?");
+        }
+
+        string accept = request.Kind == CameraActivationPromptKind.UseAsFirstCamera ? "Yes" : "Make Active";
+        string reject = request.Kind == CameraActivationPromptKind.UseAsFirstCamera ? "No" : "Keep Current";
+        if (ImGui.Button(accept))
+        {
+            CameraActivationPrompt.Apply(request.Camera.GameObject.Scene, request, true);
+            state.MarkDirty();
+            _cameraActivationRequest = null;
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button(reject))
+        {
+            _cameraActivationRequest = null;
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.EndPopup();
     }
 
     private static void DrawComponentProperties(EditorState state, EditorProjectContext project, Component component, bool showAdvanced)
@@ -348,6 +411,9 @@ internal sealed class InspectorPanel
         }
         else if (component is CapsuleCollider3D capsule)
         {
+            if (ImGui.Button($"Fit To Visual##{component.GetHashCode()}"))
+                ExecutePersistent(state, "Fit Capsule To Visual", () =>
+                    CharacterCapsuleAutoFit.TryFit(component.GameObject, project.Assets, out _));
             DrawFloatProperty(state, $"Radius##{component.GetHashCode()}", "Change Capsule Radius",
                 () => capsule.Radius, value => capsule.Radius = value, .01f, .001f, 1000f);
             DrawFloatProperty(state, $"Height##{component.GetHashCode()}", "Change Capsule Height",
@@ -362,6 +428,12 @@ internal sealed class InspectorPanel
                 () => capsule.Center = oldCenter, () => capsule.Center = center);
             DrawBooleanProperty(state, $"Is Trigger##capsule{component.GetHashCode()}", "Set Capsule Trigger",
                 () => capsule.IsTrigger, value => capsule.IsTrigger = value);
+            ImGui.SeparatorText("Auto-Fit Diagnostics");
+            ImGui.TextDisabled($"VisualBounds: {capsule.VisualBounds.X:0.###}, {capsule.VisualBounds.Y:0.###}, {capsule.VisualBounds.Z:0.###}");
+            ImGui.TextDisabled($"CapsuleRadius: {capsule.Radius:0.###}");
+            ImGui.TextDisabled($"CapsuleHeight: {capsule.Height:0.###}");
+            ImGui.TextDisabled($"CapsuleCenter: {capsule.Center.X:0.###}, {capsule.Center.Y:0.###}, {capsule.Center.Z:0.###}");
+            ImGui.TextWrapped($"AutoFitSource: {(string.IsNullOrWhiteSpace(capsule.AutoFitSource) ? "Manual/default" : capsule.AutoFitSource)}");
         }
         else if (component is CharacterController3D controller)
         {
@@ -546,6 +618,10 @@ internal sealed class InspectorPanel
                 () => boom.MouseSensitivityX, value => boom.MouseSensitivityX = value, .005f, 0f, 10f);
             DrawFloatProperty(state, $"Vertical Sensitivity##{component.GetHashCode()}", "Change Vertical Mouse Sensitivity",
                 () => boom.MouseSensitivityY, value => boom.MouseSensitivityY = value, .005f, 0f, 10f);
+            DrawBooleanProperty(state, $"Invert Horizontal Look##{component.GetHashCode()}", "Set Horizontal Look Inversion",
+                () => boom.InvertHorizontalLook, value => boom.InvertHorizontalLook = value);
+            DrawBooleanProperty(state, $"Invert Vertical Look##{component.GetHashCode()}", "Set Vertical Look Inversion",
+                () => boom.InvertVerticalLook, value => boom.InvertVerticalLook = value);
             DrawFloatProperty(state, $"Position Smoothness##{component.GetHashCode()}", "Change Camera Position Smoothness",
                 () => boom.PositionSmoothness, value => boom.PositionSmoothness = value, .1f, 0f, 1000f);
             DrawFloatProperty(state, $"Rotation Smoothness##{component.GetHashCode()}", "Change Camera Rotation Smoothness",

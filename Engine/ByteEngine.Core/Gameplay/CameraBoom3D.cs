@@ -51,6 +51,8 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float MaxPitch { get => _maxPitch; set { _maxPitch = Math.Clamp(Finite(value), -89f, 89f); if (_minPitch > _maxPitch) _minPitch = _maxPitch; _pitch = Math.Clamp(_pitch, _minPitch, _maxPitch); } }
     public float MouseSensitivityX { get => _mouseSensitivityX; set => _mouseSensitivityX = Positive(value); }
     public float MouseSensitivityY { get => _mouseSensitivityY; set => _mouseSensitivityY = Positive(value); }
+    public bool InvertHorizontalLook { get; set; }
+    public bool InvertVerticalLook { get; set; }
     public bool CameraLagEnabled { get; set; } = true;
     public bool RotationLagEnabled { get; set; } = true;
     public bool LagSubstepping { get; set; } = true;
@@ -81,7 +83,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         float pitch = Radians(Math.Clamp(Finite(pitchDegrees), -89f, 89f));
         float length = Positive(armLength);
         return new Vector3(
-            MathF.Sin(yaw) * MathF.Cos(pitch),
+            -MathF.Sin(yaw) * MathF.Cos(pitch),
             MathF.Sin(pitch),
             MathF.Cos(yaw) * MathF.Cos(pitch)) * length;
     }
@@ -212,6 +214,8 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("MatchesActiveCamera", ReferenceEquals(camera, active));
         writer.Add("Captured", Input.IsGameInputCaptured);
         writer.Add("MouseDelta", Input.MouseDelta);
+        writer.Add("InvertHorizontalLook", InvertHorizontalLook);
+        writer.Add("InvertVerticalLook", InvertVerticalLook);
         writer.Add("ControlYaw", player?.ControlYaw ?? Yaw);
         writer.Add("ControlPitch", player?.ControlPitch ?? Pitch);
         writer.Add("DesiredBoomYaw", _desiredBoomYaw);

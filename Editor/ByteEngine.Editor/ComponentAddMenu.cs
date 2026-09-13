@@ -19,6 +19,17 @@ internal static class ComponentAddMenu
             return;
         }
 
+        if (ImGui.BeginMenu("Recommended"))
+        {
+            Type[] recommended = candidates
+                .Where(type => ComponentMetadataRegistry.Get(type).BeginnerVisible)
+                .Where(type => ComponentMetadataRegistry.Get(type).Category is "Character" or "Camera" or "Rendering" or "Physics")
+                .OrderBy(type => ComponentMetadataRegistry.DisplayName(type))
+                .ToArray();
+            foreach (Type type in recommended) DrawItem(target, type, add);
+            ImGui.EndMenu();
+        }
+
         foreach (string category in ComponentMetadataRegistry.CategoryOrder)
         {
             Type[] entries = candidates

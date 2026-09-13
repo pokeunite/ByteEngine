@@ -7,6 +7,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
+using ByteEngine.Editor.Selection;
 
 using ImGuiNET;
 
@@ -63,8 +64,15 @@ internal sealed class AssetsPanel
     private bool _showDeleteConfirm;
 
     private string? _deleteTargetPath;
+    private readonly List<string> _deleteTargetPaths = new();
 
     private bool _deleteTargetIsDirectory;
+
+    private readonly AssetSelectionModel _assetSelection = new();
+    private readonly List<AssetSelectionBounds> _assetBounds = new();
+    private bool _assetMarquee;
+    private Vector2 _assetMarqueeStart;
+    private Vector2 _assetMarqueeEnd;
 
     private bool _focusNextDraw =
         true;
@@ -481,6 +489,14 @@ internal sealed class AssetsPanel
             state,
             log);
 
+        if (AssetDeleteCommand.ShouldBegin(
+                ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows),
+                ImGui.IsKeyPressed(ImGuiKey.Delete),
+                _assetSelection.Count))
+        {
+            BeginDeleteSelected();
+        }
+
         DrawWindowContextMenu(
             state,
             log);
@@ -570,9 +586,12 @@ internal sealed class AssetsPanel
         EditorState state,
         EditorLog log)
     {
-        foreach (string file
-                 in _files.ToArray())
+        string[] orderedFiles = _files.ToArray();
+        _assetSelection.Retain(orderedFiles);
+        _assetBounds.Clear();
+        for (int fileIndex = 0; fileIndex < orderedFiles.Length; fileIndex++)
         {
+            string file = orderedFiles[fileIndex];
             string projectPath =
                 Path.GetRelativePath(
                         _project.ProjectRoot,
@@ -589,11 +608,7 @@ internal sealed class AssetsPanel
                 GetAssetIcon(
                     asset?.Type);
 
-            bool selected =
-                string.Equals(
-                    state.SelectedAssetPath,
-                    projectPath,
-                    StringComparison.OrdinalIgnoreCase);
+            bool selected = _assetSelection.Contains(file);
 
             bool clicked =
                 ImGui.Selectable(
@@ -602,15 +617,12 @@ internal sealed class AssetsPanel
 
             if (clicked)
             {
-                state.SelectedAssetId =
-                    asset?.Guid;
-
-                state.SelectedAssetPath =
-                    projectPath;
-
-                state.SelectedObject =
-                    null;
+                ImGuiIOPtr io = ImGui.GetIO();
+                _assetSelection.Click(orderedFiles, fileIndex, io.KeyCtrl, io.KeyShift);
+                SyncPrimaryAssetSelection(state);
             }
+
+            _assetBounds.Add(new AssetSelectionBounds(file, ImGui.GetItemRectMin(), ImGui.GetItemRectMax()));
 
             if (asset !=
                     null &&
@@ -633,6 +645,49 @@ internal sealed class AssetsPanel
                 asset,
                 file);
         }
+
+        bool emptySpaceClicked = ImGui.IsWindowHovered() &&
+            ImGui.IsMouseClicked(ImGuiMouseButton.Left) &&
+            !ImGui.IsAnyItemHovered();
+        if (emptySpaceClicked)
+        {
+            _assetMarquee = true;
+            _assetMarqueeStart = ImGui.GetMousePos();
+            _assetMarqueeEnd = _assetMarqueeStart;
+        }
+        if (_assetMarquee)
+        {
+            _assetMarqueeEnd = ImGui.GetMousePos();
+            Vector2 minimum = Vector2.Min(_assetMarqueeStart, _assetMarqueeEnd);
+            Vector2 maximum = Vector2.Max(_assetMarqueeStart, _assetMarqueeEnd);
+            ImGui.GetWindowDrawList().AddRectFilled(minimum, maximum,
+                ImGui.GetColorU32(new Vector4(.2f, .55f, 1f, .12f)));
+            ImGui.GetWindowDrawList().AddRect(minimum, maximum,
+                ImGui.GetColorU32(new Vector4(.3f, .7f, 1f, .9f)));
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            {
+                _assetSelection.Marquee(_assetBounds, _assetMarqueeStart, _assetMarqueeEnd, ImGui.GetIO().KeyCtrl);
+                SyncPrimaryAssetSelection(state);
+                _assetMarquee = false;
+            }
+        }
+    }
+
+    private void SyncPrimaryAssetSelection(EditorState state)
+    {
+        string? primary = _assetSelection.PrimaryPath;
+        if (primary == null)
+        {
+            state.SelectedAssetId = null;
+            state.SelectedAssetPath = null;
+            return;
+        }
+        string projectPath = Path.GetRelativePath(_project.ProjectRoot, primary)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        _project.AssetDatabase.TryGetAsset(projectPath, out AssetRecord? asset);
+        state.SelectedAssetId = asset?.Guid;
+        state.SelectedAssetPath = projectPath;
+        state.SelectedObject = null;
     }
 
     private void OpenAsset(
@@ -1223,128 +1278,25 @@ internal sealed class AssetsPanel
                 safeName,
                 ".byteblueprint");
 
-        SceneData serializedScene =
-            _project.Scenes.Serialize(
-                state.EditorScene);
-
-        HashSet<Guid> hierarchyIds =
-            new();
-
-        CollectHierarchyIds(
-            selected,
-            hierarchyIds);
-
-        GameObjectData? root =
-            serializedScene.GameObjects
-                .FirstOrDefault(
-                    data =>
-                        data.Id ==
-                        selected.Id);
-
-        if (root ==
-            null)
+        try
         {
-            log.Error(
-                $"Could not serialize selected GameObject '{selected.Name}'.");
-
-            return;
+            Vector3 worldPosition = selected.Transform.WorldPosition;
+            Quaternion worldRotation = selected.Transform.WorldRotation;
+            Vector3 worldScale = selected.Transform.WorldScale;
+            Guid objectId = selected.Id;
+            BlueprintPromotionService.Promote(_project, selected, path);
+            state.SelectedObject = selected;
+            state.SelectedAssetId = null;
+            state.SelectedAssetPath = null;
+            state.MarkDirty();
+            RefreshAfterFileOperation();
+            log.Info(
+                $"Created Blueprint '{Path.GetFileName(path)}' and converted '{selected.Name}' to its first instance. " +
+                $"Transform preserved: {selected.Id == objectId && selected.Transform.WorldPosition == worldPosition && selected.Transform.WorldRotation == worldRotation && selected.Transform.WorldScale == worldScale}.");
         }
-
-        root.ParentId =
-            null;
-
-        List<GameObjectData> children =
-            serializedScene.GameObjects
-                .Where(
-                    data =>
-                        data.Id !=
-                            selected.Id &&
-                        hierarchyIds.Contains(
-                            data.Id))
-                .ToList();
-
-        BlueprintType type =
-            selected.GetComponent<CharacterController3D>() !=
-                null
-                ? BlueprintType.Character
-                : BlueprintType.GenericObject;
-
-        List<Guid> eventModules =
-            selected
-                .GetComponent<EventModuleComponent>()?
-                .Modules
-                .Where(
-                    reference =>
-                        reference.Guid !=
-                        Guid.Empty)
-                .Select(
-                    reference =>
-                        reference.Guid)
-                .Distinct()
-                .ToList()
-            ?? new List<Guid>();
-
-        var blueprint =
-            new BlueprintDefinition
-            {
-                Name =
-                    Path.GetFileNameWithoutExtension(
-                        path),
-
-                Type =
-                    type,
-
-                Root =
-                    root,
-
-                Children =
-                    children,
-
-                Variables =
-                    root.Variables
-                        .Select(
-                            variable =>
-                                new VariableData
-                                {
-                                    Name =
-                                        variable.Name,
-
-                                    Value =
-                                        variable.Value.Clone()
-                                })
-                        .ToList(),
-
-                EventModules =
-                    eventModules
-            };
-
-        new BlueprintSerializer()
-            .Save(
-                blueprint,
-                path);
-
-        RefreshAfterFileOperation();
-
-        log.Info(
-            $"Created Blueprint '{Path.GetFileName(path)}' from '{selected.Name}' with {children.Count + 1} GameObject(s).");
-    }
-
-    private static void CollectHierarchyIds(
-        GameObject gameObject,
-        ISet<Guid> ids)
-    {
-        if (!ids.Add(
-                gameObject.Id))
+        catch (Exception exception)
         {
-            return;
-        }
-
-        foreach (GameObject child
-                 in gameObject.Children)
-        {
-            CollectHierarchyIds(
-                child,
-                ids);
+            log.Error($"Could not create Blueprint from selection: {exception.Message}");
         }
     }
 
@@ -1826,12 +1778,27 @@ internal sealed class AssetsPanel
 
         _deleteTargetPath =
             path;
+        _deleteTargetPaths.Clear();
+        if (!isDirectory && _assetSelection.Count > 1 && _assetSelection.Contains(path))
+            _deleteTargetPaths.AddRange(_assetSelection.Paths);
+        else
+            _deleteTargetPaths.Add(path);
 
         _deleteTargetIsDirectory =
             isDirectory;
 
         _showDeleteConfirm =
             true;
+    }
+
+    private void BeginDeleteSelected()
+    {
+        if (_assetSelection.Count == 0) return;
+        _deleteTargetPath = null;
+        _deleteTargetPaths.Clear();
+        _deleteTargetPaths.AddRange(_assetSelection.Paths);
+        _deleteTargetIsDirectory = false;
+        _showDeleteConfirm = true;
     }
 
     private void DrawDeleteDialog(
@@ -1854,16 +1821,41 @@ internal sealed class AssetsPanel
             return;
         }
 
-        string? target =
-            _deleteTargetPath;
+        string? target = _deleteTargetPath;
+        IReadOnlyList<string> targets = _deleteTargetPaths.Count > 0
+            ? _deleteTargetPaths
+            : target == null ? Array.Empty<string>() : new[] { target };
+        AssetRecord[] affectedBlueprints = ResolveAssetsForDeletion(targets, _deleteTargetIsDirectory)
+            .Where(asset => asset.Type == AssetType.Blueprint)
+            .DistinctBy(asset => asset.Guid)
+            .ToArray();
+        int blueprintInstances = affectedBlueprints
+            .Sum(asset => BlueprintPromotionService.CountInstances(
+                state.EditorScene,
+                new AssetReference(asset.Guid, asset.ProjectPath)));
 
-        if (target !=
-            null)
+        if (targets.Count > 1)
+        {
+            ImGui.TextWrapped($"Delete {targets.Count} selected assets?");
+        }
+        else if (target != null)
         {
             ImGui.TextWrapped(
                 _deleteTargetIsDirectory
                     ? $"Delete folder '{Path.GetFileName(target)}' and everything inside it?"
                     : $"Delete asset '{Path.GetFileName(target)}'?");
+        }
+
+        if (blueprintInstances > 0)
+        {
+            ImGui.Separator();
+            ImGui.TextWrapped(
+                $"{blueprintInstances} scene object(s) use the selected Blueprint asset(s).");
+            ImGui.TextWrapped("Deleting will unpack those instances and keep their current objects and components.");
+        }
+        else
+        {
+            ImGui.TextDisabled("Known live references: none.");
         }
 
         ImGui.TextColored(
@@ -1875,43 +1867,38 @@ internal sealed class AssetsPanel
             "This cannot be undone.");
 
         bool canDelete =
-            target !=
-                null;
+            targets.Count > 0;
 
         ImGui.BeginDisabled(
             !canDelete);
 
         if (ImGui.Button(
-                "Delete",
+                blueprintInstances > 0 ? "Delete and Unpack Instances" : "Delete",
                 new Vector2(
                     100.0f,
                     0.0f)))
         {
-            if (target !=
-                null)
+            if (targets.Count > 0)
             {
                 try
                 {
-                    DeletePath(
-                        target,
-                        _deleteTargetIsDirectory);
-
-                    if (!_deleteTargetIsDirectory &&
-                        state.SelectedAssetPath !=
-                            null &&
-                        PathsEqualProjectPath(
-                            state.SelectedAssetPath,
-                            target))
+                    foreach (AssetRecord blueprint in affectedBlueprints)
                     {
-                        state.SelectedAssetId =
-                            null;
-
-                        state.SelectedAssetPath =
-                            null;
+                        int unpacked = BlueprintPromotionService.UnpackInstances(
+                            state.EditorScene,
+                            new AssetReference(blueprint.Guid, blueprint.ProjectPath));
+                        if (unpacked > 0) state.MarkDirty();
                     }
-
-                    log.Info(
-                        $"Deleted '{Path.GetFileName(target)}'.");
+                    foreach (string item in targets.ToArray())
+                    {
+                        DeletePath(item, _deleteTargetIsDirectory);
+                    }
+                    _assetSelection.Clear();
+                    state.SelectedAssetId = null;
+                    state.SelectedAssetPath = null;
+                    log.Info(targets.Count == 1
+                        ? $"Deleted '{Path.GetFileName(targets[0])}'."
+                        : $"Deleted {targets.Count} selected assets.");
                 }
                 catch (Exception exception)
                 {
@@ -1922,6 +1909,7 @@ internal sealed class AssetsPanel
 
             _deleteTargetPath =
                 null;
+            _deleteTargetPaths.Clear();
 
             ImGui.CloseCurrentPopup();
         }
@@ -1933,16 +1921,46 @@ internal sealed class AssetsPanel
         if (ImGui.Button(
                 "Cancel",
                 new Vector2(
-                    100.0f,
+                    210.0f,
                     0.0f)))
         {
             _deleteTargetPath =
                 null;
+            _deleteTargetPaths.Clear();
 
             ImGui.CloseCurrentPopup();
         }
 
         ImGui.EndPopup();
+    }
+
+    private AssetRecord? TryGetAsset(string fullPath)
+    {
+        string projectPath = Path.GetRelativePath(_project.ProjectRoot, fullPath)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        return _project.AssetDatabase.TryGetAsset(projectPath, out AssetRecord? asset) ? asset : null;
+    }
+
+    private IEnumerable<AssetRecord> ResolveAssetsForDeletion(
+        IReadOnlyList<string> targets,
+        bool isDirectory)
+    {
+        foreach (string target in targets)
+        {
+            if (!isDirectory)
+            {
+                AssetRecord? asset = TryGetAsset(target);
+                if (asset != null) yield return asset;
+                continue;
+            }
+
+            string prefix = Path.GetRelativePath(_project.ProjectRoot, target)
+                .Replace(Path.DirectorySeparatorChar, '/')
+                .TrimEnd('/') + "/";
+            foreach (AssetRecord asset in _project.AssetDatabase.Assets)
+                if (asset.ProjectPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    yield return asset;
+        }
     }
 
     private void DeletePath(

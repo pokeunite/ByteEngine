@@ -5,22 +5,54 @@ using ImGuiNET;
 
 namespace ByteEngine.Editor.Gizmos;
 
+internal enum Gizmo3DMode
+{
+    Move,
+    Rotate,
+    Scale
+}
+
 internal sealed class Gizmo3DController
 {
     private Vector3 _axis;
     private Vector2 _startMouse;
     private Vector3 _startPosition;
+    private Vector3 _startRotation;
+    private Vector3 _startScale;
     private bool _dragging;
+    private bool _hoveredHandle;
 
-    public void UpdateAndDraw(
-        EditorState state,
-        EditorCamera3D camera,
-        bool hovered,
-        Vector2 minimum,
-        Vector2 size)
+    public Gizmo3DMode Mode { get; private set; } = Gizmo3DMode.Move;
+    public bool OwnsMouse => _dragging || _hoveredHandle;
+
+    public void SetMode(Gizmo3DMode mode) => Mode = mode;
+
+    public void DrawToolbar()
     {
+        DrawModeButton("Move", Gizmo3DMode.Move);
+        ImGui.SameLine();
+        DrawModeButton("Rotate", Gizmo3DMode.Rotate);
+        ImGui.SameLine();
+        DrawModeButton("Scale", Gizmo3DMode.Scale);
+        ImGui.SameLine();
+        ImGui.TextDisabled("W / E / R");
+    }
+
+    public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered,
+        Vector2 minimum, Vector2 size)
+    {
+        if (hovered)
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Gizmo3DMode.Move;
+            if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Gizmo3DMode.Rotate;
+            if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Gizmo3DMode.Scale;
+        }
+
         GameObject? selected = state.SelectedObject;
-        if (selected != null) DrawAxes(selected, camera, minimum, size);
+        Vector3 hoveredAxis = default;
+        _hoveredHandle = selected != null && hovered &&
+            TryHitHandle(selected, camera, minimum, size, out hoveredAxis);
+        if (selected != null) DrawHandles(selected, camera, minimum, size);
         if (state.Mode != EditorMode.Edit) return;
 
         if (_dragging)
@@ -30,34 +62,39 @@ internal sealed class Gizmo3DController
                 Vector2 origin = Project(_startPosition, camera, minimum, size);
                 Vector2 endpoint = Project(_startPosition + _axis, camera, minimum, size);
                 Vector2 projectedAxis = endpoint - origin;
-                if (projectedAxis.LengthSquared() > .0001f)
-                {
-                    Vector2 screenAxis = Vector2.Normalize(projectedAxis);
-                    float distance = Vector3.Distance(camera.Position, _startPosition);
-                    float unitsPerPixel =
-                        2f * distance * MathF.Tan(camera.FieldOfView * MathF.PI / 360f) /
-                        Math.Max(size.Y, 1f);
-                    float movement = Vector2.Dot(ImGui.GetMousePos() - _startMouse, screenAxis) * unitsPerPixel;
-                    selected!.Transform.WorldPosition = _startPosition + _axis * movement;
-                }
+                float pixels = projectedAxis.LengthSquared() > .0001f
+                    ? Vector2.Dot(ImGui.GetMousePos() - _startMouse, Vector2.Normalize(projectedAxis))
+                    : (ImGui.GetMousePos() - _startMouse).X;
+                float distance = Vector3.Distance(camera.Position, _startPosition);
+                float units = pixels * 2f * distance * MathF.Tan(camera.FieldOfView * MathF.PI / 360f) /
+                    Math.Max(size.Y, 1f);
+                ApplyDragDelta(selected!, Mode, _axis, pixels, units,
+                    _startPosition, _startRotation, _startScale);
+                state.MarkDirty();
             }
             else
             {
                 _dragging = false;
                 state.Undo?.CommitGesture(state);
             }
-
             return;
         }
 
         if (!hovered || !ImGui.IsMouseClicked(ImGuiMouseButton.Left)) return;
-        if (selected != null && TryHitAxis(selected, camera, minimum, size, out Vector3 axis))
+        if (selected != null && _hoveredHandle)
         {
-            _axis = axis;
+            _axis = hoveredAxis;
             _startMouse = ImGui.GetMousePos();
             _startPosition = selected.Transform.WorldPosition;
+            _startRotation = selected.Transform.EulerAngles;
+            _startScale = selected.Transform.LocalScale;
             _dragging = true;
-            state.Undo?.BeginGesture(state, "Move Object 3D");
+            state.Undo?.BeginGesture(state, Mode switch
+            {
+                Gizmo3DMode.Rotate => "Rotate Object 3D",
+                Gizmo3DMode.Scale => "Scale Object 3D",
+                _ => "Move Object 3D"
+            });
             return;
         }
 
@@ -73,7 +110,6 @@ internal sealed class Gizmo3DController
                 hit = item;
             }
         }
-
         state.Selection.Set(hit);
         if (hit != null)
         {
@@ -82,11 +118,19 @@ internal sealed class Gizmo3DController
         }
     }
 
-    internal static Vector3 ScreenToGroundPlane(
-        Vector2 mouse,
-        EditorCamera3D camera,
-        Vector2 minimum,
-        Vector2 size)
+    internal static void ApplyDragDelta(GameObject selected, Gizmo3DMode mode, Vector3 axis,
+        float pixels, float units, Vector3 startPosition, Vector3 startRotation, Vector3 startScale)
+    {
+        if (mode == Gizmo3DMode.Move)
+            selected.Transform.WorldPosition = startPosition + axis * units;
+        else if (mode == Gizmo3DMode.Rotate)
+            selected.Transform.EulerAngles = startRotation + axis * pixels * .5f;
+        else
+            selected.Transform.LocalScale = Vector3.Max(startScale + axis * pixels * .01f, new Vector3(.001f));
+    }
+
+    internal static Vector3 ScreenToGroundPlane(Vector2 mouse, EditorCamera3D camera,
+        Vector2 minimum, Vector2 size)
     {
         Ray ray = ScreenRay(mouse, camera, minimum, size);
         if (MathF.Abs(ray.Direction.Y) > .0001f)
@@ -94,42 +138,49 @@ internal sealed class Gizmo3DController
             float distance = -ray.Origin.Y / ray.Direction.Y;
             if (distance >= 0f) return ray.Origin + ray.Direction * distance;
         }
-
         float fallbackDistance = Math.Max(camera.Position.Length() * .5f, 5f);
         return ray.Origin + ray.Direction * fallbackDistance;
     }
 
-    private static void DrawAxes(GameObject item, EditorCamera3D camera, Vector2 minimum, Vector2 size)
+    private void DrawHandles(GameObject item, EditorCamera3D camera, Vector2 minimum, Vector2 size)
     {
         Vector3 position = item.Transform.WorldPosition;
         Vector2 origin = Project(position, camera, minimum, size);
-        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-        DrawAxis(drawList, origin, Project(position + Vector3.UnitX, camera, minimum, size), new Vector4(1f, .2f, .2f, 1f));
-        DrawAxis(drawList, origin, Project(position + Vector3.UnitY, camera, minimum, size), new Vector4(.2f, 1f, .3f, 1f));
-        DrawAxis(drawList, origin, Project(position + Vector3.UnitZ, camera, minimum, size), new Vector4(.2f, .45f, 1f, 1f));
+        ImDrawListPtr draw = ImGui.GetWindowDrawList();
+        Vector4[] colors = { new(1f, .2f, .2f, 1f), new(.2f, 1f, .3f, 1f), new(.2f, .45f, 1f, 1f) };
+        if (Mode == Gizmo3DMode.Rotate)
+        {
+            for (int index = 0; index < 3; index++)
+                draw.AddCircle(origin, 45f + index * 10f, ImGui.GetColorU32(colors[index]), 48, 3f);
+            return;
+        }
+        DrawAxis(draw, origin, Project(position + Vector3.UnitX, camera, minimum, size), colors[0]);
+        DrawAxis(draw, origin, Project(position + Vector3.UnitY, camera, minimum, size), colors[1]);
+        DrawAxis(draw, origin, Project(position + Vector3.UnitZ, camera, minimum, size), colors[2]);
     }
 
-    private static void DrawAxis(ImDrawListPtr drawList, Vector2 start, Vector2 end, Vector4 color)
-    {
-        Vector2 direction = end - start;
-        if (direction.LengthSquared() < 1f) return;
-        end = start + Vector2.Normalize(direction) * 70f;
-        uint packedColor = ImGui.GetColorU32(color);
-        drawList.AddLine(start, end, packedColor, 4f);
-        drawList.AddCircleFilled(end, 5f, packedColor);
-    }
-
-    private static bool TryHitAxis(
-        GameObject item,
-        EditorCamera3D camera,
-        Vector2 minimum,
-        Vector2 size,
+    private bool TryHitHandle(GameObject item, EditorCamera3D camera, Vector2 minimum, Vector2 size,
         out Vector3 axis)
     {
         Vector3 position = item.Transform.WorldPosition;
         Vector2 origin = Project(position, camera, minimum, size);
         Vector2 mouse = ImGui.GetMousePos();
-        foreach (Vector3 candidate in new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ })
+        Vector3[] axes = { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ };
+        if (Mode == Gizmo3DMode.Rotate)
+        {
+            float radius = Vector2.Distance(mouse, origin);
+            for (int index = 0; index < 3; index++)
+            {
+                if (MathF.Abs(radius - (45f + index * 10f)) <= 5f)
+                {
+                    axis = axes[index];
+                    return true;
+                }
+            }
+            axis = default;
+            return false;
+        }
+        foreach (Vector3 candidate in axes)
         {
             Vector2 direction = Project(position + candidate, camera, minimum, size) - origin;
             if (direction.LengthSquared() < 1f) continue;
@@ -140,9 +191,18 @@ internal sealed class Gizmo3DController
                 return true;
             }
         }
-
         axis = default;
         return false;
+    }
+
+    private static void DrawAxis(ImDrawListPtr draw, Vector2 start, Vector2 end, Vector4 color)
+    {
+        Vector2 direction = end - start;
+        if (direction.LengthSquared() < 1f) return;
+        end = start + Vector2.Normalize(direction) * 70f;
+        uint packed = ImGui.GetColorU32(color);
+        draw.AddLine(start, end, packed, 4f);
+        draw.AddCircleFilled(end, 5f, packed);
     }
 
     internal static Vector2 Project(Vector3 point, EditorCamera3D camera, Vector2 minimum, Vector2 size)
@@ -151,9 +211,7 @@ internal sealed class Gizmo3DController
         Vector4 clip = Vector4.Transform(new Vector4(point, 1f), viewProjection);
         if (Math.Abs(clip.W) < .0001f) return minimum + size * .5f;
         Vector3 normalized = new(clip.X / clip.W, clip.Y / clip.W, clip.Z / clip.W);
-        return minimum + new Vector2(
-            (normalized.X + 1f) * .5f * size.X,
-            (1f - normalized.Y) * .5f * size.Y);
+        return minimum + new Vector2((normalized.X + 1f) * .5f * size.X, (1f - normalized.Y) * .5f * size.Y);
     }
 
     private static Ray ScreenRay(Vector2 mouse, EditorCamera3D camera, Vector2 minimum, Vector2 size)
@@ -163,7 +221,6 @@ internal sealed class Gizmo3DController
         float x = (mouse.X - minimum.X) / width * 2f - 1f;
         float y = 1f - (mouse.Y - minimum.Y) / height * 2f;
         Matrix4x4.Invert(camera.View * camera.Projection(width / height), out Matrix4x4 inverse);
-
         Vector4 near = Vector4.Transform(new Vector4(x, y, 0f, 1f), inverse);
         Vector4 far = Vector4.Transform(new Vector4(x, y, 1f, 1f), inverse);
         Vector3 origin = new(near.X / near.W, near.Y / near.W, near.Z / near.W);
@@ -175,12 +232,10 @@ internal sealed class Gizmo3DController
     {
         distance = 0f;
         if (!Matrix4x4.Invert(world, out Matrix4x4 inverse)) return false;
-
         Vector3 origin = Vector3.Transform(ray.Origin, inverse);
         Vector3 direction = Vector3.TransformNormal(ray.Direction, inverse);
         float minimum = 0f;
         float maximum = 100000f;
-
         for (int axis = 0; axis < 3; axis++)
         {
             float originValue = axis == 0 ? origin.X : axis == 1 ? origin.Y : origin.Z;
@@ -190,7 +245,6 @@ internal sealed class Gizmo3DController
                 if (originValue < -.5f || originValue > .5f) return false;
                 continue;
             }
-
             float entry = (-.5f - originValue) / directionValue;
             float exit = (.5f - originValue) / directionValue;
             if (entry > exit) (entry, exit) = (exit, entry);
@@ -198,7 +252,6 @@ internal sealed class Gizmo3DController
             maximum = Math.Min(maximum, exit);
             if (minimum > maximum) return false;
         }
-
         distance = minimum;
         return true;
     }
@@ -207,10 +260,16 @@ internal sealed class Gizmo3DController
     {
         Vector2 direction = end - start;
         float fraction = Math.Clamp(
-            Vector2.Dot(point - start, direction) / Math.Max(direction.LengthSquared(), .001f),
-            0f,
-            1f);
+            Vector2.Dot(point - start, direction) / Math.Max(direction.LengthSquared(), .001f), 0f, 1f);
         return Vector2.Distance(point, start + direction * fraction);
+    }
+
+    private void DrawModeButton(string label, Gizmo3DMode mode)
+    {
+        bool active = Mode == mode;
+        if (active) ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.18f, .48f, .82f, 1f));
+        if (ImGui.SmallButton(label)) Mode = mode;
+        if (active) ImGui.PopStyleColor();
     }
 
     private readonly record struct Ray(Vector3 Origin, Vector3 Direction);

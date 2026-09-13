@@ -19,6 +19,9 @@ public sealed class CapsuleCollider3D : Collider3D
     private float _radius = .5f;
     private float _height = 2f;
 
+    public Vector3 VisualBounds { get; set; }
+    public string AutoFitSource { get; set; } = string.Empty;
+
     public float Radius
     {
         get => _radius;

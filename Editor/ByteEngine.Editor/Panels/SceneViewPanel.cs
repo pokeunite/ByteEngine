@@ -104,7 +104,8 @@ internal sealed class SceneViewPanel : IDisposable
                 "Scene View",
                 ref isOpen,
                 ImGuiWindowFlags.NoScrollbar |
-                ImGuiWindowFlags.NoScrollWithMouse
+                ImGuiWindowFlags.NoScrollWithMouse |
+                (_gizmo3D.OwnsMouse ? ImGuiWindowFlags.NoMove : ImGuiWindowFlags.None)
             );
 
         IsOpen =
@@ -256,7 +257,7 @@ internal sealed class SceneViewPanel : IDisposable
         {
             HandleCamera3DInput(
                 state,
-                hovered
+                hovered && !_gizmo3D.OwnsMouse
             );
 
             DrawColliderOutlines(
@@ -431,9 +432,7 @@ internal sealed class SceneViewPanel : IDisposable
         }
         else
         {
-            ImGui.TextDisabled(
-                "XYZ Move"
-            );
+            _gizmo3D.DrawToolbar();
         }
 
         ImGui.SameLine();

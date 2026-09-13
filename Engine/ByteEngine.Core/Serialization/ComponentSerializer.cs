@@ -1050,6 +1050,8 @@ public sealed class ComponentSerializer
                 ["maxPitch"] = boom.MaxPitch,
                 ["mouseSensitivityX"] = boom.MouseSensitivityX,
                 ["mouseSensitivityY"] = boom.MouseSensitivityY,
+                ["invertHorizontalLook"] = boom.InvertHorizontalLook,
+                ["invertVerticalLook"] = boom.InvertVerticalLook,
                 ["positionSmoothness"] = boom.PositionSmoothness,
                 ["rotationSmoothness"] = boom.RotationSmoothness,
                 ["cameraLagEnabled"] = boom.CameraLagEnabled,
@@ -1079,6 +1081,8 @@ public sealed class ComponentSerializer
                 Pitch = Float(data, "pitch", 12f),
                 MouseSensitivityX = Float(data, "mouseSensitivityX", .12f),
                 MouseSensitivityY = Float(data, "mouseSensitivityY", .1f),
+                InvertHorizontalLook = data.Properties["invertHorizontalLook"]?.GetValue<bool>() ?? false,
+                InvertVerticalLook = data.Properties["invertVerticalLook"]?.GetValue<bool>() ?? false,
                 PositionSmoothness = Float(data, "positionSmoothness", 14f),
                 RotationSmoothness = Float(data, "rotationSmoothness", 20f),
                 CameraLagEnabled = data.Properties["cameraLagEnabled"]?.GetValue<bool>() ?? true,
@@ -1482,6 +1486,14 @@ public sealed class ComponentSerializer
                     ["height"] =
                         collider.Height,
 
+                    ["visualBounds"] =
+                        Array(
+                            collider.VisualBounds
+                        ),
+
+                    ["autoFitSource"] =
+                        collider.AutoFitSource,
+
                     ["center"] =
                         Array(
                             collider.Center
@@ -1511,6 +1523,19 @@ public sealed class ComponentSerializer
                         data,
                         "height",
                         2.0f
+                    ),
+
+                VisualBounds =
+                    Vector3(
+                        data.Properties["visualBounds"],
+                        System.Numerics.Vector3.Zero
+                    ),
+
+                AutoFitSource =
+                    Text(
+                        data,
+                        "autoFitSource",
+                        string.Empty
                     ),
 
                 Center =

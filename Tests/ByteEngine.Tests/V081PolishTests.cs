@@ -36,7 +36,7 @@ internal static class V081PolishTests
         input.CharacterRotation = CharacterRotationMode.FaceMovement;
         player.Transform.EulerAngles = Vector3.Zero;
         input.UpdateCharacterRotation(Vector3.UnitX, 1f);
-        Assert(MathF.Abs(PlayerController3D.DeltaAngle(player.Transform.EulerAngles.Y, -90f)) < .01f,
+        Assert(MathF.Abs(PlayerController3D.DeltaAngle(player.Transform.EulerAngles.Y, 90f)) < .01f,
             "Face Movement rotates toward movement direction");
 
         input.CharacterRotation = CharacterRotationMode.FaceCamera;

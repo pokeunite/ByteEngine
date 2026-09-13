@@ -92,11 +92,7 @@ internal sealed class EventWorkspacePanel
     private bool _requestFrameGraph =
         true;
 
-    private bool _openEventNamePopup;
-    private bool _focusEventName;
-    private Guid _renameEventId = Guid.Empty;
-    private Vector2 _pendingEventPosition;
-    private string _eventNameBuffer = "New Event";
+    private readonly EventNamePopupState _eventNamePopup = new();
 
     private AssetRecord? _asset;
 
@@ -407,7 +403,8 @@ internal sealed class EventWorkspacePanel
 
         DrawEventNamePopup();
 
-        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+        if (!_eventNamePopup.IsOpen &&
+            ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             ImGui.IsKeyPressed(ImGuiKey.F2))
         {
             EventRuleDefinition? selectedRule = _module.Rules
@@ -2833,69 +2830,61 @@ internal sealed class EventWorkspacePanel
 
     private void RequestAddEvent(Vector2 position)
     {
-        _renameEventId = Guid.Empty;
-        _pendingEventPosition = position;
-        _eventNameBuffer = "New Event";
-        _openEventNamePopup = true;
-        _focusEventName = true;
+        _eventNamePopup.BeginCreate(position);
     }
 
     private void RequestRenameEvent(EventRuleDefinition rule)
     {
-        _renameEventId = rule.Id;
-        _eventNameBuffer = GetRuleDisplayName(rule);
-        _openEventNamePopup = true;
-        _focusEventName = true;
+        _eventNamePopup.BeginRename(rule.Id, GetRuleDisplayName(rule));
     }
 
     private void DrawEventNamePopup()
     {
-        string popupName = _renameEventId == Guid.Empty ? "Create Event" : "Rename Event";
-        if (_openEventNamePopup)
+        const string popupName = "Event Name";
+        if (_eventNamePopup.ConsumeOpenRequest())
         {
             ImGui.OpenPopup(popupName);
-            _openEventNamePopup = false;
         }
 
         bool open = true;
         if (!ImGui.BeginPopupModal(popupName, ref open, ImGuiWindowFlags.AlwaysAutoResize)) return;
 
+        ImGui.TextUnformatted(_eventNamePopup.IsRename ? "Rename Event" : "Create Event");
+        ImGui.Separator();
         ImGui.TextUnformatted("Name:");
         ImGui.SetNextItemWidth(320f);
-        if (_focusEventName)
-        {
-            ImGui.SetKeyboardFocusHere();
-            _focusEventName = false;
-        }
-        ImGui.InputText("##EventDisplayName", ref _eventNameBuffer, 128);
+        if (_eventNamePopup.ConsumeFocusRequest()) ImGui.SetKeyboardFocusHere();
+        string buffer = _eventNamePopup.Buffer;
+        if (ImGui.InputText("##EventDisplayName", ref buffer, 128))
+            _eventNamePopup.Buffer = buffer;
 
-        bool confirm = ImGui.Button(_renameEventId == Guid.Empty ? "Create" : "Rename") ||
+        bool confirm = ImGui.Button(_eventNamePopup.IsRename ? "Rename" : "Create") ||
             ImGui.IsKeyPressed(ImGuiKey.Enter);
         ImGui.SameLine();
         bool cancel = ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape) || !open;
 
-        if (confirm && !string.IsNullOrWhiteSpace(_eventNameBuffer))
+        if (confirm && !string.IsNullOrWhiteSpace(_eventNamePopup.Buffer))
         {
-            string displayName = _eventNameBuffer.Trim();
-            if (_renameEventId == Guid.Empty)
+            string displayName = _eventNamePopup.Buffer.Trim();
+            if (!_eventNamePopup.IsRename)
             {
                 RecordHistory("Add Event");
-                AddEventAt(_pendingEventPosition, displayName);
+                AddEventAt(_eventNamePopup.CreatePosition, displayName);
                 _requestFrameGraph = true;
             }
-            else if (FindRule(_renameEventId) is { } rule)
+            else if (_eventNamePopup.TargetEventId is Guid eventId && FindRule(eventId) is { } rule)
             {
                 RecordHistory("Rename Event");
                 rule.DisplayName = displayName;
                 rule.EditorTitle = displayName;
                 _dirty = true;
             }
-            _renameEventId = Guid.Empty;
+            _eventNamePopup.Close();
             ImGui.CloseCurrentPopup();
         }
         else if (cancel)
         {
-            _renameEventId = Guid.Empty;
+            _eventNamePopup.Close();
             ImGui.CloseCurrentPopup();
         }
 

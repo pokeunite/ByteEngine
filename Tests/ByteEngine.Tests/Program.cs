@@ -65,7 +65,9 @@ try
     TpsCameraSystemTests.Run(root, database, assets);
     AuthoringUxTests.Run(root, database, assets);
     V081PolishTests.Run(root, database, assets);
-    Console.WriteLine("ByteEngine tests passed: v0.7 regressions and Phase 1/2/3 gameplay systems.");
+    V082EditorInteractionTests.Run(root);
+    V083CharacterAuthoringTests.Run(root, database, assets);
+    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-b.3 regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }
 

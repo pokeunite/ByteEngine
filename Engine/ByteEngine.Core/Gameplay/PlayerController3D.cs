@@ -50,9 +50,10 @@ public sealed class PlayerController3D : Component
         if (Input.IsGameInputCaptured)
         {
             Vector2 mouse = Input.MouseDelta;
+            Vector2 look = CalculateLookDelta(mouse, boom);
             AddLookInput(
-                mouse.X * (boom?.MouseSensitivityX ?? .12f),
-                -mouse.Y * (boom?.MouseSensitivityY ?? .1f),
+                look.X,
+                look.Y,
                 boom?.MinPitch ?? -40f,
                 boom?.MaxPitch ?? 65f);
         }
@@ -111,13 +112,22 @@ public sealed class PlayerController3D : Component
         Vector3 horizontal = Horizontal(direction);
         return horizontal.LengthSquared() < .0001f
             ? 0f
-            : NormalizeAngle(MathF.Atan2(-horizontal.X, -horizontal.Z) * 180f / MathF.PI);
+            : NormalizeAngle(MathF.Atan2(horizontal.X, -horizontal.Z) * 180f / MathF.PI);
     }
 
     public static Vector3 ForwardFromYaw(float yawDegrees)
     {
         float radians = yawDegrees * MathF.PI / 180f;
-        return Vector3.Normalize(new Vector3(-MathF.Sin(radians), 0f, -MathF.Cos(radians)));
+        return Vector3.Normalize(new Vector3(MathF.Sin(radians), 0f, -MathF.Cos(radians)));
+    }
+
+    public static Vector2 CalculateLookDelta(Vector2 mouseDelta, CameraBoom3D? boom)
+    {
+        float horizontal = mouseDelta.X * (boom?.MouseSensitivityX ?? .12f);
+        float vertical = -mouseDelta.Y * (boom?.MouseSensitivityY ?? .1f);
+        if (boom?.InvertHorizontalLook == true) horizontal = -horizontal;
+        if (boom?.InvertVerticalLook == true) vertical = -vertical;
+        return new Vector2(horizontal, vertical);
     }
 
     private static Vector3 Horizontal(Vector3 value)

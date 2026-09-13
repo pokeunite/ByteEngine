@@ -51,7 +51,7 @@ internal static class TpsCameraSystemTests
         boom.Yaw = 90f;
         boom.Pitch = 0f;
         boom.SnapToSocket();
-        Assert(Near(cameraObject.Transform.WorldPosition, pivot + new Vector3(5f, 0f, 0f)),
+        Assert(Near(cameraObject.Transform.WorldPosition, pivot + new Vector3(-5f, 0f, 0f)),
             "Camera boom yaw orbits horizontally");
 
         boom.Pitch = 30f;

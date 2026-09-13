@@ -68,6 +68,8 @@ internal static class ComponentMetadataRegistry
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.PivotHeight))] = new("Camera Height", "Camera", "Height of the camera pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityX))] = new("Horizontal Sensitivity", "Rotation", "Horizontal mouse sensitivity."),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityY))] = new("Vertical Sensitivity", "Rotation", "Vertical mouse sensitivity."),
+        [(typeof(CameraBoom3D), nameof(CameraBoom3D.InvertHorizontalLook))] = new("Invert Horizontal Look", "Rotation", "Reverse horizontal mouse look."),
+        [(typeof(CameraBoom3D), nameof(CameraBoom3D.InvertVerticalLook))] = new("Invert Vertical Look", "Rotation", "Reverse vertical mouse look."),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MinPitch))] = new("Minimum Vertical Angle", "Rotation", "Lowest camera pitch.", "degrees"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MaxPitch))] = new("Maximum Vertical Angle", "Rotation", "Highest camera pitch.", "degrees"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.PositionSmoothness))] = new("Camera Smoothness", "Smoothing", "How quickly camera position catches up."),

@@ -1,3 +1,6 @@
+using System.Numerics;
+using ByteEngine.Core.Animation;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
@@ -28,31 +31,85 @@ internal static class BlueprintAuthoringService
         }
     }
 
-    public static CameraBoom3D SetupThirdPersonCharacter(GameObject player)
+    public static CameraBoom3D SetupThirdPersonCharacter(GameObject player, AssetManager? assets = null)
     {
-        if (!player.HasComponent<CapsuleCollider3D>()) player.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f });
-        if (!player.HasComponent<CharacterController3D>()) player.AddComponent(new CharacterController3D());
-        if (!player.HasComponent<PlayerController3D>())
-            player.AddComponent(new PlayerController3D
-            {
-                UseLocalOrientation = false,
-                CharacterRotation = CharacterRotationMode.FaceCamera,
-                TurnSpeed = 540f,
-                ControlPitch = 12f
-            });
-        CameraBoom3D boom = player.GetComponent<CameraBoom3D>() ?? player.AddComponent(new CameraBoom3D());
-        GameObject? cameraObject = Descendants(player).FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
+        bool createInitialCapsule = player.GetComponent<CapsuleCollider3D>() == null;
+        NormalizeCharacterStructure(player);
+        EnsureSingleRootComponent(player, () => new CapsuleCollider3D { Radius = .5f, Height = 2f });
+        EnsureSingleRootComponent(player, () => new CharacterController3D());
+        EnsureSingleRootComponent(player, () => new AnimationController());
+        EnsureSingleRootComponent(player, () => new PlayerController3D
+        {
+            UseLocalOrientation = false,
+            CharacterRotation = CharacterRotationMode.FaceCamera,
+            TurnSpeed = 540f,
+            ControlPitch = 12f
+        });
+        CameraBoom3D boom = EnsureSingleRootComponent(player, () => new CameraBoom3D());
+
+        GameObject? cameraObject = Descendants(player)
+            .FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
+        Camera3D? previousActive = player.Scene?.ActiveCamera;
         if (cameraObject == null)
         {
             Scene scene = player.Scene ?? throw new InvalidOperationException("The character must belong to a scene.");
             cameraObject = scene.CreateGameObject("Camera");
             cameraObject.SetParent(player, false);
-            cameraObject.AddComponent(new Camera3D { ActiveGameCamera = true });
+            cameraObject.AddComponent(new Camera3D());
         }
+        else if (!ReferenceEquals(cameraObject.Parent, player))
+        {
+            cameraObject.SetParent(player, false);
+        }
+        cameraObject.Name = "Camera";
         Camera3D camera = cameraObject.GetComponent<Camera3D>()!;
         boom.CameraObjectId = cameraObject.Id;
-        player.Scene?.SetActiveCamera(camera);
+        if (previousActive == null || ReferenceEquals(previousActive, camera))
+            player.Scene?.SetActiveCamera(camera);
+
+        if (assets != null && createInitialCapsule)
+            CharacterCapsuleAutoFit.TryFit(player, assets, out _);
+
         return boom;
+    }
+
+    public static GameObject NormalizeCharacterStructure(GameObject player)
+    {
+        GameObject[] originalChildren = player.Children.ToArray();
+        ModelHierarchyInstance? rootModel = player.GetComponent<ModelHierarchyInstance>();
+        GameObject visual = EnsureVisualRoot(player);
+
+        if (rootModel != null)
+        {
+            Vector3 rootScale = player.Transform.LocalScale;
+            if (NearlyUniform(rootScale, rootModel.AppliedImportScale))
+            {
+                visual.Transform.LocalScale *= rootScale;
+                player.Transform.LocalScale = Vector3.One;
+            }
+
+            GameObject importedModel = visual.Children.FirstOrDefault(child => child.GetComponent<ModelHierarchyInstance>() != null)
+                ?? player.Scene!.CreateGameObject(player.Name.EndsWith("Model", StringComparison.OrdinalIgnoreCase)
+                    ? player.Name
+                    : player.Name + "Model");
+            importedModel.SetParent(visual, false);
+            if (!importedModel.HasComponent<ModelHierarchyInstance>())
+                importedModel.AddComponent(new ModelHierarchyInstance
+                {
+                    Model = rootModel.Model,
+                    AppliedImportScale = rootModel.AppliedImportScale
+                });
+            player.RemoveComponent(rootModel);
+
+            foreach (GameObject child in originalChildren)
+            {
+                if (ReferenceEquals(child, visual) || child.GetComponent<Camera3D>() != null) continue;
+                child.SetParent(importedModel, false);
+            }
+        }
+
+        RemoveGameplayComponentsFromDescendants(player);
+        return visual;
     }
 
     public static GameObject EnsureVisualRoot(GameObject player)
@@ -73,4 +130,28 @@ internal static class BlueprintAuthoringService
             foreach (GameObject descendant in Descendants(child)) yield return descendant;
         }
     }
+
+    private static T EnsureSingleRootComponent<T>(GameObject root, Func<T> create) where T : Component
+    {
+        T? component = root.Components.OfType<T>().FirstOrDefault();
+        foreach (T duplicate in root.Components.OfType<T>().Skip(1).ToArray()) root.RemoveComponent(duplicate);
+        return component ?? root.AddComponent(create());
+    }
+
+    private static void RemoveGameplayComponentsFromDescendants(GameObject root)
+    {
+        Type[] gameplayTypes =
+        {
+            typeof(CapsuleCollider3D), typeof(CharacterController3D), typeof(PlayerController3D),
+            typeof(AnimationController), typeof(CameraBoom3D)
+        };
+        foreach (GameObject child in Descendants(root))
+            foreach (Component component in child.Components.Where(item => gameplayTypes.Contains(item.GetType())).ToArray())
+                child.RemoveComponent(component);
+    }
+
+    private static bool NearlyUniform(Vector3 scale, float expected) =>
+        MathF.Abs(scale.X - expected) < .0001f &&
+        MathF.Abs(scale.Y - expected) < .0001f &&
+        MathF.Abs(scale.Z - expected) < .0001f;
 }
