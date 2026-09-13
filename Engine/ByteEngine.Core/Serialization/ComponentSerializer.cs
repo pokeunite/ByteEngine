@@ -8,6 +8,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Gameplay;
+using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -957,7 +958,15 @@ public sealed class ComponentSerializer
                 ["characterRotation"] = ((PlayerController3D)component).CharacterRotation.ToString(),
                 ["turnSpeed"] = ((PlayerController3D)component).TurnSpeed,
                 ["controlYaw"] = ((PlayerController3D)component).ControlYaw,
-                ["controlPitch"] = ((PlayerController3D)component).ControlPitch
+                ["controlPitch"] = ((PlayerController3D)component).ControlPitch,
+                ["moveActionId"] = ((PlayerController3D)component).MoveAction.Id.ToString(),
+                ["moveActionName"] = ((PlayerController3D)component).MoveAction.Name,
+                ["lookActionId"] = ((PlayerController3D)component).LookAction.Id.ToString(),
+                ["lookActionName"] = ((PlayerController3D)component).LookAction.Name,
+                ["jumpActionId"] = ((PlayerController3D)component).JumpAction.Id.ToString(),
+                ["jumpActionName"] = ((PlayerController3D)component).JumpAction.Name,
+                ["sprintActionId"] = ((PlayerController3D)component).SprintAction.Id.ToString(),
+                ["sprintActionName"] = ((PlayerController3D)component).SprintAction.Name
             });
         public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerController3D
         {
@@ -970,8 +979,18 @@ public sealed class ComponentSerializer
                     : CharacterRotationMode.FaceCamera,
             TurnSpeed = Float(data, "turnSpeed", 540f),
             ControlYaw = Float(data, "controlYaw", 0f),
-            ControlPitch = Float(data, "controlPitch", 12f)
+            ControlPitch = Float(data, "controlPitch", 12f),
+            MoveAction = Reference(data, "moveAction", "Move"),
+            LookAction = Reference(data, "lookAction", "Look"),
+            JumpAction = Reference(data, "jumpAction", "Jump"),
+            SprintAction = Reference(data, "sprintAction", "Sprint")
         };
+
+        private static InputActionReference Reference(ComponentData data, string prefix, string fallback)
+        {
+            Guid.TryParse(Text(data, prefix + "Id", string.Empty), out Guid id);
+            return new InputActionReference(id, Text(data, prefix + "Name", fallback));
+        }
     }
 
     private sealed class PlayerShooter3DCodec : IComponentCodec
@@ -997,6 +1016,8 @@ public sealed class ComponentSerializer
             {
                 ["targetId"] = camera.TargetId.ToString(),
                 ["targetName"] = camera.TargetName,
+                ["lookActionId"] = camera.LookAction.Id.ToString(),
+                ["lookActionName"] = camera.LookAction.Name,
                 ["distance"] = camera.Distance,
                 ["height"] = camera.Height,
                 ["lookAtHeight"] = camera.LookAtHeight,
@@ -1016,6 +1037,9 @@ public sealed class ComponentSerializer
             {
                 TargetId = targetId,
                 TargetName = Text(data, "targetName", string.Empty),
+                LookAction = new InputActionReference(
+                    Guid.TryParse(Text(data, "lookActionId", string.Empty), out Guid lookActionId) ? lookActionId : Guid.Empty,
+                    Text(data, "lookActionName", "Look")),
                 Distance = Float(data, "distance", 7f),
                 Height = Float(data, "height", 4f),
                 LookAtHeight = Float(data, "lookAtHeight", 1f),

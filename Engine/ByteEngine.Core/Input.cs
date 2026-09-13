@@ -1,13 +1,16 @@
 using System.Numerics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using OpenTkMouseButton = OpenTK.Windowing.GraphicsLibraryFramework.MouseButton;
+using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Core;
 
 public enum Key
 {
-    W, A, S, D,
-    Q, E, F, R, F8,
+    A, B, C, D, E, F, G, H, I, J, K, L, M,
+    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9,
+    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
     Space,
     Up, Down, Left, Right,
     LeftShift,
@@ -29,6 +32,16 @@ public static class Input
     private static readonly HashSet<Key> PreviousKeysDown = new();
     private static readonly HashSet<MouseButton> MouseButtonsDown = new();
     private static readonly HashSet<MouseButton> PreviousMouseButtonsDown = new();
+    private static readonly RawInputSnapshot RawSnapshot = new();
+    private static readonly (int Index, GamepadControl Control)[] StandardGamepadButtons =
+    {
+        (0, GamepadControl.South), (1, GamepadControl.East), (2, GamepadControl.West), (3, GamepadControl.North),
+        (4, GamepadControl.LeftShoulder), (5, GamepadControl.RightShoulder),
+        (9, GamepadControl.LeftStickButton), (10, GamepadControl.RightStickButton),
+        (11, GamepadControl.DPadUp), (12, GamepadControl.DPadRight),
+        (13, GamepadControl.DPadDown), (14, GamepadControl.DPadLeft),
+        (7, GamepadControl.Start), (6, GamepadControl.Back)
+    };
 
     public static Vector2 GameViewPointerNormalized { get; private set; } = new(.5f, .5f);
     public static Vector2 GameViewSize { get; private set; } = Vector2.One;
@@ -39,10 +52,12 @@ public static class Input
     public static bool IsGameViewFocused { get; private set; }
     public static bool IsGameInputCaptured { get; private set; }
     public static Vector2 MouseDelta { get; private set; }
+    public static RawInputSnapshot Snapshot => RawSnapshot;
     private static Vector2 _lastGameViewDisplayPosition;
     private static bool _hadFocusedGameViewPointer;
 
-    internal static void Update(KeyboardState keyboardState, MouseState mouseState)
+    internal static void Update(KeyboardState keyboardState, MouseState mouseState,
+        IReadOnlyList<JoystickState>? joystickStates = null)
     {
         PreviousKeysDown.Clear();
         foreach (Key key in KeysDown) PreviousKeysDown.Add(key);
@@ -65,6 +80,13 @@ public static class Input
         MouseDelta = IsGameInputCaptured
             ? new Vector2(mouseState.Delta.X, mouseState.Delta.Y)
             : Vector2.Zero;
+
+        RawSnapshot.Clear();
+        foreach (Key key in KeysDown) RawSnapshot.KeysDown.Add(key);
+        foreach (MouseButton button in MouseButtonsDown) RawSnapshot.MouseButtonsDown.Add(button);
+        RawSnapshot.MouseDelta = MouseDelta;
+        RawSnapshot.MouseWheel = mouseState.ScrollDelta.Y;
+        PopulateGamepad(RawSnapshot.Gamepad, joystickStates);
     }
 
     internal static void SetGameInputCaptured(bool captured)
@@ -117,26 +139,35 @@ public static class Input
     public static bool IsMouseButtonReleased(MouseButton button) =>
         !MouseButtonsDown.Contains(button) && PreviousMouseButtonsDown.Contains(button);
 
-    private static Keys ToOpenTkKey(Key key) => key switch
+    internal static void PopulateGamepad(GamepadSnapshot target, IReadOnlyList<JoystickState>? states)
     {
-        Key.W => Keys.W,
-        Key.A => Keys.A,
-        Key.S => Keys.S,
-        Key.D => Keys.D,
-        Key.Q => Keys.Q,
-        Key.E => Keys.E,
-        Key.F => Keys.F,
-        Key.R => Keys.R,
-        Key.F8 => Keys.F8,
-        Key.Space => Keys.Space,
-        Key.Up => Keys.Up,
-        Key.Down => Keys.Down,
-        Key.Left => Keys.Left,
-        Key.Right => Keys.Right,
-        Key.LeftShift => Keys.LeftShift,
-        Key.Escape => Keys.Escape,
-        _ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unsupported key.")
-    };
+        JoystickState? state = null;
+        if (states != null)
+            for (int i = 0; i < states.Count; i++)
+            {
+                JoystickState? candidate = states[i];
+                if (candidate != null && (candidate.AxisCount > 0 || candidate.ButtonCount > 0))
+                {
+                    state = candidate;
+                    break;
+                }
+            }
+        if (state == null) return;
+        float Axis(int index) => index < state.AxisCount ? state.GetAxis(index) : 0f;
+        bool Button(int index) => index < state.ButtonCount && state.IsButtonDown(index);
+        target.LeftStick = new Vector2(Axis(0), -Axis(1));
+        target.RightStick = new Vector2(Axis(2), -Axis(3));
+        target.LeftTrigger = Math.Clamp((Axis(4) + 1f) * .5f, 0f, 1f);
+        target.RightTrigger = Math.Clamp((Axis(5) + 1f) * .5f, 0f, 1f);
+        for (int i = 0; i < StandardGamepadButtons.Length; i++)
+            if (Button(StandardGamepadButtons[i].Index)) target.ButtonsDown.Add(StandardGamepadButtons[i].Control);
+    }
+
+    private static Keys ToOpenTkKey(Key key)
+    {
+        if (Enum.TryParse(key.ToString(), out Keys parsed)) return parsed;
+        throw new ArgumentOutOfRangeException(nameof(key), key, "Unsupported key.");
+    }
 
     private static OpenTkMouseButton ToOpenTkMouseButton(MouseButton button) => button switch
     {

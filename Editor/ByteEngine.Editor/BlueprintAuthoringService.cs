@@ -5,6 +5,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Editor;
 
@@ -33,18 +34,23 @@ internal static class BlueprintAuthoringService
 
     public static CameraBoom3D SetupThirdPersonCharacter(GameObject player, AssetManager? assets = null)
     {
+        InputActions.Map.EnsureGameplayDefaults();
         bool createInitialCapsule = player.GetComponent<CapsuleCollider3D>() == null;
         NormalizeCharacterStructure(player);
         EnsureSingleRootComponent(player, () => new CapsuleCollider3D { Radius = .5f, Height = 2f });
         EnsureSingleRootComponent(player, () => new CharacterController3D());
         EnsureSingleRootComponent(player, () => new AnimationController());
-        EnsureSingleRootComponent(player, () => new PlayerController3D
+        PlayerController3D playerInput = EnsureSingleRootComponent(player, () => new PlayerController3D
         {
             UseLocalOrientation = false,
             CharacterRotation = CharacterRotationMode.FaceCamera,
             TurnSpeed = 540f,
             ControlPitch = 12f
         });
+        playerInput.MoveAction = InputActions.Reference("Move");
+        playerInput.LookAction = InputActions.Reference("Look");
+        playerInput.JumpAction = InputActions.Reference("Jump");
+        playerInput.SprintAction = InputActions.Reference("Sprint");
         CameraBoom3D boom = EnsureSingleRootComponent(player, () => new CameraBoom3D());
 
         GameObject? cameraObject = Descendants(player)

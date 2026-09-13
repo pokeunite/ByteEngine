@@ -1,3 +1,5 @@
+using ByteEngine.Core.InputSystem;
+
 namespace ByteEngine.Core.Serialization.SerializationModels;
 
 public sealed class ProjectData
@@ -24,6 +26,8 @@ public sealed class ProjectData
         "Scenes";
 
     public List<VariableData> GlobalVariables { get; set; } = new();
+
+    public InputMap InputMap { get; set; } = InputMap.CreateDefault();
 }
 
 public sealed class ProjectWindowData

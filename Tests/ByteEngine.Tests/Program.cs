@@ -10,6 +10,7 @@ using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.Variables;
+using ByteEngine.Core.InputSystem;
 using ByteEngine.Editor;
 using ByteEngine.Editor.Gizmos;
 using ByteEngine.Editor.Panels;
@@ -22,6 +23,12 @@ try
     {
         V085ProfessionalEditorTests.Run(root);
         Console.WriteLine("v0.8-b.5 focused regressions passed.");
+        return;
+    }
+    if (args.Contains("--v08c"))
+    {
+        V08CInputActionsTests.Run(root);
+        Console.WriteLine("v0.8-c focused regressions passed.");
         return;
     }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
@@ -75,7 +82,8 @@ try
     V083CharacterAuthoringTests.Run(root, database, assets);
     V084EditorStabilityTests.Run();
     V085ProfessionalEditorTests.Run(root);
-    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-b.5 regressions and Phase 1/2/3 gameplay systems.");
+    V08CInputActionsTests.Run(root);
+    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-c regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }
 

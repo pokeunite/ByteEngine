@@ -4,6 +4,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
+using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Core.VisualLogic;
 
@@ -170,6 +171,40 @@ public sealed class VisualLogicRegistry
                             out Key key) &&
                         Input.IsKeyReleased(key)
             });
+
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.actionHeld", Category = "Input Actions", DisplayName = "Input Action Is Down",
+            Evaluate = (instruction, context) => InputActions.IsDown(ActionName(instruction, context))
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.actionPressed", Category = "Input Actions", DisplayName = "Input Action Pressed",
+            Evaluate = (instruction, context) => InputActions.WasPressed(ActionName(instruction, context))
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.actionReleased", Category = "Input Actions", DisplayName = "Input Action Released",
+            Evaluate = (instruction, context) => InputActions.WasReleased(ActionName(instruction, context))
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.axisGreater", Category = "Input Actions", DisplayName = "Action Axis > Value",
+            Evaluate = (instruction, context) => InputActions.ReadAxis1D(ActionName(instruction, context)) >
+                EventValueResolver.GetNumber(instruction, "value", context, .5)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.axisLess", Category = "Input Actions", DisplayName = "Action Axis < Value",
+            Evaluate = (instruction, context) => InputActions.ReadAxis1D(ActionName(instruction, context)) <
+                EventValueResolver.GetNumber(instruction, "value", context, -.5)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "input.vectorLengthGreater", Category = "Input Actions", DisplayName = "Action Vector Length > Value",
+            Evaluate = (instruction, context) => InputActions.ReadAxis2D(ActionName(instruction, context)).Length() >
+                EventValueResolver.GetNumber(instruction, "value", context, .5)
+        });
     }
 
     private static void RegisterGameplay(VisualLogicRegistry registry)
@@ -1169,4 +1204,7 @@ public sealed class VisualLogicRegistry
             true,
             out key);
     }
+
+    private static string ActionName(VisualInstruction instruction, EventExecutionContext context) =>
+        EventValueResolver.GetString(instruction, "action", context);
 }

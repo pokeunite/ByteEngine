@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.InputSystem;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
 namespace ByteEngine.Core.Diagnostics;
@@ -39,6 +40,15 @@ public static class RuntimeDiagnostics
         writer.Section("ByteEngine Runtime Diagnostics");
         writer.Add("Scene", $"{scene.Name} ({scene.Id})");
         writer.Add("Loaded", scene.IsLoaded);
+        writer.Section("Input Actions");
+        writer.Add("Gameplay Enabled", InputActions.GameplayEnabled);
+        writer.Add("Map", $"{InputActions.Map.Name} ({InputActions.Map.Id})");
+        foreach (InputActionDefinition action in InputActions.Map.Actions)
+        {
+            InputActionState state = InputActions.Get(action.Id);
+            writer.Add($"{action.Group}/{action.DisplayName}",
+                $"type={action.Type}, id={action.Id}, bindings={action.Bindings.Count}, down={state.Down}, pressed={state.Pressed}, released={state.Released}, axis1D={state.Axis1D:0.###}, axis2D=({state.Axis2D.X:0.###}, {state.Axis2D.Y:0.###}), source={state.ActiveSource}");
+        }
         int sources = 0;
         foreach (GameObject gameObject in scene.GameObjects)
             foreach (IRuntimeDiagnosticSource source in gameObject.Components.OfType<IRuntimeDiagnosticSource>())

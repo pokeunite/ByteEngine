@@ -7,6 +7,8 @@ using ByteEngine.Core.Scene;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Gameplay;
+using ByteEngine.Core.InputSystem;
 using ImGuiNET;
 
 namespace ByteEngine.Editor;
@@ -37,7 +39,7 @@ internal static class ComponentPropertyRenderer
 
     private static bool Supported(Type t) => t == typeof(float) || t == typeof(int) || t == typeof(bool) ||
         t == typeof(string) || t == typeof(Vector2) || t == typeof(Vector3) || t == typeof(Vector4) ||
-        t == typeof(Guid) || t == typeof(AssetReference) || t.IsEnum;
+        t == typeof(Guid) || t == typeof(AssetReference) || t == typeof(InputActionReference) || t.IsEnum;
 
     public static bool SetValue(Component component, ComponentPropertyDescriptor descriptor, object value, PropertyEditorContext context)
     {
@@ -100,6 +102,27 @@ internal static class ComponentPropertyRenderer
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Clear##" + descriptor.Property.Name)) { after = AssetReference.Empty; edited = true; }
             }
+            else if (descriptor.Property.PropertyType == typeof(InputActionReference))
+            {
+                InputActionReference reference = before as InputActionReference ?? new InputActionReference();
+                InputMap map = project?.Project.InputMap ?? InputActions.Map;
+                InputActionDefinition? selected = map.Resolve(reference);
+                string preview = selected?.DisplayName ?? (string.IsNullOrWhiteSpace(reference.Name) ? "None" : reference.Name + " (Missing)");
+                if (ImGui.BeginCombo(label, preview))
+                {
+                    foreach (InputActionDefinition action in map.Actions)
+                    {
+                        bool isSelected = action.Id == selected?.Id;
+                        if (ImGui.Selectable(action.DisplayName + "##" + action.Id, isSelected))
+                        {
+                            after = new InputActionReference(action.Id, action.DisplayName);
+                            edited = true;
+                        }
+                        if (isSelected) ImGui.SetItemDefaultFocus();
+                    }
+                    ImGui.EndCombo();
+                }
+            }
             else
             {
                 string text = before?.ToString() ?? string.Empty;
@@ -122,6 +145,8 @@ internal static class ComponentPropertyRenderer
             if (ImGui.IsItemDeactivatedAfterEdit() || edited && !active) end();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(descriptor.Metadata.Tooltip);
         }
+        if (component is PlayerController3D playerInput && project != null)
+            DrawMissingActions(playerInput, project, context, begin, changed, end);
         if (component is MeshRenderer mesh)
         {
             Vector4 color = mesh.Material.BaseColor;
@@ -138,5 +163,30 @@ internal static class ComponentPropertyRenderer
             end();
         }
         ImGui.PopID();
+    }
+
+    private static void DrawMissingActions(PlayerController3D playerInput, EditorProjectContext project,
+        PropertyEditorContext context, Action begin, Action changed, Action end)
+    {
+        var references = new (string DefaultName, InputActionReference Reference, Action<InputActionReference> Set)[]
+        {
+            ("Move", playerInput.MoveAction, value => playerInput.MoveAction = value),
+            ("Look", playerInput.LookAction, value => playerInput.LookAction = value),
+            ("Jump", playerInput.JumpAction, value => playerInput.JumpAction = value),
+            ("Sprint", playerInput.SprintAction, value => playerInput.SprintAction = value)
+        };
+        foreach (var item in references)
+        {
+            if (project.Project.InputMap.Resolve(item.Reference) != null) continue;
+            ImGui.TextColored(new Vector4(1f, .65f, .2f, 1f), $"Missing {item.DefaultName} Action: {item.Reference}");
+            if (context == PropertyEditorContext.Runtime || !ImGui.SmallButton($"Create Default {item.DefaultName} Action##{item.DefaultName}")) continue;
+            begin();
+            project.Project.InputMap.EnsureGameplayDefaults();
+            InputActions.Configure(project.Project.InputMap);
+            item.Set(InputActions.Reference(item.DefaultName));
+            project.SaveProject();
+            changed();
+            end();
+        }
     }
 }

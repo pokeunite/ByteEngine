@@ -3,6 +3,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
+using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Editor;
 
@@ -35,6 +36,10 @@ internal sealed class EditorProjectContext
     {
         Project =
             project;
+
+        Project.InputMap ??= InputMap.CreateDefault();
+        Project.InputMap.EnsureValid();
+        InputActions.Configure(Project.InputMap);
 
         ProjectFilePath =
             Path.GetFullPath(

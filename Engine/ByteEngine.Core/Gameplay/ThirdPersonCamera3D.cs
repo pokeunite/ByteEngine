@@ -2,6 +2,7 @@ using System.Numerics;
 using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.InputSystem;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
 namespace ByteEngine.Core.Gameplay;
@@ -19,6 +20,7 @@ public sealed class ThirdPersonCamera3D : Component, IRuntimeDiagnosticSource
 
     public Guid TargetId { get; set; }
     public string TargetName { get; set; } = string.Empty;
+    public InputActionReference LookAction { get; set; } = InputActionReference.Named("Look");
     public float Distance { get => _distance; set => _distance = Positive(value); }
     public float Height { get => _height; set => _height = Finite(value); }
     public float LookAtHeight { get => _lookAtHeight; set => _lookAtHeight = Finite(value); }
@@ -35,9 +37,9 @@ public sealed class ThirdPersonCamera3D : Component, IRuntimeDiagnosticSource
 
     protected override void OnUpdate()
     {
-        if (Input.IsGameInputCaptured)
+        if (InputActions.GameplayEnabled)
         {
-            Vector2 delta = Input.MouseDelta;
+            Vector2 delta = InputActions.ReadAxis2D(LookAction);
             Yaw += delta.X * MouseSensitivity;
             Pitch -= delta.Y * MouseSensitivity;
         }
@@ -107,6 +109,8 @@ public sealed class ThirdPersonCamera3D : Component, IRuntimeDiagnosticSource
         writer.Section($"ThirdPersonCamera3D: {camera?.Name ?? "<detached>"}");
         writer.Add("GameInputCaptured", Input.IsGameInputCaptured);
         writer.Add("RawMouseDelta", Input.MouseDelta);
+        writer.Add("LookAction", $"{LookAction} ({LookAction.Id})");
+        writer.Add("ResolvedLook", InputActions.ReadAxis2D(LookAction));
         writer.Add("TargetRequest", $"Id={TargetId}; Name={TargetName}");
         writer.Add("TargetResolution", _targetResolution);
         writer.Add("ResolvedTarget", _resolvedTarget == null ? "<none>" : $"{_resolvedTarget.Name} ({_resolvedTarget.Id})");

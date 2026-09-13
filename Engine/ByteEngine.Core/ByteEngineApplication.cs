@@ -5,6 +5,7 @@ using ByteEngine.Core.Scene;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
+using ByteEngine.Core.InputSystem;
 using OpenTK.Windowing.Desktop;
 
 namespace ByteEngine.Core;
@@ -145,7 +146,13 @@ public class ByteEngineApplication : GameWindow
 
         Input.Update(
             KeyboardState,
-            MouseState
+            MouseState,
+            JoystickStates
+        );
+
+        InputActions.Update(
+            Input.Snapshot,
+            GameplayInputActionsEnabled
         );
 
         if (Input.IsGameInputCaptured && Input.IsKeyPressed(Key.Escape))
@@ -170,6 +177,8 @@ public class ByteEngineApplication : GameWindow
             Scenes.UpdateInternal();
         }
     }
+
+    protected virtual bool GameplayInputActionsEnabled => true;
 
     protected override void OnRenderFrame(
         FrameEventArgs args)

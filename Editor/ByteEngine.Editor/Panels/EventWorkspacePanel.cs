@@ -6344,6 +6344,23 @@ internal sealed class EventWorkspacePanel
                         "W");
                 break;
 
+            case "input.actionHeld":
+            case "input.actionPressed":
+            case "input.actionReleased":
+                instruction.Arguments["action"] = EventValue.String(DefaultActionToken("Jump"));
+                break;
+
+            case "input.axisGreater":
+            case "input.vectorLengthGreater":
+                instruction.Arguments["action"] = EventValue.String(DefaultActionToken("Move"));
+                instruction.Arguments["value"] = EventValue.Number(.5);
+                break;
+
+            case "input.axisLess":
+                instruction.Arguments["action"] = EventValue.String(DefaultActionToken("Move"));
+                instruction.Arguments["value"] = EventValue.Number(-.5);
+                break;
+
             case "object.exists":
             case "object.isActive":
             case "object.destroy":
@@ -6571,6 +6588,20 @@ internal sealed class EventWorkspacePanel
                     "key",
                     "Key",
                     Key.W);
+                break;
+
+            case "input.actionHeld":
+            case "input.actionPressed":
+            case "input.actionReleased":
+                DrawInputActionArgument(instruction, "action", "Input Action", "Jump");
+                break;
+
+            case "input.axisGreater":
+            case "input.axisLess":
+            case "input.vectorLengthGreater":
+                DrawInputActionArgument(instruction, "action", "Input Action", "Move");
+                DrawValueArgument(instruction, "value", "Value", VariableType.Number,
+                    EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
                 break;
 
             case "object.exists":
@@ -7863,6 +7894,38 @@ internal sealed class EventWorkspacePanel
 
         ImGui.EndCombo();
     }
+
+    private void DrawInputActionArgument(VisualInstruction instruction, string argumentName, string label, string fallback)
+    {
+        if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value) || value == null)
+        {
+            value = EventValue.String(fallback);
+            instruction.Arguments[argumentName] = value;
+        }
+        string current = value.Kind == EventValueKind.Constant && value.Constant.Type == VariableType.String
+            ? value.Constant.String : fallback;
+        ByteEngine.Core.InputSystem.InputActionDefinition? currentAction =
+            EditorProjectContext.Active?.Project.InputMap.Find(Guid.TryParse(current, out Guid currentId) ? currentId : Guid.Empty) ??
+            EditorProjectContext.Active?.Project.InputMap.Find(current);
+        string preview = currentAction?.DisplayName ?? current;
+        ImGui.TextDisabled(label);
+        ImGui.SetNextItemWidth(-1f);
+        if (!ImGui.BeginCombo("##InputAction" + argumentName, preview)) return;
+        foreach (var action in EditorProjectContext.Active?.Project.InputMap.Actions ?? Enumerable.Empty<ByteEngine.Core.InputSystem.InputActionDefinition>())
+        {
+            bool selected = currentAction?.Id == action.Id;
+            if (ImGui.Selectable(action.DisplayName + "##" + action.Id, selected))
+            {
+                instruction.Arguments[argumentName] = EventValue.String(action.Id.ToString());
+                _dirty = true;
+            }
+            if (selected) ImGui.SetItemDefaultFocus();
+        }
+        ImGui.EndCombo();
+    }
+
+    private static string DefaultActionToken(string name) =>
+        EditorProjectContext.Active?.Project.InputMap.Find(name)?.Id.ToString() ?? name;
 
     // ========================================================
     // SELF CONTEXT

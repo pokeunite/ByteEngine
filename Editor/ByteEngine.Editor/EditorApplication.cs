@@ -46,6 +46,8 @@ public sealed class EditorApplication
     private readonly PerformancePanel _performance =
         new();
 
+    private readonly ProjectSettingsPanel _projectSettings = new();
+
     private readonly ProjectBrowserPanel _projectBrowser = new();
 
     private readonly BlueprintWorkspacePanel _blueprintWorkspace = new();
@@ -72,6 +74,9 @@ public sealed class EditorApplication
     protected override bool ShouldUpdateScene =>
         _state?.Mode ==
         EditorMode.Play;
+
+    protected override bool GameplayInputActionsEnabled =>
+        _state?.Mode == EditorMode.Play;
 
     protected override bool ShouldRenderSceneToWindow =>
         false;
@@ -284,6 +289,8 @@ public sealed class EditorApplication
                 _gameView.IsOpen
             );
         }
+
+        _projectSettings.Draw(_projectContext!);
 
         if (_console.IsOpen)
         {
@@ -647,6 +654,10 @@ public sealed class EditorApplication
             "Performance",
             _performance
         );
+
+        bool projectSettingsOpen = _projectSettings.IsOpen;
+        if (ImGui.MenuItem("Project Settings", string.Empty, projectSettingsOpen))
+            _projectSettings.IsOpen = !projectSettingsOpen;
 
         ImGui.Separator();
 

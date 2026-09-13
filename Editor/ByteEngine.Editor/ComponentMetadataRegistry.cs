@@ -85,7 +85,12 @@ internal static class ComponentMetadataRegistry
         [(typeof(CharacterController3D), nameof(CharacterController3D.MoveSpeed))] = new("Move Speed", "Movement", "Maximum movement speed.", "m/s"),
         [(typeof(PlayerController3D), nameof(PlayerController3D.CharacterRotation))] = new("Character Rotation", "Rotation", "How the character body chooses its facing direction."),
         [(typeof(PlayerController3D), nameof(PlayerController3D.TurnSpeed))] = new("Turn Speed", "Rotation", "Maximum body rotation speed.", "degrees / second"),
-        [(typeof(PlayerController3D), nameof(PlayerController3D.UseLocalOrientation))] = new("Use Character Direction", "Advanced", "Move relative to character orientation instead of control rotation.", null, true)
+        [(typeof(PlayerController3D), nameof(PlayerController3D.UseLocalOrientation))] = new("Use Character Direction", "Advanced", "Move relative to character orientation instead of control rotation.", null, true),
+        [(typeof(PlayerController3D), nameof(PlayerController3D.MoveAction))] = new("Movement Action", "Input Actions", "The 2D Input Action used for character movement."),
+        [(typeof(PlayerController3D), nameof(PlayerController3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used for camera and control rotation."),
+        [(typeof(PlayerController3D), nameof(PlayerController3D.JumpAction))] = new("Jump Action", "Input Actions", "The Button Input Action that requests a jump."),
+        [(typeof(PlayerController3D), nameof(PlayerController3D.SprintAction))] = new("Sprint Action", "Input Actions", "The Button Input Action reserved for sprint behavior."),
+        [(typeof(ThirdPersonCamera3D), nameof(ThirdPersonCamera3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used by the legacy orbit camera.")
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;

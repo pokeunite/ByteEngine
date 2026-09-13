@@ -2,6 +2,7 @@ using System.Numerics;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Core.Gameplay;
 
@@ -22,6 +23,11 @@ public sealed class PlayerController3D : Component
     private float _controlPitch = 12f;
     private float _turnSpeed = 540f;
     private float _desiredCharacterYaw;
+
+    public InputActionReference MoveAction { get; set; } = InputActionReference.Named("Move");
+    public InputActionReference LookAction { get; set; } = InputActionReference.Named("Look");
+    public InputActionReference JumpAction { get; set; } = InputActionReference.Named("Jump");
+    public InputActionReference SprintAction { get; set; } = InputActionReference.Named("Sprint");
 
     public bool UseLocalOrientation { get; set; }
     public CharacterRotationMode CharacterRotation { get; set; } = CharacterRotationMode.FaceCamera;
@@ -47,10 +53,10 @@ public sealed class PlayerController3D : Component
         if (player == null || controller?.Enabled != true) return;
 
         CameraBoom3D? boom = player.GetComponent<CameraBoom3D>();
-        if (Input.IsGameInputCaptured)
+        if (InputActions.GameplayEnabled)
         {
-            Vector2 mouse = Input.MouseDelta;
-            Vector2 look = CalculateLookDelta(mouse, boom);
+            Vector2 lookInput = InputActions.ReadAxis2D(LookAction);
+            Vector2 look = CalculateLookDelta(lookInput, boom);
             AddLookInput(
                 look.X,
                 look.Y,
@@ -58,8 +64,9 @@ public sealed class PlayerController3D : Component
                 boom?.MaxPitch ?? 65f);
         }
 
-        float forwardInput = (Input.IsKeyDown(Key.W) ? 1f : 0f) - (Input.IsKeyDown(Key.S) ? 1f : 0f);
-        float rightInput = (Input.IsKeyDown(Key.D) ? 1f : 0f) - (Input.IsKeyDown(Key.A) ? 1f : 0f);
+        Vector2 moveInput = InputActions.ReadAxis2D(MoveAction);
+        float forwardInput = moveInput.Y;
+        float rightInput = moveInput.X;
         Vector3 forward;
         Vector3 right;
 
@@ -78,7 +85,7 @@ public sealed class PlayerController3D : Component
         if (movement.LengthSquared() > 1f) movement = Vector3.Normalize(movement);
         controller.Move(movement);
         UpdateCharacterRotation(movement, Math.Max((float)Time.DeltaTime, 0f));
-        if (Input.IsKeyPressed(Key.Space)) controller.Jump();
+        if (InputActions.WasPressed(JumpAction)) controller.Jump();
     }
 
     public void UpdateCharacterRotation(Vector3 movement, float deltaTime)
