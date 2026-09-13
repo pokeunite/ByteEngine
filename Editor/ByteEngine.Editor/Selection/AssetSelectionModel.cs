@@ -40,7 +40,7 @@ internal sealed class AssetSelectionModel
             }
             else if (string.Equals(PrimaryPath, path, StringComparison.OrdinalIgnoreCase))
             {
-                PrimaryPath = _selected.LastOrDefault();
+                PrimaryPath = orderedPaths.LastOrDefault(_selected.Contains);
             }
             _anchorIndex = index;
         }
@@ -69,10 +69,12 @@ internal sealed class AssetSelectionModel
 
     public void Retain(IEnumerable<string> available)
     {
-        HashSet<string> valid = available.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        string[] ordered = available.ToArray();
+        HashSet<string> valid = ordered.ToHashSet(StringComparer.OrdinalIgnoreCase);
         _selected.RemoveWhere(path => !valid.Contains(path));
+        if (_anchorIndex >= ordered.Length) _anchorIndex = null;
         if (PrimaryPath != null && !_selected.Contains(PrimaryPath))
-            PrimaryPath = _selected.LastOrDefault();
+            PrimaryPath = ordered.LastOrDefault(_selected.Contains);
     }
 
     public void Clear()

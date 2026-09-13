@@ -326,7 +326,7 @@ internal static class BlueprintInstanceSynchronizer
     }
 
     private static bool Matches(AssetReference left, AssetReference right) =>
-        left.Guid != Guid.Empty && left.Guid == right.Guid ||
+        left.Guid != Guid.Empty && right.Guid != Guid.Empty ? left.Guid == right.Guid :
         !string.IsNullOrWhiteSpace(left.CachedProjectPath) &&
         string.Equals(left.CachedProjectPath, right.CachedProjectPath, StringComparison.OrdinalIgnoreCase);
     private static List<GameObjectData> Objects(BlueprintDefinition blueprint) =>

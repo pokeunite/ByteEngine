@@ -58,7 +58,13 @@ internal sealed class ImGuiController
         (Keys.Escape, ImGuiKey.Escape),
         (Keys.A, ImGuiKey.A),
         (Keys.C, ImGuiKey.C),
+        (Keys.D, ImGuiKey.D),
+        (Keys.Q, ImGuiKey.Q),
         (Keys.F, ImGuiKey.F),
+        (Keys.W, ImGuiKey.W),
+        (Keys.E, ImGuiKey.E),
+        (Keys.R, ImGuiKey.R),
+        (Keys.F2, ImGuiKey.F2),
         (Keys.N, ImGuiKey.N),
         (Keys.S, ImGuiKey.S),
         (Keys.V, ImGuiKey.V),
@@ -90,6 +96,7 @@ internal sealed class ImGuiController
 
         io.ConfigFlags |=
             ImGuiConfigFlags.DockingEnable;
+        io.ConfigWindowsMoveFromTitleBarOnly = true;
 
         io.BackendFlags |=
             ImGuiBackendFlags.RendererHasVtxOffset;

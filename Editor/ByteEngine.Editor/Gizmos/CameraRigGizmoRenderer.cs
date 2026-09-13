@@ -17,8 +17,8 @@ internal static class CameraRigGizmoRenderer
         Component? selectedComponent = null)
     {
         ImDrawListPtr draw = ImGui.GetWindowDrawList();
-        uint boomColor = ImGui.GetColorU32(new Vector4(.25f, .8f, 1f, .95f));
-        uint cameraColor = ImGui.GetColorU32(new Vector4(1f, .78f, .2f, .95f));
+        uint boomColor = ImGui.GetColorU32(new Vector4(.25f, .8f, 1f, .35f));
+        uint cameraColor = ImGui.GetColorU32(new Vector4(1f, .78f, .2f, .35f));
 
         foreach (GameObject gameObject in scene.GameObjects.Where(item => item.ActiveInHierarchy))
         {

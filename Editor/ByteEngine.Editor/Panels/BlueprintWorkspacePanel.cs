@@ -40,12 +40,58 @@ internal sealed class BlueprintWorkspacePanel
     private Component? _selectedComponent;
     private string _addComponentSearch = string.Empty;
     private readonly BlueprintTransformGizmo3D _transformGizmo = new();
-    private CameraActivationRequest? _cameraActivationRequest;
-    private bool _openCameraActivationPrompt;
+    private readonly CameraActivationPromptState _cameraActivationPrompt = new();
 
     private bool _open;
+    internal Guid? OpenAssetId => _asset?.Guid;
+
+    internal void EvictDeletedAsset()
+    {
+        if (_asset == null || _project == null ||
+            (_project.AssetDatabase.TryGetAsset(_asset.Guid, out _) && File.Exists(_asset.FullPath))) return;
+        _open = false;
+        _blueprint = null;
+        _preview = null;
+        _asset = null;
+        _selectedPreviewObjectId = Guid.Empty;
+        _selectedComponent = null;
+        _propertyUndo.Clear();
+        _propertyRedo.Clear();
+        _propertyBefore = null;
+        _dirty = false;
+        _cameraActivationPrompt.Reset();
+    }
 
     private bool _dirty;
+    private bool _showAdvanced;
+    private readonly Stack<SceneData> _propertyUndo = new();
+    private readonly Stack<SceneData> _propertyRedo = new();
+    private SceneData? _propertyBefore;
+
+    private void BeginPropertyEdit()
+    {
+        if (_propertyBefore == null && _preview != null && _project != null)
+            _propertyBefore = _project.Scenes.Serialize(_preview);
+    }
+
+    private void CommitPropertyEdit()
+    {
+        if (_propertyBefore == null) return;
+        _propertyUndo.Push(_propertyBefore);
+        _propertyRedo.Clear();
+        _propertyBefore = null;
+    }
+
+    private void RestorePropertyEdit(bool redo)
+    {
+        var source = redo ? _propertyRedo : _propertyUndo;
+        var destination = redo ? _propertyUndo : _propertyRedo;
+        if (_preview == null || _project == null || !source.TryPop(out SceneData? snapshot)) return;
+        destination.Push(_project.Scenes.Serialize(_preview));
+        _preview = _project.Scenes.Deserialize(snapshot);
+        _selectedComponent = null;
+        MarkDirty();
+    }
 
     private string _statusMessage =
         string.Empty;
@@ -68,6 +114,13 @@ internal sealed class BlueprintWorkspacePanel
 
         ArgumentNullException.ThrowIfNull(
             project);
+
+        _cameraActivationPrompt.Reset();
+        if (_project != null) _project.AssetDatabase.DatabaseChanged -= EvictDeletedAsset;
+        project.AssetDatabase.DatabaseChanged += EvictDeletedAsset;
+        _propertyUndo.Clear();
+        _propertyRedo.Clear();
+        _propertyBefore = null;
 
         _asset =
             asset;
@@ -97,6 +150,7 @@ internal sealed class BlueprintWorkspacePanel
         int windowWidth,
         int windowHeight)
     {
+        EvictDeletedAsset();
         if (!_open ||
             _blueprint ==
                 null ||
@@ -121,12 +175,19 @@ internal sealed class BlueprintWorkspacePanel
                 ? " *"
                 : string.Empty;
 
-        ImGui.Begin(
-            $"{_blueprint.Name} — BLUEPRINT ASSET{dirtyMarker}##BlueprintWorkspace",
+        bool visible = ImGui.Begin(
+            $"{_blueprint.Name} — BLUEPRINT ASSET{dirtyMarker}###BlueprintWorkspace",
             ref _open,
             ImGuiWindowFlags.NoScrollbar |
             ImGuiWindowFlags.NoScrollWithMouse |
             (_transformGizmo.OwnsMouse ? ImGuiWindowFlags.NoMove : ImGuiWindowFlags.None));
+
+        if (!_open || !visible)
+        {
+            if (!_open) _cameraActivationPrompt.Reset();
+            ImGui.End();
+            return;
+        }
 
         DrawToolbar();
 
@@ -176,66 +237,43 @@ internal sealed class BlueprintWorkspacePanel
 
     private void DrawToolbar()
     {
-        if (ImGui.Button(
-                _dirty
-                    ? "Save Blueprint *"
-                    : "Save Blueprint"))
+        if (ImGui.Button(_dirty ? "Save *##BlueprintSave" : "Save##BlueprintSave"))
         {
             SaveBlueprint();
         }
-
-        bool canDelete =
-            GetSelectedPreviewObject()?.Parent !=
-            null;
-
-        ImGui.BeginDisabled(
-            !canDelete);
-
-        if (ImGui.Button(
-                "Delete Object"))
-        {
-            DeleteSelectedObject();
-        }
-
+        ImGui.SameLine();
+        if (ImGui.Button("+ Add##BlueprintAdd")) ImGui.OpenPopup("Blueprint Add Menu");
+        DrawBlueprintAddMenu();
+        ImGui.SameLine();
+        ImGui.TextDisabled("|");
+        ImGui.SameLine();
+        _transformGizmo.DrawToolbar();
+        ImGui.SameLine();
+        ImGui.BeginDisabled(_propertyUndo.Count == 0);
+        if (ImGui.SmallButton("Undo")) RestorePropertyEdit(false);
         ImGui.EndDisabled();
-
         ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            !_previewBoundsMin.HasValue ||
-            !_previewBoundsMax.HasValue);
-
-        if (ImGui.Button(
-                "Frame Model"))
-        {
-            FramePreviewBounds();
-        }
-
+        ImGui.BeginDisabled(_propertyRedo.Count == 0);
+        if (ImGui.SmallButton("Redo")) RestorePropertyEdit(true);
         ImGui.EndDisabled();
-
         ImGui.SameLine();
 
-        if (ImGui.Button(
-                "Normalize Models"))
-        {
-            NormalizeExistingModelScales();
-        }
-
+        ImGui.BeginDisabled(!_previewBoundsMin.HasValue || !_previewBoundsMax.HasValue);
+        if (ImGui.Button("Frame##BlueprintFrame")) FramePreviewBounds();
+        ImGui.EndDisabled();
         ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Reimport Models"))
+        if (ImGui.Button("...##BlueprintMore")) ImGui.OpenPopup("More##BlueprintToolbarMore");
+        if (ImGui.BeginPopup("More##BlueprintToolbarMore"))
         {
-            ReimportReferencedModels();
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Write Debug Dump"))
-        {
-            WriteDebugDump(
-                "Manual Blueprint debug dump");
+            bool canDelete = GetSelectedPreviewObject()?.Parent != null;
+            ImGui.BeginDisabled(!canDelete);
+            if (ImGui.MenuItem("Delete Object##BlueprintDelete")) DeleteSelectedObject();
+            ImGui.EndDisabled();
+            if (ImGui.MenuItem("Normalize Models##BlueprintNormalize")) NormalizeExistingModelScales();
+            if (ImGui.MenuItem("Reimport Models##BlueprintReimport")) ReimportReferencedModels();
+            if (ImGui.MenuItem("Write Debug Dump##BlueprintDebug"))
+                WriteDebugDump("Manual Blueprint debug dump");
+            ImGui.EndPopup();
         }
 
         ImGui.SameLine();
@@ -277,84 +315,6 @@ internal sealed class BlueprintWorkspacePanel
         }
     }
 
-    private void DrawAddModelMenu()
-    {
-        if (!ImGui.BeginCombo(
-                "##AddModel",
-                "Add Model..."))
-        {
-            return;
-        }
-
-        AssetRecord[] models =
-            _project!.AssetDatabase.Assets
-                .Where(
-                    asset =>
-                        asset.Type ==
-                        AssetType.Model3D)
-                .OrderBy(
-                    asset =>
-                        asset.ProjectPath,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-        if (models.Length ==
-            0)
-        {
-            ImGui.TextDisabled(
-                "No 3D model assets in project.");
-        }
-
-        foreach (AssetRecord model
-                 in models)
-        {
-            string displayName =
-                Path.GetFileNameWithoutExtension(
-                    model.ProjectPath);
-
-            string extension =
-                Path.GetExtension(
-                    model.FullPath)
-                .ToLowerInvariant();
-
-            bool supported =
-                extension is
-                    ".fbx" or
-                    ".glb" or
-                    ".gltf" or
-                    ".obj";
-
-            ImGui.BeginDisabled(
-                !supported);
-
-            if (ImGui.Selectable(
-                    $"{displayName}##bp-model:{model.Guid}"))
-            {
-                AddModelAsset(
-                    model);
-            }
-
-            ImGui.EndDisabled();
-
-            if (ImGui.IsItemHovered(
-                    ImGuiHoveredFlags.AllowWhenDisabled))
-            {
-                if (supported)
-                {
-                    ImGui.SetTooltip(
-                        model.ProjectPath);
-                }
-                else
-                {
-                    ImGui.SetTooltip(
-                        $"Unsupported model format: {extension}");
-                }
-            }
-        }
-
-        ImGui.EndCombo();
-    }
-
     // ========================================================
     // HIERARCHY
     // ========================================================
@@ -370,8 +330,6 @@ internal sealed class BlueprintWorkspacePanel
             ImGuiWindowFlags.HorizontalScrollbar);
 
         ImGui.SeparatorText("OBJECTS");
-        if (ImGui.Button("+ Add")) ImGui.OpenPopup("Blueprint Add Menu");
-        DrawBlueprintAddMenu();
 
         foreach (GameObject root
                  in _preview!.GameObjects
@@ -531,9 +489,6 @@ internal sealed class BlueprintWorkspacePanel
             ImGuiWindowFlags.NoScrollbar |
             ImGuiWindowFlags.NoScrollWithMouse);
 
-        _transformGizmo.DrawToolbar();
-        ImGui.Separator();
-
         Vector2 viewport =
             ImGui.GetContentRegionAvail();
 
@@ -583,7 +538,7 @@ internal sealed class BlueprintWorkspacePanel
         bool viewportHovered = ImGui.IsItemHovered();
         bool gizmoConsumed = _transformGizmo.UpdateAndDraw(
             GetSelectedPreviewObject(), _camera, viewportHovered, ImGui.GetItemRectMin(), viewport,
-            () => MarkDirty());
+            MarkDirty, BeginPropertyEdit, CommitPropertyEdit);
 
         if (viewportHovered && !gizmoConsumed && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
         {
@@ -599,7 +554,7 @@ internal sealed class BlueprintWorkspacePanel
             if (nearest != null) { _selectedPreviewObjectId = nearest.Id; _selectedComponent = null; }
         }
 
-        if (ImGui.IsItemHovered())
+        if (viewportHovered && !_transformGizmo.OwnsMouse)
         {
             ImGuiIOPtr io =
                 ImGui.GetIO();
@@ -805,6 +760,7 @@ internal sealed class BlueprintWorkspacePanel
         GameObject selected)
     {
         ImGui.SeparatorText("COMPONENTS");
+        ImGui.Checkbox("Show Advanced", ref _showAdvanced);
 
         Component[] components =
             selected.Components
@@ -870,386 +826,10 @@ internal sealed class BlueprintWorkspacePanel
         }
     }
 
-    private void DrawKnownComponentProperties(
-        Component component)
+    private void DrawKnownComponentProperties(Component component)
     {
-        ImGui.Indent();
-
-        if (component is Camera2D camera2D)
-        {
-            float zoom =
-                camera2D.Zoom;
-
-            if (ImGui.DragFloat(
-                    "Zoom",
-                    ref zoom,
-                    0.01f,
-                    0.01f,
-                    100.0f))
-            {
-                camera2D.Zoom =
-                    zoom;
-
-                MarkDirty();
-            }
-        }
-        else if (component is Camera3D camera3D)
-        {
-            bool activeGameCamera = camera3D.ActiveGameCamera;
-            if (ImGui.Checkbox("Active Game Camera", ref activeGameCamera))
-            {
-                camera3D.ActiveGameCamera = activeGameCamera;
-                MarkDirty();
-            }
-
-            float fieldOfView =
-                camera3D.FieldOfView;
-
-            if (ImGui.DragFloat(
-                    "Field Of View",
-                    ref fieldOfView,
-                    0.25f,
-                    1.0f,
-                    179.0f))
-            {
-                camera3D.FieldOfView =
-                    fieldOfView;
-
-                MarkDirty();
-            }
-
-            float nearClip =
-                camera3D.NearClip;
-
-            if (ImGui.DragFloat(
-                    "Near Clip",
-                    ref nearClip,
-                    0.01f,
-                    0.001f,
-                    1000.0f))
-            {
-                camera3D.NearClip =
-                    nearClip;
-
-                MarkDirty();
-            }
-
-            float farClip =
-                camera3D.FarClip;
-
-            if (ImGui.DragFloat(
-                    "Far Clip",
-                    ref farClip,
-                    1.0f,
-                    0.01f,
-                    100000.0f))
-            {
-                camera3D.FarClip =
-                    farClip;
-
-                MarkDirty();
-            }
-        }
-        else if (component is MeshRenderer meshRenderer)
-        {
-            bool visible =
-                meshRenderer.Visible;
-
-            if (ImGui.Checkbox(
-                    "Visible",
-                    ref visible))
-            {
-                meshRenderer.Visible =
-                    visible;
-
-                MarkDirty();
-            }
-
-            if (meshRenderer.MeshReference !=
-                null)
-            {
-                ImGui.TextDisabled(
-                    $"Mesh: {meshRenderer.MeshReference.Model.CachedProjectPath ?? meshRenderer.MeshReference.Model.Guid.ToString()}");
-            }
-            else
-            {
-                ImGui.TextDisabled(
-                    $"Primitive: {meshRenderer.Primitive}");
-            }
-        }
-        else if (component is CapsuleCollider3D capsule)
-        {
-            if (ImGui.Button("Fit To Visual"))
-            {
-                if (CharacterCapsuleAutoFit.TryFit(component.GameObject, _project!.Assets, out CharacterCapsuleFitResult fit))
-                    _statusMessage = $"Capsule fitted to {fit.VisualBounds.X:0.###} x {fit.VisualBounds.Y:0.###} x {fit.VisualBounds.Z:0.###}";
-                else
-                    _statusMessage = "No rendered model geometry found for capsule fitting.";
-                _statusIsError = string.IsNullOrWhiteSpace(capsule.AutoFitSource);
-                MarkDirty();
-            }
-            BlueprintFloat("Radius", capsule.Radius, value => capsule.Radius = value, .01f, .001f, 1000f);
-            BlueprintFloat("Height", capsule.Height, value => capsule.Height = value, .02f, .002f, 2000f);
-            BlueprintVector3("Center", capsule.Center, value => capsule.Center = value, .02f);
-            BlueprintBool("Is Trigger", capsule.IsTrigger, value => capsule.IsTrigger = value);
-            ImGui.SeparatorText("AUTO-FIT DIAGNOSTICS");
-            ImGui.TextDisabled($"VisualBounds: {capsule.VisualBounds.X:0.###}, {capsule.VisualBounds.Y:0.###}, {capsule.VisualBounds.Z:0.###}");
-            ImGui.TextDisabled($"CapsuleRadius: {capsule.Radius:0.###}");
-            ImGui.TextDisabled($"CapsuleHeight: {capsule.Height:0.###}");
-            ImGui.TextDisabled($"CapsuleCenter: {capsule.Center.X:0.###}, {capsule.Center.Y:0.###}, {capsule.Center.Z:0.###}");
-            ImGui.TextWrapped($"AutoFitSource: {(string.IsNullOrWhiteSpace(capsule.AutoFitSource) ? "Manual/default" : capsule.AutoFitSource)}");
-        }
-        else if (component is CharacterController3D controller)
-        {
-            float moveSpeed =
-                controller.MoveSpeed;
-
-            if (ImGui.DragFloat(
-                    "Move Speed",
-                    ref moveSpeed,
-                    0.05f,
-                    0.0f,
-                    1000.0f))
-            {
-                controller.MoveSpeed =
-                    moveSpeed;
-
-                MarkDirty();
-            }
-
-            float acceleration =
-                controller.Acceleration;
-
-            if (ImGui.DragFloat(
-                    "Acceleration",
-                    ref acceleration,
-                    0.1f,
-                    0.0f,
-                    10000.0f))
-            {
-                controller.Acceleration =
-                    acceleration;
-
-                MarkDirty();
-            }
-
-            float jumpForce =
-                controller.JumpForce;
-
-            if (ImGui.DragFloat(
-                    "Jump Force",
-                    ref jumpForce,
-                    0.05f,
-                    0.0f,
-                    1000.0f))
-            {
-                controller.JumpForce =
-                    jumpForce;
-
-                MarkDirty();
-            }
-
-            float gravity =
-                controller.Gravity;
-
-            if (ImGui.DragFloat(
-                    "Gravity",
-                    ref gravity,
-                    0.05f,
-                    0.0f,
-                    1000.0f))
-            {
-                controller.Gravity =
-                    gravity;
-
-                MarkDirty();
-            }
-        }
-        else if (component is HealthComponent health)
-        {
-            BlueprintFloat("Max Health", health.MaxHealth, value => health.MaxHealth = value, .5f, 0f, 100000f);
-            BlueprintFloat("Current Health", health.CurrentHealth, value => health.CurrentHealth = value, .5f, 0f, health.MaxHealth);
-            BlueprintBool("Invulnerable", health.Invulnerable, value => health.Invulnerable = value);
-            BlueprintBool("Destroy On Death", health.DestroyOnDeath, value => health.DestroyOnDeath = value);
-        }
-        else if (component is LifetimeComponent lifetime)
-        {
-            BlueprintFloat("Lifetime Seconds", lifetime.LifetimeSeconds, value => lifetime.LifetimeSeconds = value, .05f, 0f, 100000f);
-        }
-        else if (component is Projectile3D projectile)
-        {
-            BlueprintVector3("Velocity", projectile.Velocity, value => projectile.Velocity = value, .1f);
-            BlueprintFloat("Damage", projectile.Damage, value => projectile.Damage = value, .25f, 0f, 100000f);
-            BlueprintFloat("Radius", projectile.Radius, value => projectile.Radius = value, .01f, 0f, 10000f);
-            BlueprintBool("Destroy On Hit", projectile.DestroyOnHit, value => projectile.DestroyOnHit = value);
-            ImGui.TextDisabled($"Owner: {(projectile.OwnerId == Guid.Empty ? "None" : projectile.OwnerId)}");
-        }
-        else if (component is ProjectileLauncher3D launcher)
-        {
-            string label = launcher.ProjectileBlueprint.IsEmpty ? "None" :
-                launcher.ProjectileBlueprint.CachedProjectPath ?? launcher.ProjectileBlueprint.Guid.ToString();
-            ImGui.Button($"Projectile Blueprint: {label}", new Vector2(-30f, 0f));
-            if (ImGui.BeginDragDropTarget())
-            {
-                Guid? guid = AssetDragDrop.Accept();
-                if (guid.HasValue && _project!.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Blueprint)
-                {
-                    launcher.ProjectileBlueprint = new AssetReference(asset.Guid, asset.ProjectPath);
-                    MarkDirty();
-                }
-                ImGui.EndDragDropTarget();
-            }
-            ImGui.SameLine();
-            if (ImGui.SmallButton("X##ProjectileBlueprint")) { launcher.ProjectileBlueprint = AssetReference.Empty; MarkDirty(); }
-            BlueprintFloat("Projectile Speed", launcher.ProjectileSpeed, value => launcher.ProjectileSpeed = value, .25f, 0f, 100000f);
-            BlueprintFloat("Damage", launcher.Damage, value => launcher.Damage = value, .25f, 0f, 100000f);
-            BlueprintFloat("Fire Cooldown", launcher.FireCooldown, value => launcher.FireCooldown = value, .01f, 0f, 10000f);
-            BlueprintVector3("Muzzle Offset", launcher.MuzzleOffset, value => launcher.MuzzleOffset = value, .02f);
-        }
-        else if (component is SimpleEnemyAI3D ai)
-        {
-            BlueprintString("Target Name", ai.TargetName, value => ai.TargetName = value);
-            ImGui.TextDisabled($"Target ID: {(ai.TargetId == Guid.Empty ? "Auto" : ai.TargetId)}");
-            BlueprintFloat("Move Speed", ai.MoveSpeed, value => ai.MoveSpeed = value, .05f, 0f, 10000f);
-            BlueprintFloat("Detection Range", ai.DetectionRange, value => ai.DetectionRange = value, .1f, 0f, 100000f);
-            BlueprintFloat("Attack Range", ai.AttackRange, value => ai.AttackRange = value, .05f, 0f, 100000f);
-            BlueprintFloat("Damage", ai.Damage, value => ai.Damage = value, .25f, 0f, 100000f);
-            BlueprintFloat("Attack Cooldown", ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
-            BlueprintFloat("Stop Distance", ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
-        }
-        else if (component is PlayerController3D playerController)
-        {
-            if (!component.GameObject.HasComponent<CharacterController3D>())
-            {
-                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Player Input requires Character Movement.");
-                if (ImGui.Button("Add Character Movement"))
-                {
-                    component.GameObject.AddComponent(new CharacterController3D());
-                    MarkDirty();
-                }
-            }
-            int rotationMode = (int)playerController.CharacterRotation;
-            string[] rotationModes = { "Face Movement", "Face Camera", "Independent" };
-            if (ImGui.Combo("Character Rotation", ref rotationMode, rotationModes, rotationModes.Length))
-            {
-                playerController.CharacterRotation = (CharacterRotationMode)rotationMode;
-                MarkDirty();
-            }
-            BlueprintFloat("Turn Speed", playerController.TurnSpeed, value => playerController.TurnSpeed = value, 5f, 0f, 3600f);
-            BlueprintFloat("Control Yaw", playerController.ControlYaw, value => playerController.ControlYaw = value, .25f, -180f, 180f);
-            BlueprintFloat("Control Pitch", playerController.ControlPitch, value => playerController.ControlPitch = value, .25f, -89f, 89f);
-            BlueprintBool("Use Character Direction", playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
-        }
-        else if (component is PlayerShooter3D playerShooter)
-        {
-            BlueprintBool("Automatic Fire", playerShooter.Automatic, value => playerShooter.Automatic = value);
-        }
-        else if (component is ThirdPersonCamera3D followCamera)
-        {
-            BlueprintString("Target Name", followCamera.TargetName, value => followCamera.TargetName = value);
-            ImGui.TextDisabled($"Target ID: {(followCamera.TargetId == Guid.Empty ? "None" : followCamera.TargetId)}");
-            BlueprintFloat("Distance", followCamera.Distance, value => followCamera.Distance = value, .05f, 0f, 10000f);
-            BlueprintFloat("Height", followCamera.Height, value => followCamera.Height = value, .05f, -10000f, 10000f);
-            BlueprintFloat("Look At Height", followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
-            BlueprintFloat("Follow Smoothing", followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
-            BlueprintFloat("Yaw", followCamera.Yaw, value => followCamera.Yaw = value, .25f, -100000f, 100000f);
-            BlueprintFloat("Pitch", followCamera.Pitch, value => followCamera.Pitch = value, .25f, followCamera.MinPitch, followCamera.MaxPitch);
-            BlueprintFloat("Min Pitch", followCamera.MinPitch, value => followCamera.MinPitch = value, .25f, -89f, 89f);
-            BlueprintFloat("Max Pitch", followCamera.MaxPitch, value => followCamera.MaxPitch = value, .25f, -89f, 89f);
-            BlueprintFloat("Mouse Sensitivity", followCamera.MouseSensitivity, value => followCamera.MouseSensitivity = value, .01f, 0f, 10f);
-            BlueprintFloat("Shoulder Offset", followCamera.ShoulderOffset, value => followCamera.ShoulderOffset = value, .02f, -100f, 100f);
-        }
-        else if (component is CameraBoom3D boom)
-        {
-            GameObject? childCamera = component.GameObject.Children.FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
-            if (childCamera == null)
-            {
-                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Third Person Camera has no Camera.");
-                if (ImGui.Button("Create Camera"))
-                {
-                    BlueprintAuthoringService.SetupThirdPersonCharacter(component.GameObject);
-                    MarkDirty();
-                }
-            }
-            else if (!childCamera.GetComponent<Camera3D>()!.ActiveGameCamera && ImGui.Button("Make Active Camera"))
-            {
-                component.GameObject.Scene?.SetActiveCamera(childCamera.GetComponent<Camera3D>());
-                MarkDirty();
-            }
-            ImGui.TextDisabled($"Camera Child ID: {(boom.CameraObjectId == Guid.Empty ? "Auto-detect" : boom.CameraObjectId)}");
-            ImGui.SeparatorText("CAMERA");
-            BlueprintFloat("Camera Distance", boom.ArmLength, value => boom.ArmLength = value, .05f, 0f, 1000f);
-            BlueprintFloat("Camera Height", boom.PivotHeight, value => boom.PivotHeight = value, .02f, -100f, 100f);
-            BlueprintFloat("Horizontal Sensitivity", boom.MouseSensitivityX, value => boom.MouseSensitivityX = value, .005f, 0f, 10f);
-            BlueprintFloat("Vertical Sensitivity", boom.MouseSensitivityY, value => boom.MouseSensitivityY = value, .005f, 0f, 10f);
-            BlueprintBool("Invert Horizontal Look", boom.InvertHorizontalLook, value => boom.InvertHorizontalLook = value);
-            BlueprintBool("Invert Vertical Look", boom.InvertVerticalLook, value => boom.InvertVerticalLook = value);
-            ImGui.SeparatorText("ROTATION");
-            BlueprintFloat("Yaw", boom.Yaw, value => boom.Yaw = value, .25f, -100000f, 100000f);
-            BlueprintFloat("Pitch", boom.Pitch, value => boom.Pitch = value, .25f, boom.MinPitch, boom.MaxPitch);
-            BlueprintFloat("Minimum Vertical Angle", boom.MinPitch, value => boom.MinPitch = value, .25f, -89f, 89f);
-            BlueprintFloat("Maximum Vertical Angle", boom.MaxPitch, value => boom.MaxPitch = value, .25f, -89f, 89f);
-            ImGui.SeparatorText("SMOOTHING");
-            BlueprintFloat("Position Smoothness", boom.PositionSmoothness, value => boom.PositionSmoothness = value, .1f, 0f, 1000f);
-            BlueprintFloat("Rotation Smoothness", boom.RotationSmoothness, value => boom.RotationSmoothness = value, .1f, 0f, 1000f);
-            ImGui.SeparatorText("COLLISION");
-            BlueprintBool("Enable Camera Collision", boom.EnableCameraCollision, value => boom.EnableCameraCollision = value);
-            BlueprintFloat("Collision Radius", boom.CollisionRadius, value => boom.CollisionRadius = value, .01f, 0f, 10f);
-            BlueprintFloat("Collision Return Speed", boom.CollisionReturnSpeed, value => boom.CollisionReturnSpeed = value, .1f, 0f, 1000f);
-            ImGui.SeparatorText("ADVANCED");
-            BlueprintBool("Use Control Rotation", boom.UseControlRotation, value => boom.UseControlRotation = value);
-            BlueprintBool("Position Lag", boom.CameraLagEnabled, value => boom.CameraLagEnabled = value);
-            BlueprintBool("Rotation Lag", boom.RotationLagEnabled, value => boom.RotationLagEnabled = value);
-            BlueprintBool("Lag Substepping", boom.LagSubstepping, value => boom.LagSubstepping = value);
-            BlueprintFloat("Maximum Lag Distance", boom.MaximumLagDistance, value => boom.MaximumLagDistance = value, .05f, 0f, 100f);
-            BlueprintFloat("Maximum Lag Time Step", boom.MaxLagTimeStep, value => boom.MaxLagTimeStep = value, .001f, .001f, .1f);
-            BlueprintFloat("Shoulder Offset", boom.ShoulderOffset, value => boom.ShoulderOffset = value, .02f, -100f, 100f);
-        }
-        else if (component is ArenaGameManager manager)
-        {
-            BlueprintString("Player Name", manager.PlayerName, value => manager.PlayerName = value);
-            ImGui.TextDisabled($"Player ID: {(manager.PlayerId == Guid.Empty ? "None" : manager.PlayerId)}");
-        }
-        else if (component is AnimationController animationController)
-        {
-            float threshold =
-                animationController.RunThreshold;
-
-            if (ImGui.DragFloat(
-                    "Run Threshold",
-                    ref threshold,
-                    0.05f,
-                    0.0f,
-                    1000.0f))
-            {
-                animationController.RunThreshold =
-                    threshold;
-
-                MarkDirty();
-            }
-        }
-
-        ImGui.Unindent();
-    }
-
-    private void BlueprintFloat(string label, float value, Action<float> write, float speed, float minimum, float maximum)
-    {
-        if (ImGui.DragFloat(label, ref value, speed, minimum, maximum)) { write(value); MarkDirty(); }
-    }
-
-    private void BlueprintBool(string label, bool value, Action<bool> write)
-    {
-        if (ImGui.Checkbox(label, ref value)) { write(value); MarkDirty(); }
-    }
-
-    private void BlueprintString(string label, string value, Action<string> write)
-    {
-        if (ImGui.InputText(label, ref value, 128)) { write(value); MarkDirty(); }
-    }
-
-    private void BlueprintVector3(string label, Vector3 value, Action<Vector3> write, float speed)
-    {
-        if (ImGui.DragFloat3(label, ref value, speed)) { write(value); MarkDirty(); }
+        ComponentPropertyRenderer.Draw(component, PropertyEditorContext.Blueprint, _showAdvanced,
+            BeginPropertyEdit, MarkDirty, CommitPropertyEdit, _project);
     }
 
     // ========================================================
@@ -1436,8 +1016,7 @@ internal sealed class BlueprintWorkspacePanel
                 Component added = BlueprintAuthoringService.AddComponent(selected, component);
                 if (added is Camera3D camera)
                 {
-                    _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
-                    _openCameraActivationPrompt = true;
+                    _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                 }
                 MarkDirty();
             });
@@ -1455,8 +1034,7 @@ internal sealed class BlueprintWorkspacePanel
                 Camera3D camera = cameraObject.AddComponent(new Camera3D());
                 _selectedPreviewObjectId = cameraObject.Id;
                 _selectedComponent = null;
-                _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
-                _openCameraActivationPrompt = true;
+                _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                 MarkDirty();
             }
             if (ImGui.MenuItem("Light"))
@@ -1503,8 +1081,7 @@ internal sealed class BlueprintWorkspacePanel
         Camera3D? camera = _preview!.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
         if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
         {
-            _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
-            _openCameraActivationPrompt = true;
+            _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
         }
         _selectedPreviewObjectId = root.Id;
         _selectedComponent = null;
@@ -1514,13 +1091,17 @@ internal sealed class BlueprintWorkspacePanel
 
     private void DrawCameraActivationPrompt()
     {
-        if (_openCameraActivationPrompt)
+        if (_cameraActivationPrompt.ConsumeOpenRequest())
         {
-            ImGui.OpenPopup("Blueprint Active Game Camera");
-            _openCameraActivationPrompt = false;
+            ImGui.OpenPopup("Active Game Camera##BlueprintCameraPrompt");
         }
-        if (_cameraActivationRequest is not { } request ||
-            !ImGui.BeginPopupModal("Blueprint Active Game Camera", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (_cameraActivationPrompt.Request is not { } request) return;
+        if (!ImGui.BeginPopupModal("Active Game Camera##BlueprintCameraPrompt", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            _cameraActivationPrompt.RecoverWhenNotVisible();
+            return;
+        }
+        _cameraActivationPrompt.MarkVisible();
 
         if (request.Kind == CameraActivationPromptKind.UseAsFirstCamera)
             ImGui.TextWrapped("Use this Camera as the Active Game Camera?");
@@ -1536,13 +1117,13 @@ internal sealed class BlueprintWorkspacePanel
         {
             CameraActivationPrompt.Apply(_preview, request, true);
             MarkDirty();
-            _cameraActivationRequest = null;
+            _cameraActivationPrompt.Reset();
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
         if (ImGui.Button(reject))
         {
-            _cameraActivationRequest = null;
+            _cameraActivationPrompt.Reset();
             ImGui.CloseCurrentPopup();
         }
         ImGui.EndPopup();
@@ -2286,6 +1867,7 @@ internal sealed class BlueprintWorkspacePanel
 
     private void SaveBlueprint()
     {
+        EvictDeletedAsset();
         if (_project ==
                 null ||
             _preview ==
@@ -2645,6 +2227,7 @@ internal sealed class BlueprintWorkspacePanel
 
     public void Dispose()
     {
+        if (_project != null) _project.AssetDatabase.DatabaseChanged -= EvictDeletedAsset;
         _framebuffer.Dispose();
     }
 }

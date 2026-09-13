@@ -4,9 +4,10 @@ namespace ByteEngine.Editor.Panels;
 
 internal sealed class EventNamePopupState
 {
-    public bool IsOpen { get; private set; }
-    public bool OpenRequested { get; private set; }
-    public bool FocusRequested { get; private set; }
+    private readonly PopupInteractionState _interaction = new();
+
+    public bool IsOpen => _interaction.IsOpen;
+    public bool IsVisible => _interaction.IsVisible;
     public Guid? TargetEventId { get; private set; }
     public Vector2 CreatePosition { get; private set; }
     public string Buffer { get; set; } = "New Event";
@@ -14,48 +15,49 @@ internal sealed class EventNamePopupState
 
     public void BeginCreate(Vector2 position)
     {
-        if (IsOpen) return;
+        if (!_interaction.Request(true)) return;
         TargetEventId = null;
         CreatePosition = position;
         Buffer = "New Event";
-        Begin();
     }
 
     public void BeginRename(Guid eventId, string displayName)
     {
-        if (IsOpen) return;
+        if (!_interaction.Request(true)) return;
         TargetEventId = eventId;
         Buffer = displayName;
-        Begin();
     }
 
     public bool ConsumeOpenRequest()
     {
-        bool value = OpenRequested;
-        OpenRequested = false;
-        return value;
+        return _interaction.ConsumeOpenRequest();
     }
 
     public bool ConsumeFocusRequest()
     {
-        bool value = FocusRequested;
-        FocusRequested = false;
-        return value;
+        return _interaction.ConsumeFocusRequest();
     }
 
-    public void Close()
+    public void MarkVisible() => _interaction.MarkVisible();
+
+    public void RecoverWhenNotVisible()
     {
-        IsOpen = false;
-        OpenRequested = false;
-        FocusRequested = false;
+        _interaction.RecoverWhenNotVisible();
+        if (!_interaction.IsOpen) ResetPayload();
+    }
+
+    public void Reset()
+    {
+        _interaction.Reset();
+        ResetPayload();
+    }
+
+    public void Close() => Reset();
+
+    private void ResetPayload()
+    {
         TargetEventId = null;
-    }
-
-    private void Begin()
-    {
-        if (IsOpen) return;
-        IsOpen = true;
-        OpenRequested = true;
-        FocusRequested = true;
+        Buffer = "New Event";
+        CreatePosition = Vector2.Zero;
     }
 }

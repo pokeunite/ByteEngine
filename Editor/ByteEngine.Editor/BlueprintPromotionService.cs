@@ -94,6 +94,13 @@ internal static class BlueprintPromotionService
         {
             BlueprintInstance? instance = root.GetComponent<BlueprintInstance>();
             if (instance == null || !Matches(instance.Blueprint, reference)) continue;
+            instance.Blueprint = AssetReference.Empty;
+            instance.SourceSnapshot = string.Empty;
+            instance.ObjectMap.Clear();
+            instance.InstanceId = Guid.Empty;
+            instance.ModifiedPropertyCount = instance.AddedComponentCount = instance.RemovedComponentCount = 0;
+            instance.AddedChildCount = instance.RemovedChildCount = 0;
+            instance.LastPropagation = "Unpacked";
             root.RemoveComponent(instance);
             count++;
         }
@@ -110,7 +117,7 @@ internal static class BlueprintPromotionService
     }
 
     private static bool Matches(AssetReference left, AssetReference right) =>
-        left.Guid != Guid.Empty && right.Guid != Guid.Empty && left.Guid == right.Guid ||
+        left.Guid != Guid.Empty && right.Guid != Guid.Empty ? left.Guid == right.Guid :
         !string.IsNullOrWhiteSpace(left.CachedProjectPath) &&
         string.Equals(left.CachedProjectPath, right.CachedProjectPath, StringComparison.OrdinalIgnoreCase);
 }

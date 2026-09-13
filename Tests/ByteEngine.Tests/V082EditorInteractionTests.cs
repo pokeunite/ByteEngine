@@ -170,6 +170,7 @@ internal static class V082EditorInteractionTests
             state.ConsumeOpenRequest() && !state.ConsumeOpenRequest() &&
             state.ConsumeFocusRequest() && !state.ConsumeFocusRequest(),
             "Event rename popup opens and requests keyboard focus exactly once");
+        state.MarkVisible();
         state.Buffer = "Player Defeated";
         state.BeginRename(id, "Should Not Reset");
         Assert(state.Buffer == "Player Defeated", "Active event rename typing is not reset by repeated open requests");

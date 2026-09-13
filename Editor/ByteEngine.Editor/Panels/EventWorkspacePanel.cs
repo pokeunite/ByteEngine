@@ -93,6 +93,7 @@ internal sealed class EventWorkspacePanel
         true;
 
     private readonly EventNamePopupState _eventNamePopup = new();
+    private readonly ByteGraphViewSettingsState _viewSettings = new();
 
     private AssetRecord? _asset;
 
@@ -105,6 +106,7 @@ internal sealed class EventWorkspacePanel
     private bool _dirty;
 
     private bool _requestFocus;
+    private readonly EditorIdleDebounce _autoSaveIdle = new();
 
     public bool IsOpen =>
         _open;
@@ -217,6 +219,9 @@ internal sealed class EventWorkspacePanel
         _project =
             EditorProjectContext.Active;
 
+        _eventNamePopup.Reset();
+        _viewSettings.Reset();
+
         if (_asset?.Guid ==
                 asset.Guid &&
             _module !=
@@ -300,7 +305,7 @@ internal sealed class EventWorkspacePanel
                 720.0f),
             ImGuiCond.FirstUseEver);
 
-        if (_requestFocus)
+        if (_requestFocus && !_eventNamePopup.IsOpen && !_viewSettings.IsOpen)
         {
             ImGui.SetNextWindowFocus();
 
@@ -339,12 +344,18 @@ internal sealed class EventWorkspacePanel
 
         bool visible =
             ImGui.Begin(
-                $"{_module.Name}{dirtyMarker}##EventWorkspace:{_asset.Guid}",
+                $"{_module.Name}{dirtyMarker}###EventWorkspace:{_asset.Guid}",
                 ref open,
                 workspaceFlags);
 
         _open =
             open;
+
+        if (!_open)
+        {
+            _eventNamePopup.Reset();
+            _viewSettings.Reset();
+        }
 
         if (ImGui.IsWindowFocused(
                 ImGuiFocusedFlags.RootAndChildWindows))
@@ -366,6 +377,8 @@ internal sealed class EventWorkspacePanel
 
         if (!visible)
         {
+            _eventNamePopup.Reset();
+            _viewSettings.Reset();
             ImGui.End();
 
             return;
@@ -423,8 +436,7 @@ internal sealed class EventWorkspacePanel
          * editor control so node movement and sliders do not write every
          * frame.
          */
-        if (_dirty &&
-            CanAutoSave())
+        if (_autoSaveIdle.Ready(ImGui.GetTime(), _dirty, !CanAutoSave()))
         {
             Save(
                 log,
@@ -494,8 +506,33 @@ internal sealed class EventWorkspacePanel
         if (ImGui.Button("+")) _graphCanvas.SetZoom(_graphCanvas.Zoom + .1f);
         ImGui.SameLine();
 
-        if (ImGui.Button("...")) ImGui.OpenPopup("ByteGraph Toolbar More");
-        if (ImGui.BeginPopup("ByteGraph Toolbar More"))
+        if (ImGui.Button("View##ByteGraphView")) _viewSettings.Begin(GetNodeScale());
+        if (_viewSettings.ConsumeOpenRequest()) ImGui.OpenPopup("View##ByteGraphViewSettings");
+        if (ImGui.BeginPopup("View##ByteGraphViewSettings"))
+        {
+            _viewSettings.MarkVisible();
+            float nodeScalePercent = _viewSettings.NodeScale * 100f;
+            ImGui.SetNextItemWidth(190f);
+            if (ImGui.SliderFloat("Node Scale##ByteGraphView", ref nodeScalePercent,
+                    ByteGraphViewSettingsState.MinimumNodeScale * 100f,
+                    ByteGraphViewSettingsState.MaximumNodeScale * 100f, "%.0f%%",
+                    ImGuiSliderFlags.None))
+            {
+                _viewSettings.SetNodeScale(nodeScalePercent / 100f);
+                _module.EditorNodeScale = _viewSettings.NodeScale;
+                _dirty = true;
+            }
+            if (ImGui.Button("Reset View##ByteGraphView")) _graphCanvas.ResetView();
+            ImGui.EndPopup();
+        }
+        else
+        {
+            _viewSettings.RecoverWhenNotVisible();
+        }
+        ImGui.SameLine();
+
+        if (ImGui.Button("...##ByteGraphMore")) ImGui.OpenPopup("More##ByteGraphToolbarMore");
+        if (ImGui.BeginPopup("More##ByteGraphToolbarMore"))
         {
             if (layout.CollapseSecondary && ImGui.MenuItem("Arrange"))
             {
@@ -509,13 +546,6 @@ internal sealed class EventWorkspacePanel
             ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
             if (ImGui.MenuItem("Delete")) DeleteSelectedGraphNodes();
             ImGui.EndDisabled();
-            float nodeScale = GetNodeScale();
-            ImGui.SetNextItemWidth(150f);
-            if (ImGui.SliderFloat("Node Scale", ref nodeScale, .55f, 1.15f, "%.2fx"))
-            {
-                _module.EditorNodeScale = nodeScale;
-                _dirty = true;
-            }
             ImGui.EndPopup();
         }
 
@@ -565,6 +595,11 @@ internal sealed class EventWorkspacePanel
             _draggingGraphNodeId !=
                 Guid.Empty ||
             _marqueeSelecting)
+        {
+            return false;
+        }
+
+        if (_eventNamePopup.IsOpen || _viewSettings.IsOpen)
         {
             return false;
         }
@@ -2840,14 +2875,28 @@ internal sealed class EventWorkspacePanel
 
     private void DrawEventNamePopup()
     {
-        const string popupName = "Event Name";
+        const string popupName = "Event Name##EventNamePopup";
         if (_eventNamePopup.ConsumeOpenRequest())
         {
             ImGui.OpenPopup(popupName);
         }
 
         bool open = true;
-        if (!ImGui.BeginPopupModal(popupName, ref open, ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (!ImGui.BeginPopupModal(popupName, ref open, ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            _eventNamePopup.RecoverWhenNotVisible();
+            return;
+        }
+        _eventNamePopup.MarkVisible();
+
+        if (_eventNamePopup.IsRename &&
+            (_eventNamePopup.TargetEventId is not Guid targetId || FindRule(targetId) == null))
+        {
+            _eventNamePopup.Reset();
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
 
         ImGui.TextUnformatted(_eventNamePopup.IsRename ? "Rename Event" : "Create Event");
         ImGui.Separator();
@@ -2855,7 +2904,7 @@ internal sealed class EventWorkspacePanel
         ImGui.SetNextItemWidth(320f);
         if (_eventNamePopup.ConsumeFocusRequest()) ImGui.SetKeyboardFocusHere();
         string buffer = _eventNamePopup.Buffer;
-        if (ImGui.InputText("##EventDisplayName", ref buffer, 128))
+        if (ImGui.InputText("##EventDisplayName", ref buffer, 128, ImGuiInputTextFlags.AutoSelectAll))
             _eventNamePopup.Buffer = buffer;
 
         bool confirm = ImGui.Button(_eventNamePopup.IsRename ? "Rename" : "Create") ||
@@ -2879,12 +2928,12 @@ internal sealed class EventWorkspacePanel
                 rule.EditorTitle = displayName;
                 _dirty = true;
             }
-            _eventNamePopup.Close();
+            _eventNamePopup.Reset();
             ImGui.CloseCurrentPopup();
         }
         else if (cancel)
         {
-            _eventNamePopup.Close();
+            _eventNamePopup.Reset();
             ImGui.CloseCurrentPopup();
         }
 

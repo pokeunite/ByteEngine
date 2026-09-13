@@ -255,11 +255,6 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (_is3D)
         {
-            HandleCamera3DInput(
-                state,
-                hovered && !_gizmo3D.OwnsMouse
-            );
-
             DrawColliderOutlines(
                 state,
                 minimum,
@@ -273,6 +268,7 @@ internal sealed class SceneViewPanel : IDisposable
                 minimum,
                 viewportSize
             );
+            HandleCamera3DInput(state, hovered && !_gizmo3D.OwnsMouse);
         }
         else
         {

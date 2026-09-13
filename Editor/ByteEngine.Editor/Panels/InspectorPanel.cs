@@ -20,8 +20,7 @@ internal sealed class InspectorPanel
     private bool? _setExpansion;
     private bool _showAdvanced;
     private string _addSearch = string.Empty;
-    private CameraActivationRequest? _cameraActivationRequest;
-    private bool _openCameraActivationPrompt;
+    private readonly CameraActivationPromptState _cameraActivationPrompt = new();
 
     public void Draw(EditorState state, EditorProjectContext project, Action<AssetReference> openBlueprint)
     {
@@ -39,6 +38,7 @@ internal sealed class InspectorPanel
 
         if (state.SelectedObject == null)
         {
+            _cameraActivationPrompt.Reset();
             if (state.SelectedAssetId.HasValue || state.SelectedAssetPath != null) DrawAssetOrEmpty(state, project);
             else
             {
@@ -53,12 +53,16 @@ internal sealed class InspectorPanel
         }
 
         bool readOnly = state.Mode != EditorMode.Edit;
-        if (readOnly) ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Editor values are read-only during Play Mode.");
-        ImGui.BeginDisabled(readOnly);
+        if (readOnly)
+        {
+            ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "PLAY MODE — Runtime Values");
+            ImGui.TextWrapped("Editing runtime instance. Changes reset when stopped.");
+        }
+        ImGui.BeginDisabled(readOnly && !ReferenceEquals(state.SelectedObject?.Scene, state.RuntimeScene));
 
-        GameObject selected = state.SelectedObject;
+        GameObject selected = state.SelectedObject!;
 
-        if (selected.GetComponent<BlueprintInstance>() is { } blueprintInstance)
+        if (!readOnly && selected.GetComponent<BlueprintInstance>() is { } blueprintInstance)
         {
             BlueprintOverrideSummary summary = BlueprintInstanceSynchronizer.Analyze(selected, project);
             ImGui.SeparatorText("Blueprint Instance");
@@ -136,7 +140,9 @@ internal sealed class InspectorPanel
         TrackItem(state, "Scale GameObject", scaleChanged, () => selected.Transform.LocalScale = oldScale, () => selected.Transform.LocalScale = nextScale);
         }
 
+        ImGui.BeginDisabled(readOnly);
         DrawStoreVariables("OBJECT VARIABLES", selected.Variables, state);
+        ImGui.EndDisabled();
 
         foreach (Component component in selected.Components.ToArray())
         {
@@ -153,17 +159,20 @@ internal sealed class InspectorPanel
             if (enabledChanged) component.Enabled = enabled;
             TrackItem(state, "Set Component Enabled", enabledChanged, () => component.Enabled = oldEnabled, () => component.Enabled = enabled);
             ImGui.SameLine();
+            ImGui.BeginDisabled(readOnly);
             if (ImGui.SmallButton($"Remove##{component.GetHashCode()}"))
                 ExecutePersistent(
                     state,
                     $"Remove {component.GetType().Name}",
                     () => selected.RemoveComponent(component));
+            ImGui.EndDisabled();
             DrawComponentProperties(state, project, component, _showAdvanced);
         }
 
         _setExpansion = null;
 
         ImGui.Separator();
+        ImGui.BeginDisabled(readOnly);
         if (ImGui.Button("Add Component")) ImGui.OpenPopup("Add Component Popup");
         if (ImGui.BeginPopup("Add Component Popup"))
         {
@@ -180,8 +189,7 @@ internal sealed class InspectorPanel
                         Camera3D? camera = selected.Scene?.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
                         if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
                         {
-                            _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
-                            _openCameraActivationPrompt = true;
+                            _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                         }
                     });
                 }
@@ -201,8 +209,7 @@ internal sealed class InspectorPanel
                     Component added = BlueprintAuthoringService.AddComponent(selected, component);
                     if (added is Camera3D camera)
                     {
-                        _cameraActivationRequest = CameraActivationPrompt.Create(camera, previousActive);
-                        _openCameraActivationPrompt = true;
+                        _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                     }
                 });
             });
@@ -210,6 +217,7 @@ internal sealed class InspectorPanel
         }
 
         DrawCameraActivationPrompt(state);
+        ImGui.EndDisabled();
 
         ImGui.EndDisabled();
         ImGui.End();
@@ -217,13 +225,17 @@ internal sealed class InspectorPanel
 
     private void DrawCameraActivationPrompt(EditorState state)
     {
-        if (_openCameraActivationPrompt)
+        if (_cameraActivationPrompt.ConsumeOpenRequest())
         {
-            ImGui.OpenPopup("Active Game Camera");
-            _openCameraActivationPrompt = false;
+            ImGui.OpenPopup("Active Game Camera##InspectorCameraPrompt");
         }
-        if (_cameraActivationRequest is not { } request ||
-            !ImGui.BeginPopupModal("Active Game Camera", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (_cameraActivationPrompt.Request is not { } request) return;
+        if (!ImGui.BeginPopupModal("Active Game Camera##InspectorCameraPrompt", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            _cameraActivationPrompt.RecoverWhenNotVisible();
+            return;
+        }
+        _cameraActivationPrompt.MarkVisible();
 
         if (request.Kind == CameraActivationPromptKind.UseAsFirstCamera)
             ImGui.TextWrapped("Use this Camera as the Active Game Camera?");
@@ -239,13 +251,13 @@ internal sealed class InspectorPanel
         {
             CameraActivationPrompt.Apply(request.Camera.GameObject.Scene, request, true);
             state.MarkDirty();
-            _cameraActivationRequest = null;
+            _cameraActivationPrompt.Reset();
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
         if (ImGui.Button(reject))
         {
-            _cameraActivationRequest = null;
+            _cameraActivationPrompt.Reset();
             ImGui.CloseCurrentPopup();
         }
         ImGui.EndPopup();
@@ -253,497 +265,17 @@ internal sealed class InspectorPanel
 
     private static void DrawComponentProperties(EditorState state, EditorProjectContext project, Component component, bool showAdvanced)
     {
-        ImGui.Indent();
-        if (component is Camera2D camera)
-        {
-            float oldZoom = camera.Zoom;
-            float zoom = oldZoom;
-            bool changed = ImGui.DragFloat($"Zoom##{component.GetHashCode()}", ref zoom, .01f, .01f, 100f);
-            if (changed) camera.Zoom = zoom;
-            TrackItem(state, "Change Camera Zoom", changed, () => camera.Zoom = oldZoom, () => camera.Zoom = zoom);
-        }
-        else if (component is SpriteRenderer sprite)
-        {
-            string label = TextureLabel(sprite.TextureReference, project.AssetDatabase);
-            ImGui.Button($"Texture: {label}##{component.GetHashCode()}", new Vector2(-55f, 0f));
-            if (ImGui.BeginDragDropTarget())
-            {
-                Guid? guid = AssetDragDrop.Accept();
-                if (guid.HasValue && project.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Texture2D)
-                {
-                    ExecutePersistent(state, "Change Sprite Texture", () =>
-                    {
-                        var reference = new AssetReference(asset.Guid, asset.ProjectPath);
-                        sprite.TextureReference = reference;
-                        sprite.Texture = project.Assets.LoadTexture(reference);
-                    });
-                }
-                ImGui.EndDragDropTarget();
-            }
-            ImGui.SameLine();
-            if (ImGui.SmallButton($"X##texture{component.GetHashCode()}"))
-                ExecutePersistent(state, "Clear Sprite Texture", () =>
-                {
-                    sprite.TextureReference = null;
-                    sprite.Texture = null;
-                });
-
-            Vector4 oldTint = sprite.Tint;
-            Vector4 tint = oldTint;
-            bool tintChanged = ImGui.ColorEdit4($"Tint##{component.GetHashCode()}", ref tint);
-            if (tintChanged) sprite.Tint = tint;
-            TrackItem(state, "Change Sprite Tint", tintChanged, () => sprite.Tint = oldTint, () => sprite.Tint = tint);
-
-            bool oldVisible = sprite.Visible;
-            bool visible = oldVisible;
-            bool visibleChanged = ImGui.Checkbox($"Visible##{component.GetHashCode()}", ref visible);
-            if (visibleChanged) sprite.Visible = visible;
-            TrackItem(state, "Set Sprite Visibility", visibleChanged, () => sprite.Visible = oldVisible, () => sprite.Visible = visible);
-
-            int oldOrder = sprite.OrderInLayer;
-            int order = oldOrder;
-            bool orderChanged = ImGui.DragInt($"Order In Layer##{component.GetHashCode()}", ref order, 1f);
-            if (orderChanged) sprite.OrderInLayer = order;
-            TrackItem(state, "Change Sprite Order", orderChanged, () => sprite.OrderInLayer = oldOrder, () => sprite.OrderInLayer = order);
-
-            Vector2 oldSize = sprite.Size;
-            Vector2 size = oldSize;
-            bool sizeChanged = ImGui.DragFloat2(
-                $"Size##{component.GetHashCode()}", ref size, 1f, .001f, 10000f);
-            Vector2 finalSize = Vector2.Max(size, new Vector2(.001f));
-            if (sizeChanged) sprite.Size = finalSize;
-            TrackItem(
-                state,
-                "Change Sprite Size",
-                sizeChanged,
-                () => sprite.Size = oldSize,
-                () => sprite.Size = finalSize);
-        }
-        else if (component is MeshRenderer mesh)
-        {
-            int primitive = (int)mesh.Primitive;
-            if (ImGui.Combo(
-                    $"Primitive##{component.GetHashCode()}",
-                    ref primitive,
-                    "Cube\0Plane\0Sphere\0"))
-            {
-                PrimitiveMeshType next = (PrimitiveMeshType)primitive;
-                ExecutePersistent(state, "Change Mesh Primitive", () => mesh.Primitive = next);
-            }
-
-            Vector4 oldColor = mesh.Material.BaseColor;
-            Vector4 color = oldColor;
-            bool colorChanged = ImGui.ColorEdit4($"Base Color##{component.GetHashCode()}", ref color);
-            if (colorChanged) mesh.Material.BaseColor = color;
-            TrackItem(
-                state,
-                "Change Material Color",
-                colorChanged,
-                () => mesh.Material.BaseColor = oldColor,
-                () => mesh.Material.BaseColor = color);
-
-            DrawBooleanProperty(
-                state,
-                $"Visible##mesh{component.GetHashCode()}",
-                "Set Mesh Visibility",
-                () => mesh.Visible,
-                value => mesh.Visible = value);
-        }
-        else if (component is Camera3D camera3D)
-        {
-            DrawBooleanProperty(state, $"Active Game Camera##{component.GetHashCode()}", "Set Active Game Camera",
-                () => camera3D.ActiveGameCamera, value => camera3D.ActiveGameCamera = value);
-            DrawFloatProperty(state, $"Field of View##{component.GetHashCode()}", "Change Field of View",
-                () => camera3D.FieldOfView, value => camera3D.FieldOfView = value, .25f, 1f, 179f);
-            DrawFloatProperty(state, $"Near Clip##{component.GetHashCode()}", "Change Near Clip",
-                () => camera3D.NearClip, value => camera3D.NearClip = value, .01f, .001f, 100f);
-            DrawFloatProperty(state, $"Far Clip##{component.GetHashCode()}", "Change Far Clip",
-                () => camera3D.FarClip, value => camera3D.FarClip = value, 1f, 1f, 100000f);
-        }
-        else if (component is DirectionalLight light)
-        {
-            Vector3 oldColor = light.Color;
-            Vector3 color = oldColor;
-            bool colorChanged = ImGui.ColorEdit3($"Color##{component.GetHashCode()}", ref color);
-            if (colorChanged) light.Color = color;
-            TrackItem(
-                state,
-                "Change Light Color",
-                colorChanged,
-                () => light.Color = oldColor,
-                () => light.Color = color);
-
-            DrawFloatProperty(state, $"Intensity##{component.GetHashCode()}", "Change Light Intensity",
-                () => light.Intensity, value => light.Intensity = value, .02f, 0f, 100f);
-            DrawFloatProperty(state, $"Ambient Intensity##{component.GetHashCode()}", "Change Ambient Intensity",
-                () => light.AmbientIntensity, value => light.AmbientIntensity = value, .01f, 0f, 1f);
-        }
-        else if (component is GroundSurface ground)
-        {
-            DrawBooleanProperty(state, $"Walkable##{component.GetHashCode()}", "Set Surface Walkable",
-                () => ground.Walkable, value => ground.Walkable = value);
-            DrawStringProperty(state, $"Surface Type##{component.GetHashCode()}", "Change Surface Type",
-                () => ground.SurfaceType, value => ground.SurfaceType = value, 64);
-            DrawFloatProperty(state, $"Friction##{component.GetHashCode()}", "Change Surface Friction",
-                () => ground.Friction, value => ground.Friction = value, .02f, 0f, 10f);
-        }
-        else if (component is BoxCollider3D collider)
-        {
-            Vector3 oldSize = collider.Size;
-            Vector3 size = oldSize;
-            bool sizeChanged = ImGui.DragFloat3(
-                $"Size##collider{component.GetHashCode()}", ref size, .02f, .001f, 10000f);
-            Vector3 finalSize = Vector3.Max(size, new Vector3(.001f));
-            if (sizeChanged) collider.Size = finalSize;
-            TrackItem(state, "Change Collider Size", sizeChanged,
-                () => collider.Size = oldSize, () => collider.Size = finalSize);
-
-            Vector3 oldCenter = collider.Center;
-            Vector3 center = oldCenter;
-            bool centerChanged = ImGui.DragFloat3(
-                $"Center##collider{component.GetHashCode()}", ref center, .02f);
-            if (centerChanged) collider.Center = center;
-            TrackItem(state, "Change Collider Center", centerChanged,
-                () => collider.Center = oldCenter, () => collider.Center = center);
-
-            DrawBooleanProperty(state, $"Is Trigger##{component.GetHashCode()}", "Set Collider Trigger",
-                () => collider.IsTrigger, value => collider.IsTrigger = value);
-        }
-        else if (component is CapsuleCollider3D capsule)
-        {
-            if (ImGui.Button($"Fit To Visual##{component.GetHashCode()}"))
-                ExecutePersistent(state, "Fit Capsule To Visual", () =>
-                    CharacterCapsuleAutoFit.TryFit(component.GameObject, project.Assets, out _));
-            DrawFloatProperty(state, $"Radius##{component.GetHashCode()}", "Change Capsule Radius",
-                () => capsule.Radius, value => capsule.Radius = value, .01f, .001f, 1000f);
-            DrawFloatProperty(state, $"Height##{component.GetHashCode()}", "Change Capsule Height",
-                () => capsule.Height, value => capsule.Height = value, .02f, .002f, 1000f);
-
-            Vector3 oldCenter = capsule.Center;
-            Vector3 center = oldCenter;
-            bool centerChanged = ImGui.DragFloat3(
-                $"Center##capsule{component.GetHashCode()}", ref center, .02f);
-            if (centerChanged) capsule.Center = center;
-            TrackItem(state, "Change Capsule Center", centerChanged,
-                () => capsule.Center = oldCenter, () => capsule.Center = center);
-            DrawBooleanProperty(state, $"Is Trigger##capsule{component.GetHashCode()}", "Set Capsule Trigger",
-                () => capsule.IsTrigger, value => capsule.IsTrigger = value);
-            ImGui.SeparatorText("Auto-Fit Diagnostics");
-            ImGui.TextDisabled($"VisualBounds: {capsule.VisualBounds.X:0.###}, {capsule.VisualBounds.Y:0.###}, {capsule.VisualBounds.Z:0.###}");
-            ImGui.TextDisabled($"CapsuleRadius: {capsule.Radius:0.###}");
-            ImGui.TextDisabled($"CapsuleHeight: {capsule.Height:0.###}");
-            ImGui.TextDisabled($"CapsuleCenter: {capsule.Center.X:0.###}, {capsule.Center.Y:0.###}, {capsule.Center.Z:0.###}");
-            ImGui.TextWrapped($"AutoFitSource: {(string.IsNullOrWhiteSpace(capsule.AutoFitSource) ? "Manual/default" : capsule.AutoFitSource)}");
-        }
-        else if (component is CharacterController3D controller)
-        {
-            DrawFloatProperty(state, $"Move Speed##{component.GetHashCode()}", "Change Move Speed",
-                () => controller.MoveSpeed, value => controller.MoveSpeed = value, .05f, 0f, 1000f);
-            DrawFloatProperty(state, $"Acceleration##{component.GetHashCode()}", "Change Acceleration",
-                () => controller.Acceleration, value => controller.Acceleration = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Deceleration##{component.GetHashCode()}", "Change Deceleration",
-                () => controller.Deceleration, value => controller.Deceleration = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Air Control##{component.GetHashCode()}", "Change Air Control",
-                () => controller.AirControl, value => controller.AirControl = value, .01f, 0f, 1f);
-            DrawFloatProperty(state, $"Jump Force##{component.GetHashCode()}", "Change Jump Force",
-                () => controller.JumpForce, value => controller.JumpForce = value, .05f, 0f, 1000f);
-            DrawFloatProperty(state, $"Gravity##{component.GetHashCode()}", "Change Gravity",
-                () => controller.Gravity, value => controller.Gravity = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Ground Distance##{component.GetHashCode()}", "Change Ground Distance",
-                () => controller.GroundDistance, value => controller.GroundDistance = value, .01f, 0f, 100f);
-            DrawFloatProperty(state, $"Max Slope##{component.GetHashCode()}", "Change Max Slope",
-                () => controller.MaxSlope, value => controller.MaxSlope = value, .25f, 0f, 90f);
-            DrawFloatProperty(state, $"Step Height##{component.GetHashCode()}", "Change Step Height",
-                () => controller.StepHeight, value => controller.StepHeight = value, .01f, 0f, 100f);
-            DrawFloatProperty(state, $"Coyote Time##{component.GetHashCode()}", "Change Coyote Time",
-                () => controller.CoyoteTime, value => controller.CoyoteTime = value, .01f, 0f, 10f);
-            DrawFloatProperty(state, $"Jump Buffer##{component.GetHashCode()}", "Change Jump Buffer",
-                () => controller.JumpBuffer, value => controller.JumpBuffer = value, .01f, 0f, 10f);
-            DrawBooleanProperty(state, $"Snap To Ground##{component.GetHashCode()}", "Set Snap To Ground",
-                () => controller.SnapToGround, value => controller.SnapToGround = value);
-        }
-        else if (component is HealthComponent health)
-        {
-            DrawFloatProperty(state, $"Max Health##{component.GetHashCode()}", "Change Max Health",
-                () => health.MaxHealth, value => health.MaxHealth = value, .5f, 0f, 100000f);
-            DrawFloatProperty(state, $"Current Health##{component.GetHashCode()}", "Change Current Health",
-                () => health.CurrentHealth, value => health.CurrentHealth = value, .5f, 0f, health.MaxHealth);
-            DrawBooleanProperty(state, $"Invulnerable##{component.GetHashCode()}", "Set Invulnerable",
-                () => health.Invulnerable, value => health.Invulnerable = value);
-            DrawBooleanProperty(state, $"Destroy On Death##{component.GetHashCode()}", "Set Destroy On Death",
-                () => health.DestroyOnDeath, value => health.DestroyOnDeath = value);
-            ImGui.TextDisabled($"Health: {health.HealthPercent:P0} | Dead: {health.IsDead}");
-        }
-        else if (component is LifetimeComponent lifetime)
-        {
-            DrawFloatProperty(state, $"Lifetime Seconds##{component.GetHashCode()}", "Change Lifetime",
-                () => lifetime.LifetimeSeconds, value => lifetime.LifetimeSeconds = value, .05f, 0f, 100000f);
-            ImGui.TextDisabled($"Remaining: {lifetime.RemainingSeconds:0.00}s");
-        }
-        else if (component is Projectile3D projectile)
-        {
-            DrawVector3Property(state, $"Velocity##{component.GetHashCode()}", "Change Projectile Velocity",
-                () => projectile.Velocity, value => projectile.Velocity = value, .1f);
-            DrawFloatProperty(state, $"Damage##{component.GetHashCode()}", "Change Projectile Damage",
-                () => projectile.Damage, value => projectile.Damage = value, .25f, 0f, 100000f);
-            DrawFloatProperty(state, $"Radius##{component.GetHashCode()}", "Change Projectile Radius",
-                () => projectile.Radius, value => projectile.Radius = value, .01f, 0f, 10000f);
-            DrawBooleanProperty(state, $"Destroy On Hit##{component.GetHashCode()}", "Set Destroy On Hit",
-                () => projectile.DestroyOnHit, value => projectile.DestroyOnHit = value);
-            ImGui.TextDisabled($"Owner: {(projectile.OwnerId == Guid.Empty ? "None" : projectile.OwnerId)}");
-        }
-        else if (component is ProjectileLauncher3D launcher)
-        {
-            string blueprintLabel = launcher.ProjectileBlueprint.IsEmpty ? "None" :
-                launcher.ProjectileBlueprint.CachedProjectPath ?? launcher.ProjectileBlueprint.Guid.ToString();
-            ImGui.Button($"Projectile Blueprint: {blueprintLabel}##{component.GetHashCode()}", new Vector2(-30f, 0f));
-            if (ImGui.BeginDragDropTarget())
-            {
-                Guid? guid = AssetDragDrop.Accept();
-                if (guid.HasValue && project.AssetDatabase.TryGetAsset(guid.Value, out AssetRecord? asset) && asset?.Type == AssetType.Blueprint)
-                    ExecutePersistent(state, "Change Projectile Blueprint", () =>
-                        launcher.ProjectileBlueprint = new AssetReference(asset.Guid, asset.ProjectPath));
-                ImGui.EndDragDropTarget();
-            }
-            ImGui.SameLine();
-            if (ImGui.SmallButton($"X##projectileBlueprint{component.GetHashCode()}"))
-                ExecutePersistent(state, "Clear Projectile Blueprint", () => launcher.ProjectileBlueprint = AssetReference.Empty);
-            DrawFloatProperty(state, $"Projectile Speed##{component.GetHashCode()}", "Change Projectile Speed",
-                () => launcher.ProjectileSpeed, value => launcher.ProjectileSpeed = value, .25f, 0f, 100000f);
-            DrawFloatProperty(state, $"Damage##{component.GetHashCode()}", "Change Launcher Damage",
-                () => launcher.Damage, value => launcher.Damage = value, .25f, 0f, 100000f);
-            DrawFloatProperty(state, $"Fire Cooldown##{component.GetHashCode()}", "Change Fire Cooldown",
-                () => launcher.FireCooldown, value => launcher.FireCooldown = value, .01f, 0f, 10000f);
-            DrawVector3Property(state, $"Muzzle Offset##{component.GetHashCode()}", "Change Muzzle Offset",
-                () => launcher.MuzzleOffset, value => launcher.MuzzleOffset = value, .02f);
-        }
-        else if (component is SimpleEnemyAI3D ai)
-        {
-            DrawStringProperty(state, $"Target Name##{component.GetHashCode()}", "Change AI Target",
-                () => ai.TargetName, value => ai.TargetName = value, 128);
-            ImGui.TextDisabled($"Target ID: {(ai.TargetId == Guid.Empty ? "Auto" : ai.TargetId)}");
-            DrawFloatProperty(state, $"Move Speed##ai{component.GetHashCode()}", "Change AI Move Speed",
-                () => ai.MoveSpeed, value => ai.MoveSpeed = value, .05f, 0f, 10000f);
-            DrawFloatProperty(state, $"Detection Range##{component.GetHashCode()}", "Change Detection Range",
-                () => ai.DetectionRange, value => ai.DetectionRange = value, .1f, 0f, 100000f);
-            DrawFloatProperty(state, $"Attack Range##{component.GetHashCode()}", "Change Attack Range",
-                () => ai.AttackRange, value => ai.AttackRange = value, .05f, 0f, 100000f);
-            DrawFloatProperty(state, $"Damage##ai{component.GetHashCode()}", "Change AI Damage",
-                () => ai.Damage, value => ai.Damage = value, .25f, 0f, 100000f);
-            DrawFloatProperty(state, $"Attack Cooldown##{component.GetHashCode()}", "Change Attack Cooldown",
-                () => ai.AttackCooldown, value => ai.AttackCooldown = value, .01f, 0f, 10000f);
-            DrawFloatProperty(state, $"Stop Distance##{component.GetHashCode()}", "Change Stop Distance",
-                () => ai.StopDistance, value => ai.StopDistance = value, .05f, 0f, 100000f);
-        }
-        else if (component is PlayerController3D playerController)
-        {
-            if (!component.GameObject.HasComponent<CharacterController3D>())
-            {
-                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Player Input requires Character Movement.");
-                if (ImGui.SmallButton($"Add Character Movement##{component.GetHashCode()}"))
-                    ExecutePersistent(state, "Add Character Movement", () => component.GameObject.AddComponent(new CharacterController3D()));
-            }
-            int oldMode = (int)playerController.CharacterRotation;
-            int mode = oldMode;
-            string[] modes = { "Face Movement", "Face Camera", "Independent" };
-            bool modeChanged = ImGui.Combo($"Character Rotation##{component.GetHashCode()}", ref mode, modes, modes.Length);
-            if (modeChanged) playerController.CharacterRotation = (CharacterRotationMode)mode;
-            TrackItem(state, "Change Character Rotation", modeChanged,
-                () => playerController.CharacterRotation = (CharacterRotationMode)oldMode,
-                () => playerController.CharacterRotation = (CharacterRotationMode)mode);
-            DrawFloatProperty(state, $"Turn Speed##{component.GetHashCode()}", "Change Character Turn Speed",
-                () => playerController.TurnSpeed, value => playerController.TurnSpeed = value, 5f, 0f, 3600f);
-            DrawFloatProperty(state, $"Control Yaw##{component.GetHashCode()}", "Change Control Yaw",
-                () => playerController.ControlYaw, value => playerController.ControlYaw = value, .25f, -180f, 180f);
-            DrawFloatProperty(state, $"Control Pitch##{component.GetHashCode()}", "Change Control Pitch",
-                () => playerController.ControlPitch, value => playerController.ControlPitch = value, .25f, -89f, 89f);
-            if (showAdvanced)
-                DrawBooleanProperty(state, $"Use Character Direction##{component.GetHashCode()}", "Set Player Movement Orientation",
-                    () => playerController.UseLocalOrientation, value => playerController.UseLocalOrientation = value);
-        }
-        else if (component is PlayerShooter3D playerShooter)
-        {
-            DrawBooleanProperty(state, $"Automatic Fire##{component.GetHashCode()}", "Set Automatic Fire",
-                () => playerShooter.Automatic, value => playerShooter.Automatic = value);
-        }
-        else if (component is ThirdPersonCamera3D followCamera)
-        {
-            DrawStringProperty(state, $"Target Name##camera{component.GetHashCode()}", "Change Camera Target",
-                () => followCamera.TargetName, value => followCamera.TargetName = value, 128);
-            ImGui.TextDisabled($"Target ID: {(followCamera.TargetId == Guid.Empty ? "None" : followCamera.TargetId)}");
-            DrawFloatProperty(state, $"Distance##camera{component.GetHashCode()}", "Change Camera Distance",
-                () => followCamera.Distance, value => followCamera.Distance = value, .05f, 0f, 10000f);
-            DrawFloatProperty(state, $"Height##camera{component.GetHashCode()}", "Change Camera Height",
-                () => followCamera.Height, value => followCamera.Height = value, .05f, -10000f, 10000f);
-            DrawFloatProperty(state, $"Look At Height##{component.GetHashCode()}", "Change Camera Look Height",
-                () => followCamera.LookAtHeight, value => followCamera.LookAtHeight = value, .05f, -10000f, 10000f);
-            DrawFloatProperty(state, $"Follow Smoothing##{component.GetHashCode()}", "Change Camera Smoothing",
-                () => followCamera.FollowSmoothing, value => followCamera.FollowSmoothing = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Yaw##{component.GetHashCode()}", "Change Camera Yaw",
-                () => followCamera.Yaw, value => followCamera.Yaw = value, .25f, -100000f, 100000f);
-            DrawFloatProperty(state, $"Pitch##{component.GetHashCode()}", "Change Camera Pitch",
-                () => followCamera.Pitch, value => followCamera.Pitch = value, .25f, followCamera.MinPitch, followCamera.MaxPitch);
-            DrawFloatProperty(state, $"Min Pitch##{component.GetHashCode()}", "Change Minimum Pitch",
-                () => followCamera.MinPitch, value => followCamera.MinPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Max Pitch##{component.GetHashCode()}", "Change Maximum Pitch",
-                () => followCamera.MaxPitch, value => followCamera.MaxPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Mouse Sensitivity##{component.GetHashCode()}", "Change Mouse Sensitivity",
-                () => followCamera.MouseSensitivity, value => followCamera.MouseSensitivity = value, .01f, 0f, 10f);
-            DrawFloatProperty(state, $"Shoulder Offset##{component.GetHashCode()}", "Change Shoulder Offset",
-                () => followCamera.ShoulderOffset, value => followCamera.ShoulderOffset = value, .02f, -100f, 100f);
-        }
-        else if (component is CameraBoom3D boom)
-        {
-            bool hasCamera = component.GameObject.Children.Any(child => child.GetComponent<Camera3D>() != null);
-            if (!hasCamera)
-            {
-                ImGui.TextColored(new Vector4(1f, .75f, .2f, 1f), "Third Person Camera has no Camera.");
-                if (ImGui.SmallButton($"Create Camera##{component.GetHashCode()}"))
-                    ExecutePersistent(state, "Create Camera Rig", () => BlueprintAuthoringService.SetupThirdPersonCharacter(component.GameObject));
-            }
-            ImGui.TextDisabled($"Camera Child ID: {(boom.CameraObjectId == Guid.Empty ? "Auto-detect" : boom.CameraObjectId)}");
-            DrawFloatProperty(state, $"Camera Distance##{component.GetHashCode()}", "Change Camera Arm Length",
-                () => boom.ArmLength, value => boom.ArmLength = value, .05f, 0f, 1000f);
-            DrawFloatProperty(state, $"Camera Height##{component.GetHashCode()}", "Change Camera Pivot Height",
-                () => boom.PivotHeight, value => boom.PivotHeight = value, .02f, -100f, 100f);
-            DrawFloatProperty(state, $"Yaw##boom{component.GetHashCode()}", "Change Camera Boom Yaw",
-                () => boom.Yaw, value => boom.Yaw = value, .25f, -100000f, 100000f);
-            DrawFloatProperty(state, $"Pitch##boom{component.GetHashCode()}", "Change Camera Boom Pitch",
-                () => boom.Pitch, value => boom.Pitch = value, .25f, boom.MinPitch, boom.MaxPitch);
-            DrawFloatProperty(state, $"Minimum Vertical Angle##boom{component.GetHashCode()}", "Change Camera Minimum Pitch",
-                () => boom.MinPitch, value => boom.MinPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Maximum Vertical Angle##boom{component.GetHashCode()}", "Change Camera Maximum Pitch",
-                () => boom.MaxPitch, value => boom.MaxPitch = value, .25f, -89f, 89f);
-            DrawFloatProperty(state, $"Horizontal Sensitivity##{component.GetHashCode()}", "Change Horizontal Mouse Sensitivity",
-                () => boom.MouseSensitivityX, value => boom.MouseSensitivityX = value, .005f, 0f, 10f);
-            DrawFloatProperty(state, $"Vertical Sensitivity##{component.GetHashCode()}", "Change Vertical Mouse Sensitivity",
-                () => boom.MouseSensitivityY, value => boom.MouseSensitivityY = value, .005f, 0f, 10f);
-            DrawBooleanProperty(state, $"Invert Horizontal Look##{component.GetHashCode()}", "Set Horizontal Look Inversion",
-                () => boom.InvertHorizontalLook, value => boom.InvertHorizontalLook = value);
-            DrawBooleanProperty(state, $"Invert Vertical Look##{component.GetHashCode()}", "Set Vertical Look Inversion",
-                () => boom.InvertVerticalLook, value => boom.InvertVerticalLook = value);
-            DrawFloatProperty(state, $"Position Smoothness##{component.GetHashCode()}", "Change Camera Position Smoothness",
-                () => boom.PositionSmoothness, value => boom.PositionSmoothness = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Rotation Smoothness##{component.GetHashCode()}", "Change Camera Rotation Smoothness",
-                () => boom.RotationSmoothness, value => boom.RotationSmoothness = value, .1f, 0f, 1000f);
-            DrawFloatProperty(state, $"Shoulder Offset##boom{component.GetHashCode()}", "Change Camera Shoulder Offset",
-                () => boom.ShoulderOffset, value => boom.ShoulderOffset = value, .02f, -100f, 100f);
-            DrawBooleanProperty(state, $"Enable Camera Collision##{component.GetHashCode()}", "Set Camera Collision",
-                () => boom.EnableCameraCollision, value => boom.EnableCameraCollision = value);
-            DrawFloatProperty(state, $"Collision Radius##{component.GetHashCode()}", "Change Camera Collision Radius",
-                () => boom.CollisionRadius, value => boom.CollisionRadius = value, .01f, 0f, 10f);
-            DrawFloatProperty(state, $"Collision Return Speed##{component.GetHashCode()}", "Change Camera Collision Return Speed",
-                () => boom.CollisionReturnSpeed, value => boom.CollisionReturnSpeed = value, .1f, 0f, 1000f);
-            if (showAdvanced)
-            {
-                ImGui.SeparatorText("Advanced");
-                DrawBooleanProperty(state, $"Use Control Rotation##{component.GetHashCode()}", "Set Camera Control Rotation",
-                    () => boom.UseControlRotation, value => boom.UseControlRotation = value);
-                DrawBooleanProperty(state, $"Position Lag##{component.GetHashCode()}", "Set Camera Position Lag",
-                    () => boom.CameraLagEnabled, value => boom.CameraLagEnabled = value);
-                DrawBooleanProperty(state, $"Rotation Lag##{component.GetHashCode()}", "Set Camera Rotation Lag",
-                    () => boom.RotationLagEnabled, value => boom.RotationLagEnabled = value);
-                DrawBooleanProperty(state, $"Lag Substepping##{component.GetHashCode()}", "Set Camera Lag Substepping",
-                    () => boom.LagSubstepping, value => boom.LagSubstepping = value);
-                DrawFloatProperty(state, $"Maximum Lag Distance##{component.GetHashCode()}", "Change Maximum Camera Lag",
-                    () => boom.MaximumLagDistance, value => boom.MaximumLagDistance = value, .05f, 0f, 100f);
-                DrawFloatProperty(state, $"Maximum Lag Time Step##{component.GetHashCode()}", "Change Camera Lag Time Step",
-                    () => boom.MaxLagTimeStep, value => boom.MaxLagTimeStep = value, .001f, .001f, .1f);
-            }
-        }
-        else if (component is ArenaGameManager manager)
-        {
-            DrawStringProperty(state, $"Player Name##manager{component.GetHashCode()}", "Change Arena Player",
-                () => manager.PlayerName, value => manager.PlayerName = value, 128);
-            ImGui.TextDisabled($"Player ID: {(manager.PlayerId == Guid.Empty ? "None" : manager.PlayerId)}");
-            ImGui.TextDisabled($"State: {manager.GameState}");
-            ImGui.TextDisabled($"Remaining Enemies: {manager.RemainingEnemies}");
-        }
-        else if (component is AnimationController animation)
-        {
-            DrawStringProperty(state, $"Idle##{component.GetHashCode()}", "Change Idle Animation",
-                () => animation.Idle, value => animation.Idle = value, 128);
-            DrawStringProperty(state, $"Walk##{component.GetHashCode()}", "Change Walk Animation",
-                () => animation.Walk, value => animation.Walk = value, 128);
-            DrawStringProperty(state, $"Run##{component.GetHashCode()}", "Change Run Animation",
-                () => animation.Run, value => animation.Run = value, 128);
-            DrawStringProperty(state, $"Jump##{component.GetHashCode()}", "Change Jump Animation",
-                () => animation.Jump, value => animation.Jump = value, 128);
-            DrawStringProperty(state, $"Fall##{component.GetHashCode()}", "Change Fall Animation",
-                () => animation.Fall, value => animation.Fall = value, 128);
-            DrawStringProperty(state, $"Land##{component.GetHashCode()}", "Change Land Animation",
-                () => animation.Land, value => animation.Land = value, 128);
-            DrawFloatProperty(state, $"Run Threshold##{component.GetHashCode()}", "Change Run Threshold",
-                () => animation.RunThreshold, value => animation.RunThreshold = value, .05f, 0f, 1000f);
-        }
-        else if (component is SkeletalMeshRenderer skeletal)
-        {
-            ImGui.TextDisabled($"Model: {skeletal.Model}");
-            ImGui.TextDisabled($"Skeleton: {skeletal.SkeletonKey ?? "None"}");
-            DrawBooleanProperty(state, $"Visible##skeletal{component.GetHashCode()}", "Set Skeletal Mesh Visibility",
-                () => skeletal.Visible, value => skeletal.Visible = value);
-        }
-        ImGui.Unindent();
-    }
-
-    private static void DrawFloatProperty(
-        EditorState state,
-        string label,
-        string undoName,
-        Func<float> read,
-        Action<float> write,
-        float speed,
-        float minimum,
-        float maximum)
-    {
-        float oldValue = read();
-        float value = oldValue;
-        bool changed = ImGui.DragFloat(label, ref value, speed, minimum, maximum);
-        if (changed) write(value);
-        TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
-    }
-
-    private static void DrawVector3Property(EditorState state, string label, string undoName,
-        Func<Vector3> read, Action<Vector3> write, float speed)
-    {
-        Vector3 oldValue = read();
-        Vector3 value = oldValue;
-        bool changed = ImGui.DragFloat3(label, ref value, speed);
-        if (changed) write(value);
-        TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
-    }
-
-    private static void DrawBooleanProperty(
-        EditorState state,
-        string label,
-        string undoName,
-        Func<bool> read,
-        Action<bool> write)
-    {
-        bool oldValue = read();
-        bool value = oldValue;
-        bool changed = ImGui.Checkbox(label, ref value);
-        if (changed) write(value);
-        TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
-    }
-
-    private static void DrawStringProperty(
-        EditorState state,
-        string label,
-        string undoName,
-        Func<string> read,
-        Action<string> write,
-        uint maximumLength)
-    {
-        string oldValue = read();
-        string value = oldValue;
-        bool changed = ImGui.InputText(label, ref value, maximumLength);
-        if (changed) write(value);
-        TrackItem(state, undoName, changed, () => write(oldValue), () => write(value));
+        bool runtime = state.Mode != EditorMode.Edit;
+        ComponentPropertyRenderer.Draw(component,
+            runtime ? PropertyEditorContext.Runtime : PropertyEditorContext.Scene, showAdvanced,
+            () => { if (!runtime) state.Undo?.BeginGesture(state, $"Edit {component.GetType().Name}"); },
+            state.MarkDirty,
+            () => { if (!runtime) state.Undo?.CommitGesture(state); }, project);
     }
 
     private static void TrackItem(EditorState state, string name, bool changed, Action restore, Action apply)
     {
+        if (state.Mode != EditorMode.Edit) return;
         if (ImGui.IsItemActivated())
         {
             restore();

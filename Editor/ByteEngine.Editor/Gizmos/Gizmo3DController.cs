@@ -14,90 +14,25 @@ internal enum Gizmo3DMode
 
 internal sealed class Gizmo3DController
 {
-    private Vector3 _axis;
-    private Vector2 _startMouse;
-    private Vector3 _startPosition;
-    private Vector3 _startRotation;
-    private Vector3 _startScale;
-    private bool _dragging;
-    private bool _hoveredHandle;
-
-    public Gizmo3DMode Mode { get; private set; } = Gizmo3DMode.Move;
-    public bool OwnsMouse => _dragging || _hoveredHandle;
-
-    public void SetMode(Gizmo3DMode mode) => Mode = mode;
-
-    public void DrawToolbar()
+    private readonly TransformGizmoInteraction _interaction = new();
+    public Gizmo3DMode Mode => _interaction.Mode;
+    public bool OwnsMouse => _interaction.OwnsMouse;
+    public void SetMode(Gizmo3DMode mode) => _interaction.Mode = mode;
+    internal void ApplyShortcuts(bool movePressed, bool rotatePressed, bool scalePressed)
     {
-        DrawModeButton("Move", Gizmo3DMode.Move);
-        ImGui.SameLine();
-        DrawModeButton("Rotate", Gizmo3DMode.Rotate);
-        ImGui.SameLine();
-        DrawModeButton("Scale", Gizmo3DMode.Scale);
-        ImGui.SameLine();
-        ImGui.TextDisabled("W / E / R");
+        if (movePressed) SetMode(Gizmo3DMode.Move);
+        if (rotatePressed) SetMode(Gizmo3DMode.Rotate);
+        if (scalePressed) SetMode(Gizmo3DMode.Scale);
     }
+    public void DrawToolbar() => _interaction.DrawToolbar();
 
-    public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered,
-        Vector2 minimum, Vector2 size)
+    public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered, Vector2 minimum, Vector2 size)
     {
-        if (hovered)
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Gizmo3DMode.Move;
-            if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Gizmo3DMode.Rotate;
-            if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Gizmo3DMode.Scale;
-        }
-
-        GameObject? selected = state.SelectedObject;
-        Vector3 hoveredAxis = default;
-        _hoveredHandle = selected != null && hovered &&
-            TryHitHandle(selected, camera, minimum, size, out hoveredAxis);
-        if (selected != null) DrawHandles(selected, camera, minimum, size);
         if (state.Mode != EditorMode.Edit) return;
-
-        if (_dragging)
-        {
-            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
-            {
-                Vector2 origin = Project(_startPosition, camera, minimum, size);
-                Vector2 endpoint = Project(_startPosition + _axis, camera, minimum, size);
-                Vector2 projectedAxis = endpoint - origin;
-                float pixels = projectedAxis.LengthSquared() > .0001f
-                    ? Vector2.Dot(ImGui.GetMousePos() - _startMouse, Vector2.Normalize(projectedAxis))
-                    : (ImGui.GetMousePos() - _startMouse).X;
-                float distance = Vector3.Distance(camera.Position, _startPosition);
-                float units = pixels * 2f * distance * MathF.Tan(camera.FieldOfView * MathF.PI / 360f) /
-                    Math.Max(size.Y, 1f);
-                ApplyDragDelta(selected!, Mode, _axis, pixels, units,
-                    _startPosition, _startRotation, _startScale);
-                state.MarkDirty();
-            }
-            else
-            {
-                _dragging = false;
-                state.Undo?.CommitGesture(state);
-            }
-            return;
-        }
-
+        if (_interaction.Update(state.SelectedObject, camera, hovered, minimum, size,
+            () => state.Undo?.BeginGesture(state, $"{Mode} Object 3D"),
+            state.MarkDirty, () => state.Undo?.CommitGesture(state))) return;
         if (!hovered || !ImGui.IsMouseClicked(ImGuiMouseButton.Left)) return;
-        if (selected != null && _hoveredHandle)
-        {
-            _axis = hoveredAxis;
-            _startMouse = ImGui.GetMousePos();
-            _startPosition = selected.Transform.WorldPosition;
-            _startRotation = selected.Transform.EulerAngles;
-            _startScale = selected.Transform.LocalScale;
-            _dragging = true;
-            state.Undo?.BeginGesture(state, Mode switch
-            {
-                Gizmo3DMode.Rotate => "Rotate Object 3D",
-                Gizmo3DMode.Scale => "Scale Object 3D",
-                _ => "Move Object 3D"
-            });
-            return;
-        }
-
         Ray ray = ScreenRay(ImGui.GetMousePos(), camera, minimum, size);
         GameObject? hit = null;
         float bestDistance = float.MaxValue;
@@ -111,11 +46,7 @@ internal sealed class Gizmo3DController
             }
         }
         state.Selection.Set(hit);
-        if (hit != null)
-        {
-            state.SelectedAssetId = null;
-            state.SelectedAssetPath = null;
-        }
+        if (hit != null) { state.SelectedAssetId = null; state.SelectedAssetPath = null; }
     }
 
     internal static void ApplyDragDelta(GameObject selected, Gizmo3DMode mode, Vector3 axis,
@@ -142,69 +73,6 @@ internal sealed class Gizmo3DController
         return ray.Origin + ray.Direction * fallbackDistance;
     }
 
-    private void DrawHandles(GameObject item, EditorCamera3D camera, Vector2 minimum, Vector2 size)
-    {
-        Vector3 position = item.Transform.WorldPosition;
-        Vector2 origin = Project(position, camera, minimum, size);
-        ImDrawListPtr draw = ImGui.GetWindowDrawList();
-        Vector4[] colors = { new(1f, .2f, .2f, 1f), new(.2f, 1f, .3f, 1f), new(.2f, .45f, 1f, 1f) };
-        if (Mode == Gizmo3DMode.Rotate)
-        {
-            for (int index = 0; index < 3; index++)
-                draw.AddCircle(origin, 45f + index * 10f, ImGui.GetColorU32(colors[index]), 48, 3f);
-            return;
-        }
-        DrawAxis(draw, origin, Project(position + Vector3.UnitX, camera, minimum, size), colors[0]);
-        DrawAxis(draw, origin, Project(position + Vector3.UnitY, camera, minimum, size), colors[1]);
-        DrawAxis(draw, origin, Project(position + Vector3.UnitZ, camera, minimum, size), colors[2]);
-    }
-
-    private bool TryHitHandle(GameObject item, EditorCamera3D camera, Vector2 minimum, Vector2 size,
-        out Vector3 axis)
-    {
-        Vector3 position = item.Transform.WorldPosition;
-        Vector2 origin = Project(position, camera, minimum, size);
-        Vector2 mouse = ImGui.GetMousePos();
-        Vector3[] axes = { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ };
-        if (Mode == Gizmo3DMode.Rotate)
-        {
-            float radius = Vector2.Distance(mouse, origin);
-            for (int index = 0; index < 3; index++)
-            {
-                if (MathF.Abs(radius - (45f + index * 10f)) <= 5f)
-                {
-                    axis = axes[index];
-                    return true;
-                }
-            }
-            axis = default;
-            return false;
-        }
-        foreach (Vector3 candidate in axes)
-        {
-            Vector2 direction = Project(position + candidate, camera, minimum, size) - origin;
-            if (direction.LengthSquared() < 1f) continue;
-            Vector2 end = origin + Vector2.Normalize(direction) * 70f;
-            if (DistanceToSegment(mouse, origin, end) < 9f)
-            {
-                axis = candidate;
-                return true;
-            }
-        }
-        axis = default;
-        return false;
-    }
-
-    private static void DrawAxis(ImDrawListPtr draw, Vector2 start, Vector2 end, Vector4 color)
-    {
-        Vector2 direction = end - start;
-        if (direction.LengthSquared() < 1f) return;
-        end = start + Vector2.Normalize(direction) * 70f;
-        uint packed = ImGui.GetColorU32(color);
-        draw.AddLine(start, end, packed, 4f);
-        draw.AddCircleFilled(end, 5f, packed);
-    }
-
     internal static Vector2 Project(Vector3 point, EditorCamera3D camera, Vector2 minimum, Vector2 size)
     {
         Matrix4x4 viewProjection = camera.View * camera.Projection(size.X / Math.Max(size.Y, 1f));
@@ -214,7 +82,7 @@ internal sealed class Gizmo3DController
         return minimum + new Vector2((normalized.X + 1f) * .5f * size.X, (1f - normalized.Y) * .5f * size.Y);
     }
 
-    private static Ray ScreenRay(Vector2 mouse, EditorCamera3D camera, Vector2 minimum, Vector2 size)
+    internal static Ray ScreenRay(Vector2 mouse, EditorCamera3D camera, Vector2 minimum, Vector2 size)
     {
         float width = Math.Max(size.X, 1f);
         float height = Math.Max(size.Y, 1f);
@@ -264,13 +132,5 @@ internal sealed class Gizmo3DController
         return Vector2.Distance(point, start + direction * fraction);
     }
 
-    private void DrawModeButton(string label, Gizmo3DMode mode)
-    {
-        bool active = Mode == mode;
-        if (active) ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.18f, .48f, .82f, 1f));
-        if (ImGui.SmallButton(label)) Mode = mode;
-        if (active) ImGui.PopStyleColor();
-    }
-
-    private readonly record struct Ray(Vector3 Origin, Vector3 Direction);
+    internal readonly record struct Ray(Vector3 Origin, Vector3 Direction);
 }

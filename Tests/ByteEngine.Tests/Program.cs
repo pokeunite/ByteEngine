@@ -18,6 +18,12 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Contains("--v085"))
+    {
+        V085ProfessionalEditorTests.Run(root);
+        Console.WriteLine("v0.8-b.5 focused regressions passed.");
+        return;
+    }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
     var serializer = new SceneSerializer(new ComponentSerializer(root, database, assets));
 
@@ -67,7 +73,9 @@ try
     V081PolishTests.Run(root, database, assets);
     V082EditorInteractionTests.Run(root);
     V083CharacterAuthoringTests.Run(root, database, assets);
-    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-b.3 regressions and Phase 1/2/3 gameplay systems.");
+    V084EditorStabilityTests.Run();
+    V085ProfessionalEditorTests.Run(root);
+    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-b.5 regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }
 

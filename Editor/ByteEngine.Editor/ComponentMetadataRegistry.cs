@@ -24,7 +24,9 @@ internal sealed record PropertyMetadata(
     string Category,
     string Tooltip,
     string? Unit = null,
-    bool Advanced = false);
+    bool Advanced = false,
+    bool ReadOnly = false,
+    bool RuntimeEditable = true);
 
 internal static class ComponentMetadataRegistry
 {
@@ -64,6 +66,9 @@ internal static class ComponentMetadataRegistry
 
     private static readonly Dictionary<(Type, string), PropertyMetadata> Properties = new()
     {
+        [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.VisualBounds))] = new("Visual Bounds", "Diagnostics", "Measured bounds from capsule auto-fit.", Advanced: true, ReadOnly: true),
+        [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.AutoFitSource))] = new("Auto-Fit Source", "Diagnostics", "Source used by capsule auto-fit.", Advanced: true, ReadOnly: true),
+        [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Scale recorded when importing the hierarchy.", Advanced: true, ReadOnly: true),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.ArmLength))] = new("Camera Distance", "Camera", "Distance from the character pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.PivotHeight))] = new("Camera Height", "Camera", "Height of the camera pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityX))] = new("Horizontal Sensitivity", "Rotation", "Horizontal mouse sensitivity."),

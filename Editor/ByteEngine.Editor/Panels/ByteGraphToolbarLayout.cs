@@ -6,5 +6,5 @@ internal readonly record struct ByteGraphToolbarLayout(
 {
     public static ByteGraphToolbarLayout ForWidth(float width) => new(
         CollapseSecondary: width < 980f,
-        TraceOnSecondRow: width < 1320f);
+        TraceOnSecondRow: width < 1400f);
 }

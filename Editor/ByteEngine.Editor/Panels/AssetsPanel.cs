@@ -61,12 +61,7 @@ internal sealed class AssetsPanel
     private string _renameBuffer =
         string.Empty;
 
-    private bool _showDeleteConfirm;
-
-    private string? _deleteTargetPath;
-    private readonly List<string> _deleteTargetPaths = new();
-
-    private bool _deleteTargetIsDirectory;
+    private readonly AssetDeleteInteractionState _deleteInteraction = new();
 
     private readonly AssetSelectionModel _assetSelection = new();
     private readonly List<AssetSelectionBounds> _assetBounds = new();
@@ -197,6 +192,11 @@ internal sealed class AssetsPanel
                 state,
                 log);
         }
+        else
+        {
+            _deleteInteraction.Reset();
+            _assetMarquee = false;
+        }
 
         ImGui.End();
 
@@ -266,17 +266,21 @@ internal sealed class AssetsPanel
 
         ImGui.SameLine();
 
-        ImGui.TextDisabled(
-            Breadcrumb());
-
-        ImGui.SameLine();
-
         if (ImGui.SmallButton(
-                "Refresh"))
+                "Refresh##AssetsRefresh"))
         {
             Refresh(
                 log);
         }
+
+        ImGui.SameLine();
+        string breadcrumb = Breadcrumb();
+        float available = Math.Max(ImGui.GetContentRegionAvail().X, 40f);
+        string visibleBreadcrumb = breadcrumb;
+        while (visibleBreadcrumb.Length > 8 && ImGui.CalcTextSize(visibleBreadcrumb).X > available)
+            visibleBreadcrumb = "..." + visibleBreadcrumb[4..];
+        ImGui.TextDisabled(visibleBreadcrumb);
+        if (ImGui.IsItemHovered() && visibleBreadcrumb != breadcrumb) ImGui.SetTooltip(breadcrumb);
     }
 
     // ========================================================
@@ -664,7 +668,7 @@ internal sealed class AssetsPanel
                 ImGui.GetColorU32(new Vector4(.2f, .55f, 1f, .12f)));
             ImGui.GetWindowDrawList().AddRect(minimum, maximum,
                 ImGui.GetColorU32(new Vector4(.3f, .7f, 1f, .9f)));
-            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
             {
                 _assetSelection.Marquee(_assetBounds, _assetMarqueeStart, _assetMarqueeEnd, ImGui.GetIO().KeyCtrl);
                 SyncPrimaryAssetSelection(state);
@@ -1776,56 +1780,39 @@ internal sealed class AssetsPanel
             return;
         }
 
-        _deleteTargetPath =
-            path;
-        _deleteTargetPaths.Clear();
+        IEnumerable<string> targets;
         if (!isDirectory && _assetSelection.Count > 1 && _assetSelection.Contains(path))
-            _deleteTargetPaths.AddRange(_assetSelection.Paths);
+            targets = _assetSelection.Paths;
         else
-            _deleteTargetPaths.Add(path);
-
-        _deleteTargetIsDirectory =
-            isDirectory;
-
-        _showDeleteConfirm =
-            true;
+            targets = new[] { path };
+        _deleteInteraction.Begin(targets, isDirectory);
     }
 
     private void BeginDeleteSelected()
     {
         if (_assetSelection.Count == 0) return;
-        _deleteTargetPath = null;
-        _deleteTargetPaths.Clear();
-        _deleteTargetPaths.AddRange(_assetSelection.Paths);
-        _deleteTargetIsDirectory = false;
-        _showDeleteConfirm = true;
+        _deleteInteraction.Begin(_assetSelection.Paths, false);
     }
 
     private void DrawDeleteDialog(
         EditorState state,
         EditorLog log)
     {
-        if (_showDeleteConfirm)
+        if (_deleteInteraction.ConsumeOpenRequest())
         {
-            ImGui.OpenPopup(
-                "Delete Asset");
-
-            _showDeleteConfirm =
-                false;
+            ImGui.OpenPopup("Delete Asset##AssetDeleteConfirmation");
         }
 
-        if (!ImGui.BeginPopupModal(
-                "Delete Asset",
-                ImGuiWindowFlags.AlwaysAutoResize))
+        if (!ImGui.BeginPopupModal("Delete Asset##AssetDeleteConfirmation", ImGuiWindowFlags.AlwaysAutoResize))
         {
+            _deleteInteraction.RecoverWhenNotVisible();
             return;
         }
+        _deleteInteraction.MarkVisible();
 
-        string? target = _deleteTargetPath;
-        IReadOnlyList<string> targets = _deleteTargetPaths.Count > 0
-            ? _deleteTargetPaths
-            : target == null ? Array.Empty<string>() : new[] { target };
-        AssetRecord[] affectedBlueprints = ResolveAssetsForDeletion(targets, _deleteTargetIsDirectory)
+        IReadOnlyList<string> targets = _deleteInteraction.Targets;
+        string? target = targets.Count == 1 ? targets[0] : null;
+        AssetRecord[] affectedBlueprints = ResolveAssetsForDeletion(targets, _deleteInteraction.IsDirectory)
             .Where(asset => asset.Type == AssetType.Blueprint)
             .DistinctBy(asset => asset.Guid)
             .ToArray();
@@ -1841,7 +1828,7 @@ internal sealed class AssetsPanel
         else if (target != null)
         {
             ImGui.TextWrapped(
-                _deleteTargetIsDirectory
+                _deleteInteraction.IsDirectory
                     ? $"Delete folder '{Path.GetFileName(target)}' and everything inside it?"
                     : $"Delete asset '{Path.GetFileName(target)}'?");
         }
@@ -1875,7 +1862,7 @@ internal sealed class AssetsPanel
         if (ImGui.Button(
                 blueprintInstances > 0 ? "Delete and Unpack Instances" : "Delete",
                 new Vector2(
-                    100.0f,
+                    210.0f,
                     0.0f)))
         {
             if (targets.Count > 0)
@@ -1888,10 +1875,13 @@ internal sealed class AssetsPanel
                             state.EditorScene,
                             new AssetReference(blueprint.Guid, blueprint.ProjectPath));
                         if (unpacked > 0) state.MarkDirty();
+                        if (state.RuntimeScene != null)
+                            BlueprintPromotionService.UnpackInstances(state.RuntimeScene,
+                                new AssetReference(blueprint.Guid, blueprint.ProjectPath));
                     }
                     foreach (string item in targets.ToArray())
                     {
-                        DeletePath(item, _deleteTargetIsDirectory);
+                        DeletePath(item, _deleteInteraction.IsDirectory);
                     }
                     _assetSelection.Clear();
                     state.SelectedAssetId = null;
@@ -1907,9 +1897,7 @@ internal sealed class AssetsPanel
                 }
             }
 
-            _deleteTargetPath =
-                null;
-            _deleteTargetPaths.Clear();
+            _deleteInteraction.Reset();
 
             ImGui.CloseCurrentPopup();
         }
@@ -1921,12 +1909,10 @@ internal sealed class AssetsPanel
         if (ImGui.Button(
                 "Cancel",
                 new Vector2(
-                    210.0f,
+                    100.0f,
                     0.0f)))
         {
-            _deleteTargetPath =
-                null;
-            _deleteTargetPaths.Clear();
+            _deleteInteraction.Reset();
 
             ImGui.CloseCurrentPopup();
         }
