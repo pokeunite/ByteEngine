@@ -157,15 +157,26 @@ internal sealed class ProjectSettingsPanel
         if (_captureBindingId == binding.Id)
         {
             ImGui.TextColored(new Vector4(.3f, .8f, 1f, 1f), "Press a key or mouse button... (Escape cancels)");
-            if (_captureDelayFrames > 0) _captureDelayFrames--;
+            if (_captureDelayFrames > 0)
+            {
+                _captureDelayFrames--;
+            }
             else if (TryCapture(out Key key, out MouseButton mouse, out bool isMouse, out bool cancel))
             {
                 if (!cancel)
                 {
-                    if (_captureSlot == "MouseButton" && isMouse) binding.MouseButton = mouse;
-                    else if (!isMouse) SetKeySlot(binding, _captureSlot, key);
-                    Commit(project);
+                    if (_captureSlot == "MouseButton" && isMouse)
+                    {
+                        binding.MouseButton = mouse;
+                        Commit(project);
+                    }
+                    else if (!isMouse && _captureSlot != "MouseButton")
+                    {
+                        SetKeySlot(binding, _captureSlot, key);
+                        Commit(project);
+                    }
                 }
+
                 _captureBindingId = Guid.Empty;
                 _captureSlot = string.Empty;
             }
@@ -186,11 +197,39 @@ internal sealed class ProjectSettingsPanel
 
     private static bool TryCapture(out Key key, out MouseButton mouse, out bool isMouse, out bool cancel)
     {
-        key = Key.Space; mouse = MouseButton.Left; isMouse = false; cancel = false;
-        if (ImGui.IsKeyPressed(ImGuiKey.Escape)) { cancel = true; return true; }
+        key = Key.Space;
+        mouse = MouseButton.Left;
+        isMouse = false;
+        cancel = false;
+
+        if (Input.IsKeyPressed(Key.Escape))
+        {
+            cancel = true;
+            return true;
+        }
+
         foreach (Key candidate in Enum.GetValues<Key>())
-            if (Enum.TryParse(candidate.ToString(), out ImGuiKey imguiKey) && ImGui.IsKeyPressed(imguiKey)) { key = candidate; return true; }
-        for (int i = 0; i < 3; i++) if (ImGui.IsMouseClicked((ImGuiMouseButton)i)) { mouse = (MouseButton)i; isMouse = true; return true; }
+        {
+            if (candidate == Key.Escape)
+                continue;
+
+            if (Input.IsKeyPressed(candidate))
+            {
+                key = candidate;
+                return true;
+            }
+        }
+
+        foreach (MouseButton candidate in Enum.GetValues<MouseButton>())
+        {
+            if (Input.IsMouseButtonPressed(candidate))
+            {
+                mouse = candidate;
+                isMouse = true;
+                return true;
+            }
+        }
+
         return false;
     }
 
