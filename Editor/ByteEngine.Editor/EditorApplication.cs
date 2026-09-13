@@ -200,7 +200,6 @@ public sealed class EditorApplication
         {
             e.Cancel =
                 true;
-
             RequestAfterUnsavedCheck(
                 RequestClose
             );
@@ -584,7 +583,20 @@ public sealed class EditorApplication
         }
         if (ImGui.BeginMenu("Light", canEdit))
         {
-            if (ImGui.MenuItem("Directional Light")) CreateObjectWithComponent("Directional Light", () => new DirectionalLight());
+            if (ImGui.MenuItem("Directional Light"))
+            {
+                CreateObjectWithComponent(
+                    "Directional Light",
+                    () => new DirectionalLight());
+            }
+
+            if (ImGui.MenuItem("Point Light"))
+            {
+                CreateObjectWithComponent(
+                    "Point Light",
+                    () => new PointLight());
+            }
+
             ImGui.EndMenu();
         }
 
@@ -741,7 +753,7 @@ public sealed class EditorApplication
         ImGui.EndDisabled();
     }
 
-    private void HandleShortcuts()
+       private void HandleShortcuts()
     {
         if (_state == null ||
             ImGui.GetIO().WantTextInput)

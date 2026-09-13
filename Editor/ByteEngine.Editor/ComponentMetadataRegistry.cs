@@ -50,6 +50,7 @@ internal static class ComponentMetadataRegistry
         [typeof(SkeletalMeshRenderer)] = new("Skeletal Mesh Renderer", "Rendering", "Draws an animated skinned mesh.", "character bones model"),
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
         [typeof(DirectionalLight)] = new("Directional Light", "Rendering", "Lights the scene from one direction.", "sun world light"),
+        [typeof(PointLight)] = new("Point Light", "Rendering", "Lights nearby 3D surfaces outward from a position.", "lamp bulb local omni light"),
         [typeof(BoxCollider3D)] = new("Box Collider", "Physics", "A box-shaped collision volume.", "collision cube"),
         [typeof(CapsuleCollider3D)] = new("Capsule Collider", "Physics", "A character-friendly capsule collision volume.", "collision character"),
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
@@ -98,7 +99,10 @@ internal static class ComponentMetadataRegistry
         [(typeof(PlayerController3D), nameof(PlayerController3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used for camera and control rotation."),
         [(typeof(PlayerController3D), nameof(PlayerController3D.JumpAction))] = new("Jump Action", "Input Actions", "The Button Input Action that requests a jump."),
         [(typeof(PlayerController3D), nameof(PlayerController3D.SprintAction))] = new("Sprint Action", "Input Actions", "The Button Input Action reserved for sprint behavior."),
-        [(typeof(ThirdPersonCamera3D), nameof(ThirdPersonCamera3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used by the legacy orbit camera.")
+        [(typeof(ThirdPersonCamera3D), nameof(ThirdPersonCamera3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used by the legacy orbit camera."),
+        [(typeof(PointLight), nameof(PointLight.Intensity))] = new("Intensity", "Lighting", "Brightness of this local light."),
+        [(typeof(PointLight), nameof(PointLight.Range))] = new("Range", "Lighting", "Maximum distance affected by this light.", "m"),
+        [(typeof(PointLight), nameof(PointLight.Color))] = new("Color", "Lighting", "RGB color of this light.")
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;

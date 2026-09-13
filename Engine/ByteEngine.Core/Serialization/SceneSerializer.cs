@@ -18,9 +18,25 @@ public sealed class SceneSerializer
         ComponentSerializer components,
         ClassificationSettings? classification = null)
     {
+        ArgumentNullException.ThrowIfNull(
+            components);
+
         _components =
             components;
-        _classification = classification;
+
+        /*
+         * v0.9-c:
+         *
+         * Install the renderer/light codecs on every SceneSerializer.
+         * Registering by runtime type and type name intentionally replaces
+         * the legacy MeshRenderer codec while keeping ComponentSerializer
+         * itself backwards compatible and small-risk.
+         */
+        RendererSerializationRegistrar.Register(
+            _components);
+
+        _classification =
+            classification;
     }
 
     public void Save(

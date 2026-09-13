@@ -322,23 +322,31 @@ public sealed class Scene
             return;
         }
 
+        context.Begin3DFrame();
+
         foreach (GameObject gameObject
                  in GetRenderOrder())
         {
             gameObject.RenderInternal(
                 context);
         }
+
+        context.Flush3D();
     }
 
     internal void RenderEditorInternal(
         RenderContext context)
     {
+        context.Begin3DFrame();
+
         foreach (GameObject gameObject
                  in GetRenderOrder())
         {
             gameObject.RenderEditorInternal(
                 context);
         }
+
+        context.Flush3D();
     }
 
     internal void UnloadInternal()
