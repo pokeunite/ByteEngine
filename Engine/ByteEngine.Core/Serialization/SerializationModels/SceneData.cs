@@ -27,6 +27,10 @@ public sealed class GameObjectData
     public bool Active { get; set; } =
         true;
 
+    public List<Guid> Tags { get; set; } = new();
+
+    public int Layer { get; set; }
+
     public Guid? ParentId { get; set; }
 
     public TransformData Transform { get; set; } =

@@ -6,6 +6,8 @@ public sealed class GameObject
 {
     private readonly List<Component> _components = new();
     private readonly List<GameObject> _children = new();
+    private readonly HashSet<Guid> _tags = new();
+    private int _layer;
     private bool _started;
     private Scene? _scene;
 
@@ -21,6 +23,19 @@ public sealed class GameObject
     public GameObject? Parent { get; private set; }
     public IReadOnlyList<GameObject> Children => _children;
     public Scene? Scene => _scene;
+    public IReadOnlyCollection<Guid> Tags => _tags;
+    public int Layer
+    {
+        get => _layer;
+        set
+        {
+            int safe = value is >= 0 and < 32 ? value : 0;
+            if (_layer == safe) return;
+            int previous = _layer;
+            _layer = safe;
+            _scene?.OnLayerChanged(this, previous, safe);
+        }
+    }
     public Variables.VariableStore Variables { get; } = new();
 
     public GameObject(string name = "GameObject") : this(Guid.NewGuid(), name) { }
@@ -59,6 +74,29 @@ public sealed class GameObject
         for (GameObject? current = Parent; current != null; current = current.Parent)
             if (ReferenceEquals(current, possibleAncestor)) return true;
         return false;
+    }
+
+    public bool HasTag(Guid tagId) => tagId != Guid.Empty && _tags.Contains(tagId);
+    public bool HasTag(string name) => _scene?.Classification.FindTag(name) is { } tag && HasTag(tag.Id);
+    public bool AddTag(Guid tagId)
+    {
+        if (tagId == Guid.Empty || !_tags.Add(tagId)) return false;
+        _scene?.OnTagAdded(this, tagId);
+        return true;
+    }
+    public bool AddTag(string name) => _scene?.Classification.FindTag(name) is { } tag && AddTag(tag.Id);
+    public bool RemoveTag(Guid tagId)
+    {
+        if (!_tags.Remove(tagId)) return false;
+        _scene?.OnTagRemoved(this, tagId);
+        return true;
+    }
+    public bool RemoveTag(string name) => _scene?.Classification.FindTag(name) is { } tag && RemoveTag(tag.Id);
+    internal void SetTags(IEnumerable<Guid>? tags)
+    {
+        foreach (Guid oldTag in _tags.ToArray()) RemoveTag(oldTag);
+        if (tags == null) return;
+        foreach (Guid tag in tags) AddTag(tag);
     }
 
     internal void AttachToScene(Scene scene) => _scene = scene;

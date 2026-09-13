@@ -2,6 +2,7 @@ using System.Numerics;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
+using ByteEngine.Core.Classification;
 
 namespace ByteEngine.Core.Gameplay;
 
@@ -16,6 +17,7 @@ public sealed class Projectile3D : Component
     public float Radius { get => _radius; set => _radius = Safe(value); }
     public bool DestroyOnHit { get; set; } = true;
     public Guid OwnerId { get; set; }
+    public LayerMask CollisionMask { get; set; } = LayerMask.All;
 
     protected override void OnUpdate()
     {
@@ -28,7 +30,8 @@ public sealed class Projectile3D : Component
         if (distance <= .000001f) return;
         Vector3 origin = projectile.Transform.WorldPosition;
         Vector3 direction = displacement / distance;
-        if (GameplayQuery3D.SphereCast(scene, origin, direction, Radius, out RaycastHit3D hit, distance, projectile, OwnerId))
+        if (GameplayQuery3D.SphereCast(scene, origin, direction, Radius, out RaycastHit3D hit, distance,
+                projectile, OwnerId, CollisionMask, projectile))
         {
             projectile.Transform.WorldPosition = hit.Point;
             hit.GameObject.GetComponent<HealthComponent>()?.Damage(Damage);

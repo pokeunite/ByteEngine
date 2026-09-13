@@ -36,7 +36,8 @@ public sealed class PlayerShooter3D : Component
         ProjectileLauncher3D? launcher = player.GetComponent<ProjectileLauncher3D>();
         if (launcher != null) muzzle = Vector3.Transform(launcher.MuzzleOffset, player.Transform.WorldMatrix);
 
-        if (GameplayQuery3D.Raycast(scene, rayOrigin, rayDirection, out RaycastHit3D hit, 1000f, player) &&
+        if (GameplayQuery3D.Raycast(scene, rayOrigin, rayDirection, out RaycastHit3D hit, 1000f,
+                player, null, player) &&
             hit.GameObject.GetComponent<ByteEngine.Core.Characters.GroundSurface>() == null)
         {
             Vector3 towardHit = hit.Point - muzzle;

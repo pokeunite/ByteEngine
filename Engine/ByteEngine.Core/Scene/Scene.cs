@@ -1,5 +1,6 @@
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Variables;
+using ByteEngine.Core.Classification;
 
 namespace ByteEngine.Core.Scene;
 
@@ -10,6 +11,8 @@ public sealed class Scene
 
     private readonly HashSet<Guid> _pendingDestroy =
         new();
+    private readonly Dictionary<Guid, HashSet<GameObject>> _tagIndex = new();
+    private readonly HashSet<GameObject>[] _layerIndex = Enumerable.Range(0, 32).Select(_ => new HashSet<GameObject>()).ToArray();
 
     private bool _loaded;
     private bool _isUpdating;
@@ -25,6 +28,7 @@ public sealed class Scene
 
     public bool IsLoaded =>
         _loaded;
+    public ClassificationSettings Classification { get; }
 
     public Camera3D? ActiveCamera
     {
@@ -64,9 +68,15 @@ public sealed class Scene
     {
     }
 
+    public Scene(string name, ClassificationSettings classification)
+        : this(Guid.NewGuid(), name, classification)
+    {
+    }
+
     public Scene(
         Guid id,
-        string name)
+        string name,
+        ClassificationSettings? classification = null)
     {
         if (id == Guid.Empty)
         {
@@ -85,6 +95,8 @@ public sealed class Scene
 
         Id = id;
         Name = name;
+        Classification = classification ?? ClassificationSettings.CreateDefault();
+        Classification.EnsureValid();
     }
 
     public GameObject CreateGameObject(
@@ -117,6 +129,7 @@ public sealed class Scene
 
         gameObject.AttachToScene(
             this);
+        RegisterClassification(gameObject);
 
         Camera3D? requestedCamera = gameObject.Components.OfType<Camera3D>()
             .FirstOrDefault(camera => camera.ActiveGameCamera);
@@ -182,6 +195,41 @@ public sealed class Scene
             item =>
                 item.Id ==
                 id);
+    }
+
+    public GameObject? FindFirstWithTag(Guid tagId) =>
+        _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects.FirstOrDefault(item => item.ActiveInHierarchy) : null;
+    public GameObject? FindFirstWithTag(string name) => Classification.FindTag(name) is { } tag ? FindFirstWithTag(tag.Id) : null;
+    public IReadOnlyCollection<GameObject> FindGameObjectsWithTag(Guid tagId) =>
+        _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects : Array.Empty<GameObject>();
+    public IReadOnlyCollection<GameObject> FindGameObjectsWithTag(string name) =>
+        Classification.FindTag(name) is { } tag ? FindGameObjectsWithTag(tag.Id) : Array.Empty<GameObject>();
+    public int CountWithTag(Guid tagId) => _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects.Count : 0;
+    public int CountWithTag(string name) => Classification.FindTag(name) is { } tag ? CountWithTag(tag.Id) : 0;
+    public IReadOnlyCollection<GameObject> FindGameObjectsOnLayer(int layer) =>
+        layer is >= 0 and < 32 ? _layerIndex[layer] : Array.Empty<GameObject>();
+    public IEnumerable<GameObject> FindGameObjects(LayerMask mask)
+    {
+        for (int layer = 0; layer < 32; layer++)
+            if (mask.Contains(layer))
+                foreach (GameObject gameObject in _layerIndex[layer]) yield return gameObject;
+    }
+
+    internal void OnTagAdded(GameObject gameObject, Guid tagId)
+    {
+        if (!_tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects)) _tagIndex[tagId] = objects = new();
+        objects.Add(gameObject);
+    }
+    internal void OnTagRemoved(GameObject gameObject, Guid tagId)
+    {
+        if (!_tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects)) return;
+        objects.Remove(gameObject);
+        if (objects.Count == 0) _tagIndex.Remove(tagId);
+    }
+    internal void OnLayerChanged(GameObject gameObject, int previous, int current)
+    {
+        if (previous is >= 0 and < 32) _layerIndex[previous].Remove(gameObject);
+        _layerIndex[current].Add(gameObject);
     }
 
     public T? FindComponent<T>()
@@ -343,10 +391,24 @@ public sealed class Scene
         _gameObjects.Remove(
             gameObject);
 
+        UnregisterClassification(gameObject);
+
         gameObject.DetachFromScene();
         gameObject.DestroyInternal();
 
         return true;
+    }
+
+    private void RegisterClassification(GameObject gameObject)
+    {
+        _layerIndex[gameObject.Layer].Add(gameObject);
+        foreach (Guid tag in gameObject.Tags) OnTagAdded(gameObject, tag);
+    }
+
+    private void UnregisterClassification(GameObject gameObject)
+    {
+        _layerIndex[gameObject.Layer].Remove(gameObject);
+        foreach (Guid tag in gameObject.Tags) OnTagRemoved(gameObject, tag);
     }
 
     private void FlushPendingDestroy()

@@ -15,6 +15,9 @@ internal static class V08CInputActionsTests
 {
     public static void Run(string root)
     {
+        Assert(Enum.IsDefined(Key.GraveAccent) && Enum.IsDefined(Key.KeyPadEnter) &&
+               Enum.IsDefined(Key.F25) && Enum.IsDefined(MouseButton.Button5),
+            "Bindable controls include punctuation, keypad, extended function keys, and auxiliary mouse buttons");
         TestButtonEdges();
         TestDefaultMap();
         TestAxesAndBindings();

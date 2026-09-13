@@ -65,6 +65,8 @@ public sealed class ProjectSerializer
     private static void Validate(
         ProjectData project)
     {
+        project.Classification ??= ByteEngine.Core.Classification.ClassificationSettings.CreateDefault();
+        project.Classification.EnsureValid();
         if (string.IsNullOrWhiteSpace(
                 project.Name))
         {

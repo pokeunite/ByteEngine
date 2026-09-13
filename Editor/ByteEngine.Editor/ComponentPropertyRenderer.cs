@@ -9,6 +9,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Classification;
 using ImGuiNET;
 
 namespace ByteEngine.Editor;
@@ -39,7 +40,7 @@ internal static class ComponentPropertyRenderer
 
     private static bool Supported(Type t) => t == typeof(float) || t == typeof(int) || t == typeof(bool) ||
         t == typeof(string) || t == typeof(Vector2) || t == typeof(Vector3) || t == typeof(Vector4) ||
-        t == typeof(Guid) || t == typeof(AssetReference) || t == typeof(InputActionReference) || t.IsEnum;
+        t == typeof(Guid) || t == typeof(LayerMask) || t == typeof(AssetReference) || t == typeof(InputActionReference) || t.IsEnum;
 
     public static bool SetValue(Component component, ComponentPropertyDescriptor descriptor, object value, PropertyEditorContext context)
     {
@@ -122,6 +123,21 @@ internal static class ComponentPropertyRenderer
                     }
                     ImGui.EndCombo();
                 }
+            }
+            else if (descriptor.Property.PropertyType == typeof(LayerMask))
+            {
+                LayerMask mask = before is LayerMask value ? value : LayerMask.All;
+                edited = ClassificationPickers.DrawLayerMask(label,
+                    project?.Project.Classification ?? component.GameObject.Scene?.Classification ?? ClassificationSettings.CreateDefault(), ref mask);
+                after = mask;
+            }
+            else if (descriptor.Property.PropertyType == typeof(Guid) &&
+                     descriptor.Property.Name.EndsWith("TagId", StringComparison.Ordinal))
+            {
+                Guid tag = before is Guid value ? value : Guid.Empty;
+                edited = ClassificationPickers.DrawTag(label,
+                    project?.Project.Classification ?? component.GameObject.Scene?.Classification ?? ClassificationSettings.CreateDefault(), ref tag);
+                after = tag;
             }
             else
             {

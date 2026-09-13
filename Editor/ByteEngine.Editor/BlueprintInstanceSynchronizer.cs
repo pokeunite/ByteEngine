@@ -197,6 +197,8 @@ internal static class BlueprintInstanceSynchronizer
         var merged = Clone(latest);
         merged.Name = Choose(old.Name, current.Name, latest.Name, counts);
         merged.Active = Choose(old.Active, current.Active, latest.Active, counts);
+        merged.Tags = MergeTags(old.Tags, current.Tags, latest.Tags, counts);
+        merged.Layer = Choose(old.Layer, current.Layer, latest.Layer, counts);
         merged.ParentId = Choose(old.ParentId, current.ParentId, latest.ParentId, counts);
         merged.Transform = MergeValue(old.Transform, current.Transform, latest.Transform, counts);
         merged.Variables = MergeValue(old.Variables, current.Variables, latest.Variables, counts);
@@ -261,6 +263,19 @@ internal static class BlueprintInstanceSynchronizer
         if (EqualityComparer<T>.Default.Equals(old, current)) return latest;
         counts.ModifiedProperties++;
         return current;
+    }
+
+    private static List<Guid> MergeTags(IReadOnlyCollection<Guid> old, IReadOnlyCollection<Guid> current,
+        IReadOnlyCollection<Guid> latest, Counts counts)
+    {
+        HashSet<Guid> oldSet = old.ToHashSet();
+        HashSet<Guid> currentSet = current.ToHashSet();
+        HashSet<Guid> result = latest.ToHashSet();
+        bool changed = false;
+        foreach (Guid removed in oldSet.Except(currentSet)) { result.Remove(removed); changed = true; }
+        foreach (Guid added in currentSet.Except(oldSet)) { result.Add(added); changed = true; }
+        if (changed) counts.ModifiedProperties++;
+        return result.OrderBy(id => id).ToList();
     }
 
     private static T MergeValue<T>(T old, T current, T latest, Counts counts)

@@ -1086,7 +1086,8 @@ public sealed class ComponentSerializer
                 ["shoulderOffset"] = boom.ShoulderOffset,
                 ["enableCameraCollision"] = boom.EnableCameraCollision,
                 ["collisionRadius"] = boom.CollisionRadius,
-                ["collisionReturnSpeed"] = boom.CollisionReturnSpeed
+                ["collisionReturnSpeed"] = boom.CollisionReturnSpeed,
+                ["cameraCollisionMask"] = boom.CameraCollisionMask.Bits
             });
         }
 
@@ -1117,7 +1118,9 @@ public sealed class ComponentSerializer
                 ShoulderOffset = Float(data, "shoulderOffset", 0f),
                 EnableCameraCollision = data.Properties["enableCameraCollision"]?.GetValue<bool>() ?? false,
                 CollisionRadius = Float(data, "collisionRadius", .2f),
-                CollisionReturnSpeed = Float(data, "collisionReturnSpeed", 8f)
+                CollisionReturnSpeed = Float(data, "collisionReturnSpeed", 8f),
+                CameraCollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
+                    data.Properties["cameraCollisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }
@@ -1185,7 +1188,8 @@ public sealed class ComponentSerializer
                 ["damage"] = projectile.Damage,
                 ["radius"] = projectile.Radius,
                 ["destroyOnHit"] = projectile.DestroyOnHit,
-                ["ownerId"] = projectile.OwnerId.ToString()
+                ["ownerId"] = projectile.OwnerId.ToString(),
+                ["collisionMask"] = projectile.CollisionMask.Bits
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -1197,7 +1201,9 @@ public sealed class ComponentSerializer
                 Damage = Float(data, "damage", 10f),
                 Radius = Float(data, "radius", .05f),
                 DestroyOnHit = data.Properties["destroyOnHit"]?.GetValue<bool>() ?? true,
-                OwnerId = ownerId
+                OwnerId = ownerId,
+                CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
+                    data.Properties["collisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }
@@ -1246,6 +1252,7 @@ public sealed class ComponentSerializer
             return Data(TypeName, new JsonObject
             {
                 ["targetId"] = ai.TargetId.ToString(),
+                ["targetTagId"] = ai.TargetTagId.ToString(),
                 ["targetName"] = ai.TargetName,
                 ["moveSpeed"] = ai.MoveSpeed,
                 ["detectionRange"] = ai.DetectionRange,
@@ -1258,9 +1265,11 @@ public sealed class ComponentSerializer
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
         {
             Guid.TryParse(Text(data, "targetId", string.Empty), out Guid targetId);
+            Guid.TryParse(Text(data, "targetTagId", string.Empty), out Guid targetTagId);
             return new SimpleEnemyAI3D
             {
                 TargetId = targetId,
+                TargetTagId = targetTagId,
                 TargetName = Text(data, "targetName", string.Empty),
                 MoveSpeed = Float(data, "moveSpeed", 3f),
                 DetectionRange = Float(data, "detectionRange", 20f),
@@ -1303,7 +1312,9 @@ public sealed class ComponentSerializer
                         ),
 
                     ["isTrigger"] =
-                        collider.IsTrigger
+                        collider.IsTrigger,
+                    ["useProjectMatrix"] = collider.UseProjectMatrix,
+                    ["collisionMask"] = collider.CollisionMask.Bits
                 }
             );
         }
@@ -1329,7 +1340,10 @@ public sealed class ComponentSerializer
                 IsTrigger =
                     data.Properties["isTrigger"]?
                         .GetValue<bool>() ??
-                    false
+                    false,
+                UseProjectMatrix = data.Properties["useProjectMatrix"]?.GetValue<bool>() ?? true,
+                CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
+                    data.Properties["collisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }
@@ -1388,7 +1402,8 @@ public sealed class ComponentSerializer
                         controller.JumpBuffer,
 
                     ["snapToGround"] =
-                        controller.SnapToGround
+                        controller.SnapToGround,
+                    ["groundCollisionMask"] = controller.GroundCollisionMask.Bits
                 }
             );
         }
@@ -1479,7 +1494,9 @@ public sealed class ComponentSerializer
                 SnapToGround =
                     data.Properties["snapToGround"]?
                         .GetValue<bool>() ??
-                    true
+                    true,
+                GroundCollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
+                    data.Properties["groundCollisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }
@@ -1524,7 +1541,9 @@ public sealed class ComponentSerializer
                         ),
 
                     ["isTrigger"] =
-                        collider.IsTrigger
+                        collider.IsTrigger,
+                    ["useProjectMatrix"] = collider.UseProjectMatrix,
+                    ["collisionMask"] = collider.CollisionMask.Bits
                 }
             );
         }
@@ -1571,7 +1590,10 @@ public sealed class ComponentSerializer
                 IsTrigger =
                     data.Properties["isTrigger"]?
                         .GetValue<bool>() ??
-                    false
+                    false,
+                UseProjectMatrix = data.Properties["useProjectMatrix"]?.GetValue<bool>() ?? true,
+                CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
+                    data.Properties["collisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }

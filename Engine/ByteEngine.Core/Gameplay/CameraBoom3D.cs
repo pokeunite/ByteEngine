@@ -3,6 +3,7 @@ using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Classification;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
 namespace ByteEngine.Core.Gameplay;
@@ -13,6 +14,7 @@ namespace ByteEngine.Core.Gameplay;
 /// </summary>
 public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
 {
+    public LayerMask CameraCollisionMask { get; set; } = LayerMask.All;
     private float _armLength = 4.75f;
     private float _pivotHeight = 1.6f;
     private float _yaw;
@@ -162,7 +164,8 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         _collisionObject = null;
 
         if (EnableCameraCollision && desiredLength > .0001f &&
-            GameplayQuery3D.SphereCast(scene, _smoothedPivot, fullOffset, CollisionRadius, out RaycastHit3D hit, desiredLength, root))
+            GameplayQuery3D.SphereCast(scene, _smoothedPivot, fullOffset, CollisionRadius,
+                out RaycastHit3D hit, desiredLength, root, CameraCollisionMask, root))
         {
             _collisionHit = true;
             _collisionObject = hit.GameObject;

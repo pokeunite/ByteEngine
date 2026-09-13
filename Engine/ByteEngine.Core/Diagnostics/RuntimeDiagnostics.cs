@@ -49,6 +49,23 @@ public static class RuntimeDiagnostics
             writer.Add($"{action.Group}/{action.DisplayName}",
                 $"type={action.Type}, id={action.Id}, bindings={action.Bindings.Count}, down={state.Down}, pressed={state.Pressed}, released={state.Released}, axis1D={state.Axis1D:0.###}, axis2D=({state.Axis2D.X:0.###}, {state.Axis2D.Y:0.###}), source={state.ActiveSource}");
         }
+        writer.Section("Tags & Layers");
+        writer.Add("Tags", string.Join(", ", scene.Classification.Tags.Select(item => item.Name)));
+        writer.Add("Layers", string.Join(", ", scene.Classification.Layers.OrderBy(item => item.Index)
+            .Select(item => $"{item.Index} {item.Name}")));
+        foreach (GameObject gameObject in scene.GameObjects)
+        {
+            string tags = string.Join(", ", gameObject.Tags.Select(id => scene.Classification.FindTag(id)?.Name ?? $"Missing Tag {id}"));
+            string layer = scene.Classification.FindLayer(gameObject.Layer)?.Name ?? "Default";
+            writer.Add(gameObject.Name, $"Tags: {(tags.Length == 0 ? "None" : tags)}; Layer: {layer}");
+        }
+        foreach (var layer in scene.Classification.Layers.OrderBy(item => item.Index))
+        {
+            string interactions = string.Join(", ", scene.Classification.Layers
+                .Where(other => scene.Classification.CollisionMatrix.ShouldInteract(layer.Index, other.Index))
+                .Select(other => other.Name));
+            writer.Add($"{layer.Name} interacts with", interactions);
+        }
         int sources = 0;
         foreach (GameObject gameObject in scene.GameObjects)
             foreach (IRuntimeDiagnosticSource source in gameObject.Components.OfType<IRuntimeDiagnosticSource>())

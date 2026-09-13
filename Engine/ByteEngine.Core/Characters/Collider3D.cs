@@ -1,11 +1,14 @@
 using System.Numerics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Classification;
 namespace ByteEngine.Core.Characters;
 
 public abstract class Collider3D : Component
 {
     public bool IsTrigger { get; set; }
     public Vector3 Center { get; set; }
+    public bool UseProjectMatrix { get; set; } = true;
+    public LayerMask CollisionMask { get; set; } = LayerMask.All;
     public abstract Vector3 Size { get; set; }
 }
 

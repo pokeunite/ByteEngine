@@ -40,6 +40,7 @@ internal sealed class EditorProjectContext
         Project.InputMap ??= InputMap.CreateDefault();
         Project.InputMap.EnsureValid();
         InputActions.Configure(Project.InputMap);
+        Project.Classification.EnsureValid();
 
         ProjectFilePath =
             Path.GetFullPath(
@@ -79,7 +80,8 @@ internal sealed class EditorProjectContext
 
         Scenes =
             new SceneSerializer(
-                components
+                components,
+                Project.Classification
             );
 
         /*

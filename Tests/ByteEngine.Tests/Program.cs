@@ -31,6 +31,14 @@ try
         Console.WriteLine("v0.8-c focused regressions passed.");
         return;
     }
+    if (args.Contains("--v08d"))
+    {
+        using var focusedDatabase = new AssetDatabase(root, new[] { "Assets", "Scenes" });
+        using var focusedAssets = new AssetManager(focusedDatabase);
+        V08DTagsLayersTests.Run(root, focusedDatabase, focusedAssets);
+        Console.WriteLine("v0.8-d focused regressions passed.");
+        return;
+    }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
     var serializer = new SceneSerializer(new ComponentSerializer(root, database, assets));
 
@@ -83,7 +91,8 @@ try
     V084EditorStabilityTests.Run();
     V085ProfessionalEditorTests.Run(root);
     V08CInputActionsTests.Run(root);
-    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-c regressions and Phase 1/2/3 gameplay systems.");
+    V08DTagsLayersTests.Run(root, database, assets);
+    Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-d regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }
 

@@ -11,6 +11,7 @@ public sealed class SimpleEnemyAI3D : Component
     private float _damage = 10f, _attackCooldown = 1f, _stopDistance = 1f, _cooldownRemaining;
 
     public Guid TargetId { get; set; }
+    public Guid TargetTagId { get; set; }
     public string TargetName { get; set; } = string.Empty;
     public float MoveSpeed { get => _moveSpeed; set => _moveSpeed = Safe(value); }
     public float DetectionRange { get => _detectionRange; set => _detectionRange = Safe(value); }
@@ -57,6 +58,7 @@ public sealed class SimpleEnemyAI3D : Component
     private GameObject? ResolveTarget(RuntimeScene scene, GameObject enemy)
     {
         GameObject? target = TargetId != Guid.Empty ? scene.FindGameObject(TargetId) : null;
+        if (target == null && TargetTagId != Guid.Empty) target = scene.FindFirstWithTag(TargetTagId);
         if (target == null && !string.IsNullOrWhiteSpace(TargetName)) target = scene.FindGameObject(TargetName);
         return target ?? scene.GameObjects.FirstOrDefault(candidate => !ReferenceEquals(candidate, enemy) &&
             candidate.ActiveInHierarchy && candidate.GetComponent<CharacterController3D>()?.Enabled == true);

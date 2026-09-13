@@ -5,6 +5,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Classification;
 using ByteEngine.Core.InputSystem;
 
 namespace ByteEngine.Editor;
@@ -34,6 +35,21 @@ internal static class BlueprintAuthoringService
 
     public static CameraBoom3D SetupThirdPersonCharacter(GameObject player, AssetManager? assets = null)
     {
+        ClassificationSettings? classification = player.Scene?.Classification ?? EditorProjectContext.Active?.Project.Classification;
+        if (classification != null)
+        {
+            TagDefinition playerTag = classification.FindTag("Player") ?? classification.AddTag("Player")!;
+            ObjectLayerDefinition? playerLayer = classification.FindLayer("Player");
+            if (playerLayer == null)
+            {
+                int slot = Enumerable.Range(1, 31).First(index => classification.FindLayer(index) == null);
+                classification.DefineLayer(slot, "Player");
+                playerLayer = classification.FindLayer(slot);
+            }
+            player.AddTag(playerTag.Id);
+            player.Layer = playerLayer!.Index;
+            EditorProjectContext.Active?.SaveProject();
+        }
         InputActions.Map.EnsureGameplayDefaults();
         bool createInitialCapsule = player.GetComponent<CapsuleCollider3D>() == null;
         NormalizeCharacterStructure(player);

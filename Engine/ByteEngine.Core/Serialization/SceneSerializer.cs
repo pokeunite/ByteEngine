@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Core.Classification;
 
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
@@ -11,12 +12,15 @@ namespace ByteEngine.Core.Serialization;
 public sealed class SceneSerializer
 {
     private readonly ComponentSerializer _components;
+    private readonly ClassificationSettings? _classification;
 
     public SceneSerializer(
-        ComponentSerializer components)
+        ComponentSerializer components,
+        ClassificationSettings? classification = null)
     {
         _components =
             components;
+        _classification = classification;
     }
 
     public void Save(
@@ -110,6 +114,8 @@ public sealed class SceneSerializer
                     Id = gameObject.Id,
                     Name = gameObject.Name,
                     Active = gameObject.Active,
+                    Tags = gameObject.Tags.ToList(),
+                    Layer = gameObject.Layer,
                     ParentId = gameObject.Parent?.Id,
                     Transform =
                         new TransformData
@@ -184,7 +190,8 @@ public sealed class SceneSerializer
                 string.IsNullOrWhiteSpace(
                     data.Name)
                     ? "Untitled Scene"
-                    : data.Name
+                    : data.Name,
+                _classification
             );
 
         foreach (VariableData variable in data.Variables)
@@ -211,8 +218,12 @@ public sealed class SceneSerializer
                 )
                 {
                     Active =
-                        gameObjectData.Active
+                        gameObjectData.Active,
+                    Layer = gameObjectData.Layer
                 };
+            gameObject.SetTags(gameObjectData.Tags);
+            if (gameObjectData.Layer is < 0 or >= 32)
+                Console.Error.WriteLine($"Invalid layer {gameObjectData.Layer} on '{gameObject.Name}'; using Default.");
 
             foreach (VariableData variable in gameObjectData.Variables)
                 gameObject.Variables.Set(variable.Name, variable.Value.Clone());

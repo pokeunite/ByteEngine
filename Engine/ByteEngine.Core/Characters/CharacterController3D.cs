@@ -1,12 +1,15 @@
 using System.Numerics;
 
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Classification;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Core.Characters;
 
 public sealed class CharacterController3D
     : Component
 {
+    public LayerMask GroundCollisionMask { get; set; } = LayerMask.All;
     private Vector3 _moveInput;
 
     private bool _jumpQueued;
@@ -331,6 +334,20 @@ public sealed class CharacterController3D
             if (ReferenceEquals(
                     item,
                     GameObject))
+            {
+                continue;
+            }
+
+            if (!GroundCollisionMask.Contains(item.Layer))
+            {
+                continue;
+            }
+
+            Collider3D? ownCollider = GameObject.Components.OfType<Collider3D>()
+                .FirstOrDefault(component => component.Enabled && !component.IsTrigger);
+            Collider3D? groundCollider = item.Components.OfType<Collider3D>()
+                .FirstOrDefault(component => component.Enabled && !component.IsTrigger);
+            if (!CollisionFilter.ShouldInteract(GameObject, ownCollider, item, groundCollider, scene.Classification))
             {
                 continue;
             }

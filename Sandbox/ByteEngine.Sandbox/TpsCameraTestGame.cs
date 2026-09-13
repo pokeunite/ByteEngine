@@ -15,8 +15,13 @@ public sealed class TpsCameraTestGame : ByteEngineApplication
     protected override void OnEngineStart()
     {
         var scene = new Scene("TPS Camera Test");
+        int worldLayer = scene.Classification.FindLayer("World")!.Index;
+        int playerLayer = scene.Classification.FindLayer("Player")!.Index;
+        int enemyLayer = scene.Classification.FindLayer("Enemy")!.Index;
+        int triggerLayer = scene.Classification.FindLayer("Trigger")!.Index;
 
         GameObject ground = scene.CreateGameObject("Ground");
+        ground.Layer = worldLayer;
         ground.Transform.LocalScale = new Vector3(20f, 1f, 20f);
         ground.AddComponent(new MeshRenderer
         {
@@ -27,6 +32,8 @@ public sealed class TpsCameraTestGame : ByteEngineApplication
         ground.AddComponent(new GroundSurface());
 
         GameObject player = scene.CreateGameObject("Player");
+        player.Layer = playerLayer;
+        player.AddTag(scene.Classification.FindTag("Player")!.Id);
         player.Transform.WorldPosition = new Vector3(0f, 1f, 0f);
         player.AddComponent(new MeshRenderer
         {
@@ -74,10 +81,24 @@ public sealed class TpsCameraTestGame : ByteEngineApplication
         light.Transform.EulerAngles = new Vector3(50f, -35f, 0f);
         light.AddComponent(new DirectionalLight { Intensity = 1.2f, AmbientIntensity = .4f });
 
+        GameObject enemy = scene.CreateGameObject("Filtering Enemy");
+        enemy.Layer = enemyLayer;
+        enemy.AddTag(scene.Classification.FindTag("Enemy")!.Id);
+        enemy.Transform.WorldPosition = new Vector3(3f, .5f, -3f);
+        enemy.AddComponent(new MeshRenderer { Primitive = PrimitiveMeshType.Cube,
+            Material = new Material { BaseColor = new Vector4(.85f, .18f, .15f, 1f) } });
+        enemy.AddComponent(new BoxCollider3D());
+
+        GameObject trigger = scene.CreateGameObject("Filtering Trigger");
+        trigger.Layer = triggerLayer;
+        trigger.Transform.WorldPosition = new Vector3(-3f, .5f, -3f);
+        trigger.AddComponent(new BoxCollider3D { IsTrigger = true });
+
         Scenes.LoadScene(scene);
         scene.SetActiveCamera(gameCamera);
         CaptureGameInput();
         Console.WriteLine("TPS Camera Test: mouse=orbit, WASD=move, F8=dump, Esc=release, click=recapture.");
+        Console.WriteLine($"Tags/Layers lab: Enemy tag count={scene.CountWithTag("Enemy")}; World+Enemy query count={scene.FindGameObjects(ByteEngine.Core.Classification.LayerMask.FromLayers(worldLayer, enemyLayer)).Count()}.");
     }
 
     protected override void OnEngineUpdate()

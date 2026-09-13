@@ -1,6 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Classification;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
 namespace ByteEngine.Core.Physics;
@@ -10,19 +11,26 @@ public static class GameplayQuery3D
     private const float Epsilon = 0.000001f;
 
     public static bool Raycast(RuntimeScene scene, Vector3 origin, Vector3 direction,
-        out RaycastHit3D hit, float maxDistance = float.PositiveInfinity, GameObject? ignore = null) =>
-        Cast(scene, origin, direction, 0f, out hit, maxDistance, ignore, Guid.Empty);
+        out RaycastHit3D hit, float maxDistance = float.PositiveInfinity, GameObject? ignore = null,
+        LayerMask? layerMask = null, GameObject? source = null, bool bypassCollisionMatrix = false) =>
+        Cast(scene, origin, direction, 0f, out hit, maxDistance, ignore, Guid.Empty,
+            layerMask ?? LayerMask.All, source, bypassCollisionMatrix);
 
     public static bool SphereCast(RuntimeScene scene, Vector3 origin, Vector3 direction, float radius,
-        out RaycastHit3D hit, float maxDistance = float.PositiveInfinity, GameObject? ignore = null) =>
-        Cast(scene, origin, direction, Math.Max(0f, radius), out hit, maxDistance, ignore, Guid.Empty);
+        out RaycastHit3D hit, float maxDistance = float.PositiveInfinity, GameObject? ignore = null,
+        LayerMask? layerMask = null, GameObject? source = null, bool bypassCollisionMatrix = false) =>
+        Cast(scene, origin, direction, Math.Max(0f, radius), out hit, maxDistance, ignore, Guid.Empty,
+            layerMask ?? LayerMask.All, source, bypassCollisionMatrix);
 
     internal static bool SphereCast(RuntimeScene scene, Vector3 origin, Vector3 direction, float radius,
-        out RaycastHit3D hit, float maxDistance, GameObject? ignore, Guid secondIgnoredId) =>
-        Cast(scene, origin, direction, Math.Max(0f, radius), out hit, maxDistance, ignore, secondIgnoredId);
+        out RaycastHit3D hit, float maxDistance, GameObject? ignore, Guid secondIgnoredId,
+        LayerMask? layerMask = null, GameObject? source = null) =>
+        Cast(scene, origin, direction, Math.Max(0f, radius), out hit, maxDistance, ignore, secondIgnoredId,
+            layerMask ?? LayerMask.All, source, false);
 
     private static bool Cast(RuntimeScene scene, Vector3 origin, Vector3 direction, float radius,
-        out RaycastHit3D hit, float maxDistance, GameObject? ignore, Guid secondIgnoredId)
+        out RaycastHit3D hit, float maxDistance, GameObject? ignore, Guid secondIgnoredId,
+        LayerMask layerMask, GameObject? source, bool bypassCollisionMatrix)
     {
         ArgumentNullException.ThrowIfNull(scene);
         hit = default;
@@ -32,12 +40,16 @@ public static class GameplayQuery3D
         Vector3 rayDirection = Vector3.Normalize(direction);
         float closest = maxDistance;
         bool found = false;
+        Collider3D? sourceCollider = source?.Components.OfType<Collider3D>().FirstOrDefault(item => item.Enabled);
         foreach (GameObject gameObject in scene.GameObjects)
         {
-            if (!gameObject.ActiveInHierarchy || ReferenceEquals(gameObject, ignore) || gameObject.Id == secondIgnoredId) continue;
+            if (!gameObject.ActiveInHierarchy || ReferenceEquals(gameObject, ignore) || gameObject.Id == secondIgnoredId ||
+                !layerMask.Contains(gameObject.Layer)) continue;
             foreach (Collider3D collider in gameObject.Components.OfType<Collider3D>())
             {
-                if (!collider.Enabled || !TryIntersect(origin, rayDirection, radius, collider, out float distance, out Vector3 normal) ||
+                if (!collider.Enabled || (!bypassCollisionMatrix && source != null &&
+                    !CollisionFilter.ShouldInteract(source, sourceCollider, gameObject, collider, scene.Classification)) ||
+                    !TryIntersect(origin, rayDirection, radius, collider, out float distance, out Vector3 normal) ||
                     distance < 0f || distance > closest) continue;
                 closest = distance;
                 hit = new RaycastHit3D(gameObject, collider, origin + rayDirection * distance, normal, distance);

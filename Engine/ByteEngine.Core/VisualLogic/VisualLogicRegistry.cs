@@ -281,6 +281,57 @@ public sealed class VisualLogicRegistry
     private static void RegisterObjects(
         VisualLogicRegistry registry)
     {
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "object.hasTag", Category = "Tags & Layers", DisplayName = "Object Has Tag",
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false) is { } target &&
+                TryTagId(instruction, context, out Guid tagId) && target.HasTag(tagId)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "object.doesNotHaveTag", Category = "Tags & Layers", DisplayName = "Object Does Not Have Tag",
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false) is { } target &&
+                TryTagId(instruction, context, out Guid tagId) && !target.HasTag(tagId)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "object.isOnLayer", Category = "Tags & Layers", DisplayName = "Object Is On Layer",
+            Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false) is { } target &&
+                target.Layer == (int)EventValueResolver.GetNumber(instruction, "layer", context)
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "object.withTagExists", Category = "Tags & Layers", DisplayName = "Object With Tag Exists",
+            Evaluate = (instruction, context) => TryTagId(instruction, context, out Guid tagId) &&
+                context.Scene.CountWithTag(tagId) > 0
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "object.addTag", Category = "Tags & Layers", DisplayName = "Add Tag",
+            Execute = (instruction, context) =>
+            {
+                GameObject? target = ResolveObjectTarget(instruction, context);
+                if (target != null && TryTagId(instruction, context, out Guid tagId)) target.AddTag(tagId);
+            }
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "object.removeTag", Category = "Tags & Layers", DisplayName = "Remove Tag",
+            Execute = (instruction, context) =>
+            {
+                GameObject? target = ResolveObjectTarget(instruction, context);
+                if (target != null && TryTagId(instruction, context, out Guid tagId)) target.RemoveTag(tagId);
+            }
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "object.setLayer", Category = "Tags & Layers", DisplayName = "Set Object Layer",
+            Execute = (instruction, context) =>
+            {
+                GameObject? target = ResolveObjectTarget(instruction, context);
+                if (target != null) target.Layer = (int)EventValueResolver.GetNumber(instruction, "layer", context);
+            }
+        });
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
@@ -372,6 +423,9 @@ public sealed class VisualLogicRegistry
                     }
             });
     }
+
+    private static bool TryTagId(VisualInstruction instruction, EventExecutionContext context, out Guid tagId) =>
+        Guid.TryParse(EventValueResolver.GetString(instruction, "tag", context), out tagId) && tagId != Guid.Empty;
 
     private static void RegisterCharacter(
         VisualLogicRegistry registry)

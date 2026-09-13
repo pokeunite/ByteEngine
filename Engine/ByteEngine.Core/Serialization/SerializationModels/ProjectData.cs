@@ -1,4 +1,5 @@
 using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Classification;
 
 namespace ByteEngine.Core.Serialization.SerializationModels;
 
@@ -28,6 +29,7 @@ public sealed class ProjectData
     public List<VariableData> GlobalVariables { get; set; } = new();
 
     public InputMap InputMap { get; set; } = InputMap.CreateDefault();
+    public ClassificationSettings Classification { get; set; } = ClassificationSettings.CreateDefault();
 }
 
 public sealed class ProjectWindowData

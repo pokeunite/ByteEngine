@@ -5,6 +5,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.VisualLogic;
+using ByteEngine.Core.Classification;
 
 using ImGuiNET;
 
@@ -6369,6 +6370,24 @@ internal sealed class EventWorkspacePanel
                         "Self");
                 break;
 
+            case "object.hasTag":
+            case "object.doesNotHaveTag":
+            case "object.addTag":
+            case "object.removeTag":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["tag"] = EventValue.String(DefaultTagToken("Enemy"));
+                break;
+
+            case "object.withTagExists":
+                instruction.Arguments["tag"] = EventValue.String(DefaultTagToken("Enemy"));
+                break;
+
+            case "object.isOnLayer":
+            case "object.setLayer":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["layer"] = EventValue.Number(DefaultLayerIndex("Default"));
+                break;
+
             case "object.setActive":
                 instruction.Arguments["target"] =
                     EventValue.String(
@@ -6612,6 +6631,24 @@ internal sealed class EventWorkspacePanel
                     "target",
                     "Target Object",
                     state);
+                break;
+
+            case "object.hasTag":
+            case "object.doesNotHaveTag":
+            case "object.addTag":
+            case "object.removeTag":
+                DrawObjectTargetArgument(instruction, "target", "Object", state);
+                DrawTagArgument(instruction, "tag", "Tag", "Enemy");
+                break;
+
+            case "object.withTagExists":
+                DrawTagArgument(instruction, "tag", "Tag", "Enemy");
+                break;
+
+            case "object.isOnLayer":
+            case "object.setLayer":
+                DrawObjectTargetArgument(instruction, "target", "Object", state);
+                DrawLayerArgument(instruction, "layer", "Layer", "Default");
                 break;
 
             case "object.setActive":
@@ -7926,6 +7963,40 @@ internal sealed class EventWorkspacePanel
 
     private static string DefaultActionToken(string name) =>
         EditorProjectContext.Active?.Project.InputMap.Find(name)?.Id.ToString() ?? name;
+
+    private static string DefaultTagToken(string name) =>
+        EditorProjectContext.Active?.Project.Classification.FindTag(name)?.Id.ToString() ?? string.Empty;
+
+    private static int DefaultLayerIndex(string name) =>
+        EditorProjectContext.Active?.Project.Classification.FindLayer(name)?.Index ?? 0;
+
+    private void DrawTagArgument(VisualInstruction instruction, string argumentName, string label, string fallback)
+    {
+        ClassificationSettings? settings = EditorProjectContext.Active?.Project.Classification;
+        if (settings == null) return;
+        if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value))
+            instruction.Arguments[argumentName] = value = EventValue.String(DefaultTagToken(fallback));
+        Guid.TryParse(value.Constant.String, out Guid selected);
+        if (ByteEngine.Editor.ClassificationPickers.DrawTag(label, settings, ref selected, false))
+        {
+            instruction.Arguments[argumentName] = EventValue.String(selected.ToString());
+            _dirty = true;
+        }
+    }
+
+    private void DrawLayerArgument(VisualInstruction instruction, string argumentName, string label, string fallback)
+    {
+        ClassificationSettings? settings = EditorProjectContext.Active?.Project.Classification;
+        if (settings == null) return;
+        if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value))
+            instruction.Arguments[argumentName] = value = EventValue.Number(DefaultLayerIndex(fallback));
+        int selected = value.Constant.Type == VariableType.Number ? (int)value.Constant.Number : DefaultLayerIndex(fallback);
+        if (ByteEngine.Editor.ClassificationPickers.DrawLayer(label, settings, ref selected))
+        {
+            instruction.Arguments[argumentName] = EventValue.Number(selected);
+            _dirty = true;
+        }
+    }
 
     // ========================================================
     // SELF CONTEXT

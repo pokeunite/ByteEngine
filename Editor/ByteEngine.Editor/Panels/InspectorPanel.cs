@@ -9,6 +9,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Core.Classification;
 using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
@@ -115,6 +116,8 @@ internal sealed class InspectorPanel
         bool activeChanged = ImGui.Checkbox("Active", ref active);
         if (activeChanged) selected.Active = active;
         TrackItem(state, "Set Active", activeChanged, () => selected.Active = oldActive, () => selected.Active = active);
+
+        DrawClassification(state, project.Project.Classification, selected);
 
         if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
         bool showTransform = string.IsNullOrWhiteSpace(_search) || "Transform Position Rotation Scale".Contains(_search, StringComparison.OrdinalIgnoreCase);
@@ -261,6 +264,41 @@ internal sealed class InspectorPanel
             ImGui.CloseCurrentPopup();
         }
         ImGui.EndPopup();
+    }
+
+    private static void DrawClassification(EditorState state, ClassificationSettings settings, GameObject selected)
+    {
+        ImGui.SeparatorText("Classification");
+        ImGui.TextUnformatted("Tags");
+        foreach (Guid tagId in selected.Tags.ToArray())
+        {
+            TagDefinition? tag = settings.FindTag(tagId);
+            if (tag == null) ImGui.TextColored(new Vector4(1f, .65f, .2f, 1f), $"Missing Tag: {tagId}");
+            else ImGui.TextUnformatted(tag.Name);
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"�##RemoveTag{tagId}"))
+                ApplyClassification(state, $"Remove Tag {tag?.Name ?? tagId.ToString()}", () => selected.RemoveTag(tagId));
+        }
+        if (ImGui.BeginCombo("##AddTag", "+ Add Tag"))
+        {
+            foreach (TagDefinition tag in settings.Tags.OrderBy(item => item.Name).Where(item => !selected.HasTag(item.Id)))
+                if (ImGui.Selectable($"{tag.Name}##Add{tag.Id}"))
+                    ApplyClassification(state, $"Add Tag {tag.Name}", () => selected.AddTag(tag.Id));
+            ImGui.EndCombo();
+        }
+
+        int layer = selected.Layer;
+        if (ClassificationPickers.DrawLayer("Layer", settings, ref layer))
+        {
+            int selectedLayer = layer;
+            ApplyClassification(state, $"Set Layer {settings.FindLayer(layer)?.Name}", () => selected.Layer = selectedLayer);
+        }
+    }
+
+    private static void ApplyClassification(EditorState state, string name, Action action)
+    {
+        if (state.Mode == EditorMode.Edit) ExecutePersistent(state, name, action);
+        else action();
     }
 
     private static void DrawComponentProperties(EditorState state, EditorProjectContext project, Component component, bool showAdvanced)

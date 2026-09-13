@@ -1,6 +1,8 @@
 using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Classification;
+using System.Text.RegularExpressions;
 using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
@@ -9,6 +11,7 @@ internal sealed class ProjectSettingsPanel
 {
     private readonly PopupInteractionState _addActionPopup = new();
     private readonly PopupInteractionState _deleteActionPopup = new();
+    private readonly PopupInteractionState _addTagPopup = new();
     private Guid _selectedActionId;
     private Guid _deleteActionId;
     private Guid _captureBindingId;
@@ -16,6 +19,8 @@ internal sealed class ProjectSettingsPanel
     private int _captureDelayFrames;
     private string _newActionName = "New Action";
     private InputActionType _newActionType;
+    private string _newTagName = string.Empty;
+    private string _classificationMessage = string.Empty;
 
     public bool IsOpen { get; set; }
 
@@ -28,15 +33,106 @@ internal sealed class ProjectSettingsPanel
         IsOpen = open;
         if (!visible) { ImGui.End(); return; }
 
-        if (ImGui.BeginTabBar("ProjectSettingsTabs") && ImGui.BeginTabItem("Input"))
+        if (ImGui.BeginTabBar("ProjectSettingsTabs"))
         {
-            DrawInputSettings(project);
-            ImGui.EndTabItem();
+            if (ImGui.BeginTabItem("Input"))
+            {
+                DrawInputSettings(project);
+                ImGui.EndTabItem();
+            }
+            if (ImGui.BeginTabItem("Tags & Layers"))
+            {
+                DrawTagsAndLayers(project);
+                ImGui.EndTabItem();
+            }
             ImGui.EndTabBar();
         }
         ImGui.End();
         DrawAddActionPopup(project);
         DrawDeleteActionPopup(project);
+        DrawAddTagPopup(project);
+    }
+
+    private void DrawTagsAndLayers(EditorProjectContext project)
+    {
+        ClassificationSettings settings = project.Project.Classification;
+        ImGui.SeparatorText("TAGS");
+        foreach (TagDefinition tag in settings.Tags.ToArray())
+        {
+            ImGui.PushID(tag.Id.ToString());
+            string name = tag.Name;
+            ImGui.SetNextItemWidth(260f);
+            if (ImGui.InputText("##TagName", ref name, 96, ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                _classificationMessage = settings.RenameTag(tag.Id, name) ? string.Empty : "Tag names must be non-empty and unique.";
+                if (_classificationMessage.Length == 0) Commit(project);
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Delete"))
+            {
+                int uses = CountReferences(project.ProjectRoot, tag.Id);
+                if (uses > 0) _classificationMessage = $"Tag \"{tag.Name}\" is used by {uses} objects. Remove those assignments before deleting this tag.";
+                else { settings.Tags.Remove(tag); Commit(project); _classificationMessage = string.Empty; }
+            }
+            ImGui.PopID();
+        }
+        if (ImGui.Button("+ Add Tag")) { _newTagName = string.Empty; _addTagPopup.Request(true); }
+
+        ImGui.SeparatorText("LAYERS");
+        for (int index = 0; index < 32; index++)
+        {
+            ObjectLayerDefinition? layer = settings.FindLayer(index);
+            string name = layer?.Name ?? string.Empty;
+            ImGui.PushID(index);
+            ImGui.TextUnformatted(index.ToString());
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(260f);
+            if (index == 0) ImGui.BeginDisabled();
+            if (ImGui.InputText("##LayerName", ref name, 64, ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                if (string.IsNullOrWhiteSpace(name) && index != 0)
+                {
+                    int uses = CountLayerReferences(project.ProjectRoot, index);
+                    if (uses > 0) _classificationMessage = $"Layer \"{layer?.Name}\" is used by {uses} objects. Reassign those objects before clearing this layer.";
+                    else { settings.Layers.RemoveAll(item => item.Index == index); Commit(project); _classificationMessage = string.Empty; }
+                }
+                else
+                {
+                    _classificationMessage = settings.DefineLayer(index, name) ? string.Empty : "Layer names must be unique.";
+                    if (_classificationMessage.Length == 0) Commit(project);
+                }
+            }
+            if (index == 0) ImGui.EndDisabled();
+            ImGui.PopID();
+        }
+
+        ImGui.SeparatorText("COLLISION MATRIX");
+        ImGui.TextDisabled("The project matrix controls normal interactions. Query masks separately choose which layers a query inspects.");
+        ObjectLayerDefinition[] layers = settings.Layers.OrderBy(item => item.Index).ToArray();
+        if (ImGui.BeginTable("CollisionMatrix", layers.Length + 1, ImGuiTableFlags.Borders | ImGuiTableFlags.ScrollX))
+        {
+            ImGui.TableSetupColumn("Layer");
+            foreach (ObjectLayerDefinition layer in layers) ImGui.TableSetupColumn(layer.Name);
+            ImGui.TableHeadersRow();
+            foreach (ObjectLayerDefinition row in layers)
+            {
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0); ImGui.TextUnformatted(row.Name);
+                for (int column = 0; column < layers.Length; column++)
+                {
+                    ImGui.TableSetColumnIndex(column + 1);
+                    ObjectLayerDefinition other = layers[column];
+                    bool interacts = settings.CollisionMatrix.ShouldInteract(row.Index, other.Index);
+                    if (ImGui.Checkbox($"##Matrix{row.Index}_{other.Index}", ref interacts))
+                    {
+                        settings.CollisionMatrix.SetInteraction(row.Index, other.Index, interacts);
+                        Commit(project);
+                    }
+                }
+            }
+            ImGui.EndTable();
+        }
+        if (_classificationMessage.Length > 0) ImGui.TextColored(new Vector4(1f, .65f, .2f, 1f), _classificationMessage);
     }
 
     private void DrawInputSettings(EditorProjectContext project)
@@ -161,7 +257,7 @@ internal sealed class ProjectSettingsPanel
             {
                 _captureDelayFrames--;
             }
-            else if (TryCapture(out Key key, out MouseButton mouse, out bool isMouse, out bool cancel))
+            else if (TryCapture(_captureSlot == "MouseButton", out Key key, out MouseButton mouse, out bool isMouse, out bool cancel))
             {
                 if (!cancel)
                 {
@@ -195,7 +291,7 @@ internal sealed class ProjectSettingsPanel
         _captureDelayFrames = 1;
     }
 
-    private static bool TryCapture(out Key key, out MouseButton mouse, out bool isMouse, out bool cancel)
+    private static bool TryCapture(bool captureMouse, out Key key, out MouseButton mouse, out bool isMouse, out bool cancel)
     {
         key = Key.Space;
         mouse = MouseButton.Left;
@@ -208,25 +304,28 @@ internal sealed class ProjectSettingsPanel
             return true;
         }
 
-        foreach (Key candidate in Enum.GetValues<Key>())
+        if (!captureMouse)
         {
-            if (candidate == Key.Escape)
-                continue;
-
-            if (Input.IsKeyPressed(candidate))
+            foreach (Key candidate in Enum.GetValues<Key>())
             {
-                key = candidate;
-                return true;
+                if (candidate == Key.Escape) continue;
+                if (Input.IsKeyPressed(candidate))
+                {
+                    key = candidate;
+                    return true;
+                }
             }
         }
-
-        foreach (MouseButton candidate in Enum.GetValues<MouseButton>())
+        else
         {
-            if (Input.IsMouseButtonPressed(candidate))
+            foreach (MouseButton candidate in Enum.GetValues<MouseButton>())
             {
-                mouse = candidate;
-                isMouse = true;
-                return true;
+                if (Input.IsMouseButtonPressed(candidate))
+                {
+                    mouse = candidate;
+                    isMouse = true;
+                    return true;
+                }
             }
         }
 
@@ -322,10 +421,48 @@ internal sealed class ProjectSettingsPanel
         _ => true
     };
 
+    private void DrawAddTagPopup(EditorProjectContext project)
+    {
+        if (_addTagPopup.ConsumeOpenRequest()) ImGui.OpenPopup("Add Tag");
+        bool visible = true;
+        if (ImGui.BeginPopupModal("Add Tag", ref visible, ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            _addTagPopup.MarkVisible();
+            ImGui.TextUnformatted("Tag Name:");
+            if (_addTagPopup.ConsumeFocusRequest()) ImGui.SetKeyboardFocusHere();
+            ImGui.InputText("##NewTagName", ref _newTagName, 96);
+            bool duplicate = project.Project.Classification.FindTag(_newTagName) != null;
+            if (duplicate) ImGui.TextColored(new Vector4(1f, .65f, .2f, 1f), "A tag with this name already exists.");
+            if (ImGui.Button("Create") && !duplicate && project.Project.Classification.AddTag(_newTagName) != null)
+            {
+                Commit(project); ImGui.CloseCurrentPopup(); _addTagPopup.Reset();
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Cancel")) { ImGui.CloseCurrentPopup(); _addTagPopup.Reset(); }
+            ImGui.EndPopup();
+        }
+        else _addTagPopup.RecoverWhenNotVisible();
+    }
+
+    private static int CountReferences(string root, Guid tagId)
+    {
+        string needle = tagId.ToString();
+        return ProjectAssets(root).Sum(path => Regex.Matches(File.ReadAllText(path), Regex.Escape(needle), RegexOptions.IgnoreCase).Count);
+    }
+
+    private static int CountLayerReferences(string root, int layer) =>
+        ProjectAssets(root).Sum(path => Regex.Matches(File.ReadAllText(path),
+            $"\"layer\"\\s*:\\s*{layer}(?!\\d)", RegexOptions.IgnoreCase).Count);
+
+    private static IEnumerable<string> ProjectAssets(string root) =>
+        Directory.EnumerateFiles(root, "*.bytescene", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(root, "*.byteblueprint", SearchOption.AllDirectories));
+
     private static void Commit(EditorProjectContext project)
     {
         project.Project.InputMap.EnsureValid();
         InputActions.Configure(project.Project.InputMap);
+        project.Project.Classification.EnsureValid();
         project.SaveProject();
     }
 }

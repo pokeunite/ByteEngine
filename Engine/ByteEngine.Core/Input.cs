@@ -13,6 +13,7 @@ public enum Key
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9,
 
     F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+    F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24, F25,
 
     Space,
     Tab,
@@ -24,6 +25,33 @@ public enum Key
     End,
     PageUp,
     PageDown,
+    CapsLock,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+
+    GraveAccent,
+    Minus,
+    Equal,
+    LeftBracket,
+    RightBracket,
+    Backslash,
+    Semicolon,
+    Apostrophe,
+    Comma,
+    Period,
+    Slash,
+
+    KeyPad0, KeyPad1, KeyPad2, KeyPad3, KeyPad4,
+    KeyPad5, KeyPad6, KeyPad7, KeyPad8, KeyPad9,
+    KeyPadDecimal,
+    KeyPadDivide,
+    KeyPadMultiply,
+    KeyPadSubtract,
+    KeyPadAdd,
+    KeyPadEnter,
+    KeyPadEqual,
 
     Up,
     Down,
@@ -36,6 +64,8 @@ public enum Key
     RightControl,
     LeftAlt,
     RightAlt,
+    LeftSuper,
+    RightSuper,
 
     Escape
 }
@@ -44,7 +74,9 @@ public enum MouseButton
 {
     Left,
     Right,
-    Middle
+    Middle,
+    Button4,
+    Button5
 }
 
 public static class Input
@@ -192,11 +224,8 @@ public static class Input
         throw new ArgumentOutOfRangeException(nameof(key), key, "Unsupported key.");
     }
 
-    private static OpenTkMouseButton ToOpenTkMouseButton(MouseButton button) => button switch
-    {
-        MouseButton.Left => OpenTkMouseButton.Left,
-        MouseButton.Right => OpenTkMouseButton.Right,
-        MouseButton.Middle => OpenTkMouseButton.Middle,
-        _ => throw new ArgumentOutOfRangeException(nameof(button), button, "Unsupported mouse button.")
-    };
+    private static OpenTkMouseButton ToOpenTkMouseButton(MouseButton button) =>
+        Enum.TryParse(button.ToString(), out OpenTkMouseButton parsed)
+            ? parsed
+            : throw new ArgumentOutOfRangeException(nameof(button), button, "Unsupported mouse button.");
 }
