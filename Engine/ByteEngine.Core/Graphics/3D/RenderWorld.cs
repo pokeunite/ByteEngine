@@ -130,6 +130,7 @@ public sealed class RenderWorld
                     transparentSubmitted,
                     overlaySubmitted,
                     0,
+                    0,
                     0);
 
             return;
@@ -147,6 +148,7 @@ public sealed class RenderWorld
                     opaqueSubmitted,
                     transparentSubmitted,
                     overlaySubmitted,
+                    0,
                     0,
                     0);
 
@@ -186,6 +188,15 @@ public sealed class RenderWorld
                     view,
                     _lighting)
                 : DirectionalShadowPassResult.None;
+
+        PointShadowPassResult pointShadowPass =
+            visible.Count >
+            0
+                ? context.Renderer3D.RenderPointShadowMaps(
+                    _submissions,
+                    view,
+                    _lighting)
+                : PointShadowPassResult.None;
 
         IEnumerable<RenderSubmission> opaque =
             visible
@@ -241,6 +252,7 @@ public sealed class RenderWorld
                 view.ProjectionMatrix,
                 _lighting,
                 shadowPass.Shadow,
+                pointShadowPass.Shadows,
                 submission.ReceiveShadows);
 
             drawCalls++;
@@ -258,7 +270,9 @@ public sealed class RenderWorld
                 shadowPass.Shadow.HasValue
                     ? 1
                     : 0,
-                shadowPass.DrawCalls);
+                pointShadowPass.ShadowLightCount,
+                shadowPass.DrawCalls +
+                pointShadowPass.DrawCalls);
 
         _submissions.Clear();
     }
@@ -271,7 +285,8 @@ public sealed class RenderWorld
         int opaqueSubmitted,
         int transparentSubmitted,
         int overlaySubmitted,
-        int shadowPasses,
+        int directionalShadowPasses,
+        int pointShadowPasses,
         int shadowDrawCalls)
     {
         return
@@ -286,7 +301,10 @@ public sealed class RenderWorld
                 _lighting.DirectionalLightCount,
                 _lighting.PointLightCount,
                 _lighting.DroppedLightCount,
-                shadowPasses,
+                directionalShadowPasses,
+                pointShadowPasses,
+                directionalShadowPasses +
+                pointShadowPasses,
                 shadowDrawCalls);
     }
 
@@ -321,5 +339,7 @@ public readonly record struct RenderWorldStats(
     int DirectionalLights,
     int PointLights,
     int DroppedLights,
+    int DirectionalShadowPasses,
+    int PointShadowPasses,
     int ShadowPasses,
     int ShadowDrawCalls);

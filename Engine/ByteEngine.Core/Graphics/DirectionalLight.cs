@@ -11,6 +11,7 @@ public sealed class DirectionalLight : Component
     private float _shadowDistance = 50.0f;
     private float _shadowBias = 0.0015f;
     private float _shadowStrength = 1.0f;
+    private float _shadowSoftness = 1.0f;
 
     public Vector3 Color { get; set; } =
         Vector3.One;
@@ -106,6 +107,23 @@ public sealed class DirectionalLight : Component
                     value,
                     0.0f,
                     1.0f);
+    }
+
+    /// <summary>
+    /// Multiplier for directional PCF sample spacing.
+    /// 1.0 is the v0.9-d default.
+    /// </summary>
+    public float ShadowSoftness
+    {
+        get =>
+            _shadowSoftness;
+
+        set =>
+            _shadowSoftness =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    4.0f);
     }
 
     // Direction is the direction the light rays travel. The editor arrow/transform

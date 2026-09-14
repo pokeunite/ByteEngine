@@ -79,7 +79,10 @@ public static class RendererSerializationRegistrar
                                 light.ShadowBias,
 
                             ["shadowStrength"] =
-                                light.ShadowStrength
+                                light.ShadowStrength,
+
+                            ["shadowSoftness"] =
+                                light.ShadowSoftness
                         }
                 };
         }
@@ -135,6 +138,12 @@ public static class RendererSerializationRegistrar
                         ReadFloat(
                             data,
                             "shadowStrength",
+                            1.0f),
+
+                    ShadowSoftness =
+                        ReadFloat(
+                            data,
+                            "shadowSoftness",
                             1.0f)
                 };
         }
@@ -173,7 +182,22 @@ public static class RendererSerializationRegistrar
                                 light.Intensity,
 
                             ["range"] =
-                                light.Range
+                                light.Range,
+
+                            ["castShadows"] =
+                                light.CastShadows,
+
+                            ["shadowResolution"] =
+                                light.ShadowResolution,
+
+                            ["shadowBias"] =
+                                light.ShadowBias,
+
+                            ["shadowStrength"] =
+                                light.ShadowStrength,
+
+                            ["shadowSoftness"] =
+                                light.ShadowSoftness
                         }
                 };
         }
@@ -200,7 +224,36 @@ public static class RendererSerializationRegistrar
                         ReadFloat(
                             data,
                             "range",
-                            10.0f)
+                            10.0f),
+
+                    CastShadows =
+                        data.Properties["castShadows"]?
+                            .GetValue<bool>() ??
+                        false,
+
+                    ShadowResolution =
+                        ReadInt(
+                            data,
+                            "shadowResolution",
+                            512),
+
+                    ShadowBias =
+                        ReadFloat(
+                            data,
+                            "shadowBias",
+                            0.05f),
+
+                    ShadowStrength =
+                        ReadFloat(
+                            data,
+                            "shadowStrength",
+                            1.0f),
+
+                    ShadowSoftness =
+                        ReadFloat(
+                            data,
+                            "shadowSoftness",
+                            0.06f)
                 };
         }
     }

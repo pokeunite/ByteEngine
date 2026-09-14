@@ -143,7 +143,21 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uLightViewProjection;
         uniform float uShadowBias;
         uniform float uShadowStrength;
+        uniform float uShadowSoftness;
         uniform vec2 uShadowTexelSize;
+
+        uniform samplerCube uPointShadowMap0;
+        uniform samplerCube uPointShadowMap1;
+        uniform int uPointShadowLightIndex0;
+        uniform int uPointShadowLightIndex1;
+        uniform float uPointShadowFarPlane0;
+        uniform float uPointShadowFarPlane1;
+        uniform float uPointShadowBias0;
+        uniform float uPointShadowBias1;
+        uniform float uPointShadowStrength0;
+        uniform float uPointShadowStrength1;
+        uniform float uPointShadowSoftness0;
+        uniform float uPointShadowSoftness1;
 
         const float PI=3.14159265359;
 
@@ -284,6 +298,74 @@ internal sealed class Shader3D : IDisposable
                 nDotL;
         }
 
+        float samplePointShadow(
+            samplerCube shadowMap,
+            vec3 fragmentToLight,
+            float currentDepth,
+            float farPlane,
+            float bias,
+            float softness,
+            float strength)
+        {
+            float safeFarPlane=max(farPlane,0.0001);
+            float radius=
+                max(softness,0.0)*
+                0.015*
+                (0.25+currentDepth/safeFarPlane);
+
+            float shadow=0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
+
+            return
+                shadow/7.0*
+                clamp(strength,0.0,1.0);
+        }
+
+        float calculatePointShadow(
+            int lightIndex,
+            vec3 lightPosition,
+            float currentDepth)
+        {
+            if(uReceiveShadows==0)
+                return 0.0;
+
+            vec3 fragmentToLight=
+                vWorldPosition-
+                lightPosition;
+
+            if(lightIndex==uPointShadowLightIndex0)
+            {
+                return samplePointShadow(
+                    uPointShadowMap0,
+                    fragmentToLight,
+                    currentDepth,
+                    uPointShadowFarPlane0,
+                    uPointShadowBias0,
+                    uPointShadowSoftness0,
+                    uPointShadowStrength0);
+            }
+
+            if(lightIndex==uPointShadowLightIndex1)
+            {
+                return samplePointShadow(
+                    uPointShadowMap1,
+                    fragmentToLight,
+                    currentDepth,
+                    uPointShadowFarPlane1,
+                    uPointShadowBias1,
+                    uPointShadowSoftness1,
+                    uPointShadowStrength1);
+            }
+
+            return 0.0;
+        }
+
         float calculateDirectionalShadow(
             vec3 normal,
             vec3 surfaceToLight)
@@ -353,7 +435,10 @@ internal sealed class Shader3D : IDisposable
                         vec2(
                             float(x),
                             float(y))*
-                        uShadowTexelSize;
+                        uShadowTexelSize*
+                        max(
+                            uShadowSoftness,
+                            0.0);
 
                     float storedDepth=
                         texture(
@@ -499,6 +584,12 @@ internal sealed class Shader3D : IDisposable
                     uPointLightIntensities[index]*
                     attenuation;
 
+                float pointShadow=
+                    calculatePointShadow(
+                        index,
+                        uPointLightPositions[index],
+                        distanceToLight);
+
                 direct+=
                     evaluatePbrLight(
                         n,
@@ -507,7 +598,8 @@ internal sealed class Shader3D : IDisposable
                         radiance,
                         base.rgb,
                         uMetallic,
-                        uRoughness);
+                        uRoughness)*
+                    (1.0-pointShadow);
             }
 
             vec3 linearColor=

@@ -192,7 +192,8 @@ public sealed class RenderContext
                             light.ShadowResolution,
                             light.ShadowDistance,
                             light.ShadowBias,
-                            light.ShadowStrength))
+                            light.ShadowStrength,
+                            light.ShadowSoftness))
                 .ToArray();
 
         Vector3 cameraPosition =
@@ -217,8 +218,13 @@ public sealed class RenderContext
                                 0.0f,
                                 light.Intensity),
                             Math.Max(
-                                0.01f,
-                                light.Range)))
+                                0.05f,
+                                light.Range),
+                            light.CastShadows,
+                            light.ShadowResolution,
+                            light.ShadowBias,
+                            light.ShadowStrength,
+                            light.ShadowSoftness))
                 .ToArray();
 
         float ambientIntensity =

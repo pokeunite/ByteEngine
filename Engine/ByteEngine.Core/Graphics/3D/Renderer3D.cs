@@ -14,6 +14,11 @@ public sealed class Renderer3D : IDisposable
 
     private ShadowMap3D? _shadowMap;
 
+    private PointShadowShader3D? _pointShadowShader;
+
+    private readonly PointShadowMap3D?[] _pointShadowMaps =
+        new PointShadowMap3D?[RenderLighting3D.MaxPointShadowLights];
+
     internal void Initialize()
     {
         _shader ??=
@@ -24,6 +29,17 @@ public sealed class Renderer3D : IDisposable
 
         _shadowMap ??=
             new ShadowMap3D();
+
+        _pointShadowShader ??=
+            new PointShadowShader3D();
+
+        for (int index = 0;
+             index < _pointShadowMaps.Length;
+             index++)
+        {
+            _pointShadowMaps[index] ??=
+                new PointShadowMap3D();
+        }
     }
 
     public Mesh GetPrimitive(
@@ -124,7 +140,7 @@ public sealed class Renderer3D : IDisposable
                 EnableCap.CullFace);
 
             GL.PolygonMode(
-                MaterialFace.FrontAndBack,
+                TriangleFace.FrontAndBack,
                 OpenTK.Graphics.OpenGL4.PolygonMode.Fill);
 
             _shadowShader!.Use();
@@ -209,7 +225,206 @@ public sealed class Renderer3D : IDisposable
                     _shadowMap.DepthTextureId,
                     _shadowMap.Resolution,
                     light.ShadowBias,
-                    light.ShadowStrength),
+                    light.ShadowStrength,
+                    light.ShadowSoftness),
+                drawCalls);
+    }
+
+    public PointShadowPassResult RenderPointShadowMaps(
+        IReadOnlyList<RenderSubmission> submissions,
+        RenderView3D view,
+        RenderLighting3D lighting)
+    {
+        ArgumentNullException.ThrowIfNull(submissions);
+        ArgumentNullException.ThrowIfNull(lighting);
+
+        IReadOnlyList<int> shadowLightIndices =
+            lighting.FindShadowPointLightIndices();
+
+        if (shadowLightIndices.Count == 0)
+        {
+            return PointShadowPassResult.None;
+        }
+
+        Initialize();
+
+        List<RenderPointShadow3D> shadows =
+            new();
+
+        int drawCalls =
+            0;
+
+        for (int shadowSlot = 0;
+             shadowSlot < shadowLightIndices.Count &&
+             shadowSlot < _pointShadowMaps.Length;
+             shadowSlot++)
+        {
+            int lightIndex =
+                shadowLightIndices[shadowSlot];
+
+            if (lightIndex < 0 ||
+                lightIndex >= lighting.PointLightCount)
+            {
+                continue;
+            }
+
+            RenderPointLight3D light =
+                lighting.PointLights[lightIndex];
+
+            RenderSubmission[] casters =
+                submissions
+                    .Where(
+                        submission =>
+                            submission.CastShadows &&
+                            submission.Queue != RenderQueue3D.Overlay &&
+                            submission.Material.BlendMode is
+                                BlendMode3D.Opaque or
+                                BlendMode3D.Cutout &&
+                            IntersectsPointLightRange(
+                                submission.WorldBounds,
+                                light.Position,
+                                light.Range))
+                    .ToArray();
+
+            if (casters.Length == 0)
+            {
+                continue;
+            }
+
+            PointShadowMap3D shadowMap =
+                _pointShadowMaps[shadowSlot]!;
+
+            Matrix4x4 projection =
+                Matrix4x4.CreatePerspectiveFieldOfView(
+                    MathF.PI * 0.5f,
+                    1.0f,
+                    0.05f,
+                    Math.Max(light.Range, 0.051f));
+
+            for (int faceIndex = 0;
+                 faceIndex < 6;
+                 faceIndex++)
+            {
+                Matrix4x4 viewMatrix =
+                    CreatePointShadowView(
+                        light.Position,
+                        faceIndex);
+
+                Matrix4x4 lightViewProjection =
+                    viewMatrix *
+                    projection;
+
+                int previousFramebuffer =
+                    shadowMap.BeginFace(
+                        light.ShadowResolution,
+                        faceIndex);
+
+                try
+                {
+                    GL.Enable(EnableCap.DepthTest);
+                    GL.DepthMask(true);
+                    GL.Disable(EnableCap.Blend);
+                    GL.Disable(EnableCap.CullFace);
+                    GL.PolygonMode(
+                        TriangleFace.FrontAndBack,
+                        OpenTK.Graphics.OpenGL4.PolygonMode.Fill);
+
+                    _pointShadowShader!.Use();
+
+                    _pointShadowShader.SetMatrix(
+                        "uLightViewProjection",
+                        lightViewProjection);
+
+                    _pointShadowShader.SetVector3(
+                        "uLightPosition",
+                        light.Position);
+
+                    _pointShadowShader.SetFloat(
+                        "uFarPlane",
+                        light.Range);
+
+                    foreach (RenderSubmission submission
+                             in casters)
+                    {
+                        _pointShadowShader.SetMatrix(
+                            "uModel",
+                            submission.ModelMatrix);
+
+                        bool alphaCutout =
+                            submission.Material.BlendMode ==
+                                BlendMode3D.Cutout &&
+                            submission.Material.MainTexture !=
+                                null;
+
+                        if (alphaCutout)
+                        {
+                            submission.Material.MainTexture!.Bind(0);
+
+                            _pointShadowShader.SetInt(
+                                "uTexture",
+                                0);
+
+                            _pointShadowShader.SetInt(
+                                "uUseTexture",
+                                1);
+
+                            _pointShadowShader.SetFloat(
+                                "uAlphaCutoff",
+                                Math.Clamp(
+                                    submission.Material.AlphaCutoff,
+                                    0.0f,
+                                    1.0f));
+                        }
+                        else
+                        {
+                            _pointShadowShader.SetInt(
+                                "uUseTexture",
+                                0);
+
+                            _pointShadowShader.SetFloat(
+                                "uAlphaCutoff",
+                                0.0f);
+                        }
+
+                        submission.Mesh.Bind();
+
+                        GL.DrawElements(
+                            BeginMode.Triangles,
+                            submission.Mesh.IndexCount,
+                            DrawElementsType.UnsignedInt,
+                            0);
+
+                        drawCalls++;
+                    }
+
+                    GL.BindVertexArray(0);
+                }
+                finally
+                {
+                    shadowMap.End(
+                        previousFramebuffer,
+                        view.TargetWidth,
+                        view.TargetHeight);
+
+                    RestoreBaselineState();
+                }
+            }
+
+            shadows.Add(
+                new RenderPointShadow3D(
+                    lightIndex,
+                    shadowMap.DepthCubeTextureId,
+                    light.Range,
+                    light.ShadowBias,
+                    light.ShadowStrength,
+                    light.ShadowSoftness,
+                    shadowMap.Resolution));
+        }
+
+        return shadows.Count == 0
+            ? PointShadowPassResult.None
+            : new PointShadowPassResult(
+                shadows,
                 drawCalls);
     }
 
@@ -221,6 +436,7 @@ public sealed class Renderer3D : IDisposable
         Matrix4x4 projection,
         RenderLighting3D lighting,
         RenderDirectionalShadow3D? directionalShadow,
+        IReadOnlyList<RenderPointShadow3D> pointShadows,
         bool receiveShadows)
     {
         ArgumentNullException.ThrowIfNull(
@@ -303,6 +519,10 @@ public sealed class Renderer3D : IDisposable
                 directionalShadow,
                 receiveShadows);
 
+            UploadPointShadows(
+                pointShadows,
+                receiveShadows);
+
             if (material.MainTexture !=
                 null)
             {
@@ -381,6 +601,7 @@ public sealed class Renderer3D : IDisposable
             projection,
             lighting,
             null,
+            Array.Empty<RenderPointShadow3D>(),
             false);
     }
 
@@ -407,6 +628,7 @@ public sealed class Renderer3D : IDisposable
                 intensity,
                 ambientIntensity),
             null,
+            Array.Empty<RenderPointShadow3D>(),
             false);
     }
 
@@ -434,6 +656,10 @@ public sealed class Renderer3D : IDisposable
             _shader.SetFloat(
                 "uShadowStrength",
                 0.0f);
+
+            _shader.SetFloat(
+                "uShadowSoftness",
+                1.0f);
 
             return;
         }
@@ -476,6 +702,10 @@ public sealed class Renderer3D : IDisposable
             "uShadowStrength",
             shadow.Strength);
 
+        _shader.SetFloat(
+            "uShadowSoftness",
+            shadow.Softness);
+
         float texel =
             1.0f /
             Math.Max(
@@ -487,6 +717,111 @@ public sealed class Renderer3D : IDisposable
             new Vector2(
                 texel,
                 texel));
+    }
+
+    private void UploadPointShadows(
+        IReadOnlyList<RenderPointShadow3D> pointShadows,
+        bool receiveShadows)
+    {
+        _shader!.SetInt(
+            "uPointShadowLightIndex0",
+            -1);
+
+        _shader.SetInt(
+            "uPointShadowLightIndex1",
+            -1);
+
+        _shader.SetFloat(
+            "uPointShadowStrength0",
+            0.0f);
+
+        _shader.SetFloat(
+            "uPointShadowStrength1",
+            0.0f);
+
+        if (!receiveShadows ||
+            pointShadows.Count == 0)
+        {
+            return;
+        }
+
+        int count =
+            Math.Min(
+                pointShadows.Count,
+                RenderLighting3D.MaxPointShadowLights);
+
+        for (int slot = 0;
+             slot < count;
+             slot++)
+        {
+            RenderPointShadow3D shadow =
+                pointShadows[slot];
+
+            int textureSlot =
+                3 + slot;
+
+            GL.ActiveTexture(
+                (TextureUnit)(
+                    (int)TextureUnit.Texture0 +
+                    textureSlot));
+
+            GL.BindTexture(
+                TextureTarget.TextureCubeMap,
+                shadow.DepthCubeTextureId);
+
+            if (slot == 0)
+            {
+                _shader.SetInt(
+                    "uPointShadowMap0",
+                    textureSlot);
+
+                _shader.SetInt(
+                    "uPointShadowLightIndex0",
+                    shadow.PointLightIndex);
+
+                _shader.SetFloat(
+                    "uPointShadowFarPlane0",
+                    shadow.FarPlane);
+
+                _shader.SetFloat(
+                    "uPointShadowBias0",
+                    shadow.Bias);
+
+                _shader.SetFloat(
+                    "uPointShadowStrength0",
+                    shadow.Strength);
+
+                _shader.SetFloat(
+                    "uPointShadowSoftness0",
+                    shadow.Softness);
+            }
+            else
+            {
+                _shader.SetInt(
+                    "uPointShadowMap1",
+                    textureSlot);
+
+                _shader.SetInt(
+                    "uPointShadowLightIndex1",
+                    shadow.PointLightIndex);
+
+                _shader.SetFloat(
+                    "uPointShadowFarPlane1",
+                    shadow.FarPlane);
+
+                _shader.SetFloat(
+                    "uPointShadowBias1",
+                    shadow.Bias);
+
+                _shader.SetFloat(
+                    "uPointShadowStrength1",
+                    shadow.Strength);
+
+                _shader.SetFloat(
+                    "uPointShadowSoftness1",
+                    shadow.Softness);
+            }
+        }
     }
 
     private void UploadLighting(
@@ -567,6 +902,64 @@ public sealed class Renderer3D : IDisposable
                     0.01f,
                     light.Range));
         }
+    }
+
+    private static bool IntersectsPointLightRange(
+        BoundingBox3D bounds,
+        Vector3 lightPosition,
+        float range)
+    {
+        Vector3 closest =
+            Vector3.Clamp(
+                lightPosition,
+                bounds.Minimum,
+                bounds.Maximum);
+
+        float distanceSquared =
+            Vector3.DistanceSquared(
+                lightPosition,
+                closest);
+
+        return distanceSquared <=
+            range * range;
+    }
+
+    private static Matrix4x4 CreatePointShadowView(
+        Vector3 position,
+        int faceIndex)
+    {
+        return faceIndex switch
+        {
+            0 => Matrix4x4.CreateLookAt(
+                position,
+                position + Vector3.UnitX,
+                -Vector3.UnitY),
+
+            1 => Matrix4x4.CreateLookAt(
+                position,
+                position - Vector3.UnitX,
+                -Vector3.UnitY),
+
+            2 => Matrix4x4.CreateLookAt(
+                position,
+                position + Vector3.UnitY,
+                Vector3.UnitZ),
+
+            3 => Matrix4x4.CreateLookAt(
+                position,
+                position - Vector3.UnitY,
+                -Vector3.UnitZ),
+
+            4 => Matrix4x4.CreateLookAt(
+                position,
+                position + Vector3.UnitZ,
+                -Vector3.UnitY),
+
+            _ => Matrix4x4.CreateLookAt(
+                position,
+                position - Vector3.UnitZ,
+                -Vector3.UnitY)
+        };
     }
 
     private static Matrix4x4 BuildDirectionalShadowMatrix(
@@ -712,7 +1105,7 @@ public sealed class Renderer3D : IDisposable
                     EnableCap.CullFace);
 
                 GL.CullFace(
-                    CullFaceMode.Back);
+                    TriangleFace.Back);
                 break;
 
             case CullMode3D.Front:
@@ -720,7 +1113,7 @@ public sealed class Renderer3D : IDisposable
                     EnableCap.CullFace);
 
                 GL.CullFace(
-                    CullFaceMode.Front);
+                    TriangleFace.Front);
                 break;
 
             default:
@@ -736,7 +1129,7 @@ public sealed class Renderer3D : IDisposable
                 : FrontFaceDirection.Ccw);
 
         GL.PolygonMode(
-            MaterialFace.FrontAndBack,
+            TriangleFace.FrontAndBack,
             material.PolygonMode ==
                 PolygonMode3D.Wireframe
                 ? OpenTK.Graphics.OpenGL4.PolygonMode.Line
@@ -746,7 +1139,7 @@ public sealed class Renderer3D : IDisposable
     private static void RestoreBaselineState()
     {
         GL.PolygonMode(
-            MaterialFace.FrontAndBack,
+            TriangleFace.FrontAndBack,
             OpenTK.Graphics.OpenGL4.PolygonMode.Fill);
 
         GL.DepthMask(
@@ -789,5 +1182,18 @@ public sealed class Renderer3D : IDisposable
 
         _shadowMap =
             null;
+
+        _pointShadowShader?.Dispose();
+
+        _pointShadowShader =
+            null;
+
+        for (int index = 0;
+             index < _pointShadowMaps.Length;
+             index++)
+        {
+            _pointShadowMaps[index]?.Dispose();
+            _pointShadowMaps[index] = null;
+        }
     }
 }

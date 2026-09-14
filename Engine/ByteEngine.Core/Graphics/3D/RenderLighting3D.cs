@@ -13,6 +13,9 @@ public sealed class RenderLighting3D
     public const int MaxPointLights =
         8;
 
+    public const int MaxPointShadowLights =
+        2;
+
     private readonly RenderDirectionalLight3D[] _directionalLights;
 
     private readonly RenderPointLight3D[] _pointLights;
@@ -100,6 +103,25 @@ public sealed class RenderLighting3D
         return -1;
     }
 
+    public IReadOnlyList<int> FindShadowPointLightIndices()
+    {
+        List<int> indices =
+            new();
+
+        for (int index = 0;
+             index < _pointLights.Length &&
+             indices.Count < MaxPointShadowLights;
+             index++)
+        {
+            if (_pointLights[index].CastShadows)
+            {
+                indices.Add(index);
+            }
+        }
+
+        return indices;
+    }
+
     /// <summary>
     /// Preserves ByteEngine's pre-v0.9-c visual fallback when a scene has no
     /// explicit lights. The fallback does not cast shadows.
@@ -120,6 +142,7 @@ public sealed class RenderLighting3D
                     2048,
                     50.0f,
                     0.0015f,
+                    1.0f,
                     1.0f)
             },
             Array.Empty<RenderPointLight3D>(),
@@ -146,6 +169,7 @@ public sealed class RenderLighting3D
                         2048,
                         50.0f,
                         0.0015f,
+                        1.0f,
                         1.0f)
                 },
                 Array.Empty<RenderPointLight3D>(),
