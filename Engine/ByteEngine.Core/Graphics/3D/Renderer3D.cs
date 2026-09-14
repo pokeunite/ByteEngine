@@ -239,7 +239,8 @@ public sealed class Renderer3D : IDisposable
         ArgumentNullException.ThrowIfNull(lighting);
 
         IReadOnlyList<int> shadowLightIndices =
-            lighting.FindShadowPointLightIndices();
+            lighting.FindShadowPointLightIndices(
+                view.CameraPosition);
 
         if (shadowLightIndices.Count == 0)
         {
@@ -1003,6 +1004,27 @@ public sealed class Renderer3D : IDisposable
                     -1.0f,
                     0.0f);
 
+        Vector3 upReference =
+            MathF.Abs(
+                Vector3.Dot(
+                    direction,
+                    Vector3.UnitY)) >
+            0.95f
+                ? Vector3.UnitZ
+                : Vector3.UnitY;
+
+        Vector3 right =
+            Vector3.Normalize(
+                Vector3.Cross(
+                    upReference,
+                    direction));
+
+        Vector3 up =
+            Vector3.Normalize(
+                Vector3.Cross(
+                    direction,
+                    right));
+
         Vector3 center =
             view.CameraPosition +
             cameraForward *
@@ -1011,6 +1033,58 @@ public sealed class Renderer3D : IDisposable
                 0.35f
             );
 
+        /*
+         * Stabilize the orthographic shadow projection by snapping its center
+         * to shadow-map texels in light space. Small camera movements therefore
+         * stop constantly shifting the shadow sampling grid.
+         */
+        float worldUnitsPerTexel =
+            (
+                distance *
+                2.0f
+            ) /
+            Math.Max(
+                light.ShadowResolution,
+                1);
+
+        if (worldUnitsPerTexel >
+            0.000001f)
+        {
+            float rightCoordinate =
+                Vector3.Dot(
+                    center,
+                    right);
+
+            float upCoordinate =
+                Vector3.Dot(
+                    center,
+                    up);
+
+            float snappedRight =
+                MathF.Round(
+                    rightCoordinate /
+                    worldUnitsPerTexel) *
+                worldUnitsPerTexel;
+
+            float snappedUp =
+                MathF.Round(
+                    upCoordinate /
+                    worldUnitsPerTexel) *
+                worldUnitsPerTexel;
+
+            center +=
+                right *
+                (
+                    snappedRight -
+                    rightCoordinate
+                ) +
+                up *
+                (
+                    snappedUp -
+                    upCoordinate
+                );
+        }
+
         Vector3 lightPosition =
             center -
             direction *
@@ -1018,15 +1092,6 @@ public sealed class Renderer3D : IDisposable
                 distance *
                 1.5f
             );
-
-        Vector3 up =
-            MathF.Abs(
-                Vector3.Dot(
-                    direction,
-                    Vector3.UnitY)) >
-            0.95f
-                ? Vector3.UnitZ
-                : Vector3.UnitY;
 
         Matrix4x4 lightView =
             Matrix4x4.CreateLookAt(

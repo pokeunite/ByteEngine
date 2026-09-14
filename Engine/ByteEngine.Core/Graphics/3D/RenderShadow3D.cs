@@ -40,6 +40,10 @@ public sealed class PointShadowPassResult
     public int ShadowLightCount =>
         Shadows.Count;
 
+    public int CubemapFacesRendered =>
+        Shadows.Count *
+        6;
+
     public PointShadowPassResult(
         IReadOnlyList<RenderPointShadow3D> shadows,
         int drawCalls)

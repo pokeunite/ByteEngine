@@ -103,23 +103,48 @@ public sealed class RenderLighting3D
         return -1;
     }
 
-    public IReadOnlyList<int> FindShadowPointLightIndices()
+    /// <summary>
+    /// Chooses the point lights that receive the limited cubemap-shadow slots.
+    ///
+    /// Lights whose influence volume is nearest to the active camera win.
+    /// Intensity is used as a tie-breaker. This is more stable and useful than
+    /// simply assigning slots by scene/enumeration order.
+    /// </summary>
+    public IReadOnlyList<int> FindShadowPointLightIndices(
+        Vector3 cameraPosition)
     {
-        List<int> indices =
-            new();
-
-        for (int index = 0;
-             index < _pointLights.Length &&
-             indices.Count < MaxPointShadowLights;
-             index++)
-        {
-            if (_pointLights[index].CastShadows)
-            {
-                indices.Add(index);
-            }
-        }
-
-        return indices;
+        return
+            _pointLights
+                .Select(
+                    (light, index) =>
+                        new
+                        {
+                            Light = light,
+                            Index = index,
+                            InfluenceDistance =
+                                Vector3.Distance(
+                                    light.Position,
+                                    cameraPosition) -
+                                light.Range
+                        })
+                .Where(
+                    candidate =>
+                        candidate.Light.CastShadows)
+                .OrderBy(
+                    candidate =>
+                        candidate.InfluenceDistance)
+                .ThenByDescending(
+                    candidate =>
+                        candidate.Light.Intensity)
+                .ThenBy(
+                    candidate =>
+                        candidate.Index)
+                .Take(
+                    MaxPointShadowLights)
+                .Select(
+                    candidate =>
+                        candidate.Index)
+                .ToArray();
     }
 
     /// <summary>

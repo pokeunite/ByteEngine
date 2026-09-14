@@ -53,6 +53,44 @@ public sealed class DirectionalLight : Component
     /// Depth texture resolution used by the directional shadow map.
     /// Values are normalized to 256, 512, 1024, 2048 or 4096.
     /// </summary>
+    public ShadowQuality3D ShadowQuality
+    {
+        get =>
+            _shadowResolution switch
+            {
+                <= 512 => ShadowQuality3D.Low,
+                <= 1024 => ShadowQuality3D.Medium,
+                <= 2048 => ShadowQuality3D.High,
+                _ => ShadowQuality3D.Ultra
+            };
+
+        set
+        {
+            switch (value)
+            {
+                case ShadowQuality3D.Low:
+                    ShadowResolution = 512;
+                    ShadowSoftness = 0.75f;
+                    break;
+
+                case ShadowQuality3D.Medium:
+                    ShadowResolution = 1024;
+                    ShadowSoftness = 1.0f;
+                    break;
+
+                case ShadowQuality3D.High:
+                    ShadowResolution = 2048;
+                    ShadowSoftness = 1.25f;
+                    break;
+
+                case ShadowQuality3D.Ultra:
+                    ShadowResolution = 4096;
+                    ShadowSoftness = 1.5f;
+                    break;
+            }
+        }
+    }
+
     public int ShadowResolution
     {
         get =>

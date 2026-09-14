@@ -342,4 +342,21 @@ public readonly record struct RenderWorldStats(
     int DirectionalShadowPasses,
     int PointShadowPasses,
     int ShadowPasses,
-    int ShadowDrawCalls);
+    int ShadowDrawCalls)
+{
+    /// <summary>
+    /// Number of depth-map faces rendered this frame:
+    /// one per directional shadow plus six per point-light cubemap.
+    /// </summary>
+    public int ShadowMapFaces =>
+        DirectionalShadowPasses +
+        PointShadowPasses *
+        6;
+
+    /// <summary>
+    /// Main-pass and shadow-pass draw calls combined.
+    /// </summary>
+    public int TotalDrawCalls =>
+        DrawCalls +
+        ShadowDrawCalls;
+}

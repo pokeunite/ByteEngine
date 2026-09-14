@@ -37,6 +37,44 @@ public sealed class PointLight : Component
     public bool CastShadows { get; set; } =
         false;
 
+    public ShadowQuality3D ShadowQuality
+    {
+        get =>
+            _shadowResolution switch
+            {
+                <= 256 => ShadowQuality3D.Low,
+                <= 512 => ShadowQuality3D.Medium,
+                <= 1024 => ShadowQuality3D.High,
+                _ => ShadowQuality3D.Ultra
+            };
+
+        set
+        {
+            switch (value)
+            {
+                case ShadowQuality3D.Low:
+                    ShadowResolution = 256;
+                    ShadowSoftness = 0.04f;
+                    break;
+
+                case ShadowQuality3D.Medium:
+                    ShadowResolution = 512;
+                    ShadowSoftness = 0.06f;
+                    break;
+
+                case ShadowQuality3D.High:
+                    ShadowResolution = 1024;
+                    ShadowSoftness = 0.08f;
+                    break;
+
+                case ShadowQuality3D.Ultra:
+                    ShadowResolution = 2048;
+                    ShadowSoftness = 0.10f;
+                    break;
+            }
+        }
+    }
+
     public int ShadowResolution
     {
         get => _shadowResolution;
