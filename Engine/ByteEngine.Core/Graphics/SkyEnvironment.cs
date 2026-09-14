@@ -45,6 +45,12 @@ public sealed class SkyEnvironment : Component
 
     private float _environmentRotationDegrees;
 
+    private float _environmentDiffuseStrength =
+        0.5f;
+
+    private float _environmentSpecularStrength =
+        1.0f;
+
     private Vector3 _fogColor =
         new(
             0.58f,
@@ -106,6 +112,39 @@ public sealed class SkyEnvironment : Component
     {
         EnvironmentMapTexture =
             texture;
+    }
+
+    /// <summary>
+    /// Allows the environment map to contribute diffuse and specular
+    /// image-based lighting to standard 3D materials.
+    /// </summary>
+    public bool EnvironmentLightingEnabled { get; set; } =
+        true;
+
+    public float EnvironmentDiffuseStrength
+    {
+        get =>
+            _environmentDiffuseStrength;
+
+        set =>
+            _environmentDiffuseStrength =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    4.0f);
+    }
+
+    public float EnvironmentSpecularStrength
+    {
+        get =>
+            _environmentSpecularStrength;
+
+        set =>
+            _environmentSpecularStrength =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    4.0f);
     }
 
     public Vector3 ZenithColor

@@ -610,9 +610,15 @@ public sealed class Renderer3D : IDisposable
                 pointShadows,
                 receiveShadows);
 
-            UploadEnvironmentFog(
+            RenderEnvironment3D resolvedEnvironment =
                 environment ??
-                RenderEnvironment3D.Default);
+                RenderEnvironment3D.Default;
+
+            UploadEnvironmentFog(
+                resolvedEnvironment);
+
+            UploadEnvironmentLighting(
+                resolvedEnvironment);
 
             if (material.MainTexture !=
                 null)
@@ -721,6 +727,66 @@ public sealed class Renderer3D : IDisposable
             null,
             Array.Empty<RenderPointShadow3D>(),
             false);
+    }
+
+    private void UploadEnvironmentLighting(
+        RenderEnvironment3D environment)
+    {
+        bool enabled =
+            environment.EnvironmentLightingEnabled &&
+            environment.SkyMode ==
+                SkyMode3D.EnvironmentMap &&
+            environment.EnvironmentMapTexture !=
+                null;
+
+        _shader!.SetInt(
+            "uUseEnvironmentMap",
+            enabled
+                ? 1
+                : 0);
+
+        _shader.SetFloat(
+            "uEnvironmentIntensity",
+            environment.EnvironmentIntensity);
+
+        _shader.SetFloat(
+            "uEnvironmentRotationRadians",
+            environment.EnvironmentRotationDegrees *
+            MathF.PI /
+            180.0f);
+
+        _shader.SetFloat(
+            "uEnvironmentDiffuseStrength",
+            environment.EnvironmentDiffuseStrength);
+
+        _shader.SetFloat(
+            "uEnvironmentSpecularStrength",
+            environment.EnvironmentSpecularStrength);
+
+        _shader.SetInt(
+            "uEnvironmentIsHdr",
+            enabled &&
+            environment.EnvironmentMapTexture!.IsHdr
+                ? 1
+                : 0);
+
+        if (!enabled)
+        {
+            return;
+        }
+
+        const int environmentTextureSlot =
+            5;
+
+        environment.EnvironmentMapTexture!.Bind(
+            environmentTextureSlot);
+
+        _shader.SetInt(
+            "uEnvironmentMap",
+            environmentTextureSlot);
+
+        GL.ActiveTexture(
+            TextureUnit.Texture0);
     }
 
     private void UploadEnvironmentFog(

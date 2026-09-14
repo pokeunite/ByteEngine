@@ -91,6 +91,82 @@ internal sealed class Shader3D : IDisposable
         out vec3 vWorldPosition;
         out vec2 vUV;
 
+        vec2 environmentDirectionToUv(
+            vec3 direction)
+        {
+            const float TWO_PI=
+                6.28318530718;
+
+            vec3 normalizedDirection=
+                normalize(
+                    direction);
+
+            float cosine=
+                cos(
+                    uEnvironmentRotationRadians);
+
+            float sine=
+                sin(
+                    uEnvironmentRotationRadians);
+
+            vec3 rotatedDirection=
+                vec3(
+                    cosine*normalizedDirection.x-
+                    sine*normalizedDirection.z,
+                    normalizedDirection.y,
+                    sine*normalizedDirection.x+
+                    cosine*normalizedDirection.z);
+
+            float longitude=
+                atan(
+                    rotatedDirection.z,
+                    rotatedDirection.x);
+
+            float latitude=
+                asin(
+                    clamp(
+                        rotatedDirection.y,
+                        -1.0,
+                        1.0));
+
+            return
+                vec2(
+                    longitude/
+                        TWO_PI+
+                        0.5,
+                    0.5-
+                    latitude/
+                        PI);
+        }
+
+        vec3 sampleEnvironmentLinear(
+            vec3 direction)
+        {
+            vec3 environmentColor=
+                texture(
+                    uEnvironmentMap,
+                    environmentDirectionToUv(
+                        direction)).rgb;
+
+            if(uEnvironmentIsHdr==0)
+            {
+                environmentColor=
+                    pow(
+                        max(
+                            environmentColor,
+                            vec3(0.0)),
+                        vec3(2.2));
+            }
+
+            return
+                max(
+                    environmentColor*
+                    max(
+                        uEnvironmentIntensity,
+                        0.0),
+                    vec3(0.0));
+        }
+
         void main()
         {
             vNormal=mat3(transpose(inverse(uModel)))*aNormal;
@@ -119,6 +195,14 @@ internal sealed class Shader3D : IDisposable
         uniform float uAlphaCutoff;
         uniform float uAmbientIntensity;
         uniform vec3 uCameraPosition;
+
+        uniform int uUseEnvironmentMap;
+        uniform sampler2D uEnvironmentMap;
+        uniform int uEnvironmentIsHdr;
+        uniform float uEnvironmentIntensity;
+        uniform float uEnvironmentRotationRadians;
+        uniform float uEnvironmentDiffuseStrength;
+        uniform float uEnvironmentSpecularStrength;
 
         uniform int uFogEnabled;
         uniform int uFogMode;
@@ -610,9 +694,81 @@ internal sealed class Shader3D : IDisposable
                     (1.0-pointShadow);
             }
 
+            vec3 environmentDiffuse=
+                vec3(0.0);
+
+            vec3 environmentSpecular=
+                vec3(0.0);
+
+            if(uUseEnvironmentMap==1)
+            {
+                vec3 diffuseEnvironment=
+                    sampleEnvironmentLinear(
+                        n);
+
+                environmentDiffuse=
+                    diffuseEnvironment*
+                    base.rgb*
+                    (1.0-uMetallic)*
+                    max(
+                        uEnvironmentDiffuseStrength,
+                        0.0);
+
+                vec3 reflectionDirection=
+                    reflect(
+                        -v,
+                        n);
+
+                vec3 reflectedEnvironment=
+                    sampleEnvironmentLinear(
+                        reflectionDirection);
+
+                /*
+                 * v0.9-k keeps IBL cheap: rough materials blend their sharp
+                 * reflection toward the diffuse environment sample instead
+                 * of requiring a prefiltered cubemap pass.
+                 */
+                float roughnessBlend=
+                    uRoughness*
+                    uRoughness;
+
+                vec3 roughEnvironment=
+                    mix(
+                        reflectedEnvironment,
+                        diffuseEnvironment,
+                        roughnessBlend);
+
+                float nDotV=
+                    max(
+                        dot(
+                            n,
+                            v),
+                        0.0);
+
+                vec3 f0=
+                    mix(
+                        vec3(0.04),
+                        base.rgb,
+                        uMetallic);
+
+                vec3 environmentFresnel=
+                    fresnelSchlick(
+                        nDotV,
+                        f0);
+
+                environmentSpecular=
+                    roughEnvironment*
+                    environmentFresnel*
+                    max(
+                        uEnvironmentSpecularStrength,
+                        0.0);
+            }
+
             vec3 linearColor=
                 base.rgb*
                 uAmbientIntensity+
+                environmentDiffuse+
+                environmentSpecular+
                 direct;
 
             if(uFogEnabled==1)
