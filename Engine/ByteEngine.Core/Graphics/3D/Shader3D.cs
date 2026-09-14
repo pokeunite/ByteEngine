@@ -306,6 +306,35 @@ internal sealed class Shader3D : IDisposable
                 nDotL;
         }
 
+        float samplePointShadow(
+            samplerCube shadowMap,
+            vec3 fragmentToLight,
+            float currentDepth,
+            float farPlane,
+            float bias,
+            float softness,
+            float strength)
+        {
+            float safeFarPlane=max(farPlane,0.0001);
+            float radius=
+                max(softness,0.0)*
+                0.015*
+                (0.25+currentDepth/safeFarPlane);
+
+            float shadow=0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
+            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
+
+            return
+                shadow/7.0*
+                clamp(strength,0.0,1.0);
+        }
+
         float calculatePointShadow(
             int lightIndex,
             vec3 lightPosition,
