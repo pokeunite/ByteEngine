@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 
@@ -39,6 +40,11 @@ public sealed class SkyEnvironment : Component
     private float _ambientIntensity =
         0.20f;
 
+    private float _environmentIntensity =
+        1.0f;
+
+    private float _environmentRotationDegrees;
+
     private Vector3 _fogColor =
         new(
             0.58f,
@@ -58,10 +64,49 @@ public sealed class SkyEnvironment : Component
         1.0f;
 
     /// <summary>
-    /// Draws the procedural sky behind the 3D scene.
+    /// Draws the selected sky source behind the 3D scene.
     /// </summary>
     public bool DrawSky { get; set; } =
         true;
+
+    public SkyMode3D SkyMode { get; set; } =
+        SkyMode3D.Procedural;
+
+    public AssetReference EnvironmentMapReference { get; set; } =
+        AssetReference.Empty;
+
+    public Texture2D? EnvironmentMapTexture { get; private set; }
+
+    public float EnvironmentIntensity
+    {
+        get =>
+            _environmentIntensity;
+
+        set =>
+            _environmentIntensity =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    16.0f);
+    }
+
+    public float EnvironmentRotationDegrees
+    {
+        get =>
+            _environmentRotationDegrees;
+
+        set =>
+            _environmentRotationDegrees =
+                NormalizeDegrees(
+                    value);
+    }
+
+    public void SetEnvironmentMapTexture(
+        Texture2D? texture)
+    {
+        EnvironmentMapTexture =
+            texture;
+    }
 
     public Vector3 ZenithColor
     {
@@ -243,6 +288,26 @@ public sealed class SkyEnvironment : Component
                     value,
                     0.0f,
                     1.0f);
+    }
+
+    private static float NormalizeDegrees(
+        float value)
+    {
+        if (!float.IsFinite(
+                value))
+        {
+            return 0.0f;
+        }
+
+        float normalized =
+            value %
+            360.0f;
+
+        return normalized <
+            0.0f
+                ? normalized +
+                  360.0f
+                : normalized;
     }
 
     private static Vector3 ClampColor(

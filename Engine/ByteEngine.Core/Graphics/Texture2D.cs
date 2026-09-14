@@ -22,6 +22,12 @@ public sealed class Texture2D
 
     public string? FilePath { get; private set; }
 
+    /// <summary>
+    /// True when the source image was loaded through the floating-point HDR
+    /// path and uploaded without first quantizing it to 8-bit color.
+    /// </summary>
+    public bool IsHdr { get; private set; }
+
     public Texture2D(
         string filePath,
         TextureFilter filter = TextureFilter.Nearest)
@@ -34,34 +40,17 @@ public sealed class Texture2D
             );
         }
 
-        FilePath =
-            Path.GetFullPath(
-                filePath
-            );
-
-        using FileStream stream =
-            File.OpenRead(filePath);
-
-        ImageResult image =
-            ImageResult.FromStream(
-                stream,
-                ColorComponents.RedGreenBlueAlpha
-            );
-
-        Width =
-            image.Width;
-
-        Height =
-            image.Height;
-
-        Upload(
-            image.Data,
-            filter
+        LoadFile(
+            filePath,
+            filter,
+            replacingExistingHandle: false
         );
 
         Console.WriteLine(
             $"Texture loaded: {Path.GetFileName(filePath)} " +
-            $"({Width}x{Height})"
+            $"({Width}x{Height}" +
+            (IsHdr ? ", HDR" : string.Empty) +
+            ")"
         );
     }
 
@@ -74,8 +63,9 @@ public sealed class Texture2D
         Width = width;
         Height = height;
         FilePath = null;
+        IsHdr = false;
 
-        Upload(
+        UploadBytes(
             pixels,
             filter
         );
@@ -144,63 +134,258 @@ public sealed class Texture2D
         );
     }
 
-    internal static Texture2D FromEncodedBytes(byte[] encodedData, TextureFilter filter = TextureFilter.Linear)
+    internal static Texture2D FromEncodedBytes(
+        byte[] encodedData,
+        TextureFilter filter = TextureFilter.Linear)
     {
         ArgumentNullException.ThrowIfNull(encodedData);
-        using var stream = new MemoryStream(encodedData, false);
-        ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-        return new Texture2D(image.Width, image.Height, image.Data, filter);
+
+        using var stream =
+            new MemoryStream(
+                encodedData,
+                false);
+
+        ImageResult image =
+            ImageResult.FromStream(
+                stream,
+                ColorComponents.RedGreenBlueAlpha);
+
+        return new Texture2D(
+            image.Width,
+            image.Height,
+            image.Data,
+            filter);
     }
 
-    internal void Reload(string filePath, TextureFilter filter)
+    internal void Reload(
+        string filePath,
+        TextureFilter filter)
     {
-        using FileStream stream = File.OpenRead(filePath);
-        ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-        ReplacePixels(image.Width, image.Height, image.Data, filter, Path.GetFullPath(filePath));
+        LoadFile(
+            filePath,
+            filter,
+            replacingExistingHandle: true
+        );
     }
 
-    internal void ReloadEncoded(byte[] encodedData, TextureFilter filter = TextureFilter.Linear)
+    internal void ReloadEncoded(
+        byte[] encodedData,
+        TextureFilter filter = TextureFilter.Linear)
     {
-        using var stream = new MemoryStream(encodedData, false);
-        ImageResult image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-        ReplacePixels(image.Width, image.Height, image.Data, filter, null);
+        using var stream =
+            new MemoryStream(
+                encodedData,
+                false);
+
+        ImageResult image =
+            ImageResult.FromStream(
+                stream,
+                ColorComponents.RedGreenBlueAlpha);
+
+        ReplacePixels(
+            image.Width,
+            image.Height,
+            image.Data,
+            filter,
+            null);
     }
 
     internal void ReplaceWithMissing()
     {
         const int size = 8;
-        byte[] pixels = CreateMissingPixels(size);
-        ReplacePixels(size, size, pixels, TextureFilter.Nearest, null);
+
+        byte[] pixels =
+            CreateMissingPixels(
+                size);
+
+        ReplacePixels(
+            size,
+            size,
+            pixels,
+            TextureFilter.Nearest,
+            null);
     }
 
-    private void ReplacePixels(int width, int height, byte[] pixels, TextureFilter filter, string? filePath)
+    private void LoadFile(
+        string filePath,
+        TextureFilter filter,
+        bool replacingExistingHandle)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(Texture2D));
-        int previous = _handle;
-        Width = width;
-        Height = height;
-        FilePath = filePath;
-        Upload(pixels, filter);
-        if (previous != 0) GL.DeleteTexture(previous);
-    }
-
-    private static byte[] CreateMissingPixels(int size)
-    {
-        byte[] pixels = new byte[size * size * 4];
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
+        if (_disposed)
         {
-            bool magenta = (x < size / 2) == (y < size / 2);
-            int index = (y * size + x) * 4;
-            pixels[index] = magenta ? (byte)255 : (byte)20;
-            pixels[index + 1] = magenta ? (byte)0 : (byte)20;
-            pixels[index + 2] = magenta ? (byte)255 : (byte)20;
-            pixels[index + 3] = 255;
+            throw new ObjectDisposedException(
+                nameof(Texture2D));
         }
+
+        string fullPath =
+            Path.GetFullPath(
+                filePath);
+
+        bool isHdr =
+            string.Equals(
+                Path.GetExtension(
+                    fullPath),
+                ".hdr",
+                StringComparison.OrdinalIgnoreCase);
+
+        int previousHandle =
+            replacingExistingHandle
+                ? _handle
+                : 0;
+
+        using FileStream stream =
+            File.OpenRead(
+                fullPath);
+
+        if (isHdr)
+        {
+            ImageResultFloat image =
+                ImageResultFloat.FromStream(
+                    stream,
+                    ColorComponents.RedGreenBlueAlpha);
+
+            Width =
+                image.Width;
+
+            Height =
+                image.Height;
+
+            FilePath =
+                fullPath;
+
+            IsHdr =
+                true;
+
+            UploadFloats(
+                image.Data,
+                filter);
+        }
+        else
+        {
+            ImageResult image =
+                ImageResult.FromStream(
+                    stream,
+                    ColorComponents.RedGreenBlueAlpha);
+
+            Width =
+                image.Width;
+
+            Height =
+                image.Height;
+
+            FilePath =
+                fullPath;
+
+            IsHdr =
+                false;
+
+            UploadBytes(
+                image.Data,
+                filter);
+        }
+
+        if (previousHandle != 0)
+        {
+            GL.DeleteTexture(
+                previousHandle);
+        }
+    }
+
+    private void ReplacePixels(
+        int width,
+        int height,
+        byte[] pixels,
+        TextureFilter filter,
+        string? filePath)
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(
+                nameof(Texture2D));
+        }
+
+        int previous =
+            _handle;
+
+        Width =
+            width;
+
+        Height =
+            height;
+
+        FilePath =
+            filePath;
+
+        IsHdr =
+            false;
+
+        UploadBytes(
+            pixels,
+            filter);
+
+        if (previous != 0)
+        {
+            GL.DeleteTexture(
+                previous);
+        }
+    }
+
+    private static byte[] CreateMissingPixels(
+        int size)
+    {
+        byte[] pixels =
+            new byte[
+                size *
+                size *
+                4];
+
+        for (int y = 0;
+             y < size;
+             y++)
+        {
+            for (int x = 0;
+                 x < size;
+                 x++)
+            {
+                bool magenta =
+                    (
+                        x <
+                        size / 2) ==
+                    (
+                        y <
+                        size / 2);
+
+                int index =
+                    (
+                        y *
+                        size +
+                        x) *
+                    4;
+
+                pixels[index] =
+                    magenta
+                        ? (byte)255
+                        : (byte)20;
+
+                pixels[index + 1] =
+                    magenta
+                        ? (byte)0
+                        : (byte)20;
+
+                pixels[index + 2] =
+                    magenta
+                        ? (byte)255
+                        : (byte)20;
+
+                pixels[index + 3] =
+                    255;
+            }
+        }
+
         return pixels;
     }
 
-    private void Upload(
+    private void UploadBytes(
         byte[] pixels,
         TextureFilter filter)
     {
@@ -209,66 +394,107 @@ public sealed class Texture2D
 
         GL.BindTexture(
             TextureTarget.Texture2D,
-            _handle
-        );
+            _handle);
 
-        GL.PixelStore(
-            PixelStoreParameter.UnpackAlignment,
-            1
-        );
+        ConfigurePixelStore();
 
         GL.TexImage2D(
             TextureTarget.Texture2D,
             0,
-            PixelInternalFormat.Rgba,
+            PixelInternalFormat.Rgba8,
             Width,
             Height,
             0,
             PixelFormat.Rgba,
             PixelType.UnsignedByte,
-            pixels
-        );
+            pixels);
 
+        ConfigureSampling(
+            filter);
+
+        GL.BindTexture(
+            TextureTarget.Texture2D,
+            0);
+    }
+
+    private void UploadFloats(
+        float[] pixels,
+        TextureFilter filter)
+    {
+        _handle =
+            GL.GenTexture();
+
+        GL.BindTexture(
+            TextureTarget.Texture2D,
+            _handle);
+
+        ConfigurePixelStore();
+
+        /*
+         * RGBA16F preserves HDR range while using half the storage of
+         * RGBA32F. Source data remains float on upload; the GPU performs
+         * the conversion to 16-bit floating point.
+         */
+        GL.TexImage2D(
+            TextureTarget.Texture2D,
+            0,
+            PixelInternalFormat.Rgba16f,
+            Width,
+            Height,
+            0,
+            PixelFormat.Rgba,
+            PixelType.Float,
+            pixels);
+
+        ConfigureSampling(
+            filter);
+
+        GL.BindTexture(
+            TextureTarget.Texture2D,
+            0);
+    }
+
+    private static void ConfigurePixelStore()
+    {
+        GL.PixelStore(
+            PixelStoreParameter.UnpackAlignment,
+            1);
+    }
+
+    private static void ConfigureSampling(
+        TextureFilter filter)
+    {
         TextureMinFilter minFilter =
             filter ==
-            TextureFilter.Nearest
+                TextureFilter.Nearest
                 ? TextureMinFilter.Nearest
                 : TextureMinFilter.Linear;
 
         TextureMagFilter magFilter =
             filter ==
-            TextureFilter.Nearest
+                TextureFilter.Nearest
                 ? TextureMagFilter.Nearest
                 : TextureMagFilter.Linear;
 
         GL.TexParameter(
             TextureTarget.Texture2D,
             TextureParameterName.TextureMinFilter,
-            (int)minFilter
-        );
+            (int)minFilter);
 
         GL.TexParameter(
             TextureTarget.Texture2D,
             TextureParameterName.TextureMagFilter,
-            (int)magFilter
-        );
+            (int)magFilter);
 
         GL.TexParameter(
             TextureTarget.Texture2D,
             TextureParameterName.TextureWrapS,
-            (int)TextureWrapMode.ClampToEdge
-        );
+            (int)TextureWrapMode.ClampToEdge);
 
         GL.TexParameter(
             TextureTarget.Texture2D,
             TextureParameterName.TextureWrapT,
-            (int)TextureWrapMode.ClampToEdge
-        );
-
-        GL.BindTexture(
-            TextureTarget.Texture2D,
-            0
-        );
+            (int)TextureWrapMode.ClampToEdge);
     }
 
     internal void Bind(
@@ -277,21 +503,17 @@ public sealed class Texture2D
         if (_disposed)
         {
             throw new ObjectDisposedException(
-                nameof(Texture2D)
-            );
+                nameof(Texture2D));
         }
 
         GL.ActiveTexture(
             (TextureUnit)(
                 (int)TextureUnit.Texture0 +
-                slot
-            )
-        );
+                slot));
 
         GL.BindTexture(
             TextureTarget.Texture2D,
-            _handle
-        );
+            _handle);
     }
 
     public void Dispose()
@@ -302,10 +524,12 @@ public sealed class Texture2D
         }
 
         GL.DeleteTexture(
-            _handle
-        );
+            _handle);
 
-        _handle = 0;
-        _disposed = true;
+        _handle =
+            0;
+
+        _disposed =
+            true;
     }
 }

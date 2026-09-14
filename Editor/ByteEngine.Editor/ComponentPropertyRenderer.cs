@@ -172,6 +172,18 @@ internal static class ComponentPropertyRenderer
             {
                 if (component is SpriteRenderer sprite && descriptor.Property.Name == nameof(SpriteRenderer.TextureReference) && project != null)
                     sprite.Texture = sprite.TextureReference == null || sprite.TextureReference.IsEmpty ? null : project.Assets.LoadTexture(sprite.TextureReference);
+
+                if (component is SkyEnvironment environment &&
+                    descriptor.Property.Name == nameof(SkyEnvironment.EnvironmentMapReference) &&
+                    project != null)
+                {
+                    environment.SetEnvironmentMapTexture(
+                        environment.EnvironmentMapReference.IsEmpty
+                            ? null
+                            : project.Assets.LoadTexture(
+                                environment.EnvironmentMapReference));
+                }
+
                 changed();
             }
             if (ImGui.IsItemDeactivatedAfterEdit() || edited && !active) end();

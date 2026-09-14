@@ -339,6 +339,7 @@ public sealed class AssetDatabase : IDisposable
     private static AssetType DetectType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".png" => AssetType.Texture2D,
+        ".hdr" => AssetType.Texture2D,
         ".bytescene" => AssetType.Scene,
         ".fbx" => AssetType.Model3D,
         ".obj" => AssetType.Model3D,

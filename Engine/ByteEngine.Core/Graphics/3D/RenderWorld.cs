@@ -164,9 +164,20 @@ public sealed class RenderWorld
 
         if (_environment.DrawSky)
         {
-            context.Renderer3D.RenderSky(
-                view,
-                _environment);
+            SkyShader3D.CurrentEnvironment =
+                _environment;
+
+            try
+            {
+                context.Renderer3D.RenderSky(
+                    view,
+                    _environment);
+            }
+            finally
+            {
+                SkyShader3D.CurrentEnvironment =
+                    RenderEnvironment3D.Default;
+            }
 
             environmentDrawCalls =
                 1;

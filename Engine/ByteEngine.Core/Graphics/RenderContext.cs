@@ -158,6 +158,10 @@ public sealed class RenderContext
         return
             new RenderEnvironment3D(
                 environment.DrawSky,
+                environment.SkyMode,
+                environment.EnvironmentMapTexture,
+                environment.EnvironmentIntensity,
+                environment.EnvironmentRotationDegrees,
                 environment.ZenithColor,
                 environment.HorizonColor,
                 environment.GroundColor,

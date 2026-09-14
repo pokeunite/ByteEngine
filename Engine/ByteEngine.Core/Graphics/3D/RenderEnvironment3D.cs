@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Graphics;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
 
@@ -7,6 +8,10 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public readonly record struct RenderEnvironment3D(
     bool DrawSky,
+    SkyMode3D SkyMode,
+    Texture2D? EnvironmentMapTexture,
+    float EnvironmentIntensity,
+    float EnvironmentRotationDegrees,
     Vector3 ZenithColor,
     Vector3 HorizonColor,
     Vector3 GroundColor,
@@ -25,6 +30,10 @@ public readonly record struct RenderEnvironment3D(
     public static RenderEnvironment3D Default =>
         new(
             false,
+            SkyMode3D.Procedural,
+            null,
+            1.0f,
+            0.0f,
             new Vector3(
                 0.08f,
                 0.20f,

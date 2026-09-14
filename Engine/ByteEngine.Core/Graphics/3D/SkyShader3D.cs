@@ -1,4 +1,5 @@
 using System.Numerics;
+using OpenTK.Graphics.OpenGL4;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
 
@@ -15,8 +16,61 @@ internal sealed class SkyShader3D : IDisposable
             VertexSource,
             FragmentSource);
 
-    public void Use() =>
+    internal static RenderEnvironment3D CurrentEnvironment { get; set; } =
+        RenderEnvironment3D.Default;
+
+    public void Use()
+    {
         _shader.Use();
+
+        RenderEnvironment3D environment =
+            CurrentEnvironment;
+
+        bool useEnvironmentMap =
+            environment.SkyMode ==
+                SkyMode3D.EnvironmentMap &&
+            environment.EnvironmentMapTexture !=
+                null;
+
+        _shader.SetInt(
+            "uSkyMode",
+            useEnvironmentMap
+                ? 1
+                : 0);
+
+        _shader.SetFloat(
+            "uEnvironmentIntensity",
+            environment.EnvironmentIntensity);
+
+        _shader.SetFloat(
+            "uEnvironmentRotationRadians",
+            environment.EnvironmentRotationDegrees *
+            MathF.PI /
+            180.0f);
+
+        _shader.SetInt(
+            "uEnvironmentIsHdr",
+            useEnvironmentMap &&
+            environment.EnvironmentMapTexture!.IsHdr
+                ? 1
+                : 0);
+
+        if (useEnvironmentMap)
+        {
+            const int textureSlot =
+                5;
+
+            environment.EnvironmentMapTexture!.Bind(
+                textureSlot);
+
+            _shader.SetInt(
+                "uEnvironmentMap",
+                textureSlot);
+
+            GL.ActiveTexture(
+                TextureUnit.Texture0);
+        }
+    }
 
     public void SetMatrix(
         string name,
@@ -111,11 +165,106 @@ internal sealed class SkyShader3D : IDisposable
         uniform float uSkyIntensity;
         uniform float uHorizonSharpness;
 
+        uniform int uSkyMode;
+        uniform sampler2D uEnvironmentMap;
+        uniform float uEnvironmentIntensity;
+        uniform float uEnvironmentRotationRadians;
+        uniform int uEnvironmentIsHdr;
+
         void main()
         {
             vec3 direction=
                 normalize(
                     vDirection);
+
+            if(uSkyMode==1)
+            {
+                const float PI=
+                    3.14159265359;
+
+                vec3 rotatedDirection=
+                    normalize(
+                        vec3(
+                            cos(uEnvironmentRotationRadians)*
+                                direction.x-
+                            sin(uEnvironmentRotationRadians)*
+                                direction.z,
+                            direction.y,
+                            sin(uEnvironmentRotationRadians)*
+                                direction.x+
+                            cos(uEnvironmentRotationRadians)*
+                                direction.z));
+
+                float longitude=
+                    atan(
+                        rotatedDirection.z,
+                        rotatedDirection.x);
+
+                float latitude=
+                    asin(
+                        clamp(
+                            rotatedDirection.y,
+                            -1.0,
+                            1.0));
+
+                vec2 environmentUV=
+                    vec2(
+                        longitude/
+                            (2.0*PI)+
+                            0.5,
+                        0.5-
+                        latitude/
+                            PI);
+
+                vec3 environmentColor=
+                    texture(
+                        uEnvironmentMap,
+                        environmentUV).rgb;
+
+                /*
+                 * PNG environment maps arrive as display-referred sRGB-like
+                 * values. Convert them back toward linear before exposure and
+                 * tone mapping. Native .hdr textures are already linear floats.
+                 */
+                if(uEnvironmentIsHdr==0)
+                {
+                    environmentColor=
+                        pow(
+                            max(
+                                environmentColor,
+                                vec3(0.0)),
+                            vec3(2.2));
+                }
+
+                environmentColor*=
+                    max(
+                        uEnvironmentIntensity,
+                        0.0);
+
+                vec3 mappedEnvironment=
+                    environmentColor/
+                    (
+                        environmentColor+
+                        vec3(1.0)
+                    );
+
+                vec3 displayEnvironment=
+                    pow(
+                        clamp(
+                            mappedEnvironment,
+                            vec3(0.0),
+                            vec3(1.0)),
+                        vec3(
+                            1.0/
+                            2.2));
+
+                FragColor=
+                    vec4(
+                        displayEnvironment,
+                        1.0);
+
+                return;
+            }
 
             float sharpness=
                 max(

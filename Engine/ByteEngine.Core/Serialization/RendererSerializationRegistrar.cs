@@ -62,6 +62,21 @@ public static class RendererSerializationRegistrar
                             ["drawSky"] =
                                 environment.DrawSky,
 
+                            ["skyMode"] =
+                                (int)environment.SkyMode,
+
+                            ["environmentMapGuid"] =
+                                environment.EnvironmentMapReference.Guid.ToString(),
+
+                            ["environmentMapPath"] =
+                                environment.EnvironmentMapReference.CachedProjectPath,
+
+                            ["environmentIntensity"] =
+                                environment.EnvironmentIntensity,
+
+                            ["environmentRotationDegrees"] =
+                                environment.EnvironmentRotationDegrees,
+
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -115,13 +130,56 @@ public static class RendererSerializationRegistrar
             ComponentData data,
             ComponentSerializationContext context)
         {
-            return
-                new SkyEnvironment
+            Guid.TryParse(
+                data.Properties["environmentMapGuid"]?
+                    .GetValue<string>(),
+                out Guid environmentMapGuid);
+
+            string? environmentMapPath =
+                data.Properties["environmentMapPath"]?
+                    .GetValue<string>();
+
+            AssetReference environmentMapReference =
+                environmentMapGuid ==
+                        Guid.Empty &&
+                    string.IsNullOrWhiteSpace(
+                        environmentMapPath)
+                    ? AssetReference.Empty
+                    : new AssetReference(
+                        environmentMapGuid,
+                        environmentMapPath);
+
+            SkyEnvironment environment =
+                new()
                 {
                     DrawSky =
                         data.Properties["drawSky"]?
                             .GetValue<bool>() ??
                         true,
+
+                    SkyMode =
+                        (SkyMode3D)Math.Clamp(
+                            ReadInt(
+                                data,
+                                "skyMode",
+                                (int)SkyMode3D.Procedural),
+                            (int)SkyMode3D.Procedural,
+                            (int)SkyMode3D.EnvironmentMap),
+
+                    EnvironmentMapReference =
+                        environmentMapReference,
+
+                    EnvironmentIntensity =
+                        ReadFloat(
+                            data,
+                            "environmentIntensity",
+                            1.0f),
+
+                    EnvironmentRotationDegrees =
+                        ReadFloat(
+                            data,
+                            "environmentRotationDegrees",
+                            0.0f),
 
                     ZenithColor =
                         ReadVector3(
@@ -216,6 +274,15 @@ public static class RendererSerializationRegistrar
                             "fogMaxOpacity",
                             1.0f)
                 };
+
+            if (!environmentMapReference.IsEmpty)
+            {
+                environment.SetEnvironmentMapTexture(
+                    context.Assets.LoadTexture(
+                        environmentMapReference));
+            }
+
+            return environment;
         }
     }
 
