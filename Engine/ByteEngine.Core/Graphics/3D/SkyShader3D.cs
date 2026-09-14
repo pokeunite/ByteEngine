@@ -48,13 +48,6 @@ internal sealed class SkyShader3D : IDisposable
             MathF.PI /
             180.0f);
 
-        _shader.SetInt(
-            "uEnvironmentIsHdr",
-            useEnvironmentMap &&
-            environment.EnvironmentMapTexture!.IsHdr
-                ? 1
-                : 0);
-
         if (useEnvironmentMap)
         {
             const int textureSlot =
@@ -169,7 +162,38 @@ internal sealed class SkyShader3D : IDisposable
         uniform sampler2D uEnvironmentMap;
         uniform float uEnvironmentIntensity;
         uniform float uEnvironmentRotationRadians;
-        uniform int uEnvironmentIsHdr;
+
+        vec3 acesFilm(
+            vec3 value)
+        {
+            const float a=2.51;
+            const float b=0.03;
+            const float c=2.43;
+            const float d=0.59;
+            const float e=0.14;
+
+            return
+                clamp(
+                    (
+                        value*
+                        (
+                            a*
+                            value+
+                            b
+                        )
+                    )/
+                    (
+                        value*
+                        (
+                            c*
+                            value+
+                            d
+                        )+
+                        e
+                    ),
+                    vec3(0.0),
+                    vec3(1.0));
+        }
 
         void main()
         {
@@ -219,41 +243,20 @@ internal sealed class SkyShader3D : IDisposable
                 vec3 environmentColor=
                     texture(
                         uEnvironmentMap,
-                        environmentUV).rgb;
-
-                /*
-                 * PNG environment maps arrive as display-referred sRGB-like
-                 * values. Convert them back toward linear before exposure and
-                 * tone mapping. Native .hdr textures are already linear floats.
-                 */
-                if(uEnvironmentIsHdr==0)
-                {
-                    environmentColor=
-                        pow(
-                            max(
-                                environmentColor,
-                                vec3(0.0)),
-                            vec3(2.2));
-                }
-
-                environmentColor*=
+                        environmentUV).rgb*
                     max(
                         uEnvironmentIntensity,
                         0.0);
 
                 vec3 mappedEnvironment=
-                    environmentColor/
-                    (
-                        environmentColor+
-                        vec3(1.0)
-                    );
+                    acesFilm(
+                        max(
+                            environmentColor,
+                            vec3(0.0)));
 
                 vec3 displayEnvironment=
                     pow(
-                        clamp(
-                            mappedEnvironment,
-                            vec3(0.0),
-                            vec3(1.0)),
+                        mappedEnvironment,
                         vec3(
                             1.0/
                             2.2));
@@ -306,23 +309,15 @@ internal sealed class SkyShader3D : IDisposable
                         0.0),
                     vec3(0.0));
 
-            /*
-             * Lightweight Reinhard mapping keeps HDR-ish sky values usable
-             * without introducing a scene-wide post-processing dependency.
-             */
             vec3 mapped=
-                linearColor/
-                (
-                    linearColor+
-                    vec3(1.0)
-                );
+                acesFilm(
+                    max(
+                        linearColor,
+                        vec3(0.0)));
 
             vec3 displayColor=
                 pow(
-                    clamp(
-                        mapped,
-                        vec3(0.0),
-                        vec3(1.0)),
+                    mapped,
                     vec3(
                         1.0/
                         2.2));

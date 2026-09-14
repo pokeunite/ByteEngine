@@ -28,6 +28,12 @@ public sealed class Texture2D
     /// </summary>
     public bool IsHdr { get; private set; }
 
+    /// <summary>
+    /// Increments whenever the GPU content backing this texture changes.
+    /// Environment IBL uses this to rebuild processed lighting only when needed.
+    /// </summary>
+    internal int ContentVersion { get; private set; }
+
     public Texture2D(
         string filePath,
         TextureFilter filter = TextureFilter.Nearest)
@@ -289,6 +295,8 @@ public sealed class Texture2D
             GL.DeleteTexture(
                 previousHandle);
         }
+
+        ContentVersion++;
     }
 
     private void ReplacePixels(
@@ -328,6 +336,8 @@ public sealed class Texture2D
             GL.DeleteTexture(
                 previous);
         }
+
+        ContentVersion++;
     }
 
     private static byte[] CreateMissingPixels(

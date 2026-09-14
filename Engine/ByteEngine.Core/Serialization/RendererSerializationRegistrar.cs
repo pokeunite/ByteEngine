@@ -80,12 +80,6 @@ public static class RendererSerializationRegistrar
                             ["environmentLightingEnabled"] =
                                 environment.EnvironmentLightingEnabled,
 
-                            ["environmentDiffuseStrength"] =
-                                environment.EnvironmentDiffuseStrength,
-
-                            ["environmentSpecularStrength"] =
-                                environment.EnvironmentSpecularStrength,
-
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -194,18 +188,6 @@ public static class RendererSerializationRegistrar
                         data.Properties["environmentLightingEnabled"]?
                             .GetValue<bool>() ??
                         true,
-
-                    EnvironmentDiffuseStrength =
-                        ReadFloat(
-                            data,
-                            "environmentDiffuseStrength",
-                            0.5f),
-
-                    EnvironmentSpecularStrength =
-                        ReadFloat(
-                            data,
-                            "environmentSpecularStrength",
-                            1.0f),
 
                     ZenithColor =
                         ReadVector3(

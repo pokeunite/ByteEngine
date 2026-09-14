@@ -163,8 +163,6 @@ public sealed class RenderContext
                 environment.EnvironmentIntensity,
                 environment.EnvironmentRotationDegrees,
                 environment.EnvironmentLightingEnabled,
-                environment.EnvironmentDiffuseStrength,
-                environment.EnvironmentSpecularStrength,
                 environment.ZenithColor,
                 environment.HorizonColor,
                 environment.GroundColor,

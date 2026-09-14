@@ -110,8 +110,6 @@ internal static class ComponentMetadataRegistry
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentIntensity))] = new("Environment Intensity", "Environment Map", "Brightness multiplier for the environment texture."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentRotationDegrees))] = new("Environment Rotation", "Environment Map", "Horizontal rotation of the 360-degree environment texture.", "degrees"),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentLightingEnabled))] = new("Environment Lighting", "Image Based Lighting", "Use the environment map as diffuse and specular lighting for standard 3D materials."),
-        [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentDiffuseStrength))] = new("Diffuse Strength", "Image Based Lighting", "Strength of diffuse environment lighting."),
-        [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentSpecularStrength))] = new("Reflection Strength", "Image Based Lighting", "Strength of metallic/specular environment reflections."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.ZenithColor))] = new("Zenith Color", "Sky", "Color directly overhead."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.HorizonColor))] = new("Horizon Color", "Sky", "Color around the world horizon."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.GroundColor))] = new("Ground Color", "Sky", "Color used below the horizon."),

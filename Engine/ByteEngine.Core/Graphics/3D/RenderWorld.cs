@@ -159,6 +159,10 @@ public sealed class RenderWorld
             return;
         }
 
+        context.Renderer3D.PrepareEnvironmentLighting(
+            _environment,
+            view);
+
         int environmentDrawCalls =
             0;
 

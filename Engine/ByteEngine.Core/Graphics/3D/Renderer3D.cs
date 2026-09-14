@@ -12,6 +12,8 @@ public sealed class Renderer3D : IDisposable
 
     private SkyShader3D? _skyShader;
 
+    private EnvironmentIbl3D? _environmentIbl;
+
     private ShadowShader3D? _shadowShader;
 
     private ShadowMap3D? _shadowMap;
@@ -729,6 +731,34 @@ public sealed class Renderer3D : IDisposable
             false);
     }
 
+    public void PrepareEnvironmentLighting(
+        RenderEnvironment3D environment,
+        RenderView3D view)
+    {
+        if (!environment.EnvironmentLightingEnabled ||
+            environment.SkyMode !=
+                SkyMode3D.EnvironmentMap ||
+            environment.EnvironmentMapTexture ==
+                null)
+        {
+            return;
+        }
+
+        Initialize();
+
+        _environmentIbl ??=
+            new EnvironmentIbl3D();
+
+        _environmentIbl.TryPrepare(
+            environment.EnvironmentMapTexture,
+            GetPrimitive(
+                PrimitiveMeshType.Cube),
+            view.TargetWidth,
+            view.TargetHeight);
+
+        RestoreBaselineState();
+    }
+
     private void UploadEnvironmentLighting(
         RenderEnvironment3D environment)
     {
@@ -737,10 +767,14 @@ public sealed class Renderer3D : IDisposable
             environment.SkyMode ==
                 SkyMode3D.EnvironmentMap &&
             environment.EnvironmentMapTexture !=
-                null;
+                null &&
+            _environmentIbl !=
+                null &&
+            _environmentIbl.IsReadyFor(
+                environment.EnvironmentMapTexture);
 
         _shader!.SetInt(
-            "uUseEnvironmentMap",
+            "uUseEnvironmentIbl",
             enabled
                 ? 1
                 : 0);
@@ -756,34 +790,44 @@ public sealed class Renderer3D : IDisposable
             180.0f);
 
         _shader.SetFloat(
-            "uEnvironmentDiffuseStrength",
-            environment.EnvironmentDiffuseStrength);
-
-        _shader.SetFloat(
-            "uEnvironmentSpecularStrength",
-            environment.EnvironmentSpecularStrength);
-
-        _shader.SetInt(
-            "uEnvironmentIsHdr",
-            enabled &&
-            environment.EnvironmentMapTexture!.IsHdr
-                ? 1
-                : 0);
+            "uMaxReflectionLod",
+            _environmentIbl?.MaxReflectionLod ??
+            0.0f);
 
         if (!enabled)
         {
             return;
         }
 
-        const int environmentTextureSlot =
+        const int irradianceSlot =
             5;
 
-        environment.EnvironmentMapTexture!.Bind(
-            environmentTextureSlot);
+        const int prefilterSlot =
+            6;
+
+        const int brdfSlot =
+            7;
+
+        _environmentIbl!.BindIrradiance(
+            irradianceSlot);
 
         _shader.SetInt(
-            "uEnvironmentMap",
-            environmentTextureSlot);
+            "uIrradianceMap",
+            irradianceSlot);
+
+        _environmentIbl.BindPrefilter(
+            prefilterSlot);
+
+        _shader.SetInt(
+            "uPrefilterMap",
+            prefilterSlot);
+
+        _environmentIbl.BindBrdfLut(
+            brdfSlot);
+
+        _shader.SetInt(
+            "uBrdfLut",
+            brdfSlot);
 
         GL.ActiveTexture(
             TextureUnit.Texture0);
@@ -1446,6 +1490,11 @@ public sealed class Renderer3D : IDisposable
         _skyShader?.Dispose();
 
         _skyShader =
+            null;
+
+        _environmentIbl?.Dispose();
+
+        _environmentIbl =
             null;
 
         _shadowShader?.Dispose();

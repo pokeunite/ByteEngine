@@ -91,82 +91,6 @@ internal sealed class Shader3D : IDisposable
         out vec3 vWorldPosition;
         out vec2 vUV;
 
-        vec2 environmentDirectionToUv(
-            vec3 direction)
-        {
-            const float TWO_PI=
-                6.28318530718;
-
-            vec3 normalizedDirection=
-                normalize(
-                    direction);
-
-            float cosine=
-                cos(
-                    uEnvironmentRotationRadians);
-
-            float sine=
-                sin(
-                    uEnvironmentRotationRadians);
-
-            vec3 rotatedDirection=
-                vec3(
-                    cosine*normalizedDirection.x-
-                    sine*normalizedDirection.z,
-                    normalizedDirection.y,
-                    sine*normalizedDirection.x+
-                    cosine*normalizedDirection.z);
-
-            float longitude=
-                atan(
-                    rotatedDirection.z,
-                    rotatedDirection.x);
-
-            float latitude=
-                asin(
-                    clamp(
-                        rotatedDirection.y,
-                        -1.0,
-                        1.0));
-
-            return
-                vec2(
-                    longitude/
-                        TWO_PI+
-                        0.5,
-                    0.5-
-                    latitude/
-                        PI);
-        }
-
-        vec3 sampleEnvironmentLinear(
-            vec3 direction)
-        {
-            vec3 environmentColor=
-                texture(
-                    uEnvironmentMap,
-                    environmentDirectionToUv(
-                        direction)).rgb;
-
-            if(uEnvironmentIsHdr==0)
-            {
-                environmentColor=
-                    pow(
-                        max(
-                            environmentColor,
-                            vec3(0.0)),
-                        vec3(2.2));
-            }
-
-            return
-                max(
-                    environmentColor*
-                    max(
-                        uEnvironmentIntensity,
-                        0.0),
-                    vec3(0.0));
-        }
-
         void main()
         {
             vNormal=mat3(transpose(inverse(uModel)))*aNormal;
@@ -196,13 +120,13 @@ internal sealed class Shader3D : IDisposable
         uniform float uAmbientIntensity;
         uniform vec3 uCameraPosition;
 
-        uniform int uUseEnvironmentMap;
-        uniform sampler2D uEnvironmentMap;
-        uniform int uEnvironmentIsHdr;
+        uniform int uUseEnvironmentIbl;
+        uniform samplerCube uIrradianceMap;
+        uniform samplerCube uPrefilterMap;
+        uniform sampler2D uBrdfLut;
         uniform float uEnvironmentIntensity;
         uniform float uEnvironmentRotationRadians;
-        uniform float uEnvironmentDiffuseStrength;
-        uniform float uEnvironmentSpecularStrength;
+        uniform float uMaxReflectionLod;
 
         uniform int uFogEnabled;
         uniform int uFogMode;
@@ -551,6 +475,105 @@ internal sealed class Shader3D : IDisposable
                 9.0;
         }
 
+            return
+                max(
+                    environmentColor*
+                    max(
+                        uEnvironmentIntensity,
+                        0.0),
+                    vec3(0.0));
+        }
+
+        vec3 rotateEnvironmentDirection(
+            vec3 direction)
+        {
+            float cosine=
+                cos(
+                    uEnvironmentRotationRadians);
+
+            float sine=
+                sin(
+                    uEnvironmentRotationRadians);
+
+            vec3 d=
+                normalize(
+                    direction);
+
+            return
+                normalize(
+                    vec3(
+                        cosine*d.x-
+                        sine*d.z,
+                        d.y,
+                        sine*d.x+
+                        cosine*d.z));
+        }
+
+        vec3 fresnelSchlickRoughness(
+            float cosine,
+            vec3 f0,
+            float roughness)
+        {
+            return
+                f0+
+                (
+                    max(
+                        vec3(
+                            1.0-
+                            roughness),
+                        f0)-
+                    f0
+                )*
+                pow(
+                    clamp(
+                        1.0-
+                        cosine,
+                        0.0,
+                        1.0),
+                    5.0);
+        }
+
+        vec3 acesFilm(
+            vec3 value)
+        {
+            const float a=
+                2.51;
+
+            const float b=
+                0.03;
+
+            const float c=
+                2.43;
+
+            const float d=
+                0.59;
+
+            const float e=
+                0.14;
+
+            return
+                clamp(
+                    (
+                        value*
+                        (
+                            a*
+                            value+
+                            b
+                        )
+                    )/
+                    (
+                        value*
+                        (
+                            c*
+                            value+
+                            d
+                        )+
+                        e
+                    ),
+                    vec3(0.0),
+                    vec3(1.0));
+        }
+
         void main()
         {
             vec4 base=
@@ -694,50 +717,12 @@ internal sealed class Shader3D : IDisposable
                     (1.0-pointShadow);
             }
 
-            vec3 environmentDiffuse=
-                vec3(0.0);
+            vec3 ambient=
+                base.rgb*
+                uAmbientIntensity;
 
-            vec3 environmentSpecular=
-                vec3(0.0);
-
-            if(uUseEnvironmentMap==1)
+            if(uUseEnvironmentIbl==1)
             {
-                vec3 diffuseEnvironment=
-                    sampleEnvironmentLinear(
-                        n);
-
-                environmentDiffuse=
-                    diffuseEnvironment*
-                    base.rgb*
-                    (1.0-uMetallic)*
-                    max(
-                        uEnvironmentDiffuseStrength,
-                        0.0);
-
-                vec3 reflectionDirection=
-                    reflect(
-                        -v,
-                        n);
-
-                vec3 reflectedEnvironment=
-                    sampleEnvironmentLinear(
-                        reflectionDirection);
-
-                /*
-                 * v0.9-k keeps IBL cheap: rough materials blend their sharp
-                 * reflection toward the diffuse environment sample instead
-                 * of requiring a prefiltered cubemap pass.
-                 */
-                float roughnessBlend=
-                    uRoughness*
-                    uRoughness;
-
-                vec3 roughEnvironment=
-                    mix(
-                        reflectedEnvironment,
-                        diffuseEnvironment,
-                        roughnessBlend);
-
                 float nDotV=
                     max(
                         dot(
@@ -751,24 +736,76 @@ internal sealed class Shader3D : IDisposable
                         base.rgb,
                         uMetallic);
 
-                vec3 environmentFresnel=
-                    fresnelSchlick(
+                vec3 fresnel=
+                    fresnelSchlickRoughness(
                         nDotV,
-                        f0);
+                        f0,
+                        uRoughness);
 
-                environmentSpecular=
-                    roughEnvironment*
-                    environmentFresnel*
+                vec3 kS=
+                    fresnel;
+
+                vec3 kD=
+                    (
+                        vec3(1.0)-
+                        kS
+                    )*
+                    (
+                        1.0-
+                        uMetallic
+                    );
+
+                vec3 irradiance=
+                    texture(
+                        uIrradianceMap,
+                        rotateEnvironmentDirection(
+                            n)).rgb;
+
+                vec3 diffuseEnvironment=
+                    irradiance*
+                    base.rgb;
+
+                vec3 reflectionDirection=
+                    reflect(
+                        -v,
+                        n);
+
+                vec3 prefilteredEnvironment=
+                    textureLod(
+                        uPrefilterMap,
+                        rotateEnvironmentDirection(
+                            reflectionDirection),
+                        uRoughness*
+                        uMaxReflectionLod).rgb;
+
+                vec2 brdf=
+                    texture(
+                        uBrdfLut,
+                        vec2(
+                            nDotV,
+                            uRoughness)).rg;
+
+                vec3 specularEnvironment=
+                    prefilteredEnvironment*
+                    (
+                        fresnel*
+                        brdf.x+
+                        brdf.y
+                    );
+
+                ambient=
+                    (
+                        kD*
+                        diffuseEnvironment+
+                        specularEnvironment
+                    )*
                     max(
-                        uEnvironmentSpecularStrength,
+                        uEnvironmentIntensity,
                         0.0);
             }
 
             vec3 linearColor=
-                base.rgb*
-                uAmbientIntensity+
-                environmentDiffuse+
-                environmentSpecular+
+                ambient+
                 direct;
 
             if(uFogEnabled==1)
@@ -827,12 +864,15 @@ internal sealed class Shader3D : IDisposable
                         fogFactor);
             }
 
+            vec3 mappedColor=
+                acesFilm(
+                    max(
+                        linearColor,
+                        vec3(0.0)));
+
             vec3 displayColor=
                 pow(
-                    clamp(
-                        linearColor,
-                        vec3(0.0),
-                        vec3(1.0)),
+                    mappedColor,
                     vec3(1.0/2.2));
 
             FragColor=
