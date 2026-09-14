@@ -220,10 +220,14 @@ internal sealed class SceneViewPanel : IDisposable
                         )
                     );
                 }
-                else if (_is3D &&
-                         asset.Type ==
+                else if (asset.Type ==
                          AssetType.Model3D)
                 {
+                    // A model drop is an explicit request for 3D authoring.
+                    // Do not silently discard it just because this tab was
+                    // last left in 2D mode.
+                    _is3D = true;
+
                     createModelFromAsset(
                         asset,
                         Gizmo3DController.ScreenToGroundPlane(

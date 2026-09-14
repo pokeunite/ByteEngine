@@ -93,6 +93,39 @@ internal static class BlueprintInstanceSynchronizer
         foreach (GameObject root in roots) Refresh(root, project);
     }
 
+    public static int RefreshOutdated(EditorProjectContext project, RuntimeScene scene)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(scene);
+
+        int refreshed = 0;
+        GameObject[] roots = scene.GameObjects
+            .Where(item => item.GetComponent<BlueprintInstance>() != null)
+            .ToArray();
+
+        foreach (GameObject root in roots)
+        {
+            BlueprintInstance instance = root.GetComponent<BlueprintInstance>()!;
+            if (!TryLoadBlueprint(project, instance, out BlueprintDefinition? latest, out _))
+            {
+                continue;
+            }
+
+            string latestSnapshot = SerializeObjects(Objects(latest!));
+            if (string.Equals(instance.SourceSnapshot, latestSnapshot, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (Refresh(root, project) != null)
+            {
+                refreshed++;
+            }
+        }
+
+        return refreshed;
+    }
+
     private static GameObject? Refresh(GameObject root, EditorProjectContext project)
     {
         BlueprintInstance? instance = root.GetComponent<BlueprintInstance>();

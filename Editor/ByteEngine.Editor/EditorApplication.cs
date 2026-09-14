@@ -239,7 +239,8 @@ public sealed class EditorApplication
                 DuplicateSelectedObjects,
                 CopySelectedObjects,
                 PasteObjects,
-                CreateChildObject
+                CreateChildObject,
+                InstantiateHierarchyAsset
             );
         }
 
@@ -515,6 +516,18 @@ public sealed class EditorApplication
                 !enable2D;
         }
 
+        bool showFps =
+            EditorPreferences.ShowFpsCounter;
+
+        if (ImGui.MenuItem(
+                "Show FPS Counter",
+                string.Empty,
+                showFps))
+        {
+            EditorPreferences.ShowFpsCounter =
+                !showFps;
+        }
+
         ImGui.Separator();
 
         ImGui.TextDisabled(
@@ -598,6 +611,17 @@ public sealed class EditorApplication
             }
 
             ImGui.EndMenu();
+        }
+
+        if (ImGui.MenuItem(
+                "Sky Environment",
+                string.Empty,
+                false,
+                canEdit))
+        {
+            CreateObjectWithComponent(
+                "Sky Environment",
+                () => new SkyEnvironment());
         }
 
         ImGui.Separator();
@@ -1094,6 +1118,11 @@ public sealed class EditorApplication
         EditorProjectContext? previous =
             _projectContext;
 
+        int refreshedBlueprints =
+            BlueprintInstanceSynchronizer.RefreshOutdated(
+                context,
+                scene);
+
         Scenes.SetEditorScene(
             scene
         );
@@ -1120,7 +1149,16 @@ public sealed class EditorApplication
                     scene.GameObjects.FirstOrDefault()
             };
 
-        _state.ClearDirty();
+        if (refreshedBlueprints > 0)
+        {
+            _state.MarkDirty();
+            _log.Info(
+                $"Updated {refreshedBlueprints} stale Blueprint instance(s) from their saved assets. Save the scene to keep the refreshed hierarchy.");
+        }
+        else
+        {
+            _state.ClearDirty();
+        }
         InitializeUndo(_state, context, true);
 
         EditorPreferences.SaveLastProject(
@@ -1203,6 +1241,11 @@ public sealed class EditorApplication
                     scenePath
                 );
 
+            int refreshedBlueprints =
+                BlueprintInstanceSynchronizer.RefreshOutdated(
+                    _projectContext,
+                    scene);
+
             Scenes.SetEditorScene(
                 scene
             );
@@ -1221,7 +1264,16 @@ public sealed class EditorApplication
                         scene.GameObjects.FirstOrDefault()
                 };
 
-            _state.ClearDirty();
+            if (refreshedBlueprints > 0)
+            {
+                _state.MarkDirty();
+                _log.Info(
+                    $"Updated {refreshedBlueprints} stale Blueprint instance(s) from their saved assets. Save the scene to keep the refreshed hierarchy.");
+            }
+            else
+            {
+                _state.ClearDirty();
+            }
             InitializeUndo(_state, _projectContext, true);
 
             _log.Info(
@@ -1268,6 +1320,10 @@ public sealed class EditorApplication
     {
         if (_projectContext == null) return;
         Scene scene = _projectContext.Scenes.Load(asset.FullPath);
+        int refreshedBlueprints =
+            BlueprintInstanceSynchronizer.RefreshOutdated(
+                _projectContext,
+                scene);
         Scenes.SetEditorScene(scene);
         _state = new EditorState
         {
@@ -1277,6 +1333,16 @@ public sealed class EditorApplication
             SceneFilePath = asset.FullPath,
             SelectedObject = scene.GameObjects.FirstOrDefault()
         };
+        if (refreshedBlueprints > 0)
+        {
+            _state.MarkDirty();
+            _log.Info(
+                $"Updated {refreshedBlueprints} stale Blueprint instance(s) from their saved assets. Save the scene to keep the refreshed hierarchy.");
+        }
+        else
+        {
+            _state.ClearDirty();
+        }
         InitializeUndo(_state, _projectContext, true);
         _log.Info($"Opened scene '{asset.ProjectPath}'.");
     }
@@ -1592,6 +1658,48 @@ public sealed class EditorApplication
             else
                 EditorSceneCommands.CreateModel(
                     _state, _projectContext, asset, worldPosition, _log);
+        }
+        catch (Exception exception)
+        {
+            _log.Error($"Could not instantiate model '{asset.ProjectPath}': {exception.Message}");
+        }
+    }
+
+    private void InstantiateHierarchyAsset(Guid assetId, GameObject? parent)
+    {
+        if (_state == null || _projectContext == null ||
+            !_projectContext.AssetDatabase.TryGetAsset(assetId, out AssetRecord? asset) || asset == null)
+        {
+            return;
+        }
+
+        if (asset.Type != AssetType.Model3D)
+        {
+            _log.Warning("Only 3D model assets can be dropped into the Hierarchy.");
+            return;
+        }
+
+        try
+        {
+            Action instantiate = () =>
+            {
+                GameObject model = EditorSceneCommands.CreateModel(
+                    _state, _projectContext, asset, Vector3.Zero, _log);
+
+                if (parent != null)
+                {
+                    model.SetParent(parent, false);
+                }
+            };
+
+            if (_state.Undo != null)
+            {
+                _state.Undo.Execute(_state, "Instantiate Model", instantiate);
+            }
+            else
+            {
+                instantiate();
+            }
         }
         catch (Exception exception)
         {

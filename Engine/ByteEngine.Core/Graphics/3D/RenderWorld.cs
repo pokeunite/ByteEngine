@@ -16,6 +16,9 @@ public sealed class RenderWorld
     private RenderLighting3D _lighting =
         RenderLighting3D.Default;
 
+    private RenderEnvironment3D _environment =
+        RenderEnvironment3D.Default;
+
     private int _nextSubmissionIndex;
 
     public int SubmissionCount =>
@@ -27,11 +30,25 @@ public sealed class RenderWorld
     public RenderLighting3D Lighting =>
         _lighting;
 
+    public RenderEnvironment3D Environment =>
+        _environment;
+
     public RenderWorldStats LastStats { get; private set; }
 
     public void BeginFrame(
         RenderView3D? view,
         RenderLighting3D lighting)
+    {
+        BeginFrame(
+            view,
+            lighting,
+            RenderEnvironment3D.Default);
+    }
+
+    public void BeginFrame(
+        RenderView3D? view,
+        RenderLighting3D lighting,
+        RenderEnvironment3D environment)
     {
         _submissions.Clear();
 
@@ -41,6 +58,9 @@ public sealed class RenderWorld
         _lighting =
             lighting ??
             RenderLighting3D.Default;
+
+        _environment =
+            environment;
 
         _nextSubmissionIndex =
             0;
@@ -117,25 +137,6 @@ public sealed class RenderWorld
             CountQueue(
                 RenderQueue3D.Overlay);
 
-        if (submitted ==
-            0)
-        {
-            LastStats =
-                CreateStats(
-                    submitted,
-                    0,
-                    0,
-                    0,
-                    opaqueSubmitted,
-                    transparentSubmitted,
-                    overlaySubmitted,
-                    0,
-                    0,
-                    0);
-
-            return;
-        }
-
         if (_view is not
             RenderView3D view)
         {
@@ -150,9 +151,43 @@ public sealed class RenderWorld
                     overlaySubmitted,
                     0,
                     0,
+                    0,
                     0);
 
             _submissions.Clear();
+
+            return;
+        }
+
+        int environmentDrawCalls =
+            0;
+
+        if (_environment.DrawSky)
+        {
+            context.Renderer3D.RenderSky(
+                view,
+                _environment);
+
+            environmentDrawCalls =
+                1;
+        }
+
+        if (submitted ==
+            0)
+        {
+            LastStats =
+                CreateStats(
+                    submitted,
+                    0,
+                    0,
+                    0,
+                    opaqueSubmitted,
+                    transparentSubmitted,
+                    overlaySubmitted,
+                    0,
+                    0,
+                    0,
+                    environmentDrawCalls);
 
             return;
         }
@@ -272,7 +307,8 @@ public sealed class RenderWorld
                     : 0,
                 pointShadowPass.ShadowLightCount,
                 shadowPass.DrawCalls +
-                pointShadowPass.DrawCalls);
+                pointShadowPass.DrawCalls,
+                environmentDrawCalls);
 
         _submissions.Clear();
     }
@@ -287,7 +323,8 @@ public sealed class RenderWorld
         int overlaySubmitted,
         int directionalShadowPasses,
         int pointShadowPasses,
-        int shadowDrawCalls)
+        int shadowDrawCalls,
+        int environmentDrawCalls)
     {
         return
             new RenderWorldStats(
@@ -305,7 +342,8 @@ public sealed class RenderWorld
                 pointShadowPasses,
                 directionalShadowPasses +
                 pointShadowPasses,
-                shadowDrawCalls);
+                shadowDrawCalls,
+                environmentDrawCalls);
     }
 
     private int CountQueue(
@@ -342,7 +380,8 @@ public readonly record struct RenderWorldStats(
     int DirectionalShadowPasses,
     int PointShadowPasses,
     int ShadowPasses,
-    int ShadowDrawCalls)
+    int ShadowDrawCalls,
+    int EnvironmentDrawCalls)
 {
     /// <summary>
     /// Number of depth-map faces rendered this frame:
@@ -358,5 +397,6 @@ public readonly record struct RenderWorldStats(
     /// </summary>
     public int TotalDrawCalls =>
         DrawCalls +
-        ShadowDrawCalls;
+        ShadowDrawCalls +
+        EnvironmentDrawCalls;
 }

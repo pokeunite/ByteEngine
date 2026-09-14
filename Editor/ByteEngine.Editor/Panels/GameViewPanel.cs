@@ -46,7 +46,11 @@ internal sealed class GameViewPanel : IDisposable
 
         if (!visible)
         {
-            if (Input.IsGameInputCaptured) releaseInput();
+            if (Input.IsGameInputCaptured)
+            {
+                releaseInput();
+            }
+
             Input.SetGameViewPointer(
                 Input.GameViewPointerNormalized,
                 Input.GameViewSize,
@@ -58,32 +62,66 @@ internal sealed class GameViewPanel : IDisposable
             return;
         }
 
-        int renderWidth = Math.Clamp(state.Project.Window.Width, 1, 4096);
-        int renderHeight = Math.Clamp(state.Project.Window.Height, 1, 4096);
+        int projectWidth =
+            Math.Clamp(
+                state.Project.Window.Width,
+                1,
+                4096);
+
+        int projectHeight =
+            Math.Clamp(
+                state.Project.Window.Height,
+                1,
+                4096);
 
         ImGui.TextDisabled(
-            $"{renderWidth} x {renderHeight} | " +
-            (state.Mode == EditorMode.Edit ? "Game camera preview" : "Runtime game camera"));
+            $"Project {projectWidth} x {projectHeight} | " +
+            (state.Mode == EditorMode.Edit
+                ? "Game camera preview"
+                : "Runtime game camera"));
+
         if (state.Mode == EditorMode.Play)
-            ImGui.TextDisabled(Input.IsGameInputCaptured
-                ? "Mouse captured — Esc to release"
-                : "Click Game View to capture mouse");
+        {
+            ImGui.TextDisabled(
+                Input.IsGameInputCaptured
+                    ? "Mouse captured — Esc to release"
+                    : "Click Game View to capture mouse");
+        }
 
-        Vector2 available = ImGui.GetContentRegionAvail();
-        available.X = Math.Max(available.X, 1f);
-        available.Y = Math.Max(available.Y, 1f);
+        /*
+         * The editor preview now follows the actual Game View panel size.
+         * This removes the old 16:9 fit/letterbox behavior that made the
+         * preview look smaller and left black borders around it.
+         *
+         * Project output resolution is still stored separately in
+         * state.Project.Window and remains the packaged game's setting.
+         */
+        Vector2 available =
+            ImGui.GetContentRegionAvail();
 
-        float scale = Math.Min(
-            available.X / renderWidth,
-            available.Y / renderHeight);
+        available.X =
+            Math.Max(
+                available.X,
+                1.0f);
 
-        scale = Math.Max(scale, .0001f);
+        available.Y =
+            Math.Max(
+                available.Y,
+                1.0f);
 
-        Vector2 displaySize = new(
-            renderWidth * scale,
-            renderHeight * scale);
+        int renderWidth =
+            Math.Clamp(
+                (int)MathF.Round(
+                    available.X),
+                1,
+                4096);
 
-        Vector2 offset = (available - displaySize) * .5f;
+        int renderHeight =
+            Math.Clamp(
+                (int)MathF.Round(
+                    available.Y),
+                1,
+                4096);
 
         _framebuffer.RenderGame(
             renderer,
@@ -95,19 +133,18 @@ internal sealed class GameViewPanel : IDisposable
             windowWidth,
             windowHeight);
 
-        Vector2 cursor = ImGui.GetCursorPos();
-        Vector2 screen = ImGui.GetCursorScreenPos();
+        Vector2 imageMin =
+            ImGui.GetCursorScreenPos();
 
-        ImGui.GetWindowDrawList().AddRectFilled(
-            screen,
-            screen + available,
-            ImGui.GetColorU32(new Vector4(0f, 0f, 0f, 1f)));
+        Vector2 displaySize =
+            available;
 
-        ImGui.SetCursorPos(cursor + offset);
+        Vector2 imageMax =
+            imageMin +
+            displaySize;
 
-        Vector2 imageMin = ImGui.GetCursorScreenPos();
-        Vector2 imageMax = imageMin + displaySize;
-        Vector2 mouse = ImGui.GetMousePos();
+        Vector2 mouse =
+            ImGui.GetMousePos();
 
         bool pointerInside =
             mouse.X >= imageMin.X &&
@@ -115,44 +152,191 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y >= imageMin.Y &&
             mouse.Y <= imageMax.Y;
 
-        if (state.Mode == EditorMode.Play && !Input.IsGameInputCaptured && pointerInside &&
-            ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+        if (state.Mode == EditorMode.Play &&
+            !Input.IsGameInputCaptured &&
+            pointerInside &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left))
         {
             captureInput();
         }
-        else if (state.Mode != EditorMode.Play && Input.IsGameInputCaptured)
+        else if (state.Mode != EditorMode.Play &&
+                 Input.IsGameInputCaptured)
         {
             releaseInput();
         }
 
-        Vector2 normalizedPointer = new(
-            displaySize.X > 0f ? (mouse.X - imageMin.X) / displaySize.X : .5f,
-            displaySize.Y > 0f ? (mouse.Y - imageMin.Y) / displaySize.Y : .5f);
+        Vector2 normalizedPointer =
+            new(
+                displaySize.X > 0.0f
+                    ? (mouse.X - imageMin.X) /
+                      displaySize.X
+                    : 0.5f,
+                displaySize.Y > 0.0f
+                    ? (mouse.Y - imageMin.Y) /
+                      displaySize.Y
+                    : 0.5f);
 
         Input.SetGameViewPointer(
             normalizedPointer,
-            new Vector2(renderWidth, renderHeight),
+            new Vector2(
+                renderWidth,
+                renderHeight),
             pointerInside,
-            ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows),
-            mouse - imageMin);
+            ImGui.IsWindowFocused(
+                ImGuiFocusedFlags.RootAndChildWindows),
+            mouse -
+            imageMin);
 
         ImGui.Image(
             _framebuffer.TextureId,
             displaySize,
-            new Vector2(0f, 1f),
-            new Vector2(1f, 0f));
+            new Vector2(
+                0.0f,
+                1.0f),
+            new Vector2(
+                1.0f,
+                0.0f));
 
-        if (state.Mode == EditorMode.Play && Input.IsGameInputCaptured)
+        ImDrawListPtr drawList =
+            ImGui.GetWindowDrawList();
+
+        if (EditorPreferences.ShowFpsCounter)
         {
-            const float radius = 8f;
-            uint color = ImGui.GetColorU32(new Vector4(1f, 1f, 1f, .95f));
-            Vector2 crosshair = imageMin + displaySize * .5f;
-            ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-            drawList.AddLine(crosshair - new Vector2(radius, 0f), crosshair + new Vector2(radius, 0f), color, 1.5f);
-            drawList.AddLine(crosshair - new Vector2(0f, radius), crosshair + new Vector2(0f, radius), color, 1.5f);
+            DrawFpsCounter(
+                drawList,
+                imageMin,
+                imageMax);
+        }
+
+        if (state.Mode == EditorMode.Play &&
+            Input.IsGameInputCaptured)
+        {
+            const float radius =
+                8.0f;
+
+            uint color =
+                ImGui.GetColorU32(
+                    new Vector4(
+                        1.0f,
+                        1.0f,
+                        1.0f,
+                        0.95f));
+
+            Vector2 crosshair =
+                imageMin +
+                displaySize *
+                0.5f;
+
+            drawList.AddLine(
+                crosshair -
+                new Vector2(
+                    radius,
+                    0.0f),
+                crosshair +
+                new Vector2(
+                    radius,
+                    0.0f),
+                color,
+                1.5f);
+
+            drawList.AddLine(
+                crosshair -
+                new Vector2(
+                    0.0f,
+                    radius),
+                crosshair +
+                new Vector2(
+                    0.0f,
+                    radius),
+                color,
+                1.5f);
         }
 
         ImGui.End();
+    }
+
+    private static void DrawFpsCounter(
+        ImDrawListPtr drawList,
+        Vector2 imageMin,
+        Vector2 imageMax)
+    {
+        if (imageMax.X <= imageMin.X ||
+            imageMax.Y <= imageMin.Y)
+        {
+            return;
+        }
+
+        float fps =
+            ImGui.GetIO()
+                .Framerate;
+
+        string text =
+            fps > 0.0f
+                ? $"FPS {fps:0.0}"
+                : "FPS --";
+
+        Vector2 textSize =
+            ImGui.CalcTextSize(
+                text);
+
+        const float horizontalPadding =
+            7.0f;
+
+        const float verticalPadding =
+            4.0f;
+
+        const float edgeMargin =
+            8.0f;
+
+        Vector2 boxMax =
+            new(
+                imageMax.X -
+                edgeMargin,
+                imageMin.Y +
+                edgeMargin +
+                textSize.Y +
+                verticalPadding *
+                2.0f);
+
+        Vector2 boxMin =
+            new(
+                boxMax.X -
+                textSize.X -
+                horizontalPadding *
+                2.0f,
+                imageMin.Y +
+                edgeMargin);
+
+        uint background =
+            ImGui.GetColorU32(
+                new Vector4(
+                    0.03f,
+                    0.03f,
+                    0.03f,
+                    0.78f));
+
+        uint foreground =
+            ImGui.GetColorU32(
+                new Vector4(
+                    0.95f,
+                    0.95f,
+                    0.95f,
+                    1.0f));
+
+        drawList.AddRectFilled(
+            boxMin,
+            boxMax,
+            background,
+            3.0f);
+
+        drawList.AddText(
+            boxMin +
+            new Vector2(
+                horizontalPadding,
+                verticalPadding),
+            foreground,
+            text);
     }
 
     public void Dispose()

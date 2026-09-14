@@ -22,6 +22,9 @@ public static class RendererSerializationRegistrar
         serializer.Register(
             new PointLightCodec());
 
+        serializer.Register(
+            new SkyEnvironmentCodec());
+
         /*
          * Overrides the original DirectionalLight codec so shadow settings
          * participate in scene/Blueprint persistence without changing the
@@ -29,6 +32,123 @@ public static class RendererSerializationRegistrar
          */
         serializer.Register(
             new DirectionalLightV09Codec());
+    }
+
+    private sealed class SkyEnvironmentCodec
+        : IComponentCodec
+    {
+        public string TypeName =>
+            "SkyEnvironment";
+
+        public Type ComponentType =>
+            typeof(SkyEnvironment);
+
+        public ComponentData Serialize(
+            Component component,
+            ComponentSerializationContext context)
+        {
+            SkyEnvironment environment =
+                (SkyEnvironment)component;
+
+            return
+                new ComponentData
+                {
+                    Type =
+                        TypeName,
+
+                    Properties =
+                        new JsonObject
+                        {
+                            ["drawSky"] =
+                                environment.DrawSky,
+
+                            ["zenithColor"] =
+                                Vector3Node(
+                                    environment.ZenithColor),
+
+                            ["horizonColor"] =
+                                Vector3Node(
+                                    environment.HorizonColor),
+
+                            ["groundColor"] =
+                                Vector3Node(
+                                    environment.GroundColor),
+
+                            ["skyIntensity"] =
+                                environment.SkyIntensity,
+
+                            ["horizonSharpness"] =
+                                environment.HorizonSharpness,
+
+                            ["overrideAmbient"] =
+                                environment.OverrideAmbient,
+
+                            ["ambientIntensity"] =
+                                environment.AmbientIntensity
+                        }
+                };
+        }
+
+        public Component Deserialize(
+            ComponentData data,
+            ComponentSerializationContext context)
+        {
+            return
+                new SkyEnvironment
+                {
+                    DrawSky =
+                        data.Properties["drawSky"]?
+                            .GetValue<bool>() ??
+                        true,
+
+                    ZenithColor =
+                        ReadVector3(
+                            data.Properties["zenithColor"],
+                            new Vector3(
+                                0.08f,
+                                0.20f,
+                                0.48f)),
+
+                    HorizonColor =
+                        ReadVector3(
+                            data.Properties["horizonColor"],
+                            new Vector3(
+                                0.58f,
+                                0.72f,
+                                0.95f)),
+
+                    GroundColor =
+                        ReadVector3(
+                            data.Properties["groundColor"],
+                            new Vector3(
+                                0.08f,
+                                0.075f,
+                                0.07f)),
+
+                    SkyIntensity =
+                        ReadFloat(
+                            data,
+                            "skyIntensity",
+                            1.0f),
+
+                    HorizonSharpness =
+                        ReadFloat(
+                            data,
+                            "horizonSharpness",
+                            1.25f),
+
+                    OverrideAmbient =
+                        data.Properties["overrideAmbient"]?
+                            .GetValue<bool>() ??
+                        true,
+
+                    AmbientIntensity =
+                        ReadFloat(
+                            data,
+                            "ambientIntensity",
+                            0.20f)
+                };
+        }
     }
 
     private sealed class DirectionalLightV09Codec

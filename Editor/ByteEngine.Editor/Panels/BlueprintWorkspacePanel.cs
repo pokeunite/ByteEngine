@@ -422,6 +422,15 @@ internal sealed class BlueprintWorkspacePanel
             Guid? draggedId = GameObjectDragDrop.Accept();
             if (draggedId.HasValue && _preview!.FindGameObject(draggedId.Value) is { } dragged &&
                 dragged.Parent != null && dragged.SetParent(gameObject, false)) MarkDirty();
+
+            Guid? assetId = AssetDragDrop.Accept();
+            if (assetId.HasValue &&
+                _project!.AssetDatabase.TryGetAsset(assetId.Value, out AssetRecord? asset) &&
+                asset?.Type == AssetType.Model3D)
+            {
+                _selectedPreviewObjectId = gameObject.Id;
+                AddModelAsset(asset);
+            }
             ImGui.EndDragDropTarget();
         }
 
@@ -527,6 +536,19 @@ internal sealed class BlueprintWorkspacePanel
             new Vector2(
                 1.0f,
                 0.0f));
+
+        if (ImGui.BeginDragDropTarget())
+        {
+            Guid? assetId = AssetDragDrop.Accept();
+            if (assetId.HasValue &&
+                _project!.AssetDatabase.TryGetAsset(assetId.Value, out AssetRecord? asset) &&
+                asset?.Type == AssetType.Model3D)
+            {
+                AddModelAsset(asset);
+            }
+
+            ImGui.EndDragDropTarget();
+        }
 
         CameraRigGizmoRenderer.Draw(
             _preview!,

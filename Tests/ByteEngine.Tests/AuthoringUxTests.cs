@@ -93,10 +93,16 @@ internal static class AuthoringUxTests
         Assert(applied.Root.Components.Any(item => item.Type == "HealthComponent"),
             "Applying an added component adds it to Blueprint source");
 
+        var staleScene = new Scene("Stale Blueprint Instance");
+        _ = Place(staleScene, project, projectAsset, applied);
+
         GameObjectData child = NewObject("Source Child", applied.Root.Id);
         applied.Children.Add(child);
         new BlueprintSerializer().Save(applied, projectAsset.FullPath);
         project.AssetDatabase.Scan();
+        Assert(BlueprintInstanceSynchronizer.RefreshOutdated(project, staleScene) == 1 &&
+            staleScene.GameObjects.Any(item => item.Name == "Source Child"),
+            "Scene load refreshes stale Blueprint instance children from the saved source");
         BlueprintInstanceSynchronizer.Propagate(project, scene, new AssetReference(projectAsset.Guid, projectAsset.ProjectPath));
         first = FindInstance(scene, firstInstanceId);
         second = FindInstance(scene, secondInstanceId);

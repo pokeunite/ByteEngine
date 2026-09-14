@@ -8,6 +8,8 @@ internal static class EditorPreferences
     {
         public bool Enable2DEditor { get; set; }
 
+        public bool ShowFpsCounter { get; set; }
+
         public int LayoutVersion { get; set; }
     }
 
@@ -64,6 +66,26 @@ internal static class EditorPreferences
             }
 
             Settings.Enable2DEditor =
+                value;
+
+            SaveSettings();
+        }
+    }
+
+    public static bool ShowFpsCounter
+    {
+        get =>
+            Settings.ShowFpsCounter;
+
+        set
+        {
+            if (Settings.ShowFpsCounter ==
+                value)
+            {
+                return;
+            }
+
+            Settings.ShowFpsCounter =
                 value;
 
             SaveSettings();
@@ -137,18 +159,7 @@ internal static class EditorPreferences
             if (!File.Exists(
                     SettingsPath))
             {
-                return new SettingsData
-                {
-                    /*
-                     * ByteEngine is 3D-first by default.
-                     * Users can opt into the 2D editor from Preferences.
-                     */
-                    Enable2DEditor =
-                        false,
-
-                    LayoutVersion =
-                        0
-                };
+                return CreateDefaults();
             }
 
             SettingsData? loaded =
@@ -158,23 +169,36 @@ internal static class EditorPreferences
                     JsonOptions);
 
             return loaded ??
-                   new SettingsData();
+                   CreateDefaults();
         }
         catch
         {
             /*
              * A corrupt preferences file should never stop the editor
-             * launching. Fall back to the safe 3D-first defaults.
+             * launching. Fall back to safe defaults.
              */
-            return new SettingsData
+            return CreateDefaults();
+        }
+    }
+
+    private static SettingsData CreateDefaults()
+    {
+        return
+            new SettingsData
             {
+                /*
+                 * ByteEngine is 3D-first by default.
+                 * Users can opt into the 2D editor from Preferences.
+                 */
                 Enable2DEditor =
+                    false,
+
+                ShowFpsCounter =
                     false,
 
                 LayoutVersion =
                     0
             };
-        }
     }
 
     private static void SaveSettings()

@@ -19,6 +19,13 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Length >= 3 && args[0] == "--gpu-blueprint")
+    {
+        using var diagnostic = new GpuBlueprintRenderDiagnostic(args[1], args[2]);
+        diagnostic.Run();
+        return;
+    }
+
     if (args.Contains("--v085"))
     {
         V085ProfessionalEditorTests.Run(root);
@@ -77,6 +84,38 @@ try
     string gltfPath = Path.Combine(root, "Assets", "Triangle.gltf"); WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.gltf", out AssetRecord? gltfRecord) && gltfRecord != null, "GLTF asset registration"); Guid stableModelGuid = gltfRecord!.Guid; ImportedModel imported = new GltfModelImporter().Import(gltfRecord, gltfRecord.Metadata.ModelImporter); Assert(imported.Nodes.Count == 2 && imported.Meshes.Count == 1 && imported.Meshes[0].Vertices.Length == 24 && imported.Materials.Count == 1, "GLTF hierarchy mesh and material parsing"); ModelAsset loadedModel = assets.LoadModel(new AssetReference(stableModelGuid, gltfRecord.ProjectPath)); Assert(loadedModel.Meshes.Count == 1, "ModelAsset load");
     string glbPath = Path.Combine(root, "Assets", "Triangle.glb"); SharpGLTF.Schema2.ModelRoot.Load(gltfPath).SaveGLB(glbPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.glb", out AssetRecord? glbRecord) && glbRecord != null, "GLB asset registration"); ImportedModel importedGlb = new GltfModelImporter().Import(glbRecord!, glbRecord!.Metadata.ModelImporter); Assert(importedGlb.Nodes.Count == 2 && importedGlb.Meshes.Count == 1, "Binary GLB hierarchy and mesh parsing");
     WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset(stableModelGuid, out AssetRecord? rescanned) && rescanned != null, "Model GUID stable after source change"); Assert(assets.ReimportModel(stableModelGuid).Guid == stableModelGuid, "Model reimport preserves GUID");
+
+    string editorTrianglePath = Path.Combine(editorProject.ProjectRoot, "Assets", "Triangle.gltf");
+    WriteTriangleGltf(editorTrianglePath);
+    editorProject.AssetDatabase.Scan();
+    Assert(editorProject.AssetDatabase.TryGetAsset("Assets/Triangle.gltf", out AssetRecord? editorModel) && editorModel != null, "Editor model asset registration");
+    var modelScene = new Scene("Model Authoring");
+    var modelState = new EditorState { EditorScene = modelScene, Project = editorProject.Project, ProjectFilePath = editorProject.ProjectFilePath };
+    GameObject modelRoot = EditorSceneCommands.CreateModel(modelState, editorProject, editorModel!, Vector3.Zero, editorLog);
+    Assert(modelRoot.GetComponent<ModelHierarchyInstance>() != null &&
+        modelScene.GameObjects.SelectMany(item => item.Components).OfType<MeshRenderer>().Any(item => item.Mesh != null),
+        "Editor model instantiation creates renderable mesh hierarchy");
+    SceneData modelSnapshot = editorProject.Scenes.Serialize(modelScene);
+    Scene restoredModelScene = editorProject.Scenes.Deserialize(modelSnapshot);
+    Assert(restoredModelScene.GameObjects.SelectMany(item => item.Components).OfType<MeshRenderer>().Any(item => item.Mesh != null),
+        "Blueprint/scene round-trip rehydrates imported model meshes");
+    var framedCamera = new EditorCamera3D
+    {
+        Position = new Vector3(2.800691f, 2.185876f, 2.696458f),
+        Yaw = -135f,
+        Pitch = -18f
+    };
+    var framedBounds = new BoundingBox3D(
+        new Vector3(-1.488301f, 0.000225f, -0.490829f),
+        new Vector3(1.488301f, 1.797658f, 0.2823631f));
+    foreach (float aspect in new[] { 0.5f, 1f, 16f / 9f, 3f })
+    {
+        var framedView = new RenderView3D(
+            framedCamera.View, framedCamera.Projection(aspect), framedCamera.Position,
+            Math.Max(1, (int)(700f * aspect)), 700);
+        Assert(framedView.Frustum.Intersects(framedBounds),
+            $"Blueprint framed model survives frustum culling at aspect {aspect:0.##}");
+    }
 
     string blueprintPath = Path.Combine(root, "Assets", "Player.byteblueprint"); var blueprint = new BlueprintDefinition { Name = "Player", Type = BlueprintType.Character, Root = new GameObjectData { Id = Guid.NewGuid(), Name = "Player" }, Variables = { new VariableData { Name = "Health", Value = VariableValue.FromNumber(100) } }, Sockets = { new SocketDefinition { Name = "RightHandSocket", Bone = "hand_r", Position = new Vector3(1, 2, 3), PreviewAssetGuid = stableModelGuid } }, EventModules = { Guid.NewGuid() } }; var blueprintSerializer = new BlueprintSerializer(); blueprintSerializer.Save(blueprint, blueprintPath); BlueprintDefinition loadedBlueprint = blueprintSerializer.Load(blueprintPath); Assert(loadedBlueprint.Type == BlueprintType.Character && loadedBlueprint.Variables[0].Value.Number == 100, "Blueprint variables serialization"); Assert(loadedBlueprint.Sockets[0].Bone == "hand_r" && loadedBlueprint.Sockets[0].PreviewAssetGuid == stableModelGuid, "Blueprint socket serialization"); Assert(loadedBlueprint.EventModules.Count == 1, "Blueprint logic module relationship");
     V07RegressionTests.Run(root, database, assets);

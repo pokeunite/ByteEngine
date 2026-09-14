@@ -51,6 +51,7 @@ internal static class ComponentMetadataRegistry
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
         [typeof(DirectionalLight)] = new("Directional Light", "Rendering", "Lights the scene from one direction.", "sun world light"),
         [typeof(PointLight)] = new("Point Light", "Rendering", "Lights nearby 3D surfaces outward from a position.", "lamp bulb local omni light"),
+        [typeof(SkyEnvironment)] = new("Sky Environment", "World", "Draws a procedural 3D world sky and can control scene ambient light.", "sky environment horizon background ambient world"),
         [typeof(BoxCollider3D)] = new("Box Collider", "Physics", "A box-shaped collision volume.", "collision cube"),
         [typeof(CapsuleCollider3D)] = new("Capsule Collider", "Physics", "A character-friendly capsule collision volume.", "collision character"),
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
@@ -102,7 +103,15 @@ internal static class ComponentMetadataRegistry
         [(typeof(ThirdPersonCamera3D), nameof(ThirdPersonCamera3D.LookAction))] = new("Look Action", "Input Actions", "The 2D Input Action used by the legacy orbit camera."),
         [(typeof(PointLight), nameof(PointLight.Intensity))] = new("Intensity", "Lighting", "Brightness of this local light."),
         [(typeof(PointLight), nameof(PointLight.Range))] = new("Range", "Lighting", "Maximum distance affected by this light.", "m"),
-        [(typeof(PointLight), nameof(PointLight.Color))] = new("Color", "Lighting", "RGB color of this light.")
+        [(typeof(PointLight), nameof(PointLight.Color))] = new("Color", "Lighting", "RGB color of this light."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.DrawSky))] = new("Draw Sky", "Sky", "Render the procedural world sky behind 3D geometry."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.ZenithColor))] = new("Zenith Color", "Sky", "Color directly overhead."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.HorizonColor))] = new("Horizon Color", "Sky", "Color around the world horizon."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.GroundColor))] = new("Ground Color", "Sky", "Color used below the horizon."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.SkyIntensity))] = new("Sky Intensity", "Sky", "Brightness multiplier for the procedural sky."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.HorizonSharpness))] = new("Horizon Sharpness", "Sky", "Controls the gradient transition away from the horizon."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.OverrideAmbient))] = new("Override Ambient", "Ambient", "Use this environment's ambient intensity instead of the value derived from directional lights."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.AmbientIntensity))] = new("Ambient Intensity", "Ambient", "Global ambient-light intensity applied to 3D materials.")
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;

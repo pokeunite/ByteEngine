@@ -80,7 +80,23 @@ internal static class ComponentPropertyRenderer
             else if (before is int n) { edited = ImGui.DragInt(label, ref n); after = n; }
             else if (before is bool b) { edited = ImGui.Checkbox(label, ref b); after = b; }
             else if (before is Vector2 v2) { edited = ImGui.DragFloat2(label, ref v2, .05f); after = v2; }
-            else if (before is Vector3 v3) { edited = ImGui.DragFloat3(label, ref v3, .05f); after = v3; }
+            else if (before is Vector3 v3)
+            {
+                if (IsColorProperty(component, descriptor))
+                {
+                    edited = ImGui.ColorEdit3(
+                        label,
+                        ref v3,
+                        ImGuiColorEditFlags.Float |
+                        ImGuiColorEditFlags.HDR);
+                }
+                else
+                {
+                    edited = ImGui.DragFloat3(label, ref v3, .05f);
+                }
+
+                after = v3;
+            }
             else if (before is Vector4 v4) { edited = ImGui.DragFloat4(label, ref v4, .01f); after = v4; }
             else if (descriptor.Property.PropertyType.IsEnum)
             {
@@ -179,6 +195,22 @@ internal static class ComponentPropertyRenderer
             end();
         }
         ImGui.PopID();
+    }
+
+    private static bool IsColorProperty(
+        Component component,
+        ComponentPropertyDescriptor descriptor)
+    {
+        if (descriptor.Property.PropertyType != typeof(Vector3) ||
+            !descriptor.Property.Name.EndsWith("Color", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return component is
+            SkyEnvironment or
+            DirectionalLight or
+            PointLight;
     }
 
     private static void DrawMissingActions(PlayerController3D playerInput, EditorProjectContext project,

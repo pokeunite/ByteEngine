@@ -10,6 +10,8 @@ public sealed class Renderer3D : IDisposable
 
     private Shader3D? _shader;
 
+    private SkyShader3D? _skyShader;
+
     private ShadowShader3D? _shadowShader;
 
     private ShadowMap3D? _shadowMap;
@@ -23,6 +25,9 @@ public sealed class Renderer3D : IDisposable
     {
         _shader ??=
             new Shader3D();
+
+        _skyShader ??=
+            new SkyShader3D();
 
         _shadowShader ??=
             new ShadowShader3D();
@@ -39,6 +44,86 @@ public sealed class Renderer3D : IDisposable
         {
             _pointShadowMaps[index] ??=
                 new PointShadowMap3D();
+        }
+    }
+
+    public void RenderSky(
+        RenderView3D view,
+        RenderEnvironment3D environment)
+    {
+        if (!environment.DrawSky)
+        {
+            return;
+        }
+
+        Initialize();
+
+        Mesh cube =
+            GetPrimitive(
+                PrimitiveMeshType.Cube);
+
+        GL.Disable(
+            EnableCap.DepthTest);
+
+        GL.DepthMask(
+            false);
+
+        GL.Disable(
+            EnableCap.Blend);
+
+        GL.Disable(
+            EnableCap.CullFace);
+
+        GL.PolygonMode(
+            TriangleFace.FrontAndBack,
+            OpenTK.Graphics.OpenGL4.PolygonMode.Fill);
+
+        try
+        {
+            _skyShader!.Use();
+
+            _skyShader.SetMatrix(
+                "uView",
+                view.ViewMatrix);
+
+            _skyShader.SetMatrix(
+                "uProjection",
+                view.ProjectionMatrix);
+
+            _skyShader.SetVector3(
+                "uZenithColor",
+                environment.ZenithColor);
+
+            _skyShader.SetVector3(
+                "uHorizonColor",
+                environment.HorizonColor);
+
+            _skyShader.SetVector3(
+                "uGroundColor",
+                environment.GroundColor);
+
+            _skyShader.SetFloat(
+                "uSkyIntensity",
+                environment.SkyIntensity);
+
+            _skyShader.SetFloat(
+                "uHorizonSharpness",
+                environment.HorizonSharpness);
+
+            cube.Bind();
+
+            GL.DrawElements(
+                BeginMode.Triangles,
+                cube.IndexCount,
+                DrawElementsType.UnsignedInt,
+                0);
+
+            GL.BindVertexArray(
+                0);
+        }
+        finally
+        {
+            RestoreBaselineState();
         }
     }
 
@@ -1236,6 +1321,11 @@ public sealed class Renderer3D : IDisposable
         _shader?.Dispose();
 
         _shader =
+            null;
+
+        _skyShader?.Dispose();
+
+        _skyShader =
             null;
 
         _shadowShader?.Dispose();

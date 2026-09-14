@@ -133,8 +133,52 @@ public sealed class RenderContext
                 TargetHeight);
     }
 
+    public RenderEnvironment3D CaptureRenderEnvironment3D()
+    {
+        SkyEnvironment? environment =
+            Scene.GameObjects
+                .Where(
+                    gameObject =>
+                        gameObject.ActiveInHierarchy)
+                .SelectMany(
+                    gameObject =>
+                        gameObject.Components
+                            .OfType<SkyEnvironment>())
+                .FirstOrDefault(
+                    component =>
+                        component.Enabled);
+
+        if (environment ==
+            null)
+        {
+            return
+                RenderEnvironment3D.Default;
+        }
+
+        return
+            new RenderEnvironment3D(
+                environment.DrawSky,
+                environment.ZenithColor,
+                environment.HorizonColor,
+                environment.GroundColor,
+                environment.SkyIntensity,
+                environment.HorizonSharpness,
+                environment.OverrideAmbient,
+                environment.AmbientIntensity);
+    }
+
     public RenderLighting3D CaptureRenderLighting3D(
         RenderView3D? view)
+    {
+        return
+            CaptureRenderLighting3D(
+                view,
+                CaptureRenderEnvironment3D());
+    }
+
+    private RenderLighting3D CaptureRenderLighting3D(
+        RenderView3D? view,
+        RenderEnvironment3D environment)
     {
         DirectionalLight[] directional =
             Scene.GameObjects
@@ -163,15 +207,6 @@ public sealed class RenderContext
                     light =>
                         light.Enabled)
                 .ToArray();
-
-        if (directional.Length ==
-                0 &&
-            point.Length ==
-                0)
-        {
-            return
-                RenderLighting3D.Default;
-        }
 
         RenderDirectionalLight3D[] directionalSnapshots =
             directional
@@ -238,13 +273,31 @@ public sealed class RenderContext
                     4.0f)
                 : 0.05f;
 
+        RenderLighting3D lighting =
+            directional.Length ==
+                    0 &&
+                point.Length ==
+                    0
+                ? RenderLighting3D.Default
+                : new RenderLighting3D(
+                    directionalSnapshots,
+                    pointSnapshots,
+                    ambientIntensity,
+                    directional.Length,
+                    point.Length);
+
+        if (!environment.OverrideAmbient)
+        {
+            return lighting;
+        }
+
         return
             new RenderLighting3D(
-                directionalSnapshots,
-                pointSnapshots,
-                ambientIntensity,
-                directional.Length,
-                point.Length);
+                lighting.DirectionalLights,
+                lighting.PointLights,
+                environment.AmbientIntensity,
+                lighting.SubmittedDirectionalLights,
+                lighting.SubmittedPointLights);
     }
 
     internal void Begin3DFrame()
@@ -252,10 +305,15 @@ public sealed class RenderContext
         RenderView3D? view =
             CaptureRenderView3D();
 
+        RenderEnvironment3D environment =
+            CaptureRenderEnvironment3D();
+
         RenderWorld.BeginFrame(
             view,
             CaptureRenderLighting3D(
-                view));
+                view,
+                environment),
+            environment);
     }
 
     internal void Flush3D()

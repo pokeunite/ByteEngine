@@ -18,7 +18,8 @@ internal sealed class HierarchyPanel
         Action duplicateObjects,
         Action copyObjects,
         Action pasteObjects,
-        Action<GameObject> createChild)
+        Action<GameObject> createChild,
+        Action<Guid, GameObject?> instantiateAsset)
     {
         bool isOpen = IsOpen;
         ImGui.Begin("Hierarchy", ref isOpen);
@@ -29,7 +30,7 @@ internal sealed class HierarchyPanel
         ImGui.Separator();
 
         foreach (GameObject root in state.DisplayedScene.GameObjects.Where(item => item.Parent == null))
-            DrawNode(root, state, deleteObjects, duplicateObjects, copyObjects, pasteObjects, createChild);
+            DrawNode(root, state, deleteObjects, duplicateObjects, copyObjects, pasteObjects, createChild, instantiateAsset);
 
         if (state.Mode == EditorMode.Edit)
         {
@@ -39,6 +40,9 @@ internal sealed class HierarchyPanel
                 Guid? childId = GameObjectDragDrop.Accept();
                 GameObject? child = childId.HasValue ? state.EditorScene.FindGameObject(childId.Value) : null;
                 if (child != null) state.Undo?.Execute(state, "Unparent GameObject", () => child.SetParent(null));
+
+                Guid? assetId = AssetDragDrop.Accept();
+                if (assetId.HasValue) instantiateAsset(assetId.Value, null);
                 ImGui.EndDragDropTarget();
             }
             if (ImGui.BeginPopupContextItem("HierarchyBlankContext"))
@@ -60,7 +64,8 @@ internal sealed class HierarchyPanel
         ImGui.End();
     }
 
-    private void DrawNode(GameObject gameObject, EditorState state, Action delete, Action duplicate, Action copy, Action paste, Action<GameObject> createChild)
+    private void DrawNode(GameObject gameObject, EditorState state, Action delete, Action duplicate, Action copy,
+        Action paste, Action<GameObject> createChild, Action<Guid, GameObject?> instantiateAsset)
     {
         if (_renaming == gameObject.Id)
         {
@@ -97,6 +102,9 @@ internal sealed class HierarchyPanel
             GameObject? child = childId.HasValue ? state.EditorScene.FindGameObject(childId.Value) : null;
             if (child != null && !ReferenceEquals(child, gameObject))
                 state.Undo?.Execute(state, "Parent GameObject", () => child.SetParent(gameObject));
+
+            Guid? assetId = AssetDragDrop.Accept();
+            if (assetId.HasValue) instantiateAsset(assetId.Value, gameObject);
             ImGui.EndDragDropTarget();
         }
 
@@ -114,7 +122,8 @@ internal sealed class HierarchyPanel
         if (state.Selection.Primary == gameObject && ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.F2)) BeginRename(gameObject, state);
         if (open)
         {
-            foreach (GameObject child in gameObject.Children) DrawNode(child, state, delete, duplicate, copy, paste, createChild);
+            foreach (GameObject child in gameObject.Children)
+                DrawNode(child, state, delete, duplicate, copy, paste, createChild, instantiateAsset);
             ImGui.TreePop();
         }
     }
