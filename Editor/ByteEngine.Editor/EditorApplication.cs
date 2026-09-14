@@ -1661,7 +1661,7 @@ public sealed class EditorApplication
         _state.Undo?.Execute(_state, $"Create {name}", () =>
         {
             GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
-            gameObject.AddComponent(new MeshRenderer { Primitive = primitive });
+            gameObject.AddComponent(new MeshRenderer { Primitive = primitive, UsePrimitive = true });
             if (primitive == PrimitiveMeshType.Plane)
                 gameObject.AddComponent(new BoxCollider3D { Size = new Vector3(1f, .05f, 1f) });
         });

@@ -14,6 +14,16 @@ public sealed class MeshRenderer : Component
     public PrimitiveMeshType Primitive { get; set; } =
         PrimitiveMeshType.Cube;
 
+    /// <summary>
+    /// Explicitly enables the built-in primitive mesh path.
+    ///
+    /// Generic MeshRenderer components default to false, so an unassigned
+    /// renderer does not silently become a cube. The editor's dedicated
+    /// Cube/Sphere/Plane creation commands enable this flag.
+    /// </summary>
+    public bool UsePrimitive { get; set; } =
+        false;
+
     public Material Material { get; set; } =
         new();
 
@@ -24,24 +34,23 @@ public sealed class MeshRenderer : Component
         true;
 
     /// <summary>
-    /// Automatically maps opaque/cutout materials to the opaque queue and
-    /// blended/additive materials to the transparent queue.
+    /// Includes this renderer in the directional shadow depth pass.
+    /// AlphaBlend/Additive materials are skipped by the shadow pass.
     /// </summary>
-    public bool AutomaticRenderQueue { get; set; } =
+    public bool CastShadows { get; set; } =
         true;
 
     /// <summary>
-    /// Manual queue used when AutomaticRenderQueue is disabled.
+    /// Allows this renderer to sample the active directional shadow map.
     /// </summary>
+    public bool ReceiveShadows { get; set; } =
+        true;
+
+    public bool AutomaticRenderQueue { get; set; } =
+        true;
+
     public RenderQueue3D RenderQueue { get; set; } =
         RenderQueue3D.Opaque;
-
-    /*
-     * Material authoring proxies.
-     *
-     * These live on MeshRenderer as well as Material so ByteEngine's existing
-     * reflection-driven Inspector can edit the standard material immediately.
-     */
 
     public float Metallic
     {
@@ -112,9 +121,6 @@ public sealed class MeshRenderer : Component
                 value;
     }
 
-    /// <summary>
-    /// None is double-sided rendering.
-    /// </summary>
     public CullMode3D CullMode
     {
         get =>
@@ -154,17 +160,30 @@ public sealed class MeshRenderer : Component
             return;
         }
 
-        Mesh mesh =
-            Mesh ??
-            context.Renderer3D.GetPrimitive(
-                Primitive);
+        Mesh? mesh =
+            Mesh;
+
+        if (mesh ==
+            null)
+        {
+            if (!UsePrimitive)
+            {
+                return;
+            }
+
+            mesh =
+                context.Renderer3D.GetPrimitive(
+                    Primitive);
+        }
 
         context.RenderWorld.Submit(
             mesh,
             Material,
             Transform.WorldMatrix,
             ResolveRenderQueue(),
-            FrustumCulling);
+            FrustumCulling,
+            CastShadows,
+            ReceiveShadows);
     }
 
     private RenderQueue3D ResolveRenderQueue()

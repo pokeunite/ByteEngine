@@ -8,14 +8,6 @@ using ByteEngine.Core.Serialization.SerializationModels;
 
 namespace ByteEngine.Core.Serialization;
 
-/// <summary>
-/// Installs rendering codecs introduced after the original ComponentSerializer
-/// was created.
-///
-/// SceneSerializer calls this automatically, so older central serializer code
-/// does not need to be replaced just to add renderer/light persistence.
-/// Register() intentionally overwrites the legacy MeshRenderer codec.
-/// </summary>
 public static class RendererSerializationRegistrar
 {
     public static void Register(
@@ -29,6 +21,123 @@ public static class RendererSerializationRegistrar
 
         serializer.Register(
             new PointLightCodec());
+
+        /*
+         * Overrides the original DirectionalLight codec so shadow settings
+         * participate in scene/Blueprint persistence without changing the
+         * central ComponentSerializer.
+         */
+        serializer.Register(
+            new DirectionalLightV09Codec());
+    }
+
+    private sealed class DirectionalLightV09Codec
+        : IComponentCodec
+    {
+        public string TypeName =>
+            "DirectionalLight";
+
+        public Type ComponentType =>
+            typeof(DirectionalLight);
+
+        public ComponentData Serialize(
+            Component component,
+            ComponentSerializationContext context)
+        {
+            DirectionalLight light =
+                (DirectionalLight)component;
+
+            return
+                new ComponentData
+                {
+                    Type =
+                        TypeName,
+
+                    Properties =
+                        new JsonObject
+                        {
+                            ["color"] =
+                                Vector3Node(
+                                    light.Color),
+
+                            ["intensity"] =
+                                light.Intensity,
+
+                            ["ambientIntensity"] =
+                                light.AmbientIntensity,
+
+                            ["castShadows"] =
+                                light.CastShadows,
+
+                            ["shadowResolution"] =
+                                light.ShadowResolution,
+
+                            ["shadowDistance"] =
+                                light.ShadowDistance,
+
+                            ["shadowBias"] =
+                                light.ShadowBias,
+
+                            ["shadowStrength"] =
+                                light.ShadowStrength
+                        }
+                };
+        }
+
+        public Component Deserialize(
+            ComponentData data,
+            ComponentSerializationContext context)
+        {
+            return
+                new DirectionalLight
+                {
+                    Color =
+                        ReadVector3(
+                            data.Properties["color"],
+                            Vector3.One),
+
+                    Intensity =
+                        ReadFloat(
+                            data,
+                            "intensity",
+                            1.0f),
+
+                    AmbientIntensity =
+                        ReadFloat(
+                            data,
+                            "ambientIntensity",
+                            0.25f),
+
+                    CastShadows =
+                        data.Properties["castShadows"]?
+                            .GetValue<bool>() ??
+                        false,
+
+                    ShadowResolution =
+                        ReadInt(
+                            data,
+                            "shadowResolution",
+                            2048),
+
+                    ShadowDistance =
+                        ReadFloat(
+                            data,
+                            "shadowDistance",
+                            50.0f),
+
+                    ShadowBias =
+                        ReadFloat(
+                            data,
+                            "shadowBias",
+                            0.0015f),
+
+                    ShadowStrength =
+                        ReadFloat(
+                            data,
+                            "shadowStrength",
+                            1.0f)
+                };
+        }
     }
 
     private sealed class PointLightCodec
@@ -118,11 +227,20 @@ public static class RendererSerializationRegistrar
                     ["primitive"] =
                         renderer.Primitive.ToString(),
 
+                    ["usePrimitive"] =
+                        renderer.UsePrimitive,
+
                     ["visible"] =
                         renderer.Visible,
 
                     ["frustumCulling"] =
                         renderer.FrustumCulling,
+
+                    ["castShadows"] =
+                        renderer.CastShadows,
+
+                    ["receiveShadows"] =
+                        renderer.ReceiveShadows,
 
                     ["automaticRenderQueue"] =
                         renderer.AutomaticRenderQueue,
@@ -333,6 +451,18 @@ public static class RendererSerializationRegistrar
                     Primitive =
                         primitive,
 
+                    /*
+                     * Backward compatibility:
+                     * older primitive MeshRenderers did not store an explicit
+                     * UsePrimitive flag. If no imported mesh key exists,
+                     * preserve their previous primitive behavior.
+                     */
+                    UsePrimitive =
+                        data.Properties["usePrimitive"]?
+                            .GetValue<bool>() ??
+                        !data.Properties.ContainsKey(
+                            "meshKey"),
+
                     Visible =
                         data.Properties["visible"]?
                             .GetValue<bool>() ??
@@ -340,6 +470,16 @@ public static class RendererSerializationRegistrar
 
                     FrustumCulling =
                         data.Properties["frustumCulling"]?
+                            .GetValue<bool>() ??
+                        true,
+
+                    CastShadows =
+                        data.Properties["castShadows"]?
+                            .GetValue<bool>() ??
+                        true,
+
+                    ReceiveShadows =
+                        data.Properties["receiveShadows"]?
                             .GetValue<bool>() ??
                         true,
 
@@ -456,6 +596,17 @@ public static class RendererSerializationRegistrar
 
             return renderer;
         }
+    }
+
+    private static int ReadInt(
+        ComponentData data,
+        string name,
+        int fallback)
+    {
+        return
+            data.Properties[name]?
+                .GetValue<int>() ??
+            fallback;
     }
 
     private static float ReadFloat(

@@ -12,5 +12,7 @@ public readonly record struct RenderSubmission(
     BoundingBox3D WorldBounds,
     RenderQueue3D Queue,
     bool FrustumCullingEnabled,
+    bool CastShadows,
+    bool ReceiveShadows,
     float DistanceSquaredToCamera,
     int SubmissionIndex);

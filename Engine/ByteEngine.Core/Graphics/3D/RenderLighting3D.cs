@@ -4,10 +4,6 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 /// <summary>
 /// Immutable-per-pass lighting snapshot consumed by Renderer3D.
-///
-/// v0.9-c keeps a deliberately small forward-lighting budget suitable for the
-/// current OpenGL 3.3 renderer. A later clustered/tiled path can replace the
-/// selection strategy without changing scene components.
 /// </summary>
 public sealed class RenderLighting3D
 {
@@ -87,9 +83,26 @@ public sealed class RenderLighting3D
                 _pointLights.Length);
     }
 
+    public int FindShadowDirectionalLightIndex()
+    {
+        for (int index =
+                 0;
+             index <
+             _directionalLights.Length;
+             index++)
+        {
+            if (_directionalLights[index].CastShadows)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>
     /// Preserves ByteEngine's pre-v0.9-c visual fallback when a scene has no
-    /// explicit lights.
+    /// explicit lights. The fallback does not cast shadows.
     /// </summary>
     public static RenderLighting3D Default =>
         new(
@@ -102,7 +115,12 @@ public sealed class RenderLighting3D
                         -0.3f),
                     Vector3.One,
                     1.0f,
-                    0.25f)
+                    0.25f,
+                    false,
+                    2048,
+                    50.0f,
+                    0.0015f,
+                    1.0f)
             },
             Array.Empty<RenderPointLight3D>(),
             0.25f,
@@ -123,7 +141,12 @@ public sealed class RenderLighting3D
                         direction,
                         color,
                         intensity,
-                        ambientIntensity)
+                        ambientIntensity,
+                        false,
+                        2048,
+                        50.0f,
+                        0.0015f,
+                        1.0f)
                 },
                 Array.Empty<RenderPointLight3D>(),
                 ambientIntensity,

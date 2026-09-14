@@ -5,15 +5,6 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 /// <summary>
 /// Collects 3D render submissions for one render pass.
-///
-/// v0.9-c responsibilities:
-/// - immutable view snapshot
-/// - immutable multi-light snapshot
-/// - render queues
-/// - world-space render bounds
-/// - frustum culling
-/// - opaque/transparent distance sorting
-/// - render/light statistics
 /// </summary>
 public sealed class RenderWorld
 {
@@ -63,7 +54,9 @@ public sealed class RenderWorld
         Material material,
         Matrix4x4 modelMatrix,
         RenderQueue3D queue = RenderQueue3D.Opaque,
-        bool frustumCulling = true)
+        bool frustumCulling = true,
+        bool castShadows = true,
+        bool receiveShadows = true)
     {
         ArgumentNullException.ThrowIfNull(
             mesh);
@@ -95,6 +88,8 @@ public sealed class RenderWorld
                 worldBounds,
                 queue,
                 frustumCulling,
+                castShadows,
+                receiveShadows,
                 distanceSquared,
                 _nextSubmissionIndex));
 
@@ -126,17 +121,16 @@ public sealed class RenderWorld
             0)
         {
             LastStats =
-                new RenderWorldStats(
+                CreateStats(
+                    submitted,
                     0,
                     0,
                     0,
+                    opaqueSubmitted,
+                    transparentSubmitted,
+                    overlaySubmitted,
                     0,
-                    0,
-                    0,
-                    0,
-                    _lighting.DirectionalLightCount,
-                    _lighting.PointLightCount,
-                    _lighting.DroppedLightCount);
+                    0);
 
             return;
         }
@@ -145,7 +139,7 @@ public sealed class RenderWorld
             RenderView3D view)
         {
             LastStats =
-                new RenderWorldStats(
+                CreateStats(
                     submitted,
                     0,
                     submitted,
@@ -153,9 +147,8 @@ public sealed class RenderWorld
                     opaqueSubmitted,
                     transparentSubmitted,
                     overlaySubmitted,
-                    _lighting.DirectionalLightCount,
-                    _lighting.PointLightCount,
-                    _lighting.DroppedLightCount);
+                    0,
+                    0);
 
             _submissions.Clear();
 
@@ -184,6 +177,15 @@ public sealed class RenderWorld
             visible.Add(
                 submission);
         }
+
+        DirectionalShadowPassResult shadowPass =
+            visible.Count >
+            0
+                ? context.Renderer3D.RenderDirectionalShadowMap(
+                    _submissions,
+                    view,
+                    _lighting)
+                : DirectionalShadowPassResult.None;
 
         IEnumerable<RenderSubmission> opaque =
             visible
@@ -237,13 +239,15 @@ public sealed class RenderWorld
                 submission.ModelMatrix,
                 view.ViewMatrix,
                 view.ProjectionMatrix,
-                _lighting);
+                _lighting,
+                shadowPass.Shadow,
+                submission.ReceiveShadows);
 
             drawCalls++;
         }
 
         LastStats =
-            new RenderWorldStats(
+            CreateStats(
                 submitted,
                 visible.Count,
                 culled,
@@ -251,11 +255,39 @@ public sealed class RenderWorld
                 opaqueSubmitted,
                 transparentSubmitted,
                 overlaySubmitted,
-                _lighting.DirectionalLightCount,
-                _lighting.PointLightCount,
-                _lighting.DroppedLightCount);
+                shadowPass.Shadow.HasValue
+                    ? 1
+                    : 0,
+                shadowPass.DrawCalls);
 
         _submissions.Clear();
+    }
+
+    private RenderWorldStats CreateStats(
+        int submitted,
+        int visible,
+        int culled,
+        int drawCalls,
+        int opaqueSubmitted,
+        int transparentSubmitted,
+        int overlaySubmitted,
+        int shadowPasses,
+        int shadowDrawCalls)
+    {
+        return
+            new RenderWorldStats(
+                submitted,
+                visible,
+                culled,
+                drawCalls,
+                opaqueSubmitted,
+                transparentSubmitted,
+                overlaySubmitted,
+                _lighting.DirectionalLightCount,
+                _lighting.PointLightCount,
+                _lighting.DroppedLightCount,
+                shadowPasses,
+                shadowDrawCalls);
     }
 
     private int CountQueue(
@@ -288,4 +320,6 @@ public readonly record struct RenderWorldStats(
     int OverlaySubmissions,
     int DirectionalLights,
     int PointLights,
-    int DroppedLights);
+    int DroppedLights,
+    int ShadowPasses,
+    int ShadowDrawCalls);

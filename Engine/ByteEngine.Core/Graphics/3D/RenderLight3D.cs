@@ -9,7 +9,12 @@ public readonly record struct RenderDirectionalLight3D(
     Vector3 Direction,
     Vector3 Color,
     float Intensity,
-    float AmbientIntensity);
+    float AmbientIntensity,
+    bool CastShadows,
+    int ShadowResolution,
+    float ShadowDistance,
+    float ShadowBias,
+    float ShadowStrength);
 
 /// <summary>
 /// Immutable point-light snapshot for one render pass.

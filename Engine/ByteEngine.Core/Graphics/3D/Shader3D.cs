@@ -37,6 +37,13 @@ internal sealed class Shader3D : IDisposable
                 value.M44));
     }
 
+    public void SetVector2(
+        string name,
+        Vector2 value) =>
+        _shader.SetVector2(
+            name,
+            value);
+
     public void SetVector3(
         string name,
         Vector3 value) =>
@@ -128,6 +135,15 @@ internal sealed class Shader3D : IDisposable
         uniform vec3 uPointLightColors[MAX_POINT_LIGHTS];
         uniform float uPointLightIntensities[MAX_POINT_LIGHTS];
         uniform float uPointLightRanges[MAX_POINT_LIGHTS];
+
+        uniform sampler2D uShadowMap;
+        uniform int uUseShadowMap;
+        uniform int uReceiveShadows;
+        uniform int uShadowLightIndex;
+        uniform mat4 uLightViewProjection;
+        uniform float uShadowBias;
+        uniform float uShadowStrength;
+        uniform vec2 uShadowTexelSize;
 
         const float PI=3.14159265359;
 
@@ -268,6 +284,96 @@ internal sealed class Shader3D : IDisposable
                 nDotL;
         }
 
+        float calculateDirectionalShadow(
+            vec3 normal,
+            vec3 surfaceToLight)
+        {
+            if(
+                uUseShadowMap==0 ||
+                uReceiveShadows==0)
+            {
+                return 0.0;
+            }
+
+            vec4 lightSpace=
+                uLightViewProjection*
+                vec4(
+                    vWorldPosition,
+                    1.0);
+
+            if(abs(lightSpace.w)<0.00001)
+                return 0.0;
+
+            vec3 projected=
+                lightSpace.xyz/
+                lightSpace.w;
+
+            projected=
+                projected*0.5+
+                0.5;
+
+            if(
+                projected.x<0.0 ||
+                projected.x>1.0 ||
+                projected.y<0.0 ||
+                projected.y>1.0 ||
+                projected.z<0.0 ||
+                projected.z>1.0)
+            {
+                return 0.0;
+            }
+
+            float slope=
+                1.0-
+                max(
+                    dot(
+                        normal,
+                        surfaceToLight),
+                    0.0);
+
+            float bias=
+                max(
+                    uShadowBias*slope,
+                    uShadowBias*0.25);
+
+            float shadow=
+                0.0;
+
+            for(
+                int x=-1;
+                x<=1;
+                x++)
+            {
+                for(
+                    int y=-1;
+                    y<=1;
+                    y++)
+                {
+                    vec2 offset=
+                        vec2(
+                            float(x),
+                            float(y))*
+                        uShadowTexelSize;
+
+                    float storedDepth=
+                        texture(
+                            uShadowMap,
+                            projected.xy+
+                            offset).r;
+
+                    shadow+=
+                        projected.z-bias>
+                        storedDepth
+                            ? 1.0
+                            : 0.0;
+                }
+            }
+
+            return
+                shadow/
+                9.0;
+        }
+
         void main()
         {
             vec4 base=
@@ -307,6 +413,22 @@ internal sealed class Shader3D : IDisposable
                     uDirectionalLightColors[index]*
                     uDirectionalLightIntensities[index];
 
+                float shadowMultiplier=
+                    1.0;
+
+                if(index==uShadowLightIndex)
+                {
+                    float shadow=
+                        calculateDirectionalShadow(
+                            n,
+                            l);
+
+                    shadowMultiplier=
+                        1.0-
+                        shadow*
+                        uShadowStrength;
+                }
+
                 direct+=
                     evaluatePbrLight(
                         n,
@@ -315,7 +437,8 @@ internal sealed class Shader3D : IDisposable
                         radiance,
                         base.rgb,
                         uMetallic,
-                        uRoughness);
+                        uRoughness)*
+                    shadowMultiplier;
             }
 
             for(

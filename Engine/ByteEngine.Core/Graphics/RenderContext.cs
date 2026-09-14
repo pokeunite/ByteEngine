@@ -133,13 +133,6 @@ public sealed class RenderContext
                 TargetHeight);
     }
 
-    /// <summary>
-    /// Captures every enabled scene light into immutable render-pass data.
-    ///
-    /// Directional lights keep scene order. Point lights are ranked by
-    /// distance to the active view and the nearest lights are retained when
-    /// the forward-lighting budget is exceeded.
-    /// </summary>
     public RenderLighting3D CaptureRenderLighting3D(
         RenderView3D? view)
     {
@@ -194,7 +187,12 @@ public sealed class RenderContext
                                 light.Intensity),
                             Math.Max(
                                 0.0f,
-                                light.AmbientIntensity)))
+                                light.AmbientIntensity),
+                            light.CastShadows,
+                            light.ShadowResolution,
+                            light.ShadowDistance,
+                            light.ShadowBias,
+                            light.ShadowStrength))
                 .ToArray();
 
         Vector3 cameraPosition =
