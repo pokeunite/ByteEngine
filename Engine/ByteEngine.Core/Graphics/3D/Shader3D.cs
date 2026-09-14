@@ -120,6 +120,14 @@ internal sealed class Shader3D : IDisposable
         uniform float uAmbientIntensity;
         uniform vec3 uCameraPosition;
 
+        uniform int uFogEnabled;
+        uniform int uFogMode;
+        uniform vec3 uFogColor;
+        uniform float uFogStart;
+        uniform float uFogEnd;
+        uniform float uFogDensity;
+        uniform float uFogMaxOpacity;
+
         uniform sampler2D uTexture;
         uniform sampler2D uNormalTexture;
         uniform int uUseTexture;
@@ -296,35 +304,6 @@ internal sealed class Shader3D : IDisposable
                 (diffuse+specular)*
                 radiance*
                 nDotL;
-        }
-
-        float samplePointShadow(
-            samplerCube shadowMap,
-            vec3 fragmentToLight,
-            float currentDepth,
-            float farPlane,
-            float bias,
-            float softness,
-            float strength)
-        {
-            float safeFarPlane=max(farPlane,0.0001);
-            float radius=
-                max(softness,0.0)*
-                0.015*
-                (0.25+currentDepth/safeFarPlane);
-
-            float shadow=0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(radius,0.0,0.0)).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,radius,0.0)).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight+vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
-            shadow+=currentDepth-bias>texture(shadowMap,fragmentToLight-vec3(0.0,0.0,radius)).r*safeFarPlane?1.0:0.0;
-
-            return
-                shadow/7.0*
-                clamp(strength,0.0,1.0);
         }
 
         float calculatePointShadow(
@@ -606,6 +585,62 @@ internal sealed class Shader3D : IDisposable
                 base.rgb*
                 uAmbientIntensity+
                 direct;
+
+            if(uFogEnabled==1)
+            {
+                float fogDistance=
+                    length(
+                        uCameraPosition-
+                        vWorldPosition);
+
+                float fogFactor=
+                    0.0;
+
+                if(uFogMode==0)
+                {
+                    float fogRange=
+                        max(
+                            uFogEnd-
+                            uFogStart,
+                            0.001);
+
+                    fogFactor=
+                        clamp(
+                            (
+                                fogDistance-
+                                uFogStart
+                            )/
+                            fogRange,
+                            0.0,
+                            1.0);
+                }
+                else
+                {
+                    fogFactor=
+                        1.0-
+                        exp(
+                            -max(
+                                uFogDensity,
+                                0.0)*
+                            fogDistance);
+                }
+
+                fogFactor=
+                    min(
+                        fogFactor,
+                        clamp(
+                            uFogMaxOpacity,
+                            0.0,
+                            1.0));
+
+                linearColor=
+                    mix(
+                        linearColor,
+                        max(
+                            uFogColor,
+                            vec3(0.0)),
+                        fogFactor);
+            }
 
             vec3 displayColor=
                 pow(

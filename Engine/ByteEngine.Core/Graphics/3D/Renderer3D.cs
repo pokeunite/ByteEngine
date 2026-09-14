@@ -523,7 +523,8 @@ public sealed class Renderer3D : IDisposable
         RenderLighting3D lighting,
         RenderDirectionalShadow3D? directionalShadow,
         IReadOnlyList<RenderPointShadow3D> pointShadows,
-        bool receiveShadows)
+        bool receiveShadows,
+        RenderEnvironment3D? environment = null)
     {
         ArgumentNullException.ThrowIfNull(
             mesh);
@@ -608,6 +609,10 @@ public sealed class Renderer3D : IDisposable
             UploadPointShadows(
                 pointShadows,
                 receiveShadows);
+
+            UploadEnvironmentFog(
+                environment ??
+                RenderEnvironment3D.Default);
 
             if (material.MainTexture !=
                 null)
@@ -716,6 +721,55 @@ public sealed class Renderer3D : IDisposable
             null,
             Array.Empty<RenderPointShadow3D>(),
             false);
+    }
+
+    private void UploadEnvironmentFog(
+        RenderEnvironment3D environment)
+    {
+        bool enabled =
+            environment.FogEnabled &&
+            environment.FogMaxOpacity >
+                0.0f;
+
+        _shader!.SetInt(
+            "uFogEnabled",
+            enabled
+                ? 1
+                : 0);
+
+        _shader.SetInt(
+            "uFogMode",
+            (int)environment.FogMode);
+
+        _shader.SetVector3(
+            "uFogColor",
+            environment.FogColor);
+
+        _shader.SetFloat(
+            "uFogStart",
+            Math.Max(
+                environment.FogStartDistance,
+                0.0f));
+
+        _shader.SetFloat(
+            "uFogEnd",
+            Math.Max(
+                environment.FogEndDistance,
+                environment.FogStartDistance +
+                0.01f));
+
+        _shader.SetFloat(
+            "uFogDensity",
+            Math.Max(
+                environment.FogDensity,
+                0.0f));
+
+        _shader.SetFloat(
+            "uFogMaxOpacity",
+            Math.Clamp(
+                environment.FogMaxOpacity,
+                0.0f,
+                1.0f));
     }
 
     private void UploadDirectionalShadow(

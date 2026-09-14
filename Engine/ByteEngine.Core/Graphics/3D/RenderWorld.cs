@@ -288,7 +288,14 @@ public sealed class RenderWorld
                 _lighting,
                 shadowPass.Shadow,
                 pointShadowPass.Shadows,
-                submission.ReceiveShadows);
+                submission.ReceiveShadows,
+                submission.Queue ==
+                    RenderQueue3D.Overlay
+                    ? _environment with
+                    {
+                        FogEnabled = false
+                    }
+                    : _environment);
 
             drawCalls++;
         }

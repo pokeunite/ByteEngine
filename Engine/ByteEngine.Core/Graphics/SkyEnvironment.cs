@@ -1,10 +1,11 @@
 using System.Numerics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 
 namespace ByteEngine.Core.Graphics;
 
 /// <summary>
-/// World-level procedural sky and ambient-light settings.
+/// World-level procedural sky, ambient-light and atmospheric-fog settings.
 ///
 /// Add one enabled SkyEnvironment to a scene. If multiple are enabled,
 /// ByteEngine uses the first active instance encountered in scene order.
@@ -37,6 +38,24 @@ public sealed class SkyEnvironment : Component
 
     private float _ambientIntensity =
         0.20f;
+
+    private Vector3 _fogColor =
+        new(
+            0.58f,
+            0.72f,
+            0.95f);
+
+    private float _fogStartDistance =
+        20.0f;
+
+    private float _fogEndDistance =
+        100.0f;
+
+    private float _fogDensity =
+        0.025f;
+
+    private float _fogMaxOpacity =
+        1.0f;
 
     /// <summary>
     /// Draws the procedural sky behind the 3D scene.
@@ -128,6 +147,102 @@ public sealed class SkyEnvironment : Component
                     value,
                     0.0f,
                     4.0f);
+    }
+
+    /// <summary>
+    /// Enables atmospheric distance fog for normal 3D scene geometry.
+    /// Overlay submissions are intentionally left unfogged.
+    /// </summary>
+    public bool FogEnabled { get; set; }
+
+    public FogMode3D FogMode { get; set; } =
+        FogMode3D.Linear;
+
+    public Vector3 FogColor
+    {
+        get =>
+            _fogColor;
+
+        set =>
+            _fogColor =
+                ClampColor(
+                    value);
+    }
+
+    /// <summary>
+    /// Camera distance where linear fog begins.
+    /// </summary>
+    public float FogStartDistance
+    {
+        get =>
+            _fogStartDistance;
+
+        set
+        {
+            _fogStartDistance =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    10000.0f);
+
+            if (_fogEndDistance <
+                _fogStartDistance +
+                0.01f)
+            {
+                _fogEndDistance =
+                    _fogStartDistance +
+                    0.01f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Camera distance where linear fog reaches FogMaxOpacity.
+    /// </summary>
+    public float FogEndDistance
+    {
+        get =>
+            _fogEndDistance;
+
+        set =>
+            _fogEndDistance =
+                Math.Clamp(
+                    value,
+                    _fogStartDistance +
+                    0.01f,
+                    10000.0f);
+    }
+
+    /// <summary>
+    /// Exponential fog density. Ignored by linear fog.
+    /// </summary>
+    public float FogDensity
+    {
+        get =>
+            _fogDensity;
+
+        set =>
+            _fogDensity =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    10.0f);
+    }
+
+    /// <summary>
+    /// Maximum amount of scene color that fog can replace.
+    /// </summary>
+    public float FogMaxOpacity
+    {
+        get =>
+            _fogMaxOpacity;
+
+        set =>
+            _fogMaxOpacity =
+                Math.Clamp(
+                    value,
+                    0.0f,
+                    1.0f);
     }
 
     private static Vector3 ClampColor(

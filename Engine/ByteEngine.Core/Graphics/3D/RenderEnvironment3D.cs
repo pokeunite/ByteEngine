@@ -13,7 +13,14 @@ public readonly record struct RenderEnvironment3D(
     float SkyIntensity,
     float HorizonSharpness,
     bool OverrideAmbient,
-    float AmbientIntensity)
+    float AmbientIntensity,
+    bool FogEnabled,
+    FogMode3D FogMode,
+    Vector3 FogColor,
+    float FogStartDistance,
+    float FogEndDistance,
+    float FogDensity,
+    float FogMaxOpacity)
 {
     public static RenderEnvironment3D Default =>
         new(
@@ -33,5 +40,15 @@ public readonly record struct RenderEnvironment3D(
             1.0f,
             1.25f,
             false,
-            0.25f);
+            0.25f,
+            false,
+            FogMode3D.Linear,
+            new Vector3(
+                0.58f,
+                0.72f,
+                0.95f),
+            20.0f,
+            100.0f,
+            0.025f,
+            1.0f);
 }

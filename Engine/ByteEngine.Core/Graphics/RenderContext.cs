@@ -164,7 +164,14 @@ public sealed class RenderContext
                 environment.SkyIntensity,
                 environment.HorizonSharpness,
                 environment.OverrideAmbient,
-                environment.AmbientIntensity);
+                environment.AmbientIntensity,
+                environment.FogEnabled,
+                environment.FogMode,
+                environment.FogColor,
+                environment.FogStartDistance,
+                environment.FogEndDistance,
+                environment.FogDensity,
+                environment.FogMaxOpacity);
     }
 
     public RenderLighting3D CaptureRenderLighting3D(

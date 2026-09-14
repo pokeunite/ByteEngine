@@ -84,7 +84,29 @@ public static class RendererSerializationRegistrar
                                 environment.OverrideAmbient,
 
                             ["ambientIntensity"] =
-                                environment.AmbientIntensity
+                                environment.AmbientIntensity,
+
+                            ["fogEnabled"] =
+                                environment.FogEnabled,
+
+                            ["fogMode"] =
+                                (int)environment.FogMode,
+
+                            ["fogColor"] =
+                                Vector3Node(
+                                    environment.FogColor),
+
+                            ["fogStartDistance"] =
+                                environment.FogStartDistance,
+
+                            ["fogEndDistance"] =
+                                environment.FogEndDistance,
+
+                            ["fogDensity"] =
+                                environment.FogDensity,
+
+                            ["fogMaxOpacity"] =
+                                environment.FogMaxOpacity
                         }
                 };
         }
@@ -146,7 +168,53 @@ public static class RendererSerializationRegistrar
                         ReadFloat(
                             data,
                             "ambientIntensity",
-                            0.20f)
+                            0.20f),
+
+                    FogEnabled =
+                        data.Properties["fogEnabled"]?
+                            .GetValue<bool>() ??
+                        false,
+
+                    FogMode =
+                        (FogMode3D)Math.Clamp(
+                            ReadInt(
+                                data,
+                                "fogMode",
+                                (int)FogMode3D.Linear),
+                            (int)FogMode3D.Linear,
+                            (int)FogMode3D.Exponential),
+
+                    FogColor =
+                        ReadVector3(
+                            data.Properties["fogColor"],
+                            new Vector3(
+                                0.58f,
+                                0.72f,
+                                0.95f)),
+
+                    FogStartDistance =
+                        ReadFloat(
+                            data,
+                            "fogStartDistance",
+                            20.0f),
+
+                    FogEndDistance =
+                        ReadFloat(
+                            data,
+                            "fogEndDistance",
+                            100.0f),
+
+                    FogDensity =
+                        ReadFloat(
+                            data,
+                            "fogDensity",
+                            0.025f),
+
+                    FogMaxOpacity =
+                        ReadFloat(
+                            data,
+                            "fogMaxOpacity",
+                            1.0f)
                 };
         }
     }

@@ -111,7 +111,14 @@ internal static class ComponentMetadataRegistry
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.SkyIntensity))] = new("Sky Intensity", "Sky", "Brightness multiplier for the procedural sky."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.HorizonSharpness))] = new("Horizon Sharpness", "Sky", "Controls the gradient transition away from the horizon."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.OverrideAmbient))] = new("Override Ambient", "Ambient", "Use this environment's ambient intensity instead of the value derived from directional lights."),
-        [(typeof(SkyEnvironment), nameof(SkyEnvironment.AmbientIntensity))] = new("Ambient Intensity", "Ambient", "Global ambient-light intensity applied to 3D materials.")
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.AmbientIntensity))] = new("Ambient Intensity", "Ambient", "Global ambient-light intensity applied to 3D materials."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogEnabled))] = new("Enable Fog", "Fog", "Enable atmospheric distance fog for normal 3D scene geometry."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogMode))] = new("Fog Mode", "Fog", "Linear uses start/end distances; Exponential uses density."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogColor))] = new("Fog Color", "Fog", "Atmospheric color blended into distant 3D geometry."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogStartDistance))] = new("Start Distance", "Fog", "Camera distance where linear fog begins.", "m"),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogEndDistance))] = new("End Distance", "Fog", "Camera distance where linear fog reaches maximum opacity.", "m"),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogDensity))] = new("Density", "Fog", "Density used by Exponential fog."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.FogMaxOpacity))] = new("Maximum Opacity", "Fog", "Maximum amount of scene color that fog may replace.")
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;
