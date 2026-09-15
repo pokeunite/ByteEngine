@@ -34,12 +34,23 @@ internal sealed class HierarchyPanel
          * panel is being drawn. Always iterate a snapshot so those mutations
          * cannot invalidate the scene's live GameObjects collection.
          */
-        foreach (GameObject root in state.DisplayedScene.GameObjects
-                     .Where(item => item.Parent == null)
-                     .ToArray())
-        {
-            DrawNode(root, state, deleteObjects, duplicateObjects, copyObjects, pasteObjects, createChild, instantiateAsset);
-        }
+        GameObject[] roots =
+            state.DisplayedScene.GameObjects
+                .Where(
+                    item =>
+                        item.Parent ==
+                        null)
+                .ToArray();
+
+        DrawSiblingGroup(
+            roots,
+            state,
+            deleteObjects,
+            duplicateObjects,
+            copyObjects,
+            pasteObjects,
+            createChild,
+            instantiateAsset);
 
         if (state.Mode == EditorMode.Edit)
         {
@@ -91,8 +102,6 @@ internal sealed class HierarchyPanel
         if (gameObject.Children.Count == 0) flags |= ImGuiTreeNodeFlags.Leaf;
         if (state.Selection.Contains(gameObject)) flags |= ImGuiTreeNodeFlags.Selected;
         bool open = ImGui.TreeNodeEx($"{gameObject.Name}##{gameObject.Id}", flags);
-        Vector2 itemMinimum = ImGui.GetItemRectMin();
-        Vector2 itemMaximum = ImGui.GetItemRectMax();
 
         if (ImGui.IsItemClicked(ImGuiMouseButton.Left) && !ImGui.IsItemToggledOpen())
         {
@@ -108,28 +117,26 @@ internal sealed class HierarchyPanel
             ImGui.EndDragDropSource();
         }
 
+        /*
+         * Dropping ON an object always means "make child".
+         *
+         * Reordering is deliberately handled by dedicated thin drop zones
+         * BETWEEN sibling rows. The previous top/middle/bottom row split was
+         * too ambiguous in ImGui and caused reorder attempts to become
+         * parenting operations.
+         */
         if (state.Mode == EditorMode.Edit && ImGui.BeginDragDropTarget())
         {
             Guid? childId = GameObjectDragDrop.Accept();
             GameObject? child = childId.HasValue ? state.EditorScene.FindGameObject(childId.Value) : null;
             if (child != null && !ReferenceEquals(child, gameObject))
             {
-                bool sameParent = ReferenceEquals(child.Parent, gameObject.Parent);
-                float itemHeight = Math.Max(itemMaximum.Y - itemMinimum.Y, 1.0f);
-                float localY = (ImGui.GetMousePos().Y - itemMinimum.Y) / itemHeight;
-
-                if (sameParent && localY <= 0.30f)
-                {
-                    ExecuteHierarchyEdit(state, "Move GameObject Up", () => child.MoveBefore(gameObject));
-                }
-                else if (sameParent && localY >= 0.70f)
-                {
-                    ExecuteHierarchyEdit(state, "Move GameObject Down", () => child.MoveAfter(gameObject));
-                }
-                else
-                {
-                    ExecuteHierarchyEdit(state, "Parent GameObject", () => child.SetParent(gameObject));
-                }
+                ExecuteHierarchyEdit(
+                    state,
+                    "Parent GameObject",
+                    () =>
+                        child.SetParent(
+                            gameObject));
             }
 
             Guid? assetId = AssetDragDrop.Accept();
@@ -201,10 +208,181 @@ internal sealed class HierarchyPanel
              * Child commands can also mutate the live child list. Iterate a
              * snapshot for the same reason as the root hierarchy.
              */
-            foreach (GameObject child in gameObject.Children.ToArray())
-                DrawNode(child, state, delete, duplicate, copy, paste, createChild, instantiateAsset);
+            DrawSiblingGroup(
+                gameObject.Children.ToArray(),
+                state,
+                delete,
+                duplicate,
+                copy,
+                paste,
+                createChild,
+                instantiateAsset);
+
             ImGui.TreePop();
         }
+    }
+
+    private void DrawSiblingGroup(
+        GameObject[] siblings,
+        EditorState state,
+        Action delete,
+        Action duplicate,
+        Action copy,
+        Action paste,
+        Action<GameObject> createChild,
+        Action<Guid, GameObject?> instantiateAsset)
+    {
+        if (siblings.Length ==
+            0)
+        {
+            return;
+        }
+
+        for (int index =
+                 0;
+             index <
+             siblings.Length;
+             index++)
+        {
+            GameObject sibling =
+                siblings[index];
+
+            DrawReorderDropTarget(
+                state,
+                sibling,
+                after:
+                    false,
+                $"Before:{sibling.Id}");
+
+            DrawNode(
+                sibling,
+                state,
+                delete,
+                duplicate,
+                copy,
+                paste,
+                createChild,
+                instantiateAsset);
+        }
+
+        GameObject last =
+            siblings[^1];
+
+        DrawReorderDropTarget(
+            state,
+            last,
+            after:
+                true,
+            $"After:{last.Id}");
+    }
+
+    private static void DrawReorderDropTarget(
+        EditorState state,
+        GameObject reference,
+        bool after,
+        string id)
+    {
+        if (state.Mode !=
+            EditorMode.Edit)
+        {
+            return;
+        }
+
+        ImGui.PushID(
+            id);
+
+        float width =
+            Math.Max(
+                ImGui.GetContentRegionAvail().X,
+                1.0f);
+
+        /*
+         * A real, separate ImGui item gives reorder drops an unambiguous
+         * target. Five pixels is large enough to hit while dragging but small
+         * enough not to make the hierarchy look widely spaced.
+         */
+        ImGui.InvisibleButton(
+            "##HierarchyReorderDrop",
+            new Vector2(
+                width,
+                5.0f));
+
+        Vector2 minimum =
+            ImGui.GetItemRectMin();
+
+        Vector2 maximum =
+            ImGui.GetItemRectMax();
+
+        if (ImGui.IsItemHovered())
+        {
+            float lineY =
+                (
+                    minimum.Y +
+                    maximum.Y
+                ) *
+                0.5f;
+
+            ImGui.GetWindowDrawList()
+                .AddLine(
+                    new Vector2(
+                        minimum.X,
+                        lineY),
+                    new Vector2(
+                        maximum.X,
+                        lineY),
+                    ImGui.GetColorU32(
+                        new Vector4(
+                            0.30f,
+                            0.72f,
+                            1.0f,
+                            1.0f)),
+                    2.0f);
+        }
+
+        if (ImGui.BeginDragDropTarget())
+        {
+            Guid? movingId =
+                GameObjectDragDrop.Accept();
+
+            GameObject? moving =
+                movingId.HasValue
+                    ? state.EditorScene.FindGameObject(
+                        movingId.Value)
+                    : null;
+
+            if (moving !=
+                    null &&
+                !ReferenceEquals(
+                    moving,
+                    reference) &&
+                ReferenceEquals(
+                    moving.Parent,
+                    reference.Parent))
+            {
+                ExecuteHierarchyEdit(
+                    state,
+                    after
+                        ? "Move GameObject Down"
+                        : "Move GameObject Up",
+                    () =>
+                    {
+                        if (after)
+                        {
+                            moving.MoveAfter(
+                                reference);
+                        }
+                        else
+                        {
+                            moving.MoveBefore(
+                                reference);
+                        }
+                    });
+            }
+
+            ImGui.EndDragDropTarget();
+        }
+
+        ImGui.PopID();
     }
 
     private static GameObject[] GetSiblings(GameObject gameObject, Scene scene)

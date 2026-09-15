@@ -79,9 +79,32 @@ internal sealed class InspectorPanel
             if (summary.RemovedChildren > 0) ImGui.TextDisabled($"● Children removed: {summary.RemovedChildren}");
             if (ImGui.Button("Apply Changes"))
             {
-                GameObject? replacement = BlueprintInstanceSynchronizer.Apply(selected, project);
-                if (replacement != null) state.SelectedObject = replacement;
-                state.MarkDirty();
+                /*
+                 * BlueprintInstanceSynchronizer writes the updated asset and
+                 * refreshes placed instances, but an already-open Blueprint
+                 * workspace keeps its own in-memory preview. Reopen through
+                 * the existing callback after a successful apply so the
+                 * Blueprint tab immediately reflects what was written.
+                 */
+                AssetReference blueprintReference =
+                    blueprintInstance.Blueprint;
+
+                GameObject? replacement =
+                    BlueprintInstanceSynchronizer.Apply(
+                        selected,
+                        project);
+
+                if (replacement !=
+                    null)
+                {
+                    state.SelectedObject =
+                        replacement;
+
+                    state.MarkDirty();
+
+                    openBlueprint(
+                        blueprintReference);
+                }
             }
             ImGui.SameLine();
             if (ImGui.Button("Revert Changes"))
