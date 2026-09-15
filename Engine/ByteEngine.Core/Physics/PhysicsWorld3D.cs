@@ -40,16 +40,6 @@ public sealed class PhysicsWorld3D
     private readonly Dictionary<ContactKey, PhysicsContactPair3D> _frameContacts =
         new();
 
-    /*
-     * Diagnostics only. These snapshots mirror the most recently completed
-     * physics frame and are never read by the solver itself.
-     */
-    private readonly Dictionary<ContactKey, SolverContactDiagnostics> _previousSolverDiagnostics =
-        new();
-
-    private readonly Dictionary<ContactKey, SolverContactDiagnostics> _frameSolverDiagnostics =
-        new();
-
     public Vector3 Gravity { get; set; } =
         new(
             0.0f,
@@ -127,7 +117,6 @@ public sealed class PhysicsWorld3D
                 .ToArray();
 
         _frameContacts.Clear();
-        _frameSolverDiagnostics.Clear();
 
         for (int step =
                  0;
@@ -163,23 +152,12 @@ public sealed class PhysicsWorld3D
             _previousContacts[pair.Key] =
                 pair.Value;
         }
-
-        _previousSolverDiagnostics.Clear();
-
-        foreach (var pair
-                 in _frameSolverDiagnostics)
-        {
-            _previousSolverDiagnostics[pair.Key] =
-                pair.Value;
-        }
     }
 
     public void Reset()
     {
         _previousContacts.Clear();
         _frameContacts.Clear();
-        _previousSolverDiagnostics.Clear();
-        _frameSolverDiagnostics.Clear();
     }
 
     private void SolveContacts(
@@ -282,24 +260,19 @@ public sealed class PhysicsWorld3D
                 _frameContacts[key] =
                     pair;
 
-                SolverContactDiagnostics solverDiagnostics =
-                    trigger
-                        ? SolverContactDiagnostics.ForTrigger(
-                            first.Body,
-                            second.Body)
-                        : ResolveContact(
-                            first,
-                            second,
-                            normalFromFirstToSecond,
-                            penetration);
-
-                _frameSolverDiagnostics[key] =
-                    solverDiagnostics;
+                if (!trigger)
+                {
+                    ResolveContact(
+                        first,
+                        second,
+                        normalFromFirstToSecond,
+                        penetration);
+                }
             }
         }
     }
 
-    private static SolverContactDiagnostics ResolveContact(
+    private static void ResolveContact(
         ColliderEntry first,
         ColliderEntry second,
         Vector3 normal,
@@ -332,12 +305,7 @@ public sealed class PhysicsWorld3D
         if (inverseMassSum <=
             Epsilon)
         {
-            return
-                SolverContactDiagnostics.NoImpulse(
-                    firstBody,
-                    secondBody,
-                    0.0f,
-                    0.0f);
+            return;
         }
 
         float correctionMagnitude =
@@ -380,16 +348,7 @@ public sealed class PhysicsWorld3D
         if (normalVelocity >
             0.0f)
         {
-            return
-                SolverContactDiagnostics.NoImpulse(
-                    firstBody,
-                    secondBody,
-                    Math.Max(
-                        firstBody?.Restitution ??
-                            0.0f,
-                        secondBody?.Restitution ??
-                            0.0f),
-                    normalVelocity);
+            return;
         }
 
         float restitution =
@@ -445,13 +404,7 @@ public sealed class PhysicsWorld3D
         if (tangentLengthSquared <=
             Epsilon)
         {
-            return
-                SolverContactDiagnostics.Applied(
-                    firstBody,
-                    secondBody,
-                    restitution,
-                    normalVelocity,
-                    impulseMagnitude);
+            return;
         }
 
         tangent /=
@@ -495,14 +448,6 @@ public sealed class PhysicsWorld3D
 
         secondBody?.ApplyVelocityImpulse(
             -frictionImpulse);
-
-        return
-            SolverContactDiagnostics.Applied(
-                firstBody,
-                secondBody,
-                restitution,
-                normalVelocity,
-                impulseMagnitude);
     }
 
     private static Rigidbody3D? FindBodyForCollider(
@@ -536,201 +481,6 @@ public sealed class PhysicsWorld3D
             body !=
             null &&
             body.Enabled;
-    }
-
-    /// <summary>
-    /// Returns what the physics solver currently sees for the selected object.
-    /// This is read-only and does not change simulation behavior.
-    /// </summary>
-    public PhysicsObjectDiagnostics3D GetDiagnostics(
-        GameObject selected)
-    {
-        ArgumentNullException.ThrowIfNull(
-            selected);
-
-        Rigidbody3D? localBody =
-            selected.GetComponent<Rigidbody3D>();
-
-        Rigidbody3D? resolvedBody =
-            FindBodyForCollider(
-                selected);
-
-        GameObject[] selectedHierarchy =
-            EnumerateSelfAndDescendants(
-                selected)
-                .ToArray();
-
-        HashSet<Guid> selectedIds =
-            selectedHierarchy
-                .Select(
-                    gameObject =>
-                        gameObject.Id)
-                .ToHashSet();
-
-        var colliders =
-            new List<PhysicsColliderDiagnostics3D>();
-
-        foreach (GameObject gameObject
-                 in selectedHierarchy)
-        {
-            foreach (Collider3D collider
-                     in gameObject.Components
-                         .OfType<Collider3D>())
-            {
-                Rigidbody3D? body =
-                    FindBodyForCollider(
-                        gameObject);
-
-                colliders.Add(
-                    new PhysicsColliderDiagnostics3D(
-                        gameObject.Name,
-                        collider.GetType().Name,
-                        collider.Enabled,
-                        collider.IsTrigger,
-                        body?.GameObject.Name ??
-                            "None (Static Collider)",
-                        body?.BodyType,
-                        body?.Restitution));
-            }
-        }
-
-        var contacts =
-            new List<PhysicsContactDiagnostics3D>();
-
-        foreach (var entry
-                 in _previousContacts)
-        {
-            PhysicsContactPair3D pair =
-                entry.Value;
-
-            Rigidbody3D? bodyA =
-                FindBodyForCollider(
-                    pair.A);
-
-            Rigidbody3D? bodyB =
-                FindBodyForCollider(
-                    pair.B);
-
-            bool firstMatches =
-                selectedIds.Contains(
-                    pair.A.Id) ||
-                (
-                    resolvedBody !=
-                        null &&
-                    ReferenceEquals(
-                        bodyA,
-                        resolvedBody)
-                );
-
-            bool secondMatches =
-                selectedIds.Contains(
-                    pair.B.Id) ||
-                (
-                    resolvedBody !=
-                        null &&
-                    ReferenceEquals(
-                        bodyB,
-                        resolvedBody)
-                );
-
-            if (!firstMatches &&
-                !secondMatches)
-            {
-                continue;
-            }
-
-            bool selectedIsFirst =
-                firstMatches;
-
-            _previousSolverDiagnostics.TryGetValue(
-                entry.Key,
-                out SolverContactDiagnostics solver);
-
-            contacts.Add(
-                new PhysicsContactDiagnostics3D(
-                    selectedIsFirst
-                        ? pair.A.Name
-                        : pair.B.Name,
-                    selectedIsFirst
-                        ? pair.B.Name
-                        : pair.A.Name,
-                    selectedIsFirst
-                        ? pair.ColliderA.GetType().Name
-                        : pair.ColliderB.GetType().Name,
-                    selectedIsFirst
-                        ? pair.ColliderB.GetType().Name
-                        : pair.ColliderA.GetType().Name,
-                    pair.IsTrigger,
-                    pair.Point,
-                    selectedIsFirst
-                        ? -pair.Normal
-                        : pair.Normal,
-                    pair.Penetration,
-                    solver.BodyAName,
-                    solver.BodyBName,
-                    solver.RestitutionUsed,
-                    solver.RelativeNormalVelocity,
-                    solver.NormalImpulseMagnitude,
-                    solver.ImpulseApplied));
-        }
-
-        return
-            new PhysicsObjectDiagnostics3D(
-                selected.Name,
-                selected.Components
-                    .Select(
-                        component =>
-                            component.GetType().FullName ??
-                            component.GetType().Name)
-                    .ToArray(),
-                CreateBodyDiagnostics(
-                    localBody),
-                CreateBodyDiagnostics(
-                    resolvedBody),
-                colliders,
-                contacts);
-    }
-
-    private static PhysicsBodyDiagnostics3D? CreateBodyDiagnostics(
-        Rigidbody3D? body)
-    {
-        if (body ==
-            null)
-        {
-            return null;
-        }
-
-        return
-            new PhysicsBodyDiagnostics3D(
-                body.GameObject.Name,
-                body.BodyType,
-                body.Enabled,
-                body.Mass,
-                body.UseGravity,
-                body.GravityScale,
-                body.LinearDamping,
-                body.Restitution,
-                body.Friction,
-                body.Velocity);
-    }
-
-    private static IEnumerable<GameObject> EnumerateSelfAndDescendants(
-        GameObject root)
-    {
-        yield return
-            root;
-
-        foreach (GameObject child
-                 in root.Children)
-        {
-            foreach (GameObject descendant
-                     in EnumerateSelfAndDescendants(
-                         child))
-            {
-                yield return
-                    descendant;
-            }
-        }
     }
 
     private void DispatchContactTransitions()
@@ -2038,72 +1788,6 @@ public sealed class PhysicsWorld3D
                     secondType,
                     pair.A.Id,
                     firstType);
-        }
-    }
-
-    private readonly record struct SolverContactDiagnostics(
-        string BodyAName,
-        string BodyBName,
-        float RestitutionUsed,
-        float RelativeNormalVelocity,
-        float NormalImpulseMagnitude,
-        bool ImpulseApplied)
-    {
-        public static SolverContactDiagnostics ForTrigger(
-            Rigidbody3D? first,
-            Rigidbody3D? second)
-        {
-            return
-                new SolverContactDiagnostics(
-                    first?.GameObject.Name ??
-                        "None (Static)",
-                    second?.GameObject.Name ??
-                        "None (Static)",
-                    Math.Max(
-                        first?.Restitution ??
-                            0.0f,
-                        second?.Restitution ??
-                            0.0f),
-                    0.0f,
-                    0.0f,
-                    false);
-        }
-
-        public static SolverContactDiagnostics NoImpulse(
-            Rigidbody3D? first,
-            Rigidbody3D? second,
-            float restitution,
-            float normalVelocity)
-        {
-            return
-                new SolverContactDiagnostics(
-                    first?.GameObject.Name ??
-                        "None (Static)",
-                    second?.GameObject.Name ??
-                        "None (Static)",
-                    restitution,
-                    normalVelocity,
-                    0.0f,
-                    false);
-        }
-
-        public static SolverContactDiagnostics Applied(
-            Rigidbody3D? first,
-            Rigidbody3D? second,
-            float restitution,
-            float normalVelocity,
-            float impulseMagnitude)
-        {
-            return
-                new SolverContactDiagnostics(
-                    first?.GameObject.Name ??
-                        "None (Static)",
-                    second?.GameObject.Name ??
-                        "None (Static)",
-                    restitution,
-                    normalVelocity,
-                    impulseMagnitude,
-                    true);
         }
     }
 

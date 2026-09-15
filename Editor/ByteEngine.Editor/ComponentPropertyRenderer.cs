@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Graphics;
@@ -173,6 +174,17 @@ internal static class ComponentPropertyRenderer
             {
                 if (component is SpriteRenderer sprite && descriptor.Property.Name == nameof(SpriteRenderer.TextureReference) && project != null)
                     sprite.Texture = sprite.TextureReference == null || sprite.TextureReference.IsEmpty ? null : project.Assets.LoadTexture(sprite.TextureReference);
+
+                if (component is AudioSource3D audioSource &&
+                    descriptor.Property.Name == nameof(AudioSource3D.ClipReference) &&
+                    project != null)
+                {
+                    AudioSerializationRegistrar.TryLoadClip(
+                        audioSource,
+                        audioSource.ClipReference,
+                        project.AssetDatabase,
+                        message => Console.WriteLine(message));
+                }
 
                 if (component is SkyEnvironment environment &&
                     descriptor.Property.Name == nameof(SkyEnvironment.EnvironmentMapReference) &&

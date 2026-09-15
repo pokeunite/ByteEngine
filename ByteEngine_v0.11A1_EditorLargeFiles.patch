@@ -1,0 +1,46 @@
+diff --git a/Editor/ByteEngine.Editor/Panels/AssetsPanel.cs b/Editor/ByteEngine.Editor/Panels/AssetsPanel.cs
+--- a/Editor/ByteEngine.Editor/Panels/AssetsPanel.cs
++++ b/Editor/ByteEngine.Editor/Panels/AssetsPanel.cs
+@@
+     public bool IsOpen { get; set; } =
+         true;
+
++    /// <summary>
++    /// Folder used when files are dropped into ByteEngine from Explorer.
++    /// Imports follow the folder currently open in the Assets panel, but
++    /// never target the Scenes tree.
++    /// </summary>
++    internal string ExternalImportDirectory =>
++        GetAssetCreationDirectory();
++
+     public AssetsPanel(
+         EditorProjectContext project,
+         Action<AssetRecord> openAsset)
+@@
+             AssetType.Texture2D =>
+                 "[IMG]",
+
++            AssetType.AudioClip =>
++                "[AUD]",
++
+             AssetType.Scene =>
+                 "[SCN]",
+diff --git a/Editor/ByteEngine.Editor/EditorApplication.cs b/Editor/ByteEngine.Editor/EditorApplication.cs
+--- a/Editor/ByteEngine.Editor/EditorApplication.cs
++++ b/Editor/ByteEngine.Editor/EditorApplication.cs
+@@
+-        IReadOnlyList<AssetRecord> imported = new ExternalAssetImporter(_projectContext, _log).Import(e.FileNames);
++        string importDirectory =
++            _assets?.ExternalImportDirectory ??
++            _projectContext.ResolveProjectPath(
++                _projectContext.Project.AssetDirectory);
++
++        IReadOnlyList<AssetRecord> imported =
++            new ExternalAssetImporter(
++                _projectContext,
++                _log)
++                .Import(
++                    e.FileNames,
++                    importDirectory);
++
+         AssetRecord? selected = imported.FirstOrDefault();

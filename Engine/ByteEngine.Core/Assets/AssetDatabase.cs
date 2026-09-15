@@ -340,6 +340,7 @@ public sealed class AssetDatabase : IDisposable
     {
         ".png" => AssetType.Texture2D,
         ".hdr" => AssetType.Texture2D,
+        ".wav" => AssetType.AudioClip,
         ".bytescene" => AssetType.Scene,
         ".fbx" => AssetType.Model3D,
         ".obj" => AssetType.Model3D,

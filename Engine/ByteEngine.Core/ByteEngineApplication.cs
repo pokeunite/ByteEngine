@@ -1,3 +1,4 @@
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -333,6 +334,13 @@ public class ByteEngineApplication : GameWindow
         Scenes.ShutdownInternal();
 
         OnEngineShutdown();
+
+        /*
+         * Project/runtime shutdown disposes AudioSource clips before this
+         * point. Tear down the shared OpenAL context after those resources
+         * have released their buffers.
+         */
+        AudioEngine.Shutdown();
 
         _runtimePostProcessTarget.Dispose();
 

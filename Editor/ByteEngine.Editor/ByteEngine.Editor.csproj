@@ -7,6 +7,13 @@
   <ItemGroup>
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
+
+    <!--
+      OpenTK.Audio.OpenAL is managed bindings only. Windows does not normally
+      provide OpenAL, so the editor directly restores OpenAL Soft's native
+      runtime as a publish dependency.
+    -->
+    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -18,6 +25,38 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UseWindowsForms>true</UseWindowsForms>
+
+    <!--
+      Silk's package names the Windows OpenAL Soft binary soft_oal.dll.
+      OpenTK 4.x resolves the conventional Windows OpenAL name openal32.dll.
+    -->
+    <ByteEngineOpenALSoftPath>$(NuGetPackageRoot)silk.net.openal.soft.native\1.23.1\runtimes\win-x64\native\soft_oal.dll</ByteEngineOpenALSoftPath>
   </PropertyGroup>
+
+  <Target Name="CopyByteEngineOpenALSoftAfterBuild"
+          AfterTargets="Build"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' and Exists('$(ByteEngineOpenALSoftPath)')">
+    <Copy SourceFiles="$(ByteEngineOpenALSoftPath)"
+          DestinationFiles="$(TargetDir)openal32.dll"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high"
+             Text="ByteEngine: copied OpenAL Soft to $(TargetDir)openal32.dll" />
+  </Target>
+
+  <Target Name="CopyByteEngineOpenALSoftAfterPublish"
+          AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' and Exists('$(ByteEngineOpenALSoftPath)')">
+    <Copy SourceFiles="$(ByteEngineOpenALSoftPath)"
+          DestinationFiles="$(PublishDir)openal32.dll"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high"
+             Text="ByteEngine: copied OpenAL Soft to $(PublishDir)openal32.dll" />
+  </Target>
+
+  <Target Name="ValidateByteEngineOpenALSoft"
+          BeforeTargets="Build"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' and !Exists('$(ByteEngineOpenALSoftPath)')">
+    <Error Text="ByteEngine OpenAL Soft runtime is missing at '$(ByteEngineOpenALSoftPath)'. Run dotnet restore before building." />
+  </Target>
 
 </Project>

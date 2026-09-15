@@ -1,4 +1,5 @@
 using ByteEngine.Core.Animation;
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
@@ -72,6 +73,19 @@ internal static class ComponentMetadataRegistry
         [typeof(PlayerShooter3D)] = new("Player Shooter", "Gameplay", "Maps player fire input to a projectile launcher.", "weapon input"),
         [typeof(ArenaGameManager)] = new("Arena Game Manager", "Gameplay", "Tracks arena match state.", "game rules manager", false, true),
         [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Chases and attacks a nearby player without navigation.", "enemy chase attack"),
+
+        [typeof(AudioSource3D)] = new(
+            "Audio Source 3D",
+            "Audio",
+            "Plays a PCM WAV clip as positional 3D audio or listener-relative non-spatial audio.",
+            "sound sfx music wav speaker emitter spatial loop volume pitch"),
+
+        [typeof(AudioListener3D)] = new(
+            "Audio Listener 3D",
+            "Audio",
+            "Defines the listener position and orientation. Usually placed on the active game Camera.",
+            "listener ears camera master volume"),
+
         [typeof(EventModuleComponent)] = new("Event Module", "Utility", "Runs a reusable ByteGraph event module.", "visual logic bytegraph"),
         [typeof(BlueprintInstance)] = new("Blueprint Instance", "Advanced", "Maintains the source and override state of a placed Blueprint.", "prefab source override", false, true)
     };
@@ -81,6 +95,23 @@ internal static class ComponentMetadataRegistry
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.VisualBounds))] = new("Visual Bounds", "Diagnostics", "Measured bounds from capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.AutoFitSource))] = new("Auto-Fit Source", "Diagnostics", "Source used by capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Scale recorded when importing the hierarchy.", Advanced: true, ReadOnly: true),
+
+        [(typeof(AudioSource3D), nameof(AudioSource3D.ClipReference))] = new("Audio Clip", "Audio", "Drag a PCM WAV asset here. Mono WAV is recommended for positional 3D audio."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.PlayOnStart))] = new("Play On Start", "Playback", "Start playing automatically when the scene starts."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Loop))] = new("Loop", "Playback", "Repeat playback continuously."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Spatial))] = new("Spatial 3D", "Spatial", "Position the sound in world space. Disable for music and UI."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Volume))] = new("Volume", "Playback", "Source gain. 1 is unchanged; values above 1 amplify."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Pitch))] = new("Pitch", "Playback", "Playback pitch multiplier."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.MinDistance))] = new("Reference Distance", "Spatial", "Distance where attenuation begins.", "m"),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.MaxDistance))] = new("Maximum Distance", "Spatial", "Distance used by inverse-clamped attenuation.", "m"),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.RolloffFactor))] = new("Rolloff", "Spatial", "How strongly volume falls with distance."),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.ClipLoaded))] = new("Clip Loaded", "Diagnostics", "True when the WAV was decoded and uploaded to an OpenAL buffer.", ReadOnly: true),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.BackendAvailable))] = new("Audio Backend Ready", "Diagnostics", "True when an OpenAL output device and context are available.", ReadOnly: true),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.BackendStatus))] = new("Audio Backend Status", "Diagnostics", "OpenAL device state or the exact backend error.", ReadOnly: true),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.IsPlaying))] = new("Is Playing", "Diagnostics", "Whether OpenAL reports this source as currently playing.", Advanced: true, ReadOnly: true),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.DurationSeconds))] = new("Duration", "Diagnostics", "Loaded clip duration in seconds.", "s", Advanced: true, ReadOnly: true),
+        [(typeof(AudioListener3D), nameof(AudioListener3D.Volume))] = new("Master Volume", "Listener", "Listener gain applied to all audio."),
+        [(typeof(AudioListener3D), nameof(AudioListener3D.IsActiveListener))] = new("Active Listener", "Diagnostics", "True when this is the first enabled listener in scene order.", Advanced: true, ReadOnly: true),
 
         [(typeof(Rigidbody3D), nameof(Rigidbody3D.BodyType))] = new("Body Type", "Body", "Dynamic bodies are simulated; Static bodies do not move; Kinematic bodies are moved by gameplay."),
         [(typeof(Rigidbody3D), nameof(Rigidbody3D.Mass))] = new("Mass", "Body", "Mass used by forces and collision impulses.", "kg"),

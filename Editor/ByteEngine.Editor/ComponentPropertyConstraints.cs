@@ -1,4 +1,5 @@
 using ByteEngine.Core.Animation;
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
@@ -20,6 +21,13 @@ internal static class ComponentPropertyConstraints
         [(typeof(Camera3D), "FarClip")] = new(1f, 1f, 100000f),
         [(typeof(DirectionalLight), "Intensity")] = new(.02f, 0f, 100f),
         [(typeof(DirectionalLight), "AmbientIntensity")] = new(.01f, 0f, 1f),
+
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Volume))] = new(.01f, 0f, 4f),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.Pitch))] = new(.01f, .25f, 4f),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.MinDistance))] = new(.05f, .001f, 100000f),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.MaxDistance))] = new(.25f, .001f, 1000000f),
+        [(typeof(AudioSource3D), nameof(AudioSource3D.RolloffFactor))] = new(.01f, 0f, 100f),
+        [(typeof(AudioListener3D), nameof(AudioListener3D.Volume))] = new(.01f, 0f, 4f),
 
         [(typeof(Rigidbody3D), nameof(Rigidbody3D.Mass))] = new(.05f, .0001f, 100000f),
         [(typeof(Rigidbody3D), nameof(Rigidbody3D.GravityScale))] = new(.05f, -16f, 16f),

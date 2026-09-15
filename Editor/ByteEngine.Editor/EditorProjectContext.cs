@@ -1,4 +1,5 @@
 using ByteEngine.Core;
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Serialization;
@@ -101,6 +102,9 @@ internal sealed class EditorProjectContext
             components);
 
         PhysicsSerializationRegistrar.Register(
+            components);
+
+        AudioSerializationRegistrar.Register(
             components);
 
         Active =
