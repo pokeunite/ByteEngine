@@ -5656,10 +5656,17 @@ internal sealed class EventWorkspacePanel
 
                 "object.exists" or
                 "object.isActive" or
-                "object.destroy" =>
+                "object.destroy" or
+                "audio.play" or
+                "audio.pause" or
+                "audio.stop" or
+                "audio.isPlaying" =>
                     190.0f,
 
-                "object.setActive" =>
+                "object.setActive" or
+                "audio.setVolume" or
+                "audio.setPitch" or
+                "audio.setLoop" =>
                     285.0f,
 
                 "object.spawnEmpty" =>
@@ -6365,9 +6372,40 @@ internal sealed class EventWorkspacePanel
             case "object.exists":
             case "object.isActive":
             case "object.destroy":
+            case "audio.play":
+            case "audio.pause":
+            case "audio.stop":
+            case "audio.isPlaying":
                 instruction.Arguments["target"] =
                     EventValue.String(
                         "Self");
+                break;
+
+            case "audio.setVolume":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["volume"] =
+                    EventValue.Number(
+                        1.0);
+                break;
+
+            case "audio.setPitch":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["pitch"] =
+                    EventValue.Number(
+                        1.0);
+                break;
+
+            case "audio.setLoop":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["loop"] =
+                    EventValue.Boolean(
+                        true);
                 break;
 
             case "object.hasTag":
@@ -6626,11 +6664,69 @@ internal sealed class EventWorkspacePanel
             case "object.exists":
             case "object.isActive":
             case "object.destroy":
+            case "audio.play":
+            case "audio.pause":
+            case "audio.stop":
+            case "audio.isPlaying":
                 DrawObjectTargetArgument(
                     instruction,
                     "target",
                     "Target Object",
                     state);
+                break;
+
+            case "audio.setVolume":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "volume",
+                    "Volume",
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
+                break;
+
+            case "audio.setPitch":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "pitch",
+                    "Pitch",
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
+                break;
+
+            case "audio.setLoop":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "loop",
+                    "Loop",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        true),
+                    state,
+                    false);
                 break;
 
             case "object.hasTag":

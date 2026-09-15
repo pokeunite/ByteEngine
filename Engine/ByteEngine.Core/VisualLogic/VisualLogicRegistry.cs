@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using ByteEngine.Core.Audio;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
@@ -95,6 +96,7 @@ public sealed class VisualLogicRegistry
         RegisterTransform(registry);
         RegisterVariables(registry);
         RegisterGameplay(registry);
+        RegisterAudio(registry);
 
         return registry;
     }
@@ -205,6 +207,192 @@ public sealed class VisualLogicRegistry
             Evaluate = (instruction, context) => InputActions.ReadAxis2D(ActionName(instruction, context)).Length() >
                 EventValueResolver.GetNumber(instruction, "value", context, .5)
         });
+    }
+
+    private static void RegisterAudio(
+        VisualLogicRegistry registry)
+    {
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "audio.isPlaying",
+                Category = "Audio",
+                DisplayName = "Is Playing",
+                TargetComponent = nameof(AudioSource3D),
+                Evaluate =
+                    (instruction, context) =>
+                        ResolveAudioSource(
+                            instruction,
+                            context,
+                            warnIfMissing: false)?
+                            .IsPlaying == true
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.play",
+                Category = "Audio",
+                DisplayName = "Play",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAudioSource(
+                            instruction,
+                            context)?
+                            .Play()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.pause",
+                Category = "Audio",
+                DisplayName = "Pause",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAudioSource(
+                            instruction,
+                            context)?
+                            .Pause()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.stop",
+                Category = "Audio",
+                DisplayName = "Stop",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAudioSource(
+                            instruction,
+                            context)?
+                            .Stop()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.setVolume",
+                Category = "Audio",
+                DisplayName = "Set Volume",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AudioSource3D? source =
+                            ResolveAudioSource(
+                                instruction,
+                                context);
+
+                        if (source ==
+                            null)
+                        {
+                            return;
+                        }
+
+                        source.Volume =
+                            (float)EventValueResolver.GetNumber(
+                                instruction,
+                                "volume",
+                                context,
+                                source.Volume);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.setPitch",
+                Category = "Audio",
+                DisplayName = "Set Pitch",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AudioSource3D? source =
+                            ResolveAudioSource(
+                                instruction,
+                                context);
+
+                        if (source ==
+                            null)
+                        {
+                            return;
+                        }
+
+                        source.Pitch =
+                            (float)EventValueResolver.GetNumber(
+                                instruction,
+                                "pitch",
+                                context,
+                                source.Pitch);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.setLoop",
+                Category = "Audio",
+                DisplayName = "Set Loop",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AudioSource3D? source =
+                            ResolveAudioSource(
+                                instruction,
+                                context);
+
+                        if (source ==
+                            null)
+                        {
+                            return;
+                        }
+
+                        source.Loop =
+                            EventValueResolver.GetBoolean(
+                                instruction,
+                                "loop",
+                                context,
+                                source.Loop);
+                    }
+            });
+    }
+
+    private static AudioSource3D? ResolveAudioSource(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        bool warnIfMissing = true)
+    {
+        GameObject? target =
+            ResolveObjectTarget(
+                instruction,
+                context,
+                warnIfMissing);
+
+        if (target ==
+            null)
+        {
+            return null;
+        }
+
+        AudioSource3D? source =
+            target.GetComponent<AudioSource3D>();
+
+        if (source ==
+                null &&
+            warnIfMissing)
+        {
+            context.WarningSink?.Invoke(
+                $"Event target '{target.Name}' has no AudioSource3D.");
+        }
+
+        return source;
     }
 
     private static void RegisterGameplay(VisualLogicRegistry registry)
