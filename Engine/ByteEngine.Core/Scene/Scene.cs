@@ -1,6 +1,7 @@
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Classification;
+using ByteEngine.Core.Diagnostics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -147,55 +148,52 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(
             gameObject);
 
+        CrashDebugLog.Write(
+            $"Scene.DestroyGameObject: request scene='{Name}' object='{gameObject.Name}' id={gameObject.Id} " +
+            $"components=[{string.Join(", ", gameObject.Components.Select(component => component.GetType().FullName))}] " +
+            $"isUpdating={_isUpdating}.");
+
         if (!_gameObjects.Contains(
                 gameObject))
         {
+            CrashDebugLog.Write(
+                "Scene.DestroyGameObject: object is not in this scene; returning false.");
+
             return false;
         }
 
-        /*
-         * Visual Logic can destroy an object while Scene.UpdateInternal
-         * is iterating the scene. Removing from the list immediately
-         * would invalidate that iteration and could crash play mode.
-         *
-         * Queue the destruction until the current update finishes.
-         */
         if (_isUpdating)
         {
             _pendingDestroy.Add(
                 gameObject.Id);
 
-            /*
-             * Disable it immediately so it cannot continue rendering
-             * or participate in later hierarchy activity this frame.
-             */
             gameObject.Active =
                 false;
+
+            CrashDebugLog.Write(
+                "Scene.DestroyGameObject: queued because scene is updating.");
 
             return true;
         }
 
-        return DestroyGameObjectImmediate(
-            gameObject);
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObject: entering immediate destruction.");
+
+        bool result =
+            DestroyGameObjectImmediate(
+                gameObject);
+
+        CrashDebugLog.Write(
+            $"Scene.DestroyGameObject: immediate destruction returned {result}.");
+
+        return result;
     }
 
-    public GameObject? FindGameObject(
-        string name)
-    {
-        return _gameObjects.FirstOrDefault(
-            item =>
-                item.Name ==
-                name);
-    }
+    public GameObject? FindGameObject(string name) =>
+        _gameObjects.FirstOrDefault(item => item.Name == name);
 
-    public GameObject? FindGameObject(
-        Guid id)
-    {
-        return _gameObjects.FirstOrDefault(
-            item =>
-                item.Id ==
-                id);
-    }
+    public GameObject? FindGameObject(Guid id) =>
+        _gameObjects.FirstOrDefault(item => item.Id == id);
 
     public GameObject? FindFirstWithTag(Guid tagId) =>
         _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects.FirstOrDefault(item => item.ActiveInHierarchy) : null;
@@ -220,12 +218,14 @@ public sealed class Scene
         if (!_tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects)) _tagIndex[tagId] = objects = new();
         objects.Add(gameObject);
     }
+
     internal void OnTagRemoved(GameObject gameObject, Guid tagId)
     {
         if (!_tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects)) return;
         objects.Remove(gameObject);
         if (objects.Count == 0) _tagIndex.Remove(tagId);
     }
+
     internal void OnLayerChanged(GameObject gameObject, int previous, int current)
     {
         if (previous is >= 0 and < 32) _layerIndex[previous].Remove(gameObject);
@@ -235,22 +235,14 @@ public sealed class Scene
     public T? FindComponent<T>()
         where T : Component
     {
-        foreach (GameObject gameObject
-                 in _gameObjects)
+        foreach (GameObject gameObject in _gameObjects)
         {
-            if (!gameObject.ActiveInHierarchy)
-            {
-                continue;
-            }
+            if (!gameObject.ActiveInHierarchy) continue;
 
             T? component =
                 gameObject.GetComponent<T>();
 
-            if (component != null &&
-                component.Enabled)
-            {
-                return component;
-            }
+            if (component != null && component.Enabled) return component;
         }
 
         return null;
@@ -258,151 +250,122 @@ public sealed class Scene
 
     internal void LoadInternal()
     {
-        if (_loaded)
-        {
-            return;
-        }
+        if (_loaded) return;
 
-        _loaded =
-            true;
+        _loaded = true;
 
-        Console.WriteLine(
-            $"Loading scene: {Name}");
+        Console.WriteLine($"Loading scene: {Name}");
 
-        foreach (GameObject gameObject
-                 in _gameObjects)
-        {
+        foreach (GameObject gameObject in _gameObjects)
             gameObject.StartInternal();
-        }
     }
 
     internal void UpdateInternal()
     {
-        if (!_loaded)
-        {
-            return;
-        }
+        if (!_loaded) return;
 
-        _isUpdating =
-            true;
+        _isUpdating = true;
 
         try
         {
-            /*
-             * Snapshot the list so objects created during an update
-             * begin updating on the next frame, not halfway through
-             * the current frame.
-             */
-            foreach (GameObject gameObject
-                     in _gameObjects.ToArray())
+            foreach (GameObject gameObject in _gameObjects.ToArray())
             {
-                if (_pendingDestroy.Contains(
-                        gameObject.Id))
-                {
-                    continue;
-                }
-
+                if (_pendingDestroy.Contains(gameObject.Id)) continue;
                 gameObject.UpdateInternal();
             }
         }
         finally
         {
-            _isUpdating =
-                false;
-
+            _isUpdating = false;
             FlushPendingDestroy();
         }
     }
 
-    internal void RenderInternal(
-        RenderContext context)
+    internal void RenderInternal(RenderContext context)
     {
-        if (!_loaded)
-        {
-            return;
-        }
+        if (!_loaded) return;
 
         context.Begin3DFrame();
 
-        foreach (GameObject gameObject
-                 in GetRenderOrder())
-        {
-            gameObject.RenderInternal(
-                context);
-        }
+        foreach (GameObject gameObject in GetRenderOrder())
+            gameObject.RenderInternal(context);
 
         context.Flush3D();
     }
 
-    internal void RenderEditorInternal(
-        RenderContext context)
+    internal void RenderEditorInternal(RenderContext context)
     {
         context.Begin3DFrame();
 
-        foreach (GameObject gameObject
-                 in GetRenderOrder())
-        {
-            gameObject.RenderEditorInternal(
-                context);
-        }
+        foreach (GameObject gameObject in GetRenderOrder())
+            gameObject.RenderEditorInternal(context);
 
         context.Flush3D();
     }
 
     internal void UnloadInternal()
     {
-        if (!_loaded)
-        {
-            return;
-        }
+        if (!_loaded) return;
 
-        Console.WriteLine(
-            $"Unloading scene: {Name}");
+        Console.WriteLine($"Unloading scene: {Name}");
 
-        for (int index =
-                 _gameObjects.Count -
-                 1;
-             index >=
-             0;
-             index--)
-        {
-            _gameObjects[index]
-                .StopInternal();
-        }
+        for (int index = _gameObjects.Count - 1; index >= 0; index--)
+            _gameObjects[index].StopInternal();
 
         _pendingDestroy.Clear();
-        _isUpdating =
-            false;
-        _loaded =
-            false;
+        _isUpdating = false;
+        _loaded = false;
     }
 
     private bool DestroyGameObjectImmediate(
         GameObject gameObject)
     {
-        if (!_gameObjects.Contains(
-                gameObject))
+        CrashDebugLog.Write(
+            $"Scene.DestroyGameObjectImmediate: BEGIN object='{gameObject.Name}' id={gameObject.Id}.");
+
+        if (!_gameObjects.Contains(gameObject))
         {
+            CrashDebugLog.Write(
+                "Scene.DestroyGameObjectImmediate: object already absent.");
+
             return false;
         }
 
-        foreach (GameObject child
-                 in gameObject.Children.ToArray())
+        foreach (GameObject child in gameObject.Children.ToArray())
         {
-            DestroyGameObjectImmediate(
-                child);
+            CrashDebugLog.Write(
+                $"Scene.DestroyGameObjectImmediate: destroying child '{child.Name}' id={child.Id}.");
+
+            DestroyGameObjectImmediate(child);
         }
 
-        _pendingDestroy.Remove(
-            gameObject.Id);
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObjectImmediate: removing pending-destroy id.");
 
-        _gameObjects.Remove(
-            gameObject);
+        _pendingDestroy.Remove(gameObject.Id);
+
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObjectImmediate: removing object from scene list.");
+
+        _gameObjects.Remove(gameObject);
+
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObjectImmediate: unregistering classification.");
 
         UnregisterClassification(gameObject);
 
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObjectImmediate: detaching object from scene.");
+
         gameObject.DetachFromScene();
+
+        CrashDebugLog.Write(
+            "Scene.DestroyGameObjectImmediate: calling GameObject.DestroyInternal.");
+
         gameObject.DestroyInternal();
+
+        CrashDebugLog.Write(
+            $"Scene.DestroyGameObjectImmediate: COMPLETE object='{gameObject.Name}' id={gameObject.Id}.");
 
         return true;
     }
@@ -421,50 +384,29 @@ public sealed class Scene
 
     private void FlushPendingDestroy()
     {
-        if (_pendingDestroy.Count ==
-            0)
-        {
-            return;
-        }
+        if (_pendingDestroy.Count == 0) return;
 
         Guid[] pending =
             _pendingDestroy.ToArray();
 
         _pendingDestroy.Clear();
 
-        foreach (Guid id
-                 in pending)
+        foreach (Guid id in pending)
         {
             GameObject? gameObject =
-                FindGameObject(
-                    id);
+                FindGameObject(id);
 
             if (gameObject != null)
-            {
-                DestroyGameObjectImmediate(
-                    gameObject);
-            }
+                DestroyGameObjectImmediate(gameObject);
         }
     }
 
     private IEnumerable<GameObject> GetRenderOrder()
     {
         return _gameObjects
-            .Select(
-                (gameObject, index) =>
-                    new
-                    {
-                        gameObject,
-                        index
-                    })
-            .OrderBy(
-                item =>
-                    item.gameObject.RenderOrder)
-            .ThenBy(
-                item =>
-                    item.index)
-            .Select(
-                item =>
-                    item.gameObject);
+            .Select((gameObject, index) => new { gameObject, index })
+            .OrderBy(item => item.gameObject.RenderOrder)
+            .ThenBy(item => item.index)
+            .Select(item => item.gameObject);
     }
 }

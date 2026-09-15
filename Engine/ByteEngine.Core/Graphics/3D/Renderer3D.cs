@@ -741,6 +741,13 @@ public sealed class Renderer3D : IDisposable
             environment.EnvironmentMapTexture ==
                 null)
         {
+            /*
+             * Do not retain processed cubemaps after the environment is
+             * removed/cleared. Keeping stale GPU resources made the lifecycle
+             * of SkyEnvironment deletion dependent on a previous frame.
+             */
+            _environmentIbl?.ClearEnvironment();
+
             return;
         }
 

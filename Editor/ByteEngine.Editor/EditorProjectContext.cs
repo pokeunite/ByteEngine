@@ -1,5 +1,6 @@
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -55,6 +56,12 @@ internal sealed class EditorProjectContext
                 "The project file must have a parent directory."
             );
 
+        CrashDebugLog.ConfigureProjectRoot(
+            ProjectRoot);
+
+        CrashDebugLog.Write(
+            $"EditorProjectContext: opening project '{ProjectFilePath}'.");
+
         AssetDatabase = new AssetDatabase(
             ProjectRoot,
             new[]
@@ -84,12 +91,6 @@ internal sealed class EditorProjectContext
                 Project.Classification
             );
 
-        /*
-         * Configure the live runtime Blueprint spawner for this project.
-         *
-         * A registration token prevents disposing an old project context
-         * from accidentally clearing the newer project's runtime bridge.
-         */
         Active =
             this;
 
@@ -106,6 +107,9 @@ internal sealed class EditorProjectContext
                         worldPosition,
                         this,
                         warningSink));
+
+        CrashDebugLog.Write(
+            "EditorProjectContext: project initialization complete.");
     }
 
     public static EditorProjectContext Open(
@@ -256,6 +260,9 @@ internal sealed class EditorProjectContext
 
     public void Dispose()
     {
+        CrashDebugLog.Write(
+            "EditorProjectContext.Dispose: begin.");
+
         RuntimeSpawnService.ClearBlueprintSpawner(
             _runtimeSpawnRegistration);
 
@@ -269,5 +276,8 @@ internal sealed class EditorProjectContext
 
         Assets.Dispose();
         AssetDatabase.Dispose();
+
+        CrashDebugLog.Write(
+            "EditorProjectContext.Dispose: complete.");
     }
 }

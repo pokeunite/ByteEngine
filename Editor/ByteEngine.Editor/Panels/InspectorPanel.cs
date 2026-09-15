@@ -163,12 +163,32 @@ internal sealed class InspectorPanel
             TrackItem(state, "Set Component Enabled", enabledChanged, () => component.Enabled = oldEnabled, () => component.Enabled = enabled);
             ImGui.SameLine();
             ImGui.BeginDisabled(readOnly);
-            if (ImGui.SmallButton($"Remove##{component.GetHashCode()}"))
+
+            bool removeRequested =
+                ImGui.SmallButton(
+                    $"Remove##{component.GetHashCode()}");
+
+            if (removeRequested)
+            {
                 ExecutePersistent(
                     state,
                     $"Remove {component.GetType().Name}",
                     () => selected.RemoveComponent(component));
+            }
+
             ImGui.EndDisabled();
+
+            /*
+             * RemoveComponent destroys and detaches the component immediately.
+             * Never continue drawing properties for an already-destroyed
+             * component in the same ImGui frame.
+             */
+            if (removeRequested &&
+                !readOnly)
+            {
+                continue;
+            }
+
             DrawComponentProperties(state, project, component, _showAdvanced);
         }
 
@@ -367,7 +387,10 @@ internal sealed class InspectorPanel
         if (ImGui.SmallButton($"+ Variable##{title}"))
         {
             string name = UniqueName(store.Names, "Variable");
-            ExecutePersistent(state, "Add Variable", () => store.Set(name, VariableValue.FromNumber()));
+            ExecutePersistent(
+                state,
+                "Add Variable",
+                () => store.Set(name, VariableValue.FromNumber()));
         }
     }
 

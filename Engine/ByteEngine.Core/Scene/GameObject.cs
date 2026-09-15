@@ -1,4 +1,5 @@
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Diagnostics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -24,6 +25,7 @@ public sealed class GameObject
     public IReadOnlyList<GameObject> Children => _children;
     public Scene? Scene => _scene;
     public IReadOnlyCollection<Guid> Tags => _tags;
+
     public int Layer
     {
         get => _layer;
@@ -36,6 +38,7 @@ public sealed class GameObject
             _scene?.OnLayerChanged(this, previous, safe);
         }
     }
+
     public Variables.VariableStore Variables { get; } = new();
 
     public GameObject(string name = "GameObject") : this(Guid.NewGuid(), name) { }
@@ -60,12 +63,14 @@ public sealed class GameObject
         Parent?._children.Remove(this);
         Parent = parent;
         Parent?._children.Add(this);
+
         if (worldPositionStays)
         {
             Transform.WorldPosition = position;
             Transform.WorldRotation = rotation;
             Transform.WorldScale = scale;
         }
+
         return true;
     }
 
@@ -78,20 +83,25 @@ public sealed class GameObject
 
     public bool HasTag(Guid tagId) => tagId != Guid.Empty && _tags.Contains(tagId);
     public bool HasTag(string name) => _scene?.Classification.FindTag(name) is { } tag && HasTag(tag.Id);
+
     public bool AddTag(Guid tagId)
     {
         if (tagId == Guid.Empty || !_tags.Add(tagId)) return false;
         _scene?.OnTagAdded(this, tagId);
         return true;
     }
+
     public bool AddTag(string name) => _scene?.Classification.FindTag(name) is { } tag && AddTag(tag.Id);
+
     public bool RemoveTag(Guid tagId)
     {
         if (!_tags.Remove(tagId)) return false;
         _scene?.OnTagRemoved(this, tagId);
         return true;
     }
+
     public bool RemoveTag(string name) => _scene?.Classification.FindTag(name) is { } tag && RemoveTag(tag.Id);
+
     internal void SetTags(IEnumerable<Guid>? tags)
     {
         foreach (Guid oldTag in _tags.ToArray()) RemoveTag(oldTag);
@@ -107,21 +117,40 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
+
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
             _scene.SetActiveCamera(camera);
+
         if (_started) component.StartInternal();
         return component;
     }
 
     public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
-    public bool TryGetComponent<T>(out T? component) where T : Component { component = GetComponent<T>(); return component != null; }
-    public bool HasComponent<T>() where T : Component => GetComponent<T>() != null;
+
+    public bool TryGetComponent<T>(out T? component)
+        where T : Component
+    {
+        component = GetComponent<T>();
+        return component != null;
+    }
+
+    public bool HasComponent<T>()
+        where T : Component =>
+        GetComponent<T>() != null;
 
     public bool RemoveComponent(Component component)
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
+
+        CrashDebugLog.Write(
+            $"GameObject.RemoveComponent: object='{Name}' component='{component.GetType().FullName}' BEGIN.");
+
         component.DestroyInternal();
+
+        CrashDebugLog.Write(
+            $"GameObject.RemoveComponent: object='{Name}' component='{component.GetType().FullName}' COMPLETE.");
+
         return true;
     }
 
@@ -133,24 +162,18 @@ public sealed class GameObject
     }
 
     internal void UpdateInternal()
-{
-    if (!ActiveInHierarchy)
     {
-        return;
+        if (!ActiveInHierarchy) return;
+
+        if (!_started) StartInternal();
+
+        foreach (Component component
+                 in _components.OrderBy(component => component.UpdateOrder))
+        {
+            component.UpdateInternal();
+        }
     }
 
-    if (!_started)
-    {
-        StartInternal();
-    }
-
-    foreach (Component component
-             in _components.OrderBy(
-                 component => component.UpdateOrder))
-    {
-        component.UpdateInternal();
-    }
-}
     internal void RenderInternal(Graphics.RenderContext context)
     {
         if (!ActiveInHierarchy) return;
@@ -166,14 +189,38 @@ public sealed class GameObject
 
     internal void StopInternal()
     {
-        for (int i = _components.Count - 1; i >= 0; i--) _components[i].StopInternal();
+        for (int i = _components.Count - 1; i >= 0; i--)
+            _components[i].StopInternal();
+
         _started = false;
     }
 
     internal void DestroyInternal()
     {
-        for (int i = _components.Count - 1; i >= 0; i--) _components[i].DestroyInternal();
+        CrashDebugLog.Write(
+            $"GameObject.DestroyInternal: BEGIN object='{Name}' id={Id} componentCount={_components.Count}.");
+
+        for (int i = _components.Count - 1; i >= 0; i--)
+        {
+            Component component =
+                _components[i];
+
+            CrashDebugLog.Write(
+                $"GameObject.DestroyInternal: destroying component index={i} type='{component.GetType().FullName}'.");
+
+            component.DestroyInternal();
+
+            CrashDebugLog.Write(
+                $"GameObject.DestroyInternal: destroyed component index={i} type='{component.GetType().FullName}'.");
+        }
+
+        CrashDebugLog.Write(
+            "GameObject.DestroyInternal: clearing component collection.");
+
         _components.Clear();
         _started = false;
+
+        CrashDebugLog.Write(
+            $"GameObject.DestroyInternal: COMPLETE object='{Name}' id={Id}.");
     }
 }

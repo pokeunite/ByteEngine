@@ -66,6 +66,12 @@ internal static class EditorSceneCommands
             return;
         }
 
+        /*
+         * Snapshot every selected object first. The editor must clear its
+         * selection before DestroyGameObject() detaches any components or
+         * hierarchy nodes, otherwise panels rendered later in this frame can
+         * still see a destroyed object as the active selection.
+         */
         GameObject[] selected =
             state.Selection.Objects
                 .ToArray();
@@ -87,6 +93,14 @@ internal static class EditorSceneCommands
                 )
                 .ToArray();
 
+        /*
+         * Clear selection BEFORE destruction. This is important for the Sky
+         * Environment because deleting that object invalidates its attached
+         * component immediately, while Inspector/Scene/Game panels may still
+         * run later in the same editor frame.
+         */
+        state.Selection.Clear();
+
         foreach (GameObject gameObject
                  in roots)
         {
@@ -94,8 +108,6 @@ internal static class EditorSceneCommands
                 gameObject
             );
         }
-
-        state.Selection.Clear();
 
         state.MarkDirty();
 

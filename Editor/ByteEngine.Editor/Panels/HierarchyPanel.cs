@@ -29,8 +29,17 @@ internal sealed class HierarchyPanel
         ImGui.TextColored(state.Mode == EditorMode.Edit ? new Vector4(.4f, .8f, 1f, 1f) : new Vector4(.4f, 1f, .5f, 1f), state.Mode.ToString());
         ImGui.Separator();
 
-        foreach (GameObject root in state.DisplayedScene.GameObjects.Where(item => item.Parent == null))
+        /*
+         * Hierarchy commands are allowed to delete/reparent objects while the
+         * panel is being drawn. Always iterate a snapshot so those mutations
+         * cannot invalidate the scene's live GameObjects collection.
+         */
+        foreach (GameObject root in state.DisplayedScene.GameObjects
+                     .Where(item => item.Parent == null)
+                     .ToArray())
+        {
             DrawNode(root, state, deleteObjects, duplicateObjects, copyObjects, pasteObjects, createChild, instantiateAsset);
+        }
 
         if (state.Mode == EditorMode.Edit)
         {
@@ -108,21 +117,51 @@ internal sealed class HierarchyPanel
             ImGui.EndDragDropTarget();
         }
 
+        bool deletedThisNode = false;
+
         if (state.Mode == EditorMode.Edit && ImGui.BeginPopupContextItem($"ObjectContext{gameObject.Id}"))
         {
             if (ImGui.MenuItem("Rename", "F2")) BeginRename(gameObject, state);
             if (ImGui.MenuItem("Duplicate", "Ctrl+D")) { state.Selection.Set(gameObject); duplicate(); }
-            if (ImGui.MenuItem("Delete", "Delete")) { state.Selection.Set(gameObject); delete(); }
-            if (ImGui.MenuItem("Create Child")) createChild(gameObject);
-            if (ImGui.MenuItem("Copy", "Ctrl+C")) { state.Selection.Set(gameObject); copy(); }
-            if (ImGui.MenuItem("Paste", "Ctrl+V")) paste();
+            if (ImGui.MenuItem("Delete", "Delete"))
+            {
+                state.Selection.Set(gameObject);
+                delete();
+                deletedThisNode = true;
+            }
+
+            if (!deletedThisNode)
+            {
+                if (ImGui.MenuItem("Create Child")) createChild(gameObject);
+                if (ImGui.MenuItem("Copy", "Ctrl+C")) { state.Selection.Set(gameObject); copy(); }
+                if (ImGui.MenuItem("Paste", "Ctrl+V")) paste();
+            }
+
             ImGui.EndPopup();
+        }
+
+        /*
+         * Once a context-menu delete has destroyed this object, do not touch
+         * the local GameObject again in the same ImGui frame.
+         */
+        if (deletedThisNode)
+        {
+            if (open)
+            {
+                ImGui.TreePop();
+            }
+
+            return;
         }
 
         if (state.Selection.Primary == gameObject && ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.F2)) BeginRename(gameObject, state);
         if (open)
         {
-            foreach (GameObject child in gameObject.Children)
+            /*
+             * Child commands can also mutate the live child list. Iterate a
+             * snapshot for the same reason as the root hierarchy.
+             */
+            foreach (GameObject child in gameObject.Children.ToArray())
                 DrawNode(child, state, delete, duplicate, copy, paste, createChild, instantiateAsset);
             ImGui.TreePop();
         }

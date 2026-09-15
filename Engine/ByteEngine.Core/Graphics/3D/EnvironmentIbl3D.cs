@@ -86,12 +86,24 @@ internal sealed class EnvironmentIbl3D : IDisposable
             GetPName.FramebufferBinding,
             out int previousFramebuffer);
 
+        bool hadBrdfLut =
+            _brdfLut !=
+            0;
+
         try
         {
+            /*
+             * OpenGL otherwise filters each cubemap face independently.
+             * Seamless sampling is required for rough IBL where footprints
+             * routinely cross face boundaries.
+             */
+            GL.Enable(
+                EnableCap.TextureCubeMapSeamless);
+
             EnsureShaders();
             EnsureCaptureObjects();
 
-            DestroyProcessedTextures();
+            DestroyEnvironmentTextures();
 
             BuildEnvironmentCube(
                 sourceTexture,
@@ -103,7 +115,16 @@ internal sealed class EnvironmentIbl3D : IDisposable
             BuildPrefilterCube(
                 cube);
 
-            BuildBrdfLut();
+            /*
+             * The BRDF integration LUT is environment-independent. Keep it
+             * alive when skies are changed or removed instead of rebuilding
+             * it and churning GPU resources.
+             */
+            if (_brdfLut ==
+                0)
+            {
+                BuildBrdfLut();
+            }
 
             _sourceTexture =
                 sourceTexture;
@@ -121,7 +142,17 @@ internal sealed class EnvironmentIbl3D : IDisposable
         }
         catch (Exception exception)
         {
-            DestroyProcessedTextures();
+            DestroyEnvironmentTextures();
+
+            /*
+             * Preserve a previously validated BRDF LUT, but do not keep a
+             * partially-created LUT from a failed first build.
+             */
+            if (!hadBrdfLut)
+            {
+                DeleteTexture(
+                    ref _brdfLut);
+            }
 
             _sourceTexture =
                 null;
@@ -178,6 +209,30 @@ internal sealed class EnvironmentIbl3D : IDisposable
                     targetHeight,
                     1));
         }
+    }
+
+    /// <summary>
+    /// Releases only resources derived from the currently assigned
+    /// environment. The BRDF LUT and preprocessing shaders are retained
+    /// because they are environment-independent and can be reused.
+    /// Safe to call repeatedly when the Sky Environment is removed,
+    /// disabled, or its texture is cleared.
+    /// </summary>
+    public void ClearEnvironment()
+    {
+        DestroyEnvironmentTextures();
+
+        _sourceTexture =
+            null;
+
+        _sourceContentVersion =
+            -1;
+
+        _failedSourceTexture =
+            null;
+
+        _failedSourceContentVersion =
+            -1;
     }
 
     public void BindIrradiance(
@@ -884,7 +939,7 @@ internal sealed class EnvironmentIbl3D : IDisposable
         return levels;
     }
 
-    private void DestroyProcessedTextures()
+    private void DestroyEnvironmentTextures()
     {
         DeleteTexture(
             ref _environmentCube);
@@ -894,6 +949,11 @@ internal sealed class EnvironmentIbl3D : IDisposable
 
         DeleteTexture(
             ref _prefilterCube);
+    }
+
+    private void DestroyProcessedTextures()
+    {
+        DestroyEnvironmentTextures();
 
         DeleteTexture(
             ref _brdfLut);
@@ -1107,8 +1167,13 @@ internal sealed class EnvironmentIbl3D : IDisposable
                         normal,
                         right));
 
+            /*
+             * Match the established irradiance-convolution reference density.
+             * 0.10 produced only about 1,000 samples per output texel and
+             * created structured contour/ring artifacts on smooth normals.
+             */
             float sampleDelta=
-                0.10;
+                0.025;
 
             float sampleCount=
                 0.0;
@@ -1375,7 +1440,7 @@ internal sealed class EnvironmentIbl3D : IDisposable
                 reflection;
 
             const uint sampleCount=
-                256u;
+                1024u;
 
             vec3 prefilteredColor=
                 vec3(0.0);

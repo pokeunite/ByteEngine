@@ -791,8 +791,31 @@ internal sealed class Shader3D : IDisposable
                             nDotV,
                             uRoughness)).rg;
 
+                /*
+                 * Very rough reflections should converge toward low-frequency
+                 * indirect lighting instead of exposing coarse/deep cubemap
+                 * mip structure. Unreal uses the same 0.1 -> 0.3 roughness
+                 * transition when mixing reflection captures with its
+                 * low-frequency indirect-lighting source.
+                 *
+                 * ByteEngine does not have lightmaps yet, so use the already
+                 * convolved sky irradiance as the low-frequency radiance
+                 * source while preserving the split-sum BRDF weighting.
+                 */
+                float roughReflectionMix=
+                    smoothstep(
+                        0.10,
+                        0.30,
+                        uRoughness);
+
+                vec3 specularRadiance=
+                    mix(
+                        prefilteredEnvironment,
+                        irradiance,
+                        roughReflectionMix);
+
                 vec3 specularEnvironment=
-                    prefilteredEnvironment*
+                    specularRadiance*
                     (
                         fresnel*
                         brdf.x+
