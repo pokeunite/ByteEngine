@@ -3,6 +3,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Editor;
 
@@ -19,6 +20,14 @@ internal static class ComponentPropertyConstraints
         [(typeof(Camera3D), "FarClip")] = new(1f, 1f, 100000f),
         [(typeof(DirectionalLight), "Intensity")] = new(.02f, 0f, 100f),
         [(typeof(DirectionalLight), "AmbientIntensity")] = new(.01f, 0f, 1f),
+
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Mass))] = new(.05f, .0001f, 100000f),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.GravityScale))] = new(.05f, -16f, 16f),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.LinearDamping))] = new(.01f, 0f, 100f),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Restitution))] = new(.01f, 0f, 1f),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Friction))] = new(.01f, 0f, 4f),
+
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Exposure))] = new(.02f, 0f, 16f),
         [(typeof(GroundSurface), "Friction")] = new(.02f, 0f, 10f),
         [(typeof(CapsuleCollider3D), "Radius")] = new(.01f, .001f, 1000f),
         [(typeof(CapsuleCollider3D), "Height")] = new(.02f, .002f, 1000f),
@@ -77,6 +86,9 @@ internal static class ComponentPropertyConstraints
         [(typeof(CameraBoom3D), "MaxLagTimeStep")] = new(.001f, .001f, .1f),
         [(typeof(AnimationController), "RunThreshold")] = new(.05f, 0f, 1000f),
     };
+
     public static PropertyRange Get(Type type, string name) =>
-        Ranges.TryGetValue((type, name), out var range) ? range : new(.05f, -float.MaxValue, float.MaxValue);
+        Ranges.TryGetValue((type, name), out var range)
+            ? range
+            : new(.05f, -float.MaxValue, float.MaxValue);
 }

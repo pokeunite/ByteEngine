@@ -5,6 +5,7 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.VisualLogic;
 
@@ -52,9 +53,18 @@ internal static class ComponentMetadataRegistry
         [typeof(DirectionalLight)] = new("Directional Light", "Rendering", "Lights the scene from one direction.", "sun world light"),
         [typeof(PointLight)] = new("Point Light", "Rendering", "Lights nearby 3D surfaces outward from a position.", "lamp bulb local omni light"),
         [typeof(SkyEnvironment)] = new("Sky Environment", "World", "Draws a procedural 3D world sky and can control scene ambient light.", "sky environment horizon background ambient world"),
+
         [typeof(BoxCollider3D)] = new("Box Collider", "Physics", "A box-shaped collision volume.", "collision cube"),
         [typeof(CapsuleCollider3D)] = new("Capsule Collider", "Physics", "A character-friendly capsule collision volume.", "collision character"),
+        [typeof(Rigidbody3D)] = new(
+            "Rigidbody 3D",
+            "Physics",
+            "Adds dynamic, static or kinematic linear 3D rigid-body simulation. Pair it with a Box or Capsule Collider.",
+            "rigidbody physics dynamic static kinematic mass gravity force impulse bounce restitution friction",
+            true,
+            false),
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
+
         [typeof(HealthComponent)] = new("Health", "Gameplay", "Tracks damage, healing and death.", "hit points hp damage"),
         [typeof(LifetimeComponent)] = new("Lifetime", "Gameplay", "Destroys its object after a configured duration.", "timer destroy despawn"),
         [typeof(Projectile3D)] = new("Projectile", "Gameplay", "Moves a swept projectile and damages health.", "bullet damage"),
@@ -71,6 +81,19 @@ internal static class ComponentMetadataRegistry
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.VisualBounds))] = new("Visual Bounds", "Diagnostics", "Measured bounds from capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.AutoFitSource))] = new("Auto-Fit Source", "Diagnostics", "Source used by capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Scale recorded when importing the hierarchy.", Advanced: true, ReadOnly: true),
+
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.BodyType))] = new("Body Type", "Body", "Dynamic bodies are simulated; Static bodies do not move; Kinematic bodies are moved by gameplay."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Mass))] = new("Mass", "Body", "Mass used by forces and collision impulses.", "kg"),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.UseGravity))] = new("Use Gravity", "Forces", "Apply the scene PhysicsWorld gravity to this body."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.GravityScale))] = new("Gravity Scale", "Forces", "Multiplier applied to scene gravity."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.LinearDamping))] = new("Linear Damping", "Body", "Reduces linear velocity over time."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Restitution))] = new("Restitution", "Material", "Bounciness. 0 = no bounce; 1 = fully elastic."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Friction))] = new("Friction", "Material", "Surface friction used by collision response."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.Velocity))] = new("Velocity", "Body", "Current world-space linear velocity.", "m/s", true),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.FreezePositionX))] = new("Freeze Position X", "Constraints", "Prevent physics from moving this body along world X."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.FreezePositionY))] = new("Freeze Position Y", "Constraints", "Prevent physics from moving this body along world Y."),
+        [(typeof(Rigidbody3D), nameof(Rigidbody3D.FreezePositionZ))] = new("Freeze Position Z", "Constraints", "Prevent physics from moving this body along world Z."),
+
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.ArmLength))] = new("Camera Distance", "Camera", "Distance from the character pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.PivotHeight))] = new("Camera Height", "Camera", "Height of the camera pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityX))] = new("Horizontal Sensitivity", "Rotation", "Horizontal mouse sensitivity."),
@@ -110,6 +133,7 @@ internal static class ComponentMetadataRegistry
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentIntensity))] = new("Environment Intensity", "Environment Map", "Brightness multiplier for the environment texture."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentRotationDegrees))] = new("Environment Rotation", "Environment Map", "Horizontal rotation of the 360-degree environment texture.", "degrees"),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.EnvironmentLightingEnabled))] = new("Environment Lighting", "Image Based Lighting", "Use the environment map as diffuse and specular lighting for standard 3D materials."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Exposure))] = new("Exposure", "Post Processing", "Scene-wide exposure applied before ACES tone mapping."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.ZenithColor))] = new("Zenith Color", "Sky", "Color directly overhead."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.HorizonColor))] = new("Horizon Color", "Sky", "Color around the world horizon."),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.GroundColor))] = new("Ground Color", "Sky", "Color used below the horizon."),

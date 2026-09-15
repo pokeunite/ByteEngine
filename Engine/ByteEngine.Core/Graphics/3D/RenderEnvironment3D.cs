@@ -13,6 +13,7 @@ public readonly record struct RenderEnvironment3D(
     float EnvironmentIntensity,
     float EnvironmentRotationDegrees,
     bool EnvironmentLightingEnabled,
+    float Exposure,
     Vector3 ZenithColor,
     Vector3 HorizonColor,
     Vector3 GroundColor,
@@ -36,6 +37,7 @@ public readonly record struct RenderEnvironment3D(
             1.0f,
             0.0f,
             false,
+            1.0f,
             new Vector3(
                 0.08f,
                 0.20f,

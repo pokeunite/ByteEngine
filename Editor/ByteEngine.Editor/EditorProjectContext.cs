@@ -5,6 +5,7 @@ using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
 using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Editor;
 
@@ -90,6 +91,17 @@ internal sealed class EditorProjectContext
                 components,
                 Project.Classification
             );
+
+        /*
+         * SceneSerializer installs the standard renderer codecs in its
+         * constructor. Register the v0.9-L2 SkyEnvironment codec afterward so
+         * scene/Blueprint persistence includes the new Exposure property.
+         */
+        SkyEnvironmentExposureSerialization.Register(
+            components);
+
+        PhysicsSerializationRegistrar.Register(
+            components);
 
         Active =
             this;

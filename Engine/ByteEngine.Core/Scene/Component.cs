@@ -1,4 +1,5 @@
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -115,6 +116,60 @@ public abstract class Component
         _gameObject = null;
     }
 
+    internal void CollisionEnterInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnCollisionEnter(contact);
+        }
+    }
+
+    internal void CollisionStayInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnCollisionStay(contact);
+        }
+    }
+
+    internal void CollisionExitInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnCollisionExit(contact);
+        }
+    }
+
+    internal void TriggerEnterInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnTriggerEnter(contact);
+        }
+    }
+
+    internal void TriggerStayInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnTriggerStay(contact);
+        }
+    }
+
+    internal void TriggerExitInternal(
+        PhysicsContact3D contact)
+    {
+        if (Enabled)
+        {
+            OnTriggerExit(contact);
+        }
+    }
+
     protected virtual void OnStart()
     {
     }
@@ -133,6 +188,46 @@ public abstract class Component
     }
 
     protected virtual void OnStop()
+    {
+    }
+
+    /// <summary>
+    /// Called on enabled components when a solid physics contact begins.
+    /// Contact.Normal points away from the other collider toward this object.
+    /// </summary>
+    protected virtual void OnCollisionEnter(
+        PhysicsContact3D contact)
+    {
+    }
+
+    /// <summary>
+    /// Called while a solid physics contact remains active.
+    /// </summary>
+    protected virtual void OnCollisionStay(
+        PhysicsContact3D contact)
+    {
+    }
+
+    /// <summary>
+    /// Called when a solid physics contact ends.
+    /// </summary>
+    protected virtual void OnCollisionExit(
+        PhysicsContact3D contact)
+    {
+    }
+
+    protected virtual void OnTriggerEnter(
+        PhysicsContact3D contact)
+    {
+    }
+
+    protected virtual void OnTriggerStay(
+        PhysicsContact3D contact)
+    {
+    }
+
+    protected virtual void OnTriggerExit(
+        PhysicsContact3D contact)
     {
     }
 }

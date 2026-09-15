@@ -263,32 +263,15 @@ internal sealed class SkyShader3D : IDisposable
                         uEnvironmentIntensity,
                         0.0);
 
-                vec3 mappedEnvironment=
-                    acesFilm(
-                        max(
-                            environmentColor,
-                            vec3(0.0)));
-
-                vec3 displayEnvironment=
-                    pow(
-                        mappedEnvironment,
-                        vec3(
-                            1.0/
-                            2.2));
-
-                displayEnvironment=
-                    clamp(
-                        displayEnvironment+
-                        vec3(
-                            screenDither(
-                                gl_FragCoord.xy)/
-                            255.0),
-                        vec3(0.0),
-                        vec3(1.0));
-
+                /*
+                 * Sky remains linear HDR here. The framebuffer post-process
+                 * owns exposure/tone-map/gamma for the completed scene.
+                 */
                 FragColor=
                     vec4(
-                        displayEnvironment,
+                        max(
+                            environmentColor,
+                            vec3(0.0)),
                         1.0);
 
                 return;
@@ -334,32 +317,9 @@ internal sealed class SkyShader3D : IDisposable
                         0.0),
                     vec3(0.0));
 
-            vec3 mapped=
-                acesFilm(
-                    max(
-                        linearColor,
-                        vec3(0.0)));
-
-            vec3 displayColor=
-                pow(
-                    mapped,
-                    vec3(
-                        1.0/
-                        2.2));
-
-            displayColor=
-                clamp(
-                    displayColor+
-                    vec3(
-                        screenDither(
-                            gl_FragCoord.xy)/
-                        255.0),
-                    vec3(0.0),
-                    vec3(1.0));
-
             FragColor=
                 vec4(
-                    displayColor,
+                    linearColor,
                     1.0);
         }
         """;

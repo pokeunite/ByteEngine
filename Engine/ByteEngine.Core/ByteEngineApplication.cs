@@ -17,6 +17,9 @@ public class ByteEngineApplication : GameWindow
 
     public SceneManager Scenes { get; }
 
+    private readonly RuntimePostProcessTarget3D _runtimePostProcessTarget =
+        new();
+
     public int WindowWidth =>
         ClientSize.X;
 
@@ -186,6 +189,20 @@ public class ByteEngineApplication : GameWindow
         base.OnRenderFrame(
             args);
 
+        GL.BindFramebuffer(
+            FramebufferTarget.Framebuffer,
+            0);
+
+        GL.Viewport(
+            0,
+            0,
+            Math.Max(
+                WindowWidth,
+                1),
+            Math.Max(
+                WindowHeight,
+                1));
+
         GL.Clear(
             ClearBufferMask.ColorBufferBit |
             ClearBufferMask.DepthBufferBit
@@ -196,7 +213,8 @@ public class ByteEngineApplication : GameWindow
             ByteEngine.Core.Scene.Scene? activeScene =
                 Scenes.ActiveScene;
 
-            Camera3D? camera3D = activeScene?.ActiveCamera;
+            Camera3D? camera3D =
+                activeScene?.ActiveCamera;
 
             Camera2D? camera =
                 camera3D ==
@@ -223,16 +241,54 @@ public class ByteEngineApplication : GameWindow
             if (activeScene !=
                 null)
             {
-                Scenes.RenderInternal(
-                    new RenderContext(
-                        Renderer,
-                        Renderer3D,
-                        activeScene,
+                if (camera3D !=
+                    null)
+                {
+                    _runtimePostProcessTarget.Begin(
                         WindowWidth,
-                        WindowHeight,
-                        camera,
-                        camera3D)
-                );
+                        WindowHeight);
+
+                    var context =
+                        new RenderContext(
+                            Renderer,
+                            Renderer3D,
+                            activeScene,
+                            WindowWidth,
+                            WindowHeight,
+                            camera,
+                            camera3D);
+
+                    Scenes.RenderInternal(
+                        context);
+
+                    float exposure =
+                        context
+                            .CaptureRenderEnvironment3D()
+                            .Exposure;
+
+                    _runtimePostProcessTarget.Present(
+                        exposure,
+                        WindowWidth,
+                        WindowHeight);
+                }
+                else
+                {
+                    /*
+                     * Preserve ByteEngine's established 2D direct-to-window
+                     * path. 2D content is already authored as display-space
+                     * color and should not be ACES tone mapped.
+                     */
+                    Scenes.RenderInternal(
+                        new RenderContext(
+                            Renderer,
+                            Renderer3D,
+                            activeScene,
+                            WindowWidth,
+                            WindowHeight,
+                            camera,
+                            camera3D)
+                    );
+                }
             }
         }
 
@@ -277,6 +333,8 @@ public class ByteEngineApplication : GameWindow
         Scenes.ShutdownInternal();
 
         OnEngineShutdown();
+
+        _runtimePostProcessTarget.Dispose();
 
         Renderer.Dispose();
         Renderer3D.Dispose();

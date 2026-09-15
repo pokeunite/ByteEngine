@@ -6,7 +6,8 @@ using ByteEngine.Core.Scene;
 namespace ByteEngine.Core.Graphics;
 
 /// <summary>
-/// World-level procedural sky, ambient-light and atmospheric-fog settings.
+/// World-level procedural sky, ambient-light, image-based-lighting,
+/// atmospheric-fog and display-exposure settings.
 ///
 /// Add one enabled SkyEnvironment to a scene. If multiple are enabled,
 /// ByteEngine uses the first active instance encountered in scene order.
@@ -44,6 +45,9 @@ public sealed class SkyEnvironment : Component
         1.0f;
 
     private float _environmentRotationDegrees;
+
+    private float _exposure =
+        1.0f;
 
     private Vector3 _fogColor =
         new(
@@ -101,6 +105,26 @@ public sealed class SkyEnvironment : Component
                     value);
     }
 
+    /// <summary>
+    /// Scene-wide display exposure applied after the complete 3D scene has
+    /// been composed into the HDR framebuffer and before tone mapping.
+    /// 1.0 preserves the previous ByteEngine appearance.
+    /// </summary>
+    public float Exposure
+    {
+        get =>
+            _exposure;
+
+        set =>
+            _exposure =
+                Math.Clamp(
+                    float.IsFinite(value)
+                        ? value
+                        : 1.0f,
+                    0.0f,
+                    16.0f);
+    }
+
     public void SetEnvironmentMapTexture(
         Texture2D? texture)
     {
@@ -148,10 +172,6 @@ public sealed class SkyEnvironment : Component
                     value);
     }
 
-    /// <summary>
-    /// Multiplier applied to the procedural sky before display mapping.
-    /// Values above 1 are allowed for brighter skies.
-    /// </summary>
     public float SkyIntensity
     {
         get =>
@@ -165,9 +185,6 @@ public sealed class SkyEnvironment : Component
                     16.0f);
     }
 
-    /// <summary>
-    /// Controls how quickly the sky transitions away from the horizon.
-    /// </summary>
     public float HorizonSharpness
     {
         get =>
@@ -181,10 +198,6 @@ public sealed class SkyEnvironment : Component
                     8.0f);
     }
 
-    /// <summary>
-    /// When enabled, this environment replaces the scalar ambient-light
-    /// intensity normally derived from directional lights.
-    /// </summary>
     public bool OverrideAmbient { get; set; } =
         true;
 
@@ -201,10 +214,6 @@ public sealed class SkyEnvironment : Component
                     4.0f);
     }
 
-    /// <summary>
-    /// Enables atmospheric distance fog for normal 3D scene geometry.
-    /// Overlay submissions are intentionally left unfogged.
-    /// </summary>
     public bool FogEnabled { get; set; }
 
     public FogMode3D FogMode { get; set; } =
@@ -221,9 +230,6 @@ public sealed class SkyEnvironment : Component
                     value);
     }
 
-    /// <summary>
-    /// Camera distance where linear fog begins.
-    /// </summary>
     public float FogStartDistance
     {
         get =>
@@ -248,9 +254,6 @@ public sealed class SkyEnvironment : Component
         }
     }
 
-    /// <summary>
-    /// Camera distance where linear fog reaches FogMaxOpacity.
-    /// </summary>
     public float FogEndDistance
     {
         get =>
@@ -265,9 +268,6 @@ public sealed class SkyEnvironment : Component
                     10000.0f);
     }
 
-    /// <summary>
-    /// Exponential fog density. Ignored by linear fog.
-    /// </summary>
     public float FogDensity
     {
         get =>
@@ -281,9 +281,6 @@ public sealed class SkyEnvironment : Component
                     10.0f);
     }
 
-    /// <summary>
-    /// Maximum amount of scene color that fog can replace.
-    /// </summary>
     public float FogMaxOpacity
     {
         get =>

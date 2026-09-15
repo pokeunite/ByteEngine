@@ -893,35 +893,16 @@ internal sealed class Shader3D : IDisposable
                         fogFactor);
             }
 
-            vec3 mappedColor=
-                acesFilm(
-                    max(
-                        linearColor,
-                        vec3(0.0)));
-
-            vec3 displayColor=
-                pow(
-                    mappedColor,
-                    vec3(1.0/2.2));
-
             /*
-             * The final monitor/display path is normally 8-bit. Add a tiny
-             * screen-space dither before that quantization so smooth HDR
-             * gradients do not collapse into visible contour bands.
+             * Keep the material pass in linear HDR. Exposure, tone mapping,
+             * gamma conversion and final display dithering now happen once in
+             * PostProcess3D after the full scene has been composed.
              */
-            displayColor=
-                clamp(
-                    displayColor+
-                    vec3(
-                        screenDither(
-                            gl_FragCoord.xy)/
-                        255.0),
-                    vec3(0.0),
-                    vec3(1.0));
-
             FragColor=
                 vec4(
-                    displayColor,
+                    max(
+                        linearColor,
+                        vec3(0.0)),
                     base.a);
         }
         """;

@@ -1,5 +1,6 @@
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Diagnostics;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -193,6 +194,73 @@ public sealed class GameObject
             _components[i].StopInternal();
 
         _started = false;
+    }
+
+
+    internal void DispatchCollisionEnter(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.CollisionEnterInternal(
+                contact);
+        }
+    }
+
+    internal void DispatchCollisionStay(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.CollisionStayInternal(
+                contact);
+        }
+    }
+
+    internal void DispatchCollisionExit(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.CollisionExitInternal(
+                contact);
+        }
+    }
+
+    internal void DispatchTriggerEnter(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.TriggerEnterInternal(
+                contact);
+        }
+    }
+
+    internal void DispatchTriggerStay(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.TriggerStayInternal(
+                contact);
+        }
+    }
+
+    internal void DispatchTriggerExit(
+        PhysicsContact3D contact)
+    {
+        foreach (Component component
+                 in _components.ToArray())
+        {
+            component.TriggerExitInternal(
+                contact);
+        }
     }
 
     internal void DestroyInternal()

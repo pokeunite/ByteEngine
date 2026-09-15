@@ -2,6 +2,7 @@ using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Classification;
 using ByteEngine.Core.Diagnostics;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -30,6 +31,13 @@ public sealed class Scene
     public bool IsLoaded =>
         _loaded;
     public ClassificationSettings Classification { get; }
+
+    /// <summary>
+    /// Scene-owned 3D physics world. It steps after component updates so
+    /// gameplay can apply forces or move kinematic objects first.
+    /// </summary>
+    public PhysicsWorld3D Physics { get; } =
+        new();
 
     public Camera3D? ActiveCamera
     {
@@ -273,6 +281,16 @@ public sealed class Scene
                 if (_pendingDestroy.Contains(gameObject.Id)) continue;
                 gameObject.UpdateInternal();
             }
+
+            /*
+             * Physics runs while _isUpdating is still true. Collision/trigger
+             * callbacks are therefore allowed to destroy GameObjects safely:
+             * destruction is queued until the complete gameplay+physics step
+             * has finished.
+             */
+            Physics.Step(
+                this,
+                (float)Time.DeltaTime);
         }
         finally
         {
@@ -313,6 +331,7 @@ public sealed class Scene
             _gameObjects[index].StopInternal();
 
         _pendingDestroy.Clear();
+        Physics.Reset();
         _isUpdating = false;
         _loaded = false;
     }

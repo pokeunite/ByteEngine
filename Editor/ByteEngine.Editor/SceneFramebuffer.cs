@@ -13,15 +13,25 @@ internal sealed class SceneFramebuffer
 {
     private int _framebuffer;
 
+    /*
+     * _colorTexture is the linear HDR scene target.
+     * _displayTexture is the final LDR texture shown by ImGui.
+     */
     private int _colorTexture;
     private int _depthRenderbuffer;
+
+    private int _displayFramebuffer;
+    private int _displayTexture;
+
+    private readonly PostProcess3D _postProcess =
+        new();
 
     private int _width;
 
     private int _height;
 
     public nint TextureId =>
-        _colorTexture;
+        _displayTexture;
 
     public void Render(
         Renderer2D renderer,
@@ -120,6 +130,9 @@ internal sealed class SceneFramebuffer
                 );
         }
 
+        RenderEnvironment3D environment =
+            context.CaptureRenderEnvironment3D();
+
         if (mode ==
             EditorMode.Edit)
         {
@@ -133,6 +146,21 @@ internal sealed class SceneFramebuffer
                 context
             );
         }
+
+        /*
+         * 3D is composed into the floating-point scene target and converted
+         * to display space once here. 2D keeps its existing display-space
+         * behavior and is copied without tone mapping.
+         */
+        _postProcess.Render(
+            _colorTexture,
+            _displayFramebuffer,
+            _width,
+            _height,
+            applyToneMapping:
+                is3D,
+            exposure:
+                environment.Exposure);
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
@@ -236,6 +264,9 @@ internal sealed class SceneFramebuffer
                 camera3D
             );
 
+        RenderEnvironment3D environment =
+            context.CaptureRenderEnvironment3D();
+
         if (mode ==
             EditorMode.Edit)
         {
@@ -249,6 +280,16 @@ internal sealed class SceneFramebuffer
                 context
             );
         }
+
+        _postProcess.Render(
+            _colorTexture,
+            _displayFramebuffer,
+            _width,
+            _height,
+            applyToneMapping:
+                camera3D != null,
+            exposure:
+                environment.Exposure);
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
@@ -406,6 +447,72 @@ internal sealed class SceneFramebuffer
             throw new InvalidOperationException(
                 $"Scene framebuffer is incomplete: {status}"
             );
+        }
+
+        /*
+         * Separate final-display target. Keeping this RGBA8 is intentional:
+         * PostProcess3D performs the only HDR -> display conversion and dither
+         * immediately before this final quantization.
+         */
+        _displayFramebuffer =
+            GL.GenFramebuffer();
+
+        GL.BindFramebuffer(
+            FramebufferTarget.Framebuffer,
+            _displayFramebuffer);
+
+        _displayTexture =
+            GL.GenTexture();
+
+        GL.BindTexture(
+            TextureTarget.Texture2D,
+            _displayTexture);
+
+        GL.TexImage2D(
+            TextureTarget.Texture2D,
+            0,
+            PixelInternalFormat.Rgba8,
+            _width,
+            _height,
+            0,
+            PixelFormat.Rgba,
+            PixelType.UnsignedByte,
+            IntPtr.Zero);
+
+        GL.TexParameter(
+            TextureTarget.Texture2D,
+            TextureParameterName.TextureMinFilter,
+            (int)TextureMinFilter.Linear);
+
+        GL.TexParameter(
+            TextureTarget.Texture2D,
+            TextureParameterName.TextureMagFilter,
+            (int)TextureMagFilter.Linear);
+
+        GL.FramebufferTexture2D(
+            FramebufferTarget.Framebuffer,
+            FramebufferAttachment.ColorAttachment0,
+            TextureTarget.Texture2D,
+            _displayTexture,
+            0);
+
+        FramebufferErrorCode displayStatus =
+            GL.CheckFramebufferStatus(
+                FramebufferTarget.Framebuffer);
+
+        GL.BindTexture(
+            TextureTarget.Texture2D,
+            0);
+
+        GL.BindFramebuffer(
+            FramebufferTarget.Framebuffer,
+            0);
+
+        if (displayStatus !=
+            FramebufferErrorCode.FramebufferComplete)
+        {
+            throw new InvalidOperationException(
+                $"Scene display framebuffer is incomplete: {displayStatus}");
         }
     }
 
@@ -737,6 +844,26 @@ internal sealed class SceneFramebuffer
 
     private void DestroyResources()
     {
+        if (_displayTexture !=
+            0)
+        {
+            GL.DeleteTexture(
+                _displayTexture);
+
+            _displayTexture =
+                0;
+        }
+
+        if (_displayFramebuffer !=
+            0)
+        {
+            GL.DeleteFramebuffer(
+                _displayFramebuffer);
+
+            _displayFramebuffer =
+                0;
+        }
+
         if (_depthRenderbuffer !=
             0)
         {
@@ -774,5 +901,6 @@ internal sealed class SceneFramebuffer
     public void Dispose()
     {
         DestroyResources();
+        _postProcess.Dispose();
     }
 }
