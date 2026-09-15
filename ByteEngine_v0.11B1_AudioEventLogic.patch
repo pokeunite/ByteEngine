@@ -1,0 +1,445 @@
+diff --git a/Engine/ByteEngine.Core/VisualLogic/VisualLogicRegistry.cs b/Engine/ByteEngine.Core/VisualLogic/VisualLogicRegistry.cs
+--- a/Engine/ByteEngine.Core/VisualLogic/VisualLogicRegistry.cs
++++ b/Engine/ByteEngine.Core/VisualLogic/VisualLogicRegistry.cs
+@@
+ using System.Numerics;
+
++using ByteEngine.Core.Audio;
+ using ByteEngine.Core.Characters;
+ using ByteEngine.Core.Gameplay;
+ using ByteEngine.Core.Scene;
+ using ByteEngine.Core.Variables;
+ using ByteEngine.Core.InputSystem;
+@@
+         RegisterObjects(registry);
+         RegisterCharacter(registry);
+         RegisterTransform(registry);
++        RegisterAudio(registry);
+         RegisterVariables(registry);
+         RegisterGameplay(registry);
+
+         return registry;
+     }
+@@
+     private static VisualActionDefinition
+         CreateAxisPositionAction(
+             string id,
+             string displayName,
+             int axis)
+@@
+                 }
+         };
+     }
+
++    private static void RegisterAudio(
++        VisualLogicRegistry registry)
++    {
++        registry.RegisterCondition(
++            new VisualConditionDefinition
++            {
++                Id = "audio.isPlaying",
++                Category = "Audio",
++                DisplayName = "Audio Source Is Playing",
++                TargetComponent = nameof(AudioSource3D),
++                Evaluate =
++                    (instruction, context) =>
++                        ResolveAudioSource(
++                            instruction,
++                            context,
++                            false)?
++                            .IsPlaying ==
++                        true
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.play",
++                Category = "Audio",
++                DisplayName = "Play Audio Source",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                        ResolveAudioSource(
++                            instruction,
++                            context)?
++                            .Play()
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.pause",
++                Category = "Audio",
++                DisplayName = "Pause Audio Source",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                        ResolveAudioSource(
++                            instruction,
++                            context)?
++                            .Pause()
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.stop",
++                Category = "Audio",
++                DisplayName = "Stop Audio Source",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                        ResolveAudioSource(
++                            instruction,
++                            context)?
++                            .Stop()
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.setVolume",
++                Category = "Audio",
++                DisplayName = "Set Audio Volume",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                    {
++                        AudioSource3D? source =
++                            ResolveAudioSource(
++                                instruction,
++                                context);
++
++                        if (source ==
++                            null)
++                        {
++                            return;
++                        }
++
++                        source.Volume =
++                            (float)EventValueResolver.GetNumber(
++                                instruction,
++                                "volume",
++                                context,
++                                source.Volume);
++                    }
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.setPitch",
++                Category = "Audio",
++                DisplayName = "Set Audio Pitch",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                    {
++                        AudioSource3D? source =
++                            ResolveAudioSource(
++                                instruction,
++                                context);
++
++                        if (source ==
++                            null)
++                        {
++                            return;
++                        }
++
++                        source.Pitch =
++                            (float)EventValueResolver.GetNumber(
++                                instruction,
++                                "pitch",
++                                context,
++                                source.Pitch);
++                    }
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.setLoop",
++                Category = "Audio",
++                DisplayName = "Set Audio Loop",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                    {
++                        AudioSource3D? source =
++                            ResolveAudioSource(
++                                instruction,
++                                context);
++
++                        if (source ==
++                            null)
++                        {
++                            return;
++                        }
++
++                        source.Loop =
++                            EventValueResolver.GetBoolean(
++                                instruction,
++                                "loop",
++                                context,
++                                source.Loop);
++                    }
++            });
++
++        registry.RegisterAction(
++            new VisualActionDefinition
++            {
++                Id = "audio.setSpatial",
++                Category = "Audio",
++                DisplayName = "Set Audio Spatial",
++                TargetComponent = nameof(AudioSource3D),
++                Execute =
++                    (instruction, context) =>
++                    {
++                        AudioSource3D? source =
++                            ResolveAudioSource(
++                                instruction,
++                                context);
++
++                        if (source ==
++                            null)
++                        {
++                            return;
++                        }
++
++                        source.Spatial =
++                            EventValueResolver.GetBoolean(
++                                instruction,
++                                "spatial",
++                                context,
++                                source.Spatial);
++                    }
++            });
++    }
++
++    private static AudioSource3D? ResolveAudioSource(
++        VisualInstruction instruction,
++        EventExecutionContext context,
++        bool warnIfMissing = true)
++    {
++        GameObject? target =
++            ResolveObjectTarget(
++                instruction,
++                context,
++                warnIfMissing);
++
++        if (target ==
++            null)
++        {
++            return null;
++        }
++
++        AudioSource3D? source =
++            target.GetComponent<AudioSource3D>();
++
++        if (source ==
++                null &&
++            warnIfMissing)
++        {
++            context.WarningSink?.Invoke(
++                $"Event target '{target.Name}' has no AudioSource3D component.");
++        }
++
++        return source;
++    }
++
+     private static void RegisterVariables(
+         VisualLogicRegistry registry)
+     {
+         registry.RegisterCondition(
+             new VisualConditionDefinition
+diff --git a/Editor/ByteEngine.Editor/Panels/EventWorkspacePanel.cs b/Editor/ByteEngine.Editor/Panels/EventWorkspacePanel.cs
+--- a/Editor/ByteEngine.Editor/Panels/EventWorkspacePanel.cs
++++ b/Editor/ByteEngine.Editor/Panels/EventWorkspacePanel.cs
+@@
+             case "transform.setScale":
+                 instruction.Arguments["target"] =
+                     EventValue.String(
+                         "Self");
+                 instruction.Arguments["scale"] =
+                     EventValue.Vector3(
+                         Vector3.One);
+                 break;
+
++            case "audio.isPlaying":
++            case "audio.play":
++            case "audio.pause":
++            case "audio.stop":
++                instruction.Arguments["target"] =
++                    EventValue.String(
++                        "Self");
++                break;
++
++            case "audio.setVolume":
++                instruction.Arguments["target"] =
++                    EventValue.String(
++                        "Self");
++                instruction.Arguments["volume"] =
++                    EventValue.Number(
++                        1.0);
++                break;
++
++            case "audio.setPitch":
++                instruction.Arguments["target"] =
++                    EventValue.String(
++                        "Self");
++                instruction.Arguments["pitch"] =
++                    EventValue.Number(
++                        1.0);
++                break;
++
++            case "audio.setLoop":
++                instruction.Arguments["target"] =
++                    EventValue.String(
++                        "Self");
++                instruction.Arguments["loop"] =
++                    EventValue.Boolean(
++                        false);
++                break;
++
++            case "audio.setSpatial":
++                instruction.Arguments["target"] =
++                    EventValue.String(
++                        "Self");
++                instruction.Arguments["spatial"] =
++                    EventValue.Boolean(
++                        true);
++                break;
++
+             case "variable.compare":
+                 instruction.Arguments["left"] =
+                     EventValue.Number(
+                         0.0);
+                 instruction.Arguments["operator"] =
+@@
+             case "transform.setScale":
+                 DrawObjectTargetArgument(
+                     instruction,
+                     "target",
+                     "Target Object",
+                     state);
+
+                 DrawValueArgument(
+                     instruction,
+                     "scale",
+                     "Scale",
+                     VariableType.Vector3,
+                     EventValue.Vector3(
+                         Vector3.One),
+                     state,
+                     false);
+                 break;
+
++            case "audio.isPlaying":
++            case "audio.play":
++            case "audio.pause":
++            case "audio.stop":
++                DrawObjectTargetArgument(
++                    instruction,
++                    "target",
++                    "Audio Source Object",
++                    state);
++                break;
++
++            case "audio.setVolume":
++                DrawObjectTargetArgument(
++                    instruction,
++                    "target",
++                    "Audio Source Object",
++                    state);
++
++                DrawValueArgument(
++                    instruction,
++                    "volume",
++                    "Volume",
++                    VariableType.Number,
++                    EventValue.Number(
++                        1.0),
++                    state,
++                    false);
++                break;
++
++            case "audio.setPitch":
++                DrawObjectTargetArgument(
++                    instruction,
++                    "target",
++                    "Audio Source Object",
++                    state);
++
++                DrawValueArgument(
++                    instruction,
++                    "pitch",
++                    "Pitch",
++                    VariableType.Number,
++                    EventValue.Number(
++                        1.0),
++                    state,
++                    false);
++                break;
++
++            case "audio.setLoop":
++                DrawObjectTargetArgument(
++                    instruction,
++                    "target",
++                    "Audio Source Object",
++                    state);
++
++                DrawValueArgument(
++                    instruction,
++                    "loop",
++                    "Loop",
++                    VariableType.Boolean,
++                    EventValue.Boolean(
++                        false),
++                    state,
++                    false);
++                break;
++
++            case "audio.setSpatial":
++                DrawObjectTargetArgument(
++                    instruction,
++                    "target",
++                    "Audio Source Object",
++                    state);
++
++                DrawValueArgument(
++                    instruction,
++                    "spatial",
++                    "Spatial 3D",
++                    VariableType.Boolean,
++                    EventValue.Boolean(
++                        true),
++                    state,
++                    false);
++                break;
++
+             case "variable.compare":
+                 DrawValueArgument(
+                     instruction,
+                     "left",
+                     "Left",
+@@
+                 "transform.setScale" =>
+                     350.0f,
+
++                "audio.isPlaying" or
++                "audio.play" or
++                "audio.pause" or
++                "audio.stop" =>
++                    190.0f,
++
++                "audio.setVolume" or
++                "audio.setPitch" or
++                "audio.setLoop" or
++                "audio.setSpatial" =>
++                    285.0f,
++
+                 "transform.setX" or
+                 "transform.setY" or
+                 "transform.setZ" =>
+                     295.0f,
