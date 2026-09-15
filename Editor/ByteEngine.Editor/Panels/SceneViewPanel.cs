@@ -36,6 +36,10 @@ internal sealed class SceneViewPanel : IDisposable
 
     private bool _focusRequested;
 
+    private bool _rightMouseStartedInViewport;
+
+    private float _rightMouseTravel;
+
     public bool IsOpen { get; set; } =
         true;
 
@@ -195,6 +199,43 @@ internal sealed class SceneViewPanel : IDisposable
         bool hovered =
             ImGui.IsItemHovered();
 
+        ImGuiIOPtr sceneIo =
+            ImGui.GetIO();
+
+        if (hovered &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Right))
+        {
+            _rightMouseStartedInViewport =
+                true;
+
+            _rightMouseTravel =
+                0.0f;
+        }
+
+        if (_rightMouseStartedInViewport &&
+            ImGui.IsMouseDown(
+                ImGuiMouseButton.Right))
+        {
+            _rightMouseTravel +=
+                sceneIo.MouseDelta.Length();
+
+            if (ImGui.IsMouseDragging(
+                    ImGuiMouseButton.Right) ||
+                ImGui.IsKeyDown(ImGuiKey.W) ||
+                ImGui.IsKeyDown(ImGuiKey.A) ||
+                ImGui.IsKeyDown(ImGuiKey.S) ||
+                ImGui.IsKeyDown(ImGuiKey.D) ||
+                ImGui.IsKeyDown(ImGuiKey.Q) ||
+                ImGui.IsKeyDown(ImGuiKey.E))
+            {
+                _rightMouseTravel =
+                    Math.Max(
+                        _rightMouseTravel,
+                        3.0f);
+            }
+        }
+
         if (ImGui.BeginDragDropTarget())
         {
             Guid? guid =
@@ -301,9 +342,18 @@ internal sealed class SceneViewPanel : IDisposable
             );
         }
 
-        if (hovered &&
+        bool rightMouseReleased =
             ImGui.IsMouseReleased(
-                ImGuiMouseButton.Right))
+                ImGuiMouseButton.Right);
+
+        bool openContextMenu =
+            hovered &&
+            _rightMouseStartedInViewport &&
+            rightMouseReleased &&
+            _rightMouseTravel <
+                3.0f;
+
+        if (openContextMenu)
         {
             _contextWorld =
                 _is3D
@@ -326,6 +376,15 @@ internal sealed class SceneViewPanel : IDisposable
             ImGui.OpenPopup(
                 "Scene View Context"
             );
+        }
+
+        if (rightMouseReleased)
+        {
+            _rightMouseStartedInViewport =
+                false;
+
+            _rightMouseTravel =
+                0.0f;
         }
 
         if (ImGui.BeginPopup(

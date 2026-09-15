@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
@@ -18,18 +19,41 @@ internal sealed class EditorClipboard
         _objects = Clone(snapshot.GameObjects.Where(item => selected.Contains(item.Id)).ToList());
     }
 
-    public void Paste(EditorState state, SceneSerializer serializer, bool offset = true)
+    public void Paste(EditorState state, SceneSerializer serializer, bool offset = false)
     {
         if (_objects == null || _objects.Count == 0 || state.Mode != EditorMode.Edit) return;
+
         List<GameObjectData> objects = Clone(_objects);
         Dictionary<Guid, Guid> ids = objects.ToDictionary(item => item.Id, _ => Guid.NewGuid());
+        Dictionary<Guid, Guid> originalsByNewId = new();
+        Dictionary<Guid, Guid> externalParentsByNewId = new();
+
         foreach (GameObjectData item in objects)
         {
             Guid oldId = item.Id;
-            item.Id = ids[oldId];
-            item.ParentId = item.ParentId.HasValue && ids.TryGetValue(item.ParentId.Value, out Guid parentId) ? parentId : null;
+            Guid newId = ids[oldId];
+            Guid? oldParentId = item.ParentId;
+
+            RemapBlueprintInstanceData(item, ids);
+
+            item.Id = newId;
+            originalsByNewId[newId] = oldId;
+
+            if (oldParentId.HasValue && ids.TryGetValue(oldParentId.Value, out Guid copiedParentId))
+            {
+                item.ParentId = copiedParentId;
+            }
+            else
+            {
+                item.ParentId = null;
+
+                if (oldParentId.HasValue && state.EditorScene.FindGameObject(oldParentId.Value) != null)
+                    externalParentsByNewId[newId] = oldParentId.Value;
+            }
+
             item.Name = UniqueName(state.EditorScene, item.Name);
-            if (offset && item.ParentId == null)
+
+            if (offset && item.ParentId == null && !externalParentsByNewId.ContainsKey(newId))
             {
                 if (item.Transform.LocalPosition is { } localPosition)
                 {
@@ -47,9 +71,86 @@ internal sealed class EditorClipboard
 
         var data = new SceneData { Name = "Clipboard", SceneId = Guid.NewGuid(), GameObjects = objects };
         Scene pasted = serializer.Deserialize(data);
-        foreach (GameObject gameObject in pasted.GameObjects) state.EditorScene.AddGameObject(gameObject);
-        state.Selection.Set(pasted.GameObjects);
+        GameObject[] pastedObjects = pasted.GameObjects.ToArray();
+
+        foreach (GameObject gameObject in pastedObjects)
+            state.EditorScene.AddGameObject(gameObject);
+
+        /*
+         * When the copied root was a child of an object outside the copied
+         * selection, SceneSerializer cannot recreate that external relation in
+         * the temporary clipboard scene. Restore it after the clone enters the
+         * actual editor scene and preserve the original local transform.
+         */
+        foreach ((Guid newId, Guid parentId) in externalParentsByNewId)
+        {
+            GameObject? pastedObject = state.EditorScene.FindGameObject(newId);
+            GameObject? parent = state.EditorScene.FindGameObject(parentId);
+            if (pastedObject != null && parent != null)
+                pastedObject.SetParent(parent, false);
+        }
+
+        /*
+         * Keep duplicates beside their originals instead of throwing them to
+         * the end of the Hierarchy. This is especially important for children.
+         */
+        foreach ((Guid newId, Guid originalId) in originalsByNewId)
+        {
+            GameObject? pastedObject = state.EditorScene.FindGameObject(newId);
+            GameObject? original = state.EditorScene.FindGameObject(originalId);
+            if (pastedObject != null && original != null &&
+                ReferenceEquals(pastedObject.Parent, original.Parent))
+            {
+                pastedObject.MoveAfter(original);
+            }
+        }
+
+        state.Selection.Set(pastedObjects);
         state.MarkDirty();
+    }
+
+    private static void RemapBlueprintInstanceData(
+        GameObjectData gameObject,
+        IReadOnlyDictionary<Guid, Guid> ids)
+    {
+        foreach (ComponentData component
+                 in gameObject.Components)
+        {
+            if (!component.Type.Equals(
+                    "BlueprintInstance",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            component.Properties["instanceId"] =
+                Guid.NewGuid().ToString();
+
+            if (component.Properties["objectMap"] is not
+                JsonObject objectMap)
+            {
+                continue;
+            }
+
+            foreach (string sourceId
+                     in objectMap.Select(pair => pair.Key).ToArray())
+            {
+                string? placedText =
+                    objectMap[sourceId]?
+                        .GetValue<string>();
+
+                if (Guid.TryParse(
+                        placedText,
+                        out Guid oldPlacedId) &&
+                    ids.TryGetValue(
+                        oldPlacedId,
+                        out Guid newPlacedId))
+                {
+                    objectMap[sourceId] =
+                        newPlacedId.ToString();
+                }
+            }
+        }
     }
 
     private static List<GameObjectData> Clone(List<GameObjectData> source) =>

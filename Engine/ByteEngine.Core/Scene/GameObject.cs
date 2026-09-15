@@ -65,6 +65,8 @@ public sealed class GameObject
         Parent = parent;
         Parent?._children.Add(this);
 
+        _scene?.MoveObjectToEndOfSiblingGroup(this);
+
         if (worldPositionStays)
         {
             Transform.WorldPosition = position;
@@ -73,6 +75,54 @@ public sealed class GameObject
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Moves this object immediately before a sibling in Hierarchy order.
+    /// Both objects must belong to the same Scene and have the same parent.
+    /// </summary>
+    public bool MoveBefore(GameObject sibling) =>
+        MoveRelative(sibling, after: false);
+
+    /// <summary>
+    /// Moves this object immediately after a sibling in Hierarchy order.
+    /// Both objects must belong to the same Scene and have the same parent.
+    /// </summary>
+    public bool MoveAfter(GameObject sibling) =>
+        MoveRelative(sibling, after: true);
+
+    private bool MoveRelative(GameObject sibling, bool after)
+    {
+        ArgumentNullException.ThrowIfNull(sibling);
+
+        if (ReferenceEquals(this, sibling) ||
+            _scene == null ||
+            !ReferenceEquals(_scene, sibling._scene) ||
+            !ReferenceEquals(Parent, sibling.Parent))
+        {
+            return false;
+        }
+
+        if (Parent != null)
+        {
+            List<GameObject> siblings = Parent._children;
+
+            if (!siblings.Contains(this) || !siblings.Contains(sibling))
+            {
+                return false;
+            }
+
+            siblings.Remove(this);
+
+            int siblingIndex = siblings.IndexOf(sibling);
+            int insertIndex = after ? siblingIndex + 1 : siblingIndex;
+
+            siblings.Insert(
+                Math.Clamp(insertIndex, 0, siblings.Count),
+                this);
+        }
+
+        return _scene.MoveObjectRelative(this, sibling, after);
     }
 
     public bool IsDescendantOf(GameObject possibleAncestor)

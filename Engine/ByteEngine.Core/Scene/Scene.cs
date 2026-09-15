@@ -150,6 +150,82 @@ public sealed class Scene
         }
     }
 
+    /// <summary>
+    /// Places a newly reparented child at the end of its sibling group in the
+    /// serialized Scene order. This keeps the visible Hierarchy order stable
+    /// after save/reload.
+    /// </summary>
+    internal void MoveObjectToEndOfSiblingGroup(
+        GameObject gameObject)
+    {
+        if (!_gameObjects.Contains(gameObject) ||
+            gameObject.Parent == null)
+        {
+            return;
+        }
+
+        GameObject parent =
+            gameObject.Parent;
+
+        _gameObjects.Remove(gameObject);
+
+        int insertAfter =
+            _gameObjects.IndexOf(parent);
+
+        for (int index = 0;
+             index < _gameObjects.Count;
+             index++)
+        {
+            if (ReferenceEquals(
+                    _gameObjects[index].Parent,
+                    parent))
+            {
+                insertAfter =
+                    index;
+            }
+        }
+
+        _gameObjects.Insert(
+            Math.Clamp(insertAfter + 1, 0, _gameObjects.Count),
+            gameObject);
+    }
+
+    /// <summary>
+    /// Keeps the Scene's serialized object order aligned with Hierarchy sibling
+    /// order. GameObject validates that both objects are actual siblings.
+    /// </summary>
+    internal bool MoveObjectRelative(
+        GameObject moving,
+        GameObject sibling,
+        bool after)
+    {
+        ArgumentNullException.ThrowIfNull(moving);
+        ArgumentNullException.ThrowIfNull(sibling);
+
+        if (ReferenceEquals(moving, sibling) ||
+            !_gameObjects.Contains(moving) ||
+            !_gameObjects.Contains(sibling))
+        {
+            return false;
+        }
+
+        _gameObjects.Remove(moving);
+
+        int siblingIndex =
+            _gameObjects.IndexOf(sibling);
+
+        int insertIndex =
+            after
+                ? siblingIndex + 1
+                : siblingIndex;
+
+        _gameObjects.Insert(
+            Math.Clamp(insertIndex, 0, _gameObjects.Count),
+            moving);
+
+        return true;
+    }
+
     public bool DestroyGameObject(
         GameObject gameObject)
     {

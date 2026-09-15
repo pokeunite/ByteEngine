@@ -48,7 +48,8 @@ internal sealed class HierarchyPanel
             {
                 Guid? childId = GameObjectDragDrop.Accept();
                 GameObject? child = childId.HasValue ? state.EditorScene.FindGameObject(childId.Value) : null;
-                if (child != null) state.Undo?.Execute(state, "Unparent GameObject", () => child.SetParent(null));
+                if (child != null)
+                    ExecuteHierarchyEdit(state, "Unparent GameObject", () => child.SetParent(null));
 
                 Guid? assetId = AssetDragDrop.Accept();
                 if (assetId.HasValue) instantiateAsset(assetId.Value, null);
@@ -90,6 +91,8 @@ internal sealed class HierarchyPanel
         if (gameObject.Children.Count == 0) flags |= ImGuiTreeNodeFlags.Leaf;
         if (state.Selection.Contains(gameObject)) flags |= ImGuiTreeNodeFlags.Selected;
         bool open = ImGui.TreeNodeEx($"{gameObject.Name}##{gameObject.Id}", flags);
+        Vector2 itemMinimum = ImGui.GetItemRectMin();
+        Vector2 itemMaximum = ImGui.GetItemRectMax();
 
         if (ImGui.IsItemClicked(ImGuiMouseButton.Left) && !ImGui.IsItemToggledOpen())
         {
@@ -110,7 +113,24 @@ internal sealed class HierarchyPanel
             Guid? childId = GameObjectDragDrop.Accept();
             GameObject? child = childId.HasValue ? state.EditorScene.FindGameObject(childId.Value) : null;
             if (child != null && !ReferenceEquals(child, gameObject))
-                state.Undo?.Execute(state, "Parent GameObject", () => child.SetParent(gameObject));
+            {
+                bool sameParent = ReferenceEquals(child.Parent, gameObject.Parent);
+                float itemHeight = Math.Max(itemMaximum.Y - itemMinimum.Y, 1.0f);
+                float localY = (ImGui.GetMousePos().Y - itemMinimum.Y) / itemHeight;
+
+                if (sameParent && localY <= 0.30f)
+                {
+                    ExecuteHierarchyEdit(state, "Move GameObject Up", () => child.MoveBefore(gameObject));
+                }
+                else if (sameParent && localY >= 0.70f)
+                {
+                    ExecuteHierarchyEdit(state, "Move GameObject Down", () => child.MoveAfter(gameObject));
+                }
+                else
+                {
+                    ExecuteHierarchyEdit(state, "Parent GameObject", () => child.SetParent(gameObject));
+                }
+            }
 
             Guid? assetId = AssetDragDrop.Accept();
             if (assetId.HasValue) instantiateAsset(assetId.Value, gameObject);
@@ -119,10 +139,30 @@ internal sealed class HierarchyPanel
 
         bool deletedThisNode = false;
 
+        GameObject[] siblings = GetSiblings(gameObject, state.DisplayedScene);
+        int siblingIndex = Array.IndexOf(siblings, gameObject);
+
         if (state.Mode == EditorMode.Edit && ImGui.BeginPopupContextItem($"ObjectContext{gameObject.Id}"))
         {
             if (ImGui.MenuItem("Rename", "F2")) BeginRename(gameObject, state);
             if (ImGui.MenuItem("Duplicate", "Ctrl+D")) { state.Selection.Set(gameObject); duplicate(); }
+
+            ImGui.BeginDisabled(siblingIndex <= 0);
+            if (ImGui.MenuItem("Move Up"))
+            {
+                GameObject previous = siblings[siblingIndex - 1];
+                ExecuteHierarchyEdit(state, "Move GameObject Up", () => gameObject.MoveBefore(previous));
+            }
+            ImGui.EndDisabled();
+
+            ImGui.BeginDisabled(siblingIndex < 0 || siblingIndex >= siblings.Length - 1);
+            if (ImGui.MenuItem("Move Down"))
+            {
+                GameObject next = siblings[siblingIndex + 1];
+                ExecuteHierarchyEdit(state, "Move GameObject Down", () => gameObject.MoveAfter(next));
+            }
+            ImGui.EndDisabled();
+
             if (ImGui.MenuItem("Delete", "Delete"))
             {
                 state.Selection.Set(gameObject);
@@ -165,6 +205,25 @@ internal sealed class HierarchyPanel
                 DrawNode(child, state, delete, duplicate, copy, paste, createChild, instantiateAsset);
             ImGui.TreePop();
         }
+    }
+
+    private static GameObject[] GetSiblings(GameObject gameObject, Scene scene)
+    {
+        return gameObject.Parent != null
+            ? gameObject.Parent.Children.ToArray()
+            : scene.GameObjects.Where(item => item.Parent == null).ToArray();
+    }
+
+    private static void ExecuteHierarchyEdit(EditorState state, string name, Action action)
+    {
+        if (state.Undo != null)
+        {
+            state.Undo.Execute(state, name, action);
+            return;
+        }
+
+        action();
+        state.MarkDirty();
     }
 
     private void BeginRename(GameObject gameObject, EditorState state)

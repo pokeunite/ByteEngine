@@ -10,6 +10,7 @@ using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Classification;
+using ByteEngine.Core.VisualLogic;
 using ImGuiNET;
 
 namespace ByteEngine.Editor;
@@ -191,6 +192,8 @@ internal static class ComponentPropertyRenderer
         }
         if (component is PlayerController3D playerInput && project != null)
             DrawMissingActions(playerInput, project, context, begin, changed, end);
+        if (component is EventModuleComponent eventModules && project != null)
+            DrawEventModules(eventModules, project, context, begin, changed, end);
         if (component is MeshRenderer mesh)
         {
             Vector4 color = mesh.Material.BaseColor;
@@ -223,6 +226,161 @@ internal static class ComponentPropertyRenderer
             SkyEnvironment or
             DirectionalLight or
             PointLight;
+    }
+
+    private static void DrawEventModules(
+        EventModuleComponent runner,
+        EditorProjectContext project,
+        PropertyEditorContext context,
+        Action begin,
+        Action changed,
+        Action end)
+    {
+        ImGui.SeparatorText("EVENT MODULES");
+
+        bool editable =
+            context !=
+            PropertyEditorContext.Runtime;
+
+        AssetReference[] attached =
+            runner.Modules.ToArray();
+
+        if (attached.Length ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "No Event Modules attached.");
+        }
+
+        foreach (AssetReference reference
+                 in attached)
+        {
+            AssetRecord? asset =
+                project.AssetDatabase.Resolve(
+                    reference);
+
+            string displayName =
+                asset !=
+                    null
+                    ? Path.GetFileNameWithoutExtension(
+                        asset.ProjectPath)
+                    : reference.CachedProjectPath ??
+                      reference.Guid.ToString();
+
+            ImGui.TextUnformatted(
+                displayName);
+
+            if (!editable)
+            {
+                continue;
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.SmallButton(
+                    $"Remove##event-module:{reference.Guid}:{displayName}"))
+            {
+                begin();
+                runner.RemoveModule(
+                    reference);
+                changed();
+                end();
+            }
+        }
+
+        if (!editable)
+        {
+            return;
+        }
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (!ImGui.BeginCombo(
+                "##AttachEventModuleFromComponent",
+                "Attach Event Module..."))
+        {
+            return;
+        }
+
+        AssetRecord[] modules =
+            project.AssetDatabase.Assets
+                .Where(
+                    asset =>
+                        asset.Type ==
+                        AssetType.EventModule)
+                .OrderBy(
+                    asset =>
+                        asset.ProjectPath,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (modules.Length ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "No Event Module assets in this project.");
+        }
+
+        foreach (AssetRecord moduleAsset
+                 in modules)
+        {
+            bool alreadyAttached =
+                runner.Modules.Any(
+                    reference =>
+                        reference.Guid !=
+                            Guid.Empty &&
+                        reference.Guid ==
+                            moduleAsset.Guid);
+
+            string displayName =
+                Path.GetFileNameWithoutExtension(
+                    moduleAsset.ProjectPath);
+
+            ImGui.BeginDisabled(
+                alreadyAttached);
+
+            if (ImGui.Selectable(
+                    $"{displayName}##scene-event:{moduleAsset.Guid}"))
+            {
+                try
+                {
+                    EventModuleDefinition definition =
+                        new EventModuleSerializer()
+                            .Load(
+                                moduleAsset.FullPath);
+
+                    var reference =
+                        new AssetReference(
+                            moduleAsset.Guid,
+                            moduleAsset.ProjectPath);
+
+                    begin();
+                    runner.AddResolvedModule(
+                        reference,
+                        definition);
+                    changed();
+                    end();
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine(
+                        $"Could not attach Event Module '{moduleAsset.ProjectPath}': {exception.Message}");
+                }
+            }
+
+            ImGui.EndDisabled();
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    alreadyAttached
+                        ? "Already attached."
+                        : moduleAsset.ProjectPath);
+            }
+        }
+
+        ImGui.EndCombo();
     }
 
     private static void DrawMissingActions(PlayerController3D playerInput, EditorProjectContext project,
