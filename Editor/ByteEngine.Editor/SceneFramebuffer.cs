@@ -326,15 +326,20 @@ internal sealed class SceneFramebuffer
             _colorTexture
         );
 
+        /*
+         * Keep the editor/game viewport at floating-point precision.
+         * Tone-mapped HDR/PBR gradients should not be quantized to 8-bit
+         * before ImGui presents the texture to the final display.
+         */
         GL.TexImage2D(
             TextureTarget.Texture2D,
             0,
-            PixelInternalFormat.Rgba8,
+            PixelInternalFormat.Rgba16f,
             _width,
             _height,
             0,
             PixelFormat.Rgba,
-            PixelType.UnsignedByte,
+            PixelType.Float,
             IntPtr.Zero
         );
 
@@ -506,7 +511,7 @@ internal sealed class SceneFramebuffer
                 ),
                 new Vector2(
                     halfWorldWidth *
-                    2.0f,
+                    2f,
                     lineWidth
                 ),
                 gridColor
@@ -568,6 +573,7 @@ internal sealed class SceneFramebuffer
                 yAxisColor
             );
         }
+
     }
 
     private void DrawGrid3D(

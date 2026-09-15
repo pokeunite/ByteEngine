@@ -195,6 +195,21 @@ internal sealed class SkyShader3D : IDisposable
                     vec3(1.0));
         }
 
+        float screenDither(
+            vec2 position)
+        {
+            return
+                fract(
+                    52.9829189*
+                    fract(
+                        dot(
+                            position,
+                            vec2(
+                                0.06711056,
+                                0.00583715))))-
+                0.5;
+        }
+
         void main()
         {
             vec3 direction=
@@ -261,6 +276,16 @@ internal sealed class SkyShader3D : IDisposable
                             1.0/
                             2.2));
 
+                displayEnvironment=
+                    clamp(
+                        displayEnvironment+
+                        vec3(
+                            screenDither(
+                                gl_FragCoord.xy)/
+                            255.0),
+                        vec3(0.0),
+                        vec3(1.0));
+
                 FragColor=
                     vec4(
                         displayEnvironment,
@@ -321,6 +346,16 @@ internal sealed class SkyShader3D : IDisposable
                     vec3(
                         1.0/
                         2.2));
+
+            displayColor=
+                clamp(
+                    displayColor+
+                    vec3(
+                        screenDither(
+                            gl_FragCoord.xy)/
+                        255.0),
+                    vec3(0.0),
+                    vec3(1.0));
 
             FragColor=
                 vec4(

@@ -475,15 +475,6 @@ internal sealed class Shader3D : IDisposable
                 9.0;
         }
 
-            return
-                max(
-                    environmentColor*
-                    max(
-                        uEnvironmentIntensity,
-                        0.0),
-                    vec3(0.0));
-        }
-
         vec3 rotateEnvironmentDirection(
             vec3 direction)
         {
@@ -572,6 +563,21 @@ internal sealed class Shader3D : IDisposable
                     ),
                     vec3(0.0),
                     vec3(1.0));
+        }
+
+        float screenDither(
+            vec2 position)
+        {
+            return
+                fract(
+                    52.9829189*
+                    fract(
+                        dot(
+                            position,
+                            vec2(
+                                0.06711056,
+                                0.00583715))))-
+                0.5;
         }
 
         void main()
@@ -874,6 +880,21 @@ internal sealed class Shader3D : IDisposable
                 pow(
                     mappedColor,
                     vec3(1.0/2.2));
+
+            /*
+             * The final monitor/display path is normally 8-bit. Add a tiny
+             * screen-space dither before that quantization so smooth HDR
+             * gradients do not collapse into visible contour bands.
+             */
+            displayColor=
+                clamp(
+                    displayColor+
+                    vec3(
+                        screenDither(
+                            gl_FragCoord.xy)/
+                        255.0),
+                    vec3(0.0),
+                    vec3(1.0));
 
             FragColor=
                 vec4(
