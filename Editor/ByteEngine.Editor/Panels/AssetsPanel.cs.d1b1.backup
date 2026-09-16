@@ -81,28 +81,27 @@ internal sealed class AssetsPanel
 
     private string? _expandedModelPath;
 
-    private float _assetTileScale =
-        1.0f;
+    private int _assetTileScaleIndex =
+        1;
 
     private float BrowserTileScale =>
-        Math.Clamp(
-            _assetTileScale,
-            0.75f,
-            1.65f);
-
-    private float BrowserIconSize =>
-        48.0f *
-        BrowserTileScale;
+        _assetTileScaleIndex switch
+        {
+            0 => 0.85f,
+            2 => 1.20f,
+            _ => 1.0f
+        };
 
     private float BrowserTileWidth =>
-        158.0f *
+        142.0f *
         BrowserTileScale;
 
     private float BrowserTileHeight =>
-        BrowserIconSize +
-        ImGui.GetTextLineHeight() *
-        3.0f +
-        44.0f *
+        132.0f *
+        BrowserTileScale;
+
+    private float BrowserIconSize =>
+        48.0f *
         BrowserTileScale;
 
     public bool IsOpen { get; set; } =
@@ -347,19 +346,36 @@ internal sealed class AssetsPanel
         }
 
         ImGui.SameLine();
-        ImGui.TextDisabled("Icon Size");
+        ImGui.TextDisabled("Tiles");
         ImGui.SameLine();
 
-        ImGui.SetNextItemWidth(
-            150.0f);
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 0
+                    ? "S*"
+                    : "S"))
+        {
+            _assetTileScaleIndex = 0;
+        }
 
-        ImGui.SliderFloat(
-            "##AssetIconSize",
-            ref _assetTileScale,
-            0.75f,
-            1.65f,
-            "%.2fx",
-            ImGuiSliderFlags.AlwaysClamp);
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 1
+                    ? "M*"
+                    : "M"))
+        {
+            _assetTileScaleIndex = 1;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 2
+                    ? "L*"
+                    : "L"))
+        {
+            _assetTileScaleIndex = 2;
+        }
 
         ImGui.TextDisabled("PATH");
         ImGui.SameLine();
@@ -917,9 +933,7 @@ internal sealed class AssetsPanel
             minimum,
             maximum,
             EditorIcons.ForAsset(asset?.Type),
-            GetTileDisplayName(
-                file,
-                asset?.Type),
+            Path.GetFileName(file),
             EditorIcons.AssetTypeName(asset?.Type),
             selected,
             hovered,
@@ -1091,9 +1105,6 @@ internal sealed class AssetsPanel
         float scale =
             BrowserTileScale;
 
-        float lineHeight =
-            ImGui.GetTextLineHeight();
-
         Vector4 background =
             selected
                 ? new Vector4(
@@ -1108,9 +1119,8 @@ internal sealed class AssetsPanel
         drawList.AddRectFilled(
             minimum,
             maximum,
-            ImGui.GetColorU32(
-                background),
-            4.0f);
+            ImGui.GetColorU32(background),
+            3.0f * scale);
 
         drawList.AddRect(
             minimum,
@@ -1119,37 +1129,25 @@ internal sealed class AssetsPanel
                 selected
                     ? EditorTheme.Accent
                     : EditorTheme.Border),
-            4.0f);
+            3.0f * scale);
 
         float iconSize =
             BrowserIconSize;
-
-        float iconTop =
-            minimum.Y +
-            10.0f *
-            scale;
 
         EditorIcons.DrawTileIcon(
             icon,
             new Vector2(
                 minimum.X +
-                (
-                    BrowserTileWidth -
-                    iconSize
-                ) *
+                (BrowserTileWidth - iconSize) *
                 0.5f,
-                iconTop),
+                minimum.Y +
+                10.0f *
+                scale),
             iconSize);
 
         float textWidth =
             BrowserTileWidth -
-            18.0f *
-            scale;
-
-        float nameY =
-            iconTop +
-            iconSize +
-            9.0f *
+            16.0f *
             scale;
 
         string displayName =
@@ -1158,29 +1156,20 @@ internal sealed class AssetsPanel
                 textWidth);
 
         Vector2 nameSize =
-            ImGui.CalcTextSize(
-                displayName);
+            ImGui.CalcTextSize(displayName);
 
         drawList.AddText(
             new Vector2(
                 minimum.X +
                 Math.Max(
-                    (
-                        BrowserTileWidth -
-                        nameSize.X
-                    ) *
+                    (BrowserTileWidth - nameSize.X) *
                     0.5f,
-                    5.0f),
-                nameY),
-            ImGui.GetColorU32(
-                EditorTheme.Text),
+                    5.0f * scale),
+                minimum.Y +
+                72.0f *
+                scale),
+            ImGui.GetColorU32(EditorTheme.Text),
             displayName);
-
-        float typeY =
-            nameY +
-            lineHeight +
-            4.0f *
-            scale;
 
         string displayType =
             FitTileText(
@@ -1188,61 +1177,35 @@ internal sealed class AssetsPanel
                 textWidth);
 
         Vector2 typeSize =
-            ImGui.CalcTextSize(
-                displayType);
+            ImGui.CalcTextSize(displayType);
 
         drawList.AddText(
             new Vector2(
                 minimum.X +
                 Math.Max(
-                    (
-                        BrowserTileWidth -
-                        typeSize.X
-                    ) *
+                    (BrowserTileWidth - typeSize.X) *
                     0.5f,
-                    5.0f),
-                typeY),
-            ImGui.GetColorU32(
-                EditorTheme.TextMuted),
+                    5.0f * scale),
+                minimum.Y +
+                94.0f *
+                scale),
+            ImGui.GetColorU32(EditorTheme.TextMuted),
             displayType);
 
-        if (string.IsNullOrWhiteSpace(
-                footer))
+        if (string.IsNullOrWhiteSpace(footer))
         {
             return;
         }
 
-        float footerTop =
-            typeY +
-            lineHeight +
-            5.0f *
+        float footerY =
+            maximum.Y -
+            22.0f *
             scale;
-
-        drawList.AddRectFilled(
-            new Vector2(
-                minimum.X +
-                5.0f *
-                scale,
-                footerTop),
-            new Vector2(
-                maximum.X -
-                5.0f *
-                scale,
-                maximum.Y -
-                6.0f *
-                scale),
-            ImGui.GetColorU32(
-                new Vector4(
-                    0.08f,
-                    0.095f,
-                    0.12f,
-                    0.72f)),
-            3.0f);
 
         if (showExpandArrow)
         {
             float arrowSize =
-                5.5f *
+                5.0f *
                 scale;
 
             Vector2 arrowCenter =
@@ -1250,14 +1213,9 @@ internal sealed class AssetsPanel
                     minimum.X +
                     18.0f *
                     scale,
-                    footerTop +
-                    lineHeight *
-                    0.55f);
-
-            uint animationColor =
-                ImGui.GetColorU32(
-                    EditorIcons.Color(
-                        EditorIconKind.Animation));
+                    footerY +
+                    7.0f *
+                    scale);
 
             if (expanded)
             {
@@ -1266,99 +1224,73 @@ internal sealed class AssetsPanel
                         arrowCenter.X -
                         arrowSize,
                         arrowCenter.Y -
-                        arrowSize *
-                        0.55f),
+                        arrowSize * 0.55f),
                     new Vector2(
                         arrowCenter.X +
                         arrowSize,
                         arrowCenter.Y -
-                        arrowSize *
-                        0.55f),
+                        arrowSize * 0.55f),
                     new Vector2(
                         arrowCenter.X,
                         arrowCenter.Y +
                         arrowSize),
-                    animationColor);
+                    ImGui.GetColorU32(
+                        EditorIcons.Color(
+                            EditorIconKind.Animation)));
             }
             else
             {
                 drawList.AddTriangleFilled(
                     new Vector2(
                         arrowCenter.X -
-                        arrowSize *
-                        0.55f,
+                        arrowSize * 0.55f,
                         arrowCenter.Y -
                         arrowSize),
                     new Vector2(
                         arrowCenter.X -
-                        arrowSize *
-                        0.55f,
+                        arrowSize * 0.55f,
                         arrowCenter.Y +
                         arrowSize),
                     new Vector2(
                         arrowCenter.X +
                         arrowSize,
                         arrowCenter.Y),
-                    animationColor);
+                    ImGui.GetColorU32(
+                        EditorIcons.Color(
+                            EditorIconKind.Animation)));
             }
 
             drawList.AddText(
                 new Vector2(
                     minimum.X +
-                    31.0f *
+                    30.0f *
                     scale,
-                    footerTop),
-                animationColor,
+                    footerY),
+                ImGui.GetColorU32(
+                    EditorIcons.Color(
+                        EditorIconKind.Animation)),
                 footer);
 
             return;
         }
 
-        string displayFooter =
-            FitTileText(
-                footer,
-                textWidth);
-
         Vector2 footerSize =
-            ImGui.CalcTextSize(
-                displayFooter);
+            ImGui.CalcTextSize(footer);
 
         drawList.AddText(
             new Vector2(
                 minimum.X +
                 Math.Max(
-                    (
-                        BrowserTileWidth -
-                        footerSize.X
-                    ) *
+                    (BrowserTileWidth - footerSize.X) *
                     0.5f,
-                    5.0f),
-                footerTop),
-            ImGui.GetColorU32(
-                EditorTheme.TextMuted),
-            displayFooter);
+                    5.0f * scale),
+                footerY),
+            ImGui.GetColorU32(EditorTheme.TextMuted),
+            footer);
     }
 
-    private static string GetTileDisplayName(
-        string file,
-        AssetType? type)
-    {
-        if (type ==
-                null ||
-            type ==
-                AssetType.Unknown)
-        {
-            return
-                Path.GetFileName(
-                    file);
-        }
-
-        return
-            Path.GetFileNameWithoutExtension(
-                file);
-    }
-
-    private static string FitTileText(        string text,
+    private static string FitTileText(
+        string text,
         float maximumWidth)
     {
         if (string.IsNullOrWhiteSpace(text) ||

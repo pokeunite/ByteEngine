@@ -305,38 +305,7 @@ internal sealed class ImGuiController
 
     private static void ConfigureStyle()
     {
-        ImGuiStylePtr style =
-            ImGui.GetStyle();
-
-        style.WindowRounding =
-            3.0f;
-
-        style.FrameRounding =
-            3.0f;
-
-        style.GrabRounding =
-            3.0f;
-
-        style.TabRounding =
-            3.0f;
-
-        style.WindowPadding =
-            new Vector2(
-                8.0f,
-                8.0f
-            );
-
-        style.FramePadding =
-            new Vector2(
-                6.0f,
-                4.0f
-            );
-
-        style.ItemSpacing =
-            new Vector2(
-                7.0f,
-                5.0f
-            );
+        EditorTheme.ApplyGodotInspired();
     }
 
     private unsafe void CreateDeviceResources()
@@ -424,6 +393,29 @@ internal sealed class ImGuiController
 
         ImGuiIOPtr io =
             ImGui.GetIO();
+
+        string fontsDirectory =
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.Fonts);
+
+        string segoeUi =
+            Path.Combine(
+                fontsDirectory,
+                "segoeui.ttf");
+
+        if (File.Exists(segoeUi))
+        {
+            io.Fonts.AddFontFromFileTTF(
+                segoeUi,
+                18.0f);
+        }
+        else
+        {
+            io.Fonts.AddFontDefault();
+        }
+
+        io.FontGlobalScale =
+            1.0f;
 
         io.Fonts.GetTexDataAsRGBA32(
             out byte* pixels,
@@ -917,3 +909,4 @@ internal sealed class ImGuiController
         }
         """;
 }
+

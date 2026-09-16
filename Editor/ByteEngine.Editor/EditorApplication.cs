@@ -328,10 +328,25 @@ public sealed class EditorApplication
 
     private void DrawMainMenu()
     {
+        ImGui.PushStyleVar(
+            ImGuiStyleVar.FramePadding,
+            new Vector2(
+                9.0f,
+                6.0f));
+
         if (!ImGui.BeginMainMenuBar())
         {
+            ImGui.PopStyleVar();
             return;
         }
+
+        ImGui.TextColored(
+            EditorTheme.AccentHover,
+            "BYTEENGINE");
+
+        ImGui.SameLine();
+        ImGui.TextDisabled("|");
+        ImGui.SameLine();
 
         DrawFileMenu();
 
@@ -347,9 +362,11 @@ public sealed class EditorApplication
             DrawGameObjectMenu();
             DrawWindowMenu();
             DrawPlayControls();
+            DrawEditorStatus();
         }
 
         ImGui.EndMainMenuBar();
+        ImGui.PopStyleVar();
     }
 
     private void DrawFileMenu()
@@ -730,30 +747,89 @@ public sealed class EditorApplication
             return;
         }
 
+        const float playWidth =
+            78.0f;
+
+        const float pauseWidth =
+            78.0f;
+
+        const float stopWidth =
+            72.0f;
+
+        const float spacing =
+            6.0f;
+
+        float totalWidth =
+            playWidth +
+            pauseWidth +
+            stopWidth +
+            spacing *
+            2.0f;
+
+        float centeredX =
+            (
+                ImGui.GetWindowWidth() -
+                totalWidth
+            ) *
+            0.5f;
+
         ImGui.SetCursorPosX(
             Math.Max(
-                ImGui.GetCursorPosX(),
-                (
-                    ImGui.GetWindowWidth() -
-                    190.0f
-                ) /
-                2.0f
-            )
-        );
+                ImGui.GetCursorPosX() +
+                10.0f,
+                centeredX));
+
+        bool playActive =
+            _state.Mode ==
+            EditorMode.Play;
+
+        bool paused =
+            _state.Mode ==
+            EditorMode.Paused;
+
+        ImGui.PushStyleColor(
+            ImGuiCol.Button,
+            playActive
+                ? new Vector4(
+                    0.16f,
+                    0.42f,
+                    0.25f,
+                    1.0f)
+                : new Vector4(
+                    0.13f,
+                    0.22f,
+                    0.18f,
+                    1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonHovered,
+            new Vector4(
+                0.20f,
+                0.56f,
+                0.32f,
+                1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonActive,
+            new Vector4(
+                0.24f,
+                0.68f,
+                0.39f,
+                1.0f));
 
         ImGui.BeginDisabled(
             _state.Mode ==
-            EditorMode.Play
-        );
+            EditorMode.Play);
 
         if (ImGui.Button(
-                _state.Mode ==
-                EditorMode.Paused
-                    ? "Resume"
-                    : "Play"))
+                paused
+                    ? "> Resume"
+                    : "> Play",
+                new Vector2(
+                    playWidth,
+                    0.0f)))
         {
-            if (_state.Mode ==
-                EditorMode.Paused)
+            if (paused)
             {
                 ResumePlayMode();
             }
@@ -764,35 +840,191 @@ public sealed class EditorApplication
         }
 
         ImGui.EndDisabled();
-        ImGui.SameLine();
+        ImGui.PopStyleColor(3);
+
+        ImGui.SameLine(
+            0.0f,
+            spacing);
+
+        ImGui.PushStyleColor(
+            ImGuiCol.Button,
+            paused
+                ? new Vector4(
+                    0.48f,
+                    0.34f,
+                    0.12f,
+                    1.0f)
+                : new Vector4(
+                    0.24f,
+                    0.20f,
+                    0.12f,
+                    1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonHovered,
+            new Vector4(
+                0.64f,
+                0.45f,
+                0.15f,
+                1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonActive,
+            new Vector4(
+                0.78f,
+                0.55f,
+                0.18f,
+                1.0f));
 
         ImGui.BeginDisabled(
             _state.Mode !=
-            EditorMode.Play
-        );
+            EditorMode.Play);
 
-        if (ImGui.Button("Pause"))
+        if (ImGui.Button(
+                "|| Pause",
+                new Vector2(
+                    pauseWidth,
+                    0.0f)))
         {
             PausePlayMode();
         }
 
         ImGui.EndDisabled();
-        ImGui.SameLine();
+        ImGui.PopStyleColor(3);
+
+        ImGui.SameLine(
+            0.0f,
+            spacing);
+
+        ImGui.PushStyleColor(
+            ImGuiCol.Button,
+            _state.Mode !=
+                EditorMode.Edit
+                ? new Vector4(
+                    0.46f,
+                    0.17f,
+                    0.18f,
+                    1.0f)
+                : new Vector4(
+                    0.23f,
+                    0.13f,
+                    0.14f,
+                    1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonHovered,
+            new Vector4(
+                0.62f,
+                0.22f,
+                0.24f,
+                1.0f));
+
+        ImGui.PushStyleColor(
+            ImGuiCol.ButtonActive,
+            new Vector4(
+                0.74f,
+                0.28f,
+                0.30f,
+                1.0f));
 
         ImGui.BeginDisabled(
             _state.Mode ==
-            EditorMode.Edit
-        );
+            EditorMode.Edit);
 
-        if (ImGui.Button("Stop"))
+        if (ImGui.Button(
+                "[] Stop",
+                new Vector2(
+                    stopWidth,
+                    0.0f)))
         {
             StopPlayMode();
         }
 
         ImGui.EndDisabled();
+        ImGui.PopStyleColor(3);
     }
 
-       private void HandleShortcuts()
+    private void DrawEditorStatus()
+    {
+        if (_state == null)
+        {
+            return;
+        }
+
+        string sceneName =
+            _state.SceneFilePath ==
+                null
+                ? "Untitled.bytescene"
+                : Path.GetFileName(
+                    _state.SceneFilePath);
+
+        string modeText =
+            _state.Mode switch
+            {
+                EditorMode.Play =>
+                    "PLAY",
+                EditorMode.Paused =>
+                    "PAUSED",
+                _ =>
+                    "EDIT"
+            };
+
+        Vector4 modeColor =
+            _state.Mode switch
+            {
+                EditorMode.Play =>
+                    new Vector4(
+                        0.38f,
+                        0.82f,
+                        0.49f,
+                        1.0f),
+                EditorMode.Paused =>
+                    new Vector4(
+                        0.95f,
+                        0.70f,
+                        0.28f,
+                        1.0f),
+                _ =>
+                    EditorTheme.AccentHover
+            };
+
+        string statusText =
+            $"{modeText}  |  {sceneName}";
+
+        float statusWidth =
+            ImGui.CalcTextSize(
+                statusText).X +
+            18.0f;
+
+        float targetX =
+            ImGui.GetWindowWidth() -
+            statusWidth;
+
+        if (targetX >
+            ImGui.GetCursorPosX() +
+            12.0f)
+        {
+            ImGui.SetCursorPosX(
+                targetX);
+        }
+        else
+        {
+            ImGui.SameLine();
+        }
+
+        ImGui.TextColored(
+            modeColor,
+            modeText);
+
+        ImGui.SameLine();
+        ImGui.TextDisabled("|");
+
+        ImGui.SameLine();
+        ImGui.TextDisabled(
+            sceneName);
+    }
+
+    private void HandleShortcuts()
     {
         if (_state == null ||
             ImGui.GetIO().WantTextInput)

@@ -56,14 +56,22 @@ internal sealed class EditorLayout
             ImGuiWindowFlags.NoMove |
             ImGuiWindowFlags.NoBringToFrontOnFocus |
             ImGuiWindowFlags.NoNavFocus |
-            ImGuiWindowFlags.NoSavedSettings |
-            ImGuiWindowFlags.NoBackground;
+            ImGuiWindowFlags.NoSavedSettings;
+
+        ImGui.PushStyleColor(
+            ImGuiCol.WindowBg,
+            new Vector4(
+                0.070f,
+                0.082f,
+                0.102f,
+                1.0f));
 
         ImGui.Begin(
             "ByteEngine Dock Host",
             windowFlags
         );
 
+        ImGui.PopStyleColor();
         ImGui.PopStyleVar(3);
 
         uint dockSpaceId =

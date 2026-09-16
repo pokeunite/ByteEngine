@@ -1,0 +1,168 @@
+    private void DrawToolbar(
+        EditorState state,
+        EditorLog log)
+    {
+        if (ImGui.SmallButton("Assets"))
+        {
+            SelectDirectory(GetAssetsRoot());
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("Scenes"))
+        {
+            SelectDirectory(GetScenesRoot());
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("+ Create"))
+        {
+            ImGui.OpenPopup("AssetBrowserCreateMenu");
+        }
+
+        if (ImGui.BeginPopup("AssetBrowserCreateMenu"))
+        {
+            if (ImGui.MenuItem("New Folder"))
+            {
+                _newFolderName = "New Folder";
+                _showCreateFolder = true;
+            }
+
+            if (ImGui.MenuItem("Byte Blueprint"))
+            {
+                _showCreateBlueprint = true;
+            }
+
+            if (ImGui.MenuItem("Event Module"))
+            {
+                _showCreateEventModule = true;
+            }
+
+            bool canCreateFromSelection =
+                state.Mode == EditorMode.Edit &&
+                state.SelectedObject != null &&
+                IsInsideDirectory(
+                    _currentDirectory,
+                    GetAssetsRoot());
+
+            ImGui.BeginDisabled(!canCreateFromSelection);
+
+            if (ImGui.MenuItem("Blueprint From Selected"))
+            {
+                CreateBlueprintFromSelectedObject(
+                    state,
+                    log);
+            }
+
+            ImGui.EndDisabled();
+            ImGui.EndPopup();
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("Refresh"))
+        {
+            Refresh(log);
+        }
+
+        ImGui.SameLine();
+        ImGui.TextDisabled("Search");
+        ImGui.SameLine();
+
+        float searchWidth =
+            Math.Clamp(
+                ImGui.GetContentRegionAvail().X - 150.0f,
+                100.0f,
+                240.0f);
+
+        ImGui.SetNextItemWidth(searchWidth);
+
+        ImGui.InputText(
+            "##AssetBrowserSearch",
+            ref _assetSearch,
+            128);
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _gridView
+                    ? "Grid*"
+                    : "Grid"))
+        {
+            _gridView = true;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                !_gridView
+                    ? "List*"
+                    : "List"))
+        {
+            _gridView = false;
+        }
+
+        ImGui.SameLine();
+        ImGui.TextDisabled("Tiles");
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 0
+                    ? "S*"
+                    : "S"))
+        {
+            _assetTileScaleIndex = 0;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 1
+                    ? "M*"
+                    : "M"))
+        {
+            _assetTileScaleIndex = 1;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton(
+                _assetTileScaleIndex == 2
+                    ? "L*"
+                    : "L"))
+        {
+            _assetTileScaleIndex = 2;
+        }
+
+        ImGui.TextDisabled("PATH");
+        ImGui.SameLine();
+
+        string breadcrumb =
+            Breadcrumb();
+
+        float available =
+            Math.Max(
+                ImGui.GetContentRegionAvail().X,
+                40.0f);
+
+        string visibleBreadcrumb =
+            breadcrumb;
+
+        while (visibleBreadcrumb.Length > 8 &&
+               ImGui.CalcTextSize(visibleBreadcrumb).X > available)
+        {
+            visibleBreadcrumb =
+                "..." +
+                visibleBreadcrumb[4..];
+        }
+
+        ImGui.Text(visibleBreadcrumb);
+
+        if (ImGui.IsItemHovered() &&
+            visibleBreadcrumb != breadcrumb)
+        {
+            ImGui.SetTooltip(breadcrumb);
+        }
+    }
+

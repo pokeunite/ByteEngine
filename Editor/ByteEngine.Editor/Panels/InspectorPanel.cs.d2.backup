@@ -84,42 +84,6 @@ internal sealed class InspectorPanel
 
         GameObject selected = state.SelectedObject!;
 
-        ImGui.PushStyleColor(
-            ImGuiCol.ChildBg,
-            new Vector4(
-                0.105f,
-                0.12f,
-                0.15f,
-                1.0f));
-
-        if (ImGui.BeginChild(
-                "##InspectorObjectHeader",
-                new Vector2(
-                    0.0f,
-                    54.0f),
-                true,
-                ImGuiWindowFlags.NoScrollbar))
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    0.55f,
-                    0.78f,
-                    1.0f,
-                    1.0f),
-                "GAME OBJECT");
-
-            ImGui.SameLine();
-            ImGui.TextDisabled(
-                state.Mode.ToString());
-
-            ImGui.TextUnformatted(
-                selected.Name);
-        }
-
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
-        ImGui.Spacing();
-
         if (!readOnly && selected.GetComponent<BlueprintInstance>() is { } blueprintInstance)
         {
             BlueprintOverrideSummary summary = BlueprintInstanceSynchronizer.Analyze(selected, project);
@@ -172,26 +136,10 @@ internal sealed class InspectorPanel
             ImGui.Separator();
         }
 
-        ImGui.SetNextItemWidth(
-            -44.0f);
-
-        ImGui.InputTextWithHint(
-            "##InspectorSearch",
-            "Search properties...",
-            ref _search,
-            128);
-
+        ImGui.SetNextItemWidth(-38f);
+        ImGui.InputTextWithHint("##InspectorSearch", "Search properties...", ref _search, 128);
         ImGui.SameLine();
-
-        if (ImGui.Button(
-                "...",
-                new Vector2(
-                    36.0f,
-                    0.0f)))
-        {
-            ImGui.OpenPopup(
-                "Inspector Options");
-        }
+        if (ImGui.Button("...")) ImGui.OpenPopup("Inspector Options");
         if (ImGui.BeginPopup("Inspector Options"))
         {
             if (ImGui.MenuItem("Collapse All")) _setExpansion = false;
@@ -217,39 +165,7 @@ internal sealed class InspectorPanel
 
         if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
         bool showTransform = string.IsNullOrWhiteSpace(_search) || "Transform Position Rotation Scale".Contains(_search, StringComparison.OrdinalIgnoreCase);
-        ImGui.PushStyleColor(
-            ImGuiCol.Header,
-            new Vector4(
-                0.14f,
-                0.17f,
-                0.21f,
-                1.0f));
-
-        ImGui.PushStyleColor(
-            ImGuiCol.HeaderHovered,
-            new Vector4(
-                0.18f,
-                0.22f,
-                0.28f,
-                1.0f));
-
-        ImGui.PushStyleColor(
-            ImGuiCol.HeaderActive,
-            new Vector4(
-                0.20f,
-                0.30f,
-                0.40f,
-                1.0f));
-
-        bool transformOpen =
-            showTransform &&
-            ImGui.CollapsingHeader(
-                "Transform",
-                ImGuiTreeNodeFlags.DefaultOpen);
-
-        ImGui.PopStyleColor(3);
-
-        if (transformOpen)
+        if (showTransform && ImGui.CollapsingHeader("Transform", ImGuiTreeNodeFlags.DefaultOpen))
         {
         Vector3 oldPosition = selected.Transform.LocalPosition;
         Vector3 position = oldPosition;
@@ -281,53 +197,9 @@ internal sealed class InspectorPanel
             ComponentMetadata metadata = ComponentMetadataRegistry.Get(component.GetType());
             if (!metadata.BeginnerVisible && !_showAdvanced) continue;
             if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
-            ImGuiTreeNodeFlags flags =
-                ImGuiTreeNodeFlags.None;
-
-            ImGui.PushStyleColor(
-                ImGuiCol.Header,
-                new Vector4(
-                    0.14f,
-                    0.17f,
-                    0.21f,
-                    1.0f));
-
-            ImGui.PushStyleColor(
-                ImGuiCol.HeaderHovered,
-                new Vector4(
-                    0.18f,
-                    0.22f,
-                    0.28f,
-                    1.0f));
-
-            ImGui.PushStyleColor(
-                ImGuiCol.HeaderActive,
-                new Vector4(
-                    0.20f,
-                    0.30f,
-                    0.40f,
-                    1.0f));
-
-            bool componentOpen =
-                ImGui.CollapsingHeader(
-                    $"{metadata.DisplayName}##{component.GetHashCode()}",
-                    flags);
-
-            bool componentHeaderHovered =
-                ImGui.IsItemHovered();
-
-            ImGui.PopStyleColor(3);
-
-            if (componentHeaderHovered)
-            {
-                ImGui.SetTooltip(
-                    metadata.Description);
-            }
-
-            if (!componentOpen)
-            {
-                continue;
-            }
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.None;
+            if (!ImGui.CollapsingHeader($"{metadata.DisplayName}##{component.GetHashCode()}", flags)) continue;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(metadata.Description);
             bool oldEnabled = component.Enabled;
             bool enabled = oldEnabled;
             bool enabledChanged = ImGui.Checkbox($"Enabled##{component.GetHashCode()}", ref enabled);
@@ -366,21 +238,9 @@ internal sealed class InspectorPanel
 
         _setExpansion = null;
 
-        ImGui.Spacing();
         ImGui.Separator();
-        ImGui.Spacing();
-
         ImGui.BeginDisabled(readOnly);
-
-        if (ImGui.Button(
-                "+ Add Component",
-                new Vector2(
-                    -1.0f,
-                    34.0f)))
-        {
-            ImGui.OpenPopup(
-                "Add Component Popup");
-        }
+        if (ImGui.Button("Add Component")) ImGui.OpenPopup("Add Component Popup");
         if (ImGui.BeginPopup("Add Component Popup"))
         {
             ImGui.InputTextWithHint("##AddComponentSearch", "Search components...", ref _addSearch, 96);

@@ -1352,7 +1352,7 @@ internal sealed class EventWorkspacePanel
             }
 
             ImGui.TextDisabled(
-                $"{rule.Conditions.Count} condition(s) | {rule.Actions.Count} action(s)");
+                $"{rule.Conditions.Count} condition(s)  |  {rule.Actions.Count} action(s)");
 
             if (rule.Conditions.Count ==
                 0)
@@ -1363,12 +1363,12 @@ internal sealed class EventWorkspacePanel
                         0.72f,
                         0.24f,
                         1.0f),
-                    "Every Frame");
+                    "Runs every frame because no conditions are attached.");
             }
             else
             {
                 ImGui.TextDisabled(
-                    "ALL conditions must be true");
+                    "Runs when ALL connected conditions are TRUE.");
             }
 
             if (ImGui.Button(
@@ -1726,12 +1726,71 @@ internal sealed class EventWorkspacePanel
                 ImGuiSelectableFlags.None,
                 new Vector2(
                     -1.0f,
-                    28.0f *
+                    30.0f *
                     GetNodeVisualScale()));
 
+            string description =
+                GetInstructionDescription(
+                    instruction,
+                    condition);
+
+            ImGui.PushStyleColor(
+                ImGuiCol.Button,
+                condition
+                    ? new Vector4(
+                        0.10f,
+                        0.24f,
+                        0.34f,
+                        1.0f)
+                    : new Vector4(
+                        0.34f,
+                        0.20f,
+                        0.08f,
+                        1.0f));
+
+            ImGui.PushStyleColor(
+                ImGuiCol.ButtonHovered,
+                condition
+                    ? new Vector4(
+                        0.13f,
+                        0.31f,
+                        0.43f,
+                        1.0f)
+                    : new Vector4(
+                        0.43f,
+                        0.26f,
+                        0.10f,
+                        1.0f));
+
+            ImGui.SmallButton(
+                $"{category}##InstructionCategory");
+
+            ImGui.PopStyleColor(2);
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    condition
+                        ? $"Condition category: {category}"
+                        : $"Action category: {category}");
+            }
+
+            ImGui.PushTextWrapPos(
+                ImGui.GetCursorPosX() +
+                Math.Max(
+                    ImGui.GetContentRegionAvail().X,
+                    80.0f));
 
             ImGui.TextDisabled(
-                category);
+                description);
+
+            ImGui.PopTextWrapPos();
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    description);
+            }
 
             ImGui.Separator();
 
@@ -4661,6 +4720,199 @@ internal sealed class EventWorkspacePanel
         }
     }
 
+    private static string GetInstructionDescription(
+        VisualInstruction instruction,
+        bool condition)
+    {
+        return instruction.Id switch
+        {
+            "system.always" =>
+                "Always evaluates to TRUE, so the event can run every frame.",
+
+            "system.triggerOnce" =>
+                "Returns TRUE only on the first frame the condition becomes valid.",
+
+            "input.mouseHeld" =>
+                "TRUE while the selected mouse button is being held down.",
+
+            "input.mousePressed" =>
+                "TRUE only on the frame the selected mouse button is pressed.",
+
+            "input.mouseReleased" =>
+                "TRUE only on the frame the selected mouse button is released.",
+
+            "input.keyHeld" =>
+                "TRUE while the selected keyboard key is being held down.",
+
+            "input.keyPressed" =>
+                "TRUE only on the frame the selected keyboard key is pressed.",
+
+            "input.keyReleased" =>
+                "TRUE only on the frame the selected keyboard key is released.",
+
+            "input.actionHeld" =>
+                "TRUE while the selected Input Action is active.",
+
+            "input.actionPressed" =>
+                "TRUE only when the selected Input Action is triggered this frame.",
+
+            "input.actionReleased" =>
+                "TRUE only when the selected Input Action is released this frame.",
+
+            "input.axisGreater" =>
+                "Checks whether the selected input axis is greater than the chosen value.",
+
+            "input.axisLess" =>
+                "Checks whether the selected input axis is less than the chosen value.",
+
+            "input.vectorLengthGreater" =>
+                "Checks whether the selected vector Input Action exceeds the chosen magnitude.",
+
+            "logic.and" =>
+                "TRUE only when every Condition connected to this gate is TRUE.",
+
+            "logic.or" =>
+                "TRUE when at least one Condition connected to this gate is TRUE.",
+
+            "variable.compare" =>
+                "Compares two values using the selected comparison operator.",
+
+            "object.exists" =>
+                "Checks whether the target object currently exists in the scene.",
+
+            "object.isActive" =>
+                "Checks whether the target object is currently active.",
+
+            "object.hasTag" =>
+                "Checks whether the target object has the selected tag.",
+
+            "object.doesNotHaveTag" =>
+                "Checks whether the target object does not have the selected tag.",
+
+            "object.withTagExists" =>
+                "Checks whether any object with the selected tag exists in the scene.",
+
+            "object.isOnLayer" =>
+                "Checks whether the target object is assigned to the selected layer.",
+
+            "audio.isPlaying" =>
+                "Checks whether the target AudioSource3D is currently playing.",
+
+            "character.isGrounded" =>
+                "Checks whether the Character Controller is touching the ground.",
+
+            "character.isFalling" =>
+                "Checks whether the Character Controller is currently falling.",
+
+            "character.isMoving" =>
+                "Checks whether the Character Controller is currently moving.",
+
+            "character.justLanded" =>
+                "TRUE only on the frame the Character Controller lands.",
+
+            "flow.branch" =>
+                "Routes execution through the TRUE or FALSE output based on a Boolean value.",
+
+            "object.destroySelf" =>
+                "Destroys the object that owns this Event Module.",
+
+            "object.destroy" =>
+                "Destroys the selected target object.",
+
+            "object.setActive" =>
+                "Enables or disables the selected target object.",
+
+            "object.spawnEmpty" =>
+                "Creates a new empty GameObject at the selected position.",
+
+            "object.spawnBlueprint" =>
+                "Creates an instance of the selected Blueprint at the chosen position.",
+
+            "object.addTag" =>
+                "Adds the selected tag to the target object.",
+
+            "object.removeTag" =>
+                "Removes the selected tag from the target object.",
+
+            "object.setLayer" =>
+                "Moves the target object to the selected layer.",
+
+            "audio.play" =>
+                "Starts playback on the target AudioSource3D.",
+
+            "audio.pause" =>
+                "Pauses playback on the target AudioSource3D.",
+
+            "audio.stop" =>
+                "Stops playback on the target AudioSource3D.",
+
+            "audio.setVolume" =>
+                "Changes the target AudioSource3D volume.",
+
+            "audio.setPitch" =>
+                "Changes the target AudioSource3D playback pitch.",
+
+            "audio.setLoop" =>
+                "Enables or disables looping on the target AudioSource3D.",
+
+            "character.moveForward" =>
+                "Moves the Character Controller forward by the specified amount.",
+
+            "character.moveRight" =>
+                "Moves the Character Controller sideways by the specified amount.",
+
+            "character.jump" =>
+                "Requests a jump from the Character Controller.",
+
+            "character.setVelocity" =>
+                "Sets the Character Controller velocity directly.",
+
+            "character.addImpulse" =>
+                "Adds an instantaneous velocity impulse to the Character Controller.",
+
+            "transform.setPosition" =>
+                "Sets the target object's world position.",
+
+            "transform.move" =>
+                "Moves the target object by the specified offset.",
+
+            "transform.setX" =>
+                "Sets the target object's X position.",
+
+            "transform.setY" =>
+                "Sets the target object's Y position.",
+
+            "transform.setZ" =>
+                "Sets the target object's Z position.",
+
+            "transform.setRotation" =>
+                "Sets the target object's rotation.",
+
+            "transform.rotateBy" =>
+                "Rotates the target object by the specified amount.",
+
+            "transform.setScale" =>
+                "Sets the target object's scale.",
+
+            "variable.set" =>
+                "Assigns a new value to the selected variable or property.",
+
+            "variable.add" =>
+                "Adds the specified amount to the selected numeric variable.",
+
+            "variable.subtract" =>
+                "Subtracts the specified amount from the selected numeric variable.",
+
+            "variable.toggle" =>
+                "Flips the selected Boolean value between TRUE and FALSE.",
+
+            _ =>
+                condition
+                    ? "Evaluates this condition and passes its TRUE/FALSE result into the event graph."
+                    : "Executes this action when the event reaches this node."
+        };
+    }
+
     private static IReadOnlyList<VisualInstruction> GetConnectedConditions(
         EventRuleDefinition rule)
     {
@@ -5713,8 +5965,9 @@ internal sealed class EventWorkspacePanel
             };
 
         return new Vector2(
-            300.0f,
-            height);
+            320.0f,
+            height +
+            72.0f);
     }
 
     private Vector2 GetEventConditionInput(

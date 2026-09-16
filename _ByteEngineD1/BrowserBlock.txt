@@ -1,0 +1,815 @@
+    private void DrawCurrentFolder(
+        EditorState state,
+        EditorLog log)
+    {
+        UpdateListing();
+
+        string folderName =
+            GetDisplayFolderName(
+                _currentDirectory);
+
+        ImGui.Text(folderName);
+        ImGui.SameLine();
+
+        int visibleFolderCount =
+            _directories.Count(
+                directory =>
+                    MatchesSearch(
+                        Path.GetFileName(directory)));
+
+        int visibleFileCount =
+            _files.Count(
+                file =>
+                    MatchesSearch(
+                        Path.GetFileName(file)));
+
+        ImGui.TextDisabled(
+            string.IsNullOrWhiteSpace(_assetSearch)
+                ? $"{_directories.Count} folder(s), {_files.Count} asset(s)"
+                : $"{visibleFolderCount} folder(s), {visibleFileCount} asset(s) match");
+
+        ImGui.Separator();
+
+        if (_gridView)
+        {
+            DrawAssetGrid(
+                state,
+                log);
+        }
+        else
+        {
+            DrawDirectories(log);
+            DrawFiles(
+                state,
+                log);
+        }
+
+        if (AssetDeleteCommand.ShouldBegin(
+                ImGui.IsWindowFocused(
+                    ImGuiFocusedFlags.RootAndChildWindows),
+                ImGui.IsKeyPressed(ImGuiKey.Delete),
+                _assetSelection.Count))
+        {
+            BeginDeleteSelected();
+        }
+
+        DrawWindowContextMenu(
+            state,
+            log);
+    }
+
+    private void DrawAssetGrid(
+        EditorState state,
+        EditorLog log)
+    {
+        string[] orderedFiles =
+            _files.ToArray();
+
+        _assetSelection.Retain(
+            orderedFiles);
+
+        _assetBounds.Clear();
+
+        float availableWidth =
+            Math.Max(
+                ImGui.GetContentRegionAvail().X,
+                BrowserTileWidth);
+
+        const float spacing = 9.0f;
+
+        int columns =
+            Math.Max(
+                1,
+                (int)(
+                    (availableWidth + spacing) /
+                    (BrowserTileWidth + spacing)));
+
+        int slot = 0;
+
+        foreach (string directory
+                 in _directories.ToArray())
+        {
+            string folderName =
+                Path.GetFileName(directory);
+
+            if (!MatchesSearch(folderName))
+            {
+                continue;
+            }
+
+            BeginGridSlot(
+                slot,
+                columns);
+
+            DrawDirectoryTile(
+                directory,
+                folderName,
+                log);
+
+            slot++;
+        }
+
+        for (int fileIndex = 0;
+             fileIndex < orderedFiles.Length;
+             fileIndex++)
+        {
+            string file =
+                orderedFiles[fileIndex];
+
+            string fileName =
+                Path.GetFileName(file);
+
+            if (!MatchesSearch(fileName))
+            {
+                continue;
+            }
+
+            string projectPath =
+                Path.GetRelativePath(
+                        _project.ProjectRoot,
+                        file)
+                    .Replace(
+                        '\\',
+                        '/');
+
+            _project.AssetDatabase.TryGetAsset(
+                projectPath,
+                out AssetRecord? asset);
+
+            BeginGridSlot(
+                slot,
+                columns);
+
+            DrawAssetTile(
+                state,
+                log,
+                orderedFiles,
+                fileIndex,
+                file,
+                asset);
+
+            slot++;
+
+            if (asset?.Type != AssetType.Model3D ||
+                !string.Equals(
+                    _expandedModelPath,
+                    file,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                ModelAsset model =
+                    _project.Assets.LoadModel(
+                        new AssetReference(
+                            asset.Guid,
+                            asset.ProjectPath));
+
+                foreach (ImportedAnimation animation
+                         in model.Animations)
+                {
+                    if (!MatchesSearch(animation.Name) &&
+                        !string.IsNullOrWhiteSpace(_assetSearch))
+                    {
+                        continue;
+                    }
+
+                    BeginGridSlot(
+                        slot,
+                        columns);
+
+                    DrawAnimationTile(
+                        state,
+                        asset,
+                        animation);
+
+                    slot++;
+                }
+            }
+            catch (Exception exception)
+            {
+                log.Warning(
+                    $"Could not list animation clips for '{asset.ProjectPath}': {exception.Message}");
+            }
+        }
+
+        DrawGridSelectionMarquee(state);
+    }
+
+    private static void BeginGridSlot(
+        int slot,
+        int columns)
+    {
+        if (slot > 0 &&
+            slot % columns != 0)
+        {
+            ImGui.SameLine();
+        }
+    }
+
+    private void DrawDirectoryTile(
+        string directory,
+        string folderName,
+        EditorLog log)
+    {
+        ImGui.PushID(
+            $"folder-tile:{directory}");
+
+        Vector2 minimum =
+            ImGui.GetCursorScreenPos();
+
+        ImGui.InvisibleButton(
+            "##FolderTile",
+            new Vector2(
+                BrowserTileWidth,
+                BrowserTileHeight));
+
+        Vector2 maximum =
+            ImGui.GetItemRectMax();
+
+        bool hovered =
+            ImGui.IsItemHovered();
+
+        DrawBrowserTileVisual(
+            minimum,
+            maximum,
+            EditorIconKind.Folder,
+            folderName,
+            "Folder",
+            false,
+            hovered);
+
+        if (hovered &&
+            ImGui.IsMouseDoubleClicked(
+                ImGuiMouseButton.Left))
+        {
+            SelectDirectory(directory);
+        }
+
+        if (hovered)
+        {
+            ImGui.SetTooltip(folderName);
+        }
+
+        DrawAssetDropTarget(
+            directory,
+            log);
+
+        if (ImGui.BeginPopupContextItem(
+                "FolderTileContext"))
+        {
+            if (ImGui.MenuItem("Open"))
+            {
+                SelectDirectory(directory);
+            }
+
+            if (ImGui.MenuItem("New Folder Here"))
+            {
+                SelectDirectory(directory);
+                _newFolderName = "New Folder";
+                _showCreateFolder = true;
+            }
+
+            ImGui.Separator();
+
+            if (ImGui.MenuItem("Rename"))
+            {
+                BeginRename(
+                    directory,
+                    true);
+            }
+
+            if (ImGui.MenuItem("Delete"))
+            {
+                BeginDelete(
+                    directory,
+                    true);
+            }
+
+            ImGui.EndPopup();
+        }
+
+        ImGui.PopID();
+    }
+
+    private void DrawAssetTile(
+        EditorState state,
+        EditorLog log,
+        IReadOnlyList<string> orderedFiles,
+        int fileIndex,
+        string file,
+        AssetRecord? asset)
+    {
+        ImGui.PushID(
+            $"asset-tile:{file}");
+
+        bool selected =
+            _assetSelection.Contains(file) &&
+            string.IsNullOrWhiteSpace(
+                state.SelectedModelAnimationKey);
+
+        Vector2 minimum =
+            ImGui.GetCursorScreenPos();
+
+        ImGui.InvisibleButton(
+            "##AssetTile",
+            new Vector2(
+                BrowserTileWidth,
+                BrowserTileHeight));
+
+        Vector2 maximum =
+            ImGui.GetItemRectMax();
+
+        bool hovered =
+            ImGui.IsItemHovered();
+
+        bool modelExpanded =
+            asset?.Type == AssetType.Model3D &&
+            string.Equals(
+                _expandedModelPath,
+                file,
+                StringComparison.OrdinalIgnoreCase);
+
+        bool hasExpandableClips =
+            asset?.Type ==
+                AssetType.Model3D;
+
+        DrawBrowserTileVisual(
+            minimum,
+            maximum,
+            EditorIcons.ForAsset(asset?.Type),
+            Path.GetFileName(file),
+            EditorIcons.AssetTypeName(asset?.Type),
+            selected,
+            hovered,
+            hasExpandableClips
+                ? "Clips"
+                : null,
+            hasExpandableClips,
+            modelExpanded);
+
+        _assetBounds.Add(
+            new AssetSelectionBounds(
+                file,
+                minimum,
+                maximum));
+
+        if (ImGui.IsItemClicked(
+                ImGuiMouseButton.Left))
+        {
+            Vector2 mouse =
+                ImGui.GetMousePos();
+
+            bool clickedModelFooter =
+                asset?.Type == AssetType.Model3D &&
+                mouse.Y >=
+                    maximum.Y -
+                    28.0f *
+                    BrowserTileScale;
+
+            if (clickedModelFooter)
+            {
+                _expandedModelPath =
+                    modelExpanded
+                        ? null
+                        : file;
+            }
+            else
+            {
+                ImGuiIOPtr io =
+                    ImGui.GetIO();
+
+                _assetSelection.Click(
+                    orderedFiles,
+                    fileIndex,
+                    io.KeyCtrl,
+                    io.KeyShift);
+
+                SyncPrimaryAssetSelection(state);
+            }
+        }
+
+        if (hovered &&
+            ImGui.IsMouseDoubleClicked(
+                ImGuiMouseButton.Left))
+        {
+            if (asset?.Type == AssetType.Model3D)
+            {
+                _expandedModelPath =
+                    modelExpanded
+                        ? null
+                        : file;
+            }
+            else if (asset != null)
+            {
+                OpenAsset(
+                    asset,
+                    log);
+            }
+        }
+
+        if (hovered)
+        {
+            ImGui.SetTooltip(
+                $"{Path.GetFileName(file)}\n{EditorIcons.AssetTypeName(asset?.Type)}");
+        }
+
+        DrawAssetContextMenu(
+            state,
+            log,
+            asset,
+            file);
+
+        DrawAssetDragSource(
+            asset,
+            file);
+
+        ImGui.PopID();
+    }
+
+    private void DrawAnimationTile(
+        EditorState state,
+        AssetRecord asset,
+        ImportedAnimation animation)
+    {
+        ImGui.PushID(
+            $"animation-tile:{asset.Guid}:{animation.Key}");
+
+        bool selected =
+            state.SelectedAssetId == asset.Guid &&
+            string.Equals(
+                state.SelectedModelAnimationKey,
+                animation.Key,
+                StringComparison.Ordinal);
+
+        Vector2 minimum =
+            ImGui.GetCursorScreenPos();
+
+        ImGui.InvisibleButton(
+            "##AnimationTile",
+            new Vector2(
+                BrowserTileWidth,
+                BrowserTileHeight));
+
+        Vector2 maximum =
+            ImGui.GetItemRectMax();
+
+        bool hovered =
+            ImGui.IsItemHovered();
+
+        DrawBrowserTileVisual(
+            minimum,
+            maximum,
+            EditorIconKind.Animation,
+            animation.Name,
+            "Animation Clip",
+            selected,
+            hovered,
+            $"{animation.Duration:0.00}s");
+
+        if (ImGui.IsItemClicked(
+                ImGuiMouseButton.Left))
+        {
+            state.SelectedAssetId =
+                asset.Guid;
+
+            state.SelectedAssetPath =
+                asset.ProjectPath;
+
+            state.SelectedModelAnimationKey =
+                animation.Key;
+
+            state.SelectedObject =
+                null;
+        }
+
+        if (hovered)
+        {
+            ImGui.SetTooltip(
+                $"Animation Clip\n{animation.Name}\nDuration: {animation.Duration:0.000}s");
+        }
+
+        ImGui.PopID();
+    }
+
+    private void DrawBrowserTileVisual(
+        Vector2 minimum,
+        Vector2 maximum,
+        EditorIconKind icon,
+        string name,
+        string typeName,
+        bool selected,
+        bool hovered,
+        string? footer = null,
+        bool showExpandArrow = false,
+        bool expanded = false)
+    {
+        var drawList =
+            ImGui.GetWindowDrawList();
+
+        float scale =
+            BrowserTileScale;
+
+        Vector4 background =
+            selected
+                ? new Vector4(
+                    EditorTheme.Accent.X,
+                    EditorTheme.Accent.Y,
+                    EditorTheme.Accent.Z,
+                    0.28f)
+                : hovered
+                    ? EditorTheme.PanelHovered
+                    : EditorTheme.PanelRaised;
+
+        drawList.AddRectFilled(
+            minimum,
+            maximum,
+            ImGui.GetColorU32(background),
+            3.0f * scale);
+
+        drawList.AddRect(
+            minimum,
+            maximum,
+            ImGui.GetColorU32(
+                selected
+                    ? EditorTheme.Accent
+                    : EditorTheme.Border),
+            3.0f * scale);
+
+        float iconSize =
+            BrowserIconSize;
+
+        EditorIcons.DrawTileIcon(
+            icon,
+            new Vector2(
+                minimum.X +
+                (BrowserTileWidth - iconSize) *
+                0.5f,
+                minimum.Y +
+                10.0f *
+                scale),
+            iconSize);
+
+        float textWidth =
+            BrowserTileWidth -
+            16.0f *
+            scale;
+
+        string displayName =
+            FitTileText(
+                name,
+                textWidth);
+
+        Vector2 nameSize =
+            ImGui.CalcTextSize(displayName);
+
+        drawList.AddText(
+            new Vector2(
+                minimum.X +
+                Math.Max(
+                    (BrowserTileWidth - nameSize.X) *
+                    0.5f,
+                    5.0f * scale),
+                minimum.Y +
+                72.0f *
+                scale),
+            ImGui.GetColorU32(EditorTheme.Text),
+            displayName);
+
+        string displayType =
+            FitTileText(
+                typeName,
+                textWidth);
+
+        Vector2 typeSize =
+            ImGui.CalcTextSize(displayType);
+
+        drawList.AddText(
+            new Vector2(
+                minimum.X +
+                Math.Max(
+                    (BrowserTileWidth - typeSize.X) *
+                    0.5f,
+                    5.0f * scale),
+                minimum.Y +
+                94.0f *
+                scale),
+            ImGui.GetColorU32(EditorTheme.TextMuted),
+            displayType);
+
+        if (string.IsNullOrWhiteSpace(footer))
+        {
+            return;
+        }
+
+        float footerY =
+            maximum.Y -
+            22.0f *
+            scale;
+
+        if (showExpandArrow)
+        {
+            float arrowSize =
+                5.0f *
+                scale;
+
+            Vector2 arrowCenter =
+                new(
+                    minimum.X +
+                    18.0f *
+                    scale,
+                    footerY +
+                    7.0f *
+                    scale);
+
+            if (expanded)
+            {
+                drawList.AddTriangleFilled(
+                    new Vector2(
+                        arrowCenter.X -
+                        arrowSize,
+                        arrowCenter.Y -
+                        arrowSize * 0.55f),
+                    new Vector2(
+                        arrowCenter.X +
+                        arrowSize,
+                        arrowCenter.Y -
+                        arrowSize * 0.55f),
+                    new Vector2(
+                        arrowCenter.X,
+                        arrowCenter.Y +
+                        arrowSize),
+                    ImGui.GetColorU32(
+                        EditorIcons.Color(
+                            EditorIconKind.Animation)));
+            }
+            else
+            {
+                drawList.AddTriangleFilled(
+                    new Vector2(
+                        arrowCenter.X -
+                        arrowSize * 0.55f,
+                        arrowCenter.Y -
+                        arrowSize),
+                    new Vector2(
+                        arrowCenter.X -
+                        arrowSize * 0.55f,
+                        arrowCenter.Y +
+                        arrowSize),
+                    new Vector2(
+                        arrowCenter.X +
+                        arrowSize,
+                        arrowCenter.Y),
+                    ImGui.GetColorU32(
+                        EditorIcons.Color(
+                            EditorIconKind.Animation)));
+            }
+
+            drawList.AddText(
+                new Vector2(
+                    minimum.X +
+                    30.0f *
+                    scale,
+                    footerY),
+                ImGui.GetColorU32(
+                    EditorIcons.Color(
+                        EditorIconKind.Animation)),
+                footer);
+
+            return;
+        }
+
+        Vector2 footerSize =
+            ImGui.CalcTextSize(footer);
+
+        drawList.AddText(
+            new Vector2(
+                minimum.X +
+                Math.Max(
+                    (BrowserTileWidth - footerSize.X) *
+                    0.5f,
+                    5.0f * scale),
+                footerY),
+            ImGui.GetColorU32(EditorTheme.TextMuted),
+            footer);
+    }
+
+    private static string FitTileText(
+        string text,
+        float maximumWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text) ||
+            ImGui.CalcTextSize(text).X <= maximumWidth)
+        {
+            return text;
+        }
+
+        string extension =
+            Path.GetExtension(text);
+
+        string stem =
+            string.IsNullOrWhiteSpace(extension)
+                ? text
+                : Path.GetFileNameWithoutExtension(text);
+
+        while (stem.Length > 3)
+        {
+            string candidate =
+                stem +
+                "..." +
+                extension;
+
+            if (ImGui.CalcTextSize(candidate).X <= maximumWidth)
+            {
+                return candidate;
+            }
+
+            stem =
+                stem[..^1];
+        }
+
+        return
+            stem +
+            "..." +
+            extension;
+    }
+
+    private bool MatchesSearch(
+        string text)
+    {
+        return
+            string.IsNullOrWhiteSpace(_assetSearch) ||
+            text.Contains(
+                _assetSearch.Trim(),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void DrawGridSelectionMarquee(
+        EditorState state)
+    {
+        bool emptySpaceClicked =
+            ImGui.IsWindowHovered() &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left) &&
+            !ImGui.IsAnyItemHovered();
+
+        if (emptySpaceClicked)
+        {
+            _assetMarquee = true;
+            _assetMarqueeStart = ImGui.GetMousePos();
+            _assetMarqueeEnd = _assetMarqueeStart;
+        }
+
+        if (!_assetMarquee)
+        {
+            return;
+        }
+
+        _assetMarqueeEnd =
+            ImGui.GetMousePos();
+
+        Vector2 minimum =
+            Vector2.Min(
+                _assetMarqueeStart,
+                _assetMarqueeEnd);
+
+        Vector2 maximum =
+            Vector2.Max(
+                _assetMarqueeStart,
+                _assetMarqueeEnd);
+
+        ImGui.GetWindowDrawList()
+            .AddRectFilled(
+                minimum,
+                maximum,
+                ImGui.GetColorU32(
+                    new Vector4(
+                        EditorTheme.Accent.X,
+                        EditorTheme.Accent.Y,
+                        EditorTheme.Accent.Z,
+                        0.12f)));
+
+        ImGui.GetWindowDrawList()
+            .AddRect(
+                minimum,
+                maximum,
+                ImGui.GetColorU32(EditorTheme.Accent));
+
+        if (ImGui.IsMouseDown(
+                ImGuiMouseButton.Left))
+        {
+            return;
+        }
+
+        _assetSelection.Marquee(
+            _assetBounds,
+            _assetMarqueeStart,
+            _assetMarqueeEnd,
+            ImGui.GetIO().KeyCtrl);
+
+        SyncPrimaryAssetSelection(state);
+        _assetMarquee = false;
+    }
+
