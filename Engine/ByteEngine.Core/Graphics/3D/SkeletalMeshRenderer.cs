@@ -14,9 +14,10 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// deformed mesh through ByteEngine's existing stable Mesh/RenderWorld path.
 /// Shader3D, Renderer3D, IBL, shadows, physics and audio are not rewritten.
 ///
-/// Locomotion clips are kept in-place for v0.11-C1: accumulated horizontal
-/// root translation is removed so animation cannot drag the visual mesh away
-/// from the CharacterController3D/camera root.
+/// v0.11-C2 keeps locomotion clips in-place by measuring root travel only
+/// AFTER the complete imported hierarchy has been evaluated into model space.
+/// This avoids FBX local-axis ambiguity and keeps CharacterController3D as the
+/// sole authority for player/world movement.
 ///
 /// Once animation behaviour is stable this component can move skinning to the
 /// GPU without changing imported clips, controller logic or authoring data.
@@ -33,12 +34,19 @@ public sealed class SkeletalMeshRenderer : Component
     private int[] _boneNodeIndices = Array.Empty<int>();
 
     /*
-     * Nodes that can carry locomotion root translation. Until ByteEngine's
-     * dedicated Root Motion phase is implemented, horizontal clip travel must
-     * be removed from these nodes so CharacterController3D remains the sole
-     * owner of world movement.
+     * Root-motion sampling is performed in MODEL SPACE, not in any individual
+     * FBX/glTF node's local axes. The chain starts at the skeleton root bone
+     * and walks upward through Armature/model conversion nodes so imported
+     * coordinate-system rotations are already accounted for before horizontal
+     * travel is identified.
      */
-    private bool[] _rootMotionNodes = Array.Empty<bool>();
+    private int _rootMotionNodeIndex = -1;
+    private int[] _rootMotionChainIndices = Array.Empty<int>();
+
+    private readonly Dictionary<ImportedAnimation, RootMotionRange>
+        _rootMotionRanges = new();
+
+    private Vector3 _modelSpaceRootTravel;
 
     private Vector3[] _basePositions = Array.Empty<Vector3>();
     private Quaternion[] _baseRotations = Array.Empty<Quaternion>();
@@ -102,6 +110,23 @@ public sealed class SkeletalMeshRenderer : Component
             .Select(animation => animation.Name)
             .ToArray()
         ?? Array.Empty<string>();
+
+    /// <summary>
+    /// Root node currently used to measure locomotion travel. Exposed for
+    /// runtime diagnostics; authoring does not need to set this manually.
+    /// </summary>
+    public string RootMotionNodeName =>
+        _rootMotionNodeIndex >= 0 &&
+        _rootMotionNodeIndex < _nodes.Length
+            ? _nodes[_rootMotionNodeIndex].Name
+            : string.Empty;
+
+    /// <summary>
+    /// Horizontal root travel removed from the current rendered pose, measured
+    /// after the complete imported parent chain has been evaluated.
+    /// </summary>
+    public Vector3 ModelSpaceRootTravel =>
+        _modelSpaceRootTravel;
 
     protected override void OnStart()
     {
@@ -209,12 +234,21 @@ public sealed class SkeletalMeshRenderer : Component
             UpdatePoseAndMeshes();
         }
 
+        Matrix4x4 liveWorldMatrix =
+            Transform.WorldMatrix;
+
         foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
         {
+            /*
+             * Animation caches only mesh/model-space placement. The scene
+             * transform is intentionally read here, at render time, so player
+             * movement can never be hidden by a stale animation matrix.
+             */
             context.RenderWorld.Submit(
                 runtime.Mesh,
                 runtime.Material,
-                runtime.ModelMatrix,
+                runtime.MeshToModelMatrix *
+                liveWorldMatrix,
                 ResolveRenderQueue(runtime.Material),
                 true,
                 true,
@@ -488,9 +522,14 @@ public sealed class SkeletalMeshRenderer : Component
                         : -1;
         }
 
-        _rootMotionNodes =
-            new bool[_nodes.Length];
+        _rootMotionNodeIndex =
+            -1;
 
+        /*
+         * Prefer a true skeleton root bone. Its GLOBAL/model-space position
+         * naturally includes animation on any non-bone Armature/model nodes
+         * above it, which is exactly what the old local-axis fix missed.
+         */
         for (int boneIndex = 0;
              boneIndex < _skeleton.Bones.Count;
              boneIndex++)
@@ -503,25 +542,62 @@ public sealed class SkeletalMeshRenderer : Component
             int nodeIndex =
                 _boneNodeIndices[boneIndex];
 
-            /*
-             * FBX/glTF exporters do not agree on whether locomotion travel
-             * lives on the skeleton root itself or on an Armature/model node
-             * above it. Mark the root bone and its ancestor chain.
-             */
-            var visited =
-                new HashSet<int>();
-
-            while (nodeIndex >= 0 &&
-                   nodeIndex < _rootMotionNodes.Length &&
-                   visited.Add(nodeIndex))
+            if (nodeIndex >= 0 &&
+                nodeIndex < _nodes.Length)
             {
-                _rootMotionNodes[nodeIndex] =
-                    true;
+                _rootMotionNodeIndex =
+                    nodeIndex;
 
-                nodeIndex =
-                    _parentIndices[nodeIndex];
+                break;
             }
         }
+
+        /*
+         * Malformed/importer-specific skeletons can occasionally have no bone
+         * flagged as a root. A valid mapped bone is still better than silently
+         * disabling compensation.
+         */
+        if (_rootMotionNodeIndex < 0)
+        {
+            _rootMotionNodeIndex =
+                _boneNodeIndices.FirstOrDefault(
+                    nodeIndex =>
+                        nodeIndex >= 0 &&
+                        nodeIndex < _nodes.Length,
+                    -1);
+        }
+
+        var rootMotionChain =
+            new List<int>();
+
+        var rootMotionVisited =
+            new HashSet<int>();
+
+        int currentRootNode =
+            _rootMotionNodeIndex;
+
+        while (currentRootNode >= 0 &&
+               currentRootNode < _nodes.Length &&
+               rootMotionVisited.Add(currentRootNode))
+        {
+            /*
+             * Stored root -> parent -> grandparent. With System.Numerics
+             * row-vector composition this evaluates as:
+             * rootLocal * parentLocal * grandParentLocal ...
+             */
+            rootMotionChain.Add(
+                currentRootNode);
+
+            currentRootNode =
+                _parentIndices[currentRootNode];
+        }
+
+        _rootMotionChainIndices =
+            rootMotionChain.ToArray();
+
+        _rootMotionRanges.Clear();
+        _modelSpaceRootTravel =
+            Vector3.Zero;
     }
 
     private void BuildRuntimeMeshes(AssetManager assets)
@@ -615,6 +691,9 @@ public sealed class SkeletalMeshRenderer : Component
         Matrix4x4[] locals = BuildLocalPose();
         Matrix4x4[] globals = ComputeGlobals(locals);
 
+        Matrix4x4 rootMotionCorrection =
+            BuildModelSpaceRootMotionCorrection();
+
         foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
         {
             if (runtime.MeshNodeIndex < 0 ||
@@ -670,9 +749,18 @@ public sealed class SkeletalMeshRenderer : Component
 
             SkinMesh(runtime, skinMatrices);
 
-            runtime.ModelMatrix =
+            /*
+             * Keep the animation result in model space. World placement is
+             * applied live in OnRender().
+             *
+             * The correction is applied AFTER meshGlobal, so it is measured in
+             * the same model-space axes as the fully evaluated skeleton root.
+             * This fixes FBX clips whose "forward" translation lives on local Y
+             * or another rotated importer axis.
+             */
+            runtime.MeshToModelMatrix =
                 meshGlobal *
-                Transform.WorldMatrix;
+                rootMotionCorrection;
         }
     }
 
@@ -718,9 +806,8 @@ public sealed class SkeletalMeshRenderer : Component
             }
 
             result[nodeIndex] =
-                Matrix4x4.CreateScale(current.Scale) *
-                Matrix4x4.CreateFromQuaternion(current.Rotation) *
-                Matrix4x4.CreateTranslation(current.Position);
+                PoseToMatrix(
+                    current);
         }
 
         return result;
@@ -754,18 +841,6 @@ public sealed class SkeletalMeshRenderer : Component
                 time,
                 position);
 
-        if (nodeIndex < _rootMotionNodes.Length &&
-            _rootMotionNodes[nodeIndex])
-        {
-            position =
-                RemoveAccumulatedRootTranslation(
-                    channel.Translation,
-                    animation.Duration,
-                    time,
-                    _basePositions[nodeIndex],
-                    position);
-        }
-
         rotation =
             AnimationPoseSampler.Sample(
                 channel.Rotation,
@@ -782,61 +857,184 @@ public sealed class SkeletalMeshRenderer : Component
     }
 
     /// <summary>
-    /// Converts root-motion locomotion clips into in-place playback.
+    /// Produces an in-place locomotion correction from the complete imported
+    /// hierarchy. The old C1 fix removed local X/Z from guessed nodes; that is
+    /// incorrect for FBX files where an Armature/conversion parent rotates the
+    /// animation axes.
     ///
-    /// We remove only the accumulated horizontal travel from the start of the
-    /// clip to the end of the clip. Local hip/body sway remains, and vertical
-    /// motion remains untouched. CharacterController3D continues to own actual
-    /// world movement until the dedicated Root Motion phase is implemented.
+    /// Here the skeleton root is evaluated all the way into model space first.
+    /// Only travel along the clip's net horizontal locomotion direction is
+    /// removed, preserving vertical movement and side-to-side body sway.
     /// </summary>
-    private static Vector3 RemoveAccumulatedRootTranslation(
-        ImportedVectorTrack? track,
-        float duration,
-        float time,
-        Vector3 fallback,
-        Vector3 sampled)
+    private Matrix4x4 BuildModelSpaceRootMotionCorrection()
     {
-        if (track == null ||
-            track.Keys.Count < 2 ||
-            duration <= 0.000001f)
+        _modelSpaceRootTravel =
+            Vector3.Zero;
+
+        if (_currentAnimation == null ||
+            _rootMotionChainIndices.Length == 0)
         {
-            return sampled;
+            return Matrix4x4.Identity;
         }
 
-        Vector3 start =
-            AnimationPoseSampler.Sample(
-                track,
-                0.0f,
-                fallback);
+        Vector3 currentTravel =
+            CalculateClipRootTravel(
+                _currentAnimation,
+                _currentTime);
 
-        Vector3 end =
-            AnimationPoseSampler.Sample(
-                track,
-                duration,
-                start);
+        float blend =
+            _previousAnimation == null ||
+            _activeTransitionDuration <= 0.000001f
+                ? 1.0f
+                : Math.Clamp(
+                    _transitionElapsed /
+                    _activeTransitionDuration,
+                    0.0f,
+                    1.0f);
 
-        float normalizedTime =
-            Math.Clamp(
-                time /
-                duration,
-                0.0f,
-                1.0f);
+        if (_previousAnimation != null &&
+            blend < 1.0f)
+        {
+            Vector3 previousTravel =
+                CalculateClipRootTravel(
+                    _previousAnimation,
+                    _previousTime);
 
-        Vector3 accumulatedTravel =
-            Vector3.Lerp(
-                start,
-                end,
-                normalizedTime) -
-            start;
+            _modelSpaceRootTravel =
+                Vector3.Lerp(
+                    previousTravel,
+                    currentTravel,
+                    blend);
+        }
+        else
+        {
+            _modelSpaceRootTravel =
+                currentTravel;
+        }
 
-        return
-            new Vector3(
-                sampled.X -
-                    accumulatedTravel.X,
-                sampled.Y,
-                sampled.Z -
-                    accumulatedTravel.Z);
+        return Matrix4x4.CreateTranslation(
+            -_modelSpaceRootTravel.X,
+            0.0f,
+            -_modelSpaceRootTravel.Z);
     }
+
+    private Vector3 CalculateClipRootTravel(
+        ImportedAnimation animation,
+        float time)
+    {
+        if (animation.Duration <= 0.000001f ||
+            _rootMotionChainIndices.Length == 0)
+        {
+            return Vector3.Zero;
+        }
+
+        RootMotionRange range =
+            GetRootMotionRange(
+                animation);
+
+        Vector3 netTravel =
+            range.End -
+            range.Start;
+
+        netTravel.Y =
+            0.0f;
+
+        float netLengthSquared =
+            netTravel.LengthSquared();
+
+        if (netLengthSquared <= 0.0000001f)
+        {
+            /*
+             * Already in-place (or no meaningful horizontal root travel).
+             */
+            return Vector3.Zero;
+        }
+
+        Vector3 direction =
+            netTravel /
+            MathF.Sqrt(netLengthSquared);
+
+        Vector3 current =
+            SampleRootModelPosition(
+                animation,
+                time);
+
+        Vector3 displacement =
+            current -
+            range.Start;
+
+        displacement.Y =
+            0.0f;
+
+        /*
+         * Remove progress ALONG the locomotion path but retain perpendicular
+         * movement such as hip/torso sway.
+         */
+        float distanceAlongTravel =
+            Vector3.Dot(
+                displacement,
+                direction);
+
+        return direction *
+               distanceAlongTravel;
+    }
+
+    private RootMotionRange GetRootMotionRange(
+        ImportedAnimation animation)
+    {
+        if (_rootMotionRanges.TryGetValue(
+                animation,
+                out RootMotionRange cached))
+        {
+            return cached;
+        }
+
+        RootMotionRange range =
+            new(
+                SampleRootModelPosition(
+                    animation,
+                    0.0f),
+                SampleRootModelPosition(
+                    animation,
+                    Math.Max(
+                        animation.Duration,
+                        0.0f)));
+
+        _rootMotionRanges[animation] =
+            range;
+
+        return range;
+    }
+
+    private Vector3 SampleRootModelPosition(
+        ImportedAnimation animation,
+        float time)
+    {
+        Matrix4x4 global =
+            Matrix4x4.Identity;
+
+        foreach (int nodeIndex
+                 in _rootMotionChainIndices)
+        {
+            PoseTransform pose =
+                SampleNode(
+                    nodeIndex,
+                    animation,
+                    time);
+
+            global *=
+                PoseToMatrix(
+                    pose);
+        }
+
+        return global.Translation;
+    }
+
+    private static Matrix4x4 PoseToMatrix(
+        PoseTransform pose) =>
+        Matrix4x4.CreateScale(pose.Scale) *
+        Matrix4x4.CreateFromQuaternion(pose.Rotation) *
+        Matrix4x4.CreateTranslation(pose.Position);
 
     private Matrix4x4[] ComputeGlobals(
         IReadOnlyList<Matrix4x4> locals)
@@ -1178,7 +1376,7 @@ public sealed class SkeletalMeshRenderer : Component
         /// </summary>
         public float[] DeformedVertices { get; }
 
-        public Matrix4x4 ModelMatrix { get; set; } =
+        public Matrix4x4 MeshToModelMatrix { get; set; } =
             Matrix4x4.Identity;
 
         public RuntimeSkinnedMesh(
@@ -1195,6 +1393,10 @@ public sealed class SkeletalMeshRenderer : Component
             DeformedVertices = deformedVertices;
         }
     }
+
+    private readonly record struct RootMotionRange(
+        Vector3 Start,
+        Vector3 End);
 
     private readonly record struct PoseTransform(
         Vector3 Position,
