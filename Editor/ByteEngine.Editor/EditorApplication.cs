@@ -211,6 +211,7 @@ public sealed class EditorApplication
     protected override void OnEngineShutdown()
     {
         RuntimeDiagnostics.OutputSink = null;
+        _inspector.Dispose();
         _sceneView.Dispose();
         _gameView.Dispose();
         _blueprintWorkspace.Dispose();
@@ -246,13 +247,27 @@ public sealed class EditorApplication
 
         if (_inspector.IsOpen)
         {
-            _inspector.Draw(_state, _projectContext!, reference =>
-            {
-                AssetRecord? asset = _projectContext!.AssetDatabase.Resolve(reference);
-                if (asset != null) _blueprintWorkspace.Open(asset, _projectContext);
-            });
-        }
+            _inspector.Draw(
+                _state,
+                _projectContext!,
+                Renderer,
+                Renderer3D,
+                FramebufferSize.X,
+                FramebufferSize.Y,
+                reference =>
+                {
+                    AssetRecord? asset =
+                        _projectContext!.AssetDatabase.Resolve(
+                            reference);
 
+                    if (asset != null)
+                    {
+                        _blueprintWorkspace.Open(
+                            asset,
+                            _projectContext);
+                    }
+                });
+        }
         if (_sceneView.IsOpen)
         {
             _sceneView.Draw(

@@ -67,6 +67,13 @@ internal sealed class EditorState
 
     public string? SelectedAssetPath { get; set; }
 
+    /// <summary>
+    /// Virtual animation sub-asset selected beneath a Model3D asset.
+    /// The model remains the real AssetDatabase record; this stores only the
+    /// imported clip key so no .byteanimation extraction is required.
+    /// </summary>
+    public string? SelectedModelAnimationKey { get; set; }
+
     public EditorCamera Camera { get; } =
         new();
 

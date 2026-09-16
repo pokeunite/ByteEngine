@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
@@ -15,6 +16,7 @@ using ImGuiNET;
 namespace ByteEngine.Editor.Panels;
 
 internal sealed class InspectorPanel
+    : IDisposable
 {
     public bool IsOpen { get; set; } = true;
     private string _search = string.Empty;
@@ -22,8 +24,16 @@ internal sealed class InspectorPanel
     private bool _showAdvanced;
     private string _addSearch = string.Empty;
     private readonly CameraActivationPromptState _cameraActivationPrompt = new();
+    private readonly AnimationClipPreview _animationPreview = new();
 
-    public void Draw(EditorState state, EditorProjectContext project, Action<AssetReference> openBlueprint)
+    public void Draw(
+        EditorState state,
+        EditorProjectContext project,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight,
+        Action<AssetReference> openBlueprint)
     {
         bool isOpen = IsOpen;
         ImGui.Begin("Inspector", ref isOpen);
@@ -40,7 +50,16 @@ internal sealed class InspectorPanel
         if (state.SelectedObject == null)
         {
             _cameraActivationPrompt.Reset();
-            if (state.SelectedAssetId.HasValue || state.SelectedAssetPath != null) DrawAssetOrEmpty(state, project);
+            if (state.SelectedAssetId.HasValue || state.SelectedAssetPath != null)
+            {
+                DrawAssetOrEmpty(
+                    state,
+                    project,
+                    renderer,
+                    renderer3D,
+                    windowWidth,
+                    windowHeight);
+            }
             else
             {
                 bool variablesReadOnly = state.Mode != EditorMode.Edit;
@@ -52,6 +71,8 @@ internal sealed class InspectorPanel
             ImGui.End();
             return;
         }
+
+        _animationPreview.Reset();
 
         bool readOnly = state.Mode != EditorMode.Edit;
         if (readOnly)
@@ -533,57 +554,316 @@ internal sealed class InspectorPanel
         return database.Resolve(reference) is AssetRecord asset ? Path.GetFileName(asset.ProjectPath) : "Missing Asset";
     }
 
-    private static void DrawAssetOrEmpty(EditorState state, EditorProjectContext project)
+    private void DrawAssetOrEmpty(
+        EditorState state,
+        EditorProjectContext project,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
     {
-        AssetRecord? asset = null;
-        if (state.SelectedAssetId.HasValue) project.AssetDatabase.TryGetAsset(state.SelectedAssetId.Value, out asset);
-        if (asset == null && state.SelectedAssetPath != null) project.AssetDatabase.TryGetAsset(state.SelectedAssetPath, out asset);
-        if (asset == null) { ImGui.TextDisabled(state.SelectedAssetPath == null ? "Select a GameObject or asset." : "Missing Asset"); return; }
-        ImGui.Text(Path.GetFileName(asset.ProjectPath));
-        ImGui.TextDisabled(asset.ProjectPath);
-        ImGui.TextDisabled($"GUID: {asset.Guid}");
-        if (asset.Type == AssetType.Model3D)
+        AssetRecord? asset =
+            null;
+
+        if (state.SelectedAssetId.HasValue)
         {
-            ImGui.SeparatorText("MODEL IMPORT SETTINGS");
+            project.AssetDatabase.TryGetAsset(
+                state.SelectedAssetId.Value,
+                out asset);
+        }
+
+        if (asset ==
+                null &&
+            state.SelectedAssetPath !=
+                null)
+        {
+            project.AssetDatabase.TryGetAsset(
+                state.SelectedAssetPath,
+                out asset);
+        }
+
+        if (asset ==
+            null)
+        {
+            _animationPreview.Reset();
+
+            ImGui.TextDisabled(
+                state.SelectedAssetPath ==
+                    null
+                    ? "Select a GameObject or asset."
+                    : "Missing Asset");
+
+            return;
+        }
+
+        if (asset.Type ==
+            AssetType.Model3D)
+        {
             try
             {
-                ModelAsset model = project.Assets.LoadModel(new AssetReference(asset.Guid, asset.ProjectPath));
-                ImGui.Text($"Source: {Path.GetFileName(asset.ProjectPath)}");
-                ImGui.Text($"Meshes: {model.Meshes.Count}");
-                ImGui.Text($"Materials: {model.Materials.Count}");
-                ImGui.Text($"Skeleton: {model.Skeleton?.Name ?? "None"}");
-                ImGui.Text($"Animations: {model.Animations.Count}");
+                ModelAsset model =
+                    project.Assets.LoadModel(
+                        new AssetReference(
+                            asset.Guid,
+                            asset.ProjectPath));
 
-                float scale = asset.Metadata.ModelImporter.ImportScale;
-                bool generateNormals = asset.Metadata.ModelImporter.GenerateNormals;
-                bool embeddedMaterials = asset.Metadata.ModelImporter.PreferEmbeddedMaterials;
-                bool changed = ImGui.DragFloat("Import Scale", ref scale, .01f, .0001f, 1000f);
-                changed |= ImGui.Checkbox("Generate Normals", ref generateNormals);
-                changed |= ImGui.Checkbox("Prefer Embedded Materials", ref embeddedMaterials);
+                if (!string.IsNullOrWhiteSpace(
+                        state.SelectedModelAnimationKey))
+                {
+                    ImportedAnimation? selectedAnimation =
+                        model.Animations.FirstOrDefault(
+                            animation =>
+                                string.Equals(
+                                    animation.Key,
+                                    state.SelectedModelAnimationKey,
+                                    StringComparison.Ordinal));
+
+                    if (selectedAnimation !=
+                        null)
+                    {
+                        DrawAnimationClipAsset(
+                            project,
+                            asset,
+                            model,
+                            selectedAnimation,
+                            renderer,
+                            renderer3D,
+                            windowWidth,
+                            windowHeight);
+
+                        return;
+                    }
+
+                    state.SelectedModelAnimationKey =
+                        null;
+                }
+
+                _animationPreview.Reset();
+
+                ImGui.Text(
+                    Path.GetFileName(
+                        asset.ProjectPath));
+
+                ImGui.TextDisabled(
+                    asset.ProjectPath);
+
+                ImGui.TextDisabled(
+                    $"GUID: {asset.Guid}");
+
+                ImGui.SeparatorText(
+                    "MODEL IMPORT SETTINGS");
+
+                ImGui.Text(
+                    $"Source: {Path.GetFileName(asset.ProjectPath)}");
+
+                ImGui.Text(
+                    $"Meshes: {model.Meshes.Count}");
+
+                ImGui.Text(
+                    $"Materials: {model.Materials.Count}");
+
+                ImGui.Text(
+                    $"Skeleton: {model.Skeleton?.Name ?? "None"}");
+
+                ImGui.Text(
+                    $"Bones: {model.Skeleton?.Bones.Count ?? 0}");
+
+                ImGui.Text(
+                    $"Animations: {model.Animations.Count}");
+
+                if (model.Animations.Count >
+                    0)
+                {
+                    ImGui.SeparatorText(
+                        "ANIMATIONS");
+
+                    foreach (ImportedAnimation animation
+                             in model.Animations)
+                    {
+                        ImGui.BulletText(
+                            $"{animation.Name}  {animation.Duration:0.00}s");
+                    }
+                }
+
+                float scale =
+                    asset.Metadata.ModelImporter.ImportScale;
+
+                bool generateNormals =
+                    asset.Metadata.ModelImporter.GenerateNormals;
+
+                bool embeddedMaterials =
+                    asset.Metadata.ModelImporter.PreferEmbeddedMaterials;
+
+                bool changed =
+                    ImGui.DragFloat(
+                        "Import Scale",
+                        ref scale,
+                        .01f,
+                        .0001f,
+                        1000f);
+
+                changed |=
+                    ImGui.Checkbox(
+                        "Generate Normals",
+                        ref generateNormals);
+
+                changed |=
+                    ImGui.Checkbox(
+                        "Prefer Embedded Materials",
+                        ref embeddedMaterials);
+
                 if (changed)
+                {
                     project.AssetDatabase.SetModelImporterSettings(
-                        asset.Guid, scale, generateNormals, embeddedMaterials);
-                if (ImGui.Button("Reimport")) project.Assets.ReimportModel(asset.Guid);
+                        asset.Guid,
+                        scale,
+                        generateNormals,
+                        embeddedMaterials);
+                }
+
+                if (ImGui.Button(
+                        "Reimport"))
+                {
+                    project.Assets.ReimportModel(
+                        asset.Guid);
+                }
             }
             catch (Exception exception)
             {
-                ImGui.TextColored(new Vector4(1f, .35f, .35f, 1f), "Model import failed");
-                ImGui.TextWrapped(exception.Message);
+                _animationPreview.Reset();
+
+                ImGui.TextColored(
+                    new Vector4(
+                        1f,
+                        .35f,
+                        .35f,
+                        1f),
+                    "Model import failed");
+
+                ImGui.TextWrapped(
+                    exception.Message);
             }
+
             return;
         }
-        if (asset.Type != AssetType.Texture2D) return;
-        ImGui.SeparatorText("Texture Import Settings");
-        TextureFilter filter = asset.Metadata.Importer.Filter;
-        if (ImGui.BeginCombo("Filter", filter.ToString()))
+
+        _animationPreview.Reset();
+
+        ImGui.Text(
+            Path.GetFileName(
+                asset.ProjectPath));
+
+        ImGui.TextDisabled(
+            asset.ProjectPath);
+
+        ImGui.TextDisabled(
+            $"GUID: {asset.Guid}");
+
+        if (asset.Type !=
+            AssetType.Texture2D)
         {
-            foreach (TextureFilter option in Enum.GetValues<TextureFilter>())
+            return;
+        }
+
+        ImGui.SeparatorText(
+            "Texture Import Settings");
+
+        TextureFilter filter =
+            asset.Metadata.Importer.Filter;
+
+        if (ImGui.BeginCombo(
+                "Filter",
+                filter.ToString()))
+        {
+            foreach (TextureFilter option
+                     in Enum.GetValues<TextureFilter>())
             {
-                bool selected = filter == option;
-                if (ImGui.Selectable(option.ToString(), selected)) project.AssetDatabase.SetTextureFilter(asset.Guid, option);
-                if (selected) ImGui.SetItemDefaultFocus();
+                bool selected =
+                    filter ==
+                    option;
+
+                if (ImGui.Selectable(
+                        option.ToString(),
+                        selected))
+                {
+                    project.AssetDatabase.SetTextureFilter(
+                        asset.Guid,
+                        option);
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
             }
+
             ImGui.EndCombo();
         }
+    }
+
+    private void DrawAnimationClipAsset(
+        EditorProjectContext project,
+        AssetRecord asset,
+        ModelAsset model,
+        ImportedAnimation animation,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
+    {
+        ImGui.Text(
+            animation.Name);
+
+        ImGui.TextDisabled(
+            $"{Path.GetFileName(asset.ProjectPath)} / Animation Clip");
+
+        ImGui.SeparatorText(
+            "ANIMATION CLIP");
+
+        ImGui.Text(
+            $"Name: {animation.Name}");
+
+        ImGui.Text(
+            $"Source: {Path.GetFileName(asset.ProjectPath)}");
+
+        ImGui.TextDisabled(
+            $"Key: {animation.Key}");
+
+        ImGui.Text(
+            $"Duration: {animation.Duration:0.000} s");
+
+        ImGui.Text(
+            $"Channels: {animation.Channels.Count}");
+
+        int keyframes =
+            animation.Channels.Sum(
+                channel =>
+                    (channel.Translation?.Keys.Count ?? 0) +
+                    (channel.Rotation?.Keys.Count ?? 0) +
+                    (channel.Scale?.Keys.Count ?? 0));
+
+        ImGui.Text(
+            $"Keyframes: {keyframes}");
+
+        ImGui.Text(
+            $"Skeleton Bones: {model.Skeleton?.Bones.Count ?? 0}");
+
+        ImGui.SeparatorText(
+            "PREVIEW");
+
+        _animationPreview.Draw(
+            project,
+            asset,
+            model,
+            animation,
+            renderer,
+            renderer3D,
+            windowWidth,
+            windowHeight);
+    }
+
+    public void Dispose()
+    {
+        _animationPreview.Dispose();
     }
 }

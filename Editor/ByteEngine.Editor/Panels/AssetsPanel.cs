@@ -593,9 +593,11 @@ internal sealed class AssetsPanel
         string[] orderedFiles = _files.ToArray();
         _assetSelection.Retain(orderedFiles);
         _assetBounds.Clear();
+
         for (int fileIndex = 0; fileIndex < orderedFiles.Length; fileIndex++)
         {
             string file = orderedFiles[fileIndex];
+
             string projectPath =
                 Path.GetRelativePath(
                         _project.ProjectRoot,
@@ -608,11 +610,27 @@ internal sealed class AssetsPanel
                 projectPath,
                 out AssetRecord? asset);
 
+            if (asset?.Type ==
+                AssetType.Model3D)
+            {
+                DrawModelAssetEntry(
+                    state,
+                    log,
+                    orderedFiles,
+                    fileIndex,
+                    file,
+                    asset);
+
+                continue;
+            }
+
             string icon =
                 GetAssetIcon(
                     asset?.Type);
 
-            bool selected = _assetSelection.Contains(file);
+            bool selected =
+                _assetSelection.Contains(
+                    file);
 
             bool clicked =
                 ImGui.Selectable(
@@ -621,12 +639,24 @@ internal sealed class AssetsPanel
 
             if (clicked)
             {
-                ImGuiIOPtr io = ImGui.GetIO();
-                _assetSelection.Click(orderedFiles, fileIndex, io.KeyCtrl, io.KeyShift);
-                SyncPrimaryAssetSelection(state);
+                ImGuiIOPtr io =
+                    ImGui.GetIO();
+
+                _assetSelection.Click(
+                    orderedFiles,
+                    fileIndex,
+                    io.KeyCtrl,
+                    io.KeyShift);
+
+                SyncPrimaryAssetSelection(
+                    state);
             }
 
-            _assetBounds.Add(new AssetSelectionBounds(file, ImGui.GetItemRectMin(), ImGui.GetItemRectMax()));
+            _assetBounds.Add(
+                new AssetSelectionBounds(
+                    file,
+                    ImGui.GetItemRectMin(),
+                    ImGui.GetItemRectMax()));
 
             if (asset !=
                     null &&
@@ -650,50 +680,274 @@ internal sealed class AssetsPanel
                 file);
         }
 
-        bool emptySpaceClicked = ImGui.IsWindowHovered() &&
-            ImGui.IsMouseClicked(ImGuiMouseButton.Left) &&
+        bool emptySpaceClicked =
+            ImGui.IsWindowHovered() &&
+            ImGui.IsMouseClicked(
+                ImGuiMouseButton.Left) &&
             !ImGui.IsAnyItemHovered();
+
         if (emptySpaceClicked)
         {
-            _assetMarquee = true;
-            _assetMarqueeStart = ImGui.GetMousePos();
-            _assetMarqueeEnd = _assetMarqueeStart;
+            _assetMarquee =
+                true;
+
+            _assetMarqueeStart =
+                ImGui.GetMousePos();
+
+            _assetMarqueeEnd =
+                _assetMarqueeStart;
         }
+
         if (_assetMarquee)
         {
-            _assetMarqueeEnd = ImGui.GetMousePos();
-            Vector2 minimum = Vector2.Min(_assetMarqueeStart, _assetMarqueeEnd);
-            Vector2 maximum = Vector2.Max(_assetMarqueeStart, _assetMarqueeEnd);
-            ImGui.GetWindowDrawList().AddRectFilled(minimum, maximum,
-                ImGui.GetColorU32(new Vector4(.2f, .55f, 1f, .12f)));
-            ImGui.GetWindowDrawList().AddRect(minimum, maximum,
-                ImGui.GetColorU32(new Vector4(.3f, .7f, 1f, .9f)));
-            if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            _assetMarqueeEnd =
+                ImGui.GetMousePos();
+
+            Vector2 minimum =
+                Vector2.Min(
+                    _assetMarqueeStart,
+                    _assetMarqueeEnd);
+
+            Vector2 maximum =
+                Vector2.Max(
+                    _assetMarqueeStart,
+                    _assetMarqueeEnd);
+
+            ImGui.GetWindowDrawList()
+                .AddRectFilled(
+                    minimum,
+                    maximum,
+                    ImGui.GetColorU32(
+                        new Vector4(
+                            .2f,
+                            .55f,
+                            1f,
+                            .12f)));
+
+            ImGui.GetWindowDrawList()
+                .AddRect(
+                    minimum,
+                    maximum,
+                    ImGui.GetColorU32(
+                        new Vector4(
+                            .3f,
+                            .7f,
+                            1f,
+                            .9f)));
+
+            if (!ImGui.IsMouseDown(
+                    ImGuiMouseButton.Left))
             {
-                _assetSelection.Marquee(_assetBounds, _assetMarqueeStart, _assetMarqueeEnd, ImGui.GetIO().KeyCtrl);
-                SyncPrimaryAssetSelection(state);
-                _assetMarquee = false;
+                _assetSelection.Marquee(
+                    _assetBounds,
+                    _assetMarqueeStart,
+                    _assetMarqueeEnd,
+                    ImGui.GetIO().KeyCtrl);
+
+                SyncPrimaryAssetSelection(
+                    state);
+
+                _assetMarquee =
+                    false;
             }
         }
     }
 
-    private void SyncPrimaryAssetSelection(EditorState state)
+    private void DrawModelAssetEntry(
+        EditorState state,
+        EditorLog log,
+        IReadOnlyList<string> orderedFiles,
+        int fileIndex,
+        string file,
+        AssetRecord asset)
     {
-        string? primary = _assetSelection.PrimaryPath;
-        if (primary == null)
+        bool selected =
+            _assetSelection.Contains(
+                file) &&
+            string.IsNullOrWhiteSpace(
+                state.SelectedModelAnimationKey);
+
+        ImGuiTreeNodeFlags flags =
+            ImGuiTreeNodeFlags.OpenOnArrow |
+            ImGuiTreeNodeFlags.SpanAvailWidth;
+
+        if (selected)
         {
-            state.SelectedAssetId = null;
-            state.SelectedAssetPath = null;
+            flags |=
+                ImGuiTreeNodeFlags.Selected;
+        }
+
+        bool open =
+            ImGui.TreeNodeEx(
+                $"[3D] {Path.GetFileName(file)}##model-asset:{file}",
+                flags);
+
+        if (ImGui.IsItemClicked(
+                ImGuiMouseButton.Left))
+        {
+            ImGuiIOPtr io =
+                ImGui.GetIO();
+
+            _assetSelection.Click(
+                orderedFiles,
+                fileIndex,
+                io.KeyCtrl,
+                io.KeyShift);
+
+            state.SelectedModelAnimationKey =
+                null;
+
+            SyncPrimaryAssetSelection(
+                state);
+        }
+
+        _assetBounds.Add(
+            new AssetSelectionBounds(
+                file,
+                ImGui.GetItemRectMin(),
+                ImGui.GetItemRectMax()));
+
+        if (ImGui.IsItemHovered() &&
+            ImGui.IsMouseDoubleClicked(
+                ImGuiMouseButton.Left))
+        {
+            OpenAsset(
+                asset,
+                log);
+        }
+
+        DrawAssetContextMenu(
+            state,
+            log,
+            asset,
+            file);
+
+        DrawAssetDragSource(
+            asset,
+            file);
+
+        if (!open)
+        {
             return;
         }
-        string projectPath = Path.GetRelativePath(_project.ProjectRoot, primary)
-            .Replace(Path.DirectorySeparatorChar, '/');
-        _project.AssetDatabase.TryGetAsset(projectPath, out AssetRecord? asset);
-        state.SelectedAssetId = asset?.Guid;
-        state.SelectedAssetPath = projectPath;
-        state.SelectedObject = null;
-    }
 
+        try
+        {
+            ModelAsset model =
+                _project.Assets.LoadModel(
+                    new AssetReference(
+                        asset.Guid,
+                        asset.ProjectPath));
+
+            if (model.Animations.Count ==
+                0)
+            {
+                ImGui.TextDisabled(
+                    "  [ANIM] No animation clips");
+            }
+            else
+            {
+                foreach (var animation
+                         in model.Animations)
+                {
+                    bool clipSelected =
+                        state.SelectedAssetId ==
+                            asset.Guid &&
+                        string.Equals(
+                            state.SelectedModelAnimationKey,
+                            animation.Key,
+                            StringComparison.Ordinal);
+
+                    string label =
+                        $"[ANIM] {animation.Name}  {animation.Duration:0.00}s##animation:{asset.Guid}:{animation.Key}";
+
+                    if (ImGui.Selectable(
+                            label,
+                            clipSelected))
+                    {
+                        _assetSelection.Clear();
+
+                        state.SelectedAssetId =
+                            asset.Guid;
+
+                        state.SelectedAssetPath =
+                            asset.ProjectPath;
+
+                        state.SelectedModelAnimationKey =
+                            animation.Key;
+
+                        state.SelectedObject =
+                            null;
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(
+                            $"Animation Clip\n{animation.Name}\nDuration: {animation.Duration:0.000}s");
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.35f,
+                    0.35f,
+                    1.0f),
+                "  Animation discovery failed");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    exception.Message);
+            }
+        }
+
+        ImGui.TreePop();
+    }
+    private void SyncPrimaryAssetSelection(EditorState state)
+    {
+        state.SelectedModelAnimationKey =
+            null;
+
+        string? primary =
+            _assetSelection.PrimaryPath;
+
+        if (primary ==
+            null)
+        {
+            state.SelectedAssetId =
+                null;
+
+            state.SelectedAssetPath =
+                null;
+
+            return;
+        }
+
+        string projectPath =
+            Path.GetRelativePath(
+                    _project.ProjectRoot,
+                    primary)
+                .Replace(
+                    Path.DirectorySeparatorChar,
+                    '/');
+
+        _project.AssetDatabase.TryGetAsset(
+            projectPath,
+            out AssetRecord? asset);
+
+        state.SelectedAssetId =
+            asset?.Guid;
+
+        state.SelectedAssetPath =
+            projectPath;
+
+        state.SelectedObject =
+            null;
+    }
     private void OpenAsset(
         AssetRecord asset,
         EditorLog log)

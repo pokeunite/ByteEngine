@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.Blueprints;
@@ -157,6 +158,25 @@ internal static class ComponentPropertyRenderer
                     project?.Project.Classification ?? component.GameObject.Scene?.Classification ?? ClassificationSettings.CreateDefault(), ref tag);
                 after = tag;
             }
+            else if (component is AnimationController clipController &&
+                     project != null &&
+                     descriptor.Property.PropertyType == typeof(string) &&
+                     AnimationClipDiscovery.IsLocomotionClipProperty(descriptor.Property.Name))
+            {
+                string clipName =
+                    before?.ToString() ??
+                    string.Empty;
+
+                edited =
+                    DrawAnimationClipSelector(
+                        clipController,
+                        project,
+                        label,
+                        ref clipName);
+
+                after =
+                    clipName;
+            }
             else
             {
                 string text = before?.ToString() ?? string.Empty;
@@ -206,6 +226,8 @@ internal static class ComponentPropertyRenderer
             DrawMissingActions(playerInput, project, context, begin, changed, end);
         if (component is EventModuleComponent eventModules && project != null)
             DrawEventModules(eventModules, project, context, begin, changed, end);
+        if (component is AnimationController animationController && project != null)
+            DrawAnimationControllerTools(animationController, project, context, begin, changed, end);
         if (component is MeshRenderer mesh)
         {
             Vector4 color = mesh.Material.BaseColor;
@@ -224,6 +246,172 @@ internal static class ComponentPropertyRenderer
         ImGui.PopID();
     }
 
+    private static bool DrawAnimationClipSelector(
+        AnimationController controller,
+        EditorProjectContext project,
+        string label,
+        ref string clipName)
+    {
+        IReadOnlyList<string> clips =
+            AnimationClipDiscovery.GetClipNames(
+                controller,
+                project);
+
+        bool hasClip =
+            false;
+
+        foreach (string candidate
+                 in clips)
+        {
+            if (!string.Equals(
+                    candidate,
+                    clipName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            hasClip =
+                true;
+
+            break;
+        }
+
+        string preview =
+            string.IsNullOrWhiteSpace(
+                clipName)
+                ? "None"
+                : hasClip
+                    ? clipName
+                    : $"{clipName} (Missing)";
+
+        bool changed =
+            false;
+
+        if (!ImGui.BeginCombo(
+                label,
+                preview))
+        {
+            return false;
+        }
+
+        bool noneSelected =
+            string.IsNullOrWhiteSpace(
+                clipName);
+
+        if (ImGui.Selectable(
+                "None",
+                noneSelected))
+        {
+            clipName =
+                string.Empty;
+
+            changed =
+                true;
+        }
+
+        if (clips.Count ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "No animation clips found under this character.");
+        }
+        else
+        {
+            foreach (string clip
+                     in clips)
+            {
+                bool selected =
+                    string.Equals(
+                        clipName,
+                        clip,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        clip,
+                        selected))
+                {
+                    clipName =
+                        clip;
+
+                    changed =
+                        true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+        }
+
+        ImGui.EndCombo();
+
+        return changed;
+    }
+
+    private static void DrawAnimationControllerTools(
+        AnimationController controller,
+        EditorProjectContext project,
+        PropertyEditorContext context,
+        Action begin,
+        Action changed,
+        Action end)
+    {
+        ImGui.SeparatorText(
+            "ANIMATION CLIPS");
+
+        if (!AnimationClipDiscovery.TryGetModel(
+                controller,
+                project,
+                out ModelAsset? model,
+                out AssetReference modelReference) ||
+            model ==
+                null)
+        {
+            ImGui.TextDisabled(
+                "No animated model found under this character.");
+
+            return;
+        }
+
+        AssetRecord? asset =
+            project.AssetDatabase.Resolve(
+                modelReference);
+
+        ImGui.TextDisabled(
+            $"Source: {Path.GetFileName(asset?.ProjectPath ?? model.Name)}");
+
+        ImGui.TextDisabled(
+            $"{model.Animations.Count} clip(s) discovered automatically.");
+
+        if (context ==
+            PropertyEditorContext.Runtime)
+        {
+            return;
+        }
+
+        if (ImGui.Button(
+                "Auto Assign Locomotion Clips"))
+        {
+            begin();
+
+            if (AnimationClipDiscovery.AutoAssign(
+                    controller,
+                    project))
+            {
+                changed();
+            }
+
+            end();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                "Matches common Idle, Walk, Run, Jump, Fall and Land names from the imported model.");
+        }
+    }
     private static bool IsColorProperty(
         Component component,
         ComponentPropertyDescriptor descriptor)
