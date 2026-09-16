@@ -38,7 +38,7 @@ internal sealed class HierarchyPanel
                 new Vector2(
                     0.0f,
                     50.0f),
-                true,
+                ImGuiChildFlags.Borders,
                 ImGuiWindowFlags.NoScrollbar))
         {
             ImGui.TextUnformatted(
@@ -72,8 +72,9 @@ internal sealed class HierarchyPanel
 
                 ImGui.SameLine(
                     Math.Max(
-                        ImGui.GetWindowContentRegionMax().X -
-                        buttonWidth,
+                        ImGui.GetWindowWidth() -
+                        buttonWidth -
+                        12.0f,
                         ImGui.GetCursorPosX()));
 
                 if (ImGui.Button(

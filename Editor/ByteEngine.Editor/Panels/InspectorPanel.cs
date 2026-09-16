@@ -97,7 +97,7 @@ internal sealed class InspectorPanel
                 new Vector2(
                     0.0f,
                     54.0f),
-                true,
+                ImGuiChildFlags.Borders,
                 ImGuiWindowFlags.NoScrollbar))
         {
             ImGui.TextColored(
