@@ -94,6 +94,14 @@ internal static class BlueprintAuthoringService
         playerInput.JumpAction = InputActions.Reference("Jump");
         playerInput.SprintAction = InputActions.Reference("Sprint");
 
+        /*
+         * NormalizeCharacterStructure runs before PlayerController3D is
+         * guaranteed to exist. Run the facing migration here as well so both
+         * new and existing Character Blueprints get the same canonical layout.
+         */
+        MoveRuntimeOwnedCharacterFacingToVisual(
+            player);
+
         CameraBoom3D boom =
             EnsureSingleRootComponent(
                 player,
@@ -235,7 +243,87 @@ internal static class BlueprintAuthoringService
         }
 
         RemoveGameplayComponentsFromDescendants(player);
+
+        /*
+         * The PlayerController3D owns the runtime character yaw in FaceCamera
+         * and FaceMovement modes. Any authored yaw left on the Blueprint root
+         * would therefore be overwritten as soon as Play starts.
+         *
+         * Character model facing corrections belong on the Visual child, not
+         * on the gameplay/collision root.
+         */
+        MoveRuntimeOwnedCharacterFacingToVisual(
+            player);
+
         return visual;
+    }
+
+    public static bool MoveRuntimeOwnedCharacterFacingToVisual(
+        GameObject player)
+    {
+        ArgumentNullException.ThrowIfNull(
+            player);
+
+        PlayerController3D? playerInput =
+            player.GetComponent<PlayerController3D>();
+
+        if (playerInput ==
+                null ||
+            playerInput.CharacterRotation ==
+                CharacterRotationMode.Independent)
+        {
+            return false;
+        }
+
+        Vector3 rootEuler =
+            player.Transform.EulerAngles;
+
+        float authoredYaw =
+            NormalizeAngle(
+                rootEuler.Y);
+
+        if (MathF.Abs(
+                authoredYaw) <
+            0.001f)
+        {
+            return false;
+        }
+
+        GameObject visual =
+            EnsureVisualRoot(
+                player);
+
+        /*
+         * Preserve the Visual's exact world pose while removing Y rotation
+         * from the gameplay root. Restoring the Visual world pose causes the
+         * authored facing correction to become a Visual-local offset instead.
+         *
+         * Example:
+         *   Before: Player Y = -180, Visual Y = 0
+         *   After : Player Y =    0, Visual carries the equivalent -180 offset
+         *
+         * The runtime PlayerController can now rotate Player freely without
+         * destroying the model's imported-facing correction.
+         */
+        Vector3 visualWorldPosition =
+            visual.Transform.WorldPosition;
+
+        Quaternion visualWorldRotation =
+            visual.Transform.WorldRotation;
+
+        rootEuler.Y =
+            0.0f;
+
+        player.Transform.EulerAngles =
+            rootEuler;
+
+        visual.Transform.WorldPosition =
+            visualWorldPosition;
+
+        visual.Transform.WorldRotation =
+            visualWorldRotation;
+
+        return true;
     }
 
     public static GameObject EnsureVisualRoot(GameObject player)
@@ -342,6 +430,35 @@ internal static class BlueprintAuthoringService
                 child.RemoveComponent(component);
             }
         }
+    }
+
+    private static float NormalizeAngle(
+        float value)
+    {
+        if (!float.IsFinite(
+                value))
+        {
+            return 0.0f;
+        }
+
+        value %=
+            360.0f;
+
+        if (value >
+            180.0f)
+        {
+            value -=
+                360.0f;
+        }
+
+        if (value <=
+            -180.0f)
+        {
+            value +=
+                360.0f;
+        }
+
+        return value;
     }
 
     private static bool NearlyUniform(
