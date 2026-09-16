@@ -50,31 +50,67 @@ internal static class BlueprintAuthoringService
             player.Layer = playerLayer!.Index;
             EditorProjectContext.Active?.SaveProject();
         }
+
         InputActions.Map.EnsureGameplayDefaults();
-        bool createInitialCapsule = player.GetComponent<CapsuleCollider3D>() == null;
+
+        bool createInitialCapsule =
+            player.GetComponent<CapsuleCollider3D>() == null;
+
         NormalizeCharacterStructure(player);
-        EnsureSingleRootComponent(player, () => new CapsuleCollider3D { Radius = .5f, Height = 2f });
+
+        /*
+         * The character root is treated as a feet/pivot origin by the movement
+         * controller. A 2 m fallback capsule therefore must be centered at
+         * Y = 1 m, not Y = 0. A zero-centered 2 m capsule starts one metre
+         * below the root and can begin Play Mode penetrating the floor, causing
+         * every horizontal sweep to report an immediate blocking contact.
+         */
+        CapsuleCollider3D capsule =
+            EnsureSingleRootComponent(
+                player,
+                () => new CapsuleCollider3D
+                {
+                    Radius = .5f,
+                    Height = 2f,
+                    Center = new Vector3(0f, 1f, 0f)
+                });
+
         EnsureSingleRootComponent(player, () => new CharacterController3D());
         EnsureSingleRootComponent(player, () => new AnimationController());
-        PlayerController3D playerInput = EnsureSingleRootComponent(player, () => new PlayerController3D
-        {
-            UseLocalOrientation = false,
-            CharacterRotation = CharacterRotationMode.FaceCamera,
-            TurnSpeed = 540f,
-            ControlPitch = 12f
-        });
+
+        PlayerController3D playerInput =
+            EnsureSingleRootComponent(
+                player,
+                () => new PlayerController3D
+                {
+                    UseLocalOrientation = false,
+                    CharacterRotation = CharacterRotationMode.FaceCamera,
+                    TurnSpeed = 540f,
+                    ControlPitch = 12f
+                });
+
         playerInput.MoveAction = InputActions.Reference("Move");
         playerInput.LookAction = InputActions.Reference("Look");
         playerInput.JumpAction = InputActions.Reference("Jump");
         playerInput.SprintAction = InputActions.Reference("Sprint");
-        CameraBoom3D boom = EnsureSingleRootComponent(player, () => new CameraBoom3D());
+
+        CameraBoom3D boom =
+            EnsureSingleRootComponent(
+                player,
+                () => new CameraBoom3D());
 
         GameObject? cameraObject = Descendants(player)
             .FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
+
         Camera3D? previousActive = player.Scene?.ActiveCamera;
+
         if (cameraObject == null)
         {
-            Scene scene = player.Scene ?? throw new InvalidOperationException("The character must belong to a scene.");
+            Scene scene =
+                player.Scene ??
+                throw new InvalidOperationException(
+                    "The character must belong to a scene.");
+
             cameraObject = scene.CreateGameObject("Camera");
             cameraObject.SetParent(player, false);
             cameraObject.AddComponent(new Camera3D());
@@ -83,14 +119,66 @@ internal static class BlueprintAuthoringService
         {
             cameraObject.SetParent(player, false);
         }
-        cameraObject.Name = "Camera";
-        Camera3D camera = cameraObject.GetComponent<Camera3D>()!;
-        boom.CameraObjectId = cameraObject.Id;
-        if (previousActive == null || ReferenceEquals(previousActive, camera))
-            player.Scene?.SetActiveCamera(camera);
 
-        if (assets != null && createInitialCapsule)
-            CharacterCapsuleAutoFit.TryFit(player, assets, out _);
+        cameraObject.Name = "Camera";
+
+        Camera3D camera =
+            cameraObject.GetComponent<Camera3D>()!;
+
+        boom.CameraObjectId = cameraObject.Id;
+
+        if (previousActive == null ||
+            ReferenceEquals(previousActive, camera))
+        {
+            player.Scene?.SetActiveCamera(camera);
+        }
+
+        /*
+         * v0.11-C1 Fix 2:
+         *
+         * Older Character Blueprints can already contain the previous default
+         * capsule (radius .5, height 2, center 0) with no auto-fit metadata.
+         * Re-running Setup > Third Person Character must repair that legacy
+         * placeholder instead of preserving the floor-penetrating collider.
+         *
+         * Custom/user-fitted capsules are left alone.
+         */
+        bool shouldAutoFit =
+            createInitialCapsule ||
+            IsLegacyUnfittedCharacterCapsule(capsule);
+
+        if (assets != null &&
+            shouldAutoFit)
+        {
+            if (!CharacterCapsuleAutoFit.TryFit(
+                    player,
+                    assets,
+                    out _))
+            {
+                /*
+                 * If model bounds are unavailable, keep the safe feet-origin
+                 * fallback rather than falling back to the old zero-centered
+                 * capsule.
+                 */
+                capsule.Center =
+                    new Vector3(
+                        capsule.Center.X,
+                        Math.Max(
+                            capsule.Height * .5f,
+                            capsule.Radius),
+                        capsule.Center.Z);
+            }
+        }
+        else if (shouldAutoFit)
+        {
+            capsule.Center =
+                new Vector3(
+                    capsule.Center.X,
+                    Math.Max(
+                        capsule.Height * .5f,
+                        capsule.Radius),
+                    capsule.Center.Z);
+        }
 
         return boom;
     }
@@ -110,22 +198,38 @@ internal static class BlueprintAuthoringService
                 player.Transform.LocalScale = Vector3.One;
             }
 
-            GameObject importedModel = visual.Children.FirstOrDefault(child => child.GetComponent<ModelHierarchyInstance>() != null)
-                ?? player.Scene!.CreateGameObject(player.Name.EndsWith("Model", StringComparison.OrdinalIgnoreCase)
-                    ? player.Name
-                    : player.Name + "Model");
+            GameObject importedModel =
+                visual.Children.FirstOrDefault(
+                    child => child.GetComponent<ModelHierarchyInstance>() != null)
+                ?? player.Scene!.CreateGameObject(
+                    player.Name.EndsWith(
+                        "Model",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? player.Name
+                        : player.Name + "Model");
+
             importedModel.SetParent(visual, false);
+
             if (!importedModel.HasComponent<ModelHierarchyInstance>())
-                importedModel.AddComponent(new ModelHierarchyInstance
-                {
-                    Model = rootModel.Model,
-                    AppliedImportScale = rootModel.AppliedImportScale
-                });
+            {
+                importedModel.AddComponent(
+                    new ModelHierarchyInstance
+                    {
+                        Model = rootModel.Model,
+                        AppliedImportScale = rootModel.AppliedImportScale
+                    });
+            }
+
             player.RemoveComponent(rootModel);
 
             foreach (GameObject child in originalChildren)
             {
-                if (ReferenceEquals(child, visual) || child.GetComponent<Camera3D>() != null) continue;
+                if (ReferenceEquals(child, visual) ||
+                    child.GetComponent<Camera3D>() != null)
+                {
+                    continue;
+                }
+
                 child.SetParent(importedModel, false);
             }
         }
@@ -136,12 +240,46 @@ internal static class BlueprintAuthoringService
 
     public static GameObject EnsureVisualRoot(GameObject player)
     {
-        GameObject? visual = player.Children.FirstOrDefault(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
-        if (visual != null) return visual;
-        Scene scene = player.Scene ?? throw new InvalidOperationException("The Blueprint root must belong to a preview scene.");
+        GameObject? visual =
+            player.Children.FirstOrDefault(
+                child =>
+                    child.Name.Equals(
+                        "Visual",
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (visual != null)
+        {
+            return visual;
+        }
+
+        Scene scene =
+            player.Scene ??
+            throw new InvalidOperationException(
+                "The Blueprint root must belong to a preview scene.");
+
         visual = scene.CreateGameObject("Visual");
         visual.SetParent(player, false);
         return visual;
+    }
+
+    private static bool IsLegacyUnfittedCharacterCapsule(
+        CapsuleCollider3D capsule)
+    {
+        bool defaultDimensions =
+            MathF.Abs(capsule.Radius - .5f) < .0001f &&
+            MathF.Abs(capsule.Height - 2f) < .0001f;
+
+        bool zeroCenter =
+            capsule.Center.LengthSquared() < .000001f;
+
+        bool noRecordedFit =
+            string.IsNullOrWhiteSpace(capsule.AutoFitSource) &&
+            capsule.VisualBounds.LengthSquared() < .000001f;
+
+        return
+            defaultDimensions &&
+            zeroCenter &&
+            noRecordedFit;
     }
 
     private static IEnumerable<GameObject> Descendants(GameObject root)
@@ -149,30 +287,66 @@ internal static class BlueprintAuthoringService
         foreach (GameObject child in root.Children)
         {
             yield return child;
-            foreach (GameObject descendant in Descendants(child)) yield return descendant;
+
+            foreach (GameObject descendant in Descendants(child))
+            {
+                yield return descendant;
+            }
         }
     }
 
-    private static T EnsureSingleRootComponent<T>(GameObject root, Func<T> create) where T : Component
+    private static T EnsureSingleRootComponent<T>(
+        GameObject root,
+        Func<T> create)
+        where T : Component
     {
-        T? component = root.Components.OfType<T>().FirstOrDefault();
-        foreach (T duplicate in root.Components.OfType<T>().Skip(1).ToArray()) root.RemoveComponent(duplicate);
-        return component ?? root.AddComponent(create());
+        T? component =
+            root.Components
+                .OfType<T>()
+                .FirstOrDefault();
+
+        foreach (T duplicate
+                 in root.Components
+                     .OfType<T>()
+                     .Skip(1)
+                     .ToArray())
+        {
+            root.RemoveComponent(duplicate);
+        }
+
+        return
+            component ??
+            root.AddComponent(create());
     }
 
     private static void RemoveGameplayComponentsFromDescendants(GameObject root)
     {
         Type[] gameplayTypes =
         {
-            typeof(CapsuleCollider3D), typeof(CharacterController3D), typeof(PlayerController3D),
-            typeof(AnimationController), typeof(CameraBoom3D)
+            typeof(CapsuleCollider3D),
+            typeof(CharacterController3D),
+            typeof(PlayerController3D),
+            typeof(AnimationController),
+            typeof(CameraBoom3D)
         };
+
         foreach (GameObject child in Descendants(root))
-            foreach (Component component in child.Components.Where(item => gameplayTypes.Contains(item.GetType())).ToArray())
+        {
+            foreach (Component component
+                     in child.Components
+                         .Where(
+                             item =>
+                                 gameplayTypes.Contains(item.GetType()))
+                         .ToArray())
+            {
                 child.RemoveComponent(component);
+            }
+        }
     }
 
-    private static bool NearlyUniform(Vector3 scale, float expected) =>
+    private static bool NearlyUniform(
+        Vector3 scale,
+        float expected) =>
         MathF.Abs(scale.X - expected) < .0001f &&
         MathF.Abs(scale.Y - expected) < .0001f &&
         MathF.Abs(scale.Z - expected) < .0001f;

@@ -1,4 +1,5 @@
 using ByteEngine.Core;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Diagnostics;
@@ -19,6 +20,8 @@ internal sealed class EditorProjectContext
         new();
 
     private readonly Guid _runtimeSpawnRegistration;
+
+    private readonly Guid _animationAssetRegistration;
 
     public ProjectData Project { get; }
 
@@ -79,6 +82,10 @@ internal sealed class EditorProjectContext
                 AssetDatabase,
                 warningSink);
 
+        _animationAssetRegistration =
+            AnimationRuntimeAssets.Configure(
+                Assets);
+
         ComponentSerializer components =
             new(
                 ProjectRoot,
@@ -95,8 +102,8 @@ internal sealed class EditorProjectContext
 
         /*
          * SceneSerializer installs the standard renderer codecs in its
-         * constructor. Register the v0.9-L2 SkyEnvironment codec afterward so
-         * scene/Blueprint persistence includes the new Exposure property.
+         * constructor. Register feature-specific codecs afterward so their
+         * richer persistence replaces the legacy codec for the same type name.
          */
         SkyEnvironmentExposureSerialization.Register(
             components);
@@ -105,6 +112,9 @@ internal sealed class EditorProjectContext
             components);
 
         AudioSerializationRegistrar.Register(
+            components);
+
+        AnimationSerializationRegistrar.Register(
             components);
 
         Active =
@@ -281,6 +291,9 @@ internal sealed class EditorProjectContext
 
         RuntimeSpawnService.ClearBlueprintSpawner(
             _runtimeSpawnRegistration);
+
+        AnimationRuntimeAssets.Clear(
+            _animationAssetRegistration);
 
         if (ReferenceEquals(
                 Active,
