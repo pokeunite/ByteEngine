@@ -289,12 +289,11 @@ internal sealed class AnimationClipPreview : IDisposable
 
         if (ImGui.SmallButton(
                 "Reset View") &&
-            _modelObject !=
+            _renderer !=
                 null)
         {
-            CenterModelAndFrameCamera(
-                model,
-                _modelObject);
+            FrameCurrentPose(
+                _renderer);
 
             _forceRender =
                 true;
@@ -303,7 +302,7 @@ internal sealed class AnimationClipPreview : IDisposable
         ImGui.SameLine();
 
         ImGui.TextDisabled(
-            "LMB Orbit  |  MMB Pan  |  Wheel Zoom");
+            "LMB Orbit  |  MMB Pan  |  Wheel Zoom  |  F Frame");
 
         float availableWidth =
             Math.Max(
@@ -457,10 +456,6 @@ internal sealed class AnimationClipPreview : IDisposable
                 _scene.CreateGameObject(
                     "Animated Model");
 
-            CenterModelAndFrameCamera(
-                model,
-                _modelObject);
-
             _renderer =
                 _modelObject.AddComponent(
                     new SkeletalMeshRenderer
@@ -546,6 +541,17 @@ internal sealed class AnimationClipPreview : IDisposable
                 _error =
                     $"Animation '{animation.Name}' could not be played.";
             }
+            else
+            {
+                /*
+                 * Frame the mesh that is actually visible after skinning.
+                 * Raw FBX hierarchy bounds can contain conversion/armature
+                 * transforms far outside the character and were the reason
+                 * the Gorilla appeared as a tiny sliver in the old preview.
+                 */
+                FrameCurrentPose(
+                    _renderer);
+            }
         }
         catch (Exception exception)
         {
@@ -591,14 +597,15 @@ internal sealed class AnimationClipPreview : IDisposable
             false;
     }
 
-    private void CenterModelAndFrameCamera(
-        ModelAsset model,
-        GameObject modelObject)
+    private void FrameCurrentPose(
+        SkeletalMeshRenderer renderer)
     {
-        if (!TryCalculateBounds(
-                model,
-                out Vector3 minimum,
-                out Vector3 maximum))
+        Vector3 minimum;
+        Vector3 maximum;
+
+        if (!renderer.TryGetCurrentModelBounds(
+                out BoundingBox3D bounds) ||
+            !bounds.IsValid)
         {
             minimum =
                 new Vector3(
@@ -611,6 +618,14 @@ internal sealed class AnimationClipPreview : IDisposable
                     0.5f,
                     1.8f,
                     0.5f);
+        }
+        else
+        {
+            minimum =
+                bounds.Minimum;
+
+            maximum =
+                bounds.Maximum;
         }
 
         Vector3 center =
@@ -625,16 +640,13 @@ internal sealed class AnimationClipPreview : IDisposable
                 maximum -
                 minimum,
                 new Vector3(
-                    0.1f));
-
-        modelObject.Transform.LocalPosition =
-            -center;
+                    0.05f));
 
         _camera3D.Yaw =
             -135.0f;
 
         _camera3D.Pitch =
-            -10.0f;
+            -8.0f;
 
         _camera3D.FieldOfView =
             30.0f;
@@ -666,12 +678,9 @@ internal sealed class AnimationClipPreview : IDisposable
                 0.05f);
 
         /*
-         * Fit the actual visible model dimensions instead of the diagonal
-         * bounding-sphere radius used by the first C4A preview. The diagonal
-         * method placed tall character assets much farther away than needed.
-         *
-         * X/Z are combined because the preview camera views the model from a
-         * diagonal yaw; Y controls the vertical fit.
+         * Camera is diagonal by default, so X/Z both contribute to screen
+         * width. The 0.90 factor intentionally fills most of the preview while
+         * retaining a small safety margin for limb motion.
          */
         float horizontalExtent =
             MathF.Sqrt(
@@ -682,13 +691,7 @@ internal sealed class AnimationClipPreview : IDisposable
             0.5f;
 
         float verticalExtent =
-            (
-                size.Y +
-                MathF.Max(
-                    size.X,
-                    size.Z) *
-                0.12f
-            ) *
+            size.Y *
             0.5f;
 
         float horizontalDistance =
@@ -699,19 +702,16 @@ internal sealed class AnimationClipPreview : IDisposable
             verticalExtent /
             verticalTangent;
 
-        float distance =
+        _cameraTarget =
+            center;
+
+        _cameraDistance =
             Math.Max(
                 Math.Max(
                     horizontalDistance,
                     verticalDistance) *
-                0.88f,
-                0.45f);
-
-        _cameraTarget =
-            Vector3.Zero;
-
-        _cameraDistance =
-            distance;
+                0.90f,
+                0.20f);
 
         UpdatePreviewCameraPosition();
     }
@@ -728,6 +728,18 @@ internal sealed class AnimationClipPreview : IDisposable
 
         bool changed =
             false;
+
+        if (ImGui.IsKeyPressed(
+                ImGuiKey.F) &&
+            _renderer !=
+                null)
+        {
+            FrameCurrentPose(
+                _renderer);
+
+            changed =
+                true;
+        }
 
         if (ImGui.IsMouseDragging(
                 ImGuiMouseButton.Left))
@@ -821,192 +833,5 @@ internal sealed class AnimationClipPreview : IDisposable
             _cameraDistance;
     }
 
-    private static bool TryCalculateBounds(
-        ModelAsset model,
-        out Vector3 minimum,
-        out Vector3 maximum)
-    {
-        minimum =
-            new Vector3(
-                float.MaxValue);
 
-        maximum =
-            new Vector3(
-                float.MinValue);
-
-        bool hasVertex =
-            false;
-
-        ImportedNode[] nodes =
-            model.Nodes.ToArray();
-
-        Dictionary<string, int> nodeByKey =
-            nodes
-                .Select(
-                    (node, index) =>
-                        (
-                            node.Key,
-                            index
-                        ))
-                .ToDictionary(
-                    item =>
-                        item.Key,
-                    item =>
-                        item.index,
-                    StringComparer.Ordinal);
-
-        Matrix4x4[] globals =
-            new Matrix4x4[
-                nodes.Length];
-
-        byte[] states =
-            new byte[
-                nodes.Length];
-
-        Matrix4x4 ResolveGlobal(
-            int index)
-        {
-            if (states[index] ==
-                2)
-            {
-                return globals[index];
-            }
-
-            if (states[index] ==
-                1)
-            {
-                return nodes[index]
-                    .LocalTransform;
-            }
-
-            states[index] =
-                1;
-
-            ImportedNode node =
-                nodes[index];
-
-            Matrix4x4 result =
-                node.LocalTransform;
-
-            if (node.ParentKey !=
-                    null &&
-                nodeByKey.TryGetValue(
-                    node.ParentKey,
-                    out int parentIndex))
-            {
-                result *=
-                    ResolveGlobal(
-                        parentIndex);
-            }
-
-            globals[index] =
-                result;
-
-            states[index] =
-                2;
-
-            return result;
-        }
-
-        Dictionary<string, ImportedMesh> meshes =
-            model.Meshes.ToDictionary(
-                mesh =>
-                    mesh.Key,
-                StringComparer.Ordinal);
-
-        for (int nodeIndex =
-                 0;
-             nodeIndex <
-             nodes.Length;
-             nodeIndex++)
-        {
-            Matrix4x4 global =
-                ResolveGlobal(
-                    nodeIndex);
-
-            foreach (string meshKey
-                     in nodes[nodeIndex].MeshKeys)
-            {
-                if (!meshes.TryGetValue(
-                        meshKey,
-                        out ImportedMesh? mesh))
-                {
-                    continue;
-                }
-
-                float[] vertices =
-                    mesh.Vertices;
-
-                for (int offset =
-                         0;
-                     offset +
-                         2 <
-                     vertices.Length;
-                     offset +=
-                         8)
-                {
-                    Vector3 position =
-                        Vector3.Transform(
-                            new Vector3(
-                                vertices[offset],
-                                vertices[offset + 1],
-                                vertices[offset + 2]),
-                            global);
-
-                    minimum =
-                        Vector3.Min(
-                            minimum,
-                            position);
-
-                    maximum =
-                        Vector3.Max(
-                            maximum,
-                            position);
-
-                    hasVertex =
-                        true;
-                }
-            }
-        }
-
-        if (!hasVertex)
-        {
-            foreach (ImportedMesh mesh
-                     in model.Meshes)
-            {
-                float[] vertices =
-                    mesh.Vertices;
-
-                for (int offset =
-                         0;
-                     offset +
-                         2 <
-                     vertices.Length;
-                     offset +=
-                         8)
-                {
-                    Vector3 position =
-                        new(
-                            vertices[offset],
-                            vertices[offset + 1],
-                            vertices[offset + 2]);
-
-                    minimum =
-                        Vector3.Min(
-                            minimum,
-                            position);
-
-                    maximum =
-                        Vector3.Max(
-                            maximum,
-                            position);
-
-                    hasVertex =
-                        true;
-                }
-            }
-        }
-
-        return hasVertex;
-    }
 }

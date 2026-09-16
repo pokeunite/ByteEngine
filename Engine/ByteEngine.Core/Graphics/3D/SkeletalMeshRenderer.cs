@@ -128,6 +128,82 @@ public sealed class SkeletalMeshRenderer : Component
     public Vector3 ModelSpaceRootTravel =>
         _modelSpaceRootTravel;
 
+    /// <summary>
+    /// Returns bounds for the currently deformed/skinned meshes in model
+    /// space. This is primarily useful to editor tools such as animation
+    /// previews that need to frame what is actually visible rather than raw
+    /// importer hierarchy bounds.
+    ///
+    /// The method does not alter animation state. It only ensures the current
+    /// pose is resolved, then combines each runtime mesh's already-maintained
+    /// dynamic LocalBounds with its mesh-to-model transform.
+    /// </summary>
+    public bool TryGetCurrentModelBounds(
+        out BoundingBox3D bounds)
+    {
+        if (!_resolved)
+        {
+            ResolveRuntimeResources();
+        }
+
+        if (_poseDirty)
+        {
+            UpdatePoseAndMeshes();
+        }
+
+        Vector3 minimum =
+            new(
+                float.PositiveInfinity,
+                float.PositiveInfinity,
+                float.PositiveInfinity);
+
+        Vector3 maximum =
+            new(
+                float.NegativeInfinity,
+                float.NegativeInfinity,
+                float.NegativeInfinity);
+
+        bool found =
+            false;
+
+        foreach (RuntimeSkinnedMesh runtime
+                 in _runtimeMeshes)
+        {
+            BoundingBox3D meshBounds =
+                runtime.Mesh.LocalBounds.Transform(
+                    runtime.MeshToModelMatrix);
+
+            if (!meshBounds.IsValid)
+            {
+                continue;
+            }
+
+            minimum =
+                Vector3.Min(
+                    minimum,
+                    meshBounds.Minimum);
+
+            maximum =
+                Vector3.Max(
+                    maximum,
+                    meshBounds.Maximum);
+
+            found =
+                true;
+        }
+
+        bounds =
+            found
+                ? new BoundingBox3D(
+                    minimum,
+                    maximum)
+                : BoundingBox3D.Empty;
+
+        return
+            found &&
+            bounds.IsValid;
+    }
+
     protected override void OnStart()
     {
         ResolveRuntimeResources();
