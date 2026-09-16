@@ -159,9 +159,18 @@ public sealed class RenderWorld
             return;
         }
 
-        context.Renderer3D.PrepareEnvironmentLighting(
-            _environment,
-            view);
+        /*
+         * Auxiliary preview passes intentionally reuse the shared Renderer3D
+         * without owning its environment cache. Skipping preparation here is
+         * what prevents a no-sky preview from calling ClearEnvironment() on
+         * IBL resources that belong to the main Scene/Game view.
+         */
+        if (context.PrepareEnvironmentLighting3D)
+        {
+            context.Renderer3D.PrepareEnvironmentLighting(
+                _environment,
+                view);
+        }
 
         int environmentDrawCalls =
             0;
@@ -230,7 +239,14 @@ public sealed class RenderWorld
                 submission);
         }
 
+        /*
+         * Asset previews do not need shadow maps. Keeping this decision on the
+         * RenderContext means the main Scene/Game renderer retains its normal
+         * shadow behavior while auxiliary previews can remain a single main
+         * mesh pass.
+         */
         DirectionalShadowPassResult shadowPass =
+            context.RenderShadows3D &&
             visible.Count >
             0
                 ? context.Renderer3D.RenderDirectionalShadowMap(
@@ -240,6 +256,7 @@ public sealed class RenderWorld
                 : DirectionalShadowPassResult.None;
 
         PointShadowPassResult pointShadowPass =
+            context.RenderShadows3D &&
             visible.Count >
             0
                 ? context.Renderer3D.RenderPointShadowMaps(

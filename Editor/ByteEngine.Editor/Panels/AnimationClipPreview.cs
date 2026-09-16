@@ -27,10 +27,14 @@ internal sealed class AnimationClipPreview : IDisposable
      * framebuffer recreation churn and avoids effectively rendering another
      * full-speed game viewport just to show a small asset preview.
      */
-    private const int PreviewRenderWidth = 384;
-    private const int PreviewRenderHeight = 256;
+    private const int PreviewRenderWidth = 512;
+    private const int PreviewRenderHeight = 320;
 
-    private const double PreviewFramesPerSecond = 12.0;
+    /*
+     * 30 FPS is smooth enough for animation inspection while remaining
+     * deliberately below the main editor viewport refresh rate.
+     */
+    private const double PreviewFramesPerSecond = 30.0;
     private const double PreviewFrameInterval =
         1.0 /
         PreviewFramesPerSecond;
@@ -66,6 +70,12 @@ internal sealed class AnimationClipPreview : IDisposable
 
     private bool _forceRender =
         true;
+
+    private Vector3 _cameraTarget =
+        Vector3.Zero;
+
+    private float _cameraDistance =
+        2.0f;
 
     private double _lastPreviewTickSeconds;
 
@@ -236,6 +246,10 @@ internal sealed class AnimationClipPreview : IDisposable
                 windowWidth,
                 windowHeight,
                 drawGrid3D:
+                    false,
+                prepareEnvironmentLighting3D:
+                    false,
+                renderShadows3D:
                     false);
 
             _hasRenderedFrame =
@@ -271,7 +285,25 @@ internal sealed class AnimationClipPreview : IDisposable
             string.Empty);
 
         ImGui.TextDisabled(
-            "Preview 12 FPS - performance mode");
+            "Preview 30 FPS - lightweight lighting");
+
+        if (ImGui.SmallButton(
+                "Reset View") &&
+            _modelObject !=
+                null)
+        {
+            CenterModelAndFrameCamera(
+                model,
+                _modelObject);
+
+            _forceRender =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        ImGui.TextDisabled(
+            "LMB Orbit  |  MMB Pan  |  Wheel Zoom");
 
         float availableWidth =
             Math.Max(
@@ -281,8 +313,8 @@ internal sealed class AnimationClipPreview : IDisposable
         float previewWidth =
             Math.Clamp(
                 availableWidth,
-                120.0f,
-                420.0f);
+                140.0f,
+                460.0f);
 
         float previewHeight =
             previewWidth *
@@ -327,6 +359,8 @@ internal sealed class AnimationClipPreview : IDisposable
                     previewWidth,
                     previewHeight));
         }
+
+        HandlePreviewCameraInput();
     }
 
     public void Reset()
@@ -350,6 +384,12 @@ internal sealed class AnimationClipPreview : IDisposable
 
         _forceRender =
             true;
+
+        _cameraTarget =
+            Vector3.Zero;
+
+        _cameraDistance =
+            2.0f;
 
         _lastPreviewTickSeconds =
             _previewClock.Elapsed
@@ -446,24 +486,51 @@ internal sealed class AnimationClipPreview : IDisposable
                             0.0f
                     });
 
-            GameObject lightObject =
+            /*
+             * Unity-style preview philosophy: a cheap key/fill setup instead
+             * of the game's HDR environment or shadow stack.
+             */
+            GameObject keyLightObject =
                 _scene.CreateGameObject(
-                    "Preview Light");
+                    "Preview Key Light");
 
-            lightObject.Transform.EulerAngles =
+            keyLightObject.Transform.EulerAngles =
                 new Vector3(
                     -35.0f,
                     -35.0f,
                     0.0f);
 
-            lightObject.AddComponent(
+            keyLightObject.AddComponent(
                 new DirectionalLight
                 {
                     Intensity =
-                        1.6f,
+                        1.25f,
 
                     AmbientIntensity =
+                        0.22f,
+
+                    CastShadows =
+                        false
+                });
+
+            GameObject fillLightObject =
+                _scene.CreateGameObject(
+                    "Preview Fill Light");
+
+            fillLightObject.Transform.EulerAngles =
+                new Vector3(
+                    20.0f,
+                    145.0f,
+                    0.0f);
+
+            fillLightObject.AddComponent(
+                new DirectionalLight
+                {
+                    Intensity =
                         0.55f,
+
+                    AmbientIntensity =
+                        0.12f,
 
                     CastShadows =
                         false
@@ -570,7 +637,7 @@ internal sealed class AnimationClipPreview : IDisposable
             -10.0f;
 
         _camera3D.FieldOfView =
-            38.0f;
+            30.0f;
 
         float aspectRatio =
             (float)PreviewRenderWidth /
@@ -637,12 +704,121 @@ internal sealed class AnimationClipPreview : IDisposable
                 Math.Max(
                     horizontalDistance,
                     verticalDistance) *
-                1.08f,
-                0.75f);
+                0.88f,
+                0.45f);
 
-        _camera3D.Position =
-            -_camera3D.Forward *
+        _cameraTarget =
+            Vector3.Zero;
+
+        _cameraDistance =
             distance;
+
+        UpdatePreviewCameraPosition();
+    }
+
+    private void HandlePreviewCameraInput()
+    {
+        if (!ImGui.IsItemHovered())
+        {
+            return;
+        }
+
+        ImGuiIOPtr io =
+            ImGui.GetIO();
+
+        bool changed =
+            false;
+
+        if (ImGui.IsMouseDragging(
+                ImGuiMouseButton.Left))
+        {
+            Vector2 delta =
+                io.MouseDelta;
+
+            _camera3D.Yaw +=
+                delta.X *
+                0.30f;
+
+            _camera3D.Pitch =
+                Math.Clamp(
+                    _camera3D.Pitch -
+                    delta.Y *
+                    0.30f,
+                    -85.0f,
+                    85.0f);
+
+            changed =
+                true;
+        }
+
+        if (ImGui.IsMouseDragging(
+                ImGuiMouseButton.Middle))
+        {
+            Vector2 delta =
+                io.MouseDelta;
+
+            Vector3 cameraUp =
+                Vector3.Normalize(
+                    Vector3.Cross(
+                        _camera3D.Right,
+                        _camera3D.Forward));
+
+            float panScale =
+                Math.Max(
+                    _cameraDistance *
+                    0.0025f,
+                    0.0005f);
+
+            _cameraTarget +=
+                (
+                    -_camera3D.Right *
+                    delta.X +
+                    cameraUp *
+                    delta.Y
+                ) *
+                panScale;
+
+            changed =
+                true;
+        }
+
+        if (MathF.Abs(
+                io.MouseWheel) >
+            0.0001f)
+        {
+            float zoomFactor =
+                MathF.Pow(
+                    0.88f,
+                    io.MouseWheel);
+
+            _cameraDistance =
+                Math.Clamp(
+                    _cameraDistance *
+                    zoomFactor,
+                    0.05f,
+                    500.0f);
+
+            changed =
+                true;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        UpdatePreviewCameraPosition();
+
+        _forceRender =
+            true;
+    }
+
+    private void UpdatePreviewCameraPosition()
+    {
+        _camera3D.Position =
+            _cameraTarget -
+            _camera3D.Forward *
+            _cameraDistance;
     }
 
     private static bool TryCalculateBounds(

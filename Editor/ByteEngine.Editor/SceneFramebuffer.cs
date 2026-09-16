@@ -45,7 +45,9 @@ internal sealed class SceneFramebuffer
         int height,
         int windowWidth,
         int windowHeight,
-        bool drawGrid3D = true)
+        bool drawGrid3D = true,
+        bool prepareEnvironmentLighting3D = true,
+        bool renderShadows3D = true)
     {
         Resize(
             width,
@@ -97,7 +99,11 @@ internal sealed class SceneFramebuffer
                     projectionMatrix3D:
                         camera3D.Projection(
                             (float)_width /
-                            _height)
+                            _height),
+                    prepareEnvironmentLighting3D:
+                        prepareEnvironmentLighting3D,
+                    renderShadows3D:
+                        renderShadows3D
                 );
 
             if (drawGrid3D)

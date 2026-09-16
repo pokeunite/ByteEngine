@@ -23,6 +23,23 @@ public sealed class RenderContext
 
     public Matrix4x4? ProjectionMatrix3D { get; }
 
+    /// <summary>
+    /// Controls whether this render pass may prepare, replace or clear the
+    /// shared Renderer3D environment-lighting cache. Main Scene/Game renders
+    /// keep the default true value. Auxiliary asset previews can disable it so
+    /// a preview without a SkyEnvironment cannot invalidate the main view's
+    /// already-prepared IBL resources.
+    /// </summary>
+    public bool PrepareEnvironmentLighting3D { get; }
+
+    /// <summary>
+    /// Controls whether this pass may render directional or point-light shadow
+    /// maps. Main Scene/Game views keep the default true value. Small editor
+    /// previews disable shadows because they add extra render passes without
+    /// helping the user identify an animation clip.
+    /// </summary>
+    public bool RenderShadows3D { get; }
+
     public RenderWorld RenderWorld { get; } =
         new();
 
@@ -49,7 +66,9 @@ public sealed class RenderContext
         Camera2D? camera2D = null,
         Camera3D? camera3D = null,
         Matrix4x4? viewMatrix3D = null,
-        Matrix4x4? projectionMatrix3D = null)
+        Matrix4x4? projectionMatrix3D = null,
+        bool prepareEnvironmentLighting3D = true,
+        bool renderShadows3D = true)
     {
         Renderer2D =
             renderer2D;
@@ -81,6 +100,12 @@ public sealed class RenderContext
 
         ProjectionMatrix3D =
             projectionMatrix3D;
+
+        PrepareEnvironmentLighting3D =
+            prepareEnvironmentLighting3D;
+
+        RenderShadows3D =
+            renderShadows3D;
     }
 
     public Matrix4x4 GetViewMatrix3D()
