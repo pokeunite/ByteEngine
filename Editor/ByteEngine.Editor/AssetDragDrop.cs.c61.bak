@@ -14,32 +14,29 @@ internal static class AssetDragDrop
     private static double _pendingObjectSelectionTime;
 
     /// <summary>
-    /// Remembers the object that was selected immediately before an Asset
-    /// Browser click. If that click turns into a drag, Set() restores the
-    /// object so the Inspector remains a valid drop target.
+    /// Called before the editor clears object selection in order to show an
+    /// Asset in the Inspector. If that same mouse gesture becomes an asset
+    /// drag, Set() restores the GameObject so an Inspector drop target remains
+    /// visible instead of switching to Asset information mid-drag.
     /// </summary>
-    public static void RememberObjectSelection(
-        GameObject? gameObject)
+    public static void RememberObjectSelection(GameObject gameObject)
     {
-        if (gameObject == null)
+        ArgumentNullException.ThrowIfNull(gameObject);
+
+        if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
         {
             return;
         }
 
-        _pendingObjectSelection =
-            gameObject;
-
-        _pendingObjectSelectionTime =
-            ImGui.GetTime();
+        _pendingObjectSelection = gameObject;
+        _pendingObjectSelectionTime = ImGui.GetTime();
     }
 
     public static unsafe void Set(Guid guid)
     {
         RestoreObjectSelectionForDrag();
 
-        Span<byte> bytes =
-            stackalloc byte[16];
-
+        Span<byte> bytes = stackalloc byte[16];
         guid.TryWriteBytes(bytes);
 
         fixed (byte* pointer = bytes)
@@ -55,8 +52,7 @@ internal static class AssetDragDrop
     public static unsafe Guid? Accept()
     {
         ImGuiPayloadPtr payload =
-            ImGui.AcceptDragDropPayload(
-                PayloadType);
+            ImGui.AcceptDragDropPayload(PayloadType);
 
         if (payload.NativePtr == null)
         {
@@ -70,9 +66,7 @@ internal static class AssetDragDrop
             return null;
         }
 
-        byte[] bytes =
-            new byte[16];
-
+        byte[] bytes = new byte[16];
         Marshal.Copy(
             payload.Data,
             bytes,
@@ -87,13 +81,10 @@ internal static class AssetDragDrop
         GameObject? remembered =
             _pendingObjectSelection;
 
-        _pendingObjectSelection =
-            null;
+        _pendingObjectSelection = null;
 
         if (remembered == null ||
-            ImGui.GetTime() -
-            _pendingObjectSelectionTime >
-            1.5)
+            ImGui.GetTime() - _pendingObjectSelectionTime > 1.5)
         {
             return;
         }
@@ -103,26 +94,15 @@ internal static class AssetDragDrop
 
         if (state == null ||
             remembered.Scene == null ||
-            (!ReferenceEquals(
-                 remembered.Scene,
-                 state.EditorScene) &&
-             !ReferenceEquals(
-                 remembered.Scene,
-                 state.RuntimeScene)))
+            (!ReferenceEquals(remembered.Scene, state.EditorScene) &&
+             !ReferenceEquals(remembered.Scene, state.RuntimeScene)))
         {
             return;
         }
 
-        state.Selection.Set(
-            remembered);
-
-        state.SelectedAssetId =
-            null;
-
-        state.SelectedAssetPath =
-            null;
-
-        state.SelectedModelAnimationKey =
-            null;
+        state.Selection.Set(remembered);
+        state.SelectedAssetId = null;
+        state.SelectedAssetPath = null;
+        state.SelectedModelAnimationKey = null;
     }
 }

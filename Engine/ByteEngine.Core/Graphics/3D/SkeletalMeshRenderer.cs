@@ -34,6 +34,15 @@ public sealed class SkeletalMeshRenderer : Component
     private int[] _boneNodeIndices = Array.Empty<int>();
 
     /*
+     * C6 socket foundation: keep the exact blended model-space pose used for
+     * skinning so attachments can query a bone without independently sampling
+     * animation. This guarantees sockets follow cross-fades and root-motion
+     * compensation exactly as the visible mesh does.
+     */
+    private Matrix4x4[] _currentPoseGlobals = Array.Empty<Matrix4x4>();
+    private Matrix4x4 _currentRootMotionCorrection = Matrix4x4.Identity;
+
+    /*
      * Root-motion sampling is performed in MODEL SPACE, not in any individual
      * FBX/glTF node's local axes. The chain starts at the skeleton root bone
      * and walks upward through Armature/model conversion nodes so imported
@@ -110,6 +119,123 @@ public sealed class SkeletalMeshRenderer : Component
             .Select(animation => animation.Name)
             .ToArray()
         ?? Array.Empty<string>();
+
+    /// <summary>
+    /// Names of bones available for runtime sockets/attachments. Resolves the
+    /// model lazily so editor/runtime tooling can query this before Play begins.
+    /// </summary>
+    public IReadOnlyList<string> BoneNames
+    {
+        get
+        {
+            if (!_resolved)
+            {
+                ResolveRuntimeResources();
+            }
+
+            return _skeleton?.Bones
+                .Select(bone => bone.Name)
+                .ToArray()
+                ?? Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Returns the selected bone in the same corrected model space used by the
+    /// visible skinned mesh. Cross-fades and in-place root-motion compensation
+    /// are therefore already included.
+    /// </summary>
+    public bool TryGetBoneModelMatrix(
+        string boneName,
+        out Matrix4x4 matrix)
+    {
+        matrix = Matrix4x4.Identity;
+
+        if (string.IsNullOrWhiteSpace(boneName))
+        {
+            return false;
+        }
+
+        if (!_resolved &&
+            !ResolveRuntimeResources())
+        {
+            return false;
+        }
+
+        if (_poseDirty)
+        {
+            UpdatePoseAndMeshes();
+        }
+
+        if (_skeleton == null ||
+            _currentPoseGlobals.Length == 0)
+        {
+            return false;
+        }
+
+        int boneIndex =
+            _skeleton.Bones.FindIndex(
+                bone =>
+                    string.Equals(
+                        bone.Name,
+                        boneName,
+                        StringComparison.Ordinal));
+
+        if (boneIndex < 0)
+        {
+            boneIndex =
+                _skeleton.Bones.FindIndex(
+                    bone =>
+                        string.Equals(
+                            bone.Name,
+                            boneName,
+                            StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (boneIndex < 0 ||
+            boneIndex >= _boneNodeIndices.Length)
+        {
+            return false;
+        }
+
+        int nodeIndex =
+            _boneNodeIndices[boneIndex];
+
+        if (nodeIndex < 0 ||
+            nodeIndex >= _currentPoseGlobals.Length)
+        {
+            return false;
+        }
+
+        matrix =
+            _currentPoseGlobals[nodeIndex] *
+            _currentRootMotionCorrection;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the selected bone in world space, including the animated model's
+    /// live scene transform. Intended for weapons, VFX and other attachments.
+    /// </summary>
+    public bool TryGetBoneWorldMatrix(
+        string boneName,
+        out Matrix4x4 matrix)
+    {
+        if (!TryGetBoneModelMatrix(
+                boneName,
+                out Matrix4x4 modelMatrix))
+        {
+            matrix = Matrix4x4.Identity;
+            return false;
+        }
+
+        matrix =
+            modelMatrix *
+            Transform.WorldMatrix;
+
+        return true;
+    }
 
     /// <summary>
     /// Root node currently used to measure locomotion travel. Exposed for
@@ -347,7 +473,6 @@ public sealed class SkeletalMeshRenderer : Component
         {
             return _model != null && _runtimeMeshes.Count > 0;
         }
-
         if (Model.IsEmpty ||
             !AnimationRuntimeAssets.TryGet(out AssetManager? assets) ||
             assets == null)
@@ -697,7 +822,6 @@ public sealed class SkeletalMeshRenderer : Component
                 meshNodeIndices.TryAdd(meshKey, nodeIndex);
             }
         }
-
         int skinnedIndex = 0;
 
         foreach (ImportedMesh source in _model.Meshes)
@@ -769,6 +893,9 @@ public sealed class SkeletalMeshRenderer : Component
 
         Matrix4x4 rootMotionCorrection =
             BuildModelSpaceRootMotionCorrection();
+
+        _currentPoseGlobals = globals;
+        _currentRootMotionCorrection = rootMotionCorrection;
 
         foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
         {
@@ -1437,6 +1564,8 @@ public sealed class SkeletalMeshRenderer : Component
         }
 
         _runtimeMeshes.Clear();
+        _currentPoseGlobals = Array.Empty<Matrix4x4>();
+        _currentRootMotionCorrection = Matrix4x4.Identity;
     }
 
     private sealed class RuntimeSkinnedMesh

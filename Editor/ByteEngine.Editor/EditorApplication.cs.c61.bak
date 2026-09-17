@@ -182,27 +182,13 @@ public sealed class EditorApplication
             return;
         }
 
-        string? destinationDirectory =
-            _assets?.CurrentImportDirectory;
-
-        IReadOnlyList<AssetRecord> imported =
-            new ExternalAssetImporter(
-                _projectContext,
-                _log)
-            .Import(
-                e.FileNames,
-                destinationDirectory);
-        AssetRecord? selected =
-            imported.FirstOrDefault();
-
-        if (selected != null &&
-            _state.SelectedObject == null)
+        IReadOnlyList<AssetRecord> imported = new ExternalAssetImporter(_projectContext, _log).Import(e.FileNames);
+        AssetRecord? selected = imported.FirstOrDefault();
+        if (selected != null)
         {
-            _state.SelectedAssetId =
-                selected.Guid;
-
-            _state.SelectedAssetPath =
-                selected.ProjectPath;
+            _state.SelectedObject = null;
+            _state.SelectedAssetId = selected.Guid;
+            _state.SelectedAssetPath = selected.ProjectPath;
         }
     }
 

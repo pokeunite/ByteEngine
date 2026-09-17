@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Assets;
@@ -20,6 +21,7 @@ public static class AnimationSerializationRegistrar
 
         serializer.Register(new AnimationControllerCodec());
         serializer.Register(new SkeletalMeshRendererCodec());
+        serializer.Register(new BoneSocket3DCodec());
     }
 
     private sealed class AnimationControllerCodec : IComponentCodec
@@ -200,6 +202,82 @@ public static class AnimationSerializationRegistrar
                             0.15f)
                 };
         }
+    }
+
+    private sealed class BoneSocket3DCodec : IComponentCodec
+    {
+        public string TypeName => "BoneSocket3D";
+        public Type ComponentType => typeof(BoneSocket3D);
+
+        public ComponentData Serialize(
+            Component component,
+            ComponentSerializationContext context)
+        {
+            BoneSocket3D socket =
+                (BoneSocket3D)component;
+
+            return
+                new ComponentData
+                {
+                    Type = TypeName,
+                    Properties =
+                        new JsonObject
+                        {
+                            ["boneName"] = socket.BoneName,
+                            ["positionOffset"] = Vector3Node(socket.PositionOffset),
+                            ["rotationOffsetDegrees"] = Vector3Node(socket.RotationOffsetDegrees),
+                            ["scaleMultiplier"] = Vector3Node(socket.ScaleMultiplier),
+                            ["inheritBoneScale"] = socket.InheritBoneScale
+                        }
+                };
+        }
+
+        public Component Deserialize(
+            ComponentData data,
+            ComponentSerializationContext context) =>
+            new BoneSocket3D
+            {
+                BoneName =
+                    Text(data, "boneName", string.Empty),
+                PositionOffset =
+                    ReadVector3(
+                        data.Properties["positionOffset"],
+                        Vector3.Zero),
+                RotationOffsetDegrees =
+                    ReadVector3(
+                        data.Properties["rotationOffsetDegrees"],
+                        Vector3.Zero),
+                ScaleMultiplier =
+                    ReadVector3(
+                        data.Properties["scaleMultiplier"],
+                        Vector3.One),
+                InheritBoneScale =
+                    data.Properties["inheritBoneScale"]?
+                        .GetValue<bool>() ??
+                    true
+            };
+    }
+
+    private static JsonArray Vector3Node(Vector3 value) =>
+        new(
+            value.X,
+            value.Y,
+            value.Z);
+
+    private static Vector3 ReadVector3(
+        JsonNode? node,
+        Vector3 fallback)
+    {
+        if (node is not JsonArray array ||
+            array.Count < 3)
+        {
+            return fallback;
+        }
+
+        return new Vector3(
+            array[0]?.GetValue<float>() ?? fallback.X,
+            array[1]?.GetValue<float>() ?? fallback.Y,
+            array[2]?.GetValue<float>() ?? fallback.Z);
     }
 
     private static string Text(
