@@ -9,5 +9,6 @@ public enum AssetType
     Model3D,
     EventModule,
     Blueprint,
-    AnimationEvents
+    AnimationEvents,
+    AnimationProfile
 }

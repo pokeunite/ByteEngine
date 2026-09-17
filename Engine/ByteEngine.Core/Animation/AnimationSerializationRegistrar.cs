@@ -43,6 +43,10 @@ public static class AnimationSerializationRegistrar
                     Properties =
                         new JsonObject
                         {
+                            ["animationProfileGuid"] =
+                                controller.AnimationProfile.Guid.ToString(),
+                            ["animationProfilePath"] =
+                                controller.AnimationProfile.CachedProjectPath,
                             ["idle"] = controller.Idle,
                             ["walk"] = controller.Walk,
                             ["run"] = controller.Run,
@@ -63,34 +67,45 @@ public static class AnimationSerializationRegistrar
 
         public Component Deserialize(
             ComponentData data,
-            ComponentSerializationContext context) =>
-            new AnimationController
-            {
-                Idle = Text(data, "idle", "Idle"),
-                Walk = Text(data, "walk", "Walk"),
-                Run = Text(data, "run", "Run"),
-                Jump = Text(data, "jump", "Jump"),
-                Fall = Text(data, "fall", "Fall"),
-                Land = Text(data, "land", "Land"),
-                RunThreshold =
-                    Float(data, "runThreshold", 4.0f),
-                DriveLocomotion =
-                    data.Properties["driveLocomotion"]?
-                        .GetValue<bool>() ??
-                    true,
-                TransitionDuration =
-                    Float(
-                        data,
-                        "transitionDuration",
-                        0.15f),
-                PlaybackSpeed =
-                    Float(
-                        data,
-                        "playbackSpeed",
-                        1.0f),
-                RootMotionMode =
-                    ReadRootMotionMode(data)
-            };
+            ComponentSerializationContext context)
+        {
+            AssetReference profile =
+                ReadAssetReference(
+                    data,
+                    context,
+                    "animationProfileGuid",
+                    "animationProfilePath");
+
+            return
+                new AnimationController
+                {
+                    AnimationProfile = profile,
+                    Idle = Text(data, "idle", "Idle"),
+                    Walk = Text(data, "walk", "Walk"),
+                    Run = Text(data, "run", "Run"),
+                    Jump = Text(data, "jump", "Jump"),
+                    Fall = Text(data, "fall", "Fall"),
+                    Land = Text(data, "land", "Land"),
+                    RunThreshold =
+                        Float(data, "runThreshold", 4.0f),
+                    DriveLocomotion =
+                        data.Properties["driveLocomotion"]?
+                            .GetValue<bool>() ??
+                        true,
+                    TransitionDuration =
+                        Float(
+                            data,
+                            "transitionDuration",
+                            0.15f),
+                    PlaybackSpeed =
+                        Float(
+                            data,
+                            "playbackSpeed",
+                            1.0f),
+                    RootMotionMode =
+                        ReadRootMotionMode(data)
+                };
+        }
     }
 
     private sealed class SkeletalMeshRendererCodec : IComponentCodec
@@ -260,6 +275,37 @@ public static class AnimationSerializationRegistrar
                         .GetValue<bool>() ??
                     false
             };
+    }
+
+    private static AssetReference ReadAssetReference(
+        ComponentData data,
+        ComponentSerializationContext context,
+        string guidKey,
+        string pathKey)
+    {
+        Guid.TryParse(
+            data.Properties[guidKey]?
+                .GetValue<string>(),
+            out Guid guid);
+
+        string? path =
+            data.Properties[pathKey]?
+                .GetValue<string>();
+
+        if (guid != Guid.Empty)
+        {
+            return new AssetReference(
+                guid,
+                path);
+        }
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            return context.AssetDatabase.ResolveReference(
+                path);
+        }
+
+        return AssetReference.Empty;
     }
 
     private static JsonArray Vector3Node(Vector3 value) =>

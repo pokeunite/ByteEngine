@@ -18,20 +18,12 @@ public enum LocomotionState
 }
 
 /// <summary>
-/// Character locomotion animation controller.
+/// Character animation playback driver.
 ///
-/// v0.11-C1 upgrades the old state-only component into a playback driver. It
-/// discovers imported skinned model hierarchies beneath the character, creates
-/// their runtime SkeletalMeshRenderer and drives clips from CharacterController3D.
-///
-/// v0.11-C5B adds temporary one-shot/action overrides. Action clips suspend
-/// locomotion playback while they are active and automatically return to the
-/// current locomotion state when the one-shot completes.
-///
-/// v0.11-C7 adds an explicit root-motion policy. SkeletalMeshRenderer continues
-/// to extract/remove model-space locomotion travel from the rendered pose; this
-/// controller can optionally apply that extracted horizontal travel to the
-/// character GameObject.
+/// C8C keeps all existing C5-C7 playback/root-motion behaviour but adds one
+/// optional unified Animation Profile asset. When assigned, the profile is the
+/// source of truth for locomotion settings while gameplay continues to talk to
+/// this one AnimationController.
 /// </summary>
 public sealed class AnimationController : Component
 {
@@ -42,19 +34,19 @@ public sealed class AnimationController : Component
     private bool _actionPaused;
     private string _currentAction = string.Empty;
 
-    /*
-     * C7 root-motion state is controller-owned deliberately. The renderer's
-     * existing C2 extraction remains the single source of truth, while the
-     * character controller decides whether that extracted travel should become
-     * world movement. Only the first active skeletal renderer is used so
-     * multi-mesh characters cannot apply movement twice.
-     */
     private SkeletalMeshRenderer? _rootMotionSource;
     private string _rootMotionAnimation = string.Empty;
     private Vector3 _lastRootMotionTravel;
     private Vector3 _lastAppliedRootMotionDelta;
     private float _lastRootMotionTime;
     private bool _rootMotionSampleValid;
+
+    /// <summary>
+    /// Optional unified .byteanim profile. If empty, all legacy controller
+    /// properties continue to work exactly as before.
+    /// </summary>
+    public AssetReference AnimationProfile { get; set; } =
+        AssetReference.Empty;
 
     public string Idle { get; set; } = "Idle";
     public string Walk { get; set; } = "Walk";
@@ -71,17 +63,9 @@ public sealed class AnimationController : Component
 
     public float PlaybackSpeed { get; set; } = 1.0f;
 
-    /// <summary>
-    /// Controls whether extracted locomotion travel stays in-place or moves the
-    /// owning character. InPlace preserves the pre-C7 behaviour.
-    /// </summary>
     public RootMotionMode RootMotionMode { get; set; } =
         RootMotionMode.InPlace;
 
-    /// <summary>
-    /// World-space root-motion delta applied during the most recent controller
-    /// update. Zero while InPlace, paused, or before a valid sample exists.
-    /// </summary>
     public Vector3 RootMotionDelta { get; private set; }
 
     public LocomotionState State { get; private set; }
@@ -106,17 +90,21 @@ public sealed class AnimationController : Component
 
     protected override void OnStart()
     {
-        /*
-         * Imported model roots can live below this character. Building the
-         * runtime renderer here is safe for normal Character Blueprints and
-         * means locomotion can begin immediately on the first update.
-         */
+        ApplyAnimationProfile();
         RefreshRenderers();
         ResetRootMotionTracking();
     }
 
     protected override void OnUpdate()
     {
+        /*
+         * Do not reload/re-apply the Animation Profile every frame.
+         *
+         * Profiles are applied on start and explicitly when the editor assigns
+         * or saves one. Re-resolving the asset every update caused unnecessary
+         * AssetManager/database work and made the editor feel slower as soon as
+         * a profile was assigned.
+         */
         if (_renderers.Count == 0)
         {
             RefreshRenderers();
@@ -131,12 +119,6 @@ public sealed class AnimationController : Component
                 Math.Max(TransitionDuration, 0.0f);
         }
 
-        /*
-         * Skeletal renderers beneath the character normally update after the
-         * controller in scene order, so this consumes the most recently
-         * evaluated pose. That intentionally makes root motion one animation
-         * sample behind rather than duplicating animation evaluation here.
-         */
         UpdateRootMotion();
 
         if (_actionActive)
@@ -163,11 +145,6 @@ public sealed class AnimationController : Component
             _actionActive = false;
             _actionPaused = false;
             _currentAction = string.Empty;
-
-            /*
-             * Force locomotion to re-apply even when the state itself did not
-             * change during the action (for example Idle -> Attack -> Idle).
-             */
             _stateInitialized = false;
         }
 
@@ -177,6 +154,55 @@ public sealed class AnimationController : Component
         }
 
         UpdateLocomotion();
+    }
+
+    /// <summary>
+    /// Pull the unified profile into the existing proven C5-C7 controller
+    /// fields. Leaving AnimationProfile empty preserves the legacy workflow.
+    /// </summary>
+    public bool ApplyAnimationProfile()
+    {
+        if (AnimationProfile == null ||
+            AnimationProfile.IsEmpty ||
+            !AnimationRuntimeAssets.TryGet(out AssetManager? assets) ||
+            assets == null)
+        {
+            return false;
+        }
+
+        AnimationProfile profile;
+
+        try
+        {
+            profile =
+                assets.LoadAnimationProfile(
+                    AnimationProfile);
+        }
+        catch
+        {
+            return false;
+        }
+
+        profile.Normalize();
+
+        AnimationLocomotionProfile locomotion =
+            profile.Locomotion;
+
+        Idle = locomotion.Idle;
+        Walk = locomotion.Walk;
+        Run = locomotion.Run;
+        Jump = locomotion.Jump;
+        Fall = locomotion.Fall;
+        Land = locomotion.Land;
+        RunThreshold = locomotion.RunThreshold;
+        DriveLocomotion =
+            locomotion.Enabled &&
+            locomotion.DriveFromCharacterController;
+        TransitionDuration = locomotion.TransitionDuration;
+        PlaybackSpeed = locomotion.PlaybackSpeed;
+        RootMotionMode = locomotion.RootMotionMode;
+
+        return true;
     }
 
     private void UpdateLocomotion()
@@ -325,12 +351,6 @@ public sealed class AnimationController : Component
             loop);
     }
 
-    /// <summary>
-    /// Plays a temporary non-looping action clip and suspends locomotion until
-    /// the clip finishes. If the same action is already active, retrigger=false
-    /// leaves it running. If another action is active, interruptCurrent=false
-    /// rejects the new request.
-    /// </summary>
     public bool PlayAction(
         string clipName,
         bool retrigger = false,
@@ -369,12 +389,6 @@ public sealed class AnimationController : Component
             if (sameAction &&
                 retrigger)
             {
-                /*
-                 * SkeletalMeshRenderer.Play intentionally resumes the same
-                 * current clip instead of rewinding it. Stop first when the
-                 * caller explicitly asks for a retrigger so the one-shot
-                 * restarts at time zero.
-                 */
                 foreach (SkeletalMeshRenderer renderer in _renderers)
                 {
                     renderer.Stop();
@@ -526,9 +540,6 @@ public sealed class AnimationController : Component
             return;
         }
 
-        /*
-         * Paused clips and duplicate samples must never produce movement.
-         */
         if (MathF.Abs(
                 playbackTime -
                 _lastRootMotionTime) <=
@@ -549,13 +560,6 @@ public sealed class AnimationController : Component
 
         if (wrapped)
         {
-            /*
-             * SkeletalMeshRenderer exposes accumulated extracted travel but not
-             * a public arbitrary-time sampler. Re-use the previous valid frame
-             * delta at a loop boundary instead of interpreting the wrap as a
-             * large backwards teleport. On the following sample, exact travel
-             * deltas resume normally.
-             */
             localDelta =
                 _lastAppliedRootMotionDelta;
         }
@@ -575,12 +579,6 @@ public sealed class AnimationController : Component
             localDelta.LengthSquared() >
                 0.0000000001f)
         {
-            /*
-             * Travel is measured in the skeletal renderer's model space. Use
-             * its live world matrix as a direction transform so authored model
-             * rotation/import scale are respected before moving the character
-             * root.
-             */
             Vector3 worldDelta =
                 Vector3.TransformNormal(
                     localDelta,
@@ -603,11 +601,6 @@ public sealed class AnimationController : Component
         }
         else if (!wrapped)
         {
-            /*
-             * Keep a useful local velocity estimate even while InPlace, so a
-             * runtime switch to ApplyHorizontal at a loop boundary does not
-             * generate a backwards jump.
-             */
             _lastAppliedRootMotionDelta =
                 localDelta;
         }

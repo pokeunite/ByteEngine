@@ -18,98 +18,288 @@ using ImGuiNET;
 namespace ByteEngine.Editor;
 
 internal enum PropertyEditorContext { Scene, Blueprint, Runtime }
-internal sealed record ComponentPropertyDescriptor(PropertyInfo Property, PropertyMetadata Metadata)
+
+internal sealed record ComponentPropertyDescriptor(
+    PropertyInfo Property,
+    PropertyMetadata Metadata)
 {
-    public bool ReadOnly => Property.SetMethod?.IsPublic != true || Metadata.ReadOnly;
+    public bool ReadOnly =>
+        Property.SetMethod?.IsPublic != true ||
+        Metadata.ReadOnly;
 }
 
-/// <summary>One descriptor list and widget pipeline for scene, Blueprint and runtime component values.</summary>
+/// <summary>
+/// One descriptor list and widget pipeline for scene, Blueprint and runtime
+/// component values.
+/// </summary>
 internal static class ComponentPropertyRenderer
 {
-    private static readonly Dictionary<Type, IReadOnlyList<ComponentPropertyDescriptor>> Cache = new();
-    public static IReadOnlyList<ComponentPropertyDescriptor> Descriptors(Type type, PropertyEditorContext context)
+    private static readonly Dictionary<Type, IReadOnlyList<ComponentPropertyDescriptor>> Cache =
+        new();
+
+    public static IReadOnlyList<ComponentPropertyDescriptor> Descriptors(
+        Type type,
+        PropertyEditorContext context)
     {
-        if (Cache.TryGetValue(type, out var cached)) return cached;
-        var result = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Where(p => p.DeclaringType != typeof(Component) && p.GetIndexParameters().Length == 0 &&
-                p.GetMethod?.IsPublic == true && Supported(p.PropertyType) &&
-                p.Name is not ("UpdateOrder" or "RenderOrder") && type != typeof(BlueprintInstance))
-            .Select(p => new ComponentPropertyDescriptor(p, ComponentMetadataRegistry.GetProperty(type, p.Name) ??
-                new PropertyMetadata(Regex.Replace(p.Name, "(?<=[a-z])(?=[A-Z])", " "), "Properties", p.Name)))
-            .ToArray();
-        Cache[type] = result;
+        if (Cache.TryGetValue(
+                type,
+                out IReadOnlyList<ComponentPropertyDescriptor>? cached))
+        {
+            return cached;
+        }
+
+        ComponentPropertyDescriptor[] result =
+            type.GetProperties(
+                    BindingFlags.Instance |
+                    BindingFlags.Public)
+                .Where(
+                    property =>
+                        property.DeclaringType != typeof(Component) &&
+                        property.GetIndexParameters().Length == 0 &&
+                        property.GetMethod?.IsPublic == true &&
+                        Supported(property.PropertyType) &&
+                        property.Name is not ("UpdateOrder" or "RenderOrder") &&
+                        type != typeof(BlueprintInstance))
+                .Select(
+                    property =>
+                        new ComponentPropertyDescriptor(
+                            property,
+                            ComponentMetadataRegistry.GetProperty(
+                                type,
+                                property.Name)
+                            ?? new PropertyMetadata(
+                                Regex.Replace(
+                                    property.Name,
+                                    "(?<=[a-z])(?=[A-Z])",
+                                    " "),
+                                "Properties",
+                                property.Name)))
+                .ToArray();
+
+        Cache[type] =
+            result;
+
         return result;
     }
 
-    private static bool Supported(Type t) => t == typeof(float) || t == typeof(int) || t == typeof(bool) ||
-        t == typeof(string) || t == typeof(Vector2) || t == typeof(Vector3) || t == typeof(Vector4) ||
-        t == typeof(Guid) || t == typeof(LayerMask) || t == typeof(AssetReference) || t == typeof(InputActionReference) || t.IsEnum;
+    private static bool Supported(
+        Type type) =>
+        type == typeof(float) ||
+        type == typeof(int) ||
+        type == typeof(bool) ||
+        type == typeof(string) ||
+        type == typeof(Vector2) ||
+        type == typeof(Vector3) ||
+        type == typeof(Vector4) ||
+        type == typeof(Guid) ||
+        type == typeof(LayerMask) ||
+        type == typeof(AssetReference) ||
+        type == typeof(InputActionReference) ||
+        type.IsEnum;
 
-    public static bool SetValue(Component component, ComponentPropertyDescriptor descriptor, object value, PropertyEditorContext context)
+    public static bool SetValue(
+        Component component,
+        ComponentPropertyDescriptor descriptor,
+        object value,
+        PropertyEditorContext context)
     {
-        if (descriptor.ReadOnly || (context == PropertyEditorContext.Runtime && !descriptor.Metadata.RuntimeEditable)) return false;
+        if (descriptor.ReadOnly ||
+            context == PropertyEditorContext.Runtime &&
+            !descriptor.Metadata.RuntimeEditable)
+        {
+            return false;
+        }
+
         if (value is float number)
         {
-            var range = ComponentPropertyConstraints.Get(component.GetType(), descriptor.Property.Name);
-            value = Math.Clamp(float.IsFinite(number) ? number : 0, range.Minimum, range.Maximum);
+            var range =
+                ComponentPropertyConstraints.Get(
+                    component.GetType(),
+                    descriptor.Property.Name);
+
+            value =
+                Math.Clamp(
+                    float.IsFinite(number)
+                        ? number
+                        : 0,
+                    range.Minimum,
+                    range.Maximum);
         }
-        descriptor.Property.SetValue(component, value);
+
+        descriptor.Property.SetValue(
+            component,
+            value);
+
         return true;
     }
 
-    public static void Draw(Component component, PropertyEditorContext context, bool advanced,
-        Action begin, Action changed, Action end, EditorProjectContext? project = null)
+    public static void Draw(
+        Component component,
+        PropertyEditorContext context,
+        bool advanced,
+        Action begin,
+        Action changed,
+        Action end,
+        EditorProjectContext? project = null)
     {
-        ImGui.PushID(component.GetHashCode());
-        foreach (var descriptor in Descriptors(component.GetType(), context))
+        ImGui.PushID(
+            component.GetHashCode());
+
+        foreach (ComponentPropertyDescriptor descriptor
+                 in Descriptors(
+                     component.GetType(),
+                     context))
         {
-            if (descriptor.Metadata.Advanced && !advanced) continue;
-            object? before = descriptor.Property.GetValue(component);
-            string label = descriptor.Metadata.DisplayName + "##" + descriptor.Property.Name;
-            bool readOnly = descriptor.ReadOnly || context == PropertyEditorContext.Runtime && !descriptor.Metadata.RuntimeEditable;
-            if (readOnly)
+            if (descriptor.Metadata.Advanced &&
+                !advanced)
             {
-                ImGui.TextDisabled($"{descriptor.Metadata.DisplayName}: {before ?? "None"}");
                 continue;
             }
-            object? after = before;
-            bool edited = false;
-            if (before is float f)
+
+            object? before =
+                descriptor.Property.GetValue(
+                    component);
+
+            string label =
+                descriptor.Metadata.DisplayName +
+                "##" +
+                descriptor.Property.Name;
+
+            bool readOnly =
+                descriptor.ReadOnly ||
+                context == PropertyEditorContext.Runtime &&
+                !descriptor.Metadata.RuntimeEditable;
+
+            if (readOnly)
             {
-                var range = ComponentPropertyConstraints.Get(component.GetType(), descriptor.Property.Name);
-                edited = ImGui.DragFloat(label, ref f, range.Speed, range.Minimum, range.Maximum);
-                after = f;
+                ImGui.TextDisabled(
+                    $"{descriptor.Metadata.DisplayName}: {before ?? "None"}");
+
+                continue;
             }
-            else if (before is int n) { edited = ImGui.DragInt(label, ref n); after = n; }
-            else if (before is bool b) { edited = ImGui.Checkbox(label, ref b); after = b; }
-            else if (before is Vector2 v2) { edited = ImGui.DragFloat2(label, ref v2, .05f); after = v2; }
-            else if (before is Vector3 v3)
+
+            object? after =
+                before;
+
+            bool edited =
+                false;
+
+            if (before is float floatValue)
             {
-                if (IsColorProperty(component, descriptor))
-                {
-                    edited = ImGui.ColorEdit3(
+                var range =
+                    ComponentPropertyConstraints.Get(
+                        component.GetType(),
+                        descriptor.Property.Name);
+
+                edited =
+                    ImGui.DragFloat(
                         label,
-                        ref v3,
-                        ImGuiColorEditFlags.Float |
-                        ImGuiColorEditFlags.HDR);
+                        ref floatValue,
+                        range.Speed,
+                        range.Minimum,
+                        range.Maximum);
+
+                after =
+                    floatValue;
+            }
+            else if (before is int intValue)
+            {
+                edited =
+                    ImGui.DragInt(
+                        label,
+                        ref intValue);
+
+                after =
+                    intValue;
+            }
+            else if (before is bool boolValue)
+            {
+                edited =
+                    ImGui.Checkbox(
+                        label,
+                        ref boolValue);
+
+                after =
+                    boolValue;
+            }
+            else if (before is Vector2 vector2)
+            {
+                edited =
+                    ImGui.DragFloat2(
+                        label,
+                        ref vector2,
+                        0.05f);
+
+                after =
+                    vector2;
+            }
+            else if (before is Vector3 vector3)
+            {
+                if (IsColorProperty(
+                        component,
+                        descriptor))
+                {
+                    edited =
+                        ImGui.ColorEdit3(
+                            label,
+                            ref vector3,
+                            ImGuiColorEditFlags.Float |
+                            ImGuiColorEditFlags.HDR);
                 }
                 else
                 {
-                    edited = ImGui.DragFloat3(label, ref v3, .05f);
+                    edited =
+                        ImGui.DragFloat3(
+                            label,
+                            ref vector3,
+                            0.05f);
                 }
 
-                after = v3;
+                after =
+                    vector3;
             }
-            else if (before is Vector4 v4) { edited = ImGui.DragFloat4(label, ref v4, .01f); after = v4; }
+            else if (before is Vector4 vector4)
+            {
+                edited =
+                    ImGui.DragFloat4(
+                        label,
+                        ref vector4,
+                        0.01f);
+
+                after =
+                    vector4;
+            }
             else if (descriptor.Property.PropertyType.IsEnum)
             {
-                string[] names = Enum.GetNames(descriptor.Property.PropertyType);
-                Array values = Enum.GetValues(descriptor.Property.PropertyType);
-                int index = Array.IndexOf(values.Cast<object>().ToArray(), before);
-                edited = ImGui.Combo(label, ref index, names, names.Length);
-                if (edited) after = values.GetValue(index);
+                string[] names =
+                    Enum.GetNames(
+                        descriptor.Property.PropertyType);
+
+                Array values =
+                    Enum.GetValues(
+                        descriptor.Property.PropertyType);
+
+                int index =
+                    Array.IndexOf(
+                        values.Cast<object>().ToArray(),
+                        before);
+
+                edited =
+                    ImGui.Combo(
+                        label,
+                        ref index,
+                        names,
+                        names.Length);
+
+                if (edited)
+                {
+                    after =
+                        values.GetValue(
+                            index);
+                }
             }
-            else if (descriptor.Property.PropertyType == typeof(AssetReference))
+            else if (descriptor.Property.PropertyType ==
+                     typeof(AssetReference))
             {
                 AssetReference reference =
                     before as AssetReference ??
@@ -134,46 +324,109 @@ internal static class ComponentPropertyRenderer
                         $"{descriptor.Metadata.DisplayName}: {reference}");
                 }
             }
-            else if (descriptor.Property.PropertyType == typeof(InputActionReference))
+            else if (descriptor.Property.PropertyType ==
+                     typeof(InputActionReference))
             {
-                InputActionReference reference = before as InputActionReference ?? new InputActionReference();
-                InputMap map = project?.Project.InputMap ?? InputActions.Map;
-                InputActionDefinition? selected = map.Resolve(reference);
-                string preview = selected?.DisplayName ?? (string.IsNullOrWhiteSpace(reference.Name) ? "None" : reference.Name + " (Missing)");
-                if (ImGui.BeginCombo(label, preview))
+                InputActionReference reference =
+                    before as InputActionReference ??
+                    new InputActionReference();
+
+                InputMap map =
+                    project?.Project.InputMap ??
+                    InputActions.Map;
+
+                InputActionDefinition? selected =
+                    map.Resolve(
+                        reference);
+
+                string preview =
+                    selected?.DisplayName ??
+                    (string.IsNullOrWhiteSpace(reference.Name)
+                        ? "None"
+                        : reference.Name + " (Missing)");
+
+                if (ImGui.BeginCombo(
+                        label,
+                        preview))
                 {
-                    foreach (InputActionDefinition action in map.Actions)
+                    foreach (InputActionDefinition action
+                             in map.Actions)
                     {
-                        bool isSelected = action.Id == selected?.Id;
-                        if (ImGui.Selectable(action.DisplayName + "##" + action.Id, isSelected))
+                        bool isSelected =
+                            action.Id ==
+                            selected?.Id;
+
+                        if (ImGui.Selectable(
+                                action.DisplayName +
+                                "##" +
+                                action.Id,
+                                isSelected))
                         {
-                            after = new InputActionReference(action.Id, action.DisplayName);
-                            edited = true;
+                            after =
+                                new InputActionReference(
+                                    action.Id,
+                                    action.DisplayName);
+
+                            edited =
+                                true;
                         }
-                        if (isSelected) ImGui.SetItemDefaultFocus();
+
+                        if (isSelected)
+                        {
+                            ImGui.SetItemDefaultFocus();
+                        }
                     }
+
                     ImGui.EndCombo();
                 }
             }
-            else if (descriptor.Property.PropertyType == typeof(LayerMask))
+            else if (descriptor.Property.PropertyType ==
+                     typeof(LayerMask))
             {
-                LayerMask mask = before is LayerMask value ? value : LayerMask.All;
-                edited = ClassificationPickers.DrawLayerMask(label,
-                    project?.Project.Classification ?? component.GameObject.Scene?.Classification ?? ClassificationSettings.CreateDefault(), ref mask);
-                after = mask;
+                LayerMask mask =
+                    before is LayerMask value
+                        ? value
+                        : LayerMask.All;
+
+                edited =
+                    ClassificationPickers.DrawLayerMask(
+                        label,
+                        project?.Project.Classification ??
+                        component.GameObject.Scene?.Classification ??
+                        ClassificationSettings.CreateDefault(),
+                        ref mask);
+
+                after =
+                    mask;
             }
-            else if (descriptor.Property.PropertyType == typeof(Guid) &&
-                     descriptor.Property.Name.EndsWith("TagId", StringComparison.Ordinal))
+            else if (descriptor.Property.PropertyType ==
+                         typeof(Guid) &&
+                     descriptor.Property.Name.EndsWith(
+                         "TagId",
+                         StringComparison.Ordinal))
             {
-                Guid tag = before is Guid value ? value : Guid.Empty;
-                edited = ClassificationPickers.DrawTag(label,
-                    project?.Project.Classification ?? component.GameObject.Scene?.Classification ?? ClassificationSettings.CreateDefault(), ref tag);
-                after = tag;
+                Guid tag =
+                    before is Guid value
+                        ? value
+                        : Guid.Empty;
+
+                edited =
+                    ClassificationPickers.DrawTag(
+                        label,
+                        project?.Project.Classification ??
+                        component.GameObject.Scene?.Classification ??
+                        ClassificationSettings.CreateDefault(),
+                        ref tag);
+
+                after =
+                    tag;
             }
             else if (component is BoneSocket3D boneSocket &&
                      project != null &&
-                     descriptor.Property.Name == nameof(BoneSocket3D.BoneName) &&
-                     descriptor.Property.PropertyType == typeof(string))
+                     descriptor.Property.Name ==
+                         nameof(BoneSocket3D.BoneName) &&
+                     descriptor.Property.PropertyType ==
+                         typeof(string))
             {
                 string boneName =
                     before?.ToString() ??
@@ -191,8 +444,10 @@ internal static class ComponentPropertyRenderer
             }
             else if (component is AnimationController clipController &&
                      project != null &&
-                     descriptor.Property.PropertyType == typeof(string) &&
-                     AnimationClipDiscovery.IsLocomotionClipProperty(descriptor.Property.Name))
+                     descriptor.Property.PropertyType ==
+                         typeof(string) &&
+                     AnimationClipDiscovery.IsLocomotionClipProperty(
+                         descriptor.Property.Name))
             {
                 string clipName =
                     before?.ToString() ??
@@ -210,35 +465,85 @@ internal static class ComponentPropertyRenderer
             }
             else
             {
-                string text = before?.ToString() ?? string.Empty;
-                edited = ImGui.InputText(label, ref text, 1024);
-                if (descriptor.Property.PropertyType == typeof(Guid))
+                string text =
+                    before?.ToString() ??
+                    string.Empty;
+
+                edited =
+                    ImGui.InputText(
+                        label,
+                        ref text,
+                        1024);
+
+                if (descriptor.Property.PropertyType ==
+                    typeof(Guid))
                 {
-                    edited &= Guid.TryParse(text, out _);
-                    if (edited) after = Guid.Parse(text);
+                    edited &=
+                        Guid.TryParse(
+                            text,
+                            out _);
+
+                    if (edited)
+                    {
+                        after =
+                            Guid.Parse(
+                                text);
+                    }
                 }
-                else after = text;
+                else
+                {
+                    after =
+                        text;
+                }
             }
-            bool active = ImGui.IsItemActive();
-            if (ImGui.IsItemActivated() || edited) begin();
-            if (edited && after != null && SetValue(component, descriptor, after, context))
+
+            bool active =
+                ImGui.IsItemActive();
+
+            if (ImGui.IsItemActivated() ||
+                edited)
             {
-                if (component is SpriteRenderer sprite && descriptor.Property.Name == nameof(SpriteRenderer.TextureReference) && project != null)
-                    sprite.Texture = sprite.TextureReference == null || sprite.TextureReference.IsEmpty ? null : project.Assets.LoadTexture(sprite.TextureReference);
+                begin();
+            }
+
+            if (edited &&
+                after != null &&
+                SetValue(
+                    component,
+                    descriptor,
+                    after,
+                    context))
+            {
+                if (component is SpriteRenderer sprite &&
+                    descriptor.Property.Name ==
+                        nameof(SpriteRenderer.TextureReference) &&
+                    project != null)
+                {
+                    sprite.Texture =
+                        sprite.TextureReference == null ||
+                        sprite.TextureReference.IsEmpty
+                            ? null
+                            : project.Assets.LoadTexture(
+                                sprite.TextureReference);
+                }
 
                 if (component is AudioSource3D audioSource &&
-                    descriptor.Property.Name == nameof(AudioSource3D.ClipReference) &&
+                    descriptor.Property.Name ==
+                        nameof(AudioSource3D.ClipReference) &&
                     project != null)
                 {
                     AudioSerializationRegistrar.TryLoadClip(
                         audioSource,
                         audioSource.ClipReference,
                         project.AssetDatabase,
-                        message => Console.WriteLine(message));
+                        message =>
+                            Console.WriteLine(
+                                message));
                 }
 
                 if (component is SkyEnvironment environment &&
-                    descriptor.Property.Name == nameof(SkyEnvironment.EnvironmentMapReference) &&
+                    descriptor.Property.Name ==
+                        nameof(SkyEnvironment.EnvironmentMapReference) &&
                     project != null)
                 {
                     environment.SetEnvironmentMapTexture(
@@ -248,32 +553,116 @@ internal static class ComponentPropertyRenderer
                                 environment.EnvironmentMapReference));
                 }
 
+                if (component is AnimationController profileController &&
+                    descriptor.Property.Name ==
+                        nameof(AnimationController.AnimationProfile))
+                {
+                    profileController.ApplyAnimationProfile();
+                }
+
                 changed();
             }
-            if (ImGui.IsItemDeactivatedAfterEdit() || edited && !active) end();
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(descriptor.Metadata.Tooltip);
+
+            if (ImGui.IsItemDeactivatedAfterEdit() ||
+                edited &&
+                !active)
+            {
+                end();
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    descriptor.Metadata.Tooltip);
+            }
         }
-        if (component is PlayerController3D playerInput && project != null)
-            DrawMissingActions(playerInput, project, context, begin, changed, end);
-        if (component is EventModuleComponent eventModules && project != null)
-            DrawEventModules(eventModules, project, context, begin, changed, end);
-        if (component is AnimationController animationController && project != null)
-            DrawAnimationControllerTools(animationController, project, context, begin, changed, end);
+
+        if (component is PlayerController3D playerInput &&
+            project != null)
+        {
+            DrawMissingActions(
+                playerInput,
+                project,
+                context,
+                begin,
+                changed,
+                end);
+        }
+
+        if (component is EventModuleComponent eventModules &&
+            project != null)
+        {
+            DrawEventModules(
+                eventModules,
+                project,
+                context,
+                begin,
+                changed,
+                end);
+        }
+
+        if (component is AnimationController animationController &&
+            project != null)
+        {
+            DrawAnimationControllerTools(
+                animationController,
+                project,
+                context,
+                begin,
+                changed,
+                end);
+        }
+
         if (component is MeshRenderer mesh)
         {
-            Vector4 color = mesh.Material.BaseColor;
-            bool edited = ImGui.ColorEdit4("Base Color", ref color);
-            if (ImGui.IsItemActivated() || edited) begin();
-            if (edited) { mesh.Material.BaseColor = color; changed(); }
-            if (ImGui.IsItemDeactivatedAfterEdit() || edited && !ImGui.IsItemActive()) end();
+            Vector4 color =
+                mesh.Material.BaseColor;
+
+            bool edited =
+                ImGui.ColorEdit4(
+                    "Base Color",
+                    ref color);
+
+            if (ImGui.IsItemActivated() ||
+                edited)
+            {
+                begin();
+            }
+
+            if (edited)
+            {
+                mesh.Material.BaseColor =
+                    color;
+
+                changed();
+            }
+
+            if (ImGui.IsItemDeactivatedAfterEdit() ||
+                edited &&
+                !ImGui.IsItemActive())
+            {
+                end();
+            }
         }
-        if (component is CapsuleCollider3D && project != null && context != PropertyEditorContext.Runtime &&
+
+        if (component is CapsuleCollider3D &&
+            project != null &&
+            context != PropertyEditorContext.Runtime &&
             ImGui.Button("Fit To Visual"))
         {
             begin();
-            if (CharacterCapsuleAutoFit.TryFit(component.GameObject, project.Assets, out _)) changed();
+
+            if (CharacterCapsuleAutoFit.TryFit(
+                    component.GameObject,
+                    project.Assets,
+                    out _))
+            {
+                changed();
+            }
+
             end();
         }
+
         ImGui.PopID();
     }
 
@@ -330,7 +719,8 @@ internal static class ComponentPropertyRenderer
                         StringComparer.OrdinalIgnoreCase)
                     .ToArray();
 
-            if (candidates.Length == 0)
+            if (candidates.Length ==
+                0)
             {
                 ImGui.TextDisabled(
                     expectedType.HasValue
@@ -367,7 +757,6 @@ internal static class ComponentPropertyRenderer
             ImGui.EndCombo();
         }
 
-        // Keep drag/drop as well as the picker.
         if (ImGui.BeginDragDropTarget())
         {
             Guid? id =
@@ -415,6 +804,13 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is AnimationController &&
+            propertyName ==
+                nameof(AnimationController.AnimationProfile))
+        {
+            return AssetType.AnimationProfile;
+        }
+
         if (component is SpriteRenderer &&
             propertyName ==
                 nameof(SpriteRenderer.TextureReference))
@@ -505,7 +901,8 @@ internal static class ComponentPropertyRenderer
                 true;
         }
 
-        if (bones.Count == 0)
+        if (bones.Count ==
+            0)
         {
             ImGui.TextDisabled(
                 "No skeleton bones found for this character/model.");
@@ -548,10 +945,6 @@ internal static class ComponentPropertyRenderer
         BoneSocket3D socket,
         EditorProjectContext project)
     {
-        /*
-         * Runtime/Play mode: prefer the live renderer because its skeleton is
-         * exactly the one BoneSocket3D will bind to.
-         */
         SkeletalMeshRenderer? renderer =
             socket.ResolveSourceRenderer();
 
@@ -567,17 +960,13 @@ internal static class ComponentPropertyRenderer
                         StringComparer.OrdinalIgnoreCase)
                     .ToArray();
 
-            if (liveBones.Length > 0)
+            if (liveBones.Length >
+                0)
             {
                 return liveBones;
             }
         }
 
-        /*
-         * Edit mode: no SkeletalMeshRenderer is required. Find the nearest
-         * character AnimationController and reuse the same animated-model
-         * discovery path used by the animation clip picker.
-         */
         for (GameObject? current = socket.GameObject;
              current != null;
              current = current.Parent)
@@ -585,7 +974,8 @@ internal static class ComponentPropertyRenderer
             AnimationController? controller =
                 current.GetComponent<AnimationController>();
 
-            if (controller == null)
+            if (controller ==
+                null)
             {
                 continue;
             }
@@ -610,18 +1000,14 @@ internal static class ComponentPropertyRenderer
                             StringComparer.OrdinalIgnoreCase)
                         .ToArray();
 
-                if (modelBones.Length > 0)
+                if (modelBones.Length >
+                    0)
                 {
                     return modelBones;
                 }
             }
         }
 
-        /*
-         * Fallback for a model hierarchy that has no AnimationController yet.
-         * Walk upward from the socket and inspect sibling/descendant visual
-         * branches for a ModelHierarchyInstance with a skeleton.
-         */
         GameObject branchToSkip =
             socket.GameObject;
 
@@ -671,7 +1057,8 @@ internal static class ComponentPropertyRenderer
                     project.Assets.LoadModel(
                         instance.Model);
 
-                if (model.Skeleton == null)
+                if (model.Skeleton ==
+                    null)
                 {
                     continue;
                 }
@@ -689,7 +1076,8 @@ internal static class ComponentPropertyRenderer
                             StringComparer.OrdinalIgnoreCase)
                         .ToArray();
 
-                if (names.Length == 0)
+                if (names.Length ==
+                    0)
                 {
                     continue;
                 }
@@ -701,7 +1089,6 @@ internal static class ComponentPropertyRenderer
             }
             catch
             {
-                // Keep searching other visual/model branches.
             }
         }
 
@@ -741,6 +1128,7 @@ internal static class ComponentPropertyRenderer
             }
         }
     }
+
     private static bool DrawAnimationClipSelector(
         AnimationController controller,
         EditorProjectContext project,
@@ -752,25 +1140,16 @@ internal static class ComponentPropertyRenderer
                 controller,
                 project);
 
+        string currentClipName =
+            clipName;
+
         bool hasClip =
-            false;
-
-        foreach (string candidate
-                 in clips)
-        {
-            if (!string.Equals(
-                    candidate,
-                    clipName,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            hasClip =
-                true;
-
-            break;
-        }
+            clips.Any(
+                candidate =>
+                    string.Equals(
+                        candidate,
+                        currentClipName,
+                        StringComparison.OrdinalIgnoreCase));
 
         string preview =
             string.IsNullOrWhiteSpace(
@@ -790,13 +1169,10 @@ internal static class ComponentPropertyRenderer
             return false;
         }
 
-        bool noneSelected =
-            string.IsNullOrWhiteSpace(
-                clipName);
-
         if (ImGui.Selectable(
                 "None",
-                noneSelected))
+                string.IsNullOrWhiteSpace(
+                    clipName)))
         {
             clipName =
                 string.Empty;
@@ -853,6 +1229,14 @@ internal static class ComponentPropertyRenderer
         Action changed,
         Action end)
     {
+        AnimationProfileInspector.Draw(
+            controller,
+            project,
+            context,
+            begin,
+            changed,
+            end);
+
         ImGui.SeparatorText(
             "ANIMATION CLIPS");
 
@@ -907,12 +1291,15 @@ internal static class ComponentPropertyRenderer
                 "Matches common Idle, Walk, Run, Jump, Fall and Land names from the imported model.");
         }
     }
+
     private static bool IsColorProperty(
         Component component,
         ComponentPropertyDescriptor descriptor)
     {
         if (descriptor.Property.PropertyType != typeof(Vector3) ||
-            !descriptor.Property.Name.EndsWith("Color", StringComparison.Ordinal))
+            !descriptor.Property.Name.EndsWith(
+                "Color",
+                StringComparison.Ordinal))
         {
             return false;
         }
@@ -931,7 +1318,8 @@ internal static class ComponentPropertyRenderer
         Action changed,
         Action end)
     {
-        ImGui.SeparatorText("EVENT MODULES");
+        ImGui.SeparatorText(
+            "EVENT MODULES");
 
         bool editable =
             context !=
@@ -955,8 +1343,7 @@ internal static class ComponentPropertyRenderer
                     reference);
 
             string displayName =
-                asset !=
-                    null
+                asset != null
                     ? Path.GetFileNameWithoutExtension(
                         asset.ProjectPath)
                     : reference.CachedProjectPath ??
@@ -976,8 +1363,10 @@ internal static class ComponentPropertyRenderer
                     $"Remove##event-module:{reference.Guid}:{displayName}"))
             {
                 begin();
+
                 runner.RemoveModule(
                     reference);
+
                 changed();
                 end();
             }
@@ -1051,9 +1440,11 @@ internal static class ComponentPropertyRenderer
                             moduleAsset.ProjectPath);
 
                     begin();
+
                     runner.AddResolvedModule(
                         reference,
                         definition);
+
                     changed();
                     end();
                 }
@@ -1078,30 +1469,81 @@ internal static class ComponentPropertyRenderer
         ImGui.EndCombo();
     }
 
-    private static void DrawMissingActions(PlayerController3D playerInput, EditorProjectContext project,
-        PropertyEditorContext context, Action begin, Action changed, Action end)
+    private static void DrawMissingActions(
+        PlayerController3D playerInput,
+        EditorProjectContext project,
+        PropertyEditorContext context,
+        Action begin,
+        Action changed,
+        Action end)
     {
-        var references = new (string DefaultName, InputActionReference Reference, Action<InputActionReference> Set)[]
+        var references =
+            new (
+                string DefaultName,
+                InputActionReference Reference,
+                Action<InputActionReference> Set)[]
+            {
+                (
+                    "Move",
+                    playerInput.MoveAction,
+                    value =>
+                        playerInput.MoveAction = value),
+                (
+                    "Look",
+                    playerInput.LookAction,
+                    value =>
+                        playerInput.LookAction = value),
+                (
+                    "Jump",
+                    playerInput.JumpAction,
+                    value =>
+                        playerInput.JumpAction = value),
+                (
+                    "Sprint",
+                    playerInput.SprintAction,
+                    value =>
+                        playerInput.SprintAction = value)
+            };
+
+        foreach (var item
+                 in references)
         {
-            ("Move", playerInput.MoveAction, value => playerInput.MoveAction = value),
-            ("Look", playerInput.LookAction, value => playerInput.LookAction = value),
-            ("Jump", playerInput.JumpAction, value => playerInput.JumpAction = value),
-            ("Sprint", playerInput.SprintAction, value => playerInput.SprintAction = value)
-        };
-        foreach (var item in references)
-        {
-            if (project.Project.InputMap.Resolve(item.Reference) != null) continue;
-            ImGui.TextColored(new Vector4(1f, .65f, .2f, 1f), $"Missing {item.DefaultName} Action: {item.Reference}");
-            if (context == PropertyEditorContext.Runtime || !ImGui.SmallButton($"Create Default {item.DefaultName} Action##{item.DefaultName}")) continue;
+            if (project.Project.InputMap.Resolve(
+                    item.Reference) != null)
+            {
+                continue;
+            }
+
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.65f,
+                    0.2f,
+                    1.0f),
+                $"Missing {item.DefaultName} Action: {item.Reference}");
+
+            if (context ==
+                    PropertyEditorContext.Runtime ||
+                !ImGui.SmallButton(
+                    $"Create Default {item.DefaultName} Action##{item.DefaultName}"))
+            {
+                continue;
+            }
+
             begin();
+
             project.Project.InputMap.EnsureGameplayDefaults();
-            InputActions.Configure(project.Project.InputMap);
-            item.Set(InputActions.Reference(item.DefaultName));
+            InputActions.Configure(
+                project.Project.InputMap);
+
+            item.Set(
+                InputActions.Reference(
+                    item.DefaultName));
+
             project.SaveProject();
+
             changed();
             end();
         }
     }
 }
-
-

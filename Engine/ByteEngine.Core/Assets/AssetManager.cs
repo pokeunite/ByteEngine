@@ -1,3 +1,4 @@
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Assets.Importers;
@@ -10,11 +11,13 @@ public sealed class AssetManager : IDisposable
     private readonly Action<string>? _warningSink;
     private readonly Dictionary<Guid, Texture2D> _textures = new();
     private readonly Dictionary<Guid, ModelAsset> _models = new();
+    private readonly Dictionary<Guid, AnimationProfile> _animationProfiles = new();
     private readonly Dictionary<(Guid Model, string Key), Mesh> _modelMeshes = new();
     private readonly Dictionary<(Guid Model, string Key), Material> _modelMaterials = new();
     private readonly Dictionary<(Guid Model, string Key), Texture2D> _modelTextures = new();
     private readonly HashSet<string> _reportedMissing = new(StringComparer.OrdinalIgnoreCase);
     private readonly TextureImporter _textureImporter = new();
+    private readonly AnimationProfileImporter _animationProfileImporter = new();
     private Texture2D? _missingTexture;
 
     public string ProjectRoot => _database.ProjectRoot;
@@ -74,6 +77,26 @@ public sealed class AssetManager : IDisposable
         return model;
     }
 
+    /// <summary>
+    /// Loads a unified .byteanim Animation Profile through the same GUID-backed
+    /// asset system used by models and textures.
+    /// </summary>
+    public AnimationProfile LoadAnimationProfile(AssetReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        AssetRecord? asset = _database.Resolve(reference);
+        if (asset == null || asset.Type != AssetType.AnimationProfile)
+            throw new FileNotFoundException($"Animation Profile asset '{reference}' could not be resolved.");
+
+        if (_animationProfiles.TryGetValue(asset.Guid, out AnimationProfile? cached))
+            return cached;
+
+        AnimationProfile profile = _animationProfileImporter.Import(asset);
+        _animationProfiles[asset.Guid] = profile;
+        return profile;
+    }
+
     public ModelAsset ReimportModel(Guid guid)
     {
         if (!_database.TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D)
@@ -131,7 +154,6 @@ public sealed class AssetManager : IDisposable
             }
         }
 
-
         foreach ((Guid guid, ModelAsset _) in _models.ToArray())
         {
             if (!_database.TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D)
@@ -143,6 +165,31 @@ public sealed class AssetManager : IDisposable
             catch (Exception exception)
             {
                 _warningSink?.Invoke($"Could not reimport model '{record.ProjectPath}': {exception.Message}");
+            }
+        }
+
+        /*
+         * Preserve AnimationProfile object identity during hot reload. Runtime
+         * controllers/editor panels can safely hold the loaded profile while
+         * the asset file is edited or regenerated.
+         */
+        foreach ((Guid guid, AnimationProfile profile) in _animationProfiles.ToArray())
+        {
+            if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
+                record?.Type != AssetType.AnimationProfile)
+            {
+                _animationProfiles.Remove(guid);
+                continue;
+            }
+
+            try
+            {
+                AnimationProfile refreshed = _animationProfileImporter.Import(record);
+                CopyAnimationProfile(refreshed, profile);
+            }
+            catch (Exception exception)
+            {
+                _warningSink?.Invoke($"Could not reload Animation Profile '{record.ProjectPath}': {exception.Message}");
             }
         }
     }
@@ -160,6 +207,19 @@ public sealed class AssetManager : IDisposable
             if (_modelMaterials.TryGetValue((guid, source.Key), out Material? material))
                 ApplyMaterial(guid, source, material);
         return refreshed;
+    }
+
+    private static void CopyAnimationProfile(
+        AnimationProfile source,
+        AnimationProfile target)
+    {
+        target.Version = source.Version;
+        target.Name = source.Name;
+        target.Rig = source.Rig;
+        target.Locomotion = source.Locomotion;
+        target.Actions = source.Actions;
+        target.Procedural = source.Procedural;
+        target.Normalize();
     }
 
     private void ApplyMaterial(Guid modelGuid, ImportedMaterial source, Material target)
@@ -206,6 +266,7 @@ public sealed class AssetManager : IDisposable
         _modelTextures.Clear();
         _modelMaterials.Clear();
         _models.Clear();
+        _animationProfiles.Clear();
         _missingTexture?.Dispose();
         _missingTexture = null;
     }

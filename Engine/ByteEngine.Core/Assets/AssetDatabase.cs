@@ -349,6 +349,7 @@ public sealed class AssetDatabase : IDisposable
         ".byteevents" => AssetType.EventModule,
         ".byteblueprint" => AssetType.Blueprint,
         ".byteanimevents" => AssetType.AnimationEvents,
+        ".byteanim" => AssetType.AnimationProfile,
         _ => AssetType.Unknown
     };
 
