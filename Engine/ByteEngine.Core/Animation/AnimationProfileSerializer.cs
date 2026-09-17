@@ -7,10 +7,17 @@ namespace ByteEngine.Core.Animation;
 
 /// <summary>
 /// JSON persistence for .byteanim Animation Profile assets.
+///
+/// Important: the on-disk document deliberately does not deserialize
+/// AssetReference directly. AssetReference is an immutable runtime type with
+/// multiple constructors and has changed over ByteEngine's lifetime. The DTO
+/// layer below keeps .byteanim files stable and reconstructs AssetReference
+/// explicitly after JSON parsing.
 /// </summary>
 public static class AnimationProfileSerializer
 {
-    public const string FileExtension = ".byteanim";
+    public const string FileExtension =
+        ".byteanim";
 
     private static readonly JsonSerializerOptions Json =
         CreateOptions();
@@ -25,16 +32,20 @@ public static class AnimationProfileSerializer
             File.ReadAllText(
                 path);
 
-        AnimationProfile? profile =
-            JsonSerializer.Deserialize<AnimationProfile>(
+        AnimationProfileDocument? document =
+            JsonSerializer.Deserialize<AnimationProfileDocument>(
                 json,
                 Json);
 
-        if (profile == null)
+        if (document == null)
         {
             throw new InvalidDataException(
                 $"Animation profile '{path}' did not contain a valid profile.");
         }
+
+        AnimationProfile profile =
+            FromDocument(
+                document);
 
         profile.Normalize();
 
@@ -55,9 +66,11 @@ public static class AnimationProfileSerializer
 
         string? directory =
             Path.GetDirectoryName(
-                Path.GetFullPath(path));
+                Path.GetFullPath(
+                    path));
 
-        if (!string.IsNullOrWhiteSpace(directory))
+        if (!string.IsNullOrWhiteSpace(
+                directory))
         {
             Directory.CreateDirectory(
                 directory);
@@ -67,10 +80,14 @@ public static class AnimationProfileSerializer
             path +
             ".tmp";
 
+        AnimationProfileDocument document =
+            ToDocument(
+                profile);
+
         File.WriteAllText(
             temporary,
             JsonSerializer.Serialize(
-                profile,
+                document,
                 Json));
 
         File.Move(
@@ -85,7 +102,8 @@ public static class AnimationProfileSerializer
         var profile =
             new AnimationProfile();
 
-        if (!string.IsNullOrWhiteSpace(name))
+        if (!string.IsNullOrWhiteSpace(
+                name))
         {
             profile.Name =
                 name.Trim();
@@ -96,6 +114,148 @@ public static class AnimationProfileSerializer
         return profile;
     }
 
+    private static AnimationProfile FromDocument(
+        AnimationProfileDocument document)
+    {
+        AnimationRigDocument rigDocument =
+            document.Rig ??
+            new AnimationRigDocument();
+
+        AssetReference referenceModel =
+            ToAssetReference(
+                rigDocument.ReferenceModel);
+
+        return
+            new AnimationProfile
+            {
+                Version =
+                    Math.Max(
+                        document.Version,
+                        1),
+
+                Name =
+                    document.Name ??
+                    "Animation Profile",
+
+                Rig =
+                    new AnimationRigProfile
+                    {
+                        Type =
+                            rigDocument.Type,
+
+                        ReferenceModel =
+                            referenceModel
+                    },
+
+                Locomotion =
+                    document.Locomotion ??
+                    new AnimationLocomotionProfile(),
+
+                Actions =
+                    document.Actions ??
+                    new List<AnimationActionProfile>(),
+
+                Procedural =
+                    document.Procedural ??
+                    new AnimationProceduralProfile()
+            };
+    }
+
+    private static AnimationProfileDocument ToDocument(
+        AnimationProfile profile)
+    {
+        return
+            new AnimationProfileDocument
+            {
+                Version =
+                    profile.Version,
+
+                Name =
+                    profile.Name,
+
+                Rig =
+                    new AnimationRigDocument
+                    {
+                        Type =
+                            profile.Rig.Type,
+
+                        ReferenceModel =
+                            FromAssetReference(
+                                profile.Rig.ReferenceModel)
+                    },
+
+                Locomotion =
+                    profile.Locomotion,
+
+                Actions =
+                    profile.Actions,
+
+                Procedural =
+                    profile.Procedural
+            };
+    }
+
+    private static AssetReference ToAssetReference(
+        AssetReferenceDocument? document)
+    {
+        if (document == null)
+        {
+            return AssetReference.Empty;
+        }
+
+        string? path =
+            FirstNonEmpty(
+                document.CachedProjectPath,
+                document.ProjectPath,
+                document.Path);
+
+        if (document.Guid ==
+                Guid.Empty &&
+            string.IsNullOrWhiteSpace(
+                path))
+        {
+            return AssetReference.Empty;
+        }
+
+        return
+            new AssetReference(
+                document.Guid,
+                path);
+    }
+
+    private static AssetReferenceDocument FromAssetReference(
+        AssetReference? reference)
+    {
+        reference ??=
+            AssetReference.Empty;
+
+        return
+            new AssetReferenceDocument
+            {
+                Guid =
+                    reference.Guid,
+
+                CachedProjectPath =
+                    reference.CachedProjectPath
+            };
+    }
+
+    private static string? FirstNonEmpty(
+        params string?[] values)
+    {
+        foreach (string? value
+                 in values)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static JsonSerializerOptions CreateOptions()
     {
         var options =
@@ -103,12 +263,16 @@ public static class AnimationProfileSerializer
             {
                 PropertyNamingPolicy =
                     JsonNamingPolicy.CamelCase,
+
                 PropertyNameCaseInsensitive =
                     true,
+
                 WriteIndented =
                     true,
+
                 AllowTrailingCommas =
                     true,
+
                 ReadCommentHandling =
                     JsonCommentHandling.Skip
             };
@@ -116,141 +280,58 @@ public static class AnimationProfileSerializer
         options.Converters.Add(
             new JsonStringEnumConverter());
 
-        options.Converters.Add(
-            new AssetReferenceJsonConverter());
-
         return options;
     }
 
     /// <summary>
-    /// AssetReference is intentionally a small immutable reference type and is
-    /// not directly constructible by System.Text.Json. Keep .byteanim files
-    /// human-readable while explicitly rebuilding the reference during load.
+    /// Stable on-disk representation of an Animation Profile.
     /// </summary>
-    private sealed class AssetReferenceJsonConverter
-        : JsonConverter<AssetReference>
+    private sealed class AnimationProfileDocument
     {
-        public override AssetReference Read(
-            ref Utf8JsonReader reader,
-            Type typeToConvert,
-            JsonSerializerOptions options)
-        {
-            if (reader.TokenType == JsonTokenType.Null)
-            {
-                return AssetReference.Empty;
-            }
+        public int Version { get; set; } =
+            AnimationProfile.CurrentVersion;
 
-            if (reader.TokenType != JsonTokenType.StartObject)
-            {
-                throw new JsonException(
-                    "Animation Profile asset reference must be a JSON object.");
-            }
+        public string? Name { get; set; } =
+            "Animation Profile";
 
-            Guid guid =
-                Guid.Empty;
+        public AnimationRigDocument? Rig { get; set; } =
+            new();
 
-            string? cachedProjectPath =
-                null;
+        public AnimationLocomotionProfile? Locomotion { get; set; } =
+            new();
 
-            while (reader.Read())
-            {
-                if (reader.TokenType ==
-                    JsonTokenType.EndObject)
-                {
-                    break;
-                }
+        public List<AnimationActionProfile>? Actions { get; set; } =
+            new();
 
-                if (reader.TokenType !=
-                    JsonTokenType.PropertyName)
-                {
-                    continue;
-                }
+        public AnimationProceduralProfile? Procedural { get; set; } =
+            new();
+    }
 
-                string? propertyName =
-                    reader.GetString();
+    /// <summary>
+    /// Rig DTO exists specifically so JSON never tries to instantiate the
+    /// runtime AssetReference type.
+    /// </summary>
+    private sealed class AnimationRigDocument
+    {
+        public AnimationRigType Type { get; set; } =
+            AnimationRigType.Generic;
 
-                if (!reader.Read())
-                {
-                    throw new JsonException(
-                        "Unexpected end of Animation Profile asset reference.");
-                }
+        public AssetReferenceDocument? ReferenceModel { get; set; } =
+            new();
+    }
 
-                if (string.Equals(
-                        propertyName,
-                        "guid",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    if (reader.TokenType ==
-                        JsonTokenType.String)
-                    {
-                        Guid.TryParse(
-                            reader.GetString(),
-                            out guid);
-                    }
+    /// <summary>
+    /// Accepts both the current "cachedProjectPath" spelling and older
+    /// "projectPath"/"path" spellings when loading existing .byteanim files.
+    /// </summary>
+    private sealed class AssetReferenceDocument
+    {
+        public Guid Guid { get; set; }
 
-                    continue;
-                }
+        public string? CachedProjectPath { get; set; }
 
-                if (string.Equals(
-                        propertyName,
-                        "cachedProjectPath",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(
-                        propertyName,
-                        "path",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    cachedProjectPath =
-                        reader.TokenType ==
-                            JsonTokenType.Null
-                            ? null
-                            : reader.GetString();
+        public string? ProjectPath { get; set; }
 
-                    continue;
-                }
-
-                using JsonDocument ignored =
-                    JsonDocument.ParseValue(
-                        ref reader);
-            }
-
-            if (guid == Guid.Empty &&
-                string.IsNullOrWhiteSpace(
-                    cachedProjectPath))
-            {
-                return AssetReference.Empty;
-            }
-
-            return new AssetReference(
-                guid,
-                cachedProjectPath);
-        }
-
-        public override void Write(
-            Utf8JsonWriter writer,
-            AssetReference value,
-            JsonSerializerOptions options)
-        {
-            writer.WriteStartObject();
-
-            writer.WriteString(
-                "guid",
-                value?.Guid ?? Guid.Empty);
-
-            if (string.IsNullOrWhiteSpace(
-                    value?.CachedProjectPath))
-            {
-                writer.WriteNull(
-                    "cachedProjectPath");
-            }
-            else
-            {
-                writer.WriteString(
-                    "cachedProjectPath",
-                    value.CachedProjectPath);
-            }
-
-            writer.WriteEndObject();
-        }
+        public string? Path { get; set; }
     }
 }

@@ -36,6 +36,7 @@ internal static class EditorIcons
             AssetType.EventModule => EditorIconKind.EventModule,
             AssetType.Blueprint => EditorIconKind.Blueprint,
             AssetType.AnimationEvents => EditorIconKind.Animation,
+            AssetType.AnimationProfile => EditorIconKind.Animation,
             _ => EditorIconKind.File
         };
 
@@ -50,6 +51,7 @@ internal static class EditorIcons
             AssetType.EventModule => "Events",
             AssetType.Blueprint => "Blueprint",
             AssetType.AnimationEvents => "Animation",
+            AssetType.AnimationProfile => "Animation Profile",
             _ => "File"
         };
 

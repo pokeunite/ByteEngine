@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json.Nodes;
 
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Blueprints;
@@ -21,6 +22,9 @@ internal sealed class AssetsPanel
     private readonly Action<AssetRecord> _openAsset;
 
     private readonly EventWorkspaceCollection _eventWorkspaces =
+        new();
+
+    private readonly AnimationProfileWorkspacePanel _animationProfileWorkspace =
         new();
 
     private readonly List<string> _directories =
@@ -47,6 +51,11 @@ internal sealed class AssetsPanel
         "New Event Module";
 
     private int _eventModuleTemplate;
+
+    private bool _showCreateAnimationProfile;
+
+    private string _animationProfileName =
+        "New Animation Profile";
 
     private bool _showCreateFolder;
 
@@ -221,6 +230,9 @@ internal sealed class AssetsPanel
             DrawCreateEventModuleDialog(
                 log);
 
+            DrawCreateAnimationProfileDialog(
+                log);
+
             DrawCreateFolderDialog(
                 log);
 
@@ -241,6 +253,28 @@ internal sealed class AssetsPanel
         ImGui.End();
 
         _eventWorkspaces.Draw(
+            log);
+
+        AssetReference? requestedProfile =
+            AnimationProfileWorkspaceRequest.Consume();
+
+        if (requestedProfile != null)
+        {
+            AssetRecord? requestedAsset =
+                _project.AssetDatabase.Resolve(
+                    requestedProfile);
+
+            if (requestedAsset?.Type ==
+                AssetType.AnimationProfile)
+            {
+                _animationProfileWorkspace.Open(
+                    requestedAsset,
+                    _project,
+                    log);
+            }
+        }
+
+        _animationProfileWorkspace.Draw(
             log);
     }
 
@@ -287,6 +321,15 @@ internal sealed class AssetsPanel
             if (ImGui.MenuItem("Event Module"))
             {
                 _showCreateEventModule = true;
+            }
+
+            if (ImGui.MenuItem("Animation Profile"))
+            {
+                _animationProfileName =
+                    "New Animation Profile";
+
+                _showCreateAnimationProfile =
+                    true;
             }
 
             bool canCreateFromSelection =
@@ -1930,6 +1973,17 @@ state.SelectedObject =
         EditorLog log)
     {
         if (asset.Type ==
+            AssetType.AnimationProfile)
+        {
+            _animationProfileWorkspace.Open(
+                asset,
+                _project,
+                log);
+
+            return;
+        }
+
+        if (asset.Type ==
             AssetType.EventModule)
         {
             _eventWorkspaces.Open(
@@ -1967,6 +2021,9 @@ state.SelectedObject =
                 "[EVT]",
 
             AssetType.AnimationEvents =>
+                "[ANIM]",
+
+            AssetType.AnimationProfile =>
                 "[ANIM]",
 
             _ =>
@@ -2259,6 +2316,16 @@ state.SelectedObject =
                     "Event Module"))
             {
                 _showCreateEventModule =
+                    true;
+            }
+
+            if (ImGui.MenuItem(
+                    "Animation Profile"))
+            {
+                _animationProfileName =
+                    "New Animation Profile";
+
+                _showCreateAnimationProfile =
                     true;
             }
 
@@ -2673,6 +2740,128 @@ state.SelectedObject =
             log.Info(
                 "Character Movement template: W/S move forward/back, A/D strafe, Space jumps while grounded.");
         }
+    }
+
+    // ========================================================
+    // ANIMATION PROFILE CREATION
+    // ========================================================
+
+    private void DrawCreateAnimationProfileDialog(
+        EditorLog log)
+    {
+        if (_showCreateAnimationProfile)
+        {
+            ImGui.OpenPopup(
+                "Create Animation Profile");
+
+            _showCreateAnimationProfile =
+                false;
+        }
+
+        if (!ImGui.BeginPopupModal(
+                "Create Animation Profile",
+                ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            return;
+        }
+
+        ImGui.TextWrapped(
+            "Creates a reusable .byteanim asset. Assign or drag it into an Animation Controller after setup.");
+
+        ImGui.InputText(
+            "Name",
+            ref _animationProfileName,
+            128);
+
+        bool valid =
+            !string.IsNullOrWhiteSpace(
+                _animationProfileName);
+
+        ImGui.BeginDisabled(
+            !valid);
+
+        if (ImGui.Button(
+                "Create",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            try
+            {
+                CreateAnimationProfile(
+                    log);
+
+                ImGui.CloseCurrentPopup();
+            }
+            catch (Exception exception)
+            {
+                log.Error(
+                    $"Could not create Animation Profile: {exception.Message}");
+            }
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Cancel",
+                new Vector2(
+                    100.0f,
+                    0.0f)))
+        {
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void CreateAnimationProfile(
+        EditorLog log)
+    {
+        string directory =
+            GetAssetCreationDirectory();
+
+        string safeName =
+            MakeSafeFileName(
+                _animationProfileName);
+
+        string path =
+            GetUniqueAssetPath(
+                directory,
+                safeName,
+                AnimationProfileSerializer.FileExtension);
+
+        AnimationProfile profile =
+            AnimationProfileSerializer.CreateDefault(
+                safeName);
+
+        AnimationProfileSerializer.Save(
+            path,
+            profile);
+
+        SelectDirectory(
+            directory);
+
+        RefreshAfterFileOperation();
+
+        string projectPath =
+            ToProjectPath(
+                path);
+
+        if (_project.AssetDatabase.TryGetAsset(
+                projectPath,
+                out AssetRecord? asset) &&
+            asset?.Type == AssetType.AnimationProfile)
+        {
+            _animationProfileWorkspace.Open(
+                asset,
+                _project,
+                log);
+        }
+
+        log.Info(
+            $"Created Animation Profile '{Path.GetFileName(path)}'.");
     }
 
     // ========================================================
@@ -3679,4 +3868,3 @@ state.SelectedObject =
                 : safeName;
     }
 }
-
