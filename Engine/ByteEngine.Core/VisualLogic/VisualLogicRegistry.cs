@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
@@ -97,6 +98,7 @@ public sealed class VisualLogicRegistry
         RegisterVariables(registry);
         RegisterGameplay(registry);
         RegisterAudio(registry);
+        RegisterAnimation(registry);
 
         return registry;
     }
@@ -207,6 +209,333 @@ public sealed class VisualLogicRegistry
             Evaluate = (instruction, context) => InputActions.ReadAxis2D(ActionName(instruction, context)).Length() >
                 EventValueResolver.GetNumber(instruction, "value", context, .5)
         });
+    }
+
+
+    private static void RegisterAnimation(
+        VisualLogicRegistry registry)
+    {
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "animation.isPlaying",
+                Category = "Animation",
+                DisplayName = "Is Playing",
+                TargetComponent = nameof(AnimationController),
+                Evaluate =
+                    (instruction, context) =>
+                        ResolveAnimationController(
+                            instruction,
+                            context,
+                            warnIfMissing: false)?
+                            .IsPlaying == true
+            });
+
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "animation.currentClipIs",
+                Category = "Animation",
+                DisplayName = "Current Clip Is",
+                TargetComponent = nameof(AnimationController),
+                Evaluate =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context,
+                                warnIfMissing: false);
+
+                        if (controller == null)
+                        {
+                            return false;
+                        }
+
+                        string clip =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "clip",
+                                context);
+
+                        return string.Equals(
+                            controller.CurrentAnimation,
+                            clip,
+                            StringComparison.OrdinalIgnoreCase);
+                    }
+            });
+
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "animation.currentStateIs",
+                Category = "Animation",
+                DisplayName = "Current State Is",
+                TargetComponent = nameof(AnimationController),
+                Evaluate =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context,
+                                warnIfMissing: false);
+
+                        if (controller == null)
+                        {
+                            return false;
+                        }
+
+                        string state =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "state",
+                                context);
+
+                        return string.Equals(
+                            controller.State.ToString(),
+                            state,
+                            StringComparison.OrdinalIgnoreCase);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.play",
+                Category = "Animation",
+                DisplayName = "Play Clip",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context);
+
+                        if (controller == null)
+                        {
+                            return;
+                        }
+
+                        string clip =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "clip",
+                                context);
+
+                        if (string.IsNullOrWhiteSpace(
+                                clip))
+                        {
+                            context.WarningSink?.Invoke(
+                                "Play Clip requires a non-empty animation clip name.");
+                            return;
+                        }
+
+                        bool loop =
+                            EventValueResolver.GetBoolean(
+                                instruction,
+                                "loop",
+                                context,
+                                true);
+
+                        controller.Play(
+                            clip,
+                            loop);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.playAction",
+                Category = "Animation",
+                DisplayName = "Play Action",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context);
+
+                        if (controller == null)
+                        {
+                            return;
+                        }
+
+                        string clip =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "clip",
+                                context);
+
+                        if (string.IsNullOrWhiteSpace(
+                                clip))
+                        {
+                            context.WarningSink?.Invoke(
+                                "Play Action requires a non-empty animation clip name.");
+                            return;
+                        }
+
+                        bool retrigger =
+                            EventValueResolver.GetBoolean(
+                                instruction,
+                                "retrigger",
+                                context,
+                                false);
+
+                        bool interruptCurrent =
+                            EventValueResolver.GetBoolean(
+                                instruction,
+                                "interruptCurrent",
+                                context,
+                                true);
+
+                        controller.PlayAction(
+                            clip,
+                            retrigger,
+                            interruptCurrent);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.pause",
+                Category = "Animation",
+                DisplayName = "Pause",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAnimationController(
+                            instruction,
+                            context)?
+                            .Pause()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.resume",
+                Category = "Animation",
+                DisplayName = "Resume",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAnimationController(
+                            instruction,
+                            context)?
+                            .Resume()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.stop",
+                Category = "Animation",
+                DisplayName = "Stop",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                        ResolveAnimationController(
+                            instruction,
+                            context)?
+                            .Stop()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.setSpeed",
+                Category = "Animation",
+                DisplayName = "Set Speed",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context);
+
+                        if (controller == null)
+                        {
+                            return;
+                        }
+
+                        controller.PlaybackSpeed =
+                            Math.Max(
+                                (float)EventValueResolver.GetNumber(
+                                    instruction,
+                                    "speed",
+                                    context,
+                                    controller.PlaybackSpeed),
+                                0.0f);
+                    }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.setTransitionDuration",
+                Category = "Animation",
+                DisplayName = "Set Transition Duration",
+                TargetComponent = nameof(AnimationController),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AnimationController? controller =
+                            ResolveAnimationController(
+                                instruction,
+                                context);
+
+                        if (controller == null)
+                        {
+                            return;
+                        }
+
+                        controller.TransitionDuration =
+                            Math.Max(
+                                (float)EventValueResolver.GetNumber(
+                                    instruction,
+                                    "duration",
+                                    context,
+                                    controller.TransitionDuration),
+                                0.0f);
+                    }
+            });
+    }
+
+    private static AnimationController? ResolveAnimationController(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        bool warnIfMissing = true)
+    {
+        GameObject? target =
+            ResolveObjectTarget(
+                instruction,
+                context,
+                warnIfMissing);
+
+        if (target == null)
+        {
+            return null;
+        }
+
+        AnimationController? controller =
+            target.GetComponent<AnimationController>();
+
+        if (controller == null &&
+            warnIfMissing)
+        {
+            context.WarningSink?.Invoke(
+                $"Event target '{target.Name}' has no AnimationController.");
+        }
+
+        return controller;
     }
 
     private static void RegisterAudio(

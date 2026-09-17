@@ -21,12 +21,19 @@ public enum LocomotionState
 /// v0.11-C1 upgrades the old state-only component into a playback driver. It
 /// discovers imported skinned model hierarchies beneath the character, creates
 /// their runtime SkeletalMeshRenderer and drives clips from CharacterController3D.
+///
+/// v0.11-C5B adds temporary one-shot/action overrides. Action clips suspend
+/// locomotion playback while they are active and automatically return to the
+/// current locomotion state when the one-shot completes.
 /// </summary>
 public sealed class AnimationController : Component
 {
     private readonly List<SkeletalMeshRenderer> _renderers = new();
 
     private bool _stateInitialized;
+    private bool _actionActive;
+    private bool _actionPaused;
+    private string _currentAction = string.Empty;
 
     public string Idle { get; set; } = "Idle";
     public string Walk { get; set; } = "Walk";
@@ -55,6 +62,14 @@ public sealed class AnimationController : Component
     public bool IsPlaying =>
         _renderers.Any(renderer => renderer.IsPlaying);
 
+    public bool IsActionPlaying =>
+        _actionActive;
+
+    public string CurrentAction =>
+        _actionActive
+            ? _currentAction
+            : string.Empty;
+
     protected override void OnStart()
     {
         /*
@@ -81,11 +96,48 @@ public sealed class AnimationController : Component
                 Math.Max(TransitionDuration, 0.0f);
         }
 
+        if (_actionActive)
+        {
+            if (_actionPaused)
+            {
+                return;
+            }
+
+            bool actionStillPlaying =
+                _renderers.Any(
+                    renderer =>
+                        renderer.IsPlaying &&
+                        string.Equals(
+                            renderer.CurrentAnimation,
+                            _currentAction,
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (actionStillPlaying)
+            {
+                return;
+            }
+
+            _actionActive = false;
+            _actionPaused = false;
+            _currentAction = string.Empty;
+
+            /*
+             * Force locomotion to re-apply even when the state itself did not
+             * change during the action (for example Idle -> Attack -> Idle).
+             */
+            _stateInitialized = false;
+        }
+
         if (!DriveLocomotion)
         {
             return;
         }
 
+        UpdateLocomotion();
+    }
+
+    private void UpdateLocomotion()
+    {
         CharacterController3D? controller =
             GameObject.GetComponent<CharacterController3D>();
 
@@ -124,7 +176,9 @@ public sealed class AnimationController : Component
 
         if (!string.IsNullOrWhiteSpace(clipName))
         {
-            Play(clipName, loop);
+            PlayInternal(
+                clipName,
+                loop);
         }
     }
 
@@ -219,6 +273,127 @@ public sealed class AnimationController : Component
         string clipName,
         bool loop = true)
     {
+        CancelActionOverride();
+
+        return PlayInternal(
+            clipName,
+            loop);
+    }
+
+    /// <summary>
+    /// Plays a temporary non-looping action clip and suspends locomotion until
+    /// the clip finishes. If the same action is already active, retrigger=false
+    /// leaves it running. If another action is active, interruptCurrent=false
+    /// rejects the new request.
+    /// </summary>
+    public bool PlayAction(
+        string clipName,
+        bool retrigger = false,
+        bool interruptCurrent = true)
+    {
+        if (string.IsNullOrWhiteSpace(clipName))
+        {
+            return false;
+        }
+
+        if (_renderers.Count == 0)
+        {
+            RefreshRenderers();
+        }
+
+        if (_actionActive)
+        {
+            bool sameAction =
+                string.Equals(
+                    _currentAction,
+                    clipName,
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (sameAction &&
+                !retrigger)
+            {
+                return true;
+            }
+
+            if (!sameAction &&
+                !interruptCurrent)
+            {
+                return false;
+            }
+
+            if (sameAction &&
+                retrigger)
+            {
+                /*
+                 * SkeletalMeshRenderer.Play intentionally resumes the same
+                 * current clip instead of rewinding it. Stop first when the
+                 * caller explicitly asks for a retrigger so the one-shot
+                 * restarts at time zero.
+                 */
+                foreach (SkeletalMeshRenderer renderer in _renderers)
+                {
+                    renderer.Stop();
+                }
+            }
+        }
+
+        bool played =
+            PlayInternal(
+                clipName,
+                false);
+
+        if (!played)
+        {
+            return false;
+        }
+
+        _currentAction = clipName;
+        _actionActive = true;
+        _actionPaused = false;
+
+        return true;
+    }
+
+    public void Pause()
+    {
+        foreach (SkeletalMeshRenderer renderer in _renderers)
+        {
+            renderer.Pause();
+        }
+
+        if (_actionActive)
+        {
+            _actionPaused = true;
+        }
+    }
+
+    public void Resume()
+    {
+        foreach (SkeletalMeshRenderer renderer in _renderers)
+        {
+            renderer.Resume();
+        }
+
+        if (_actionActive)
+        {
+            _actionPaused = false;
+        }
+    }
+
+    public void Stop()
+    {
+        CancelActionOverride();
+
+        foreach (SkeletalMeshRenderer renderer in _renderers)
+        {
+            renderer.Stop();
+        }
+    }
+
+    private bool PlayInternal(
+        string clipName,
+        bool loop)
+    {
         if (_renderers.Count == 0)
         {
             RefreshRenderers();
@@ -241,28 +416,18 @@ public sealed class AnimationController : Component
         return played;
     }
 
-    public void Pause()
+    private void CancelActionOverride()
     {
-        foreach (SkeletalMeshRenderer renderer in _renderers)
+        if (!_actionActive &&
+            string.IsNullOrWhiteSpace(_currentAction))
         {
-            renderer.Pause();
+            return;
         }
-    }
 
-    public void Resume()
-    {
-        foreach (SkeletalMeshRenderer renderer in _renderers)
-        {
-            renderer.Resume();
-        }
-    }
-
-    public void Stop()
-    {
-        foreach (SkeletalMeshRenderer renderer in _renderers)
-        {
-            renderer.Stop();
-        }
+        _actionActive = false;
+        _actionPaused = false;
+        _currentAction = string.Empty;
+        _stateInitialized = false;
     }
 
     private string GetClipName(

@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
@@ -1497,7 +1498,6 @@ internal sealed class EventWorkspacePanel
 
             ImGui.PushID(
                 instruction.InstanceId.ToString());
-
             bool remove =
                 DrawInstructionGraphNode(
                     rule,
@@ -4798,6 +4798,36 @@ internal sealed class EventWorkspacePanel
             "audio.isPlaying" =>
                 "Checks whether the target AudioSource3D is currently playing.",
 
+            "animation.isPlaying" =>
+                "Checks whether the target AnimationController is currently playing.",
+
+            "animation.currentClipIs" =>
+                "Checks the currently playing animation clip.",
+
+            "animation.currentStateIs" =>
+                "Checks the current locomotion animation state.",
+
+            "animation.play" =>
+                "Plays the selected clip on the target AnimationController.",
+
+            "animation.playAction" =>
+                "Plays a non-looping action override, suspends locomotion, then returns to the current locomotion state when it finishes.",
+
+            "animation.pause" =>
+                "Pauses animation playback on the target AnimationController.",
+
+            "animation.resume" =>
+                "Resumes animation playback on the target AnimationController.",
+
+            "animation.stop" =>
+                "Stops animation playback on the target AnimationController.",
+
+            "animation.setSpeed" =>
+                "Changes animation playback speed on the target AnimationController.",
+
+            "animation.setTransitionDuration" =>
+                "Changes cross-fade transition duration on the target AnimationController.",
+
             "character.isGrounded" =>
                 "Checks whether the Character Controller is touching the ground.",
 
@@ -5497,7 +5527,6 @@ internal sealed class EventWorkspacePanel
 
         Guid? previousNext =
             source.NextActionId;
-
         source.NextActionId =
             created.InstanceId;
 
@@ -5912,8 +5941,24 @@ internal sealed class EventWorkspacePanel
                 "audio.play" or
                 "audio.pause" or
                 "audio.stop" or
-                "audio.isPlaying" =>
+                "audio.isPlaying" or
+                "animation.pause" or
+                "animation.resume" or
+                "animation.stop" or
+                "animation.isPlaying" =>
                     190.0f,
+
+                "animation.currentClipIs" or
+                "animation.currentStateIs" or
+                "animation.setSpeed" or
+                "animation.setTransitionDuration" =>
+                    350.0f,
+
+                "animation.play" =>
+                    500.0f,
+
+                "animation.playAction" =>
+                    610.0f,
 
                 "object.setActive" or
                 "audio.setVolume" or
@@ -6461,7 +6506,7 @@ internal sealed class EventWorkspacePanel
             ImGui.EndMenu();
         }
 
-        var groups =
+        var actionGroups =
             _registry.Actions
                 .OrderBy(
                     definition =>
@@ -6474,7 +6519,7 @@ internal sealed class EventWorkspacePanel
                         definition.Category);
 
         foreach (var group
-                 in groups)
+                 in actionGroups)
         {
             if (!ImGui.BeginMenu(
                     group.Key))
@@ -6620,6 +6665,78 @@ internal sealed class EventWorkspacePanel
             case "input.axisLess":
                 instruction.Arguments["action"] = EventValue.String(DefaultActionToken("Move"));
                 instruction.Arguments["value"] = EventValue.Number(-.5);
+                break;
+
+            case "animation.pause":
+            case "animation.resume":
+            case "animation.stop":
+            case "animation.isPlaying":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                break;
+
+            case "animation.play":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["clip"] =
+                    EventValue.String(
+                        string.Empty);
+                instruction.Arguments["loop"] =
+                    EventValue.Boolean(
+                        true);
+                break;
+
+            case "animation.playAction":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["clip"] =
+                    EventValue.String(
+                        string.Empty);
+                instruction.Arguments["retrigger"] =
+                    EventValue.Boolean(
+                        false);
+                instruction.Arguments["interruptCurrent"] =
+                    EventValue.Boolean(
+                        true);
+                break;
+
+            case "animation.setSpeed":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["speed"] =
+                    EventValue.Number(
+                        1.0);
+                break;
+
+            case "animation.setTransitionDuration":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["duration"] =
+                    EventValue.Number(
+                        0.15);
+                break;
+
+            case "animation.currentClipIs":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["clip"] =
+                    EventValue.String(
+                        string.Empty);
+                break;
+
+            case "animation.currentStateIs":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["state"] =
+                    EventValue.String(
+                        "Idle");
                 break;
 
             case "object.exists":
@@ -6912,6 +7029,143 @@ internal sealed class EventWorkspacePanel
                 DrawInputActionArgument(instruction, "action", "Input Action", "Move");
                 DrawValueArgument(instruction, "value", "Value", VariableType.Number,
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
+                break;
+
+            case "animation.pause":
+            case "animation.resume":
+            case "animation.stop":
+            case "animation.isPlaying":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+                break;
+
+            case "animation.play":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawAnimationClipArgument(
+                    instruction,
+                    "clip",
+                    "Clip",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "loop",
+                    "Loop",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        true),
+                    state,
+                    false);
+                break;
+
+            case "animation.playAction":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawAnimationClipArgument(
+                    instruction,
+                    "clip",
+                    "Action Clip",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "retrigger",
+                    "Retrigger Same Action",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        false),
+                    state,
+                    false);
+
+                DrawValueArgument(
+                    instruction,
+                    "interruptCurrent",
+                    "Interrupt Current Action",
+                    VariableType.Boolean,
+                    EventValue.Boolean(
+                        true),
+                    state,
+                    false);
+                break;
+
+            case "animation.setSpeed":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "speed",
+                    "Speed",
+                    VariableType.Number,
+                    EventValue.Number(
+                        1.0),
+                    state,
+                    false);
+                break;
+
+            case "animation.setTransitionDuration":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "duration",
+                    "Transition Duration",
+                    VariableType.Number,
+                    EventValue.Number(
+                        0.15),
+                    state,
+                    false);
+                break;
+
+            case "animation.currentClipIs":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawAnimationClipArgument(
+                    instruction,
+                    "clip",
+                    "Clip",
+                    state);
+                break;
+
+            case "animation.currentStateIs":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+
+                DrawValueArgument(
+                    instruction,
+                    "state",
+                    "State",
+                    VariableType.String,
+                    EventValue.String(
+                        "Idle"),
+                    state,
+                    false);
                 break;
 
             case "object.exists":
@@ -7277,6 +7531,301 @@ internal sealed class EventWorkspacePanel
                     state);
                 break;
         }
+    }
+
+    // ========================================================
+    // ANIMATION CLIP PICKER
+    // ========================================================
+
+    private void DrawAnimationClipArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        EditorState? state)
+    {
+        if (!instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) ||
+            value == null)
+        {
+            value =
+                EventValue.String(
+                    string.Empty);
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        ImGui.PushID(
+            $"AnimationClip:{argumentName}");
+
+        ImGui.TextDisabled(
+            label);
+
+        string source =
+            value.Kind ==
+            EventValueKind.Reference
+                ? "Reference"
+                : "Constant";
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##Source",
+                source))
+        {
+            if (ImGui.Selectable(
+                    "Constant",
+                    value.Kind ==
+                    EventValueKind.Constant))
+            {
+                value =
+                    EventValue.String(
+                        string.Empty);
+
+                instruction.Arguments[argumentName] =
+                    value;
+
+                _dirty =
+                    true;
+            }
+
+            if (ImGui.Selectable(
+                    "Reference",
+                    value.Kind ==
+                    EventValueKind.Reference))
+            {
+                value =
+                    new EventValue
+                    {
+                        Kind =
+                            EventValueKind.Reference
+                    };
+
+                instruction.Arguments[argumentName] =
+                    value;
+
+                _dirty =
+                    true;
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.Dummy(
+            new Vector2(
+                0.0f,
+                2.0f));
+
+        if (value.Kind ==
+            EventValueKind.Reference)
+        {
+            DrawReferenceValue(
+                instruction,
+                argumentName,
+                value,
+                VariableType.String,
+                state,
+                false);
+
+            ImGui.PopID();
+
+            return;
+        }
+
+        if (value.Constant.Type !=
+            VariableType.String)
+        {
+            value =
+                EventValue.String(
+                    string.Empty);
+
+            instruction.Arguments[argumentName] =
+                value;
+        }
+
+        string current =
+            value.Constant.String;
+
+        GameObject? target =
+            state != null
+                ? ResolveAnimationTargetForEditor(
+                    instruction,
+                    state)
+                : null;
+
+        AnimationController? controller =
+            target?
+                .GetComponent<AnimationController>();
+
+        IReadOnlyList<string> clipNames =
+            controller != null &&
+            _project != null
+                ? ByteEngine.Editor.AnimationClipDiscovery.GetClipNames(
+                    controller,
+                    _project)
+                : Array.Empty<string>();
+
+        string preview =
+            string.IsNullOrWhiteSpace(
+                current)
+                ? "Select Animation Clip..."
+                : current;
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##AnimationClip",
+                preview))
+        {
+            bool noneSelected =
+                string.IsNullOrWhiteSpace(
+                    current);
+
+            if (ImGui.Selectable(
+                    "<None>",
+                    noneSelected))
+            {
+                RecordHistory(
+                    "Change Animation Clip");
+
+                instruction.Arguments[argumentName] =
+                    EventValue.String(
+                        string.Empty);
+
+                current =
+                    string.Empty;
+
+                _dirty =
+                    true;
+            }
+
+            if (clipNames.Count >
+                0)
+            {
+                ImGui.Separator();
+
+                foreach (string clipName
+                         in clipNames)
+                {
+                    bool selected =
+                        string.Equals(
+                            current,
+                            clipName,
+                            StringComparison.OrdinalIgnoreCase);
+
+                    if (ImGui.Selectable(
+                            clipName,
+                            selected))
+                    {
+                        RecordHistory(
+                            "Change Animation Clip");
+
+                        instruction.Arguments[argumentName] =
+                            EventValue.String(
+                                clipName);
+
+                        current =
+                            clipName;
+
+                        _dirty =
+                            true;
+                    }
+
+                    if (selected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+            }
+            else
+            {
+                ImGui.Separator();
+
+                ImGui.TextDisabled(
+                    "No animation clips found for the target object.");
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (state ==
+            null)
+        {
+            ImGui.TextDisabled(
+                "No active editor state.");
+        }
+        else if (target ==
+            null)
+        {
+            ImGui.TextDisabled(
+                "Choose a valid Target Object first.");
+        }
+        else if (controller ==
+            null)
+        {
+            ImGui.TextDisabled(
+                $"'{target.Name}' has no AnimationController.");
+        }
+        else if (clipNames.Count ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "The target AnimationController has no discoverable model clips.");
+        }
+
+        ImGui.PopID();
+    }
+
+    private GameObject? ResolveAnimationTargetForEditor(
+        VisualInstruction instruction,
+        EditorState state)
+    {
+        GameObject? self =
+            ResolveSelfContext(
+                state);
+
+        string token =
+            "Self";
+
+        if (instruction.Arguments.TryGetValue(
+                "target",
+                out EventValue? targetValue) &&
+            targetValue != null &&
+            targetValue.Kind ==
+                EventValueKind.Constant &&
+            targetValue.Constant.Type ==
+                VariableType.String &&
+            !string.IsNullOrWhiteSpace(
+                targetValue.Constant.String))
+        {
+            token =
+                targetValue.Constant.String;
+        }
+
+        if (string.Equals(
+                token,
+                "Self",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return self;
+        }
+
+        if (token.StartsWith(
+                "id:",
+                StringComparison.OrdinalIgnoreCase) &&
+            Guid.TryParse(
+                token[3..],
+                out Guid objectId))
+        {
+            return state.EditorScene.FindGameObject(
+                objectId);
+        }
+
+        return state.EditorScene.FindGameObject(
+            token);
     }
 
     // ========================================================
