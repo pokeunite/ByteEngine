@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics.ThreeD;
@@ -25,6 +27,11 @@ public enum LocomotionState
 /// v0.11-C5B adds temporary one-shot/action overrides. Action clips suspend
 /// locomotion playback while they are active and automatically return to the
 /// current locomotion state when the one-shot completes.
+///
+/// v0.11-C7 adds an explicit root-motion policy. SkeletalMeshRenderer continues
+/// to extract/remove model-space locomotion travel from the rendered pose; this
+/// controller can optionally apply that extracted horizontal travel to the
+/// character GameObject.
 /// </summary>
 public sealed class AnimationController : Component
 {
@@ -34,6 +41,20 @@ public sealed class AnimationController : Component
     private bool _actionActive;
     private bool _actionPaused;
     private string _currentAction = string.Empty;
+
+    /*
+     * C7 root-motion state is controller-owned deliberately. The renderer's
+     * existing C2 extraction remains the single source of truth, while the
+     * character controller decides whether that extracted travel should become
+     * world movement. Only the first active skeletal renderer is used so
+     * multi-mesh characters cannot apply movement twice.
+     */
+    private SkeletalMeshRenderer? _rootMotionSource;
+    private string _rootMotionAnimation = string.Empty;
+    private Vector3 _lastRootMotionTravel;
+    private Vector3 _lastAppliedRootMotionDelta;
+    private float _lastRootMotionTime;
+    private bool _rootMotionSampleValid;
 
     public string Idle { get; set; } = "Idle";
     public string Walk { get; set; } = "Walk";
@@ -49,6 +70,19 @@ public sealed class AnimationController : Component
     public float TransitionDuration { get; set; } = 0.15f;
 
     public float PlaybackSpeed { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Controls whether extracted locomotion travel stays in-place or moves the
+    /// owning character. InPlace preserves the pre-C7 behaviour.
+    /// </summary>
+    public RootMotionMode RootMotionMode { get; set; } =
+        RootMotionMode.InPlace;
+
+    /// <summary>
+    /// World-space root-motion delta applied during the most recent controller
+    /// update. Zero while InPlace, paused, or before a valid sample exists.
+    /// </summary>
+    public Vector3 RootMotionDelta { get; private set; }
 
     public LocomotionState State { get; private set; }
 
@@ -78,6 +112,7 @@ public sealed class AnimationController : Component
          * means locomotion can begin immediately on the first update.
          */
         RefreshRenderers();
+        ResetRootMotionTracking();
     }
 
     protected override void OnUpdate()
@@ -95,6 +130,14 @@ public sealed class AnimationController : Component
             renderer.TransitionDuration =
                 Math.Max(TransitionDuration, 0.0f);
         }
+
+        /*
+         * Skeletal renderers beneath the character normally update after the
+         * controller in scene order, so this consumes the most recently
+         * evaluated pose. That intentionally makes root motion one animation
+         * sample behind rather than duplicating animation evaluation here.
+         */
+        UpdateRootMotion();
 
         if (_actionActive)
         {
@@ -267,6 +310,8 @@ public sealed class AnimationController : Component
                 instance.Model,
                 skinnedMeshKeys);
         }
+
+        ResetRootMotionTracking();
     }
 
     public bool Play(
@@ -351,6 +396,8 @@ public sealed class AnimationController : Component
         _actionActive = true;
         _actionPaused = false;
 
+        ResetRootMotionTracking();
+
         return true;
     }
 
@@ -365,6 +412,9 @@ public sealed class AnimationController : Component
         {
             _actionPaused = true;
         }
+
+        RootMotionDelta =
+            Vector3.Zero;
     }
 
     public void Resume()
@@ -378,6 +428,8 @@ public sealed class AnimationController : Component
         {
             _actionPaused = false;
         }
+
+        ResetRootMotionTracking();
     }
 
     public void Stop()
@@ -388,6 +440,8 @@ public sealed class AnimationController : Component
         {
             renderer.Stop();
         }
+
+        ResetRootMotionTracking();
     }
 
     private bool PlayInternal(
@@ -413,8 +467,209 @@ public sealed class AnimationController : Component
                     Math.Max(TransitionDuration, 0.0f));
         }
 
+        if (played)
+        {
+            ResetRootMotionTracking();
+        }
+
         return played;
     }
+
+    private void UpdateRootMotion()
+    {
+        RootMotionDelta =
+            Vector3.Zero;
+
+        SkeletalMeshRenderer? source =
+            _renderers.FirstOrDefault(
+                renderer =>
+                    renderer.ModelLoaded &&
+                    !string.IsNullOrWhiteSpace(
+                        renderer.CurrentAnimation));
+
+        if (source == null)
+        {
+            ResetRootMotionTracking();
+            return;
+        }
+
+        string animation =
+            source.CurrentAnimation;
+
+        Vector3 travel =
+            source.ModelSpaceRootTravel;
+
+        float playbackTime =
+            source.PlaybackTime;
+
+        bool sourceChanged =
+            !ReferenceEquals(
+                _rootMotionSource,
+                source);
+
+        bool clipChanged =
+            !string.Equals(
+                _rootMotionAnimation,
+                animation,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!_rootMotionSampleValid ||
+            sourceChanged ||
+            clipChanged)
+        {
+            StoreRootMotionSample(
+                source,
+                animation,
+                travel,
+                playbackTime);
+
+            return;
+        }
+
+        /*
+         * Paused clips and duplicate samples must never produce movement.
+         */
+        if (MathF.Abs(
+                playbackTime -
+                _lastRootMotionTime) <=
+            0.000001f)
+        {
+            _lastRootMotionTravel =
+                travel;
+
+            return;
+        }
+
+        Vector3 localDelta;
+
+        bool wrapped =
+            source.Loop &&
+            playbackTime + 0.000001f <
+            _lastRootMotionTime;
+
+        if (wrapped)
+        {
+            /*
+             * SkeletalMeshRenderer exposes accumulated extracted travel but not
+             * a public arbitrary-time sampler. Re-use the previous valid frame
+             * delta at a loop boundary instead of interpreting the wrap as a
+             * large backwards teleport. On the following sample, exact travel
+             * deltas resume normally.
+             */
+            localDelta =
+                _lastAppliedRootMotionDelta;
+        }
+        else
+        {
+            localDelta =
+                travel -
+                _lastRootMotionTravel;
+        }
+
+        localDelta.Y =
+            0.0f;
+
+        if (RootMotionMode ==
+                RootMotionMode.ApplyHorizontal &&
+            IsFinite(localDelta) &&
+            localDelta.LengthSquared() >
+                0.0000000001f)
+        {
+            /*
+             * Travel is measured in the skeletal renderer's model space. Use
+             * its live world matrix as a direction transform so authored model
+             * rotation/import scale are respected before moving the character
+             * root.
+             */
+            Vector3 worldDelta =
+                Vector3.TransformNormal(
+                    localDelta,
+                    source.Transform.WorldMatrix);
+
+            worldDelta.Y =
+                0.0f;
+
+            if (IsFinite(worldDelta))
+            {
+                GameObject.Transform.WorldPosition +=
+                    worldDelta;
+
+                RootMotionDelta =
+                    worldDelta;
+
+                _lastAppliedRootMotionDelta =
+                    localDelta;
+            }
+        }
+        else if (!wrapped)
+        {
+            /*
+             * Keep a useful local velocity estimate even while InPlace, so a
+             * runtime switch to ApplyHorizontal at a loop boundary does not
+             * generate a backwards jump.
+             */
+            _lastAppliedRootMotionDelta =
+                localDelta;
+        }
+
+        StoreRootMotionSample(
+            source,
+            animation,
+            travel,
+            playbackTime);
+    }
+
+    private void StoreRootMotionSample(
+        SkeletalMeshRenderer source,
+        string animation,
+        Vector3 travel,
+        float playbackTime)
+    {
+        _rootMotionSource =
+            source;
+
+        _rootMotionAnimation =
+            animation;
+
+        _lastRootMotionTravel =
+            travel;
+
+        _lastRootMotionTime =
+            playbackTime;
+
+        _rootMotionSampleValid =
+            true;
+    }
+
+    private void ResetRootMotionTracking()
+    {
+        RootMotionDelta =
+            Vector3.Zero;
+
+        _rootMotionSource =
+            null;
+
+        _rootMotionAnimation =
+            string.Empty;
+
+        _lastRootMotionTravel =
+            Vector3.Zero;
+
+        _lastAppliedRootMotionDelta =
+            Vector3.Zero;
+
+        _lastRootMotionTime =
+            0.0f;
+
+        _rootMotionSampleValid =
+            false;
+    }
+
+    private static bool IsFinite(
+        Vector3 value) =>
+        float.IsFinite(value.X) &&
+        float.IsFinite(value.Y) &&
+        float.IsFinite(value.Z);
 
     private void CancelActionOverride()
     {
@@ -428,6 +683,8 @@ public sealed class AnimationController : Component
         _actionPaused = false;
         _currentAction = string.Empty;
         _stateInitialized = false;
+
+        ResetRootMotionTracking();
     }
 
     private string GetClipName(

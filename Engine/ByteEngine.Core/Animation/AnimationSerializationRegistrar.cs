@@ -54,7 +54,9 @@ public static class AnimationSerializationRegistrar
                             ["transitionDuration"] =
                                 controller.TransitionDuration,
                             ["playbackSpeed"] =
-                                controller.PlaybackSpeed
+                                controller.PlaybackSpeed,
+                            ["rootMotionMode"] =
+                                controller.RootMotionMode.ToString()
                         }
                 };
         }
@@ -85,7 +87,9 @@ public static class AnimationSerializationRegistrar
                     Float(
                         data,
                         "playbackSpeed",
-                        1.0f)
+                        1.0f),
+                RootMotionMode =
+                    ReadRootMotionMode(data)
             };
     }
 
@@ -295,4 +299,19 @@ public static class AnimationSerializationRegistrar
         data.Properties[key]?
             .GetValue<float>() ??
         fallback;
+
+    private static RootMotionMode ReadRootMotionMode(
+        ComponentData data)
+    {
+        string? value =
+            data.Properties["rootMotionMode"]?
+                .GetValue<string>();
+
+        return Enum.TryParse(
+                value,
+                ignoreCase: true,
+                out RootMotionMode mode)
+            ? mode
+            : RootMotionMode.InPlace;
+    }
 }
