@@ -254,7 +254,7 @@ public static class AnimationSerializationRegistrar
                 InheritBoneScale =
                     data.Properties["inheritBoneScale"]?
                         .GetValue<bool>() ??
-                    true
+                    false
             };
     }
 

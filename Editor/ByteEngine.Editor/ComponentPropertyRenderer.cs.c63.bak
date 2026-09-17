@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using ByteEngine.Core.Animation;
@@ -171,7 +171,6 @@ internal static class ComponentPropertyRenderer
                 after = tag;
             }
             else if (component is BoneSocket3D boneSocket &&
-                     project != null &&
                      descriptor.Property.Name == nameof(BoneSocket3D.BoneName) &&
                      descriptor.Property.PropertyType == typeof(string))
             {
@@ -182,7 +181,6 @@ internal static class ComponentPropertyRenderer
                 edited =
                     DrawBoneSelector(
                         boneSocket,
-                        project,
                         label,
                         ref boneName);
 
@@ -455,14 +453,15 @@ internal static class ComponentPropertyRenderer
 
     private static bool DrawBoneSelector(
         BoneSocket3D socket,
-        EditorProjectContext project,
         string label,
         ref string boneName)
     {
+        SkeletalMeshRenderer? renderer =
+            socket.ResolveSourceRenderer();
+
         IReadOnlyList<string> bones =
-            GetSocketBoneNames(
-                socket,
-                project);
+            renderer?.BoneNames ??
+            Array.Empty<string>();
 
         string currentBoneName =
             boneName;
@@ -505,10 +504,15 @@ internal static class ComponentPropertyRenderer
                 true;
         }
 
-        if (bones.Count == 0)
+        if (renderer == null)
         {
             ImGui.TextDisabled(
-                "No skeleton bones found for this character/model.");
+                "No Skeletal Mesh Renderer found for this socket.");
+        }
+        else if (bones.Count == 0)
+        {
+            ImGui.TextDisabled(
+                "The resolved skeletal model contains no bones.");
         }
         else
         {
@@ -542,204 +546,6 @@ internal static class ComponentPropertyRenderer
         ImGui.EndCombo();
 
         return changed;
-    }
-
-    private static IReadOnlyList<string> GetSocketBoneNames(
-        BoneSocket3D socket,
-        EditorProjectContext project)
-    {
-        /*
-         * Runtime/Play mode: prefer the live renderer because its skeleton is
-         * exactly the one BoneSocket3D will bind to.
-         */
-        SkeletalMeshRenderer? renderer =
-            socket.ResolveSourceRenderer();
-
-        if (renderer != null)
-        {
-            string[] liveBones =
-                renderer.BoneNames
-                    .Where(
-                        name =>
-                            !string.IsNullOrWhiteSpace(
-                                name))
-                    .Distinct(
-                        StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-
-            if (liveBones.Length > 0)
-            {
-                return liveBones;
-            }
-        }
-
-        /*
-         * Edit mode: no SkeletalMeshRenderer is required. Find the nearest
-         * character AnimationController and reuse the same animated-model
-         * discovery path used by the animation clip picker.
-         */
-        for (GameObject? current = socket.GameObject;
-             current != null;
-             current = current.Parent)
-        {
-            AnimationController? controller =
-                current.GetComponent<AnimationController>();
-
-            if (controller == null)
-            {
-                continue;
-            }
-
-            if (AnimationClipDiscovery.TryGetModel(
-                    controller,
-                    project,
-                    out ModelAsset? model,
-                    out _) &&
-                model?.Skeleton != null)
-            {
-                string[] modelBones =
-                    model.Skeleton.Bones
-                        .Select(
-                            bone =>
-                                bone.Name)
-                        .Where(
-                            name =>
-                                !string.IsNullOrWhiteSpace(
-                                    name))
-                        .Distinct(
-                            StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
-
-                if (modelBones.Length > 0)
-                {
-                    return modelBones;
-                }
-            }
-        }
-
-        /*
-         * Fallback for a model hierarchy that has no AnimationController yet.
-         * Walk upward from the socket and inspect sibling/descendant visual
-         * branches for a ModelHierarchyInstance with a skeleton.
-         */
-        GameObject branchToSkip =
-            socket.GameObject;
-
-        for (GameObject? ancestor = socket.GameObject.Parent;
-             ancestor != null;
-             ancestor = ancestor.Parent)
-        {
-            if (TryFindModelBones(
-                    ancestor,
-                    branchToSkip,
-                    project,
-                    out IReadOnlyList<string> modelBones))
-            {
-                return modelBones;
-            }
-
-            branchToSkip =
-                ancestor;
-        }
-
-        return Array.Empty<string>();
-    }
-
-    private static bool TryFindModelBones(
-        GameObject root,
-        GameObject branchToSkip,
-        EditorProjectContext project,
-        out IReadOnlyList<string> bones)
-    {
-        foreach (GameObject candidate
-                 in SelfAndDescendantsForSocket(
-                     root,
-                     branchToSkip))
-        {
-            ModelHierarchyInstance? instance =
-                candidate.GetComponent<ModelHierarchyInstance>();
-
-            if (instance == null ||
-                instance.Model.IsEmpty)
-            {
-                continue;
-            }
-
-            try
-            {
-                ModelAsset model =
-                    project.Assets.LoadModel(
-                        instance.Model);
-
-                if (model.Skeleton == null)
-                {
-                    continue;
-                }
-
-                string[] names =
-                    model.Skeleton.Bones
-                        .Select(
-                            bone =>
-                                bone.Name)
-                        .Where(
-                            name =>
-                                !string.IsNullOrWhiteSpace(
-                                    name))
-                        .Distinct(
-                            StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
-
-                if (names.Length == 0)
-                {
-                    continue;
-                }
-
-                bones =
-                    names;
-
-                return true;
-            }
-            catch
-            {
-                // Keep searching other visual/model branches.
-            }
-        }
-
-        bones =
-            Array.Empty<string>();
-
-        return false;
-    }
-
-    private static IEnumerable<GameObject> SelfAndDescendantsForSocket(
-        GameObject root,
-        GameObject branchToSkip)
-    {
-        if (!ReferenceEquals(
-                root,
-                branchToSkip))
-        {
-            yield return root;
-        }
-
-        foreach (GameObject child
-                 in root.Children)
-        {
-            if (ReferenceEquals(
-                    child,
-                    branchToSkip))
-            {
-                continue;
-            }
-
-            foreach (GameObject candidate
-                     in SelfAndDescendantsForSocket(
-                         child,
-                         branchToSkip))
-            {
-                yield return candidate;
-            }
-        }
     }
     private static bool DrawAnimationClipSelector(
         AnimationController controller,
