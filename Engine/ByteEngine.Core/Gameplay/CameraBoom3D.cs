@@ -70,24 +70,29 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float MouseSensitivityY { get => _mouseSensitivityY; set => _mouseSensitivityY = Positive(value); }
     public bool InvertHorizontalLook { get; set; }
     public bool InvertVerticalLook { get; set; }
+
     /// <summary>
-/// Optional cinematic position lag. Standard TPS keeps this disabled so the
-/// player remains locked to a stable camera pivot.
-/// </summary>
+    /// Optional cinematic position lag. Standard TPS keeps this disabled so the
+    /// player remains locked to a stable camera pivot.
+    /// </summary>
     public bool CameraLagEnabled { get; set; } = false;
+
     /// <summary>
-/// Optional camera-rotation lag. Standard TPS follows control rotation directly.
-/// </summary>
+    /// Optional camera-rotation lag. Standard TPS follows control rotation directly.
+    /// </summary>
     public bool RotationLagEnabled { get; set; } = false;
+
     public bool LagSubstepping { get; set; } = true;
     public float PositionSmoothness { get => _positionSmoothness; set => _positionSmoothness = Positive(value); }
     public float RotationSmoothness { get => _rotationSmoothness; set => _rotationSmoothness = Positive(value); }
     public float MaximumLagDistance { get => _maxLagDistance; set => _maxLagDistance = Positive(value); }
     public float MaxLagTimeStep { get => _maxLagTimeStep; set => _maxLagTimeStep = Math.Clamp(Positive(value), .001f, .1f); }
     public float ShoulderOffset { get => _shoulderOffset; set => _shoulderOffset = Finite(value); }
+
     /// <summary>
     /// Unreal-style camera probe. New TPS rigs default this on.
-    /// Existing scenes that explicitly serialized false keep their authored value.
+    /// Existing scenes are migrated by SceneSerializer so pre-TPS-D serialized
+    /// false values do not silently disable collision forever.
     /// </summary>
     public bool EnableCameraCollision { get; set; } = true;
 
@@ -120,6 +125,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         get => _collisionReturnSpeed;
         set => _collisionReturnSpeed = Positive(value);
     }
+
     public Vector3 DesiredSocketPosition => _desiredSocketPosition;
     public Vector3 ActualSocketPosition => _actualSocketPosition;
     public float DesiredBoomYaw => _desiredBoomYaw;
@@ -168,6 +174,22 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         return orbit.LengthSquared() > .000001f
             ? -Vector3.Normalize(orbit)
             : new Vector3(0f, 0f, -1f);
+    }
+
+    /// <summary>
+    /// Horizontal camera-right vector for the boom yaw convention.
+    /// This must stay perpendicular to the camera's horizontal view direction;
+    /// otherwise shoulder framing also moves the camera forward/backward and
+    /// corrupts collision distance while orbiting.
+    /// </summary>
+    public static Vector3 CalculateCameraRight(float yawDegrees)
+    {
+        float yaw = Radians(Finite(yawDegrees));
+
+        return new Vector3(
+            MathF.Cos(yaw),
+            0f,
+            MathF.Sin(yaw));
     }
 
     public static float SmoothAngle(float current, float target, float speed, float deltaTime)
@@ -263,13 +285,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
          * socket/framing offset; it does not change what direction the camera
          * is looking.
          */
-        float yawRadians = Radians(_smoothedBoomYaw);
-
         Vector3 right =
-            new(
-                MathF.Cos(yawRadians),
-                0f,
-                -MathF.Sin(yawRadians));
+            CalculateCameraRight(
+                _smoothedBoomYaw);
 
         Vector3 orbitOffset =
             CalculateOrbitVector(
@@ -422,6 +440,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("StableFollow.DefaultPositionLag", false);
         writer.Add("StableFollow.DefaultRotationLag", false);
         writer.Add("ViewForward", CalculateViewForward(_smoothedBoomYaw, _smoothedBoomPitch));
+        writer.Add("CameraRight", CalculateCameraRight(_smoothedBoomYaw));
         writer.Add("DesiredSocketPosition", _desiredSocketPosition);
         writer.Add("ActualSocketPosition", _actualSocketPosition);
         writer.Add("RootPosition", root?.Transform.WorldPosition);
