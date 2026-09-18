@@ -5,13 +5,10 @@ using ByteEngine.Core.Graphics.ThreeD;
 namespace ByteEngine.Core.Animation;
 
 /// <summary>
-/// C9E runtime bridge for Unity-style Humanoid animation reuse.
+/// Runtime bridge for Humanoid animation reuse.
 ///
-/// A source model can contain the animation while a different target Humanoid
-/// model owns the visible mesh. The source clip is baked once into a target
-/// runtime clip, cached on the target ModelAsset, and then played through the
-/// existing SkeletalMeshRenderer. That keeps cross-fades, sockets, skinning and
-/// C7 root-motion behavior on the already-proven renderer path.
+/// C9M supplies both source and target ImportedNode hierarchies to the clip
+/// builder so FBX helper/pre-rotation nodes are included in retargeting.
 /// </summary>
 public static class HumanoidRetargetRuntime
 {
@@ -64,11 +61,6 @@ public static class HumanoidRetargetRuntime
             ?? throw new KeyNotFoundException(
                 $"Animation '{sourceClipName}' was not found in source model '{sourceModel.Name}'.");
 
-        /*
-         * Same model means no retarget is required. Returning the imported clip
-         * keeps the call convenient for authoring/runtime code that does not
-         * need to special-case source == target.
-         */
         if (sourceModel.Guid ==
             targetModel.Guid)
         {
@@ -94,8 +86,7 @@ public static class HumanoidRetargetRuntime
                         runtimeKey,
                         StringComparison.Ordinal));
 
-        if (cached !=
-            null)
+        if (cached != null)
         {
             return cached;
         }
@@ -112,6 +103,8 @@ public static class HumanoidRetargetRuntime
                 sourceModel.HumanoidMapping,
                 sourceModel.ReferenceHumanoidPose!,
                 sourceAnimation,
+                sourceModel.Nodes,
+                sourceModel.Meshes,
                 targetModel.Skeleton!,
                 targetModel.HumanoidMapping,
                 targetModel.ReferenceHumanoidPose!,
@@ -122,16 +115,10 @@ public static class HumanoidRetargetRuntime
                 runtimeName,
                 samplesPerSecond);
 
-        return
-            targetModel.RegisterRuntimeAnimation(
-                generated);
+        return targetModel.RegisterRuntimeAnimation(
+            generated);
     }
 
-    /// <summary>
-    /// Retargets if needed and immediately plays the resulting clip through the
-    /// target renderer. This is the first C9 API where a Humanoid animation from
-    /// one model can actually drive another Humanoid character at runtime.
-    /// </summary>
     public static bool Play(
         AssetManager assets,
         SkeletalMeshRenderer targetRenderer,
@@ -170,11 +157,10 @@ public static class HumanoidRetargetRuntime
             return false;
         }
 
-        return
-            targetRenderer.Play(
-                runtimeClip.Name,
-                loop,
-                transitionDuration);
+        return targetRenderer.Play(
+            runtimeClip.Name,
+            loop,
+            transitionDuration);
     }
 
     private static void ValidateHumanoid(
@@ -188,10 +174,8 @@ public static class HumanoidRetargetRuntime
                 $"The {role} model '{model.Name}' is not classified as Humanoid.");
         }
 
-        if (model.Skeleton ==
-                null ||
-            model.ReferenceHumanoidPose ==
-                null ||
+        if (model.Skeleton == null ||
+            model.ReferenceHumanoidPose == null ||
             !model.ReferenceHumanoidPose.IsReady)
         {
             throw new InvalidOperationException(
@@ -214,8 +198,7 @@ public static class HumanoidRetargetRuntime
                 model.Skeleton,
                 model.HumanoidMapping);
 
-        if (diagnostics.Errors.Count >
-            0)
+        if (diagnostics.Errors.Count > 0)
         {
             throw new InvalidOperationException(
                 $"The {role} model '{model.Name}' has an invalid Humanoid hierarchy: {string.Join(" | ", diagnostics.Errors)}");

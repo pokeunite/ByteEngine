@@ -7,10 +7,8 @@ namespace ByteEngine.Core.Animation;
 /// <summary>
 /// Bakes a source Humanoid animation into target-skeleton node tracks.
 ///
-/// ByteEngine's existing SkeletalMeshRenderer already knows how to blend,
-/// loop, skin, expose sockets and extract root motion from ImportedAnimation.
-/// C9E therefore retargets once into a runtime clip cache instead of adding a
-/// second skeletal-animation player.
+/// C9M passes the complete source ImportedNode hierarchy into the retargeter so
+/// FBX pre-rotation/helper nodes participate in the source pose.
 /// </summary>
 public static class HumanoidRetargetClipBuilder
 {
@@ -31,21 +29,22 @@ public static class HumanoidRetargetClipBuilder
         string runtimeClipName,
         float samplesPerSecond = DefaultSamplesPerSecond)
     {
-        return
-            Build(
-                sourceSkeleton,
-                sourceMapping,
-                sourceReferencePose,
-                sourceAnimation,
-                targetSkeleton,
-                targetMapping,
-                targetReferencePose,
-                targetNodes,
-                Array.Empty<ImportedMesh>(),
-                sourceModelGuid,
-                targetModelGuid,
-                runtimeClipName,
-                samplesPerSecond);
+        return BuildCore(
+            sourceSkeleton,
+            sourceMapping,
+            sourceReferencePose,
+            sourceAnimation,
+            Array.Empty<ImportedNode>(),
+            Array.Empty<ImportedMesh>(),
+            targetSkeleton,
+            targetMapping,
+            targetReferencePose,
+            targetNodes,
+            Array.Empty<ImportedMesh>(),
+            sourceModelGuid,
+            targetModelGuid,
+            runtimeClipName,
+            samplesPerSecond);
     }
 
     public static ImportedAnimation Build(
@@ -63,6 +62,79 @@ public static class HumanoidRetargetClipBuilder
         string runtimeClipName,
         float samplesPerSecond = DefaultSamplesPerSecond)
     {
+        return BuildCore(
+            sourceSkeleton,
+            sourceMapping,
+            sourceReferencePose,
+            sourceAnimation,
+            Array.Empty<ImportedNode>(),
+            Array.Empty<ImportedMesh>(),
+            targetSkeleton,
+            targetMapping,
+            targetReferencePose,
+            targetNodes,
+            targetMeshes,
+            sourceModelGuid,
+            targetModelGuid,
+            runtimeClipName,
+            samplesPerSecond);
+    }
+
+    /// <summary>
+    /// Runtime-aware overload with the full source node/mesh hierarchy.
+    /// </summary>
+    public static ImportedAnimation Build(
+        SkeletonAsset sourceSkeleton,
+        HumanoidBoneMap sourceMapping,
+        HumanoidReferencePose sourceReferencePose,
+        ImportedAnimation sourceAnimation,
+        IReadOnlyList<ImportedNode> sourceNodes,
+        IReadOnlyList<ImportedMesh> sourceMeshes,
+        SkeletonAsset targetSkeleton,
+        HumanoidBoneMap targetMapping,
+        HumanoidReferencePose targetReferencePose,
+        IReadOnlyList<ImportedNode> targetNodes,
+        IReadOnlyList<ImportedMesh> targetMeshes,
+        Guid sourceModelGuid,
+        Guid targetModelGuid,
+        string runtimeClipName,
+        float samplesPerSecond = DefaultSamplesPerSecond)
+    {
+        return BuildCore(
+            sourceSkeleton,
+            sourceMapping,
+            sourceReferencePose,
+            sourceAnimation,
+            sourceNodes,
+            sourceMeshes,
+            targetSkeleton,
+            targetMapping,
+            targetReferencePose,
+            targetNodes,
+            targetMeshes,
+            sourceModelGuid,
+            targetModelGuid,
+            runtimeClipName,
+            samplesPerSecond);
+    }
+
+    private static ImportedAnimation BuildCore(
+        SkeletonAsset sourceSkeleton,
+        HumanoidBoneMap sourceMapping,
+        HumanoidReferencePose sourceReferencePose,
+        ImportedAnimation sourceAnimation,
+        IReadOnlyList<ImportedNode> sourceNodes,
+        IReadOnlyList<ImportedMesh> sourceMeshes,
+        SkeletonAsset targetSkeleton,
+        HumanoidBoneMap targetMapping,
+        HumanoidReferencePose targetReferencePose,
+        IReadOnlyList<ImportedNode> targetNodes,
+        IReadOnlyList<ImportedMesh> targetMeshes,
+        Guid sourceModelGuid,
+        Guid targetModelGuid,
+        string runtimeClipName,
+        float samplesPerSecond)
+    {
         ArgumentNullException.ThrowIfNull(
             sourceSkeleton);
 
@@ -74,6 +146,12 @@ public static class HumanoidRetargetClipBuilder
 
         ArgumentNullException.ThrowIfNull(
             sourceAnimation);
+
+        ArgumentNullException.ThrowIfNull(
+            sourceNodes);
+
+        ArgumentNullException.ThrowIfNull(
+            sourceMeshes);
 
         ArgumentNullException.ThrowIfNull(
             targetSkeleton);
@@ -102,8 +180,7 @@ public static class HumanoidRetargetClipBuilder
                 "Target Humanoid reference pose is not ready.");
         }
 
-        if (targetNodes.Count ==
-            0)
+        if (targetNodes.Count == 0)
         {
             throw new InvalidOperationException(
                 "Target model has no imported node hierarchy.");
@@ -149,16 +226,14 @@ public static class HumanoidRetargetClipBuilder
                             : -1)
                 .Where(
                     index =>
-                        index >=
-                        0)
+                        index >= 0)
                 .Distinct()
                 .OrderBy(
                     index =>
                         index)
                 .ToArray();
 
-        if (trackedBoneIndices.Length ==
-            0)
+        if (trackedBoneIndices.Length == 0)
         {
             throw new InvalidOperationException(
                 "Target Humanoid mapping contains no bones present in the target skeleton.");
@@ -188,17 +263,31 @@ public static class HumanoidRetargetClipBuilder
                  in sampleTimes)
         {
             HumanoidRetargetPose retargetPose =
-                HumanoidRetargeter.Retarget(
-                    sourceSkeleton,
-                    sourceMapping,
-                    sourceReferencePose,
-                    sourceAnimation,
-                    sampleTime,
-                    targetSkeleton,
-                    targetMapping,
-                    targetReferencePose,
-                    loop:
-                        false);
+                sourceNodes.Count > 0
+                    ? HumanoidRetargeter.Retarget(
+                        sourceSkeleton,
+                        sourceMapping,
+                        sourceReferencePose,
+                        sourceAnimation,
+                        sourceNodes,
+                        sourceMeshes,
+                        sampleTime,
+                        targetSkeleton,
+                        targetMapping,
+                        targetReferencePose,
+                        loop:
+                            false)
+                    : HumanoidRetargeter.Retarget(
+                        sourceSkeleton,
+                        sourceMapping,
+                        sourceReferencePose,
+                        sourceAnimation,
+                        sampleTime,
+                        targetSkeleton,
+                        targetMapping,
+                        targetReferencePose,
+                        loop:
+                            false);
 
             Matrix4x4[] nodeGlobals =
                 BuildNodeGlobals(
@@ -212,10 +301,8 @@ public static class HumanoidRetargetClipBuilder
                     targetRuntime.BoneNodeIndices[
                         boneIndex];
 
-                if (nodeIndex <
-                        0 ||
-                    nodeIndex >=
-                        targetNodes.Count)
+                if (nodeIndex < 0 ||
+                    nodeIndex >= targetNodes.Count)
                 {
                     continue;
                 }
@@ -240,7 +327,8 @@ public static class HumanoidRetargetClipBuilder
                         rotation);
 
                 MutableChannel channel =
-                    channels[boneIndex];
+                    channels[
+                        boneIndex];
 
                 channel.Translation.Keys.Add(
                     new ImportedVectorKey(
@@ -265,30 +353,28 @@ public static class HumanoidRetargetClipBuilder
             }
         }
 
-        return
-            new ImportedAnimation
-            {
-                Key =
-                    runtimeKey,
+        return new ImportedAnimation
+        {
+            Key =
+                runtimeKey,
 
-                Name =
-                    safeName,
+            Name =
+                safeName,
 
-                Duration =
-                    duration,
+            Duration =
+                duration,
 
-                Channels =
-                    channels
-                        .Values
-                        .Where(
-                            channel =>
-                                channel.Translation.Keys.Count >
-                                0)
-                        .Select(
-                            channel =>
-                                channel.ToImported())
-                        .ToList()
-            };
+            Channels =
+                channels
+                    .Values
+                    .Where(
+                        channel =>
+                            channel.Translation.Keys.Count > 0)
+                    .Select(
+                        channel =>
+                            channel.ToImported())
+                    .ToList()
+        };
     }
 
     private static NodeRuntime BuildNodeRuntime(
@@ -296,49 +382,9 @@ public static class HumanoidRetargetClipBuilder
         IReadOnlyList<ImportedNode> targetNodes,
         IReadOnlyList<ImportedMesh> targetMeshes)
     {
-        var byKey =
-            targetNodes
-                .Select(
-                    (node, index) =>
-                        new
-                        {
-                            node.Key,
-                            Index =
-                                index
-                        })
-                .ToDictionary(
-                    item =>
-                        item.Key,
-                    item =>
-                        item.Index,
-                    StringComparer.Ordinal);
-
-        var parentIndices =
-            new int[
-                targetNodes.Count];
-
-        Array.Fill(
-            parentIndices,
-            -1);
-
-        for (int index = 0;
-             index < targetNodes.Count;
-             index++)
-        {
-            string? parentKey =
-                targetNodes[index]
-                    .ParentKey;
-
-            if (parentKey !=
-                    null &&
-                byKey.TryGetValue(
-                    parentKey,
-                    out int parent))
-            {
-                parentIndices[index] =
-                    parent;
-            }
-        }
+        int[] parentIndices =
+            BuildParentIndices(
+                targetNodes);
 
         var nodeByName =
             targetNodes
@@ -347,8 +393,7 @@ public static class HumanoidRetargetClipBuilder
                         new
                         {
                             node.Name,
-                            Index =
-                                index
+                            Index = index
                         })
                 .Where(
                     item =>
@@ -372,8 +417,7 @@ public static class HumanoidRetargetClipBuilder
                         new
                         {
                             bone.Name,
-                            Index =
-                                index
+                            Index = index
                         })
                 .Where(
                     item =>
@@ -422,12 +466,10 @@ public static class HumanoidRetargetClipBuilder
                 continue;
             }
 
-            boneNodeIndices[
-                boneIndex] =
+            boneNodeIndices[boneIndex] =
                 nodeIndex;
 
-            nodeBoneIndices[
-                nodeIndex] =
+            nodeBoneIndices[nodeIndex] =
                 boneIndex;
         }
 
@@ -442,60 +484,76 @@ public static class HumanoidRetargetClipBuilder
                 targetMeshes,
                 referenceNodeGlobals);
 
-        var bindToNodeCorrections =
-            new Matrix4x4[
-                targetSkeleton.Bones.Count];
-
-        Array.Fill(
-            bindToNodeCorrections,
-            Matrix4x4.Identity);
-
-        for (int boneIndex = 0;
-             boneIndex <
-                targetSkeleton.Bones.Count;
-             boneIndex++)
-        {
-            /*
-             * Keep every retargeted bone in the SAME imported skin frame.
-             *
-             * C9I inferred a frame per bone from vertex weights. Multi-part
-             * characters can have several mesh nodes, so that produced a pose
-             * assembled from several incompatible coordinate spaces and could
-             * detach hands/feet or bend chains even with correct mappings.
-             */
-            bindToNodeCorrections[
-                boneIndex] =
-                skeletonBindFrame;
-        }
-
-        return
-            new NodeRuntime(
-                targetNodes,
-                parentIndices,
-                boneNodeIndices,
-                nodeBoneIndices,
-                boneIndexByName,
-                bindToNodeCorrections);
+        return new NodeRuntime(
+            targetNodes,
+            parentIndices,
+            boneNodeIndices,
+            nodeBoneIndices,
+            boneIndexByName,
+            skeletonBindFrame);
     }
 
-    /// <summary>
-    /// Returns one coherent model-space frame for the target skin.
-    ///
-    /// Imported SkeletonAsset stores one inverse-bind transform per bone.
-    /// Therefore retarget output must not mix several mesh-node frames into
-    /// different bones of the same pose.
-    /// </summary>
+    private static int[] BuildParentIndices(
+        IReadOnlyList<ImportedNode> nodes)
+    {
+        var byKey =
+            nodes
+                .Select(
+                    (node, index) =>
+                        new
+                        {
+                            node.Key,
+                            Index = index
+                        })
+                .Where(
+                    item =>
+                        !string.IsNullOrWhiteSpace(
+                            item.Key))
+                .ToDictionary(
+                    item =>
+                        item.Key,
+                    item =>
+                        item.Index,
+                    StringComparer.Ordinal);
+
+        var parentIndices =
+            new int[
+                nodes.Count];
+
+        Array.Fill(
+            parentIndices,
+            -1);
+
+        for (int index = 0;
+             index < nodes.Count;
+             index++)
+        {
+            string? parentKey =
+                nodes[index]
+                    .ParentKey;
+
+            if (!string.IsNullOrWhiteSpace(
+                    parentKey) &&
+                byKey.TryGetValue(
+                    parentKey,
+                    out int parent))
+            {
+                parentIndices[index] =
+                    parent;
+            }
+        }
+
+        return parentIndices;
+    }
+
     private static Matrix4x4 ResolveSkeletonBindFrame(
         IReadOnlyList<ImportedNode> nodes,
         IReadOnlyList<ImportedMesh> meshes,
         IReadOnlyList<Matrix4x4> nodeGlobals)
     {
-        if (meshes.Count ==
-                0 ||
-            nodes.Count ==
-                0 ||
-            nodeGlobals.Count !=
-                nodes.Count)
+        if (meshes.Count == 0 ||
+            nodes.Count == 0 ||
+            nodeGlobals.Count != nodes.Count)
         {
             return Matrix4x4.Identity;
         }
@@ -505,8 +563,7 @@ public static class HumanoidRetargetClipBuilder
                 StringComparer.Ordinal);
 
         for (int nodeIndex = 0;
-             nodeIndex <
-                nodes.Count;
+             nodeIndex < nodes.Count;
              nodeIndex++)
         {
             foreach (string meshKey
@@ -533,33 +590,25 @@ public static class HumanoidRetargetClipBuilder
                 mesh.Vertices.Length /
                 8;
 
-            if (vertexCount <=
-                    0 ||
-                mesh.JointIndices.Length !=
-                    vertexCount ||
-                mesh.JointWeights.Length !=
-                    vertexCount)
+            if (vertexCount <= 0 ||
+                mesh.JointIndices.Length != vertexCount ||
+                mesh.JointWeights.Length != vertexCount)
             {
                 continue;
             }
 
             for (int vertexIndex = 0;
-                 vertexIndex <
-                    vertexCount;
+                 vertexIndex < vertexCount;
                  vertexIndex++)
             {
                 Vector4 weights =
                     mesh.JointWeights[
                         vertexIndex];
 
-                if (weights.X >
-                        0.00001f ||
-                    weights.Y >
-                        0.00001f ||
-                    weights.Z >
-                        0.00001f ||
-                    weights.W >
-                        0.00001f)
+                if (weights.X > 0.00001f ||
+                    weights.Y > 0.00001f ||
+                    weights.Z > 0.00001f ||
+                    weights.W > 0.00001f)
                 {
                     return meshFrame;
                 }
@@ -582,8 +631,7 @@ public static class HumanoidRetargetClipBuilder
                 nodes.Count];
 
         for (int index = 0;
-             index <
-                nodes.Count;
+             index < nodes.Count;
              index++)
         {
             Resolve(
@@ -595,15 +643,12 @@ public static class HumanoidRetargetClipBuilder
         Matrix4x4 Resolve(
             int index)
         {
-            if (state[index] ==
-                2)
+            if (state[index] == 2)
             {
-                return
-                    globals[index];
+                return globals[index];
             }
 
-            if (state[index] ==
-                1)
+            if (state[index] == 1)
             {
                 globals[index] =
                     nodes[index]
@@ -612,22 +657,21 @@ public static class HumanoidRetargetClipBuilder
                 state[index] =
                     2;
 
-                return
-                    globals[index];
+                return globals[index];
             }
 
             state[index] =
                 1;
 
             int parent =
-                parentIndices[
-                    index];
+                index <
+                    parentIndices.Count
+                    ? parentIndices[index]
+                    : -1;
 
             globals[index] =
-                parent >=
-                    0 &&
-                parent <
-                    nodes.Count
+                parent >= 0 &&
+                parent < nodes.Count
                     ? nodes[index]
                         .LocalTransform *
                       Resolve(
@@ -638,8 +682,7 @@ public static class HumanoidRetargetClipBuilder
             state[index] =
                 2;
 
-            return
-                globals[index];
+            return globals[index];
         }
     }
 
@@ -660,96 +703,73 @@ public static class HumanoidRetargetClipBuilder
              index++)
         {
             ResolveGlobal(
-                runtime,
-                retargetedBoneModels,
-                index,
-                globals,
-                state);
+                index);
         }
 
         return globals;
-    }
 
-    private static Matrix4x4 ResolveGlobal(
-        NodeRuntime runtime,
-        IReadOnlyList<Matrix4x4> retargetedBoneModels,
-        int index,
-        Matrix4x4[] globals,
-        byte[] state)
-    {
-        if (state[index] ==
-            2)
+        Matrix4x4 ResolveGlobal(
+            int index)
         {
-            return globals[index];
-        }
+            if (state[index] == 2)
+            {
+                return globals[index];
+            }
 
-        if (state[index] ==
-            1)
-        {
-            globals[index] =
-                runtime.Nodes[index]
-                    .LocalTransform;
+            if (state[index] == 1)
+            {
+                globals[index] =
+                    runtime.Nodes[index]
+                        .LocalTransform;
+
+                state[index] =
+                    2;
+
+                return globals[index];
+            }
 
             state[index] =
-                2;
+                1;
 
-            return globals[index];
-        }
+            int boneIndex =
+                runtime.NodeBoneIndices[
+                    index];
 
-        state[index] =
-            1;
-
-        int boneIndex =
-            runtime.NodeBoneIndices[
-                index];
-
-        if (boneIndex >=
-                0 &&
-            boneIndex <
-                retargetedBoneModels.Count)
-        {
-            Matrix4x4 correction =
+            if (boneIndex >= 0 &&
                 boneIndex <
-                    runtime.BindToNodeCorrections.Length
-                    ? runtime.BindToNodeCorrections[
-                        boneIndex]
-                    : Matrix4x4.Identity;
+                    retargetedBoneModels.Count)
+            {
+                globals[index] =
+                    retargetedBoneModels[
+                        boneIndex] *
+                    runtime.SkeletonBindFrame;
+
+                state[index] =
+                    2;
+
+                return globals[index];
+            }
+
+            int parent =
+                runtime.ParentIndices[
+                    index];
 
             globals[index] =
-                retargetedBoneModels[
-                    boneIndex] *
-                correction;
+                parent >= 0 &&
+                parent <
+                    runtime.Nodes.Count
+                    ? runtime.Nodes[index]
+                        .LocalTransform *
+                      ResolveGlobal(
+                          parent)
+                    : runtime.Nodes[index]
+                        .LocalTransform;
 
             state[index] =
                 2;
 
             return globals[index];
         }
-
-        int parent =
-            runtime.ParentIndices[
-                index];
-
-        globals[index] =
-            parent >=
-                0 &&
-            parent <
-                runtime.Nodes.Count
-                ? runtime.Nodes[index]
-                    .LocalTransform *
-                    ResolveGlobal(
-                        runtime,
-                        retargetedBoneModels,
-                        parent,
-                        globals,
-                        state)
-                : runtime.Nodes[index]
-                    .LocalTransform;
-
-        state[index] =
-            2;
-
-        return globals[index];
     }
 
     private static Matrix4x4 ToNodeLocal(
@@ -761,10 +781,8 @@ public static class HumanoidRetargetClipBuilder
             runtime.ParentIndices[
                 nodeIndex];
 
-        if (parent <
-                0 ||
-            parent >=
-                globals.Count)
+        if (parent < 0 ||
+            parent >= globals.Count)
         {
             return globals[
                 nodeIndex];
@@ -778,23 +796,20 @@ public static class HumanoidRetargetClipBuilder
                 nodeIndex];
         }
 
-        return
-            globals[nodeIndex] *
-            inverseParent;
+        return globals[nodeIndex] *
+               inverseParent;
     }
 
     private static float[] BuildSampleTimes(
         float duration,
         float samplesPerSecond)
     {
-        if (duration <=
-            0.000001f)
+        if (duration <= 0.000001f)
         {
-            return
-                new[]
-                {
-                    0.0f
-                };
+            return new[]
+            {
+                0.0f
+            };
         }
 
         int intervals =
@@ -806,21 +821,18 @@ public static class HumanoidRetargetClipBuilder
 
         var result =
             new float[
-                intervals +
-                1];
+                intervals + 1];
 
         for (int index = 0;
-             index <=
-                intervals;
+             index <= intervals;
              index++)
         {
             result[index] =
-                index ==
-                    intervals
+                index == intervals
                     ? duration
                     : duration *
-                        index /
-                        intervals;
+                      index /
+                      intervals;
         }
 
         return result;
@@ -889,5 +901,5 @@ public static class HumanoidRetargetClipBuilder
         int[] BoneNodeIndices,
         int[] NodeBoneIndices,
         IReadOnlyDictionary<string, int> BoneIndexByName,
-        Matrix4x4[] BindToNodeCorrections);
+        Matrix4x4 SkeletonBindFrame);
 }
