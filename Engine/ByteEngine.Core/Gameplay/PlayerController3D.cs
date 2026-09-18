@@ -52,13 +52,12 @@ public sealed class PlayerController3D : Component
     private bool _idleTurnInPlaceActive;
 
     /*
-     * TPS-E behavior-validation defaults.
-     * These stay private for this test pass; persistence/editor exposure comes
-     * after the corrected feel is visually approved.
+     * TPS-E turn-in-place defaults. These values were visually validated before
+     * being promoted to normal authorable component properties.
      */
-    private const float IdleTurnStartAngleDegrees = 60f;
-    private const float IdleTurnFinishAngleDegrees = 5f;
-    private const float IdleTurnSpeedDegreesPerSecond = 300f;
+    private float _idleTurnStartAngle = 60f;
+    private float _idleTurnFinishAngle = 5f;
+    private float _idleTurnSpeed = 300f;
 
     public InputActionReference MoveAction { get; set; } = InputActionReference.Named("Move");
     public InputActionReference LookAction { get; set; } = InputActionReference.Named("Look");
@@ -84,6 +83,54 @@ public sealed class PlayerController3D : Component
     {
         get => _turnSpeed;
         set => _turnSpeed = Positive(value);
+    }
+
+    /// <summary>
+    /// Camera/body yaw separation allowed while idle before FaceMovement starts
+    /// a turn-in-place. Range: 0..180 degrees.
+    /// </summary>
+    public float IdleTurnStartAngle
+    {
+        get => _idleTurnStartAngle;
+        set
+        {
+            _idleTurnStartAngle =
+                Math.Clamp(
+                    Positive(value),
+                    0f,
+                    180f);
+
+            if (_idleTurnFinishAngle >
+                _idleTurnStartAngle)
+            {
+                _idleTurnFinishAngle =
+                    _idleTurnStartAngle;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Remaining yaw difference at which an active idle turn is considered
+    /// complete. Clamped so it cannot exceed IdleTurnStartAngle.
+    /// </summary>
+    public float IdleTurnFinishAngle
+    {
+        get => _idleTurnFinishAngle;
+        set =>
+            _idleTurnFinishAngle =
+                Math.Clamp(
+                    Positive(value),
+                    0f,
+                    IdleTurnStartAngle);
+    }
+
+    /// <summary>
+    /// Rotation speed used only by idle FaceMovement turn-in-place.
+    /// </summary>
+    public float IdleTurnSpeed
+    {
+        get => _idleTurnSpeed;
+        set => _idleTurnSpeed = Positive(value);
     }
 
     public float ControlYaw
@@ -285,7 +332,7 @@ public sealed class PlayerController3D : Component
             if (!_idleTurnInPlaceActive)
             {
                 if (absoluteDelta <
-                    IdleTurnStartAngleDegrees)
+                    IdleTurnStartAngle)
                 {
                     _desiredCharacterYaw =
                         NormalizeAngle(euler.Y);
@@ -303,7 +350,7 @@ public sealed class PlayerController3D : Component
              * instead of stopping with a visible body/camera mismatch.
              */
             if (absoluteDelta <=
-                IdleTurnFinishAngleDegrees)
+                IdleTurnFinishAngle)
             {
                 euler.Y =
                     cameraFacingYaw;
@@ -319,7 +366,7 @@ public sealed class PlayerController3D : Component
                 MoveTowardsAngle(
                     euler.Y,
                     _desiredCharacterYaw,
-                    IdleTurnSpeedDegreesPerSecond *
+                    IdleTurnSpeed *
                     Math.Max(deltaTime, 0f));
 
             player.Transform.EulerAngles =

@@ -15,6 +15,15 @@ public sealed class SceneSerializer
     private const string TpsDCollisionSafetyMarginProperty =
         "collisionSafetyMargin";
 
+    private const string TpsEIdleTurnStartAngleProperty =
+        "idleTurnStartAngle";
+
+    private const string TpsEIdleTurnFinishAngleProperty =
+        "idleTurnFinishAngle";
+
+    private const string TpsEIdleTurnSpeedProperty =
+        "idleTurnSpeed";
+
     private readonly ComponentSerializer _components;
     private readonly ClassificationSettings? _classification;
 
@@ -326,13 +335,27 @@ public sealed class SceneSerializer
         Component component,
         ComponentData componentData)
     {
-        if (component is not CameraBoom3D boom)
+        if (component is CameraBoom3D boom)
         {
-            return;
+            componentData.Properties[TpsDCollisionSafetyMarginProperty] =
+                boom.CollisionSafetyMargin;
         }
 
-        componentData.Properties[TpsDCollisionSafetyMarginProperty] =
-            boom.CollisionSafetyMargin;
+        if (component is PlayerController3D player)
+        {
+            /*
+             * TPS-E settings are persisted here while the legacy component
+             * codec remains backwards compatible with older scene formats.
+             */
+            componentData.Properties[TpsEIdleTurnStartAngleProperty] =
+                player.IdleTurnStartAngle;
+
+            componentData.Properties[TpsEIdleTurnFinishAngleProperty] =
+                player.IdleTurnFinishAngle;
+
+            componentData.Properties[TpsEIdleTurnSpeedProperty] =
+                player.IdleTurnSpeed;
+        }
     }
 
     /// <summary>
@@ -347,6 +370,44 @@ public sealed class SceneSerializer
         Component component,
         ComponentData componentData)
     {
+        if (component is PlayerController3D player)
+        {
+            /*
+             * The legacy PlayerController3D codec predates standard TPS-B/E and
+             * still falls back to local movement + FaceCamera when properties
+             * are missing. Correct only missing data here so explicitly authored
+             * legacy aim/strafe scenes remain untouched.
+             */
+            if (componentData.Properties["useLocalOrientation"] ==
+                null)
+            {
+                player.UseLocalOrientation =
+                    false;
+            }
+
+            if (componentData.Properties["characterRotation"] ==
+                null)
+            {
+                player.CharacterRotation =
+                    CharacterRotationMode.FaceMovement;
+            }
+
+            player.IdleTurnStartAngle =
+                componentData.Properties[TpsEIdleTurnStartAngleProperty]?
+                    .GetValue<float>() ??
+                60f;
+
+            player.IdleTurnFinishAngle =
+                componentData.Properties[TpsEIdleTurnFinishAngleProperty]?
+                    .GetValue<float>() ??
+                5f;
+
+            player.IdleTurnSpeed =
+                componentData.Properties[TpsEIdleTurnSpeedProperty]?
+                    .GetValue<float>() ??
+                300f;
+        }
+
         if (component is not CameraBoom3D boom)
         {
             return;
