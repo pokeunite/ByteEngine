@@ -15,6 +15,7 @@ internal static class TpsStableCameraFramingTests
     {
         VerifyStableTpsDefaults();
         VerifyViewForwardMatchesInverseOrbit();
+        VerifyCameraRightMatchesYawConvention();
         VerifyShoulderOffsetDoesNotChangeViewDirection();
     }
 
@@ -56,6 +57,41 @@ internal static class TpsStableCameraFramingTests
             -Vector3.Normalize(orbit),
             .0001f,
             "TPS-C: camera forward must be the inverse of the boom orbit direction.");
+    }
+
+    private static void VerifyCameraRightMatchesYawConvention()
+    {
+        const float yaw =
+            45f;
+
+        Vector3 forward =
+            CameraBoom3D.CalculateViewForward(
+                yaw,
+                0f);
+
+        Vector3 right =
+            CameraBoom3D.CalculateCameraRight(
+                yaw);
+
+        Vector3 expected =
+            Vector3.Normalize(
+                Vector3.Cross(
+                    forward,
+                    Vector3.UnitY));
+
+        AssertNear(
+            right,
+            expected,
+            .0001f,
+            "TPS-C: camera right does not match the boom yaw convention.");
+
+        Assert(
+            MathF.Abs(
+                Vector3.Dot(
+                    forward,
+                    right)) <
+            .0001f,
+            "TPS-C: shoulder-right vector must remain perpendicular to camera forward.");
     }
 
     private static void VerifyShoulderOffsetDoesNotChangeViewDirection()
