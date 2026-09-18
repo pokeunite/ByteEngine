@@ -1,6 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Classification;
@@ -58,6 +59,23 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     private float _smoothedBoomYaw;
     private float _smoothedBoomPitch;
 
+    /*
+     * TPS-D near-owner protection.
+     *
+     * When an obstacle forces the spring arm almost all the way into the
+     * character, keeping the player mesh visible can put the camera inside the
+     * torso/head. That produces the large inside-out polygons seen in the test
+     * recording even though wall collision itself is working correctly.
+     *
+     * Hide and show use separate distances to avoid visibility flicker while
+     * the boom hovers around the threshold.
+     */
+    private const float NearOwnerHideDistance = 1.0f;
+    private const float NearOwnerShowDistance = 1.2f;
+    private readonly List<MeshRenderer> _hiddenOwnerMeshRenderers = new();
+    private readonly List<SkeletalMeshRenderer> _hiddenOwnerSkeletalRenderers = new();
+    private bool _ownerRenderersHidden;
+
     public Guid CameraObjectId { get; set; }
     public bool UseControlRotation { get; set; } = true;
     public float ArmLength { get => _armLength; set => _armLength = Positive(value); }
@@ -70,24 +88,29 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float MouseSensitivityY { get => _mouseSensitivityY; set => _mouseSensitivityY = Positive(value); }
     public bool InvertHorizontalLook { get; set; }
     public bool InvertVerticalLook { get; set; }
+
     /// <summary>
-/// Optional cinematic position lag. Standard TPS keeps this disabled so the
-/// player remains locked to a stable camera pivot.
-/// </summary>
+    /// Optional cinematic position lag. Standard TPS keeps this disabled so the
+    /// player remains locked to a stable camera pivot.
+    /// </summary>
     public bool CameraLagEnabled { get; set; } = false;
+
     /// <summary>
-/// Optional camera-rotation lag. Standard TPS follows control rotation directly.
-/// </summary>
+    /// Optional camera-rotation lag. Standard TPS follows control rotation directly.
+    /// </summary>
     public bool RotationLagEnabled { get; set; } = false;
+
     public bool LagSubstepping { get; set; } = true;
     public float PositionSmoothness { get => _positionSmoothness; set => _positionSmoothness = Positive(value); }
     public float RotationSmoothness { get => _rotationSmoothness; set => _rotationSmoothness = Positive(value); }
     public float MaximumLagDistance { get => _maxLagDistance; set => _maxLagDistance = Positive(value); }
     public float MaxLagTimeStep { get => _maxLagTimeStep; set => _maxLagTimeStep = Math.Clamp(Positive(value), .001f, .1f); }
     public float ShoulderOffset { get => _shoulderOffset; set => _shoulderOffset = Finite(value); }
+
     /// <summary>
     /// Unreal-style camera probe. New TPS rigs default this on.
-    /// Existing scenes that explicitly serialized false keep their authored value.
+    /// Existing scenes are migrated by SceneSerializer so pre-TPS-D serialized
+    /// false values do not silently disable collision forever.
     /// </summary>
     public bool EnableCameraCollision { get; set; } = true;
 
@@ -120,6 +143,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         get => _collisionReturnSpeed;
         set => _collisionReturnSpeed = Positive(value);
     }
+
     public Vector3 DesiredSocketPosition => _desiredSocketPosition;
     public Vector3 ActualSocketPosition => _actualSocketPosition;
     public float DesiredBoomYaw => _desiredBoomYaw;
@@ -168,6 +192,22 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         return orbit.LengthSquared() > .000001f
             ? -Vector3.Normalize(orbit)
             : new Vector3(0f, 0f, -1f);
+    }
+
+    /// <summary>
+    /// Horizontal camera-right vector for the boom yaw convention.
+    /// This must stay perpendicular to the camera's horizontal view direction;
+    /// otherwise shoulder framing also moves the camera forward/backward and
+    /// corrupts collision distance while orbiting.
+    /// </summary>
+    public static Vector3 CalculateCameraRight(float yawDegrees)
+    {
+        float yaw = Radians(Finite(yawDegrees));
+
+        return new Vector3(
+            MathF.Cos(yaw),
+            0f,
+            MathF.Sin(yaw));
     }
 
     public static float SmoothAngle(float current, float target, float speed, float deltaTime)
@@ -263,13 +303,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
          * socket/framing offset; it does not change what direction the camera
          * is looking.
          */
-        float yawRadians = Radians(_smoothedBoomYaw);
-
         Vector3 right =
-            new(
-                MathF.Cos(yawRadians),
-                0f,
-                -MathF.Sin(yawRadians));
+            CalculateCameraRight(
+                _smoothedBoomYaw);
 
         Vector3 orbitOffset =
             CalculateOrbitVector(
@@ -353,6 +389,14 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         _cameraObject.Transform.WorldPosition = _actualSocketPosition;
 
         /*
+         * Keep the working spring-arm collision response intact. If that
+         * response necessarily places the camera inside the player's visual
+         * geometry, temporarily hide only renderers owned by the player
+         * hierarchy. Camera-attached visuals are deliberately excluded.
+         */
+        UpdateNearOwnerVisibility(root);
+
+        /*
          * Do not LookAt(pivot) here. With a shoulder offset, LookAt forces the
          * player back into screen center and defeats over-the-shoulder framing.
          * Unreal-style spring arms keep the camera aligned to control rotation.
@@ -364,6 +408,104 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
 
         _cameraObject.Transform.WorldRotation =
             LookRotation(viewForward);
+    }
+
+    private void UpdateNearOwnerVisibility(GameObject root)
+    {
+        if (!_ownerRenderersHidden)
+        {
+            if (_actualLength > NearOwnerHideDistance)
+            {
+                return;
+            }
+
+            HideOwnerRenderers(root);
+            return;
+        }
+
+        if (_actualLength < NearOwnerShowDistance)
+        {
+            return;
+        }
+
+        RestoreOwnerRenderers();
+    }
+
+    private void HideOwnerRenderers(GameObject root)
+    {
+        _hiddenOwnerMeshRenderers.Clear();
+        _hiddenOwnerSkeletalRenderers.Clear();
+
+        foreach (GameObject item in SelfAndDescendants(root))
+        {
+            /*
+             * A Camera3D normally has no mesh, but excluding the camera subtree
+             * keeps camera-mounted weapons/effects safe if a project adds them.
+             */
+            if (_cameraObject != null &&
+                (ReferenceEquals(item, _cameraObject) ||
+                 item.IsDescendantOf(_cameraObject)))
+            {
+                continue;
+            }
+
+            foreach (Component component in item.Components)
+            {
+                if (component is MeshRenderer meshRenderer &&
+                    meshRenderer.Visible)
+                {
+                    _hiddenOwnerMeshRenderers.Add(meshRenderer);
+                    meshRenderer.Visible = false;
+                }
+                else if (component is SkeletalMeshRenderer skeletalRenderer &&
+                         skeletalRenderer.Visible)
+                {
+                    _hiddenOwnerSkeletalRenderers.Add(skeletalRenderer);
+                    skeletalRenderer.Visible = false;
+                }
+            }
+        }
+
+        _ownerRenderersHidden =
+            _hiddenOwnerMeshRenderers.Count > 0 ||
+            _hiddenOwnerSkeletalRenderers.Count > 0;
+    }
+
+    private void RestoreOwnerRenderers()
+    {
+        foreach (MeshRenderer renderer in _hiddenOwnerMeshRenderers)
+        {
+            renderer.Visible = true;
+        }
+
+        foreach (SkeletalMeshRenderer renderer in _hiddenOwnerSkeletalRenderers)
+        {
+            renderer.Visible = true;
+        }
+
+        _hiddenOwnerMeshRenderers.Clear();
+        _hiddenOwnerSkeletalRenderers.Clear();
+        _ownerRenderersHidden = false;
+    }
+
+    private static IEnumerable<GameObject> SelfAndDescendants(GameObject root)
+    {
+        yield return root;
+
+        foreach (GameObject descendant in Descendants(root))
+        {
+            yield return descendant;
+        }
+    }
+
+    protected override void OnStop()
+    {
+        RestoreOwnerRenderers();
+    }
+
+    protected override void OnDestroy()
+    {
+        RestoreOwnerRenderers();
     }
 
     private GameObject? ResolveCamera(GameObject root, RuntimeScene scene)
@@ -422,6 +564,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("StableFollow.DefaultPositionLag", false);
         writer.Add("StableFollow.DefaultRotationLag", false);
         writer.Add("ViewForward", CalculateViewForward(_smoothedBoomYaw, _smoothedBoomPitch));
+        writer.Add("CameraRight", CalculateCameraRight(_smoothedBoomYaw));
         writer.Add("DesiredSocketPosition", _desiredSocketPosition);
         writer.Add("ActualSocketPosition", _actualSocketPosition);
         writer.Add("RootPosition", root?.Transform.WorldPosition);
@@ -438,6 +581,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("Collision.HitObject", Describe(_collisionObject));
         writer.Add("Collision.DesiredLength", ArmLength);
         writer.Add("Collision.ActualLength", _actualLength);
+        writer.Add("NearOwner.Hidden", _ownerRenderersHidden);
+        writer.Add("NearOwner.HideDistance", NearOwnerHideDistance);
+        writer.Add("NearOwner.ShowDistance", NearOwnerShowDistance);
     }
 
     private static string Describe(GameObject? value) => value == null ? "<none>" : $"{value.Name} ({value.Id})";
