@@ -19,6 +19,7 @@ internal static class TpsCameraCollisionRegressionTests
     {
         VerifyCollisionDefaults();
         VerifySphereRadiusIsNotSubtractedTwice();
+        VerifySolidWallPullsCameraIn();
         VerifyCameraProbeIgnoresTriggers();
     }
 
@@ -62,6 +63,115 @@ internal static class TpsCameraCollisionRegressionTests
             2.15f,
             .0001f,
             "TPS-D: sphere-cast radius appears to be subtracted twice.");
+    }
+
+    private static void VerifySolidWallPullsCameraIn()
+    {
+        var scene =
+            new Scene(
+                "TPS-D Solid Wall Probe");
+
+        GameObject player =
+            scene.CreateGameObject(
+                "Player");
+
+        var boom =
+            player.AddComponent(
+                new CameraBoom3D
+                {
+                    ArmLength =
+                        5f,
+
+                    PivotHeight =
+                        1.5f,
+
+                    Yaw =
+                        0f,
+
+                    Pitch =
+                        0f,
+
+                    ShoulderOffset =
+                        0f,
+
+                    CollisionRadius =
+                        .2f,
+
+                    CollisionSafetyMargin =
+                        .05f,
+
+                    EnableCameraCollision =
+                        true,
+
+                    CameraLagEnabled =
+                        false,
+
+                    RotationLagEnabled =
+                        false
+                });
+
+        GameObject cameraObject =
+            scene.CreateGameObject(
+                "Camera");
+
+        cameraObject.SetParent(
+            player,
+            false);
+
+        Camera3D camera =
+            cameraObject.AddComponent(
+                new Camera3D
+                {
+                    ActiveGameCamera =
+                        true
+                });
+
+        boom.CameraObjectId =
+            cameraObject.Id;
+
+        scene.SetActiveCamera(
+            camera);
+
+        GameObject wall =
+            scene.CreateGameObject(
+                "Solid Wall");
+
+        wall.Transform.WorldPosition =
+            new Vector3(
+                0f,
+                1.5f,
+                2.5f);
+
+        wall.AddComponent(
+            new BoxCollider3D
+            {
+                Size =
+                    new Vector3(
+                        4f,
+                        4f,
+                        .25f),
+
+                IsTrigger =
+                    false
+            });
+
+        scene.LoadInternal();
+
+        /*
+         * Wall front face is at Z=2.375. The .2 sphere radius expands that
+         * surface toward the pivot to 2.175, then the .05 safety margin keeps
+         * the final camera center at 2.125.
+         */
+        AssertNear(
+            boom.ActualArmLength,
+            2.125f,
+            .001f,
+            "TPS-D: solid wall did not pull the camera in to the sphere-safe distance.");
+
+        Assert(
+            boom.ActualArmLength <
+            boom.ArmLength,
+            "TPS-D: solid wall left the camera at full boom length.");
     }
 
     private static void VerifyCameraProbeIgnoresTriggers()
