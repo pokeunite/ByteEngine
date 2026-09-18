@@ -116,6 +116,7 @@ public static class HumanoidRetargetRuntime
                 targetModel.HumanoidMapping,
                 targetModel.ReferenceHumanoidPose!,
                 targetModel.Nodes,
+                targetModel.Meshes,
                 sourceModel.Guid,
                 targetModel.Guid,
                 runtimeName,
@@ -206,6 +207,18 @@ public static class HumanoidRetargetRuntime
         {
             throw new InvalidOperationException(
                 $"The {role} model '{model.Name}' has an incomplete Humanoid mapping.");
+        }
+
+        HumanoidRigDiagnosticReport diagnostics =
+            HumanoidRigDiagnostics.Analyze(
+                model.Skeleton,
+                model.HumanoidMapping);
+
+        if (diagnostics.Errors.Count >
+            0)
+        {
+            throw new InvalidOperationException(
+                $"The {role} model '{model.Name}' has an invalid Humanoid hierarchy: {string.Join(" | ", diagnostics.Errors)}");
         }
     }
 

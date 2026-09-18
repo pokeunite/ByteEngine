@@ -603,17 +603,31 @@ internal sealed class AnimationProfileWorkspacePanel
                 _project.Assets.LoadModel(
                     referenceModel);
 
+            HumanoidRigDiagnosticReport sourceDiagnostics =
+                HumanoidRigDiagnostics.Analyze(
+                    sourceModel.Skeleton,
+                    sourceModel.HumanoidMapping);
+
+            HumanoidRigDiagnosticReport targetDiagnostics =
+                HumanoidRigDiagnostics.Analyze(
+                    targetModel.Skeleton,
+                    targetModel.HumanoidMapping);
+
             bool sourceReady =
                 sourceModel.RigType ==
                     AnimationRigType.Humanoid &&
                 sourceModel.ReferenceHumanoidPose?.IsReady ==
-                    true;
+                    true &&
+                sourceDiagnostics.Errors.Count ==
+                    0;
 
             bool targetReady =
                 targetModel.RigType ==
                     AnimationRigType.Humanoid &&
                 targetModel.ReferenceHumanoidPose?.IsReady ==
-                    true;
+                    true &&
+                targetDiagnostics.Errors.Count ==
+                    0;
 
             if (sourceReady &&
                 targetReady)
@@ -642,13 +656,19 @@ internal sealed class AnimationProfileWorkspacePanel
                 if (!targetReady)
                 {
                     ImGui.BulletText(
-                        "Reference Model must be a ready Humanoid.");
+                        targetDiagnostics.Errors.Count >
+                            0
+                            ? "Reference Model Humanoid hierarchy has mapping errors."
+                            : "Reference Model must be a ready Humanoid.");
                 }
 
                 if (!sourceReady)
                 {
                     ImGui.BulletText(
-                        "Animation Source Model must be a ready Humanoid.");
+                        sourceDiagnostics.Errors.Count >
+                            0
+                            ? "Animation Source Humanoid hierarchy has mapping errors."
+                            : "Animation Source Model must be a ready Humanoid.");
                 }
             }
 

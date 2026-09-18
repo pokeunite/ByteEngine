@@ -13,6 +13,8 @@ internal static class C9HumanoidRetargetClipBuilderTests
     {
         VerifyRetargetedClipUsesTargetBoneNames();
         VerifyTargetBoneLengthsRemainTargetAuthored();
+        VerifyTargetNodeRootConversionIsPreserved();
+        VerifyMeshBindFrameWinsOverAuthoredNodePose();
     }
 
     private static void VerifyRetargetedClipUsesTargetBoneNames()
@@ -130,6 +132,355 @@ internal static class C9HumanoidRetargetClipBuilderTests
             last,
             0.0001f,
             "C9E: retargeted arm animation changed target-authored bone length/local offset.");
+    }
+
+    private static void VerifyTargetNodeRootConversionIsPreserved()
+    {
+        Fixture source =
+            CreateFixture(
+                "Src",
+                1.0f);
+
+        Fixture targetBase =
+            CreateFixture(
+                "Dst",
+                2.0f);
+
+        Matrix4x4 conversion =
+            Matrix4x4.CreateRotationX(
+                15.0f *
+                MathF.PI /
+                180.0f) *
+            Matrix4x4.CreateTranslation(
+                new Vector3(
+                    0.0f,
+                    5.0f,
+                    -2.0f));
+
+        Fixture target =
+            AddNodeConversionRoot(
+                targetBase,
+                conversion);
+
+        ImportedAnimation sourceClip =
+            CreateSourceClip(
+                source);
+
+        ImportedAnimation generated =
+            HumanoidRetargetClipBuilder.Build(
+                source.Skeleton,
+                source.Mapping,
+                source.ReferencePose,
+                sourceClip,
+                target.Skeleton,
+                target.Mapping,
+                target.ReferencePose,
+                target.Nodes,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Converted Root Target",
+                30.0f);
+
+        string targetHips =
+            target.Mapping.GetBoneName(
+                HumanoidBone.Hips)
+            ?? throw new InvalidOperationException();
+
+        ImportedAnimationChannel hips =
+            generated.FindChannel(
+                targetHips)
+            ?? throw new InvalidOperationException(
+                "C9H: target Hips channel missing from converted-root retarget clip.");
+
+        Vector3 generatedFirst =
+            hips.Translation!
+                .Keys[0]
+                .Value;
+
+        Vector3 expectedLocal =
+            LocalTranslation(
+                target,
+                HumanoidBone.Hips);
+
+        AssertNear(
+            generatedFirst,
+            expectedLocal,
+            0.001f,
+            "C9H: target ImportedNode root/conversion transform leaked into the generated Hips local track.");
+    }
+
+    private static void VerifyMeshBindFrameWinsOverAuthoredNodePose()
+    {
+        Fixture source =
+            CreateFixture(
+                "Src",
+                1.0f);
+
+        Fixture target =
+            CreateFixture(
+                "Dst",
+                1.0f);
+
+        string targetArmName =
+            target.Mapping.GetBoneName(
+                HumanoidBone.LeftUpperArm)
+            ?? throw new InvalidOperationException();
+
+        string targetHipsName =
+            target.Mapping.GetBoneName(
+                HumanoidBone.Hips)
+            ?? throw new InvalidOperationException();
+
+        const string meshNodeKey =
+            "node:test-skinned-mesh";
+
+        const string meshKey =
+            "mesh:test-skinned-mesh";
+
+        Matrix4x4 meshFrame =
+            Matrix4x4.CreateTranslation(
+                new Vector3(
+                    0.0f,
+                    4.0f,
+                    -1.0f));
+
+        var nodes =
+            new List<ImportedNode>
+            {
+                new()
+                {
+                    Key =
+                        meshNodeKey,
+
+                    Name =
+                        "SkinnedMeshRoot",
+
+                    LocalTransform =
+                        meshFrame,
+
+                    MeshKeys =
+                        new List<string>
+                        {
+                            meshKey
+                        }
+                }
+            };
+
+        foreach (ImportedNode node
+                 in target.Nodes)
+        {
+            Matrix4x4 local =
+                node.LocalTransform;
+
+            if (string.Equals(
+                    node.Name,
+                    targetArmName,
+                    StringComparison.Ordinal))
+            {
+                Matrix4x4.Decompose(
+                    local,
+                    out Vector3 scale,
+                    out _,
+                    out Vector3 translation);
+
+                local =
+                    Matrix4x4.CreateScale(
+                        scale) *
+                    Matrix4x4.CreateFromQuaternion(
+                        Quaternion.CreateFromAxisAngle(
+                            Vector3.UnitZ,
+                            35.0f *
+                            MathF.PI /
+                            180.0f)) *
+                    Matrix4x4.CreateTranslation(
+                        translation);
+            }
+
+            nodes.Add(
+                new ImportedNode
+                {
+                    Key =
+                        node.Key,
+
+                    Name =
+                        node.Name,
+
+                    ParentKey =
+                        string.Equals(
+                            node.Name,
+                            targetHipsName,
+                            StringComparison.Ordinal)
+                            ? meshNodeKey
+                            : node.ParentKey,
+
+                    LocalTransform =
+                        local,
+
+                    MeshKeys =
+                        node.MeshKeys.ToList()
+                });
+        }
+
+        int boneCount =
+            target.Skeleton.Bones.Count;
+
+        var vertices =
+            new float[
+                boneCount *
+                8];
+
+        var jointIndices =
+            new Vector4[
+                boneCount];
+
+        var jointWeights =
+            new Vector4[
+                boneCount];
+
+        for (int boneIndex = 0;
+             boneIndex <
+                boneCount;
+             boneIndex++)
+        {
+            jointIndices[boneIndex] =
+                new Vector4(
+                    boneIndex,
+                    0.0f,
+                    0.0f,
+                    0.0f);
+
+            jointWeights[boneIndex] =
+                new Vector4(
+                    1.0f,
+                    0.0f,
+                    0.0f,
+                    0.0f);
+        }
+
+        ImportedMesh[] meshes =
+        {
+            new()
+            {
+                Key =
+                    meshKey,
+
+                Name =
+                    "Test Skin",
+
+                Vertices =
+                    vertices,
+
+                JointIndices =
+                    jointIndices,
+
+                JointWeights =
+                    jointWeights
+            }
+        };
+
+        ImportedAnimation generated =
+            HumanoidRetargetClipBuilder.Build(
+                source.Skeleton,
+                source.Mapping,
+                source.ReferencePose,
+                CreateSourceClip(
+                    source),
+                target.Skeleton,
+                target.Mapping,
+                target.ReferencePose,
+                nodes,
+                meshes,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Bind Frame Test",
+                30.0f);
+
+        ImportedAnimationChannel arm =
+            generated.FindChannel(
+                targetArmName)
+            ?? throw new InvalidOperationException(
+                "C9I: target LeftUpperArm channel missing from bind-frame test.");
+
+        Quaternion firstRotation =
+            arm.Rotation!
+                .Keys[0]
+                .Value;
+
+        float dot =
+            MathF.Abs(
+                Quaternion.Dot(
+                    Quaternion.Normalize(
+                        firstRotation),
+                    Quaternion.Identity));
+
+        Assert(
+            dot >
+                0.999f,
+            "C9I: authored/static node pose leaked into the retargeted bind pose instead of using the skin bind frame.");
+    }
+
+    private static Fixture AddNodeConversionRoot(
+        Fixture fixture,
+        Matrix4x4 conversion)
+    {
+        string hipsName =
+            fixture.Mapping.GetBoneName(
+                HumanoidBone.Hips)
+            ?? throw new InvalidOperationException();
+
+        const string rootKey =
+            "node:byteengine-test-conversion-root";
+
+        var nodes =
+            new List<ImportedNode>
+            {
+                new()
+                {
+                    Key =
+                        rootKey,
+
+                    Name =
+                        "ArmatureConversion",
+
+                    LocalTransform =
+                        conversion
+                }
+            };
+
+        foreach (ImportedNode node
+                 in fixture.Nodes)
+        {
+            nodes.Add(
+                new ImportedNode
+                {
+                    Key =
+                        node.Key,
+
+                    Name =
+                        node.Name,
+
+                    ParentKey =
+                        string.Equals(
+                            node.Name,
+                            hipsName,
+                            StringComparison.Ordinal)
+                            ? rootKey
+                            : node.ParentKey,
+
+                    LocalTransform =
+                        node.LocalTransform,
+
+                    MeshKeys =
+                        node.MeshKeys.ToList()
+                });
+        }
+
+        return
+            new Fixture(
+                fixture.Skeleton,
+                fixture.Mapping,
+                fixture.ReferencePose,
+                nodes);
     }
 
     private static ImportedAnimation CreateSourceClip(

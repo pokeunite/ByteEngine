@@ -75,6 +75,9 @@ internal sealed class HumanoidRigConfiguratorPanel
 
     private bool _mappedBonesOnly;
 
+    private bool _autoAdvanceRequired =
+        true;
+
     public void Open(
         AssetRecord asset,
         EditorProjectContext project,
@@ -313,6 +316,8 @@ internal sealed class HumanoidRigConfiguratorPanel
                 _rigType =
                     AnimationRigType.Humanoid;
 
+                SelectFirstMissingRequired();
+
                 _dirty =
                     true;
             }
@@ -376,6 +381,8 @@ internal sealed class HumanoidRigConfiguratorPanel
                 _mapping =
                     HumanoidRigMapper.AutoMap(
                         _model.Skeleton);
+
+                SelectFirstMissingRequired();
             }
 
             _dirty =
@@ -435,7 +442,12 @@ internal sealed class HumanoidRigConfiguratorPanel
                 _model.Skeleton,
                 _mapping);
 
-        if (validation.IsReady)
+        bool authoringReady =
+            validation.IsReady &&
+            diagnostics.Errors.Count ==
+                0;
+
+        if (authoringReady)
         {
             ImGui.TextColored(
                 new Vector4(
@@ -499,49 +511,508 @@ internal sealed class HumanoidRigConfiguratorPanel
         }
 
         ImGui.SeparatorText(
-            "SELECTED HUMANOID SLOT");
+            "BODY MAP");
 
-        ImGui.Text(
+        ImGui.TextWrapped(
+            "1. Click a body joint below.  2. Click the matching joint on the source skeleton.");
+
+        ImGui.TextDisabled(
+            "Green = mapped   Red = required missing   Gray = optional   Orange = selected");
+
+        DrawHumanoidBodyMap();
+
+        ImGui.SeparatorText(
+            "CURRENT MAPPING");
+
+        string selectedName =
             HumanoidRigAuthoring.DisplayName(
-                _selectedSemantic));
+                _selectedSemantic);
 
         string? current =
             _mapping.GetBoneName(
                 _selectedSemantic);
 
-        ImGui.TextDisabled(
-            current ==
-                null
-                ? "Source bone: None"
-                : $"Source bone: {current}");
+        if (current ==
+            null)
+        {
+            ImGui.TextColored(
+                HumanoidBoneCatalog.IsRequired(
+                    _selectedSemantic)
+                    ? new Vector4(
+                        1.0f,
+                        0.55f,
+                        0.30f,
+                        1.0f)
+                    : new Vector4(
+                        0.78f,
+                        0.82f,
+                        0.88f,
+                        1.0f),
+                $"{selectedName}  ->  Not mapped");
+        }
+        else
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    0.35f,
+                    0.86f,
+                    0.48f,
+                    1.0f),
+                $"{selectedName}  ->  {current}");
+        }
 
         DrawSearchableSourceBonePicker();
 
-        ImGui.SeparatorText(
-            "HUMANOID SLOTS");
+        if (current !=
+                null &&
+            ImGui.Button(
+                "Clear Selected"))
+        {
+            _mapping.ClearBone(
+                _selectedSemantic);
 
-        ImGui.InputTextWithHint(
-            "##SemanticSearch",
-            "Search humanoid slots...",
-            ref _semanticSearch,
-            96);
+            _dirty =
+                true;
+        }
 
-        DrawSemanticSection(
-            "Required",
-            HumanoidBoneCatalog.Required);
+        ImGui.SameLine();
 
-        HumanoidBone[] optional =
-            Enum.GetValues<HumanoidBone>()
-                .Where(
-                    bone =>
-                        !HumanoidBoneCatalog.IsRequired(
-                            bone))
-                .ToArray();
+        ImGui.Checkbox(
+            "Auto-advance required bones",
+            ref _autoAdvanceRequired);
 
-        DrawSemanticSection(
-            "Optional",
-            optional);
+        if (ImGui.TreeNode(
+                "Advanced Bone List"))
+        {
+            ImGui.TextDisabled(
+                "Use this only when you want precise slot-by-slot editing.");
+
+            ImGui.InputTextWithHint(
+                "##SemanticSearch",
+                "Search humanoid slots...",
+                ref _semanticSearch,
+                96);
+
+            DrawSemanticSection(
+                "Required",
+                HumanoidBoneCatalog.Required);
+
+            HumanoidBone[] optional =
+                Enum.GetValues<HumanoidBone>()
+                    .Where(
+                        bone =>
+                            !HumanoidBoneCatalog.IsRequired(
+                                bone))
+                    .ToArray();
+
+            DrawSemanticSection(
+                "Optional",
+                optional);
+
+            ImGui.TreePop();
+        }
     }
+
+    private void DrawHumanoidBodyMap()
+    {
+        float width =
+            Math.Max(
+                ImGui.GetContentRegionAvail().X,
+                220.0f);
+
+        float height =
+            Math.Clamp(
+                width *
+                0.95f,
+                220.0f,
+                310.0f);
+
+        Vector2 origin =
+            ImGui.GetCursorScreenPos();
+
+        Vector2 size =
+            new(
+                width,
+                height);
+
+        ImGui.InvisibleButton(
+            "##HumanoidBodyMap",
+            size);
+
+        bool hovered =
+            ImGui.IsItemHovered();
+
+        Vector2 mouse =
+            ImGui.GetIO().MousePos;
+
+        ImDrawListPtr drawList =
+            ImGui.GetWindowDrawList();
+
+        uint background =
+            ImGui.GetColorU32(
+                new Vector4(
+                    0.065f,
+                    0.075f,
+                    0.09f,
+                    1.0f));
+
+        drawList.AddRectFilled(
+            origin,
+            origin +
+                size,
+            background,
+            5.0f);
+
+        BodyMapPoint[] points =
+            BodyMapPoints();
+
+        Vector2 P(
+            HumanoidBone bone)
+        {
+            BodyMapPoint point =
+                points.First(
+                    candidate =>
+                        candidate.Bone ==
+                            bone);
+
+            return
+                origin +
+                new Vector2(
+                    point.X *
+                    size.X,
+                    point.Y *
+                    size.Y);
+        }
+
+        uint bodyLine =
+            ImGui.GetColorU32(
+                new Vector4(
+                    0.34f,
+                    0.42f,
+                    0.52f,
+                    0.85f));
+
+        void Link(
+            HumanoidBone a,
+            HumanoidBone b)
+        {
+            drawList.AddLine(
+                P(a),
+                P(b),
+                bodyLine,
+                2.0f);
+        }
+
+        Link(HumanoidBone.Head, HumanoidBone.Neck);
+        Link(HumanoidBone.Neck, HumanoidBone.UpperChest);
+        Link(HumanoidBone.UpperChest, HumanoidBone.Chest);
+        Link(HumanoidBone.Chest, HumanoidBone.Spine);
+        Link(HumanoidBone.Spine, HumanoidBone.Hips);
+
+        Link(HumanoidBone.UpperChest, HumanoidBone.LeftShoulder);
+        Link(HumanoidBone.LeftShoulder, HumanoidBone.LeftUpperArm);
+        Link(HumanoidBone.LeftUpperArm, HumanoidBone.LeftLowerArm);
+        Link(HumanoidBone.LeftLowerArm, HumanoidBone.LeftHand);
+
+        Link(HumanoidBone.UpperChest, HumanoidBone.RightShoulder);
+        Link(HumanoidBone.RightShoulder, HumanoidBone.RightUpperArm);
+        Link(HumanoidBone.RightUpperArm, HumanoidBone.RightLowerArm);
+        Link(HumanoidBone.RightLowerArm, HumanoidBone.RightHand);
+
+        Link(HumanoidBone.Hips, HumanoidBone.LeftUpperLeg);
+        Link(HumanoidBone.LeftUpperLeg, HumanoidBone.LeftLowerLeg);
+        Link(HumanoidBone.LeftLowerLeg, HumanoidBone.LeftFoot);
+        Link(HumanoidBone.LeftFoot, HumanoidBone.LeftToes);
+
+        Link(HumanoidBone.Hips, HumanoidBone.RightUpperLeg);
+        Link(HumanoidBone.RightUpperLeg, HumanoidBone.RightLowerLeg);
+        Link(HumanoidBone.RightLowerLeg, HumanoidBone.RightFoot);
+        Link(HumanoidBone.RightFoot, HumanoidBone.RightToes);
+
+        int hoveredIndex =
+            -1;
+
+        float bestDistance =
+            15.0f;
+
+        for (int index = 0;
+             index <
+                points.Length;
+             index++)
+        {
+            BodyMapPoint point =
+                points[index];
+
+            Vector2 screen =
+                origin +
+                new Vector2(
+                    point.X *
+                    size.X,
+                    point.Y *
+                    size.Y);
+
+            float distance =
+                hovered
+                    ? Vector2.Distance(
+                        mouse,
+                        screen)
+                    : float.PositiveInfinity;
+
+            if (distance <
+                bestDistance)
+            {
+                bestDistance =
+                    distance;
+
+                hoveredIndex =
+                    index;
+            }
+        }
+
+        for (int index = 0;
+             index <
+                points.Length;
+             index++)
+        {
+            BodyMapPoint point =
+                points[index];
+
+            Vector2 screen =
+                origin +
+                new Vector2(
+                    point.X *
+                    size.X,
+                    point.Y *
+                    size.Y);
+
+            bool mapped =
+                _mapping.IsMapped(
+                    point.Bone);
+
+            bool required =
+                HumanoidBoneCatalog.IsRequired(
+                    point.Bone);
+
+            bool selected =
+                point.Bone ==
+                    _selectedSemantic;
+
+            bool pointHovered =
+                index ==
+                    hoveredIndex;
+
+            uint color =
+                ImGui.GetColorU32(
+                    pointHovered
+                        ? new Vector4(
+                            1.0f,
+                            0.94f,
+                            0.18f,
+                            1.0f)
+                        : selected
+                            ? new Vector4(
+                                1.0f,
+                                0.55f,
+                                0.08f,
+                                1.0f)
+                            : mapped
+                                ? new Vector4(
+                                    0.20f,
+                                    1.0f,
+                                    0.38f,
+                                    1.0f)
+                                : required
+                                    ? new Vector4(
+                                        1.0f,
+                                        0.32f,
+                                        0.25f,
+                                        1.0f)
+                                    : new Vector4(
+                                        0.70f,
+                                        0.74f,
+                                        0.80f,
+                                        1.0f));
+
+            uint outline =
+                ImGui.GetColorU32(
+                    new Vector4(
+                        0.0f,
+                        0.0f,
+                        0.0f,
+                        0.9f));
+
+            float radius =
+                selected ||
+                pointHovered
+                    ? 7.0f
+                    : 5.5f;
+
+            drawList.AddCircleFilled(
+                screen,
+                radius +
+                    2.0f,
+                outline,
+                16);
+
+            drawList.AddCircleFilled(
+                screen,
+                radius,
+                color,
+                16);
+        }
+
+        if (hoveredIndex >=
+                0 &&
+            hoveredIndex <
+                points.Length)
+        {
+            HumanoidBone semantic =
+                points[hoveredIndex]
+                    .Bone;
+
+            string display =
+                HumanoidRigAuthoring.DisplayName(
+                    semantic);
+
+            string? mapped =
+                _mapping.GetBoneName(
+                    semantic);
+
+            ImGui.BeginTooltip();
+
+            ImGui.TextUnformatted(
+                display);
+
+            ImGui.TextDisabled(
+                mapped ==
+                    null
+                    ? HumanoidBoneCatalog.IsRequired(
+                        semantic)
+                        ? "Required - not mapped"
+                        : "Optional - not mapped"
+                    : $"Source bone: {mapped}");
+
+            ImGui.TextDisabled(
+                "Click to select this body part.");
+
+            ImGui.EndTooltip();
+
+            if (ImGui.IsMouseClicked(
+                    ImGuiMouseButton.Left))
+            {
+                _selectedSemantic =
+                    semantic;
+            }
+        }
+    }
+
+    private static BodyMapPoint[] BodyMapPoints() =>
+        new[]
+        {
+            new BodyMapPoint(HumanoidBone.Head, 0.50f, 0.08f),
+            new BodyMapPoint(HumanoidBone.Neck, 0.50f, 0.16f),
+            new BodyMapPoint(HumanoidBone.UpperChest, 0.50f, 0.23f),
+            new BodyMapPoint(HumanoidBone.Chest, 0.50f, 0.30f),
+            new BodyMapPoint(HumanoidBone.Spine, 0.50f, 0.38f),
+            new BodyMapPoint(HumanoidBone.Hips, 0.50f, 0.49f),
+
+            new BodyMapPoint(HumanoidBone.LeftShoulder, 0.39f, 0.23f),
+            new BodyMapPoint(HumanoidBone.LeftUpperArm, 0.28f, 0.29f),
+            new BodyMapPoint(HumanoidBone.LeftLowerArm, 0.18f, 0.37f),
+            new BodyMapPoint(HumanoidBone.LeftHand, 0.09f, 0.44f),
+
+            new BodyMapPoint(HumanoidBone.RightShoulder, 0.61f, 0.23f),
+            new BodyMapPoint(HumanoidBone.RightUpperArm, 0.72f, 0.29f),
+            new BodyMapPoint(HumanoidBone.RightLowerArm, 0.82f, 0.37f),
+            new BodyMapPoint(HumanoidBone.RightHand, 0.91f, 0.44f),
+
+            new BodyMapPoint(HumanoidBone.LeftUpperLeg, 0.44f, 0.61f),
+            new BodyMapPoint(HumanoidBone.LeftLowerLeg, 0.42f, 0.76f),
+            new BodyMapPoint(HumanoidBone.LeftFoot, 0.40f, 0.90f),
+            new BodyMapPoint(HumanoidBone.LeftToes, 0.35f, 0.94f),
+
+            new BodyMapPoint(HumanoidBone.RightUpperLeg, 0.56f, 0.61f),
+            new BodyMapPoint(HumanoidBone.RightLowerLeg, 0.58f, 0.76f),
+            new BodyMapPoint(HumanoidBone.RightFoot, 0.60f, 0.90f),
+            new BodyMapPoint(HumanoidBone.RightToes, 0.65f, 0.94f)
+        };
+
+    private void SelectFirstMissingRequired()
+    {
+        foreach (HumanoidBone candidate
+                 in HumanoidBoneCatalog.Required)
+        {
+            if (!_mapping.IsMapped(
+                    candidate))
+            {
+                _selectedSemantic =
+                    candidate;
+
+                return;
+            }
+        }
+
+        _selectedSemantic =
+            HumanoidBone.Hips;
+    }
+
+    private void SelectNextMissingRequired(
+        HumanoidBone justMapped)
+    {
+        if (!_autoAdvanceRequired ||
+            !HumanoidBoneCatalog.IsRequired(
+                justMapped))
+        {
+            return;
+        }
+
+        IReadOnlyList<HumanoidBone> required =
+            HumanoidBoneCatalog.Required;
+
+        int currentIndex =
+            0;
+
+        for (int index = 0;
+             index <
+                required.Count;
+             index++)
+        {
+            if (required[index] ==
+                justMapped)
+            {
+                currentIndex =
+                    index;
+
+                break;
+            }
+        }
+
+        for (int offset = 1;
+             offset <=
+                required.Count;
+             offset++)
+        {
+            HumanoidBone candidate =
+                required[
+                    (currentIndex +
+                     offset) %
+                    required.Count];
+
+            if (!_mapping.IsMapped(
+                    candidate))
+            {
+                _selectedSemantic =
+                    candidate;
+
+                return;
+            }
+        }
+    }
+
+    private readonly record struct BodyMapPoint(
+        HumanoidBone Bone,
+        float X,
+        float Y);
 
     private void DrawSemanticSection(
         string title,
@@ -1517,21 +1988,104 @@ internal sealed class HumanoidRigConfiguratorPanel
                 new Vector3[
                     _model.Skeleton.Bones.Count];
 
+            Matrix4x4[] boneMeshFrames =
+                ResolveBoneMeshFrames(
+                    _model.Skeleton,
+                    meshTransforms);
+
+            Dictionary<string, int> nodeByName =
+                _model.Nodes
+                    .Select(
+                        (node, index) =>
+                            new
+                            {
+                                node.Name,
+                                Index =
+                                    index
+                            })
+                    .Where(
+                        item =>
+                            !string.IsNullOrWhiteSpace(
+                                item.Name))
+                    .GroupBy(
+                        item =>
+                            item.Name,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group =>
+                            group.Key,
+                        group =>
+                            group.First().Index,
+                        StringComparer.OrdinalIgnoreCase);
+
+            bool meshProvidedFrame =
+                boundsPoints.Count >
+                0;
+
             for (int index = 0;
                  index <
                     _model.Skeleton.Bones.Count;
                  index++)
             {
+                Bone bone =
+                    _model.Skeleton.Bones[
+                        index];
+
                 if (Matrix4x4.Invert(
-                        _model.Skeleton.Bones[index]
-                            .BindPose,
-                        out Matrix4x4 modelSpace))
+                        bone.BindPose,
+                        out Matrix4x4 inverseBind))
                 {
+                    Matrix4x4 meshFrame =
+                        index <
+                            boneMeshFrames.Length
+                            ? boneMeshFrames[index]
+                            : Matrix4x4.Identity;
+
+                    /*
+                     * The imported inverse bind is expressed relative to the
+                     * skinned mesh node. Reconstruct the true bind-pose joint
+                     * in ByteEngine model space with the exact same relation
+                     * used by SkeletalMeshRenderer:
+                     *
+                     * inverseBind * jointGlobal * inverse(meshGlobal) = I
+                     * therefore jointGlobal = inverse(inverseBind) * meshGlobal.
+                     *
+                     * Using ImportedNode globals directly can show frame-0 or
+                     * authored node pose instead of the actual skin bind pose.
+                     */
+                    Matrix4x4 bindGlobal =
+                        inverseBind *
+                        meshFrame;
+
                     _bonePositions[index] =
-                        modelSpace.Translation;
+                        bindGlobal.Translation;
 
                     boundsPoints.Add(
                         _bonePositions[index]);
+
+                    continue;
+                }
+
+                bool resolvedFromNode =
+                    nodeByName.TryGetValue(
+                        bone.Name,
+                        out int nodeIndex) &&
+                    nodeIndex >=
+                        0 &&
+                    nodeIndex <
+                        globals.Length;
+
+                if (resolvedFromNode)
+                {
+                    _bonePositions[index] =
+                        globals[nodeIndex]
+                            .Translation;
+
+                    if (!meshProvidedFrame)
+                    {
+                        boundsPoints.Add(
+                            _bonePositions[index]);
+                    }
                 }
             }
         }
@@ -1633,6 +2187,197 @@ internal sealed class HumanoidRigConfiguratorPanel
         }
     }
 
+    private Matrix4x4[] ResolveBoneMeshFrames(
+        SkeletonAsset skeleton,
+        IReadOnlyDictionary<string, Matrix4x4> meshTransforms)
+    {
+        var frames =
+            new Matrix4x4[
+                skeleton.Bones.Count];
+
+        Array.Fill(
+            frames,
+            Matrix4x4.Identity);
+
+        var resolved =
+            new bool[
+                skeleton.Bones.Count];
+
+        if (_model ==
+            null)
+        {
+            return frames;
+        }
+
+        Matrix4x4 fallbackFrame =
+            Matrix4x4.Identity;
+
+        bool hasFallback =
+            false;
+
+        foreach (ImportedMesh mesh
+                 in _model.Meshes)
+        {
+            if (!meshTransforms.TryGetValue(
+                    mesh.Key,
+                    out Matrix4x4 meshFrame))
+            {
+                continue;
+            }
+
+            int vertexCount =
+                mesh.Vertices.Length /
+                8;
+
+            if (vertexCount <=
+                    0 ||
+                mesh.JointIndices.Length !=
+                    vertexCount ||
+                mesh.JointWeights.Length !=
+                    vertexCount)
+            {
+                continue;
+            }
+
+            if (!hasFallback)
+            {
+                fallbackFrame =
+                    meshFrame;
+
+                hasFallback =
+                    true;
+            }
+
+            for (int vertexIndex = 0;
+                 vertexIndex <
+                    vertexCount;
+                 vertexIndex++)
+            {
+                Vector4 joints =
+                    mesh.JointIndices[
+                        vertexIndex];
+
+                Vector4 weights =
+                    mesh.JointWeights[
+                        vertexIndex];
+
+                ResolveInfluence(
+                    joints.X,
+                    weights.X);
+
+                ResolveInfluence(
+                    joints.Y,
+                    weights.Y);
+
+                ResolveInfluence(
+                    joints.Z,
+                    weights.Z);
+
+                ResolveInfluence(
+                    joints.W,
+                    weights.W);
+            }
+
+            void ResolveInfluence(
+                float sourceIndex,
+                float weight)
+            {
+                if (!float.IsFinite(
+                        sourceIndex) ||
+                    !float.IsFinite(
+                        weight) ||
+                    weight <=
+                        0.00001f)
+                {
+                    return;
+                }
+
+                int boneIndex =
+                    (int)MathF.Round(
+                        sourceIndex);
+
+                if (boneIndex <
+                        0 ||
+                    boneIndex >=
+                        frames.Length ||
+                    resolved[boneIndex])
+                {
+                    return;
+                }
+
+                /*
+                 * FbxModelImporter keeps the first inverse-bind matrix it sees
+                 * for a bone while walking meshes in source order. Walking the
+                 * imported meshes in that same order reproduces the matching
+                 * mesh-node frame for that stored inverse bind.
+                 */
+                frames[boneIndex] =
+                    meshFrame;
+
+                resolved[boneIndex] =
+                    true;
+            }
+        }
+
+        /*
+         * Non-deforming helper bones may not have direct vertex weights. Give
+         * their ancestors the same skin frame as the nearest weighted child.
+         */
+        for (int boneIndex = 0;
+             boneIndex <
+                skeleton.Bones.Count;
+             boneIndex++)
+        {
+            if (!resolved[boneIndex])
+            {
+                continue;
+            }
+
+            int parent =
+                skeleton.Bones[boneIndex]
+                    .ParentIndex;
+
+            var visited =
+                new HashSet<int>();
+
+            while (parent >=
+                       0 &&
+                   parent <
+                       skeleton.Bones.Count &&
+                   visited.Add(
+                       parent))
+            {
+                if (!resolved[parent])
+                {
+                    frames[parent] =
+                        frames[boneIndex];
+
+                    resolved[parent] =
+                        true;
+                }
+
+                parent =
+                    skeleton.Bones[parent]
+                        .ParentIndex;
+            }
+        }
+
+        for (int boneIndex = 0;
+             boneIndex <
+                frames.Length;
+             boneIndex++)
+        {
+            if (!resolved[boneIndex] &&
+                hasFallback)
+            {
+                frames[boneIndex] =
+                    fallbackFrame;
+            }
+        }
+
+        return frames;
+    }
+
     private static Vector3 TransformVertex(
         ImportedMesh mesh,
         int vertexIndex,
@@ -1700,6 +2445,9 @@ internal sealed class HumanoidRigConfiguratorPanel
 
         _dirty =
             true;
+
+        SelectNextMissingRequired(
+            semantic);
     }
 
     private void Apply(

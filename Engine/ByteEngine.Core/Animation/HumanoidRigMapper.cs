@@ -31,12 +31,12 @@ public sealed class HumanoidRigValidationResult
 }
 
 /// <summary>
-/// Name-based first-pass Humanoid mapper.
+/// Hierarchy-aware first-pass Humanoid mapper.
 ///
-/// C9B intentionally keeps this deterministic and transparent. It recognizes
-/// common Mixamo, Unreal-style, Blender/DEF and conventional human bone names,
-/// then leaves any unresolved role visible for manual correction in the editor.
-/// Retargeting/reference-pose math is not performed here.
+/// Names still provide the initial semantic hint, but required chains are also
+/// constrained to the source skeleton hierarchy. Deform bones are preferred and
+/// obvious IK/control/helper bones are rejected so a convincing name on the wrong
+/// branch cannot silently create a broken Humanoid mapping.
 /// </summary>
 public static class HumanoidRigMapper
 {
@@ -135,6 +135,31 @@ public static class HumanoidRigMapper
                         candidate.Normalized.Length > 0)
                 .ToArray();
 
+        Dictionary<string, int> indicesByName =
+            skeleton.Bones
+                .Select(
+                    (bone, index) =>
+                        new
+                        {
+                            bone.Name,
+                            Index =
+                                index
+                        })
+                .Where(
+                    item =>
+                        !string.IsNullOrWhiteSpace(
+                            item.Name))
+                .GroupBy(
+                    item =>
+                        item.Name,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group =>
+                        group.Key,
+                    group =>
+                        group.First().Index,
+                    StringComparer.OrdinalIgnoreCase);
+
         var usedSourceBones =
             new HashSet<int>();
 
@@ -154,11 +179,19 @@ public static class HumanoidRigMapper
             int bestScore =
                 0;
 
+            int? expectedAncestorIndex =
+                FindMappedAncestorIndex(
+                    semanticBone,
+                    result,
+                    indicesByName);
+
             foreach (BoneCandidate candidate
                      in candidates)
             {
                 if (usedSourceBones.Contains(
-                        candidate.Index))
+                        candidate.Index) ||
+                    IsLikelyHelperBone(
+                        candidate.SourceName))
                 {
                     continue;
                 }
@@ -172,6 +205,37 @@ public static class HumanoidRigMapper
                                     alias))
                         .DefaultIfEmpty(0)
                         .Max();
+
+                if (score <
+                    600)
+                {
+                    continue;
+                }
+
+                if (expectedAncestorIndex.HasValue)
+                {
+                    if (!IsDescendant(
+                            skeleton,
+                            candidate.Index,
+                            expectedAncestorIndex.Value))
+                    {
+                        continue;
+                    }
+
+                    score +=
+                        300;
+                }
+
+                score +=
+                    DeformBonePreference(
+                        candidate.SourceName);
+
+                if (LooksLikeTwistOrRollBone(
+                        candidate.SourceName))
+                {
+                    score -=
+                        450;
+                }
 
                 if (score <=
                     bestScore)
@@ -187,9 +251,7 @@ public static class HumanoidRigMapper
             }
 
             if (bestIndex <
-                    0 ||
-                bestScore <
-                    600)
+                0)
             {
                 continue;
             }
@@ -211,6 +273,320 @@ public static class HumanoidRigMapper
         result.Normalize();
 
         return result;
+    }
+
+    private static int? FindMappedAncestorIndex(
+        HumanoidBone semanticBone,
+        HumanoidBoneMap mapping,
+        IReadOnlyDictionary<string, int> indicesByName)
+    {
+        foreach (HumanoidBone expectedAncestor
+                 in ExpectedAncestors(
+                     semanticBone))
+        {
+            if (!mapping.TryGetBoneName(
+                    expectedAncestor,
+                    out string sourceName))
+            {
+                continue;
+            }
+
+            if (indicesByName.TryGetValue(
+                    sourceName,
+                    out int index))
+            {
+                return index;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<HumanoidBone> ExpectedAncestors(
+        HumanoidBone bone)
+    {
+        return bone switch
+        {
+            HumanoidBone.Spine =>
+                new[] { HumanoidBone.Hips },
+
+            HumanoidBone.Chest =>
+                new[] { HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.UpperChest =>
+                new[] { HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.Neck =>
+                new[] { HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.Head =>
+                new[] { HumanoidBone.Neck, HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.Jaw or
+            HumanoidBone.LeftEye or
+            HumanoidBone.RightEye =>
+                new[] { HumanoidBone.Head },
+
+            HumanoidBone.LeftShoulder =>
+                new[] { HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.LeftUpperArm =>
+                new[] { HumanoidBone.LeftShoulder, HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.LeftLowerArm =>
+                new[] { HumanoidBone.LeftUpperArm },
+
+            HumanoidBone.LeftHand =>
+                new[] { HumanoidBone.LeftLowerArm },
+
+            HumanoidBone.RightShoulder =>
+                new[] { HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.RightUpperArm =>
+                new[] { HumanoidBone.RightShoulder, HumanoidBone.UpperChest, HumanoidBone.Chest, HumanoidBone.Spine, HumanoidBone.Hips },
+
+            HumanoidBone.RightLowerArm =>
+                new[] { HumanoidBone.RightUpperArm },
+
+            HumanoidBone.RightHand =>
+                new[] { HumanoidBone.RightLowerArm },
+
+            HumanoidBone.LeftUpperLeg =>
+                new[] { HumanoidBone.Hips },
+
+            HumanoidBone.LeftLowerLeg =>
+                new[] { HumanoidBone.LeftUpperLeg },
+
+            HumanoidBone.LeftFoot =>
+                new[] { HumanoidBone.LeftLowerLeg },
+
+            HumanoidBone.LeftToes =>
+                new[] { HumanoidBone.LeftFoot },
+
+            HumanoidBone.RightUpperLeg =>
+                new[] { HumanoidBone.Hips },
+
+            HumanoidBone.RightLowerLeg =>
+                new[] { HumanoidBone.RightUpperLeg },
+
+            HumanoidBone.RightFoot =>
+                new[] { HumanoidBone.RightLowerLeg },
+
+            HumanoidBone.RightToes =>
+                new[] { HumanoidBone.RightFoot },
+
+            HumanoidBone.LeftThumbProximal or
+            HumanoidBone.LeftIndexProximal or
+            HumanoidBone.LeftMiddleProximal or
+            HumanoidBone.LeftRingProximal or
+            HumanoidBone.LeftLittleProximal =>
+                new[] { HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftThumbIntermediate =>
+                new[] { HumanoidBone.LeftThumbProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftThumbDistal =>
+                new[] { HumanoidBone.LeftThumbIntermediate, HumanoidBone.LeftThumbProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftIndexIntermediate =>
+                new[] { HumanoidBone.LeftIndexProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftIndexDistal =>
+                new[] { HumanoidBone.LeftIndexIntermediate, HumanoidBone.LeftIndexProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftMiddleIntermediate =>
+                new[] { HumanoidBone.LeftMiddleProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftMiddleDistal =>
+                new[] { HumanoidBone.LeftMiddleIntermediate, HumanoidBone.LeftMiddleProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftRingIntermediate =>
+                new[] { HumanoidBone.LeftRingProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftRingDistal =>
+                new[] { HumanoidBone.LeftRingIntermediate, HumanoidBone.LeftRingProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftLittleIntermediate =>
+                new[] { HumanoidBone.LeftLittleProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.LeftLittleDistal =>
+                new[] { HumanoidBone.LeftLittleIntermediate, HumanoidBone.LeftLittleProximal, HumanoidBone.LeftHand },
+
+            HumanoidBone.RightThumbProximal or
+            HumanoidBone.RightIndexProximal or
+            HumanoidBone.RightMiddleProximal or
+            HumanoidBone.RightRingProximal or
+            HumanoidBone.RightLittleProximal =>
+                new[] { HumanoidBone.RightHand },
+
+            HumanoidBone.RightThumbIntermediate =>
+                new[] { HumanoidBone.RightThumbProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightThumbDistal =>
+                new[] { HumanoidBone.RightThumbIntermediate, HumanoidBone.RightThumbProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightIndexIntermediate =>
+                new[] { HumanoidBone.RightIndexProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightIndexDistal =>
+                new[] { HumanoidBone.RightIndexIntermediate, HumanoidBone.RightIndexProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightMiddleIntermediate =>
+                new[] { HumanoidBone.RightMiddleProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightMiddleDistal =>
+                new[] { HumanoidBone.RightMiddleIntermediate, HumanoidBone.RightMiddleProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightRingIntermediate =>
+                new[] { HumanoidBone.RightRingProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightRingDistal =>
+                new[] { HumanoidBone.RightRingIntermediate, HumanoidBone.RightRingProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightLittleIntermediate =>
+                new[] { HumanoidBone.RightLittleProximal, HumanoidBone.RightHand },
+
+            HumanoidBone.RightLittleDistal =>
+                new[] { HumanoidBone.RightLittleIntermediate, HumanoidBone.RightLittleProximal, HumanoidBone.RightHand },
+
+            _ =>
+                Array.Empty<HumanoidBone>()
+        };
+    }
+
+    private static bool IsDescendant(
+        SkeletonAsset skeleton,
+        int childIndex,
+        int ancestorIndex)
+    {
+        if (childIndex ==
+            ancestorIndex)
+        {
+            return false;
+        }
+
+        var visited =
+            new HashSet<int>();
+
+        int current =
+            childIndex;
+
+        while (current >=
+                   0 &&
+               current <
+                   skeleton.Bones.Count &&
+               visited.Add(
+                   current))
+        {
+            current =
+                skeleton.Bones[
+                    current]
+                    .ParentIndex;
+
+            if (current ==
+                ancestorIndex)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsLikelyHelperBone(
+        string sourceName)
+    {
+        string leaf =
+            sourceName.Trim();
+
+        string normalized =
+            new(
+                leaf
+                    .Where(
+                        char.IsLetterOrDigit)
+                    .Select(
+                        char.ToLowerInvariant)
+                    .ToArray());
+
+        if (leaf.StartsWith(
+                "MCH-",
+                StringComparison.OrdinalIgnoreCase) ||
+            leaf.StartsWith(
+                "MCH_",
+                StringComparison.OrdinalIgnoreCase) ||
+            leaf.StartsWith(
+                "ORG-",
+                StringComparison.OrdinalIgnoreCase) ||
+            leaf.StartsWith(
+                "ORG_",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return
+            normalized.Contains(
+                "control",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "ctrl",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "target",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "pole",
+                StringComparison.Ordinal) ||
+            normalized.EndsWith(
+                "ik",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "ikhand",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "ikfoot",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "handik",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "footik",
+                StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeTwistOrRollBone(
+        string sourceName)
+    {
+        string normalized =
+            NormalizeBoneName(
+                sourceName);
+
+        return
+            normalized.Contains(
+                "twist",
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                "roll",
+                StringComparison.Ordinal);
+    }
+
+    private static int DeformBonePreference(
+        string sourceName)
+    {
+        if (sourceName.StartsWith(
+                "DEF-",
+                StringComparison.OrdinalIgnoreCase) ||
+            sourceName.StartsWith(
+                "DEF_",
+                StringComparison.OrdinalIgnoreCase) ||
+            sourceName.Contains(
+                "deform",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return 140;
+        }
+
+        return 0;
     }
 
     public static HumanoidRigValidationResult Validate(
@@ -545,6 +921,7 @@ public static class HumanoidRigMapper
                         "leftarm",
                         "upperarml",
                         "lupperarm",
+                        "arml",
                         "larm"),
 
                 [HumanoidBone.LeftLowerArm] =
@@ -553,6 +930,7 @@ public static class HumanoidRigMapper
                         "leftforearm",
                         "lowerarml",
                         "forearml",
+                        "forarml",
                         "llowerarm",
                         "lforearm"),
 
@@ -576,6 +954,7 @@ public static class HumanoidRigMapper
                         "rightarm",
                         "upperarmr",
                         "rupperarm",
+                        "armr",
                         "rarm"),
 
                 [HumanoidBone.RightLowerArm] =
@@ -584,6 +963,7 @@ public static class HumanoidRigMapper
                         "rightforearm",
                         "lowerarmr",
                         "forearmr",
+                        "forarmr",
                         "rlowerarm",
                         "rforearm"),
 
@@ -601,6 +981,7 @@ public static class HumanoidRigMapper
                         "upperlegl",
                         "uplegl",
                         "thighl",
+                        "hipl",
                         "lthigh"),
 
                 [HumanoidBone.LeftLowerLeg] =
@@ -638,6 +1019,7 @@ public static class HumanoidRigMapper
                         "upperlegr",
                         "uplegr",
                         "thighr",
+                        "hipr",
                         "rthigh"),
 
                 [HumanoidBone.RightLowerLeg] =
