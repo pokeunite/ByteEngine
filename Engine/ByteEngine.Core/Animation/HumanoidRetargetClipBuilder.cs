@@ -436,9 +436,8 @@ public static class HumanoidRetargetClipBuilder
                 targetNodes,
                 parentIndices);
 
-        Matrix4x4[] boneMeshFrames =
-            ResolveBoneMeshFrames(
-                targetSkeleton,
+        Matrix4x4 skeletonBindFrame =
+            ResolveSkeletonBindFrame(
                 targetNodes,
                 targetMeshes,
                 referenceNodeGlobals);
@@ -456,35 +455,17 @@ public static class HumanoidRetargetClipBuilder
                 targetSkeleton.Bones.Count;
              boneIndex++)
         {
-            if (boneIndex <
-                    boneMeshFrames.Length)
-            {
-                bindToNodeCorrections[
-                    boneIndex] =
-                    boneMeshFrames[
-                        boneIndex];
-
-                continue;
-            }
-
-            int nodeIndex =
-                boneNodeIndices[
-                    boneIndex];
-
-            if (nodeIndex <
-                    0 ||
-                nodeIndex >=
-                    referenceNodeGlobals.Length)
-            {
-                continue;
-            }
-
+            /*
+             * Keep every retargeted bone in the SAME imported skin frame.
+             *
+             * C9I inferred a frame per bone from vertex weights. Multi-part
+             * characters can have several mesh nodes, so that produced a pose
+             * assembled from several incompatible coordinate spaces and could
+             * detach hands/feet or bend chains even with correct mappings.
+             */
             bindToNodeCorrections[
                 boneIndex] =
-                targetSkeleton.Bones[
-                    boneIndex].BindPose *
-                referenceNodeGlobals[
-                    nodeIndex];
+                skeletonBindFrame;
         }
 
         return
@@ -497,8 +478,14 @@ public static class HumanoidRetargetClipBuilder
                 bindToNodeCorrections);
     }
 
-    private static Matrix4x4[] ResolveBoneMeshFrames(
-        SkeletonAsset skeleton,
+    /// <summary>
+    /// Returns one coherent model-space frame for the target skin.
+    ///
+    /// Imported SkeletonAsset stores one inverse-bind transform per bone.
+    /// Therefore retarget output must not mix several mesh-node frames into
+    /// different bones of the same pose.
+    /// </summary>
+    private static Matrix4x4 ResolveSkeletonBindFrame(
         IReadOnlyList<ImportedNode> nodes,
         IReadOnlyList<ImportedMesh> meshes,
         IReadOnlyList<Matrix4x4> nodeGlobals)
@@ -510,8 +497,7 @@ public static class HumanoidRetargetClipBuilder
             nodeGlobals.Count !=
                 nodes.Count)
         {
-            return
-                Array.Empty<Matrix4x4>();
+            return Matrix4x4.Identity;
         }
 
         var meshFrames =
@@ -532,24 +518,6 @@ public static class HumanoidRetargetClipBuilder
                     nodeGlobals[nodeIndex]);
             }
         }
-
-        var frames =
-            new Matrix4x4[
-                skeleton.Bones.Count];
-
-        Array.Fill(
-            frames,
-            Matrix4x4.Identity);
-
-        var resolved =
-            new bool[
-                skeleton.Bones.Count];
-
-        Matrix4x4 fallback =
-            Matrix4x4.Identity;
-
-        bool hasFallback =
-            false;
 
         foreach (ImportedMesh mesh
                  in meshes)
@@ -575,138 +543,30 @@ public static class HumanoidRetargetClipBuilder
                 continue;
             }
 
-            if (!hasFallback)
-            {
-                fallback =
-                    meshFrame;
-
-                hasFallback =
-                    true;
-            }
-
             for (int vertexIndex = 0;
                  vertexIndex <
                     vertexCount;
                  vertexIndex++)
             {
-                Vector4 joints =
-                    mesh.JointIndices[
-                        vertexIndex];
-
                 Vector4 weights =
                     mesh.JointWeights[
                         vertexIndex];
 
-                Capture(
-                    joints.X,
-                    weights.X);
-
-                Capture(
-                    joints.Y,
-                    weights.Y);
-
-                Capture(
-                    joints.Z,
-                    weights.Z);
-
-                Capture(
-                    joints.W,
-                    weights.W);
-            }
-
-            void Capture(
-                float sourceIndex,
-                float weight)
-            {
-                if (!float.IsFinite(
-                        sourceIndex) ||
-                    !float.IsFinite(
-                        weight) ||
-                    weight <=
+                if (weights.X >
+                        0.00001f ||
+                    weights.Y >
+                        0.00001f ||
+                    weights.Z >
+                        0.00001f ||
+                    weights.W >
                         0.00001f)
                 {
-                    return;
+                    return meshFrame;
                 }
-
-                int boneIndex =
-                    (int)MathF.Round(
-                        sourceIndex);
-
-                if (boneIndex <
-                        0 ||
-                    boneIndex >=
-                        frames.Length ||
-                    resolved[boneIndex])
-                {
-                    return;
-                }
-
-                frames[boneIndex] =
-                    meshFrame;
-
-                resolved[boneIndex] =
-                    true;
             }
         }
 
-        if (!hasFallback)
-        {
-            return
-                Array.Empty<Matrix4x4>();
-        }
-
-        for (int boneIndex = 0;
-             boneIndex <
-                skeleton.Bones.Count;
-             boneIndex++)
-        {
-            if (!resolved[boneIndex])
-            {
-                continue;
-            }
-
-            int parent =
-                skeleton.Bones[boneIndex]
-                    .ParentIndex;
-
-            var visited =
-                new HashSet<int>();
-
-            while (parent >=
-                       0 &&
-                   parent <
-                       skeleton.Bones.Count &&
-                   visited.Add(
-                       parent))
-            {
-                if (!resolved[parent])
-                {
-                    frames[parent] =
-                        frames[boneIndex];
-
-                    resolved[parent] =
-                        true;
-                }
-
-                parent =
-                    skeleton.Bones[parent]
-                        .ParentIndex;
-            }
-        }
-
-        for (int boneIndex = 0;
-             boneIndex <
-                frames.Length;
-             boneIndex++)
-        {
-            if (!resolved[boneIndex])
-            {
-                frames[boneIndex] =
-                    fallback;
-            }
-        }
-
-        return frames;
+        return Matrix4x4.Identity;
     }
 
     private static Matrix4x4[] BuildReferenceNodeGlobals(

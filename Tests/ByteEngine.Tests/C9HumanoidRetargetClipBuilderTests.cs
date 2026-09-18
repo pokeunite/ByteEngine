@@ -15,6 +15,7 @@ internal static class C9HumanoidRetargetClipBuilderTests
         VerifyTargetBoneLengthsRemainTargetAuthored();
         VerifyTargetNodeRootConversionIsPreserved();
         VerifyMeshBindFrameWinsOverAuthoredNodePose();
+        VerifyMultiPartTargetUsesOneCoherentSkinFrame();
     }
 
     private static void VerifyRetargetedClipUsesTargetBoneNames()
@@ -417,6 +418,263 @@ internal static class C9HumanoidRetargetClipBuilderTests
             dot >
                 0.999f,
             "C9I: authored/static node pose leaked into the retargeted bind pose instead of using the skin bind frame.");
+    }
+
+    private static void VerifyMultiPartTargetUsesOneCoherentSkinFrame()
+    {
+        Fixture source =
+            CreateFixture(
+                "Src",
+                1.0f);
+
+        Fixture target =
+            CreateFixture(
+                "Dst",
+                1.0f);
+
+        const string primaryMeshKey =
+            "mesh:primary";
+
+        const string secondaryMeshKey =
+            "mesh:secondary";
+
+        const string primaryNodeKey =
+            "node:primary";
+
+        const string secondaryNodeKey =
+            "node:secondary";
+
+        Matrix4x4 primaryFrame =
+            Matrix4x4.CreateTranslation(
+                new Vector3(
+                    0.0f,
+                    3.0f,
+                    0.0f));
+
+        Matrix4x4 secondaryFrame =
+            Matrix4x4.CreateTranslation(
+                new Vector3(
+                    25.0f,
+                    -10.0f,
+                    7.0f));
+
+        var nodes =
+            new List<ImportedNode>
+            {
+                new()
+                {
+                    Key =
+                        primaryNodeKey,
+
+                    Name =
+                        "PrimarySkin",
+
+                    LocalTransform =
+                        primaryFrame,
+
+                    MeshKeys =
+                        new List<string>
+                        {
+                            primaryMeshKey
+                        }
+                },
+
+                new()
+                {
+                    Key =
+                        secondaryNodeKey,
+
+                    Name =
+                        "SecondarySkin",
+
+                    LocalTransform =
+                        secondaryFrame,
+
+                    MeshKeys =
+                        new List<string>
+                        {
+                            secondaryMeshKey
+                        }
+                }
+            };
+
+        string hipsName =
+            target.Mapping.GetBoneName(
+                HumanoidBone.Hips)!;
+
+        foreach (ImportedNode node
+                 in target.Nodes)
+        {
+            nodes.Add(
+                new ImportedNode
+                {
+                    Key =
+                        node.Key,
+
+                    Name =
+                        node.Name,
+
+                    ParentKey =
+                        string.Equals(
+                            node.Name,
+                            hipsName,
+                            StringComparison.Ordinal)
+                            ? primaryNodeKey
+                            : node.ParentKey,
+
+                    LocalTransform =
+                        node.LocalTransform,
+
+                    MeshKeys =
+                        node.MeshKeys.ToList()
+                });
+        }
+
+        int boneCount =
+            target.Skeleton.Bones.Count;
+
+        ImportedMesh primary =
+            CreateSkinMesh(
+                primaryMeshKey,
+                Enumerable.Range(
+                    0,
+                    boneCount /
+                    2)
+                    .ToArray());
+
+        ImportedMesh secondary =
+            CreateSkinMesh(
+                secondaryMeshKey,
+                Enumerable.Range(
+                    boneCount /
+                    2,
+                    boneCount -
+                    boneCount /
+                    2)
+                    .ToArray());
+
+        ImportedAnimation generated =
+            HumanoidRetargetClipBuilder.Build(
+                source.Skeleton,
+                source.Mapping,
+                source.ReferencePose,
+                CreateSourceClip(
+                    source),
+                target.Skeleton,
+                target.Mapping,
+                target.ReferencePose,
+                nodes,
+                new[]
+                {
+                    primary,
+                    secondary
+                },
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Multi Part Frame Test",
+                30.0f);
+
+        string leftHandName =
+            target.Mapping.GetBoneName(
+                HumanoidBone.LeftHand)!;
+
+        string rightFootName =
+            target.Mapping.GetBoneName(
+                HumanoidBone.RightFoot)!;
+
+        ImportedAnimationChannel leftHand =
+            generated.FindChannel(
+                leftHandName)
+            ?? throw new InvalidOperationException(
+                "C9J: left hand channel missing.");
+
+        ImportedAnimationChannel rightFoot =
+            generated.FindChannel(
+                rightFootName)
+            ?? throw new InvalidOperationException(
+                "C9J: right foot channel missing.");
+
+        /*
+         * If secondaryFrame leaks into only part of the skeleton the local
+         * tracks become enormous. One coherent frame keeps both chains local
+         * and close to their authored offsets.
+         */
+        Vector3 leftHandTranslation =
+            leftHand.Translation!
+                .Keys[0]
+                .Value;
+
+        Vector3 rightFootTranslation =
+            rightFoot.Translation!
+                .Keys[0]
+                .Value;
+
+        Assert(
+            leftHandTranslation.Length() <
+                5.0f &&
+            rightFootTranslation.Length() <
+                5.0f,
+            "C9J: multi-part target mixed incompatible mesh-node frames into one Humanoid pose.");
+
+        ImportedMesh CreateSkinMesh(
+            string key,
+            int[] influencedBones)
+        {
+            int vertexCount =
+                influencedBones.Length;
+
+            var vertices =
+                new float[
+                    vertexCount *
+                    8];
+
+            var joints =
+                new Vector4[
+                    vertexCount];
+
+            var weights =
+                new Vector4[
+                    vertexCount];
+
+            for (int index = 0;
+                 index <
+                    influencedBones.Length;
+                 index++)
+            {
+                joints[index] =
+                    new Vector4(
+                        influencedBones[index],
+                        0.0f,
+                        0.0f,
+                        0.0f);
+
+                weights[index] =
+                    new Vector4(
+                        1.0f,
+                        0.0f,
+                        0.0f,
+                        0.0f);
+            }
+
+            return
+                new ImportedMesh
+                {
+                    Key =
+                        key,
+
+                    Name =
+                        key,
+
+                    Vertices =
+                        vertices,
+
+                    JointIndices =
+                        joints,
+
+                    JointWeights =
+                        weights
+                };
+        }
     }
 
     private static Fixture AddNodeConversionRoot(

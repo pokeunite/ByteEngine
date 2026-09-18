@@ -1988,9 +1988,8 @@ internal sealed class HumanoidRigConfiguratorPanel
                 new Vector3[
                     _model.Skeleton.Bones.Count];
 
-            Matrix4x4[] boneMeshFrames =
-                ResolveBoneMeshFrames(
-                    _model.Skeleton,
+            Matrix4x4 skeletonBindFrame =
+                ResolveSkeletonBindFrame(
                     meshTransforms);
 
             Dictionary<string, int> nodeByName =
@@ -2035,27 +2034,29 @@ internal sealed class HumanoidRigConfiguratorPanel
                         bone.BindPose,
                         out Matrix4x4 inverseBind))
                 {
-                    Matrix4x4 meshFrame =
-                        index <
-                            boneMeshFrames.Length
-                            ? boneMeshFrames[index]
-                            : Matrix4x4.Identity;
-
                     /*
-                     * The imported inverse bind is expressed relative to the
-                     * skinned mesh node. Reconstruct the true bind-pose joint
-                     * in ByteEngine model space with the exact same relation
-                     * used by SkeletalMeshRenderer:
+                     * IMPORTANT:
+                     *
+                     * Bone.BindPose is one inverse-bind matrix per skeleton bone.
+                     * FbxModelImporter currently keeps the FIRST offset matrix it
+                     * encounters for that bone. C9I tried to infer a different
+                     * mesh frame per bone from vertex weights. On multi-part FBX
+                     * characters that mixes unrelated mesh-node spaces inside a
+                     * single skeleton and can turn a perfectly valid humanoid
+                     * into the exploded/contorted preview seen in C9I.
+                     *
+                     * Use one coherent skin frame for the entire skeleton. This
+                     * matches the single-space SkeletonAsset contract and the
+                     * way the stored inverse binds are consumed by the runtime.
+                     *
+                     * Row-vector relationship used by SkeletalMeshRenderer:
                      *
                      * inverseBind * jointGlobal * inverse(meshGlobal) = I
-                     * therefore jointGlobal = inverse(inverseBind) * meshGlobal.
-                     *
-                     * Using ImportedNode globals directly can show frame-0 or
-                     * authored node pose instead of the actual skin bind pose.
+                     * jointGlobal = inverse(inverseBind) * meshGlobal
                      */
                     Matrix4x4 bindGlobal =
                         inverseBind *
-                        meshFrame;
+                        skeletonBindFrame;
 
                     _bonePositions[index] =
                         bindGlobal.Translation;
@@ -2187,33 +2188,25 @@ internal sealed class HumanoidRigConfiguratorPanel
         }
     }
 
-    private Matrix4x4[] ResolveBoneMeshFrames(
-        SkeletonAsset skeleton,
+    /// <summary>
+    /// Resolves ONE model-space frame for the imported skin.
+    ///
+    /// SkeletonAsset owns one inverse-bind matrix per bone, not one per
+    /// mesh/bone pair. Mixing a separate mesh frame into every bone therefore
+    /// creates an internally inconsistent skeleton on multi-part FBX models.
+    ///
+    /// The first imported mesh with valid skin weights is the best match for
+    /// FbxModelImporter, which also walks source meshes in order when it keeps
+    /// the first inverse-bind matrix for a bone.
+    /// </summary>
+    private Matrix4x4 ResolveSkeletonBindFrame(
         IReadOnlyDictionary<string, Matrix4x4> meshTransforms)
     {
-        var frames =
-            new Matrix4x4[
-                skeleton.Bones.Count];
-
-        Array.Fill(
-            frames,
-            Matrix4x4.Identity);
-
-        var resolved =
-            new bool[
-                skeleton.Bones.Count];
-
         if (_model ==
             null)
         {
-            return frames;
+            return Matrix4x4.Identity;
         }
-
-        Matrix4x4 fallbackFrame =
-            Matrix4x4.Identity;
-
-        bool hasFallback =
-            false;
 
         foreach (ImportedMesh mesh
                  in _model.Meshes)
@@ -2239,143 +2232,46 @@ internal sealed class HumanoidRigConfiguratorPanel
                 continue;
             }
 
-            if (!hasFallback)
-            {
-                fallbackFrame =
-                    meshFrame;
-
-                hasFallback =
-                    true;
-            }
+            bool hasSkinWeights =
+                false;
 
             for (int vertexIndex = 0;
                  vertexIndex <
                     vertexCount;
                  vertexIndex++)
             {
-                Vector4 joints =
-                    mesh.JointIndices[
-                        vertexIndex];
-
                 Vector4 weights =
                     mesh.JointWeights[
                         vertexIndex];
 
-                ResolveInfluence(
-                    joints.X,
-                    weights.X);
-
-                ResolveInfluence(
-                    joints.Y,
-                    weights.Y);
-
-                ResolveInfluence(
-                    joints.Z,
-                    weights.Z);
-
-                ResolveInfluence(
-                    joints.W,
-                    weights.W);
-            }
-
-            void ResolveInfluence(
-                float sourceIndex,
-                float weight)
-            {
-                if (!float.IsFinite(
-                        sourceIndex) ||
-                    !float.IsFinite(
-                        weight) ||
-                    weight <=
+                if (weights.X >
+                        0.00001f ||
+                    weights.Y >
+                        0.00001f ||
+                    weights.Z >
+                        0.00001f ||
+                    weights.W >
                         0.00001f)
                 {
-                    return;
+                    hasSkinWeights =
+                        true;
+
+                    break;
                 }
+            }
 
-                int boneIndex =
-                    (int)MathF.Round(
-                        sourceIndex);
-
-                if (boneIndex <
-                        0 ||
-                    boneIndex >=
-                        frames.Length ||
-                    resolved[boneIndex])
-                {
-                    return;
-                }
-
-                /*
-                 * FbxModelImporter keeps the first inverse-bind matrix it sees
-                 * for a bone while walking meshes in source order. Walking the
-                 * imported meshes in that same order reproduces the matching
-                 * mesh-node frame for that stored inverse bind.
-                 */
-                frames[boneIndex] =
-                    meshFrame;
-
-                resolved[boneIndex] =
-                    true;
+            if (hasSkinWeights)
+            {
+                return meshFrame;
             }
         }
 
         /*
-         * Non-deforming helper bones may not have direct vertex weights. Give
-         * their ancestors the same skin frame as the nearest weighted child.
+         * No skinned mesh was found. Identity is safer than mixing arbitrary
+         * node spaces. The node-pose fallback below still handles bones whose
+         * inverse bind cannot be inverted.
          */
-        for (int boneIndex = 0;
-             boneIndex <
-                skeleton.Bones.Count;
-             boneIndex++)
-        {
-            if (!resolved[boneIndex])
-            {
-                continue;
-            }
-
-            int parent =
-                skeleton.Bones[boneIndex]
-                    .ParentIndex;
-
-            var visited =
-                new HashSet<int>();
-
-            while (parent >=
-                       0 &&
-                   parent <
-                       skeleton.Bones.Count &&
-                   visited.Add(
-                       parent))
-            {
-                if (!resolved[parent])
-                {
-                    frames[parent] =
-                        frames[boneIndex];
-
-                    resolved[parent] =
-                        true;
-                }
-
-                parent =
-                    skeleton.Bones[parent]
-                        .ParentIndex;
-            }
-        }
-
-        for (int boneIndex = 0;
-             boneIndex <
-                frames.Length;
-             boneIndex++)
-        {
-            if (!resolved[boneIndex] &&
-                hasFallback)
-            {
-                frames[boneIndex] =
-                    fallbackFrame;
-            }
-        }
-
-        return frames;
+        return Matrix4x4.Identity;
     }
 
     private static Vector3 TransformVertex(
