@@ -70,6 +70,21 @@ public abstract class Component
         OnUpdate();
     }
 
+    internal void LateUpdateInternal()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        if (!_started)
+        {
+            StartInternal();
+        }
+
+        OnLateUpdate();
+    }
+
     internal void RenderInternal(
         RenderContext context)
     {
@@ -175,6 +190,15 @@ public abstract class Component
     }
 
     protected virtual void OnUpdate()
+    {
+    }
+
+    /// <summary>
+    /// Called after the Scene has completed its normal component update pass and
+    /// physics step for the frame. Camera follow, procedural pose corrections,
+    /// and other systems that depend on final gameplay transforms belong here.
+    /// </summary>
+    protected virtual void OnLateUpdate()
     {
     }
 

@@ -8,14 +8,34 @@ namespace ByteEngine.Core.Gameplay;
 
 public enum CharacterRotationMode
 {
+    /// <summary>
+    /// Standard third-person locomotion. Movement is camera-relative by default,
+    /// while the character turns toward the actual movement direction.
+    /// </summary>
     FaceMovement,
+
+    /// <summary>
+    /// Aim/strafe locomotion. The character faces the camera/control yaw even
+    /// while moving sideways or backwards.
+    /// </summary>
     FaceCamera,
+
+    /// <summary>
+    /// PlayerController3D does not rotate the character.
+    /// </summary>
     Independent
 }
 
 /// <summary>
 /// Converts player input into movement intent and persistent control rotation.
-/// Physical movement remains in CharacterController3D and camera placement in CameraBoom3D.
+///
+/// TPS-B separates movement direction from facing direction:
+/// - camera-relative movement remains the default movement space;
+/// - FaceMovement is the standard third-person default;
+/// - FaceCamera is an explicit aim/strafe mode;
+/// - CharacterController3D remains the sole owner of physical movement.
+///
+/// Camera placement remains in CameraBoom3D.
 /// </summary>
 public sealed class PlayerController3D : Component
 {
@@ -29,34 +49,105 @@ public sealed class PlayerController3D : Component
     public InputActionReference JumpAction { get; set; } = InputActionReference.Named("Jump");
     public InputActionReference SprintAction { get; set; } = InputActionReference.Named("Sprint");
 
+    /// <summary>
+    /// When false (default), movement input is resolved relative to ControlYaw,
+    /// giving standard third-person camera-relative movement.
+    ///
+    /// When true, movement uses the character's local forward/right axes.
+    /// </summary>
     public bool UseLocalOrientation { get; set; }
-    public CharacterRotationMode CharacterRotation { get; set; } = CharacterRotationMode.FaceCamera;
-    public float TurnSpeed { get => _turnSpeed; set => _turnSpeed = Positive(value); }
-    public float ControlYaw { get => _controlYaw; set => _controlYaw = NormalizeAngle(Finite(value)); }
-    public float ControlPitch { get => _controlPitch; set => _controlPitch = Math.Clamp(Finite(value), -89f, 89f); }
-    public float DesiredCharacterYaw => _desiredCharacterYaw;
-    public override int UpdateOrder => -300;
 
-    public void SetControlRotation(float yaw, float pitch, float minPitch = -40f, float maxPitch = 65f)
+    /// <summary>
+    /// Standard TPS defaults to FaceMovement. FaceCamera is intended for
+    /// aim/strafe gameplay where the body should follow camera yaw.
+    /// </summary>
+    public CharacterRotationMode CharacterRotation { get; set; } =
+        CharacterRotationMode.FaceMovement;
+
+    public float TurnSpeed
     {
-        ControlYaw = yaw;
-        _controlPitch = Math.Clamp(Finite(pitch), Math.Min(minPitch, maxPitch), Math.Max(minPitch, maxPitch));
+        get => _turnSpeed;
+        set => _turnSpeed = Positive(value);
     }
 
-    public void AddLookInput(float yawDelta, float pitchDelta, float minPitch = -40f, float maxPitch = 65f) =>
-        SetControlRotation(ControlYaw + yawDelta, ControlPitch + pitchDelta, minPitch, maxPitch);
+    public float ControlYaw
+    {
+        get => _controlYaw;
+        set => _controlYaw = NormalizeAngle(Finite(value));
+    }
+
+    public float ControlPitch
+    {
+        get => _controlPitch;
+        set => _controlPitch = Math.Clamp(Finite(value), -89f, 89f);
+    }
+
+    public float DesiredCharacterYaw => _desiredCharacterYaw;
+
+    public override int UpdateOrder => -300;
+
+    protected override void OnStart()
+    {
+        GameObject? player = AttachedGameObject;
+
+        if (player != null)
+        {
+            _desiredCharacterYaw =
+                NormalizeAngle(player.Transform.EulerAngles.Y);
+        }
+    }
+
+    public void SetControlRotation(
+        float yaw,
+        float pitch,
+        float minPitch = -40f,
+        float maxPitch = 65f)
+    {
+        ControlYaw = yaw;
+
+        _controlPitch =
+            Math.Clamp(
+                Finite(pitch),
+                Math.Min(minPitch, maxPitch),
+                Math.Max(minPitch, maxPitch));
+    }
+
+    public void AddLookInput(
+        float yawDelta,
+        float pitchDelta,
+        float minPitch = -40f,
+        float maxPitch = 65f) =>
+        SetControlRotation(
+            ControlYaw + yawDelta,
+            ControlPitch + pitchDelta,
+            minPitch,
+            maxPitch);
 
     protected override void OnUpdate()
     {
         GameObject? player = AttachedGameObject;
-        CharacterController3D? controller = player?.GetComponent<CharacterController3D>();
-        if (player == null || controller?.Enabled != true) return;
+        CharacterController3D? controller =
+            player?.GetComponent<CharacterController3D>();
 
-        CameraBoom3D? boom = player.GetComponent<CameraBoom3D>();
+        if (player == null ||
+            controller?.Enabled != true)
+        {
+            return;
+        }
+
+        CameraBoom3D? boom =
+            player.GetComponent<CameraBoom3D>();
+
         if (InputActions.GameplayEnabled)
         {
-            Vector2 lookInput = InputActions.ReadAxis2D(LookAction);
-            Vector2 look = CalculateLookDelta(lookInput, boom);
+            Vector2 lookInput =
+                InputActions.ReadAxis2D(LookAction);
+
+            Vector2 look =
+                CalculateLookDelta(
+                    lookInput,
+                    boom);
+
             AddLookInput(
                 look.X,
                 look.Y,
@@ -64,93 +155,248 @@ public sealed class PlayerController3D : Component
                 boom?.MaxPitch ?? 65f);
         }
 
-        Vector2 moveInput = InputActions.ReadAxis2D(MoveAction);
-        float forwardInput = moveInput.Y;
-        float rightInput = moveInput.X;
+        Vector2 moveInput =
+            InputActions.ReadAxis2D(MoveAction);
+
+        float forwardInput =
+            moveInput.Y;
+
+        float rightInput =
+            moveInput.X;
+
         Vector3 forward;
         Vector3 right;
 
         if (UseLocalOrientation)
         {
-            forward = Horizontal(player.Transform.Forward);
-            right = Horizontal(player.Transform.Right);
+            forward =
+                Horizontal(player.Transform.Forward);
+
+            right =
+                Horizontal(player.Transform.Right);
         }
         else
         {
-            forward = ForwardFromYaw(ControlYaw);
-            right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
+            /*
+             * Standard TPS movement:
+             * input follows camera/control yaw, independently of which way
+             * the character body currently faces.
+             */
+            forward =
+                ForwardFromYaw(ControlYaw);
+
+            right =
+                Vector3.Normalize(
+                    Vector3.Cross(
+                        forward,
+                        Vector3.UnitY));
         }
 
-        Vector3 movement = forward * forwardInput + right * rightInput;
-        if (movement.LengthSquared() > 1f) movement = Vector3.Normalize(movement);
+        Vector3 movement =
+            forward * forwardInput +
+            right * rightInput;
+
+        if (movement.LengthSquared() > 1f)
+        {
+            movement =
+                Vector3.Normalize(movement);
+        }
+
         controller.Move(movement);
-        UpdateCharacterRotation(movement, Math.Max((float)Time.DeltaTime, 0f));
-        if (InputActions.WasPressed(JumpAction)) controller.Jump();
+
+        /*
+         * Facing is a separate decision from movement-space calculation.
+         * FaceMovement = normal free-orbit TPS.
+         * FaceCamera   = aim/strafe mode.
+         */
+        UpdateCharacterRotation(
+            movement,
+            Math.Max(
+                (float)Time.DeltaTime,
+                0f));
+
+        if (InputActions.WasPressed(JumpAction))
+        {
+            controller.Jump();
+        }
     }
 
-    public void UpdateCharacterRotation(Vector3 movement, float deltaTime)
+    public void UpdateCharacterRotation(
+        Vector3 movement,
+        float deltaTime)
     {
         GameObject? player = AttachedGameObject;
-        if (player == null || CharacterRotation == CharacterRotationMode.Independent) return;
 
-        bool hasMovement = Horizontal(movement).LengthSquared() > .0001f;
-        if (CharacterRotation == CharacterRotationMode.FaceMovement && !hasMovement) return;
+        if (player == null ||
+            CharacterRotation ==
+                CharacterRotationMode.Independent)
+        {
+            return;
+        }
 
-        _desiredCharacterYaw = CharacterRotation == CharacterRotationMode.FaceCamera
-            ? ControlYaw
-            : YawFromDirection(movement);
+        bool hasMovement =
+            Horizontal(movement)
+                .LengthSquared() >
+            .0001f;
 
-        Vector3 euler = player.Transform.EulerAngles;
-        euler.Y = MoveTowardsAngle(euler.Y, _desiredCharacterYaw, TurnSpeed * Math.Max(deltaTime, 0f));
-        player.Transform.EulerAngles = euler;
+        if (CharacterRotation ==
+                CharacterRotationMode.FaceMovement &&
+            !hasMovement)
+        {
+            /*
+             * Normal TPS keeps the last body heading while idle. The camera
+             * remains free to orbit without dragging the character around.
+             */
+            return;
+        }
+
+        _desiredCharacterYaw =
+            CharacterRotation ==
+                CharacterRotationMode.FaceCamera
+                ? ControlYaw
+                : YawFromDirection(movement);
+
+        Vector3 euler =
+            player.Transform.EulerAngles;
+
+        euler.Y =
+            MoveTowardsAngle(
+                euler.Y,
+                _desiredCharacterYaw,
+                TurnSpeed *
+                Math.Max(deltaTime, 0f));
+
+        player.Transform.EulerAngles =
+            euler;
     }
 
-    public static float DeltaAngle(float current, float target) => NormalizeAngle(target - current);
+    public static float DeltaAngle(
+        float current,
+        float target) =>
+        NormalizeAngle(target - current);
 
-    public static float MoveTowardsAngle(float current, float target, float maxDelta)
+    public static float MoveTowardsAngle(
+        float current,
+        float target,
+        float maxDelta)
     {
-        float delta = DeltaAngle(current, target);
-        if (MathF.Abs(delta) <= Math.Max(maxDelta, 0f)) return NormalizeAngle(target);
-        return NormalizeAngle(current + MathF.CopySign(Math.Max(maxDelta, 0f), delta));
+        float delta =
+            DeltaAngle(current, target);
+
+        if (MathF.Abs(delta) <=
+            Math.Max(maxDelta, 0f))
+        {
+            return NormalizeAngle(target);
+        }
+
+        return NormalizeAngle(
+            current +
+            MathF.CopySign(
+                Math.Max(maxDelta, 0f),
+                delta));
     }
 
-    public static float YawFromDirection(Vector3 direction)
+    public static float YawFromDirection(
+        Vector3 direction)
     {
-        Vector3 horizontal = Horizontal(direction);
-        return horizontal.LengthSquared() < .0001f
+        Vector3 horizontal =
+            Horizontal(direction);
+
+        return horizontal.LengthSquared() <
+               .0001f
             ? 0f
-            : NormalizeAngle(MathF.Atan2(horizontal.X, -horizontal.Z) * 180f / MathF.PI);
+            : NormalizeAngle(
+                MathF.Atan2(
+                    horizontal.X,
+                    -horizontal.Z) *
+                180f /
+                MathF.PI);
     }
 
-    public static Vector3 ForwardFromYaw(float yawDegrees)
+    public static Vector3 ForwardFromYaw(
+        float yawDegrees)
     {
-        float radians = yawDegrees * MathF.PI / 180f;
-        return Vector3.Normalize(new Vector3(MathF.Sin(radians), 0f, -MathF.Cos(radians)));
+        float radians =
+            yawDegrees *
+            MathF.PI /
+            180f;
+
+        return Vector3.Normalize(
+            new Vector3(
+                MathF.Sin(radians),
+                0f,
+                -MathF.Cos(radians)));
     }
 
-    public static Vector2 CalculateLookDelta(Vector2 mouseDelta, CameraBoom3D? boom)
+    public static Vector2 CalculateLookDelta(
+        Vector2 mouseDelta,
+        CameraBoom3D? boom)
     {
-        float horizontal = mouseDelta.X * (boom?.MouseSensitivityX ?? .12f);
-        float vertical = -mouseDelta.Y * (boom?.MouseSensitivityY ?? .1f);
-        if (boom?.InvertHorizontalLook == true) horizontal = -horizontal;
-        if (boom?.InvertVerticalLook == true) vertical = -vertical;
-        return new Vector2(horizontal, vertical);
+        float horizontal =
+            mouseDelta.X *
+            (boom?.MouseSensitivityX ?? .12f);
+
+        float vertical =
+            -mouseDelta.Y *
+            (boom?.MouseSensitivityY ?? .1f);
+
+        if (boom?.InvertHorizontalLook == true)
+        {
+            horizontal =
+                -horizontal;
+        }
+
+        if (boom?.InvertVerticalLook == true)
+        {
+            vertical =
+                -vertical;
+        }
+
+        return new Vector2(
+            horizontal,
+            vertical);
     }
 
-    private static Vector3 Horizontal(Vector3 value)
+    private static Vector3 Horizontal(
+        Vector3 value)
     {
         value.Y = 0f;
-        return value.LengthSquared() > .0001f ? Vector3.Normalize(value) : Vector3.Zero;
+
+        return value.LengthSquared() >
+               .0001f
+            ? Vector3.Normalize(value)
+            : Vector3.Zero;
     }
 
-    private static float NormalizeAngle(float value)
+    private static float NormalizeAngle(
+        float value)
     {
-        value = Finite(value) % 360f;
-        if (value > 180f) value -= 360f;
-        if (value <= -180f) value += 360f;
+        value =
+            Finite(value) %
+            360f;
+
+        if (value > 180f)
+        {
+            value -= 360f;
+        }
+
+        if (value <= -180f)
+        {
+            value += 360f;
+        }
+
         return value;
     }
 
-    private static float Positive(float value) => Math.Max(0f, Finite(value));
-    private static float Finite(float value) => float.IsFinite(value) ? value : 0f;
+    private static float Positive(
+        float value) =>
+        Math.Max(
+            0f,
+            Finite(value));
+
+    private static float Finite(
+        float value) =>
+        float.IsFinite(value)
+            ? value
+            : 0f;
 }

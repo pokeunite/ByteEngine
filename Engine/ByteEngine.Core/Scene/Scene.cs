@@ -352,7 +352,10 @@ public sealed class Scene
 
         try
         {
-            foreach (GameObject gameObject in _gameObjects.ToArray())
+            GameObject[] frameObjects =
+                _gameObjects.ToArray();
+
+            foreach (GameObject gameObject in frameObjects)
             {
                 if (_pendingDestroy.Contains(gameObject.Id)) continue;
                 gameObject.UpdateInternal();
@@ -367,6 +370,22 @@ public sealed class Scene
             Physics.Step(
                 this,
                 (float)Time.DeltaTime);
+
+            /*
+             * LateUpdate is a distinct, scene-wide pass after normal gameplay
+             * updates and physics. This gives camera rigs and other post-motion
+             * systems the final transforms for the frame instead of making them
+             * depend on GameObject/component ordering.
+             *
+             * The same frame snapshot is used intentionally: objects created
+             * during Update start normally but enter the update/late-update pair
+             * on the following frame. Objects queued for destruction are skipped.
+             */
+            foreach (GameObject gameObject in frameObjects)
+            {
+                if (_pendingDestroy.Contains(gameObject.Id)) continue;
+                gameObject.LateUpdateInternal();
+            }
         }
         finally
         {

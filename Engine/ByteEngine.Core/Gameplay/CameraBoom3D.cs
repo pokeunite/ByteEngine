@@ -9,8 +9,22 @@ using RuntimeScene = ByteEngine.Core.Scene.Scene;
 namespace ByteEngine.Core.Gameplay;
 
 /// <summary>
-/// A third-person spring arm. It consumes PlayerController3D control rotation,
-/// resolves its camera socket, handles collision, then places a child Camera3D.
+/// Unreal-style third-person spring arm.
+///
+/// TPS-C keeps the character/pivot framing stable.
+/// TPS-D hardens spring-arm collision:
+/// - follows after gameplay/physics in LateUpdate (TPS-A);
+/// - position/rotation lag are optional effects, not default locomotion;
+/// - orbit, shoulder framing and view rotation are resolved independently;
+/// - collision probe radius is already accounted for by SphereCast, so the
+///   boom no longer subtracts that radius twice;
+/// - solid obstacles pull the camera in immediately;
+/// - obstacle removal restores arm length smoothly;
+/// - triggers are ignored and CameraCollisionMask is the authoritative probe
+///   filter instead of the player's gameplay collision matrix.
+///
+/// Character movement remains owned by CharacterController3D and facing remains
+/// owned by PlayerController3D.
 /// </summary>
 public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
 {
@@ -27,6 +41,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     private float _rotationSmoothness = 20f;
     private float _shoulderOffset;
     private float _collisionRadius = .2f;
+    private float _collisionSafetyMargin = .05f;
     private float _collisionReturnSpeed = 8f;
     private float _maxLagDistance = 1.5f;
     private float _maxLagTimeStep = 1f / 60f;
@@ -55,17 +70,56 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float MouseSensitivityY { get => _mouseSensitivityY; set => _mouseSensitivityY = Positive(value); }
     public bool InvertHorizontalLook { get; set; }
     public bool InvertVerticalLook { get; set; }
-    public bool CameraLagEnabled { get; set; } = true;
-    public bool RotationLagEnabled { get; set; } = true;
+    /// <summary>
+/// Optional cinematic position lag. Standard TPS keeps this disabled so the
+/// player remains locked to a stable camera pivot.
+/// </summary>
+    public bool CameraLagEnabled { get; set; } = false;
+    /// <summary>
+/// Optional camera-rotation lag. Standard TPS follows control rotation directly.
+/// </summary>
+    public bool RotationLagEnabled { get; set; } = false;
     public bool LagSubstepping { get; set; } = true;
     public float PositionSmoothness { get => _positionSmoothness; set => _positionSmoothness = Positive(value); }
     public float RotationSmoothness { get => _rotationSmoothness; set => _rotationSmoothness = Positive(value); }
     public float MaximumLagDistance { get => _maxLagDistance; set => _maxLagDistance = Positive(value); }
     public float MaxLagTimeStep { get => _maxLagTimeStep; set => _maxLagTimeStep = Math.Clamp(Positive(value), .001f, .1f); }
     public float ShoulderOffset { get => _shoulderOffset; set => _shoulderOffset = Finite(value); }
-    public bool EnableCameraCollision { get; set; }
-    public float CollisionRadius { get => _collisionRadius; set => _collisionRadius = Positive(value); }
-    public float CollisionReturnSpeed { get => _collisionReturnSpeed; set => _collisionReturnSpeed = Positive(value); }
+    /// <summary>
+    /// Unreal-style camera probe. New TPS rigs default this on.
+    /// Existing scenes that explicitly serialized false keep their authored value.
+    /// </summary>
+    public bool EnableCameraCollision { get; set; } = true;
+
+    /// <summary>
+    /// Radius of the swept camera probe.
+    /// </summary>
+    public float CollisionRadius
+    {
+        get => _collisionRadius;
+        set => _collisionRadius = Positive(value);
+    }
+
+    /// <summary>
+    /// Small gap left between the swept camera sphere and a blocking surface.
+    /// SphereCast already expands geometry by CollisionRadius, so this margin
+    /// must not include CollisionRadius again.
+    /// </summary>
+    public float CollisionSafetyMargin
+    {
+        get => _collisionSafetyMargin;
+        set => _collisionSafetyMargin = Positive(value);
+    }
+
+    /// <summary>
+    /// Speed used only when restoring the camera after an obstruction clears.
+    /// Pull-in remains immediate to prevent wall clipping.
+    /// </summary>
+    public float CollisionReturnSpeed
+    {
+        get => _collisionReturnSpeed;
+        set => _collisionReturnSpeed = Positive(value);
+    }
     public Vector3 DesiredSocketPosition => _desiredSocketPosition;
     public Vector3 ActualSocketPosition => _actualSocketPosition;
     public float DesiredBoomYaw => _desiredBoomYaw;
@@ -76,7 +130,13 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public override int UpdateOrder => -200;
 
     protected override void OnStart() => UpdateRig(true);
-    protected override void OnUpdate() => UpdateRig(false);
+
+    /// <summary>
+    /// The camera boom follows in the scene-wide late-update phase so it sees
+    /// the character's final gameplay/physics transform for the frame.
+    /// </summary>
+    protected override void OnLateUpdate() => UpdateRig(false);
+
     public void SnapToSocket() => UpdateRig(true);
 
     public static Vector3 CalculateOrbitVector(float yawDegrees, float pitchDegrees, float armLength)
@@ -90,10 +150,54 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             MathF.Cos(yaw) * MathF.Cos(pitch)) * length;
     }
 
+    /// <summary>
+    /// Camera forward direction for a boom yaw/pitch. This is the inverse of
+    /// the unit orbit direction: the camera sits behind the pivot and looks
+    /// forward along control rotation.
+    /// </summary>
+    public static Vector3 CalculateViewForward(
+        float yawDegrees,
+        float pitchDegrees)
+    {
+        Vector3 orbit =
+            CalculateOrbitVector(
+                yawDegrees,
+                pitchDegrees,
+                1.0f);
+
+        return orbit.LengthSquared() > .000001f
+            ? -Vector3.Normalize(orbit)
+            : new Vector3(0f, 0f, -1f);
+    }
+
     public static float SmoothAngle(float current, float target, float speed, float deltaTime)
     {
         float factor = ExponentialFactor(speed, deltaTime);
         return current + PlayerController3D.DeltaAngle(current, target) * factor;
+    }
+
+    /// <summary>
+    /// Converts a sphere-cast hit into an allowed spring-arm length.
+    /// hitDistance is already radius-aware.
+    /// </summary>
+    public static float CalculateCollisionLength(
+        float desiredLength,
+        float hitDistance,
+        float safetyMargin)
+    {
+        float desired =
+            Positive(desiredLength);
+
+        float hit =
+            Positive(hitDistance);
+
+        float margin =
+            Positive(safetyMargin);
+
+        return Math.Clamp(
+            hit - margin,
+            0f,
+            desired);
     }
 
     public static int CalculateLagSteps(float deltaTime, bool enabled, float maxStep) =>
@@ -154,36 +258,112 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             }
         }
 
+        /*
+         * Resolve framing around the FINAL follow pivot. Shoulder offset is a
+         * socket/framing offset; it does not change what direction the camera
+         * is looking.
+         */
         float yawRadians = Radians(_smoothedBoomYaw);
-        Vector3 right = new(MathF.Cos(yawRadians), 0f, -MathF.Sin(yawRadians));
-        Vector3 fullOffset = CalculateOrbitVector(_smoothedBoomYaw, _smoothedBoomPitch, ArmLength) + right * ShoulderOffset;
-        _desiredSocketPosition = desiredPivot + fullOffset;
-        float desiredLength = fullOffset.Length();
+
+        Vector3 right =
+            new(
+                MathF.Cos(yawRadians),
+                0f,
+                -MathF.Sin(yawRadians));
+
+        Vector3 orbitOffset =
+            CalculateOrbitVector(
+                _smoothedBoomYaw,
+                _smoothedBoomPitch,
+                ArmLength);
+
+        Vector3 shoulderOffset =
+            right *
+            ShoulderOffset;
+
+        Vector3 fullOffset =
+            orbitOffset +
+            shoulderOffset;
+
+        _desiredSocketPosition =
+            _smoothedPivot +
+            fullOffset;
+
+        float desiredLength =
+            fullOffset.Length();
         float collisionLength = desiredLength;
         _collisionHit = false;
         _collisionObject = null;
 
-        if (EnableCameraCollision && desiredLength > .0001f &&
-            GameplayQuery3D.SphereCast(scene, _smoothedPivot, fullOffset, CollisionRadius,
-                out RaycastHit3D hit, desiredLength, root, CameraCollisionMask, root))
+        if (EnableCameraCollision &&
+            desiredLength > .0001f &&
+            GameplayQuery3D.SphereCast(
+                scene,
+                _smoothedPivot,
+                fullOffset,
+                CollisionRadius,
+                out RaycastHit3D hit,
+                desiredLength,
+                ignore: root,
+                layerMask: CameraCollisionMask,
+                source: root,
+                bypassCollisionMatrix: true,
+                includeTriggers: false))
         {
             _collisionHit = true;
             _collisionObject = hit.GameObject;
-            collisionLength = Math.Max(0f, hit.Distance - CollisionRadius);
+
+            /*
+             * GameplayQuery3D.SphereCast intersects against geometry expanded by
+             * the cast radius. hit.Distance is therefore already the safe center
+             * travel distance for the camera sphere. Subtracting CollisionRadius
+             * again over-compresses the spring arm.
+             */
+            collisionLength =
+                CalculateCollisionLength(
+                    desiredLength,
+                    hit.Distance,
+                    CollisionSafetyMargin);
         }
 
-        if (immediate || collisionLength < _actualLength)
-            _actualLength = collisionLength;
+        /*
+         * Obstruction response is deliberately asymmetric:
+         * - pull in immediately so the camera cannot clip through a wall;
+         * - restore smoothly when the view becomes clear.
+         */
+        if (immediate ||
+            collisionLength < _actualLength)
+        {
+            _actualLength =
+                collisionLength;
+        }
         else
-            _actualLength = Lerp(_actualLength, collisionLength, ExponentialFactor(CollisionReturnSpeed, deltaTime));
+        {
+            _actualLength =
+                Lerp(
+                    _actualLength,
+                    collisionLength,
+                    ExponentialFactor(
+                        CollisionReturnSpeed,
+                        deltaTime));
+        }
 
         Vector3 direction = desiredLength > .0001f ? Vector3.Normalize(fullOffset) : Vector3.Zero;
         _actualSocketPosition = _smoothedPivot + direction * _actualLength;
         _cameraObject.Transform.WorldPosition = _actualSocketPosition;
 
-        Vector3 lookDirection = _smoothedPivot - _actualSocketPosition;
-        if (lookDirection.LengthSquared() > .000001f)
-            _cameraObject.Transform.WorldRotation = LookRotation(Vector3.Normalize(lookDirection));
+        /*
+         * Do not LookAt(pivot) here. With a shoulder offset, LookAt forces the
+         * player back into screen center and defeats over-the-shoulder framing.
+         * Unreal-style spring arms keep the camera aligned to control rotation.
+         */
+        Vector3 viewForward =
+            CalculateViewForward(
+                _smoothedBoomYaw,
+                _smoothedBoomPitch);
+
+        _cameraObject.Transform.WorldRotation =
+            LookRotation(viewForward);
     }
 
     private GameObject? ResolveCamera(GameObject root, RuntimeScene scene)
@@ -239,6 +419,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("ArmLength", ArmLength);
         writer.Add("PivotHeight", PivotHeight);
         writer.Add("ShoulderOffset", ShoulderOffset);
+        writer.Add("StableFollow.DefaultPositionLag", false);
+        writer.Add("StableFollow.DefaultRotationLag", false);
+        writer.Add("ViewForward", CalculateViewForward(_smoothedBoomYaw, _smoothedBoomPitch));
         writer.Add("DesiredSocketPosition", _desiredSocketPosition);
         writer.Add("ActualSocketPosition", _actualSocketPosition);
         writer.Add("RootPosition", root?.Transform.WorldPosition);
@@ -248,6 +431,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("Forward", _cameraObject?.Transform.Forward);
         writer.Add("FOV", camera?.FieldOfView);
         writer.Add("Collision.Enabled", EnableCameraCollision);
+        writer.Add("Collision.Radius", CollisionRadius);
+        writer.Add("Collision.SafetyMargin", CollisionSafetyMargin);
+        writer.Add("Collision.ReturnSpeed", CollisionReturnSpeed);
         writer.Add("Collision.Hit", _collisionHit);
         writer.Add("Collision.HitObject", Describe(_collisionObject));
         writer.Add("Collision.DesiredLength", ArmLength);

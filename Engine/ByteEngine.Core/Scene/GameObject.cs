@@ -225,6 +225,19 @@ public sealed class GameObject
         }
     }
 
+    internal void LateUpdateInternal()
+    {
+        if (!ActiveInHierarchy) return;
+
+        if (!_started) StartInternal();
+
+        foreach (Component component
+                 in _components.OrderBy(component => component.UpdateOrder))
+        {
+            component.LateUpdateInternal();
+        }
+    }
+
     internal void RenderInternal(Graphics.RenderContext context)
     {
         if (!ActiveInHierarchy) return;
