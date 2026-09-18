@@ -11,40 +11,66 @@ namespace ByteEngine.Editor.Panels;
 /// <summary>
 /// Dedicated authoring workspace for .byteanim assets.
 ///
-/// Editing is kept out of AnimationController so characters only reference a
-/// profile. Changes stay in memory until Save, avoiding AssetDatabase scans and
-/// hot reload work on every ImGui edit frame.
+/// Profile changes stay in memory until Save. Humanoid bone configuration is
+/// delegated to a dedicated rig window instead of expanding the profile into a
+/// long wall of bone dropdowns.
 /// </summary>
 internal sealed class AnimationProfileWorkspacePanel
 {
+    private readonly HumanoidRigConfiguratorPanel _humanoidConfigurator =
+        new();
+
     private AssetRecord? _asset;
     private EditorProjectContext? _project;
     private AnimationProfile? _profile;
+
     private bool _visible;
     private bool _focusNextDraw;
     private bool _dirty;
+
     private string? _loadError;
+
     private Guid _clipCacheModelGuid;
     private string? _clipCacheModelPath;
-    private IReadOnlyList<string> _clipCache = Array.Empty<string>();
+    private IReadOnlyList<string> _clipCache =
+        Array.Empty<string>();
     private bool _clipCacheValid;
+
+    private string _clipSearch =
+        string.Empty;
+
+    private string _assetSearch =
+        string.Empty;
 
     public void Open(
         AssetRecord asset,
         EditorProjectContext project,
         EditorLog log)
     {
-        if (asset.Type != AssetType.AnimationProfile)
+        if (asset.Type !=
+            AssetType.AnimationProfile)
         {
             return;
         }
 
-        _asset = asset;
-        _project = project;
-        _visible = true;
-        _focusNextDraw = true;
-        _dirty = false;
-        _loadError = null;
+        _asset =
+            asset;
+
+        _project =
+            project;
+
+        _visible =
+            true;
+
+        _focusNextDraw =
+            true;
+
+        _dirty =
+            false;
+
+        _loadError =
+            null;
+
         InvalidateClipCache();
 
         try
@@ -55,8 +81,12 @@ internal sealed class AnimationProfileWorkspacePanel
         }
         catch (Exception exception)
         {
-            _profile = null;
-            _loadError = exception.Message;
+            _profile =
+                null;
+
+            _loadError =
+                exception.Message;
+
             log.Error(
                 $"Could not open Animation Profile '{asset.ProjectPath}': {exception.Message}");
         }
@@ -65,8 +95,39 @@ internal sealed class AnimationProfileWorkspacePanel
     public void Draw(
         EditorLog log)
     {
-        if (!_visible ||
-            _asset == null ||
+        if (_visible &&
+            _asset != null &&
+            _project != null)
+        {
+            DrawWorkspace(
+                log);
+        }
+
+        Guid? configureRequest =
+            HumanoidRigConfiguratorRequest.Consume();
+
+        if (configureRequest.HasValue &&
+            _project != null &&
+            _project.AssetDatabase.TryGetAsset(
+                configureRequest.Value,
+                out AssetRecord? modelAsset) &&
+            modelAsset?.Type ==
+                AssetType.Model3D)
+        {
+            _humanoidConfigurator.Open(
+                modelAsset,
+                _project,
+                log);
+        }
+
+        _humanoidConfigurator.Draw(
+            log);
+    }
+
+    private void DrawWorkspace(
+        EditorLog log)
+    {
+        if (_asset == null ||
             _project == null)
         {
             return;
@@ -75,14 +136,17 @@ internal sealed class AnimationProfileWorkspacePanel
         if (_focusNextDraw)
         {
             ImGui.SetNextWindowFocus();
-            _focusNextDraw = false;
+
+            _focusNextDraw =
+                false;
         }
 
         string name =
             Path.GetFileNameWithoutExtension(
                 _asset.ProjectPath);
 
-        bool open = true;
+        bool open =
+            true;
 
         bool visible =
             ImGui.Begin(
@@ -92,10 +156,14 @@ internal sealed class AnimationProfileWorkspacePanel
 
         if (visible)
         {
-            DrawMenuBar(log);
-            DrawHeader(log);
+            DrawMenuBar(
+                log);
 
-            if (_profile == null)
+            DrawHeader(
+                log);
+
+            if (_profile ==
+                null)
             {
                 ImGui.TextColored(
                     new Vector4(
@@ -105,14 +173,18 @@ internal sealed class AnimationProfileWorkspacePanel
                         1.0f),
                     "Animation Profile could not be loaded.");
 
-                if (!string.IsNullOrWhiteSpace(_loadError))
+                if (!string.IsNullOrWhiteSpace(
+                        _loadError))
                 {
-                    ImGui.TextWrapped(_loadError);
+                    ImGui.TextWrapped(
+                        _loadError);
                 }
 
-                if (ImGui.Button("Retry Load"))
+                if (ImGui.Button(
+                        "Retry Load"))
                 {
-                    Reload(log);
+                    Reload(
+                        log);
                 }
             }
             else
@@ -127,10 +199,12 @@ internal sealed class AnimationProfileWorkspacePanel
         {
             if (_dirty)
             {
-                Save(log);
+                Save(
+                    log);
             }
 
-            _visible = false;
+            _visible =
+                false;
         }
     }
 
@@ -144,32 +218,39 @@ internal sealed class AnimationProfileWorkspacePanel
 
         ImGui.BeginDisabled(
             !_dirty ||
-            _profile == null);
+            _profile ==
+                null);
 
         if (ImGui.MenuItem(
                 "Save",
                 "Ctrl+S"))
         {
-            Save(log);
+            Save(
+                log);
         }
 
         ImGui.EndDisabled();
 
-        if (ImGui.MenuItem("Revert"))
+        if (ImGui.MenuItem(
+                "Revert"))
         {
-            Reload(log);
+            Reload(
+                log);
         }
 
         ImGui.Separator();
 
-        if (ImGui.MenuItem("Close"))
+        if (ImGui.MenuItem(
+                "Close"))
         {
             if (_dirty)
             {
-                Save(log);
+                Save(
+                    log);
             }
 
-            _visible = false;
+            _visible =
+                false;
         }
 
         ImGui.EndMenuBar();
@@ -178,7 +259,8 @@ internal sealed class AnimationProfileWorkspacePanel
     private void DrawHeader(
         EditorLog log)
     {
-        if (_asset == null)
+        if (_asset ==
+            null)
         {
             return;
         }
@@ -201,28 +283,35 @@ internal sealed class AnimationProfileWorkspacePanel
 
         ImGui.BeginDisabled(
             !_dirty ||
-            _profile == null);
+            _profile ==
+                null);
 
-        if (ImGui.Button("Save"))
+        if (ImGui.Button(
+                "Save"))
         {
-            Save(log);
+            Save(
+                log);
         }
 
         ImGui.EndDisabled();
 
         ImGui.SameLine();
 
-        if (ImGui.Button("Revert"))
+        if (ImGui.Button(
+                "Revert"))
         {
-            Reload(log);
+            Reload(
+                log);
         }
 
         if (ImGui.IsWindowFocused(
                 ImGuiFocusedFlags.RootAndChildWindows) &&
             ImGui.GetIO().KeyCtrl &&
-            ImGui.IsKeyPressed(ImGuiKey.S))
+            ImGui.IsKeyPressed(
+                ImGuiKey.S))
         {
-            Save(log);
+            Save(
+                log);
         }
 
         ImGui.Separator();
@@ -230,9 +319,12 @@ internal sealed class AnimationProfileWorkspacePanel
 
     private void DrawProfileTabs()
     {
-        if (_profile == null ||
-            _project == null ||
-            _asset == null)
+        if (_profile ==
+                null ||
+            _project ==
+                null ||
+            _asset ==
+                null)
         {
             return;
         }
@@ -243,39 +335,55 @@ internal sealed class AnimationProfileWorkspacePanel
             return;
         }
 
-        if (ImGui.BeginTabItem("RIG"))
+        if (ImGui.BeginTabItem(
+                "RIG"))
         {
-            _dirty |= DrawRig();
+            _dirty |=
+                DrawRig();
+
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("LOCOMOTION"))
+        if (ImGui.BeginTabItem(
+                "LOCOMOTION"))
         {
-            _dirty |= DrawLocomotion();
+            _dirty |=
+                DrawLocomotion();
+
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("ACTIONS"))
+        if (ImGui.BeginTabItem(
+                "ACTIONS"))
         {
-            _dirty |= DrawActions();
+            _dirty |=
+                DrawActions();
+
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("LAYERS"))
+        if (ImGui.BeginTabItem(
+                "LAYERS"))
         {
             DrawLayers();
+
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("PROCEDURAL"))
+        if (ImGui.BeginTabItem(
+                "PROCEDURAL"))
         {
-            _dirty |= DrawProcedural();
+            _dirty |=
+                DrawProcedural();
+
             ImGui.EndTabItem();
         }
 
-        if (ImGui.BeginTabItem("DEBUG"))
+        if (ImGui.BeginTabItem(
+                "DEBUG"))
         {
             DrawDebug();
+
             ImGui.EndTabItem();
         }
 
@@ -284,8 +392,10 @@ internal sealed class AnimationProfileWorkspacePanel
 
     private bool DrawRig()
     {
-        if (_profile == null ||
-            _project == null)
+        if (_profile ==
+                null ||
+            _project ==
+                null)
         {
             return false;
         }
@@ -317,7 +427,7 @@ internal sealed class AnimationProfileWorkspacePanel
         if (modelReference.IsEmpty)
         {
             ImGui.TextWrapped(
-                "Choose the character model that defines this profile's skeleton. Its Generic/Humanoid classification and Humanoid bone map are stored on the model asset.");
+                "Choose the character model that defines this profile's skeleton.");
 
             return changed;
         }
@@ -346,7 +456,7 @@ internal sealed class AnimationProfileWorkspacePanel
         if (animationSource.IsEmpty)
         {
             ImGui.TextDisabled(
-                "Using Reference Model animations. Choose a different ready Humanoid model here to reuse/retarget its clips.");
+                "Using Reference Model animations. Choose another ready Humanoid model to reuse/retarget its clips.");
         }
         else
         {
@@ -359,7 +469,8 @@ internal sealed class AnimationProfileWorkspacePanel
             _project.AssetDatabase.Resolve(
                 modelReference);
 
-        if (modelAsset == null ||
+        if (modelAsset ==
+                null ||
             modelAsset.Type !=
                 AssetType.Model3D)
         {
@@ -384,13 +495,9 @@ internal sealed class AnimationProfileWorkspacePanel
                 HumanoidRigAuthoring.Draw(
                     modelAsset,
                     model,
+                    _project,
                     out AnimationRigType actualRigType);
 
-            /*
-             * C8 stored Rig.Type directly in the profile. C9 makes the model
-             * metadata authoritative, but keeps the profile value mirrored for
-             * backwards compatibility with existing .byteanim files.
-             */
             if (_profile.Rig.Type !=
                 actualRigType)
             {
@@ -421,7 +528,8 @@ internal sealed class AnimationProfileWorkspacePanel
             ImGui.Spacing();
 
             ImGui.TextDisabled(
-                clips.Count == 0
+                clips.Count ==
+                    0
                     ? "Animation source clips: none"
                     : $"Animation source clips: {clips.Count}");
         }
@@ -446,7 +554,8 @@ internal sealed class AnimationProfileWorkspacePanel
         AssetReference referenceModel,
         AssetReference animationSource)
     {
-        if (_project == null)
+        if (_project ==
+            null)
         {
             return;
         }
@@ -455,7 +564,8 @@ internal sealed class AnimationProfileWorkspacePanel
             _project.AssetDatabase.Resolve(
                 animationSource);
 
-        if (sourceAsset == null ||
+        if (sourceAsset ==
+                null ||
             sourceAsset.Type !=
                 AssetType.Model3D)
         {
@@ -518,28 +628,35 @@ internal sealed class AnimationProfileWorkspacePanel
 
                 ImGui.TextDisabled(
                     $"{sourceModel.Animations.Count} source clip(s) available for transparent runtime retargeting.");
+            }
+            else
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.58f,
+                        0.24f,
+                        1.0f),
+                    "Humanoid Retarget Source Needs Attention");
 
-                return;
+                if (!targetReady)
+                {
+                    ImGui.BulletText(
+                        "Reference Model must be a ready Humanoid.");
+                }
+
+                if (!sourceReady)
+                {
+                    ImGui.BulletText(
+                        "Animation Source Model must be a ready Humanoid.");
+                }
             }
 
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.58f,
-                    0.24f,
-                    1.0f),
-                "Humanoid Retarget Source Needs Attention");
-
-            if (!targetReady)
+            if (ImGui.SmallButton(
+                    $"Configure Animation Source Humanoid...##{sourceAsset.Guid}"))
             {
-                ImGui.BulletText(
-                    "Reference Model must be a ready Humanoid.");
-            }
-
-            if (!sourceReady)
-            {
-                ImGui.BulletText(
-                    "Animation Source Model must be a ready Humanoid.");
+                HumanoidRigConfiguratorRequest.Request(
+                    sourceAsset.Guid);
             }
         }
         catch (Exception exception)
@@ -569,6 +686,11 @@ internal sealed class AnimationProfileWorkspacePanel
                 model.Skeleton,
                 mapping);
 
+        HumanoidRigDiagnosticReport diagnostics =
+            HumanoidRigDiagnostics.Analyze(
+                model.Skeleton,
+                mapping);
+
         if (pose.IsReady)
         {
             ImGui.TextColored(
@@ -582,8 +704,16 @@ internal sealed class AnimationProfileWorkspacePanel
             ImGui.TextDisabled(
                 $"{pose.CapturedBoneCount} mapped bone(s) captured from the model bind pose.");
 
-            ImGui.TextWrapped(
-                "ByteEngine now has the model-space Humanoid reference pose needed for retargeting. C9D will use this source/target pose data for actual Humanoid animation conversion.");
+            if (!diagnostics.ApproximatelyTPose)
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.67f,
+                        0.25f,
+                        1.0f),
+                    "Reference pose is not close to a clean T-pose. Retargeting quality may suffer.");
+            }
 
             return;
         }
@@ -613,7 +743,8 @@ internal sealed class AnimationProfileWorkspacePanel
 
     private bool DrawLocomotion()
     {
-        if (_profile == null)
+        if (_profile ==
+            null)
         {
             return false;
         }
@@ -621,15 +752,24 @@ internal sealed class AnimationProfileWorkspacePanel
         AnimationLocomotionProfile locomotion =
             _profile.Locomotion;
 
-        bool changed = false;
+        bool changed =
+            false;
 
-        ImGui.SeparatorText("BASE LOCOMOTION");
+        ImGui.SeparatorText(
+            "BASE LOCOMOTION");
 
-        bool enabled = locomotion.Enabled;
-        if (ImGui.Checkbox("Enabled", ref enabled))
+        bool enabled =
+            locomotion.Enabled;
+
+        if (ImGui.Checkbox(
+                "Enabled",
+                ref enabled))
         {
-            locomotion.Enabled = enabled;
-            changed = true;
+            locomotion.Enabled =
+                enabled;
+
+            changed =
+                true;
         }
 
         bool automatic =
@@ -639,53 +779,104 @@ internal sealed class AnimationProfileWorkspacePanel
                 "Automatic Speed / State",
                 ref automatic))
         {
-            locomotion.DriveFromCharacterController = automatic;
-            changed = true;
+            locomotion.DriveFromCharacterController =
+                automatic;
+
+            changed =
+                true;
         }
 
         IReadOnlyList<string> clips =
             GetAnimationClipNames();
 
-        string idle = locomotion.Idle;
-        if (DrawClipPicker("Idle", clips, ref idle))
+        string idle =
+            locomotion.Idle;
+
+        if (DrawClipPicker(
+                "Idle",
+                clips,
+                ref idle))
         {
-            locomotion.Idle = idle;
-            changed = true;
+            locomotion.Idle =
+                idle;
+
+            changed =
+                true;
         }
 
-        string walk = locomotion.Walk;
-        if (DrawClipPicker("Walk", clips, ref walk))
+        string walk =
+            locomotion.Walk;
+
+        if (DrawClipPicker(
+                "Walk",
+                clips,
+                ref walk))
         {
-            locomotion.Walk = walk;
-            changed = true;
+            locomotion.Walk =
+                walk;
+
+            changed =
+                true;
         }
 
-        string run = locomotion.Run;
-        if (DrawClipPicker("Run", clips, ref run))
+        string run =
+            locomotion.Run;
+
+        if (DrawClipPicker(
+                "Run",
+                clips,
+                ref run))
         {
-            locomotion.Run = run;
-            changed = true;
+            locomotion.Run =
+                run;
+
+            changed =
+                true;
         }
 
-        string jump = locomotion.Jump;
-        if (DrawClipPicker("Jump", clips, ref jump))
+        string jump =
+            locomotion.Jump;
+
+        if (DrawClipPicker(
+                "Jump",
+                clips,
+                ref jump))
         {
-            locomotion.Jump = jump;
-            changed = true;
+            locomotion.Jump =
+                jump;
+
+            changed =
+                true;
         }
 
-        string fall = locomotion.Fall;
-        if (DrawClipPicker("Fall", clips, ref fall))
+        string fall =
+            locomotion.Fall;
+
+        if (DrawClipPicker(
+                "Fall",
+                clips,
+                ref fall))
         {
-            locomotion.Fall = fall;
-            changed = true;
+            locomotion.Fall =
+                fall;
+
+            changed =
+                true;
         }
 
-        string land = locomotion.Land;
-        if (DrawClipPicker("Land", clips, ref land))
+        string land =
+            locomotion.Land;
+
+        if (DrawClipPicker(
+                "Land",
+                clips,
+                ref land))
         {
-            locomotion.Land = land;
-            changed = true;
+            locomotion.Land =
+                land;
+
+            changed =
+                true;
         }
 
         float runThreshold =
@@ -699,8 +890,12 @@ internal sealed class AnimationProfileWorkspacePanel
                 1000.0f))
         {
             locomotion.RunThreshold =
-                Math.Max(runThreshold, 0.0f);
-            changed = true;
+                Math.Max(
+                    runThreshold,
+                    0.0f);
+
+            changed =
+                true;
         }
 
         float transition =
@@ -714,8 +909,12 @@ internal sealed class AnimationProfileWorkspacePanel
                 5.0f))
         {
             locomotion.TransitionDuration =
-                Math.Max(transition, 0.0f);
-            changed = true;
+                Math.Max(
+                    transition,
+                    0.0f);
+
+            changed =
+                true;
         }
 
         float playbackSpeed =
@@ -729,8 +928,12 @@ internal sealed class AnimationProfileWorkspacePanel
                 10.0f))
         {
             locomotion.PlaybackSpeed =
-                Math.Max(playbackSpeed, 0.0f);
-            changed = true;
+                Math.Max(
+                    playbackSpeed,
+                    0.0f);
+
+            changed =
+                true;
         }
 
         int rootMotion =
@@ -747,13 +950,16 @@ internal sealed class AnimationProfileWorkspacePanel
         {
             locomotion.RootMotionMode =
                 (RootMotionMode)rootMotion;
-            changed = true;
+
+            changed =
+                true;
         }
 
-        if (clips.Count == 0)
+        if (clips.Count ==
+            0)
         {
             ImGui.TextWrapped(
-                "Choose a Reference Model in RIG. Optionally choose a different Animation Source Model to populate these clip pickers from a reusable Humanoid animation library.");
+                "Choose a Reference Model in RIG. Optionally choose a different Animation Source Model.");
         }
 
         return changed;
@@ -761,28 +967,37 @@ internal sealed class AnimationProfileWorkspacePanel
 
     private bool DrawActions()
     {
-        if (_profile == null)
+        if (_profile ==
+            null)
         {
             return false;
         }
 
-        bool changed = false;
+        bool changed =
+            false;
+
         IReadOnlyList<string> clips =
             GetAnimationClipNames();
 
-        ImGui.SeparatorText("NAMED ACTIONS");
+        ImGui.SeparatorText(
+            "NAMED ACTIONS");
 
-        if (ImGui.Button("+ Add Action"))
+        if (ImGui.Button(
+                "+ Add Action"))
         {
             _profile.Actions.Add(
                 new AnimationActionProfile());
-            changed = true;
+
+            changed =
+                true;
         }
 
-        int removeIndex = -1;
+        int removeIndex =
+            -1;
 
         for (int index = 0;
-             index < _profile.Actions.Count;
+             index <
+                _profile.Actions.Count;
              index++)
         {
             AnimationActionProfile action =
@@ -792,7 +1007,8 @@ internal sealed class AnimationProfileWorkspacePanel
                 $"ProfileAction:{index}");
 
             string title =
-                string.IsNullOrWhiteSpace(action.Name)
+                string.IsNullOrWhiteSpace(
+                    action.Name)
                     ? $"Action {index + 1}"
                     : action.Name;
 
@@ -803,9 +1019,11 @@ internal sealed class AnimationProfileWorkspacePanel
 
             ImGui.SameLine();
 
-            if (ImGui.SmallButton("Remove"))
+            if (ImGui.SmallButton(
+                    "Remove"))
             {
-                removeIndex = index;
+                removeIndex =
+                    index;
             }
 
             if (open)
@@ -819,8 +1037,11 @@ internal sealed class AnimationProfileWorkspacePanel
                         ref actionName,
                         128))
                 {
-                    action.Name = actionName;
-                    changed = true;
+                    action.Name =
+                        actionName;
+
+                    changed =
+                        true;
                 }
 
                 string actionClip =
@@ -832,18 +1053,30 @@ internal sealed class AnimationProfileWorkspacePanel
                         clips,
                         ref actionClip))
                 {
-                    action.Clip = actionClip;
-                    changed = true;
+                    action.Clip =
+                        actionClip;
+
+                    changed =
+                        true;
                 }
 
-                bool loop = action.Loop;
-                if (ImGui.Checkbox("Loop", ref loop))
+                bool loop =
+                    action.Loop;
+
+                if (ImGui.Checkbox(
+                        "Loop",
+                        ref loop))
                 {
-                    action.Loop = loop;
-                    changed = true;
+                    action.Loop =
+                        loop;
+
+                    changed =
+                        true;
                 }
 
-                float blendIn = action.BlendIn;
+                float blendIn =
+                    action.BlendIn;
+
                 if (ImGui.DragFloat(
                         "Blend In",
                         ref blendIn,
@@ -852,11 +1085,17 @@ internal sealed class AnimationProfileWorkspacePanel
                         5.0f))
                 {
                     action.BlendIn =
-                        Math.Max(blendIn, 0.0f);
-                    changed = true;
+                        Math.Max(
+                            blendIn,
+                            0.0f);
+
+                    changed =
+                        true;
                 }
 
-                float blendOut = action.BlendOut;
+                float blendOut =
+                    action.BlendOut;
+
                 if (ImGui.DragFloat(
                         "Blend Out",
                         ref blendOut,
@@ -865,8 +1104,12 @@ internal sealed class AnimationProfileWorkspacePanel
                         5.0f))
                 {
                     action.BlendOut =
-                        Math.Max(blendOut, 0.0f);
-                    changed = true;
+                        Math.Max(
+                            blendOut,
+                            0.0f);
+
+                    changed =
+                        true;
                 }
 
                 ImGui.TreePop();
@@ -875,17 +1118,21 @@ internal sealed class AnimationProfileWorkspacePanel
             ImGui.PopID();
         }
 
-        if (removeIndex >= 0)
+        if (removeIndex >=
+            0)
         {
             _profile.Actions.RemoveAt(
                 removeIndex);
-            changed = true;
+
+            changed =
+                true;
         }
 
-        if (_profile.Actions.Count == 0)
+        if (_profile.Actions.Count ==
+            0)
         {
             ImGui.TextDisabled(
-                "Actions are named one-shot/override animations. C11 expands this area with sections, combos, event windows and targeting.");
+                "Actions are named one-shot/override animations. C11 expands this area with sections, combos and event windows.");
         }
 
         return changed;
@@ -893,18 +1140,29 @@ internal sealed class AnimationProfileWorkspacePanel
 
     private static void DrawLayers()
     {
-        ImGui.SeparatorText("ANIMATION LAYERS");
+        ImGui.SeparatorText(
+            "ANIMATION LAYERS");
+
         ImGui.TextWrapped(
-            "Layer definitions and body-region masks arrive in C13. They will live here instead of becoming separate character components.");
-        ImGui.BulletText("Full Body");
-        ImGui.BulletText("Upper Body");
-        ImGui.BulletText("Lower Body");
-        ImGui.BulletText("Arms / Head / Custom regions");
+            "Layer definitions and body-region masks arrive in C13. They stay inside the Animation Profile.");
+
+        ImGui.BulletText(
+            "Full Body");
+
+        ImGui.BulletText(
+            "Upper Body");
+
+        ImGui.BulletText(
+            "Lower Body");
+
+        ImGui.BulletText(
+            "Arms / Head / Custom regions");
     }
 
     private bool DrawProcedural()
     {
-        if (_profile == null)
+        if (_profile ==
+            null)
         {
             return false;
         }
@@ -912,48 +1170,80 @@ internal sealed class AnimationProfileWorkspacePanel
         AnimationProceduralProfile procedural =
             _profile.Procedural;
 
-        bool changed = false;
+        bool changed =
+            false;
 
-        ImGui.SeparatorText("PROCEDURAL POSE FEATURES");
+        ImGui.SeparatorText(
+            "PROCEDURAL POSE FEATURES");
 
-        bool aim = procedural.AimEnabled;
-        if (ImGui.Checkbox("Aim", ref aim))
+        bool aim =
+            procedural.AimEnabled;
+
+        if (ImGui.Checkbox(
+                "Aim",
+                ref aim))
         {
-            procedural.AimEnabled = aim;
-            changed = true;
+            procedural.AimEnabled =
+                aim;
+
+            changed =
+                true;
         }
 
-        bool lookAt = procedural.LookAtEnabled;
-        if (ImGui.Checkbox("Look At", ref lookAt))
+        bool lookAt =
+            procedural.LookAtEnabled;
+
+        if (ImGui.Checkbox(
+                "Look At",
+                ref lookAt))
         {
-            procedural.LookAtEnabled = lookAt;
-            changed = true;
+            procedural.LookAtEnabled =
+                lookAt;
+
+            changed =
+                true;
         }
 
-        bool footIk = procedural.FootIkEnabled;
-        if (ImGui.Checkbox("Foot IK", ref footIk))
+        bool footIk =
+            procedural.FootIkEnabled;
+
+        if (ImGui.Checkbox(
+                "Foot IK",
+                ref footIk))
         {
-            procedural.FootIkEnabled = footIk;
-            changed = true;
+            procedural.FootIkEnabled =
+                footIk;
+
+            changed =
+                true;
         }
 
-        bool handIk = procedural.HandIkEnabled;
-        if (ImGui.Checkbox("Hand IK", ref handIk))
+        bool handIk =
+            procedural.HandIkEnabled;
+
+        if (ImGui.Checkbox(
+                "Hand IK",
+                ref handIk))
         {
-            procedural.HandIkEnabled = handIk;
-            changed = true;
+            procedural.HandIkEnabled =
+                handIk;
+
+            changed =
+                true;
         }
 
         ImGui.TextDisabled(
-            "C8 stores these authoring switches only. Aim and IK solvers arrive in C14-C15.");
+            "Aim and IK solvers arrive in later animation milestones.");
 
         return changed;
     }
 
     private void DrawDebug()
     {
-        if (_profile == null ||
-            _asset == null)
+        if (_profile ==
+                null ||
+            _asset ==
+                null)
         {
             return;
         }
@@ -961,26 +1251,48 @@ internal sealed class AnimationProfileWorkspacePanel
         IReadOnlyList<string> clips =
             GetAnimationClipNames();
 
-        ImGui.SeparatorText("PROFILE STATUS");
-        ImGui.Text($"Version: {_profile.Version}");
-        ImGui.Text($"Actions: {_profile.Actions.Count}");
-        ImGui.Text($"Animation source clips: {clips.Count}");
-        ImGui.Text($"Rig: {_profile.Rig.Type}");
-        ImGui.TextDisabled($"GUID: {_asset.Guid}");
-        ImGui.TextDisabled(_asset.ProjectPath);
+        ImGui.SeparatorText(
+            "PROFILE STATUS");
+
+        ImGui.Text(
+            $"Version: {_profile.Version}");
+
+        ImGui.Text(
+            $"Actions: {_profile.Actions.Count}");
+
+        ImGui.Text(
+            $"Animation source clips: {clips.Count}");
+
+        ImGui.Text(
+            $"Rig: {_profile.Rig.Type}");
+
+        ImGui.TextDisabled(
+            $"GUID: {_asset.Guid}");
+
+        ImGui.TextDisabled(
+            _asset.ProjectPath);
 
         string[] duplicateActions =
             _profile.Actions
-                .Where(action =>
-                    !string.IsNullOrWhiteSpace(action.Name))
+                .Where(
+                    action =>
+                        !string.IsNullOrWhiteSpace(
+                            action.Name))
                 .GroupBy(
-                    action => action.Name,
+                    action =>
+                        action.Name,
                     StringComparer.OrdinalIgnoreCase)
-                .Where(group => group.Count() > 1)
-                .Select(group => group.Key)
+                .Where(
+                    group =>
+                        group.Count() >
+                        1)
+                .Select(
+                    group =>
+                        group.Key)
                 .ToArray();
 
-        if (duplicateActions.Length > 0)
+        if (duplicateActions.Length >
+            0)
         {
             ImGui.TextColored(
                 new Vector4(
@@ -992,35 +1304,44 @@ internal sealed class AnimationProfileWorkspacePanel
         }
         else
         {
-            ImGui.TextDisabled("No duplicate action names detected.");
+            ImGui.TextDisabled(
+                "No duplicate action names detected.");
         }
     }
 
     private IReadOnlyList<string> GetAnimationClipNames()
     {
-        if (_profile == null ||
-            _project == null ||
-            _profile.Rig.ReferenceModel == null ||
+        if (_profile ==
+                null ||
+            _project ==
+                null ||
+            _profile.Rig.ReferenceModel ==
+                null ||
             _profile.Rig.ReferenceModel.IsEmpty)
         {
             InvalidateClipCache();
-            return Array.Empty<string>();
+
+            return
+                Array.Empty<string>();
         }
 
         AssetReference reference =
-            _profile.Rig.AnimationSourceModel != null &&
-            !_profile.Rig.AnimationSourceModel.IsEmpty
+            _profile.Rig.AnimationSourceModel !=
+                    null &&
+                !_profile.Rig.AnimationSourceModel.IsEmpty
                 ? _profile.Rig.AnimationSourceModel
                 : _profile.Rig.ReferenceModel;
 
         if (_clipCacheValid &&
-            _clipCacheModelGuid == reference.Guid &&
+            _clipCacheModelGuid ==
+                reference.Guid &&
             string.Equals(
                 _clipCacheModelPath,
                 reference.CachedProjectPath,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return _clipCache;
+            return
+                _clipCache;
         }
 
         try
@@ -1029,38 +1350,60 @@ internal sealed class AnimationProfileWorkspacePanel
                 _project.Assets.LoadModel(
                     reference);
 
-            _clipCache = model.Animations
-                .Select(animation =>
-                    string.IsNullOrWhiteSpace(animation.Name)
-                        ? animation.Key
-                        : animation.Name)
-                .Where(name =>
-                    !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name =>
-                    name,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            _clipCache =
+                model.Animations
+                    .Select(
+                        animation =>
+                            string.IsNullOrWhiteSpace(
+                                animation.Name)
+                                ? animation.Key
+                                : animation.Name)
+                    .Where(
+                        name =>
+                            !string.IsNullOrWhiteSpace(
+                                name))
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(
+                        name =>
+                            name,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
-            _clipCacheModelGuid = reference.Guid;
-            _clipCacheModelPath = reference.CachedProjectPath;
-            _clipCacheValid = true;
+            _clipCacheModelGuid =
+                reference.Guid;
 
-            return _clipCache;
+            _clipCacheModelPath =
+                reference.CachedProjectPath;
+
+            _clipCacheValid =
+                true;
+
+            return
+                _clipCache;
         }
         catch
         {
             InvalidateClipCache();
-            return Array.Empty<string>();
+
+            return
+                Array.Empty<string>();
         }
     }
 
     private void InvalidateClipCache()
     {
-        _clipCacheModelGuid = Guid.Empty;
-        _clipCacheModelPath = null;
-        _clipCache = Array.Empty<string>();
-        _clipCacheValid = false;
+        _clipCacheModelGuid =
+            Guid.Empty;
+
+        _clipCacheModelPath =
+            null;
+
+        _clipCache =
+            Array.Empty<string>();
+
+        _clipCacheValid =
+            false;
     }
 
     private static bool SameAssetReference(
@@ -1076,10 +1419,11 @@ internal sealed class AnimationProfileWorkspacePanel
                 right.Guid;
         }
 
-        return string.Equals(
-            left.CachedProjectPath,
-            right.CachedProjectPath,
-            StringComparison.OrdinalIgnoreCase);
+        return
+            string.Equals(
+                left.CachedProjectPath,
+                right.CachedProjectPath,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private bool DrawAssetPicker(
@@ -1087,7 +1431,8 @@ internal sealed class AnimationProfileWorkspacePanel
         AssetType expectedType,
         ref AssetReference reference)
     {
-        if (_project == null)
+        if (_project ==
+            null)
         {
             return false;
         }
@@ -1103,29 +1448,63 @@ internal sealed class AnimationProfileWorkspacePanel
             reference.CachedProjectPath ??
             "None";
 
-        bool changed = false;
+        bool changed =
+            false;
 
-        if (ImGui.BeginCombo(label, preview))
+        if (ImGui.BeginCombo(
+                label,
+                preview))
         {
+            if (ImGui.IsWindowAppearing())
+            {
+                _assetSearch =
+                    string.Empty;
+
+                ImGui.SetKeyboardFocusHere();
+            }
+
+            ImGui.InputTextWithHint(
+                "##AssetSearch",
+                "Search model assets...",
+                ref _assetSearch,
+                128);
+
             if (ImGui.Selectable(
                     "None",
                     reference.IsEmpty))
             {
-                reference = AssetReference.Empty;
-                changed = true;
+                reference =
+                    AssetReference.Empty;
+
+                changed =
+                    true;
             }
 
             foreach (AssetRecord asset
                      in _project.AssetDatabase.Assets
-                         .Where(asset =>
-                             asset.Type == expectedType)
+                         .Where(
+                             asset =>
+                                 asset.Type ==
+                                 expectedType)
                          .OrderBy(
-                             asset => asset.ProjectPath,
+                             asset =>
+                                 asset.ProjectPath,
                              StringComparer.OrdinalIgnoreCase))
             {
+                if (!string.IsNullOrWhiteSpace(
+                        _assetSearch) &&
+                    !asset.ProjectPath.Contains(
+                        _assetSearch,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 bool selected =
-                    asset.Guid != Guid.Empty &&
-                    asset.Guid == reference.Guid;
+                    asset.Guid !=
+                        Guid.Empty &&
+                    asset.Guid ==
+                        reference.Guid;
 
                 if (ImGui.Selectable(
                         asset.ProjectPath,
@@ -1135,7 +1514,9 @@ internal sealed class AnimationProfileWorkspacePanel
                         new AssetReference(
                             asset.Guid,
                             asset.ProjectPath);
-                    changed = true;
+
+                    changed =
+                        true;
                 }
 
                 if (selected)
@@ -1156,13 +1537,16 @@ internal sealed class AnimationProfileWorkspacePanel
                 _project.AssetDatabase.TryGetAsset(
                     id.Value,
                     out AssetRecord? dropped) &&
-                dropped?.Type == expectedType)
+                dropped?.Type ==
+                    expectedType)
             {
                 reference =
                     new AssetReference(
                         dropped.Guid,
                         dropped.ProjectPath);
-                changed = true;
+
+                changed =
+                    true;
             }
 
             ImGui.EndDragDropTarget();
@@ -1171,62 +1555,116 @@ internal sealed class AnimationProfileWorkspacePanel
         return changed;
     }
 
-    private static bool DrawClipPicker(
+    private bool DrawClipPicker(
         string label,
         IReadOnlyList<string> clips,
         ref string value)
     {
-        value ??= string.Empty;
+        value ??=
+            string.Empty;
 
-        string currentValue = value;
+        string currentValue =
+            value;
 
         bool exists =
-            clips.Any(clip =>
-                string.Equals(
-                    clip,
-                    currentValue,
-                    StringComparison.OrdinalIgnoreCase));
+            clips.Any(
+                clip =>
+                    string.Equals(
+                        clip,
+                        currentValue,
+                        StringComparison.OrdinalIgnoreCase));
 
         string preview =
-            string.IsNullOrWhiteSpace(value)
+            string.IsNullOrWhiteSpace(
+                value)
                 ? "None"
                 : exists
                     ? value
                     : $"{value} (Missing)";
 
-        bool changed = false;
+        bool changed =
+            false;
 
-        if (!ImGui.BeginCombo(label, preview))
+        if (!ImGui.BeginCombo(
+                label,
+                preview))
         {
             return false;
         }
 
-        if (ImGui.Selectable(
-                "None",
-                string.IsNullOrWhiteSpace(value)))
+        if (ImGui.IsWindowAppearing())
         {
-            value = string.Empty;
-            changed = true;
+            _clipSearch =
+                string.Empty;
+
+            ImGui.SetKeyboardFocusHere();
         }
 
-        foreach (string clip in clips)
+        ImGui.InputTextWithHint(
+            "##AnimationSearch",
+            "Search animations...",
+            ref _clipSearch,
+            128);
+
+        if (ImGui.Selectable(
+                "None",
+                string.IsNullOrWhiteSpace(
+                    value)))
         {
+            value =
+                string.Empty;
+
+            changed =
+                true;
+        }
+
+        int visibleCount =
+            0;
+
+        foreach (string clip
+                 in clips)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    _clipSearch) &&
+                !clip.Contains(
+                    _clipSearch,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            visibleCount++;
+
             bool selected =
                 string.Equals(
                     clip,
                     value,
                     StringComparison.OrdinalIgnoreCase);
 
-            if (ImGui.Selectable(clip, selected))
+            if (ImGui.Selectable(
+                    clip,
+                    selected))
             {
-                value = clip;
-                changed = true;
+                value =
+                    clip;
+
+                changed =
+                    true;
             }
 
             if (selected)
             {
                 ImGui.SetItemDefaultFocus();
             }
+        }
+
+        if (visibleCount ==
+                0 &&
+            clips.Count >
+                0)
+        {
+            ImGui.TextDisabled(
+                "No animations match the search.");
         }
 
         ImGui.EndCombo();
@@ -1237,9 +1675,12 @@ internal sealed class AnimationProfileWorkspacePanel
     private void Save(
         EditorLog log)
     {
-        if (_profile == null ||
-            _asset == null ||
-            _project == null)
+        if (_profile ==
+                null ||
+            _asset ==
+                null ||
+            _project ==
+                null)
         {
             return;
         }
@@ -1252,26 +1693,25 @@ internal sealed class AnimationProfileWorkspacePanel
                 _asset.FullPath,
                 _profile);
 
-            /*
-             * The profile path/GUID did not change, so a full database scan is
-             * unnecessary here. Reload only this profile into the runtime cache.
-             * The file watcher can update database metadata later without
-             * forcing every cached model to reimport.
-             */
             _project.Assets.ReloadAnimationProfile(
                 new AssetReference(
                     _asset.Guid,
                     _asset.ProjectPath));
 
-            _dirty = false;
-            _loadError = null;
+            _dirty =
+                false;
+
+            _loadError =
+                null;
 
             log.Info(
                 $"Saved Animation Profile '{_asset.ProjectPath}'.");
         }
         catch (Exception exception)
         {
-            _loadError = exception.Message;
+            _loadError =
+                exception.Message;
+
             log.Error(
                 $"Could not save Animation Profile '{_asset.ProjectPath}': {exception.Message}");
         }
@@ -1280,7 +1720,8 @@ internal sealed class AnimationProfileWorkspacePanel
     private void Reload(
         EditorLog log)
     {
-        if (_asset == null)
+        if (_asset ==
+            null)
         {
             return;
         }
@@ -1292,13 +1733,21 @@ internal sealed class AnimationProfileWorkspacePanel
                     _asset.FullPath);
 
             InvalidateClipCache();
-            _dirty = false;
-            _loadError = null;
+
+            _dirty =
+                false;
+
+            _loadError =
+                null;
         }
         catch (Exception exception)
         {
-            _profile = null;
-            _loadError = exception.Message;
+            _profile =
+                null;
+
+            _loadError =
+                exception.Message;
+
             log.Error(
                 $"Could not reload Animation Profile '{_asset.ProjectPath}': {exception.Message}");
         }
@@ -1316,7 +1765,8 @@ internal static class AnimationProfileWorkspaceRequest
     public static void Request(
         AssetReference reference)
     {
-        if (reference == null ||
+        if (reference ==
+                null ||
             reference.IsEmpty)
         {
             return;
@@ -1333,7 +1783,8 @@ internal static class AnimationProfileWorkspaceRequest
         AssetReference? pending =
             _pending;
 
-        _pending = null;
+        _pending =
+            null;
 
         return pending;
     }

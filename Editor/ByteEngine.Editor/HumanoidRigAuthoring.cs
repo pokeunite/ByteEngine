@@ -6,16 +6,17 @@ using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 
+using ByteEngine.Editor.Panels;
+
 using ImGuiNET;
 
 namespace ByteEngine.Editor;
 
 /// <summary>
-/// Central Humanoid-rig authoring UI used by the Animation Profile workspace.
+/// Compact Humanoid-rig surface used by Animation Profile authoring.
 ///
-/// Rig metadata is persisted on the model's .meta file because Generic/Humanoid
-/// classification is intrinsic to the imported skeleton. The Animation Profile
-/// merely links to that model.
+/// Detailed mapping now lives in the dedicated Humanoid Rig Configurator so the
+/// Animation Profile does not become a several-screen-long list of bone fields.
 /// </summary>
 internal static class HumanoidRigAuthoring
 {
@@ -25,6 +26,7 @@ internal static class HumanoidRigAuthoring
     public static bool Draw(
         AssetRecord asset,
         ModelAsset model,
+        EditorProjectContext project,
         out AnimationRigType rigType)
     {
         ModelImporterSettings settings =
@@ -39,7 +41,7 @@ internal static class HumanoidRigAuthoring
             null;
 
         ImGui.TextDisabled(
-            "Rig classification is stored on the Reference Model asset.");
+            "Rig classification and Humanoid mapping are stored on the model asset.");
 
         int selectedRigType =
             (int)settings.RigType;
@@ -70,6 +72,11 @@ internal static class HumanoidRigAuthoring
 
             changed =
                 true;
+
+            PersistAndRefresh(
+                asset,
+                project,
+                out saveError);
         }
 
         rigType =
@@ -79,14 +86,7 @@ internal static class HumanoidRigAuthoring
             AnimationRigType.Generic)
         {
             ImGui.TextWrapped(
-                "Generic keeps the source skeleton exactly as authored. Humanoid enables semantic human-bone mapping and later reusable Humanoid animation retargeting.");
-
-            if (changed)
-            {
-                Persist(
-                    asset,
-                    out saveError);
-            }
+                "Generic keeps the source skeleton exactly as authored. Switch to Humanoid to enable reusable humanoid animation retargeting.");
 
             DrawSaveError(
                 saveError);
@@ -106,13 +106,6 @@ internal static class HumanoidRigAuthoring
                     0.30f,
                     1.0f),
                 "Humanoid requires a model with a skeleton.");
-
-            if (changed)
-            {
-                Persist(
-                    asset,
-                    out saveError);
-            }
 
             DrawSaveError(
                 saveError);
@@ -135,18 +128,20 @@ internal static class HumanoidRigAuthoring
 
             changed =
                 true;
+
+            PersistAndRefresh(
+                asset,
+                project,
+                out saveError);
         }
 
         ImGui.SameLine();
 
         if (ImGui.Button(
-                "Clear Mapping"))
+                "Configure Humanoid..."))
         {
-            settings.HumanoidMapping =
-                new HumanoidBoneMap();
-
-            changed =
-                true;
+            HumanoidRigConfiguratorRequest.Request(
+                asset.Guid);
         }
 
         HumanoidRigValidationResult validation =
@@ -157,58 +152,37 @@ internal static class HumanoidRigAuthoring
         DrawValidation(
             validation);
 
-        if (ImGui.TreeNodeEx(
-                "Required Bone Mapping",
-                ImGuiTreeNodeFlags.DefaultOpen))
+        HumanoidRigDiagnosticReport diagnostics =
+            HumanoidRigDiagnostics.Analyze(
+                model.Skeleton,
+                settings.HumanoidMapping);
+
+        if (validation.IsReady)
         {
-            foreach (HumanoidBone semanticBone
-                     in HumanoidBoneCatalog.Required)
+            if (diagnostics.Errors.Count >
+                0)
             {
-                if (DrawBonePicker(
-                        semanticBone,
-                        model.Skeleton,
-                        settings.HumanoidMapping))
-                {
-                    changed =
-                        true;
-                }
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.38f,
+                        0.30f,
+                        1.0f),
+                    "Hierarchy check failed - open Configure Humanoid.");
             }
-
-            ImGui.TreePop();
-        }
-
-        if (ImGui.TreeNode(
-                "Optional Bone Mapping"))
-        {
-            foreach (HumanoidBone semanticBone
-                     in Enum.GetValues<HumanoidBone>())
+            else if (!diagnostics.ApproximatelyTPose)
             {
-                if (HumanoidBoneCatalog.IsRequired(
-                        semanticBone))
-                {
-                    continue;
-                }
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.67f,
+                        0.25f,
+                        1.0f),
+                    "Reference pose is not close to a clean T-pose.");
 
-                if (DrawBonePicker(
-                        semanticBone,
-                        model.Skeleton,
-                        settings.HumanoidMapping))
-                {
-                    changed =
-                        true;
-                }
+                ImGui.TextDisabled(
+                    "Open Configure Humanoid to inspect the skeleton visually.");
             }
-
-            ImGui.TreePop();
-        }
-
-        if (changed)
-        {
-            settings.Normalize();
-
-            Persist(
-                asset,
-                out saveError);
         }
 
         DrawSaveError(
@@ -218,6 +192,67 @@ internal static class HumanoidRigAuthoring
             settings.RigType;
 
         return changed;
+    }
+
+    internal static bool Persist(
+        AssetRecord asset,
+        out string? error)
+    {
+        error =
+            null;
+
+        try
+        {
+            asset.Metadata.ModelImporter.Normalize();
+
+            string temporary =
+                asset.MetaPath +
+                ".tmp";
+
+            File.WriteAllText(
+                temporary,
+                JsonSerializer.Serialize(
+                    asset.Metadata,
+                    MetaJson));
+
+            File.Move(
+                temporary,
+                asset.MetaPath,
+                true);
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error =
+                exception.Message;
+
+            return false;
+        }
+    }
+
+    private static void PersistAndRefresh(
+        AssetRecord asset,
+        EditorProjectContext project,
+        out string? error)
+    {
+        if (!Persist(
+                asset,
+                out error))
+        {
+            return;
+        }
+
+        try
+        {
+            project.Assets.ReimportModel(
+                asset.Guid);
+        }
+        catch (Exception exception)
+        {
+            error =
+                exception.Message;
+        }
     }
 
     private static void DrawValidation(
@@ -283,98 +318,7 @@ internal static class HumanoidRigAuthoring
         }
     }
 
-    private static bool DrawBonePicker(
-        HumanoidBone semanticBone,
-        SkeletonAsset skeleton,
-        HumanoidBoneMap mapping)
-    {
-        string? current =
-            mapping.GetBoneName(
-                semanticBone);
-
-        bool currentExists =
-            current !=
-                null &&
-            skeleton.Bones.Any(
-                bone =>
-                    string.Equals(
-                        bone.Name,
-                        current,
-                        StringComparison.OrdinalIgnoreCase));
-
-        string preview =
-            current ==
-                null
-                ? "None"
-                : currentExists
-                    ? current
-                    : $"{current} (Missing)";
-
-        bool changed =
-            false;
-
-        string label =
-            $"{DisplayName(semanticBone)}##HumanoidBone:{semanticBone}";
-
-        if (ImGui.BeginCombo(
-                label,
-                preview))
-        {
-            if (ImGui.Selectable(
-                    "None",
-                    current ==
-                        null))
-            {
-                mapping.ClearBone(
-                    semanticBone);
-
-                changed =
-                    true;
-            }
-
-            foreach (Bone bone
-                     in skeleton.Bones
-                         .OrderBy(
-                             bone =>
-                                 bone.Name,
-                             StringComparer.OrdinalIgnoreCase))
-            {
-                bool selected =
-                    string.Equals(
-                        bone.Name,
-                        current,
-                        StringComparison.OrdinalIgnoreCase);
-
-                if (ImGui.Selectable(
-                        bone.Name,
-                        selected))
-                {
-                    ClearDuplicateAssignment(
-                        mapping,
-                        semanticBone,
-                        bone.Name);
-
-                    mapping.SetBone(
-                        semanticBone,
-                        bone.Name);
-
-                    changed =
-                        true;
-                }
-
-                if (selected)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
-            }
-
-            ImGui.EndCombo();
-        }
-
-        return changed;
-    }
-
-    private static void ClearDuplicateAssignment(
+    internal static void ClearDuplicateAssignment(
         HumanoidBoneMap mapping,
         HumanoidBone semanticBone,
         string sourceBoneName)
@@ -402,59 +346,7 @@ internal static class HumanoidRigAuthoring
         }
     }
 
-    private static void Persist(
-        AssetRecord asset,
-        out string? error)
-    {
-        error =
-            null;
-
-        try
-        {
-            string temporary =
-                asset.MetaPath +
-                ".tmp";
-
-            File.WriteAllText(
-                temporary,
-                JsonSerializer.Serialize(
-                    asset.Metadata,
-                    MetaJson));
-
-            File.Move(
-                temporary,
-                asset.MetaPath,
-                true);
-        }
-        catch (Exception exception)
-        {
-            error =
-                exception.Message;
-        }
-    }
-
-    private static void DrawSaveError(
-        string? error)
-    {
-        if (string.IsNullOrWhiteSpace(
-                error))
-        {
-            return;
-        }
-
-        ImGui.TextColored(
-            new Vector4(
-                1.0f,
-                0.35f,
-                0.30f,
-                1.0f),
-            "Could not save model rig metadata.");
-
-        ImGui.TextWrapped(
-            error);
-    }
-
-    private static string DisplayName(
+    internal static string DisplayName(
         HumanoidBone bone)
     {
         string text =
@@ -488,6 +380,27 @@ internal static class HumanoidRigAuthoring
         }
 
         return output.ToString();
+    }
+
+    private static void DrawSaveError(
+        string? error)
+    {
+        if (string.IsNullOrWhiteSpace(
+                error))
+        {
+            return;
+        }
+
+        ImGui.TextColored(
+            new Vector4(
+                1.0f,
+                0.35f,
+                0.30f,
+                1.0f),
+            "Could not save model rig metadata.");
+
+        ImGui.TextWrapped(
+            error);
     }
 
     private static JsonSerializerOptions CreateMetaJson()
