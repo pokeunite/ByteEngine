@@ -1,4 +1,5 @@
 using ByteEngine.Core.Blueprints;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ImGuiNET;
 
@@ -48,10 +49,28 @@ internal static class ComponentAddMenu
     {
         ComponentMetadata metadata = ComponentMetadataRegistry.Get(type);
         bool exists = target.Components.Any(component => component.GetType() == type);
+
         if (ImGui.MenuItem(metadata.DisplayName, string.Empty, false, !exists) &&
             Activator.CreateInstance(type) is Component component)
         {
             add(component, metadata.DisplayName);
+
+            /*
+             * The Third Person Character preset already runs visual auto-fit.
+             * Do the same when a Capsule Collider is added manually so character
+             * setup does not require a second "Fit To Visual" step.
+             *
+             * If no model is available, CapsuleCollider3D's feet-origin default
+             * remains the safe fallback.
+             */
+            if (component is CapsuleCollider3D &&
+                EditorProjectContext.Active?.Assets is { } assets)
+            {
+                CharacterCapsuleAutoFit.TryFit(
+                    target,
+                    assets,
+                    out _);
+            }
         }
 
         if (ImGui.IsItemHovered())

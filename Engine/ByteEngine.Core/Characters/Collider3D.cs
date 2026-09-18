@@ -1,6 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Classification;
+
 namespace ByteEngine.Core.Characters;
 
 public abstract class Collider3D : Component
@@ -21,6 +22,20 @@ public sealed class CapsuleCollider3D : Collider3D
 {
     private float _radius = .5f;
     private float _height = 2f;
+
+    public CapsuleCollider3D()
+    {
+        /*
+         * Character roots use a feet/pivot origin. A default two metre capsule
+         * must therefore sit from Y=0..2 rather than -1..1, otherwise adding a
+         * fresh capsule can immediately place half of it inside the floor.
+         */
+        Center =
+            new Vector3(
+                0f,
+                1f,
+                0f);
+    }
 
     public Vector3 VisualBounds { get; set; }
     public string AutoFitSource { get; set; } = string.Empty;

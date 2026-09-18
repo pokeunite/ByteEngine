@@ -440,13 +440,27 @@ public static class GameplayQuery3D
 
                 if (ignoreInitialOverlapWhenMovingOut &&
                     distance <=
-                        Epsilon &&
-                    Vector3.Dot(
-                        rayDirection,
-                        normal) >
-                        0.0001f)
+                        Epsilon)
                 {
-                    continue;
+                    /*
+                     * A correctly fitted character capsule can rest exactly
+                     * tangent to a floor. Horizontal capsule sweeps must not
+                     * treat that distance-zero floor contact as a blocker.
+                     *
+                     * Keep only initial contacts where motion actually points
+                     * INTO the surface. Tangent motion and motion away from the
+                     * surface are safe to ignore.
+                     */
+                    float intoSurface =
+                        Vector3.Dot(
+                            rayDirection,
+                            normal);
+
+                    if (intoSurface >=
+                        -0.0001f)
+                    {
+                        continue;
+                    }
                 }
 
                 closest =
