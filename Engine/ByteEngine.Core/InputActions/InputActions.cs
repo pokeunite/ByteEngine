@@ -135,6 +135,14 @@ public static class InputActions
     {
         source = binding.Type.ToString();
         unbounded = false;
+
+        /*
+         * Input-action 2D axes use the same convention as movement/gamepad:
+         * +X = right, +Y = up.
+         *
+         * OpenTK mouse delta is screen-style (+Y = down), so normalize mouse Y
+         * here instead of forcing every gameplay consumer to special-case it.
+         */
         Vector2 value = binding.Type switch
         {
             InputBindingType.KeyboardKey => new Vector2(snapshot.KeyDown(binding.Key) ? 1f : 0f, 0f),
@@ -143,13 +151,14 @@ public static class InputActions
             InputBindingType.Keyboard2DComposite => new Vector2(
                 (snapshot.KeyDown(binding.RightKey) ? 1f : 0f) - (snapshot.KeyDown(binding.LeftKey) ? 1f : 0f),
                 (snapshot.KeyDown(binding.UpKey) ? 1f : 0f) - (snapshot.KeyDown(binding.DownKey) ? 1f : 0f)),
-            InputBindingType.MouseDelta => snapshot.MouseDelta,
+            InputBindingType.MouseDelta => new Vector2(snapshot.MouseDelta.X, -snapshot.MouseDelta.Y),
             InputBindingType.MouseWheel => new Vector2(snapshot.MouseWheel, 0f),
             InputBindingType.GamepadButton => new Vector2(snapshot.Gamepad.ButtonsDown.Contains(binding.GamepadControl) ? 1f : 0f, 0f),
             InputBindingType.GamepadStick => binding.GamepadControl == GamepadControl.RightStick ? snapshot.Gamepad.RightStick : snapshot.Gamepad.LeftStick,
             InputBindingType.GamepadTrigger => new Vector2(binding.GamepadControl == GamepadControl.RightTrigger ? snapshot.Gamepad.RightTrigger : snapshot.Gamepad.LeftTrigger, 0f),
             _ => Vector2.Zero
         };
+
         unbounded = binding.Type == InputBindingType.MouseDelta;
         if (binding.Type is InputBindingType.GamepadStick or InputBindingType.GamepadTrigger) value = ApplyDeadzone(value, binding.Deadzone);
         value *= binding.Scale;

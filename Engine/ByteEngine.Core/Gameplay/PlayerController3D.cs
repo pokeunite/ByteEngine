@@ -35,6 +35,12 @@ public enum CharacterRotationMode
 /// - FaceCamera is an explicit aim/strafe mode;
 /// - CharacterController3D remains the sole owner of physical movement.
 ///
+/// TPS-E adds idle turn-in-place and fixes the transform/control yaw convention:
+/// - control yaw +90 looks toward world +X;
+/// - Transform Euler yaw +90 faces world -X;
+/// - character-facing targets therefore convert control yaw into transform yaw;
+/// - idle FaceMovement can free-orbit before smoothly catching up.
+///
 /// Camera placement remains in CameraBoom3D.
 /// </summary>
 public sealed class PlayerController3D : Component
@@ -43,6 +49,16 @@ public sealed class PlayerController3D : Component
     private float _controlPitch = 12f;
     private float _turnSpeed = 540f;
     private float _desiredCharacterYaw;
+    private bool _idleTurnInPlaceActive;
+
+    /*
+     * TPS-E behavior-validation defaults.
+     * These stay private for this test pass; persistence/editor exposure comes
+     * after the corrected feel is visually approved.
+     */
+    private const float IdleTurnStartAngleDegrees = 60f;
+    private const float IdleTurnFinishAngleDegrees = 5f;
+    private const float IdleTurnSpeedDegreesPerSecond = 300f;
 
     public InputActionReference MoveAction { get; set; } = InputActionReference.Named("Move");
     public InputActionReference LookAction { get; set; } = InputActionReference.Named("Look");
@@ -95,6 +111,8 @@ public sealed class PlayerController3D : Component
             _desiredCharacterYaw =
                 NormalizeAngle(player.Transform.EulerAngles.Y);
         }
+
+        _idleTurnInPlaceActive = false;
     }
 
     public void SetControlRotation(
@@ -132,6 +150,7 @@ public sealed class PlayerController3D : Component
         if (player == null ||
             controller?.Enabled != true)
         {
+            _idleTurnInPlaceActive = false;
             return;
         }
 
@@ -179,8 +198,7 @@ public sealed class PlayerController3D : Component
         {
             /*
              * Standard TPS movement:
-             * input follows camera/control yaw, independently of which way
-             * the character body currently faces.
+             * input follows camera/control yaw independently of body facing.
              */
             forward =
                 ForwardFromYaw(ControlYaw);
@@ -204,11 +222,6 @@ public sealed class PlayerController3D : Component
 
         controller.Move(movement);
 
-        /*
-         * Facing is a separate decision from movement-space calculation.
-         * FaceMovement = normal free-orbit TPS.
-         * FaceCamera   = aim/strafe mode.
-         */
         UpdateCharacterRotation(
             movement,
             Math.Max(
@@ -227,10 +240,16 @@ public sealed class PlayerController3D : Component
     {
         GameObject? player = AttachedGameObject;
 
-        if (player == null ||
-            CharacterRotation ==
-                CharacterRotationMode.Independent)
+        if (player == null)
         {
+            _idleTurnInPlaceActive = false;
+            return;
+        }
+
+        if (CharacterRotation ==
+            CharacterRotationMode.Independent)
+        {
+            _idleTurnInPlaceActive = false;
             return;
         }
 
@@ -239,25 +258,88 @@ public sealed class PlayerController3D : Component
                 .LengthSquared() >
             .0001f;
 
+        Vector3 euler =
+            player.Transform.EulerAngles;
+
         if (CharacterRotation ==
                 CharacterRotationMode.FaceMovement &&
             !hasMovement)
         {
             /*
-             * Normal TPS keeps the last body heading while idle. The camera
-             * remains free to orbit without dragging the character around.
+             * Control yaw and Transform yaw have opposite signs in ByteEngine's
+             * current conventions. Convert first, then measure the real body
+             * heading difference.
              */
+            float cameraFacingYaw =
+                TransformYawFromControlYaw(
+                    ControlYaw);
+
+            float cameraBodyDelta =
+                DeltaAngle(
+                    euler.Y,
+                    cameraFacingYaw);
+
+            float absoluteDelta =
+                MathF.Abs(cameraBodyDelta);
+
+            if (!_idleTurnInPlaceActive)
+            {
+                if (absoluteDelta <
+                    IdleTurnStartAngleDegrees)
+                {
+                    _desiredCharacterYaw =
+                        NormalizeAngle(euler.Y);
+                    return;
+                }
+
+                _idleTurnInPlaceActive = true;
+            }
+
+            _desiredCharacterYaw =
+                cameraFacingYaw;
+
+            /*
+             * Once turn-in-place starts, finish the turn toward the camera
+             * instead of stopping with a visible body/camera mismatch.
+             */
+            if (absoluteDelta <=
+                IdleTurnFinishAngleDegrees)
+            {
+                euler.Y =
+                    cameraFacingYaw;
+
+                player.Transform.EulerAngles =
+                    euler;
+
+                _idleTurnInPlaceActive = false;
+                return;
+            }
+
+            euler.Y =
+                MoveTowardsAngle(
+                    euler.Y,
+                    _desiredCharacterYaw,
+                    IdleTurnSpeedDegreesPerSecond *
+                    Math.Max(deltaTime, 0f));
+
+            player.Transform.EulerAngles =
+                euler;
+
             return;
         }
+
+        /*
+         * Moving FaceMovement and explicit FaceCamera immediately own facing.
+         */
+        _idleTurnInPlaceActive = false;
 
         _desiredCharacterYaw =
             CharacterRotation ==
                 CharacterRotationMode.FaceCamera
-                ? ControlYaw
-                : YawFromDirection(movement);
-
-        Vector3 euler =
-            player.Transform.EulerAngles;
+                ? TransformYawFromControlYaw(
+                    ControlYaw)
+                : YawFromDirection(
+                    movement);
 
         euler.Y =
             MoveTowardsAngle(
@@ -269,6 +351,15 @@ public sealed class PlayerController3D : Component
         player.Transform.EulerAngles =
             euler;
     }
+
+    /// <summary>
+    /// Converts camera/control yaw into Transform Euler yaw.
+    /// Camera/control +90 looks toward +X, while Transform +90 faces -X.
+    /// </summary>
+    public static float TransformYawFromControlYaw(
+        float controlYaw) =>
+        NormalizeAngle(
+            -Finite(controlYaw));
 
     public static float DeltaAngle(
         float current,
@@ -296,6 +387,9 @@ public sealed class PlayerController3D : Component
                 delta));
     }
 
+    /// <summary>
+    /// Returns Transform Euler yaw that makes Transform.Forward face direction.
+    /// </summary>
     public static float YawFromDirection(
         Vector3 direction)
     {
@@ -306,13 +400,17 @@ public sealed class PlayerController3D : Component
                .0001f
             ? 0f
             : NormalizeAngle(
-                MathF.Atan2(
+                -MathF.Atan2(
                     horizontal.X,
                     -horizontal.Z) *
                 180f /
                 MathF.PI);
     }
 
+    /// <summary>
+    /// Returns world movement/camera-forward direction from control yaw.
+    /// This remains control-space yaw and intentionally is NOT negated.
+    /// </summary>
     public static Vector3 ForwardFromYaw(
         float yawDegrees)
     {
@@ -329,15 +427,19 @@ public sealed class PlayerController3D : Component
     }
 
     public static Vector2 CalculateLookDelta(
-        Vector2 mouseDelta,
+        Vector2 lookInput,
         CameraBoom3D? boom)
     {
         float horizontal =
-            mouseDelta.X *
+            lookInput.X *
             (boom?.MouseSensitivityX ?? .12f);
 
+        /*
+         * InputActions normalizes all 2D look sources to +Y = up.
+         * Negative pitch therefore means looking upward in CameraBoom3D.
+         */
         float vertical =
-            -mouseDelta.Y *
+            -lookInput.Y *
             (boom?.MouseSensitivityY ?? .1f);
 
         if (boom?.InvertHorizontalLook == true)
