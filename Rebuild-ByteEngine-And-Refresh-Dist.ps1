@@ -27,41 +27,48 @@ function Invoke-DotNet {
 
 $repoRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $solution = Join-Path $repoRoot "ByteEngine.sln"
+$editorProject = Join-Path $repoRoot "Editor\ByteEngine.Editor\ByteEngine.Editor.csproj"
 $publishScript = Join-Path $repoRoot "Tools\PublishEditor.ps1"
+
 $distRoot = Join-Path $repoRoot "Dist\ByteEngine"
 $distExe = Join-Path $distRoot "ByteEngine.Editor.exe"
 $distDll = Join-Path $distRoot "ByteEngine.Editor.dll"
 $distOpenAL = Join-Path $distRoot "openal32.dll"
 
+$debugEditorRoot = Join-Path $repoRoot "Editor\ByteEngine.Editor\bin\Debug\net9.0-windows\win-x64"
+$debugEditorExe = Join-Path $debugEditorRoot "ByteEngine.Editor.exe"
+$debugEditorDll = Join-Path $debugEditorRoot "ByteEngine.Editor.dll"
+$debugOpenAL = Join-Path $debugEditorRoot "openal32.dll"
+
 Write-Host ""
-Write-Host "==============================================" -ForegroundColor DarkCyan
-Write-Host " ByteEngine - Rebuild + Refresh Dist" -ForegroundColor Cyan
-Write-Host "==============================================" -ForegroundColor DarkCyan
-Write-Host "Repository: $repoRoot"
-Write-Host "Build config: $BuildConfiguration"
+Write-Host "==========================================================" -ForegroundColor DarkCyan
+Write-Host " ByteEngine - Rebuild Debug + Selected Config + Dist" -ForegroundColor Cyan
+Write-Host "==========================================================" -ForegroundColor DarkCyan
+Write-Host "Repository      : $repoRoot"
+Write-Host "Dist config     : $BuildConfiguration"
+Write-Host "dotnet run path : Debug"
 Write-Host ""
 
 if (-not (Test-Path -LiteralPath $solution)) {
-    throw "ByteEngine.sln was not found beside this script. Put this .ps1 file in C:\Users\codex\ByteEngine and run it from there."
+    throw "ByteEngine.sln was not found beside this script."
+}
+
+if (-not (Test-Path -LiteralPath $editorProject)) {
+    throw "Editor project was not found: $editorProject"
 }
 
 if (-not (Test-Path -LiteralPath $publishScript)) {
     throw "Required publish script was not found: $publishScript"
 }
 
-# Make absolutely sure the editor is not holding old Dist binaries open.
 $runningEditors = Get-Process -Name "ByteEngine.Editor" -ErrorAction SilentlyContinue
 
 if ($runningEditors) {
     Write-Host "Stopping running ByteEngine Editor process(es)..." -ForegroundColor Yellow
 
     foreach ($process in $runningEditors) {
-        try {
-            $path = $process.Path
-        }
-        catch {
-            $path = "<path unavailable>"
-        }
+        try { $path = $process.Path }
+        catch { $path = "<path unavailable>" }
 
         Write-Host "  PID $($process.Id)  $path"
         Stop-Process -Id $process.Id -Force
@@ -76,22 +83,52 @@ try {
     $startedAt = Get-Date
 
     Write-Host ""
-    Write-Host "[1/4] Cleaning previous compiled output..." -ForegroundColor Green
+    Write-Host "[1/6] Cleaning selected solution configuration..." -ForegroundColor Green
     Invoke-DotNet `
         -Arguments @("clean", $solution, "-c", $BuildConfiguration, "--nologo") `
-        -FailureMessage "ByteEngine clean failed"
+        -FailureMessage "ByteEngine $BuildConfiguration clean failed"
 
     Write-Host ""
-    Write-Host "[2/4] Building ByteEngine solution..." -ForegroundColor Green
+    Write-Host "[2/6] Building selected solution configuration..." -ForegroundColor Green
     Invoke-DotNet `
         -Arguments @("build", $solution, "-c", $BuildConfiguration, "--nologo", "--no-incremental") `
-        -FailureMessage "ByteEngine solution build failed"
+        -FailureMessage "ByteEngine $BuildConfiguration solution build failed"
 
     Write-Host ""
-    Write-Host "[3/4] Recreating Dist\ByteEngine..." -ForegroundColor Green
+    Write-Host "[3/6] Refreshing Debug output used by plain dotnet run..." -ForegroundColor Green
 
-    # PublishEditor.ps1 deletes Dist\ByteEngine first and republishes the editor
-    # as a complete self-contained folder. It also verifies/copies openal32.dll.
+    Invoke-DotNet `
+        -Arguments @("clean", $editorProject, "-c", "Debug", "--nologo") `
+        -FailureMessage "ByteEngine Editor Debug clean failed"
+
+    Invoke-DotNet `
+        -Arguments @("build", $editorProject, "-c", "Debug", "--nologo", "--no-incremental") `
+        -FailureMessage "ByteEngine Editor Debug build failed"
+
+    Write-Host ""
+    Write-Host "[4/6] Verifying Debug editor output..." -ForegroundColor Green
+
+    foreach ($requiredFile in @($debugEditorExe, $debugEditorDll, $debugOpenAL)) {
+        if (-not (Test-Path -LiteralPath $requiredFile)) {
+            throw "Required Debug editor file is missing: $requiredFile"
+        }
+    }
+
+    $timestampTolerance = $startedAt.AddSeconds(-5)
+    $debugExeInfo = Get-Item -LiteralPath $debugEditorExe
+    $debugDllInfo = Get-Item -LiteralPath $debugEditorDll
+
+    if ($debugExeInfo.LastWriteTime -lt $timestampTolerance) {
+        throw "Debug editor executable does not look freshly generated. LastWriteTime: $($debugExeInfo.LastWriteTime)"
+    }
+
+    if ($debugDllInfo.LastWriteTime -lt $timestampTolerance) {
+        throw "Debug editor DLL does not look freshly generated. LastWriteTime: $($debugDllInfo.LastWriteTime)"
+    }
+
+    Write-Host ""
+    Write-Host "[5/6] Recreating Dist\ByteEngine..." -ForegroundColor Green
+
     & $publishScript -Configuration $BuildConfiguration
 
     if ($LASTEXITCODE -ne 0) {
@@ -99,7 +136,7 @@ try {
     }
 
     Write-Host ""
-    Write-Host "[4/4] Verifying fresh Dist package..." -ForegroundColor Green
+    Write-Host "[6/6] Verifying fresh Dist package..." -ForegroundColor Green
 
     foreach ($requiredFile in @($distExe, $distDll, $distOpenAL)) {
         if (-not (Test-Path -LiteralPath $requiredFile)) {
@@ -111,11 +148,6 @@ try {
     $dllInfo = Get-Item -LiteralPath $distDll
     $openAlInfo = Get-Item -LiteralPath $distOpenAL
 
-    # Because PublishEditor removes the whole Dist folder before publishing,
-    # these files must have been recreated during this run. This timestamp
-    # check catches any unexpected publish/output-path problem.
-    $timestampTolerance = $startedAt.AddSeconds(-5)
-
     if ($exeInfo.LastWriteTime -lt $timestampTolerance) {
         throw "Dist executable does not look freshly generated. LastWriteTime: $($exeInfo.LastWriteTime)"
     }
@@ -124,33 +156,37 @@ try {
         throw "Dist editor DLL does not look freshly generated. LastWriteTime: $($dllInfo.LastWriteTime)"
     }
 
-    $exeHash = (Get-FileHash -LiteralPath $distExe -Algorithm SHA256).Hash
-    $dllHash = (Get-FileHash -LiteralPath $distDll -Algorithm SHA256).Hash
+    $debugExeHash = (Get-FileHash -LiteralPath $debugEditorExe -Algorithm SHA256).Hash
+    $debugDllHash = (Get-FileHash -LiteralPath $debugEditorDll -Algorithm SHA256).Hash
+    $distExeHash = (Get-FileHash -LiteralPath $distExe -Algorithm SHA256).Hash
+    $distDllHash = (Get-FileHash -LiteralPath $distDll -Algorithm SHA256).Hash
 
     Write-Host ""
-    Write-Host "==============================================" -ForegroundColor DarkGreen
-    Write-Host " BYTEENGINE BUILD + DIST REFRESH SUCCESS" -ForegroundColor Green
-    Write-Host "==============================================" -ForegroundColor DarkGreen
+    Write-Host "==========================================================" -ForegroundColor DarkGreen
+    Write-Host " BYTEENGINE DEBUG + DIST REFRESH SUCCESS" -ForegroundColor Green
+    Write-Host "==========================================================" -ForegroundColor DarkGreen
     Write-Host ""
-    Write-Host "Fresh Dist package:"
-    Write-Host "  $distRoot"
+
+    Write-Host "Development / dotnet run output:"
+    Write-Host "  $debugEditorRoot" -ForegroundColor Cyan
+    Write-Host "  EXE timestamp : $($debugExeInfo.LastWriteTime)"
+    Write-Host "  DLL timestamp : $($debugDllInfo.LastWriteTime)"
+    Write-Host "  EXE SHA256    : $debugExeHash"
+    Write-Host "  DLL SHA256    : $debugDllHash"
     Write-Host ""
-    Write-Host "ByteEngine.Editor.exe"
-    Write-Host "  LastWriteTime : $($exeInfo.LastWriteTime)"
-    Write-Host "  Size          : $([Math]::Round($exeInfo.Length / 1MB, 2)) MB"
-    Write-Host "  SHA256        : $exeHash"
+
+    Write-Host "Dist package:"
+    Write-Host "  $distRoot" -ForegroundColor Cyan
+    Write-Host "  EXE timestamp : $($exeInfo.LastWriteTime)"
+    Write-Host "  DLL timestamp : $($dllInfo.LastWriteTime)"
+    Write-Host "  EXE SHA256    : $distExeHash"
+    Write-Host "  DLL SHA256    : $distDllHash"
+    Write-Host "  OpenAL        : $($openAlInfo.LastWriteTime)"
     Write-Host ""
-    Write-Host "ByteEngine.Editor.dll"
-    Write-Host "  LastWriteTime : $($dllInfo.LastWriteTime)"
-    Write-Host "  Size          : $([Math]::Round($dllInfo.Length / 1KB, 1)) KB"
-    Write-Host "  SHA256        : $dllHash"
-    Write-Host ""
-    Write-Host "openal32.dll"
-    Write-Host "  LastWriteTime : $($openAlInfo.LastWriteTime)"
-    Write-Host "  Size          : $([Math]::Round($openAlInfo.Length / 1KB, 1)) KB"
-    Write-Host ""
-    Write-Host "Launch this build:"
-    Write-Host "  $distExe" -ForegroundColor Cyan
+
+    Write-Host "Both launch paths are now fresh:"
+    Write-Host "  dotnet run --project Editor/ByteEngine.Editor/ByteEngine.Editor.csproj" -ForegroundColor Cyan
+    Write-Host "  .\Dist\ByteEngine\ByteEngine.Editor.exe" -ForegroundColor Cyan
     Write-Host ""
 }
 finally {

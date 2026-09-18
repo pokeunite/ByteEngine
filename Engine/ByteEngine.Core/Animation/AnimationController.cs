@@ -230,23 +230,21 @@ public sealed class AnimationController : Component
         CharacterController3D? controller =
             GameObject.GetComponent<CharacterController3D>();
 
-        if (controller == null)
-        {
-            return;
-        }
-
+        /*
+         * A CharacterController3D is optional.
+         *
+         * Static NPCs, menu characters, preview characters and other animated
+         * objects still need a valid base pose. Without a movement controller,
+         * locomotion therefore settles on Idle instead of returning early and
+         * leaving the skinned model in its bind/T-pose.
+         *
+         * When a CharacterController3D is present the existing movement-driven
+         * state selection remains unchanged.
+         */
         LocomotionState nextState =
-            controller.JustLanded
-                ? LocomotionState.Land
-                : controller.IsFalling
-                    ? LocomotionState.Fall
-                    : !controller.IsGrounded
-                        ? LocomotionState.Jump
-                        : controller.Speed < 0.05f
-                            ? LocomotionState.Idle
-                            : controller.Speed >= RunThreshold
-                                ? LocomotionState.Run
-                                : LocomotionState.Walk;
+            ResolveLocomotionState(
+                controller,
+                RunThreshold);
 
         if (_stateInitialized &&
             nextState == State)
@@ -743,6 +741,29 @@ public sealed class AnimationController : Component
         _stateInitialized = false;
 
         ResetRootMotionTracking();
+    }
+
+    private static LocomotionState ResolveLocomotionState(
+        CharacterController3D? controller,
+        float runThreshold)
+    {
+        if (controller == null)
+        {
+            return LocomotionState.Idle;
+        }
+
+        return
+            controller.JustLanded
+                ? LocomotionState.Land
+                : controller.IsFalling
+                    ? LocomotionState.Fall
+                    : !controller.IsGrounded
+                        ? LocomotionState.Jump
+                        : controller.Speed < 0.05f
+                            ? LocomotionState.Idle
+                            : controller.Speed >= runThreshold
+                                ? LocomotionState.Run
+                                : LocomotionState.Walk;
     }
 
     private string GetClipName(

@@ -7,10 +7,6 @@ namespace ByteEngine.Core.Animation;
 
 /// <summary>
 /// One sampled Humanoid retarget result for a target skeleton.
-///
-/// LocalMatrices follow the target skeleton hierarchy and ModelMatrices contain
-/// the resolved model-space transforms. The renderer/runtime integration added
-/// after C9D can consume these matrices without rebuilding retarget math.
 /// </summary>
 public sealed class HumanoidRetargetPose
 {
@@ -28,36 +24,25 @@ public sealed class HumanoidRetargetPose
         float sourceTime,
         float translationScale)
     {
-        LocalMatrices =
-            localMatrices;
-
-        ModelMatrices =
-            modelMatrices;
-
-        SourceTime =
-            sourceTime;
-
-        TranslationScale =
-            translationScale;
+        LocalMatrices = localMatrices;
+        ModelMatrices = modelMatrices;
+        SourceTime = sourceTime;
+        TranslationScale = translationScale;
     }
 }
 
 /// <summary>
 /// ByteEngine Humanoid source -> target pose conversion core.
 ///
-/// C9D performs the actual retarget calculation but deliberately does not wire
-/// it into SkeletalMeshRenderer yet. It samples the source animation, measures
-/// rotation changes relative to the source bind/reference pose, applies those
-/// changes to the target reference pose, preserves target bone lengths/scales,
-/// and proportionally transfers Root/Hips translation.
+/// C9L transfers animation orientation in MODEL SPACE rather than copying local
+/// rotation deltas directly between unrelated skeletons. This is important for
+/// Humanoid retargeting because two valid rigs can use completely different
+/// local bone axes/roll while representing the same anatomical pose.
+///
+/// Target bone lengths, local offsets and scale remain target-authored.
 /// </summary>
 public static class HumanoidRetargeter
 {
-    /// <summary>
-    /// Convenience overload for imported ModelAsset instances.
-    /// Both models must already be classified Humanoid and have valid reference
-    /// poses from C9C.
-    /// </summary>
     public static HumanoidRetargetPose Retarget(
         ModelAsset sourceModel,
         ImportedAnimation sourceAnimation,
@@ -65,66 +50,48 @@ public static class HumanoidRetargeter
         ModelAsset targetModel,
         bool loop = true)
     {
-        ArgumentNullException.ThrowIfNull(
-            sourceModel);
+        ArgumentNullException.ThrowIfNull(sourceModel);
+        ArgumentNullException.ThrowIfNull(sourceAnimation);
+        ArgumentNullException.ThrowIfNull(targetModel);
 
-        ArgumentNullException.ThrowIfNull(
-            sourceAnimation);
-
-        ArgumentNullException.ThrowIfNull(
-            targetModel);
-
-        if (sourceModel.RigType !=
-            AnimationRigType.Humanoid)
+        if (sourceModel.RigType != AnimationRigType.Humanoid)
         {
             throw new InvalidOperationException(
                 $"Source model '{sourceModel.Name}' is not a Humanoid rig.");
         }
 
-        if (targetModel.RigType !=
-            AnimationRigType.Humanoid)
+        if (targetModel.RigType != AnimationRigType.Humanoid)
         {
             throw new InvalidOperationException(
                 $"Target model '{targetModel.Name}' is not a Humanoid rig.");
         }
 
-        if (sourceModel.Skeleton ==
-                null ||
-            sourceModel.ReferenceHumanoidPose ==
-                null)
+        if (sourceModel.Skeleton == null ||
+            sourceModel.ReferenceHumanoidPose == null)
         {
             throw new InvalidOperationException(
                 $"Source model '{sourceModel.Name}' does not have a valid Humanoid skeleton/reference pose.");
         }
 
-        if (targetModel.Skeleton ==
-                null ||
-            targetModel.ReferenceHumanoidPose ==
-                null)
+        if (targetModel.Skeleton == null ||
+            targetModel.ReferenceHumanoidPose == null)
         {
             throw new InvalidOperationException(
                 $"Target model '{targetModel.Name}' does not have a valid Humanoid skeleton/reference pose.");
         }
 
-        return
-            Retarget(
-                sourceModel.Skeleton,
-                sourceModel.HumanoidMapping,
-                sourceModel.ReferenceHumanoidPose,
-                sourceAnimation,
-                time,
-                targetModel.Skeleton,
-                targetModel.HumanoidMapping,
-                targetModel.ReferenceHumanoidPose,
-                loop);
+        return Retarget(
+            sourceModel.Skeleton,
+            sourceModel.HumanoidMapping,
+            sourceModel.ReferenceHumanoidPose,
+            sourceAnimation,
+            time,
+            targetModel.Skeleton,
+            targetModel.HumanoidMapping,
+            targetModel.ReferenceHumanoidPose,
+            loop);
     }
 
-    /// <summary>
-    /// Retarget one source clip sample into the target skeleton.
-    ///
-    /// This overload is importer/runtime-neutral and is also used by regression
-    /// tests. It does not mutate either skeleton or animation asset.
-    /// </summary>
     public static HumanoidRetargetPose Retarget(
         SkeletonAsset sourceSkeleton,
         HumanoidBoneMap sourceMapping,
@@ -136,26 +103,13 @@ public static class HumanoidRetargeter
         HumanoidReferencePose targetReferencePose,
         bool loop = true)
     {
-        ArgumentNullException.ThrowIfNull(
-            sourceSkeleton);
-
-        ArgumentNullException.ThrowIfNull(
-            sourceMapping);
-
-        ArgumentNullException.ThrowIfNull(
-            sourceReferencePose);
-
-        ArgumentNullException.ThrowIfNull(
-            sourceAnimation);
-
-        ArgumentNullException.ThrowIfNull(
-            targetSkeleton);
-
-        ArgumentNullException.ThrowIfNull(
-            targetMapping);
-
-        ArgumentNullException.ThrowIfNull(
-            targetReferencePose);
+        ArgumentNullException.ThrowIfNull(sourceSkeleton);
+        ArgumentNullException.ThrowIfNull(sourceMapping);
+        ArgumentNullException.ThrowIfNull(sourceReferencePose);
+        ArgumentNullException.ThrowIfNull(sourceAnimation);
+        ArgumentNullException.ThrowIfNull(targetSkeleton);
+        ArgumentNullException.ThrowIfNull(targetMapping);
+        ArgumentNullException.ThrowIfNull(targetReferencePose);
 
         if (!sourceReferencePose.IsReady)
         {
@@ -176,8 +130,10 @@ public static class HumanoidRetargeter
                 loop);
 
         Matrix4x4[] sourceReferenceLocals =
-            BuildReferenceLocalMatrices(
-                sourceSkeleton);
+            BuildReferenceLocalMatrices(sourceSkeleton);
+
+        Matrix4x4[] sourceReferenceModels =
+            BuildReferenceModelMatrices(sourceSkeleton);
 
         Matrix4x4[] sourceCurrentLocals =
             SampleSourceLocalMatrices(
@@ -186,21 +142,22 @@ public static class HumanoidRetargeter
                 sampleTime,
                 sourceReferenceLocals);
 
-        Matrix4x4[] targetReferenceLocals =
-            BuildReferenceLocalMatrices(
-                targetSkeleton);
+        Matrix4x4[] sourceCurrentModels =
+            BuildModelMatrices(
+                sourceSkeleton,
+                sourceCurrentLocals);
 
-        Matrix4x4[] targetLocals =
-            targetReferenceLocals
-                .ToArray();
+        Matrix4x4[] targetReferenceLocals =
+            BuildReferenceLocalMatrices(targetSkeleton);
+
+        Matrix4x4[] targetReferenceModels =
+            BuildReferenceModelMatrices(targetSkeleton);
 
         Dictionary<string, int> sourceIndices =
-            BuildBoneIndex(
-                sourceSkeleton);
+            BuildBoneIndex(sourceSkeleton);
 
         Dictionary<string, int> targetIndices =
-            BuildBoneIndex(
-                targetSkeleton);
+            BuildBoneIndex(targetSkeleton);
 
         Dictionary<int, HumanoidBone> targetSemantics =
             BuildTargetSemanticIndex(
@@ -212,6 +169,35 @@ public static class HumanoidRetargeter
                 sourceReferencePose,
                 targetReferencePose);
 
+        var desiredModelRotations =
+            new Quaternion?[
+                targetSkeleton.Bones.Count];
+
+        var desiredModelTranslationDeltas =
+            new Vector3[
+                targetSkeleton.Bones.Count];
+
+        var hasTranslationDelta =
+            new bool[
+                targetSkeleton.Bones.Count];
+
+        /*
+         * Build semantic target orientations in MODEL SPACE.
+         *
+         * Old C9D behaviour copied a LOCAL rotation delta from one rig onto the
+         * target rig. That only works when source/target bones share the same
+         * local axes and roll. Mixamo vs another Humanoid commonly does not.
+         *
+         * Model-space delta:
+         *   sourceDelta = inverse(sourceReferenceModelRot)
+         *               * sourceCurrentModelRot
+         *
+         * Then:
+         *   targetDesiredModelRot = targetReferenceModelRot * sourceDelta
+         *
+         * Later we solve that desired model orientation back into each target
+         * bone's own local space using the CURRENT target parent orientation.
+         */
         for (int targetIndex = 0;
              targetIndex < targetSkeleton.Bones.Count;
              targetIndex++)
@@ -234,111 +220,229 @@ public static class HumanoidRetargeter
             }
 
             if (!TryDecompose(
-                    sourceReferenceLocals[sourceIndex],
-                    out Vector3 sourceReferenceScale,
-                    out Quaternion sourceReferenceRotation,
-                    out Vector3 sourceReferenceTranslation) ||
-                !TryDecompose(
-                    sourceCurrentLocals[sourceIndex],
+                    sourceReferenceModels[sourceIndex],
                     out _,
-                    out Quaternion sourceCurrentRotation,
-                    out Vector3 sourceCurrentTranslation) ||
+                    out Quaternion sourceReferenceModelRotation,
+                    out Vector3 sourceReferenceModelTranslation) ||
                 !TryDecompose(
-                    targetReferenceLocals[targetIndex],
-                    out Vector3 targetReferenceScale,
-                    out Quaternion targetReferenceRotation,
-                    out Vector3 targetReferenceTranslation))
+                    sourceCurrentModels[sourceIndex],
+                    out _,
+                    out Quaternion sourceCurrentModelRotation,
+                    out Vector3 sourceCurrentModelTranslation) ||
+                !TryDecompose(
+                    targetReferenceModels[targetIndex],
+                    out _,
+                    out Quaternion targetReferenceModelRotation,
+                    out _))
             {
                 continue;
             }
 
-            Quaternion rotationDelta =
+            Quaternion modelDelta =
                 RelativeRotation(
-                    sourceReferenceRotation,
-                    sourceCurrentRotation);
+                    sourceReferenceModelRotation,
+                    sourceCurrentModelRotation);
 
-            Quaternion targetRotation =
+            desiredModelRotations[targetIndex] =
                 ApplyRotationDelta(
-                    targetReferenceRotation,
-                    rotationDelta);
+                    targetReferenceModelRotation,
+                    modelDelta);
 
-            Vector3 targetTranslation =
-                targetReferenceTranslation;
-
-            if (semanticBone ==
-                    HumanoidBone.Root ||
-                semanticBone ==
-                    HumanoidBone.Hips)
+            if (semanticBone == HumanoidBone.Root ||
+                semanticBone == HumanoidBone.Hips)
             {
-                Vector3 sourceTranslationDelta =
-                    sourceCurrentTranslation -
-                    sourceReferenceTranslation;
-
-                targetTranslation +=
-                    sourceTranslationDelta *
+                desiredModelTranslationDeltas[targetIndex] =
+                    (sourceCurrentModelTranslation -
+                     sourceReferenceModelTranslation) *
                     translationScale;
+
+                hasTranslationDelta[targetIndex] =
+                    true;
             }
-
-            /*
-             * Keep target reference scale. Applying source animation scale is
-             * intentionally deferred because it can distort characters with
-             * different proportions. Rotation + Root/Hips translation is the
-             * stable Humanoid baseline.
-             */
-            targetLocals[targetIndex] =
-                Compose(
-                    targetReferenceScale,
-                    targetRotation,
-                    targetTranslation);
-
-            _ =
-                sourceReferenceScale;
         }
 
-        Matrix4x4[] targetModels =
-            BuildModelMatrices(
-                targetSkeleton,
-                targetLocals);
+        Matrix4x4[] targetLocals =
+            targetReferenceLocals.ToArray();
 
-        return
-            new HumanoidRetargetPose(
-                targetLocals,
-                targetModels,
-                sampleTime,
-                translationScale);
+        Matrix4x4[] targetModels =
+            new Matrix4x4[
+                targetSkeleton.Bones.Count];
+
+        var resolved =
+            new bool[
+                targetSkeleton.Bones.Count];
+
+        var resolving =
+            new bool[
+                targetSkeleton.Bones.Count];
+
+        for (int targetIndex = 0;
+             targetIndex < targetSkeleton.Bones.Count;
+             targetIndex++)
+        {
+            ResolveTargetPose(
+                targetIndex);
+        }
+
+        return new HumanoidRetargetPose(
+            targetLocals,
+            targetModels,
+            sampleTime,
+            translationScale);
+
+        Matrix4x4 ResolveTargetPose(
+            int targetIndex)
+        {
+            if (resolved[targetIndex])
+            {
+                return targetModels[targetIndex];
+            }
+
+            if (resolving[targetIndex])
+            {
+                targetModels[targetIndex] =
+                    targetLocals[targetIndex];
+
+                resolved[targetIndex] =
+                    true;
+
+                return targetModels[targetIndex];
+            }
+
+            resolving[targetIndex] =
+                true;
+
+            int parentIndex =
+                targetSkeleton.Bones[targetIndex]
+                    .ParentIndex;
+
+            Matrix4x4 parentModel =
+                Matrix4x4.Identity;
+
+            bool hasParent =
+                parentIndex >= 0 &&
+                parentIndex <
+                    targetSkeleton.Bones.Count;
+
+            if (hasParent)
+            {
+                parentModel =
+                    ResolveTargetPose(parentIndex);
+            }
+
+            if (!TryDecompose(
+                    targetReferenceLocals[targetIndex],
+                    out Vector3 targetScale,
+                    out Quaternion targetReferenceLocalRotation,
+                    out Vector3 targetTranslation))
+            {
+                targetLocals[targetIndex] =
+                    targetReferenceLocals[targetIndex];
+
+                targetModels[targetIndex] =
+                    hasParent
+                        ? targetLocals[targetIndex] *
+                          parentModel
+                        : targetLocals[targetIndex];
+
+                resolving[targetIndex] =
+                    false;
+
+                resolved[targetIndex] =
+                    true;
+
+                return targetModels[targetIndex];
+            }
+
+            Quaternion targetLocalRotation =
+                targetReferenceLocalRotation;
+
+            Quaternion? desiredModelRotation =
+                desiredModelRotations[targetIndex];
+
+            if (desiredModelRotation.HasValue)
+            {
+                if (hasParent &&
+                    TryDecompose(
+                        parentModel,
+                        out _,
+                        out Quaternion parentModelRotation,
+                        out _))
+                {
+                    targetLocalRotation =
+                        ModelToLocalRotation(
+                            desiredModelRotation.Value,
+                            parentModelRotation);
+                }
+                else
+                {
+                    targetLocalRotation =
+                        NormalizeSafe(
+                            desiredModelRotation.Value);
+                }
+            }
+
+            if (hasTranslationDelta[targetIndex])
+            {
+                Vector3 modelDelta =
+                    desiredModelTranslationDeltas[targetIndex];
+
+                if (hasParent &&
+                    Matrix4x4.Invert(
+                        parentModel,
+                        out Matrix4x4 inverseParentModel))
+                {
+                    targetTranslation +=
+                        Vector3.TransformNormal(
+                            modelDelta,
+                            inverseParentModel);
+                }
+                else
+                {
+                    targetTranslation +=
+                        modelDelta;
+                }
+            }
+
+            targetLocals[targetIndex] =
+                Compose(
+                    targetScale,
+                    targetLocalRotation,
+                    targetTranslation);
+
+            targetModels[targetIndex] =
+                hasParent
+                    ? targetLocals[targetIndex] *
+                      parentModel
+                    : targetLocals[targetIndex];
+
+            resolving[targetIndex] =
+                false;
+
+            resolved[targetIndex] =
+                true;
+
+            return targetModels[targetIndex];
+        }
     }
 
-    /// <summary>
-    /// Estimates target/source body-size ratio from mapped reference positions.
-    /// Used only for Root/Hips translation so differently sized Humanoids do
-    /// not inherit raw source displacement in the wrong scale.
-    /// </summary>
     public static float CalculateTranslationScale(
         HumanoidReferencePose source,
         HumanoidReferencePose target)
     {
-        ArgumentNullException.ThrowIfNull(
-            source);
-
-        ArgumentNullException.ThrowIfNull(
-            target);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
 
         float sourceMeasure =
-            MeasureBody(
-                source);
+            MeasureBody(source);
 
         float targetMeasure =
-            MeasureBody(
-                target);
+            MeasureBody(target);
 
-        if (!float.IsFinite(
-                sourceMeasure) ||
-            !float.IsFinite(
-                targetMeasure) ||
-            sourceMeasure <=
-                0.0001f ||
-            targetMeasure <=
-                0.0001f)
+        if (!float.IsFinite(sourceMeasure) ||
+            !float.IsFinite(targetMeasure) ||
+            sourceMeasure <= 0.0001f ||
+            targetMeasure <= 0.0001f)
         {
             return 1.0f;
         }
@@ -386,8 +490,7 @@ public static class HumanoidRetargeter
                 animation.FindChannel(
                     bone.Name);
 
-            if (channel ==
-                null)
+            if (channel == null)
             {
                 result[index] =
                     fallback;
@@ -442,10 +545,8 @@ public static class HumanoidRetargeter
                 skeleton.Bones[index]
                     .ParentIndex;
 
-            if (parent <
-                    0 ||
-                parent >=
-                    skeleton.Bones.Count)
+            if (parent < 0 ||
+                parent >= skeleton.Bones.Count)
             {
                 locals[index] =
                     globals[index];
@@ -466,7 +567,6 @@ public static class HumanoidRetargeter
             /*
              * System.Numerics uses row-vector composition:
              * model = local * parentModel.
-             * Therefore local = model * inverse(parentModel).
              */
             locals[index] =
                 globals[index] *
@@ -490,8 +590,7 @@ public static class HumanoidRetargeter
             if (!Matrix4x4.Invert(
                     skeleton.Bones[index].BindPose,
                     out Matrix4x4 model) ||
-                !IsFinite(
-                    model))
+                !IsFinite(model))
             {
                 model =
                     Matrix4x4.Identity;
@@ -551,10 +650,6 @@ public static class HumanoidRetargeter
 
         if (resolving[index])
         {
-            /*
-             * Malformed cyclic hierarchy: fail safely at this bone instead of
-             * recursing forever.
-             */
             result[index] =
                 locals[index];
 
@@ -572,18 +667,16 @@ public static class HumanoidRetargeter
                 .ParentIndex;
 
         Matrix4x4 model =
-            parent >=
-                0 &&
-            parent <
-                skeleton.Bones.Count
+            parent >= 0 &&
+            parent < skeleton.Bones.Count
                 ? locals[index] *
-                    ResolveModelMatrix(
-                        skeleton,
-                        locals,
-                        parent,
-                        result,
-                        resolved,
-                        resolving)
+                  ResolveModelMatrix(
+                      skeleton,
+                      locals,
+                      parent,
+                      result,
+                      resolved,
+                      resolving)
                 : locals[index];
 
         resolving[index] =
@@ -601,30 +694,28 @@ public static class HumanoidRetargeter
     private static Dictionary<string, int> BuildBoneIndex(
         SkeletonAsset skeleton)
     {
-        return
-            skeleton.Bones
-                .Select(
-                    (bone, index) =>
-                        new
-                        {
-                            bone.Name,
-                            Index =
-                                index
-                        })
-                .Where(
-                    item =>
-                        !string.IsNullOrWhiteSpace(
-                            item.Name))
-                .GroupBy(
-                    item =>
-                        item.Name,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group =>
-                        group.Key,
-                    group =>
-                        group.First().Index,
-                    StringComparer.OrdinalIgnoreCase);
+        return skeleton.Bones
+            .Select(
+                (bone, index) =>
+                    new
+                    {
+                        bone.Name,
+                        Index = index
+                    })
+            .Where(
+                item =>
+                    !string.IsNullOrWhiteSpace(
+                        item.Name))
+            .GroupBy(
+                item =>
+                    item.Name,
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group =>
+                    group.Key,
+                group =>
+                    group.First().Index,
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private static Dictionary<int, HumanoidBone> BuildTargetSemanticIndex(
@@ -657,13 +748,11 @@ public static class HumanoidRetargeter
     {
         Matrix4x4 referenceMatrix =
             Matrix4x4.CreateFromQuaternion(
-                NormalizeSafe(
-                    reference));
+                NormalizeSafe(reference));
 
         Matrix4x4 currentMatrix =
             Matrix4x4.CreateFromQuaternion(
-                NormalizeSafe(
-                    current));
+                NormalizeSafe(current));
 
         if (!Matrix4x4.Invert(
                 referenceMatrix,
@@ -685,8 +774,7 @@ public static class HumanoidRetargeter
             return Quaternion.Identity;
         }
 
-        return NormalizeSafe(
-            rotation);
+        return NormalizeSafe(rotation);
     }
 
     private static Quaternion ApplyRotationDelta(
@@ -695,13 +783,11 @@ public static class HumanoidRetargeter
     {
         Matrix4x4 targetReferenceMatrix =
             Matrix4x4.CreateFromQuaternion(
-                NormalizeSafe(
-                    targetReference));
+                NormalizeSafe(targetReference));
 
         Matrix4x4 deltaMatrix =
             Matrix4x4.CreateFromQuaternion(
-                NormalizeSafe(
-                    delta));
+                NormalizeSafe(delta));
 
         Matrix4x4 target =
             targetReferenceMatrix *
@@ -717,8 +803,45 @@ public static class HumanoidRetargeter
                 targetReference);
         }
 
-        return NormalizeSafe(
-            rotation);
+        return NormalizeSafe(rotation);
+    }
+
+    private static Quaternion ModelToLocalRotation(
+        Quaternion desiredModelRotation,
+        Quaternion parentModelRotation)
+    {
+        Matrix4x4 model =
+            Matrix4x4.CreateFromQuaternion(
+                NormalizeSafe(
+                    desiredModelRotation));
+
+        Matrix4x4 parent =
+            Matrix4x4.CreateFromQuaternion(
+                NormalizeSafe(
+                    parentModelRotation));
+
+        if (!Matrix4x4.Invert(
+                parent,
+                out Matrix4x4 inverseParent))
+        {
+            return NormalizeSafe(
+                desiredModelRotation);
+        }
+
+        Matrix4x4 local =
+            model *
+            inverseParent;
+
+        if (!Matrix4x4.Decompose(
+                local,
+                out _,
+                out Quaternion rotation,
+                out _))
+        {
+            return Quaternion.Identity;
+        }
+
+        return NormalizeSafe(rotation);
     }
 
     private static float MeasureBody(
@@ -728,8 +851,7 @@ public static class HumanoidRetargeter
             pose.GetBone(
                 HumanoidBone.Hips);
 
-        if (hips ==
-            null)
+        if (hips == null)
         {
             return 0.0f;
         }
@@ -737,32 +859,21 @@ public static class HumanoidRetargeter
         var distances =
             new List<float>();
 
-        AddDistance(
-            HumanoidBone.Head);
+        AddDistance(HumanoidBone.Head);
+        AddDistance(HumanoidBone.LeftFoot);
+        AddDistance(HumanoidBone.RightFoot);
 
-        AddDistance(
-            HumanoidBone.LeftFoot);
-
-        AddDistance(
-            HumanoidBone.RightFoot);
-
-        if (distances.Count ==
-            0)
-        {
-            return 0.0f;
-        }
-
-        return distances.Average();
+        return distances.Count == 0
+            ? 0.0f
+            : distances.Average();
 
         void AddDistance(
             HumanoidBone bone)
         {
             HumanoidReferenceBonePose? target =
-                pose.GetBone(
-                    bone);
+                pose.GetBone(bone);
 
-            if (target ==
-                null)
+            if (target == null)
             {
                 return;
             }
@@ -772,13 +883,10 @@ public static class HumanoidRetargeter
                     hips.Position,
                     target.Position);
 
-            if (float.IsFinite(
-                    distance) &&
-                distance >
-                    0.0001f)
+            if (float.IsFinite(distance) &&
+                distance > 0.0001f)
             {
-                distances.Add(
-                    distance);
+                distances.Add(distance);
             }
         }
     }
@@ -788,12 +896,9 @@ public static class HumanoidRetargeter
         float time,
         bool loop)
     {
-        if (!float.IsFinite(
-                time) ||
-            !float.IsFinite(
-                duration) ||
-            duration <=
-                0.000001f)
+        if (!float.IsFinite(time) ||
+            !float.IsFinite(duration) ||
+            duration <= 0.000001f)
         {
             return 0.0f;
         }
@@ -810,11 +915,9 @@ public static class HumanoidRetargeter
             time %
             duration;
 
-        if (wrapped <
-            0.0f)
+        if (wrapped < 0.0f)
         {
-            wrapped +=
-                duration;
+            wrapped += duration;
         }
 
         return wrapped;
@@ -831,12 +934,9 @@ public static class HumanoidRetargeter
                 out scale,
                 out rotation,
                 out translation) ||
-            !IsFinite(
-                scale) ||
-            !IsFinite(
-                rotation) ||
-            !IsFinite(
-                translation))
+            !IsFinite(scale) ||
+            !IsFinite(rotation) ||
+            !IsFinite(translation))
         {
             scale =
                 Vector3.One;
@@ -851,8 +951,7 @@ public static class HumanoidRetargeter
         }
 
         rotation =
-            NormalizeSafe(
-                rotation);
+            NormalizeSafe(rotation);
 
         return true;
     }
@@ -863,11 +962,9 @@ public static class HumanoidRetargeter
         Vector3 translation)
     {
         return
-            Matrix4x4.CreateScale(
-                scale) *
+            Matrix4x4.CreateScale(scale) *
             Matrix4x4.CreateFromQuaternion(
-                NormalizeSafe(
-                    rotation)) *
+                NormalizeSafe(rotation)) *
             Matrix4x4.CreateTranslation(
                 translation);
     }
@@ -876,8 +973,7 @@ public static class HumanoidRetargeter
         Quaternion value) =>
         value.LengthSquared() >
             0.000001f
-            ? Quaternion.Normalize(
-                value)
+            ? Quaternion.Normalize(value)
             : Quaternion.Identity;
 
     private static bool IsFinite(
