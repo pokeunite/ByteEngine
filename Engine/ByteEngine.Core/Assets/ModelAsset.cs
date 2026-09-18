@@ -1,27 +1,144 @@
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets.Importers;
 
 namespace ByteEngine.Core.Assets;
 
 public sealed class ModelAsset
 {
-    public Guid Guid { get; }
-    public Guid SourceAssetGuid { get; }
-    public string Name { get; }
-    public IReadOnlyList<ImportedNode> Nodes { get; }
-    public IReadOnlyList<ImportedMesh> Meshes { get; }
-    public IReadOnlyList<ImportedMaterial> Materials { get; }
-    public SkeletonAsset? Skeleton { get; }
-    public IReadOnlyList<ImportedAnimation> Animations { get; }
+    private readonly List<ImportedAnimation> _animations;
 
-    internal ModelAsset(ImportedModel imported)
+    public Guid Guid { get; }
+
+    public Guid SourceAssetGuid { get; }
+
+    public string Name { get; }
+
+    public IReadOnlyList<ImportedNode> Nodes { get; }
+
+    public IReadOnlyList<ImportedMesh> Meshes { get; }
+
+    public IReadOnlyList<ImportedMaterial> Materials { get; }
+
+    public SkeletonAsset? Skeleton { get; }
+
+    public IReadOnlyList<ImportedAnimation> Animations =>
+        _animations;
+
+    /// <summary>
+    /// Rig classification captured from this model's importer metadata.
+    /// Existing assets remain Generic unless explicitly changed to Humanoid.
+    /// </summary>
+    public AnimationRigType RigType { get; }
+
+    /// <summary>
+    /// Snapshot of the source model's semantic Humanoid bone mapping.
+    /// </summary>
+    public HumanoidBoneMap HumanoidMapping { get; }
+
+    /// <summary>
+    /// Derived source bind/reference pose for Humanoid models.
+    ///
+    /// This is not persisted independently; it is rebuilt from the imported
+    /// skeleton's inverse bind matrices whenever the model is imported.
+    /// </summary>
+    public HumanoidReferencePose? ReferenceHumanoidPose { get; }
+
+    internal ModelAsset(
+        ImportedModel imported)
+        : this(
+            imported,
+            null)
     {
-        Guid = imported.Guid;
-        SourceAssetGuid = imported.SourceAssetGuid;
-        Name = imported.Name;
-        Nodes = imported.Nodes;
-        Meshes = imported.Meshes;
-        Materials = imported.Materials;
-        Skeleton = imported.Skeleton;
-        Animations = imported.Animations;
     }
+
+    internal ModelAsset(
+        ImportedModel imported,
+        ModelImporterSettings? settings)
+    {
+        ArgumentNullException.ThrowIfNull(
+            imported);
+
+        settings ??=
+            new ModelImporterSettings();
+
+        settings.Normalize();
+
+        Guid =
+            imported.Guid;
+
+        SourceAssetGuid =
+            imported.SourceAssetGuid;
+
+        Name =
+            imported.Name;
+
+        Nodes =
+            imported.Nodes;
+
+        Meshes =
+            imported.Meshes;
+
+        Materials =
+            imported.Materials;
+
+        Skeleton =
+            imported.Skeleton;
+
+        _animations =
+            imported.Animations
+                .ToList();
+
+        RigType =
+            settings.RigType;
+
+        HumanoidMapping =
+            settings.HumanoidMapping.Clone();
+
+        if (RigType ==
+                AnimationRigType.Humanoid &&
+            Skeleton !=
+                null)
+        {
+            ReferenceHumanoidPose =
+                HumanoidReferencePose.Capture(
+                    Skeleton,
+                    HumanoidMapping);
+        }
+    }
+
+    /// <summary>
+    /// Adds or replaces a runtime-generated animation clip without changing the
+    /// source model file. C9E uses this for Humanoid retarget caches so the
+    /// existing SkeletalMeshRenderer can play a retargeted clip exactly like a
+    /// native imported clip.
+    /// </summary>
+    internal ImportedAnimation RegisterRuntimeAnimation(
+        ImportedAnimation animation)
+    {
+        ArgumentNullException.ThrowIfNull(
+            animation);
+
+        int existing =
+            _animations.FindIndex(
+                candidate =>
+                    string.Equals(
+                        candidate.Key,
+                        animation.Key,
+                        StringComparison.Ordinal));
+
+        if (existing >=
+            0)
+        {
+            _animations[existing] =
+                animation;
+
+            return animation;
+        }
+
+        _animations.Add(
+            animation);
+
+        return animation;
+    }
+
 }

@@ -12,6 +12,9 @@ public sealed class AssetManager : IDisposable
     private readonly Dictionary<Guid, Texture2D> _textures = new();
     private readonly Dictionary<Guid, ModelAsset> _models = new();
     private readonly Dictionary<Guid, AnimationProfile> _animationProfiles = new();
+    private readonly Dictionary<Guid, AssetRevision> _textureRevisions = new();
+    private readonly Dictionary<Guid, AssetRevision> _modelRevisions = new();
+    private readonly Dictionary<Guid, AssetRevision> _animationProfileRevisions = new();
     private readonly Dictionary<(Guid Model, string Key), Mesh> _modelMeshes = new();
     private readonly Dictionary<(Guid Model, string Key), Material> _modelMaterials = new();
     private readonly Dictionary<(Guid Model, string Key), Texture2D> _modelTextures = new();
@@ -54,6 +57,7 @@ public sealed class AssetManager : IDisposable
         {
             Texture2D texture = _textureImporter.Import(asset);
             _textures[asset.Guid] = texture;
+            _textureRevisions[asset.Guid] = CaptureRevision(asset);
             return texture;
         }
         catch (Exception exception)
@@ -71,9 +75,20 @@ public sealed class AssetManager : IDisposable
             throw new FileNotFoundException($"Model asset '{reference}' could not be resolved.");
         if (_models.TryGetValue(asset.Guid, out ModelAsset? cached)) return cached;
 
-        ImportedModel imported = ModelImporter.ForPath(asset.FullPath).Import(asset, asset.Metadata.ModelImporter);
-        var model = new ModelAsset(imported);
+        asset.Metadata.ModelImporter.Normalize();
+
+        ImportedModel imported =
+            ModelImporter.ForPath(asset.FullPath)
+                .Import(
+                    asset,
+                    asset.Metadata.ModelImporter);
+
+        var model =
+            new ModelAsset(
+                imported,
+                asset.Metadata.ModelImporter);
         _models[asset.Guid] = model;
+        _modelRevisions[asset.Guid] = CaptureRevision(asset);
         return model;
     }
 
@@ -94,7 +109,35 @@ public sealed class AssetManager : IDisposable
 
         AnimationProfile profile = _animationProfileImporter.Import(asset);
         _animationProfiles[asset.Guid] = profile;
+        _animationProfileRevisions[asset.Guid] = CaptureRevision(asset);
         return profile;
+    }
+
+    /// <summary>
+    /// Reloads one Animation Profile without forcing a full AssetDatabase scan.
+    /// This is used by the profile editor after Save so editing a .byteanim file
+    /// does not reimport every cached model and texture in the project.
+    /// </summary>
+    public AnimationProfile ReloadAnimationProfile(AssetReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        AssetRecord? asset = _database.Resolve(reference);
+        if (asset == null || asset.Type != AssetType.AnimationProfile)
+            throw new FileNotFoundException($"Animation Profile asset '{reference}' could not be resolved.");
+
+        AnimationProfile refreshed = _animationProfileImporter.Import(asset);
+
+        if (_animationProfiles.TryGetValue(asset.Guid, out AnimationProfile? existing))
+        {
+            CopyAnimationProfile(refreshed, existing);
+            _animationProfileRevisions[asset.Guid] = CaptureRevision(asset);
+            return existing;
+        }
+
+        _animationProfiles[asset.Guid] = refreshed;
+        _animationProfileRevisions[asset.Guid] = CaptureRevision(asset);
+        return refreshed;
     }
 
     public ModelAsset ReimportModel(Guid guid)
@@ -135,17 +178,37 @@ public sealed class AssetManager : IDisposable
 
     private void ReloadChangedResources()
     {
+        /*
+         * AssetDatabase.Scan() reports that the database changed even when the
+         * contents of already-loaded assets did not. Reimporting every cached
+         * FBX/GLTF/texture on each scan made project open, profile save and
+         * ordinary browser refreshes increasingly expensive.
+         *
+         * Keep hot reload, but only touch a loaded resource when its source or
+         * .meta sidecar revision actually changed.
+         */
         foreach ((Guid guid, Texture2D texture) in _textures.ToArray())
         {
-            if (!_database.TryGetAsset(guid, out AssetRecord? record) || record == null || record.Type != AssetType.Texture2D)
+            if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
+                record == null ||
+                record.Type != AssetType.Texture2D)
             {
                 texture.ReplaceWithMissing();
+                _textureRevisions.Remove(guid);
+                continue;
+            }
+
+            AssetRevision revision = CaptureRevision(record);
+            if (_textureRevisions.TryGetValue(guid, out AssetRevision previous) &&
+                previous == revision)
+            {
                 continue;
             }
 
             try
             {
                 texture.Reload(record.FullPath, record.Metadata.Importer.Filter);
+                _textureRevisions[guid] = revision;
             }
             catch (Exception exception)
             {
@@ -156,8 +219,20 @@ public sealed class AssetManager : IDisposable
 
         foreach ((Guid guid, ModelAsset _) in _models.ToArray())
         {
-            if (!_database.TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D)
+            if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
+                record?.Type != AssetType.Model3D)
+            {
+                _modelRevisions.Remove(guid);
                 continue;
+            }
+
+            AssetRevision revision = CaptureRevision(record);
+            if (_modelRevisions.TryGetValue(guid, out AssetRevision previous) &&
+                previous == revision)
+            {
+                continue;
+            }
+
             try
             {
                 RefreshModel(record);
@@ -168,17 +243,20 @@ public sealed class AssetManager : IDisposable
             }
         }
 
-        /*
-         * Preserve AnimationProfile object identity during hot reload. Runtime
-         * controllers/editor panels can safely hold the loaded profile while
-         * the asset file is edited or regenerated.
-         */
         foreach ((Guid guid, AnimationProfile profile) in _animationProfiles.ToArray())
         {
             if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
                 record?.Type != AssetType.AnimationProfile)
             {
                 _animationProfiles.Remove(guid);
+                _animationProfileRevisions.Remove(guid);
+                continue;
+            }
+
+            AssetRevision revision = CaptureRevision(record);
+            if (_animationProfileRevisions.TryGetValue(guid, out AssetRevision previous) &&
+                previous == revision)
+            {
                 continue;
             }
 
@@ -186,6 +264,7 @@ public sealed class AssetManager : IDisposable
             {
                 AnimationProfile refreshed = _animationProfileImporter.Import(record);
                 CopyAnimationProfile(refreshed, profile);
+                _animationProfileRevisions[guid] = revision;
             }
             catch (Exception exception)
             {
@@ -194,12 +273,38 @@ public sealed class AssetManager : IDisposable
         }
     }
 
+    private static AssetRevision CaptureRevision(AssetRecord record)
+    {
+        FileInfo asset = new(record.FullPath);
+        FileInfo meta = new(record.MetaPath);
+
+        return new AssetRevision(
+            asset.Exists ? asset.LastWriteTimeUtc.Ticks : 0L,
+            asset.Exists ? asset.Length : 0L,
+            meta.Exists ? meta.LastWriteTimeUtc.Ticks : 0L,
+            meta.Exists ? meta.Length : 0L);
+    }
+
+    private readonly record struct AssetRevision(
+        long AssetWriteTicks,
+        long AssetLength,
+        long MetaWriteTicks,
+        long MetaLength);
+
     private ModelAsset RefreshModel(AssetRecord record)
     {
         Guid guid = record.Guid;
-        var refreshed = new ModelAsset(
-            ModelImporter.ForPath(record.FullPath).Import(record, record.Metadata.ModelImporter));
+        record.Metadata.ModelImporter.Normalize();
+
+        var refreshed =
+            new ModelAsset(
+                ModelImporter.ForPath(record.FullPath)
+                    .Import(
+                        record,
+                        record.Metadata.ModelImporter),
+                record.Metadata.ModelImporter);
         _models[guid] = refreshed;
+        _modelRevisions[guid] = CaptureRevision(record);
         foreach (ImportedMesh source in refreshed.Meshes)
             if (_modelMeshes.TryGetValue((guid, source.Key), out Mesh? mesh))
                 mesh.ReplaceData(source.Vertices, source.Indices);
@@ -266,7 +371,10 @@ public sealed class AssetManager : IDisposable
         _modelTextures.Clear();
         _modelMaterials.Clear();
         _models.Clear();
+        _textureRevisions.Clear();
+        _modelRevisions.Clear();
         _animationProfiles.Clear();
+        _animationProfileRevisions.Clear();
         _missingTexture?.Dispose();
         _missingTexture = null;
     }

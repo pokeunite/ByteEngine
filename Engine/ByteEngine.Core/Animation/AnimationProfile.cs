@@ -15,7 +15,7 @@ namespace ByteEngine.Core.Animation;
 /// </summary>
 public sealed class AnimationProfile
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -38,7 +38,7 @@ public sealed class AnimationProfile
         Version =
             Math.Max(
                 Version,
-                1);
+                CurrentVersion);
 
         Name =
             string.IsNullOrWhiteSpace(Name)
@@ -47,6 +47,12 @@ public sealed class AnimationProfile
 
         Rig ??=
             new AnimationRigProfile();
+
+        Rig.ReferenceModel ??=
+            AssetReference.Empty;
+
+        Rig.AnimationSourceModel ??=
+            AssetReference.Empty;
 
         Locomotion ??=
             new AnimationLocomotionProfile();
@@ -100,6 +106,16 @@ public sealed class AnimationRigProfile
     /// this for humanoid validation and bone mapping.
     /// </summary>
     public AssetReference ReferenceModel { get; set; } =
+        AssetReference.Empty;
+
+    /// <summary>
+    /// Optional model that owns the animation clips used by this profile.
+    ///
+    /// Empty means "use ReferenceModel", preserving the simple one-model
+    /// workflow. When this points at a different ready Humanoid model, C9
+    /// transparently retargets its clips onto the ReferenceModel character.
+    /// </summary>
+    public AssetReference AnimationSourceModel { get; set; } =
         AssetReference.Empty;
 }
 

@@ -24,6 +24,10 @@ internal sealed class AnimationProfileWorkspacePanel
     private bool _focusNextDraw;
     private bool _dirty;
     private string? _loadError;
+    private Guid _clipCacheModelGuid;
+    private string? _clipCacheModelPath;
+    private IReadOnlyList<string> _clipCache = Array.Empty<string>();
+    private bool _clipCacheValid;
 
     public void Open(
         AssetRecord asset,
@@ -41,6 +45,7 @@ internal sealed class AnimationProfileWorkspacePanel
         _focusNextDraw = true;
         _dirty = false;
         _loadError = null;
+        InvalidateClipCache();
 
         try
         {
@@ -285,63 +290,325 @@ internal sealed class AnimationProfileWorkspacePanel
             return false;
         }
 
-        bool changed = false;
+        bool changed =
+            false;
 
-        ImGui.SeparatorText("SKELETON RIG");
+        ImGui.SeparatorText(
+            "SKELETON RIG");
 
-        int rigType =
-            (int)_profile.Rig.Type;
-
-        string[] rigNames =
-            Enum.GetNames<AnimationRigType>();
-
-        if (ImGui.Combo(
-                "Rig Type",
-                ref rigType,
-                rigNames,
-                rigNames.Length))
-        {
-            _profile.Rig.Type =
-                (AnimationRigType)rigType;
-            changed = true;
-        }
-
-        AssetReference model =
+        AssetReference modelReference =
             _profile.Rig.ReferenceModel ??
             AssetReference.Empty;
 
         if (DrawAssetPicker(
                 "Reference Model",
                 AssetType.Model3D,
-                ref model))
+                ref modelReference))
         {
-            _profile.Rig.ReferenceModel = model;
-            changed = true;
+            _profile.Rig.ReferenceModel =
+                modelReference;
+
+            InvalidateClipCache();
+
+            changed =
+                true;
         }
 
-        ImGui.Spacing();
-
-        if (_profile.Rig.Type ==
-            AnimationRigType.Humanoid)
+        if (modelReference.IsEmpty)
         {
             ImGui.TextWrapped(
-                "Humanoid semantic bone mapping and validation arrive in C9. The selected model is the reference character used by that system.");
+                "Choose the character model that defines this profile's skeleton. Its Generic/Humanoid classification and Humanoid bone map are stored on the model asset.");
+
+            return changed;
+        }
+
+        ImGui.SeparatorText(
+            "ANIMATION SOURCE");
+
+        AssetReference animationSource =
+            _profile.Rig.AnimationSourceModel ??
+            AssetReference.Empty;
+
+        if (DrawAssetPicker(
+                "Animation Source Model",
+                AssetType.Model3D,
+                ref animationSource))
+        {
+            _profile.Rig.AnimationSourceModel =
+                animationSource;
+
+            InvalidateClipCache();
+
+            changed =
+                true;
+        }
+
+        if (animationSource.IsEmpty)
+        {
+            ImGui.TextDisabled(
+                "Using Reference Model animations. Choose a different ready Humanoid model here to reuse/retarget its clips.");
         }
         else
         {
-            ImGui.TextDisabled(
-                "Generic uses the imported skeleton as authored.");
+            DrawAnimationSourceStatus(
+                modelReference,
+                animationSource);
         }
 
-        IReadOnlyList<string> clips =
-            GetReferenceModelClipNames();
+        AssetRecord? modelAsset =
+            _project.AssetDatabase.Resolve(
+                modelReference);
 
-        ImGui.TextDisabled(
-            clips.Count == 0
-                ? "Reference model animation clips: none"
-                : $"Reference model animation clips: {clips.Count}");
+        if (modelAsset == null ||
+            modelAsset.Type !=
+                AssetType.Model3D)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.38f,
+                    0.30f,
+                    1.0f),
+                "Reference Model is missing or is not a 3D model.");
+
+            return changed;
+        }
+
+        try
+        {
+            ModelAsset model =
+                _project.Assets.LoadModel(
+                    modelReference);
+
+            bool rigMetadataChanged =
+                HumanoidRigAuthoring.Draw(
+                    modelAsset,
+                    model,
+                    out AnimationRigType actualRigType);
+
+            /*
+             * C8 stored Rig.Type directly in the profile. C9 makes the model
+             * metadata authoritative, but keeps the profile value mirrored for
+             * backwards compatibility with existing .byteanim files.
+             */
+            if (_profile.Rig.Type !=
+                actualRigType)
+            {
+                _profile.Rig.Type =
+                    actualRigType;
+
+                changed =
+                    true;
+            }
+
+            if (rigMetadataChanged)
+            {
+                _profile.Rig.Type =
+                    actualRigType;
+            }
+
+            if (actualRigType ==
+                AnimationRigType.Humanoid)
+            {
+                DrawReferencePoseStatus(
+                    model,
+                    modelAsset.Metadata.ModelImporter.HumanoidMapping);
+            }
+
+            IReadOnlyList<string> clips =
+                GetAnimationClipNames();
+
+            ImGui.Spacing();
+
+            ImGui.TextDisabled(
+                clips.Count == 0
+                    ? "Animation source clips: none"
+                    : $"Animation source clips: {clips.Count}");
+        }
+        catch (Exception exception)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.38f,
+                    0.30f,
+                    1.0f),
+                "Could not inspect the Reference Model.");
+
+            ImGui.TextWrapped(
+                exception.Message);
+        }
 
         return changed;
+    }
+
+    private void DrawAnimationSourceStatus(
+        AssetReference referenceModel,
+        AssetReference animationSource)
+    {
+        if (_project == null)
+        {
+            return;
+        }
+
+        AssetRecord? sourceAsset =
+            _project.AssetDatabase.Resolve(
+                animationSource);
+
+        if (sourceAsset == null ||
+            sourceAsset.Type !=
+                AssetType.Model3D)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.38f,
+                    0.30f,
+                    1.0f),
+                "Animation Source Model is missing or invalid.");
+
+            return;
+        }
+
+        try
+        {
+            ModelAsset sourceModel =
+                _project.Assets.LoadModel(
+                    animationSource);
+
+            bool sameModel =
+                SameAssetReference(
+                    referenceModel,
+                    animationSource);
+
+            if (sameModel)
+            {
+                ImGui.TextDisabled(
+                    "Animation Source is the Reference Model. Clips play natively; no retargeting is required.");
+
+                return;
+            }
+
+            ModelAsset targetModel =
+                _project.Assets.LoadModel(
+                    referenceModel);
+
+            bool sourceReady =
+                sourceModel.RigType ==
+                    AnimationRigType.Humanoid &&
+                sourceModel.ReferenceHumanoidPose?.IsReady ==
+                    true;
+
+            bool targetReady =
+                targetModel.RigType ==
+                    AnimationRigType.Humanoid &&
+                targetModel.ReferenceHumanoidPose?.IsReady ==
+                    true;
+
+            if (sourceReady &&
+                targetReady)
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        0.35f,
+                        0.86f,
+                        0.48f,
+                        1.0f),
+                    "Humanoid Retarget Source Ready");
+
+                ImGui.TextDisabled(
+                    $"{sourceModel.Animations.Count} source clip(s) available for transparent runtime retargeting.");
+
+                return;
+            }
+
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.58f,
+                    0.24f,
+                    1.0f),
+                "Humanoid Retarget Source Needs Attention");
+
+            if (!targetReady)
+            {
+                ImGui.BulletText(
+                    "Reference Model must be a ready Humanoid.");
+            }
+
+            if (!sourceReady)
+            {
+                ImGui.BulletText(
+                    "Animation Source Model must be a ready Humanoid.");
+            }
+        }
+        catch (Exception exception)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.38f,
+                    0.30f,
+                    1.0f),
+                "Could not inspect Animation Source Model.");
+
+            ImGui.TextWrapped(
+                exception.Message);
+        }
+    }
+
+    private static void DrawReferencePoseStatus(
+        ModelAsset model,
+        HumanoidBoneMap mapping)
+    {
+        ImGui.SeparatorText(
+            "REFERENCE POSE");
+
+        HumanoidReferencePose pose =
+            HumanoidReferencePose.Capture(
+                model.Skeleton,
+                mapping);
+
+        if (pose.IsReady)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    0.35f,
+                    0.86f,
+                    0.48f,
+                    1.0f),
+                "Reference Pose Ready");
+
+            ImGui.TextDisabled(
+                $"{pose.CapturedBoneCount} mapped bone(s) captured from the model bind pose.");
+
+            ImGui.TextWrapped(
+                "ByteEngine now has the model-space Humanoid reference pose needed for retargeting. C9D will use this source/target pose data for actual Humanoid animation conversion.");
+
+            return;
+        }
+
+        ImGui.TextColored(
+            new Vector4(
+                1.0f,
+                0.58f,
+                0.24f,
+                1.0f),
+            "Reference Pose Needs Attention");
+
+        if (pose.MissingRequiredBones.Count >
+            0)
+        {
+            ImGui.TextWrapped(
+                $"Missing reference transforms: {string.Join(", ", pose.MissingRequiredBones)}");
+        }
+
+        if (pose.InvalidMappedBones.Count >
+            0)
+        {
+            ImGui.TextWrapped(
+                $"Invalid inverse-bind transforms: {string.Join(", ", pose.InvalidMappedBones)}");
+        }
     }
 
     private bool DrawLocomotion()
@@ -377,7 +644,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         IReadOnlyList<string> clips =
-            GetReferenceModelClipNames();
+            GetAnimationClipNames();
 
         string idle = locomotion.Idle;
         if (DrawClipPicker("Idle", clips, ref idle))
@@ -486,7 +753,7 @@ internal sealed class AnimationProfileWorkspacePanel
         if (clips.Count == 0)
         {
             ImGui.TextWrapped(
-                "Choose a Reference Model in RIG to populate the animation clip pickers.");
+                "Choose a Reference Model in RIG. Optionally choose a different Animation Source Model to populate these clip pickers from a reusable Humanoid animation library.");
         }
 
         return changed;
@@ -501,7 +768,7 @@ internal sealed class AnimationProfileWorkspacePanel
 
         bool changed = false;
         IReadOnlyList<string> clips =
-            GetReferenceModelClipNames();
+            GetAnimationClipNames();
 
         ImGui.SeparatorText("NAMED ACTIONS");
 
@@ -692,12 +959,12 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         IReadOnlyList<string> clips =
-            GetReferenceModelClipNames();
+            GetAnimationClipNames();
 
         ImGui.SeparatorText("PROFILE STATUS");
         ImGui.Text($"Version: {_profile.Version}");
         ImGui.Text($"Actions: {_profile.Actions.Count}");
-        ImGui.Text($"Reference clips: {clips.Count}");
+        ImGui.Text($"Animation source clips: {clips.Count}");
         ImGui.Text($"Rig: {_profile.Rig.Type}");
         ImGui.TextDisabled($"GUID: {_asset.Guid}");
         ImGui.TextDisabled(_asset.ProjectPath);
@@ -729,23 +996,40 @@ internal sealed class AnimationProfileWorkspacePanel
         }
     }
 
-    private IReadOnlyList<string> GetReferenceModelClipNames()
+    private IReadOnlyList<string> GetAnimationClipNames()
     {
         if (_profile == null ||
             _project == null ||
             _profile.Rig.ReferenceModel == null ||
             _profile.Rig.ReferenceModel.IsEmpty)
         {
+            InvalidateClipCache();
             return Array.Empty<string>();
+        }
+
+        AssetReference reference =
+            _profile.Rig.AnimationSourceModel != null &&
+            !_profile.Rig.AnimationSourceModel.IsEmpty
+                ? _profile.Rig.AnimationSourceModel
+                : _profile.Rig.ReferenceModel;
+
+        if (_clipCacheValid &&
+            _clipCacheModelGuid == reference.Guid &&
+            string.Equals(
+                _clipCacheModelPath,
+                reference.CachedProjectPath,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return _clipCache;
         }
 
         try
         {
             ModelAsset model =
                 _project.Assets.LoadModel(
-                    _profile.Rig.ReferenceModel);
+                    reference);
 
-            return model.Animations
+            _clipCache = model.Animations
                 .Select(animation =>
                     string.IsNullOrWhiteSpace(animation.Name)
                         ? animation.Key
@@ -757,11 +1041,45 @@ internal sealed class AnimationProfileWorkspacePanel
                     name,
                     StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+            _clipCacheModelGuid = reference.Guid;
+            _clipCacheModelPath = reference.CachedProjectPath;
+            _clipCacheValid = true;
+
+            return _clipCache;
         }
         catch
         {
+            InvalidateClipCache();
             return Array.Empty<string>();
         }
+    }
+
+    private void InvalidateClipCache()
+    {
+        _clipCacheModelGuid = Guid.Empty;
+        _clipCacheModelPath = null;
+        _clipCache = Array.Empty<string>();
+        _clipCacheValid = false;
+    }
+
+    private static bool SameAssetReference(
+        AssetReference left,
+        AssetReference right)
+    {
+        if (left.Guid !=
+                Guid.Empty &&
+            right.Guid !=
+                Guid.Empty)
+        {
+            return left.Guid ==
+                right.Guid;
+        }
+
+        return string.Equals(
+            left.CachedProjectPath,
+            right.CachedProjectPath,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private bool DrawAssetPicker(
@@ -935,11 +1253,15 @@ internal sealed class AnimationProfileWorkspacePanel
                 _profile);
 
             /*
-             * One explicit scan per save keeps the AssetManager cache and live
-             * references fresh without the per-control/per-frame churn that
-             * made the first C8D editor feel slower.
+             * The profile path/GUID did not change, so a full database scan is
+             * unnecessary here. Reload only this profile into the runtime cache.
+             * The file watcher can update database metadata later without
+             * forcing every cached model to reimport.
              */
-            _project.AssetDatabase.Scan();
+            _project.Assets.ReloadAnimationProfile(
+                new AssetReference(
+                    _asset.Guid,
+                    _asset.ProjectPath));
 
             _dirty = false;
             _loadError = null;
@@ -969,6 +1291,7 @@ internal sealed class AnimationProfileWorkspacePanel
                 AnimationProfileSerializer.Load(
                     _asset.FullPath);
 
+            InvalidateClipCache();
             _dirty = false;
             _loadError = null;
         }

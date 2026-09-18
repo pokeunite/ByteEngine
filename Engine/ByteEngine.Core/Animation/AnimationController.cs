@@ -29,6 +29,12 @@ public sealed class AnimationController : Component
 {
     private readonly List<SkeletalMeshRenderer> _renderers = new();
 
+    private readonly HashSet<SkeletalMeshRenderer> _actionRenderers =
+        new();
+
+    private AssetReference _animationSourceModel =
+        AssetReference.Empty;
+
     private bool _stateInitialized;
     private bool _actionActive;
     private bool _actionPaused;
@@ -129,13 +135,9 @@ public sealed class AnimationController : Component
             }
 
             bool actionStillPlaying =
-                _renderers.Any(
+                _actionRenderers.Any(
                     renderer =>
-                        renderer.IsPlaying &&
-                        string.Equals(
-                            renderer.CurrentAnimation,
-                            _currentAction,
-                            StringComparison.OrdinalIgnoreCase));
+                        renderer.IsPlaying);
 
             if (actionStillPlaying)
             {
@@ -145,6 +147,7 @@ public sealed class AnimationController : Component
             _actionActive = false;
             _actionPaused = false;
             _currentAction = string.Empty;
+            _actionRenderers.Clear();
             _stateInitialized = false;
         }
 
@@ -163,10 +166,20 @@ public sealed class AnimationController : Component
     public bool ApplyAnimationProfile()
     {
         if (AnimationProfile == null ||
-            AnimationProfile.IsEmpty ||
-            !AnimationRuntimeAssets.TryGet(out AssetManager? assets) ||
+            AnimationProfile.IsEmpty)
+        {
+            _animationSourceModel =
+                AssetReference.Empty;
+
+            return false;
+        }
+
+        if (!AnimationRuntimeAssets.TryGet(out AssetManager? assets) ||
             assets == null)
         {
+            _animationSourceModel =
+                AssetReference.Empty;
+
             return false;
         }
 
@@ -180,10 +193,17 @@ public sealed class AnimationController : Component
         }
         catch
         {
+            _animationSourceModel =
+                AssetReference.Empty;
+
             return false;
         }
 
         profile.Normalize();
+
+        _animationSourceModel =
+            profile.Rig.AnimationSourceModel ??
+            AssetReference.Empty;
 
         AnimationLocomotionProfile locomotion =
             profile.Locomotion;
@@ -293,8 +313,7 @@ public sealed class AnimationController : Component
                 continue;
             }
 
-            if (model.Skeleton == null ||
-                model.Animations.Count == 0)
+            if (model.Skeleton == null)
             {
                 continue;
             }
@@ -396,10 +415,13 @@ public sealed class AnimationController : Component
             }
         }
 
+        _actionRenderers.Clear();
+
         bool played =
             PlayInternal(
                 clipName,
-                false);
+                false,
+                _actionRenderers);
 
         if (!played)
         {
@@ -460,7 +482,8 @@ public sealed class AnimationController : Component
 
     private bool PlayInternal(
         string clipName,
-        bool loop)
+        bool loop,
+        ISet<SkeletalMeshRenderer>? playedRenderers = null)
     {
         if (_renderers.Count == 0)
         {
@@ -469,16 +492,57 @@ public sealed class AnimationController : Component
 
         bool played = false;
 
-        foreach (SkeletalMeshRenderer renderer in _renderers)
+        AnimationRuntimeAssets.TryGet(
+            out AssetManager? assets);
+
+        foreach (SkeletalMeshRenderer renderer
+                 in _renderers)
         {
             renderer.Speed =
-                Math.Max(PlaybackSpeed, 0.0f);
+                Math.Max(
+                    PlaybackSpeed,
+                    0.0f);
 
-            played |=
-                renderer.Play(
-                    clipName,
-                    loop,
-                    Math.Max(TransitionDuration, 0.0f));
+            bool rendererPlayed;
+
+            if (assets != null &&
+                !_animationSourceModel.IsEmpty &&
+                !SameModel(
+                    _animationSourceModel,
+                    renderer.Model))
+            {
+                rendererPlayed =
+                    HumanoidRetargetRuntime.Play(
+                        assets,
+                        renderer,
+                        _animationSourceModel,
+                        clipName,
+                        loop,
+                        Math.Max(
+                            TransitionDuration,
+                            0.0f));
+            }
+            else
+            {
+                rendererPlayed =
+                    renderer.Play(
+                        clipName,
+                        loop,
+                        Math.Max(
+                            TransitionDuration,
+                            0.0f));
+            }
+
+            if (!rendererPlayed)
+            {
+                continue;
+            }
+
+            played =
+                true;
+
+            playedRenderers?.Add(
+                renderer);
         }
 
         if (played)
@@ -675,6 +739,7 @@ public sealed class AnimationController : Component
         _actionActive = false;
         _actionPaused = false;
         _currentAction = string.Empty;
+        _actionRenderers.Clear();
         _stateInitialized = false;
 
         ResetRootMotionTracking();

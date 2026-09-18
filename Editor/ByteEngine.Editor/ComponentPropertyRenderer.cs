@@ -692,8 +692,42 @@ internal static class ComponentPropertyRenderer
         bool changed =
             false;
 
+        bool animationProfileField =
+            component is AnimationController &&
+            descriptor.Property.Name ==
+                nameof(AnimationController.AnimationProfile);
+
+        string comboLabel =
+            animationProfileField
+                ? $"##asset-picker:{descriptor.Property.Name}"
+                : label;
+
+        if (animationProfileField)
+        {
+            ImGui.TextUnformatted(
+                descriptor.Metadata.DisplayName);
+
+            float clearWidth =
+                reference.IsEmpty
+                    ? 0.0f
+                    : ImGui.CalcTextSize("Clear").X +
+                      ImGui.GetStyle().FramePadding.X * 2.0f;
+
+            float comboWidth =
+                ImGui.GetContentRegionAvail().X -
+                (reference.IsEmpty
+                    ? 0.0f
+                    : clearWidth +
+                      ImGui.GetStyle().ItemSpacing.X);
+
+            ImGui.SetNextItemWidth(
+                Math.Max(
+                    comboWidth,
+                    120.0f));
+        }
+
         if (ImGui.BeginCombo(
-                label,
+                comboLabel,
                 preview))
         {
             if (ImGui.Selectable(
