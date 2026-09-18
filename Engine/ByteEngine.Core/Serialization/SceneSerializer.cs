@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.Classification;
@@ -11,6 +12,9 @@ namespace ByteEngine.Core.Serialization;
 
 public sealed class SceneSerializer
 {
+    private const string TpsDCollisionSafetyMarginProperty =
+        "collisionSafetyMargin";
+
     private readonly ComponentSerializer _components;
     private readonly ClassificationSettings? _classification;
 
@@ -175,6 +179,10 @@ public sealed class SceneSerializer
 
                 if (componentData != null)
                 {
+                    ApplyComponentSerializationCompatibility(
+                        component,
+                        componentData);
+
                     gameObjectData.Components.Add(
                         componentData
                     );
@@ -272,6 +280,10 @@ public sealed class SceneSerializer
 
                 if (component != null)
                 {
+                    ApplyComponentDeserializationCompatibility(
+                        component,
+                        componentData);
+
                     gameObject.AddComponent(
                         component
                     );
@@ -302,6 +314,84 @@ public sealed class SceneSerializer
         }
 
         return scene;
+    }
+
+    /// <summary>
+    /// TPS-D introduced CollisionSafetyMargin after the original CameraBoom3D
+    /// codec had already shipped. Writing it here serves two purposes until the
+    /// component codec is versioned: the authored value persists, and its
+    /// presence marks a scene as having passed through the TPS-D serializer.
+    /// </summary>
+    private static void ApplyComponentSerializationCompatibility(
+        Component component,
+        ComponentData componentData)
+    {
+        if (component is not CameraBoom3D boom)
+        {
+            return;
+        }
+
+        componentData.Properties[TpsDCollisionSafetyMarginProperty] =
+            boom.CollisionSafetyMargin;
+    }
+
+    /// <summary>
+    /// One-time TPS-D migration for scenes saved before collision became the
+    /// standard spring-arm behavior. The old codec serialized its default false
+    /// value, so there is no way to distinguish an untouched old default from an
+    /// intentional opt-out. Scenes without the TPS-D marker are therefore moved
+    /// to the new baseline once; after they are saved again the marker is present
+    /// and an explicit EnableCameraCollision=false is respected normally.
+    /// </summary>
+    private static void ApplyComponentDeserializationCompatibility(
+        Component component,
+        ComponentData componentData)
+    {
+        if (component is not CameraBoom3D boom)
+        {
+            return;
+        }
+
+        bool hasTpsDMarker =
+            componentData.Properties[TpsDCollisionSafetyMarginProperty] !=
+            null;
+
+        boom.CollisionSafetyMargin =
+            componentData.Properties[TpsDCollisionSafetyMarginProperty]?
+                .GetValue<float>() ??
+            .05f;
+
+        if (hasTpsDMarker)
+        {
+            return;
+        }
+
+        /*
+         * Pre-TPS-D scenes commonly contain enableCameraCollision=false only
+         * because that was the old default. Migrate those scenes to the new
+         * collision-aware baseline on first load.
+         */
+        boom.EnableCameraCollision =
+            true;
+
+        /*
+         * The old codec also used true as its fallback for both lag modes.
+         * Only correct missing properties here; explicitly authored values are
+         * preserved.
+         */
+        if (componentData.Properties["cameraLagEnabled"] ==
+            null)
+        {
+            boom.CameraLagEnabled =
+                false;
+        }
+
+        if (componentData.Properties["rotationLagEnabled"] ==
+            null)
+        {
+            boom.RotationLagEnabled =
+                false;
+        }
     }
 
     public IReadOnlyList<GameObject> InstantiateHierarchy(
