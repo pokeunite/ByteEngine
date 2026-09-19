@@ -1,4 +1,7 @@
 using System.Numerics;
+using System.Text.Json.Serialization;
+
+using ByteEngine.Core.Animation;
 
 namespace ByteEngine.Core.Assets.Importers;
 
@@ -125,6 +128,17 @@ public sealed class ImportedAnimation
     public string Name { get; init; } = "Animation";
     public float Duration { get; init; }
     public List<ImportedAnimationChannel> Channels { get; init; } = new();
+
+    /// <summary>
+    /// ByteEngine-owned event metadata for this target-model animation.
+    ///
+    /// Importers leave this list empty. C10-D persists/restores it from
+    /// ByteEngine model-animation metadata, so native FBX clips and baked
+    /// retargeted clips share the same runtime representation without rewriting
+    /// the source model file.
+    /// </summary>
+    [JsonIgnore]
+    public List<AnimationEventMarker> Events { get; init; } = new();
 
     public ImportedAnimationChannel? FindChannel(string nodeName)
     {

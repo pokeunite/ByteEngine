@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -47,6 +48,24 @@ public sealed class AnimationController : Component
     private float _lastRootMotionTime;
     private bool _rootMotionSampleValid;
 
+    /*
+     * C10 runtime event cursor.
+     *
+     * One renderer is the event authority for the controller so characters with
+     * several synchronized skeletal renderers never emit duplicate gameplay
+     * events. Event snapshots are rebuilt only when the active clip changes.
+     */
+    private SkeletalMeshRenderer? _animationEventSource;
+    private ImportedAnimation? _animationEventClip;
+    private string _animationEventName = string.Empty;
+    private AnimationEventMarker[] _animationEventSnapshot =
+        Array.Empty<AnimationEventMarker>();
+    private readonly List<AnimationEventCrossingHit> _animationEventCrossings =
+        new(8);
+    private float _animationEventPreviousTime;
+    private long _animationEventLoopIndex;
+    private bool _animationEventSampleValid;
+
     /// <summary>
     /// Optional unified .byteanim profile. If empty, all legacy controller
     /// properties continue to work exactly as before.
@@ -75,6 +94,12 @@ public sealed class AnimationController : Component
     public Vector3 RootMotionDelta { get; private set; }
 
     public LocomotionState State { get; private set; }
+
+    /// <summary>
+    /// Fired once for every event marker crossed by the authoritative animation
+    /// renderer. Large frame advances and loop wraparound preserve marker order.
+    /// </summary>
+    public event Action<AnimationEventOccurrence>? AnimationEventFired;
 
     public string CurrentAnimation =>
         _renderers
@@ -157,6 +182,22 @@ public sealed class AnimationController : Component
         }
 
         UpdateLocomotion();
+    }
+
+    protected override void OnLateUpdate()
+    {
+        /*
+         * SkeletalMeshRenderer advances during the normal scene-wide Update
+         * pass. Reading it in LateUpdate removes dependency on hierarchy/object
+         * update order and gives event crossing the final playback time for the
+         * frame.
+         */
+        UpdateAnimationEvents();
+    }
+
+    protected override void OnDestroy()
+    {
+        ResetAnimationEventTracking();
     }
 
     /// <summary>
@@ -271,6 +312,8 @@ public sealed class AnimationController : Component
 
     public void RefreshRenderers()
     {
+        ResetAnimationEventTracking();
+
         _renderers.Clear();
 
         foreach (GameObject gameObject in SelfAndDescendants(GameObject))
@@ -355,6 +398,7 @@ public sealed class AnimationController : Component
         }
 
         ResetRootMotionTracking();
+        ResetAnimationEventTracking();
     }
 
     public bool Play(
@@ -410,6 +454,13 @@ public sealed class AnimationController : Component
                 {
                     renderer.Stop();
                 }
+
+                /*
+                 * Same-name retriggers rewind the renderer to time zero, so the
+                 * event cursor must also rewind. A normal Play() of the same
+                 * clip only resumes and therefore intentionally does not reset.
+                 */
+                ResetAnimationEventTracking();
             }
         }
 
@@ -476,6 +527,7 @@ public sealed class AnimationController : Component
         }
 
         ResetRootMotionTracking();
+        ResetAnimationEventTracking();
     }
 
     private bool PlayInternal(
@@ -549,6 +601,452 @@ public sealed class AnimationController : Component
         }
 
         return played;
+    }
+
+    private void UpdateAnimationEvents()
+    {
+        SkeletalMeshRenderer? source =
+            _renderers.FirstOrDefault(
+                renderer =>
+                    renderer.ModelLoaded &&
+                    !string.IsNullOrWhiteSpace(
+                        renderer.CurrentAnimation));
+
+        if (source == null)
+        {
+            ResetAnimationEventTracking();
+            return;
+        }
+
+        string animationName =
+            source.CurrentAnimation;
+
+        bool sourceChanged =
+            !ReferenceEquals(
+                _animationEventSource,
+                source);
+
+        bool clipChanged =
+            !string.Equals(
+                _animationEventName,
+                animationName,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (sourceChanged ||
+            clipChanged)
+        {
+            BindAnimationEventClip(
+                source,
+                animationName);
+        }
+
+        ImportedAnimation? clip =
+            _animationEventClip;
+
+        if (clip == null)
+        {
+            return;
+        }
+
+        float duration =
+            Math.Max(
+                clip.Duration,
+                0.0f);
+
+        if (duration <=
+            0.000001f)
+        {
+            _animationEventPreviousTime =
+                0.0f;
+
+            _animationEventSampleValid =
+                true;
+
+            return;
+        }
+
+        float currentTime =
+            Math.Clamp(
+                source.PlaybackTime,
+                0.0f,
+                duration);
+
+        bool includeStart =
+            !_animationEventSampleValid;
+
+        float fromTime =
+            includeStart
+                ? 0.0f
+                : _animationEventPreviousTime;
+
+        float rawAdvance =
+            includeStart
+                ? ResolveInitialAnimationAdvance(
+                    source,
+                    currentTime,
+                    duration)
+                : ResolveAnimationAdvance(
+                    source,
+                    _animationEventPreviousTime,
+                    currentTime,
+                    duration);
+
+        long baseLoopIndex =
+            _animationEventLoopIndex;
+
+        AnimationEventCrossing.Collect(
+            _animationEventSnapshot,
+            duration,
+            fromTime,
+            rawAdvance,
+            source.Loop,
+            includeStart,
+            _animationEventCrossings,
+            out long loopsCrossed);
+
+        _animationEventPreviousTime =
+            currentTime;
+
+        _animationEventSampleValid =
+            true;
+
+        _animationEventLoopIndex +=
+            loopsCrossed;
+
+        if (_animationEventCrossings.Count ==
+            0)
+        {
+            return;
+        }
+
+        string dispatchAnimation =
+            clip.Name;
+
+        foreach (AnimationEventCrossingHit hit
+                 in _animationEventCrossings)
+        {
+            AnimationEventMarker marker =
+                hit.Marker;
+
+            var occurrence =
+                new AnimationEventOccurrence(
+                    source.Model.Guid,
+                    clip.Key,
+                    clip.Name,
+                    marker.Id,
+                    marker.Name,
+                    marker.Payload,
+                    marker.Time,
+                    baseLoopIndex +
+                    hit.LoopOffset);
+
+            AnimationEventFired?.Invoke(
+                occurrence);
+
+            /*
+             * An event callback may intentionally interrupt or replace the
+             * animation. Events later in the old traversal must not leak into
+             * the new clip after that interruption.
+             */
+            if (!string.Equals(
+                    source.CurrentAnimation,
+                    dispatchAnimation,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+        }
+    }
+
+    private void BindAnimationEventClip(
+        SkeletalMeshRenderer source,
+        string animationName)
+    {
+        ResetAnimationEventTracking();
+
+        _animationEventSource =
+            source;
+
+        _animationEventName =
+            animationName;
+
+        if (!AnimationRuntimeAssets.TryGet(
+                out AssetManager? assets) ||
+            assets == null)
+        {
+            return;
+        }
+
+        try
+        {
+            ModelAsset model =
+                assets.LoadModel(
+                    source.Model);
+
+            ImportedAnimation? clip =
+                model.Animations.FirstOrDefault(
+                    animation =>
+                        string.Equals(
+                            animation.Name,
+                            animationName,
+                            StringComparison.Ordinal))
+                ?? model.Animations.FirstOrDefault(
+                    animation =>
+                        string.Equals(
+                            animation.Name,
+                            animationName,
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (clip == null)
+            {
+                return;
+            }
+
+            _animationEventClip =
+                clip;
+
+            _animationEventSnapshot =
+                AnimationEventCrossing.BuildSnapshot(
+                    clip.Events,
+                    clip.Duration);
+        }
+        catch
+        {
+            _animationEventClip =
+                null;
+
+            _animationEventSnapshot =
+                Array.Empty<AnimationEventMarker>();
+        }
+    }
+
+    private static float ResolveInitialAnimationAdvance(
+        SkeletalMeshRenderer source,
+        float currentTime,
+        float duration)
+    {
+        float expected =
+            CurrentFrameAnimationAdvance(
+                source);
+
+        if (expected <=
+            0.000001f)
+        {
+            return currentTime;
+        }
+
+        float expectedTime =
+            PredictAnimationTime(
+                0.0f,
+                expected,
+                duration,
+                source.Loop);
+
+        bool expectedMatches =
+            NearlySameAnimationTime(
+                expectedTime,
+                currentTime,
+                duration);
+
+        if (expectedMatches &&
+            (currentTime >
+                 0.000001f ||
+             source.IsPlaying &&
+             expected >=
+                 duration -
+                 0.000001f))
+        {
+            return expected;
+        }
+
+        /*
+         * If this controller started the renderer after that renderer's Update
+         * slot for the frame, playback is still at zero. Do not invent a frame
+         * of movement. The zero-time marker still fires through includeStart.
+         */
+        return currentTime;
+    }
+
+    private static float ResolveAnimationAdvance(
+        SkeletalMeshRenderer source,
+        float previousTime,
+        float currentTime,
+        float duration)
+    {
+        float observed;
+
+        if (source.Loop)
+        {
+            observed =
+                currentTime +
+                    0.000001f >=
+                previousTime
+                    ? Math.Max(
+                        currentTime -
+                        previousTime,
+                        0.0f)
+                    : Math.Max(
+                        duration -
+                        previousTime +
+                        currentTime,
+                        0.0f);
+        }
+        else
+        {
+            observed =
+                Math.Max(
+                    currentTime -
+                    previousTime,
+                    0.0f);
+        }
+
+        float expected =
+            CurrentFrameAnimationAdvance(
+                source);
+
+        if (expected <=
+            0.000001f)
+        {
+            return observed;
+        }
+
+        bool visiblyMoved =
+            MathF.Abs(
+                currentTime -
+                previousTime) >
+            0.000001f;
+
+        /*
+         * Pause can happen earlier in the same Update pass. If playback time
+         * did not move and the renderer is no longer playing, no event time was
+         * crossed this frame.
+         */
+        if (!visiblyMoved &&
+            !source.IsPlaying)
+        {
+            return 0.0f;
+        }
+
+        float expectedTime =
+            PredictAnimationTime(
+                previousTime,
+                expected,
+                duration,
+                source.Loop);
+
+        if (NearlySameAnimationTime(
+                expectedTime,
+                currentTime,
+                duration))
+        {
+            /*
+             * This is the important large-frame path. The observed modulo time
+             * cannot reveal that two or more loops were crossed, but the raw
+             * frame advance can. Use it only when it predicts the renderer's
+             * actual final time.
+             */
+            return expected;
+        }
+
+        return observed;
+    }
+
+    private static float CurrentFrameAnimationAdvance(
+        SkeletalMeshRenderer source)
+    {
+        float deltaTime =
+            Math.Max(
+                (float)ByteEngine.Core.Time.DeltaTime,
+                0.0f);
+
+        float speed =
+            Math.Max(
+                source.Speed,
+                0.0f);
+
+        return deltaTime *
+               speed;
+    }
+
+    private static float PredictAnimationTime(
+        float fromTime,
+        float advance,
+        float duration,
+        bool loop)
+    {
+        if (duration <=
+            0.000001f)
+        {
+            return 0.0f;
+        }
+
+        float next =
+            Math.Max(
+                fromTime,
+                0.0f) +
+            Math.Max(
+                advance,
+                0.0f);
+
+        if (!loop)
+        {
+            return Math.Min(
+                next,
+                duration);
+        }
+
+        float wrapped =
+            next %
+            duration;
+
+        return wrapped <
+            0.0f
+                ? wrapped +
+                  duration
+                : wrapped;
+    }
+
+    private static bool NearlySameAnimationTime(
+        float left,
+        float right,
+        float duration)
+    {
+        float tolerance =
+            Math.Max(
+                0.0001f,
+                duration *
+                0.0001f);
+
+        return MathF.Abs(
+                left -
+                right) <=
+            tolerance;
+    }
+
+    private void ResetAnimationEventTracking()
+    {
+        _animationEventSource =
+            null;
+
+        _animationEventClip =
+            null;
+
+        _animationEventName =
+            string.Empty;
+
+        _animationEventSnapshot =
+            Array.Empty<AnimationEventMarker>();
+
+        _animationEventCrossings.Clear();
+
+        _animationEventPreviousTime =
+            0.0f;
+
+        _animationEventLoopIndex =
+            0;
+
+        _animationEventSampleValid =
+            false;
     }
 
     private void UpdateRootMotion()
