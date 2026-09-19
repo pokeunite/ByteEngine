@@ -1,5 +1,6 @@
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets.Importers;
+using System.Runtime.CompilerServices;
 
 namespace ByteEngine.Tests;
 
@@ -9,6 +10,7 @@ namespace ByteEngine.Tests;
 /// </summary>
 internal static class C10AnimationEventsTests
 {
+    [ModuleInitializer]
     public static void Run()
     {
         SnapshotIsSanitizedAndSorted();
@@ -20,6 +22,8 @@ internal static class C10AnimationEventsTests
         StartMarkerFiresOnce();
         EmptyTrackStillCountsLoops();
         ImportedAnimationOwnsRuntimeEventMetadata();
+        C10AnimationWindowTests.Run();
+        C10AnimationMetadataTests.Run();
     }
 
     private static void SnapshotIsSanitizedAndSorted()

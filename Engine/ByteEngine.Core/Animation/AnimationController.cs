@@ -65,6 +65,11 @@ public sealed class AnimationController : Component
     private float _animationEventPreviousTime;
     private long _animationEventLoopIndex;
     private bool _animationEventSampleValid;
+    private AnimationWindowBoundary[] _animationWindowSnapshot =
+        Array.Empty<AnimationWindowBoundary>();
+    private readonly List<AnimationWindowCrossingHit> _animationWindowCrossings =
+        new(8);
+    private readonly HashSet<Guid> _activeAnimationWindows = new();
 
     /// <summary>
     /// Optional unified .byteanim profile. If empty, all legacy controller
@@ -100,6 +105,34 @@ public sealed class AnimationController : Component
     /// renderer. Large frame advances and loop wraparound preserve marker order.
     /// </summary>
     public event Action<AnimationEventOccurrence>? AnimationEventFired;
+
+    public event Action<AnimationWindowOccurrence>? WindowEntered;
+
+    public event Action<AnimationWindowOccurrence>? WindowExited;
+
+    public bool IsWindowActive(Guid windowId) =>
+        windowId != Guid.Empty &&
+        _activeAnimationWindows.Contains(windowId);
+
+    public bool IsWindowActive(string windowName)
+    {
+        if (string.IsNullOrWhiteSpace(windowName)) return false;
+
+        foreach (AnimationWindowBoundary boundary in _animationWindowSnapshot)
+        {
+            if (boundary.Kind == AnimationWindowBoundaryKind.Enter &&
+                string.Equals(
+                    boundary.Window.Name,
+                    windowName,
+                    StringComparison.OrdinalIgnoreCase) &&
+                _activeAnimationWindows.Contains(boundary.Window.Id))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public string CurrentAnimation =>
         _renderers
@@ -598,6 +631,19 @@ public sealed class AnimationController : Component
         if (played)
         {
             ResetRootMotionTracking();
+
+            if (!string.Equals(
+                    _animationEventName,
+                    clipName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                /*
+                 * Clear active duration windows immediately when playback
+                 * switches clips. The next LateUpdate binds the new cached
+                 * timeline; stale windows are never observable in between.
+                 */
+                ResetAnimationEventTracking();
+            }
         }
 
         return played;
@@ -704,31 +750,27 @@ public sealed class AnimationController : Component
             _animationEventCrossings,
             out long loopsCrossed);
 
-        _animationEventPreviousTime =
-            currentTime;
+        AnimationWindowCrossing.Collect(
+            _animationWindowSnapshot,
+            duration,
+            fromTime,
+            rawAdvance,
+            source.Loop,
+            includeStart,
+            _animationWindowCrossings,
+            out _);
 
-        _animationEventSampleValid =
-            true;
+        _animationEventPreviousTime = currentTime;
+        _animationEventSampleValid = true;
+        _animationEventLoopIndex += loopsCrossed;
 
-        _animationEventLoopIndex +=
-            loopsCrossed;
+        string dispatchAnimation = clip.Name;
 
-        if (_animationEventCrossings.Count ==
-            0)
+        foreach (AnimationEventCrossingHit hit in _animationEventCrossings)
         {
-            return;
-        }
+            AnimationEventMarker marker = hit.Marker;
 
-        string dispatchAnimation =
-            clip.Name;
-
-        foreach (AnimationEventCrossingHit hit
-                 in _animationEventCrossings)
-        {
-            AnimationEventMarker marker =
-                hit.Marker;
-
-            var occurrence =
+            AnimationEventFired?.Invoke(
                 new AnimationEventOccurrence(
                     source.Model.Guid,
                     clip.Key,
@@ -737,27 +779,57 @@ public sealed class AnimationController : Component
                     marker.Name,
                     marker.Payload,
                     marker.Time,
-                    baseLoopIndex +
-                    hit.LoopOffset);
+                    baseLoopIndex + hit.LoopOffset));
 
-            AnimationEventFired?.Invoke(
-                occurrence);
-
-            /*
-             * An event callback may intentionally interrupt or replace the
-             * animation. Events later in the old traversal must not leak into
-             * the new clip after that interruption.
-             */
             if (!string.Equals(
                     source.CurrentAnimation,
                     dispatchAnimation,
                     StringComparison.OrdinalIgnoreCase))
             {
-                break;
+                ResetAnimationEventTracking();
+                return;
+            }
+        }
+
+        foreach (AnimationWindowCrossingHit hit in _animationWindowCrossings)
+        {
+            AnimationWindowBoundary boundary = hit.Boundary;
+            AnimationWindow window = boundary.Window;
+            bool entering =
+                boundary.Kind == AnimationWindowBoundaryKind.Enter;
+
+            if (entering)
+                _activeAnimationWindows.Add(window.Id);
+            else
+                _activeAnimationWindows.Remove(window.Id);
+
+            var occurrence =
+                new AnimationWindowOccurrence(
+                    source.Model.Guid,
+                    clip.Key,
+                    clip.Name,
+                    window.Id,
+                    window.Name,
+                    window.Payload,
+                    window.StartTime,
+                    window.EndTime,
+                    baseLoopIndex + hit.LoopOffset);
+
+            if (entering)
+                WindowEntered?.Invoke(occurrence);
+            else
+                WindowExited?.Invoke(occurrence);
+
+            if (!string.Equals(
+                    source.CurrentAnimation,
+                    dispatchAnimation,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ResetAnimationEventTracking();
+                return;
             }
         }
     }
-
     private void BindAnimationEventClip(
         SkeletalMeshRenderer source,
         string animationName)
@@ -809,6 +881,11 @@ public sealed class AnimationController : Component
                 AnimationEventCrossing.BuildSnapshot(
                     clip.Events,
                     clip.Duration);
+
+            _animationWindowSnapshot =
+                AnimationWindowCrossing.BuildSnapshot(
+                    clip.Windows,
+                    clip.Duration);
         }
         catch
         {
@@ -817,6 +894,9 @@ public sealed class AnimationController : Component
 
             _animationEventSnapshot =
                 Array.Empty<AnimationEventMarker>();
+
+            _animationWindowSnapshot =
+                Array.Empty<AnimationWindowBoundary>();
         }
     }
 
@@ -1038,6 +1118,12 @@ public sealed class AnimationController : Component
             Array.Empty<AnimationEventMarker>();
 
         _animationEventCrossings.Clear();
+
+        _animationWindowSnapshot =
+            Array.Empty<AnimationWindowBoundary>();
+
+        _animationWindowCrossings.Clear();
+        _activeAnimationWindows.Clear();
 
         _animationEventPreviousTime =
             0.0f;

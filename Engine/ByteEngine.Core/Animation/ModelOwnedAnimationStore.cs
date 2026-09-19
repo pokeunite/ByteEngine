@@ -342,6 +342,14 @@ public static class ModelOwnedAnimationStore
         targetModel.RegisterRuntimeAnimation(
             ownedAnimation);
 
+        /*
+         * Replacement keeps the stable animation key. Reapply its independent
+         * event/window sidecar so rebaking never drops author metadata.
+         */
+        ModelAnimationMetadataStore.MergeInto(
+            projectRoot,
+            targetModel);
+
         return
             new ModelOwnedAnimationBakeResult(
                 ownedAnimation,
@@ -494,6 +502,16 @@ public static class ModelOwnedAnimationStore
 
         ModelOwnedAnimationEntry removed =
             library.Animations[index];
+
+        /*
+         * Delete metadata first. If it is corrupt, fail before changing the
+         * valid baked-animation library so no orphaned or silently overwritten
+         * metadata state is created.
+         */
+        ModelAnimationMetadataStore.Remove(
+            projectRoot,
+            targetModel.Guid,
+            removed.Animation.Key);
 
         library.Animations.RemoveAt(
             index);

@@ -10,8 +10,8 @@ using ByteEngine.Core.Serialization.SerializationModels;
 namespace ByteEngine.Core.Animation;
 
 /// <summary>
-/// Richer v0.11-C animation persistence. These codecs intentionally use the
-/// existing component type names so older scenes remain compatible.
+/// Animation component persistence not installed by the base serializer.
+/// AnimationController persistence is authoritative in ComponentSerializer.
 /// </summary>
 public static class AnimationSerializationRegistrar
 {
@@ -19,93 +19,8 @@ public static class AnimationSerializationRegistrar
     {
         ArgumentNullException.ThrowIfNull(serializer);
 
-        serializer.Register(new AnimationControllerCodec());
         serializer.Register(new SkeletalMeshRendererCodec());
         serializer.Register(new BoneSocket3DCodec());
-    }
-
-    private sealed class AnimationControllerCodec : IComponentCodec
-    {
-        public string TypeName => "AnimationController";
-        public Type ComponentType => typeof(AnimationController);
-
-        public ComponentData Serialize(
-            Component component,
-            ComponentSerializationContext context)
-        {
-            AnimationController controller =
-                (AnimationController)component;
-
-            return
-                new ComponentData
-                {
-                    Type = TypeName,
-                    Properties =
-                        new JsonObject
-                        {
-                            ["animationProfileGuid"] =
-                                controller.AnimationProfile.Guid.ToString(),
-                            ["animationProfilePath"] =
-                                controller.AnimationProfile.CachedProjectPath,
-                            ["idle"] = controller.Idle,
-                            ["walk"] = controller.Walk,
-                            ["run"] = controller.Run,
-                            ["jump"] = controller.Jump,
-                            ["fall"] = controller.Fall,
-                            ["land"] = controller.Land,
-                            ["runThreshold"] = controller.RunThreshold,
-                            ["driveLocomotion"] = controller.DriveLocomotion,
-                            ["transitionDuration"] =
-                                controller.TransitionDuration,
-                            ["playbackSpeed"] =
-                                controller.PlaybackSpeed,
-                            ["rootMotionMode"] =
-                                controller.RootMotionMode.ToString()
-                        }
-                };
-        }
-
-        public Component Deserialize(
-            ComponentData data,
-            ComponentSerializationContext context)
-        {
-            AssetReference profile =
-                ReadAssetReference(
-                    data,
-                    context,
-                    "animationProfileGuid",
-                    "animationProfilePath");
-
-            return
-                new AnimationController
-                {
-                    AnimationProfile = profile,
-                    Idle = Text(data, "idle", "Idle"),
-                    Walk = Text(data, "walk", "Walk"),
-                    Run = Text(data, "run", "Run"),
-                    Jump = Text(data, "jump", "Jump"),
-                    Fall = Text(data, "fall", "Fall"),
-                    Land = Text(data, "land", "Land"),
-                    RunThreshold =
-                        Float(data, "runThreshold", 4.0f),
-                    DriveLocomotion =
-                        data.Properties["driveLocomotion"]?
-                            .GetValue<bool>() ??
-                        true,
-                    TransitionDuration =
-                        Float(
-                            data,
-                            "transitionDuration",
-                            0.15f),
-                    PlaybackSpeed =
-                        Float(
-                            data,
-                            "playbackSpeed",
-                            1.0f),
-                    RootMotionMode =
-                        ReadRootMotionMode(data)
-                };
-        }
     }
 
     private sealed class SkeletalMeshRendererCodec : IComponentCodec
@@ -277,37 +192,6 @@ public static class AnimationSerializationRegistrar
             };
     }
 
-    private static AssetReference ReadAssetReference(
-        ComponentData data,
-        ComponentSerializationContext context,
-        string guidKey,
-        string pathKey)
-    {
-        Guid.TryParse(
-            data.Properties[guidKey]?
-                .GetValue<string>(),
-            out Guid guid);
-
-        string? path =
-            data.Properties[pathKey]?
-                .GetValue<string>();
-
-        if (guid != Guid.Empty)
-        {
-            return new AssetReference(
-                guid,
-                path);
-        }
-
-        if (!string.IsNullOrWhiteSpace(path))
-        {
-            return context.AssetDatabase.ResolveReference(
-                path);
-        }
-
-        return AssetReference.Empty;
-    }
-
     private static JsonArray Vector3Node(Vector3 value) =>
         new(
             value.X,
@@ -345,19 +229,4 @@ public static class AnimationSerializationRegistrar
         data.Properties[key]?
             .GetValue<float>() ??
         fallback;
-
-    private static RootMotionMode ReadRootMotionMode(
-        ComponentData data)
-    {
-        string? value =
-            data.Properties["rootMotionMode"]?
-                .GetValue<string>();
-
-        return Enum.TryParse(
-                value,
-                ignoreCase: true,
-                out RootMotionMode mode)
-            ? mode
-            : RootMotionMode.InPlace;
-    }
 }

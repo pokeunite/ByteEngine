@@ -98,6 +98,11 @@ public sealed class AssetManager : IDisposable
             ProjectRoot,
             model);
 
+        ModelAnimationMetadataStore.MergeInto(
+            ProjectRoot,
+            model,
+            _warningSink);
+
         _models[asset.Guid] = model;
         _modelRevisions[asset.Guid] = CaptureRevision(asset);
         return model;
@@ -323,6 +328,11 @@ public sealed class AssetManager : IDisposable
         ModelOwnedAnimationStore.MergeInto(
             ProjectRoot,
             refreshed);
+
+        ModelAnimationMetadataStore.MergeInto(
+            ProjectRoot,
+            refreshed,
+            _warningSink);
 
         _models[guid] = refreshed;
         _modelRevisions[guid] = CaptureRevision(record);

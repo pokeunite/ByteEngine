@@ -1,10 +1,12 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization;
+using ByteEngine.Core.Serialization.SerializationModels;
 
 namespace ByteEngine.Tests;
 
@@ -74,12 +76,23 @@ internal static class C7AnimationRegressionTests
             using var assets =
                 new AssetManager(database);
 
+            var components =
+                new ComponentSerializer(
+                    root,
+                    database,
+                    assets);
+
             var serializer =
                 new SceneSerializer(
-                    new ComponentSerializer(
-                        root,
-                        database,
-                        assets));
+                    components);
+
+            /*
+             * The base serializer owns AnimationController persistence. Register
+             * the existing supplemental animation codecs so this fixture can
+             * also verify BoneSocket3D without replacing that controller codec.
+             */
+            AnimationSerializationRegistrar.Register(
+                components);
 
             var scene =
                 new Scene("C7 Animation Regression");
@@ -90,9 +103,18 @@ internal static class C7AnimationRegressionTests
             character.AddComponent(
                 new AnimationController
                 {
+                    AnimationProfile =
+                        new AssetReference(
+                            Guid.Parse("a6f11f53-bd09-4dfa-92bd-67698fe8148e"),
+                            "Assets/Player.byteanim"),
                     Idle = "Stand",
                     Walk = "Walk",
                     Run = "Sprint",
+                    Jump = "Leap",
+                    Fall = "Drop",
+                    Land = "TouchDown",
+                    RunThreshold = 6.25f,
+                    DriveLocomotion = false,
                     TransitionDuration = 0.2f,
                     PlaybackSpeed = 1.15f,
                     RootMotionMode =
@@ -131,9 +153,20 @@ internal static class C7AnimationRegressionTests
                 "C7: AnimationController failed scene round-trip.");
 
             Assert(
-                clonedController!.RootMotionMode ==
-                    RootMotionMode.ApplyHorizontal,
-                "C7: RootMotionMode failed serialization round-trip.");
+                clonedController!.AnimationProfile.Guid ==
+                    Guid.Parse("a6f11f53-bd09-4dfa-92bd-67698fe8148e") &&
+                clonedController.AnimationProfile.CachedProjectPath ==
+                    "Assets/Player.byteanim" &&
+                clonedController.Idle == "Stand" &&
+                clonedController.Walk == "Walk" &&
+                clonedController.Run == "Sprint" &&
+                clonedController.Jump == "Leap" &&
+                clonedController.Fall == "Drop" &&
+                clonedController.Land == "TouchDown" &&
+                MathF.Abs(clonedController.RunThreshold - 6.25f) < 0.0001f &&
+                !clonedController.DriveLocomotion &&
+                clonedController.RootMotionMode == RootMotionMode.ApplyHorizontal,
+                "C7/C8: current AnimationController fields failed serialization round-trip.");
 
             Assert(
                 MathF.Abs(
@@ -177,6 +210,28 @@ internal static class C7AnimationRegressionTests
                     new Vector3(1.0f, 1.1f, 0.9f)) <
                     0.0001f,
                 "C6/C7 regression: BoneSocket3D scale multiplier failed round-trip.");
+            AnimationController? legacy =
+                components.Deserialize(
+                    new ComponentData
+                    {
+                        Type = "AnimationController",
+                        Properties =
+                            new JsonObject
+                            {
+                                ["idle"] = "LegacyIdle",
+                                ["runThreshold"] = 3.5f
+                            }
+                    }) as AnimationController;
+
+            Assert(
+                legacy != null &&
+                legacy.Idle == "LegacyIdle" &&
+                legacy.AnimationProfile.IsEmpty &&
+                legacy.DriveLocomotion &&
+                MathF.Abs(legacy.TransitionDuration - 0.15f) < 0.0001f &&
+                MathF.Abs(legacy.PlaybackSpeed - 1.0f) < 0.0001f &&
+                legacy.RootMotionMode == RootMotionMode.InPlace,
+                "C7/C8: legacy AnimationController data did not load modern defaults.");
         }
         finally
         {

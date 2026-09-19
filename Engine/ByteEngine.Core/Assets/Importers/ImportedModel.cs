@@ -140,6 +140,9 @@ public sealed class ImportedAnimation
     [JsonIgnore]
     public List<AnimationEventMarker> Events { get; init; } = new();
 
+    [JsonIgnore]
+    public List<AnimationWindow> Windows { get; init; } = new();
+
     public ImportedAnimationChannel? FindChannel(string nodeName)
     {
         if (string.IsNullOrWhiteSpace(nodeName))

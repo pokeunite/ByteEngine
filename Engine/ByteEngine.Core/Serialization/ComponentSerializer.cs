@@ -1618,6 +1618,12 @@ public sealed class ComponentSerializer
                 TypeName,
                 new JsonObject
                 {
+                    ["animationProfileGuid"] =
+                        controller.AnimationProfile.Guid.ToString(),
+
+                    ["animationProfilePath"] =
+                        controller.AnimationProfile.CachedProjectPath,
+
                     ["idle"] =
                         controller.Idle,
 
@@ -1637,7 +1643,19 @@ public sealed class ComponentSerializer
                         controller.Land,
 
                     ["runThreshold"] =
-                        controller.RunThreshold
+                        controller.RunThreshold,
+
+                    ["driveLocomotion"] =
+                        controller.DriveLocomotion,
+
+                    ["transitionDuration"] =
+                        controller.TransitionDuration,
+
+                    ["playbackSpeed"] =
+                        controller.PlaybackSpeed,
+
+                    ["rootMotionMode"] =
+                        controller.RootMotionMode.ToString()
                 }
             );
         }
@@ -1646,56 +1664,56 @@ public sealed class ComponentSerializer
             ComponentData data,
             ComponentSerializationContext context)
         {
+            Guid.TryParse(
+                data.Properties["animationProfileGuid"]?
+                    .GetValue<string>(),
+                out Guid profileGuid);
+
+            string? profilePath =
+                data.Properties["animationProfilePath"]?
+                    .GetValue<string>();
+
+            AssetReference profile =
+                profileGuid != Guid.Empty
+                    ? new AssetReference(
+                        profileGuid,
+                        profilePath)
+                    : !string.IsNullOrWhiteSpace(profilePath)
+                        ? context.AssetDatabase.ResolveReference(
+                            profilePath)
+                        : AssetReference.Empty;
+
+            string? rootMotionText =
+                data.Properties["rootMotionMode"]?
+                    .GetValue<string>();
+
+            RootMotionMode rootMotionMode =
+                Enum.TryParse(
+                    rootMotionText,
+                    ignoreCase: true,
+                    out RootMotionMode parsedRootMotionMode)
+                    ? parsedRootMotionMode
+                    : RootMotionMode.InPlace;
+
             return new AnimationController
             {
-                Idle =
-                    Text(
-                        data,
-                        "idle",
-                        "Idle"
-                    ),
-
-                Walk =
-                    Text(
-                        data,
-                        "walk",
-                        "Walk"
-                    ),
-
-                Run =
-                    Text(
-                        data,
-                        "run",
-                        "Run"
-                    ),
-
-                Jump =
-                    Text(
-                        data,
-                        "jump",
-                        "Jump"
-                    ),
-
-                Fall =
-                    Text(
-                        data,
-                        "fall",
-                        "Fall"
-                    ),
-
-                Land =
-                    Text(
-                        data,
-                        "land",
-                        "Land"
-                    ),
-
-                RunThreshold =
-                    Float(
-                        data,
-                        "runThreshold",
-                        4.0f
-                    )
+                AnimationProfile = profile,
+                Idle = Text(data, "idle", "Idle"),
+                Walk = Text(data, "walk", "Walk"),
+                Run = Text(data, "run", "Run"),
+                Jump = Text(data, "jump", "Jump"),
+                Fall = Text(data, "fall", "Fall"),
+                Land = Text(data, "land", "Land"),
+                RunThreshold = Float(data, "runThreshold", 4.0f),
+                DriveLocomotion =
+                    data.Properties["driveLocomotion"]?
+                        .GetValue<bool>() ??
+                    true,
+                TransitionDuration =
+                    Float(data, "transitionDuration", 0.15f),
+                PlaybackSpeed =
+                    Float(data, "playbackSpeed", 1.0f),
+                RootMotionMode = rootMotionMode
             };
         }
     }
