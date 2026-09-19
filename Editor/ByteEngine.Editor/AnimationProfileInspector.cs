@@ -9,10 +9,12 @@ using ImGuiNET;
 namespace ByteEngine.Editor;
 
 /// <summary>
-/// Small AnimationController-facing profile surface.
+/// AnimationController-facing profile surface.
 ///
-/// Profile authoring lives in the dedicated .byteanim workspace. The character
-/// component only owns the reference and a convenient Open button.
+/// When a valid Animation Profile is assigned it becomes the authoring source
+/// of truth for locomotion settings. Legacy component slots are hidden by
+/// ComponentPropertyRenderer so users never edit values that the profile will
+/// overwrite at runtime.
 /// </summary>
 internal static class AnimationProfileInspector
 {
@@ -24,50 +26,112 @@ internal static class AnimationProfileInspector
         Action changed,
         Action end)
     {
-        ImGui.SeparatorText("ANIMATION PROFILE");
+        /*
+         * Safe to call from multiple editor surfaces. The retarget window
+         * internally draws at most once per ImGui frame.
+         */
+        HumanoidRetargetBakeWindow.Draw();
+
+        ImGui.SeparatorText(
+            "ANIMATION PROFILE");
 
         AssetReference reference =
             controller.AnimationProfile ??
             AssetReference.Empty;
 
-        if (reference.IsEmpty)
-        {
-            ImGui.TextWrapped(
-                "No Animation Profile assigned. Create one in Assets > + Create > Animation Profile, then drag or pick it in the Animation Profile field above.");
-
-            return;
-        }
-
         AssetRecord? asset =
-            project.AssetDatabase.Resolve(
-                reference);
+            reference.IsEmpty
+                ? null
+                : project.AssetDatabase.Resolve(
+                    reference);
 
-        if (asset == null ||
-            asset.Type != AssetType.AnimationProfile)
+        /*
+         * Asset references are GUID-backed, so a rename keeps working. If the
+         * profile was actually deleted from the Asset Browser, remove the stale
+         * component reference automatically instead of leaving a dead path in
+         * the inspector.
+         */
+        if (!reference.IsEmpty &&
+            (asset ==
+                 null ||
+             asset.Type !=
+                 AssetType.AnimationProfile))
         {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.55f,
-                    0.2f,
-                    1.0f),
-                "Assigned Animation Profile is missing or invalid.");
+            if (context !=
+                PropertyEditorContext.Runtime)
+            {
+                begin();
 
-            ImGui.TextDisabled(
-                reference.CachedProjectPath ??
-                reference.Guid.ToString());
+                controller.AnimationProfile =
+                    AssetReference.Empty;
+
+                controller.ApplyAnimationProfile();
+
+                changed();
+                end();
+
+                reference =
+                    AssetReference.Empty;
+
+                asset =
+                    null;
+
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.68f,
+                        0.25f,
+                        1.0f),
+                    "Deleted Animation Profile reference cleared automatically.");
+            }
+            else
+            {
+                ImGui.TextColored(
+                    new Vector4(
+                        1.0f,
+                        0.45f,
+                        0.30f,
+                        1.0f),
+                    "Assigned Animation Profile is missing.");
+
+                return;
+            }
+        }
+
+        if (reference.IsEmpty ||
+            asset ==
+                null)
+        {
+            DrawProfileRequiredHelp();
 
             return;
         }
+
+        ImGui.TextColored(
+            new Vector4(
+                0.35f,
+                0.86f,
+                0.48f,
+                1.0f),
+            "Animation Profile Active");
 
         ImGui.TextDisabled(
             asset.ProjectPath);
 
         ImGui.TextWrapped(
-            "Rig, locomotion, actions, layers and procedural animation are edited in the Animation Profile asset.");
+            "This profile now owns locomotion clip assignments and playback settings. The duplicate legacy slots on Animation Controller are hidden while the profile is assigned.");
+
+        ImGui.TextColored(
+            new Vector4(
+                1.0f,
+                0.68f,
+                0.25f,
+                1.0f),
+            "After editing the profile, press Apply & Save before testing it.");
 
         ImGui.BeginDisabled(
-            context == PropertyEditorContext.Runtime);
+            context ==
+            PropertyEditorContext.Runtime);
 
         if (ImGui.Button(
                 "Open Animation Profile"))
@@ -76,12 +140,55 @@ internal static class AnimationProfileInspector
                 reference);
         }
 
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Retarget Animation..."))
+        {
+            HumanoidRetargetBakeWindow.Open(
+                reference,
+                project);
+        }
+
         ImGui.EndDisabled();
 
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                "Opens the dedicated Animation Profile editor. You can also double-click the .byteanim asset in the Asset Browser.");
+                "Preview a temporary Humanoid retarget result. Nothing is baked into the target character until you explicitly choose Bake To Character.");
         }
+    }
+
+    private static void DrawProfileRequiredHelp()
+    {
+        ImGui.TextColored(
+            new Vector4(
+                1.0f,
+                0.68f,
+                0.25f,
+                1.0f),
+            "RETARGETING SETUP REQUIRED");
+
+        ImGui.TextWrapped(
+            "Retargeting needs an Animation Profile because the profile identifies the target character model and Humanoid skeleton.");
+
+        ImGui.BulletText(
+            "1. Assets > + Create > Animation Profile");
+
+        ImGui.BulletText(
+            "2. Assign that profile to Animation Controller");
+
+        ImGui.BulletText(
+            "3. Open the profile and set its Reference Model");
+
+        ImGui.BulletText(
+            "4. Press Apply & Save, then use Retarget Animation");
+
+        ImGui.BeginDisabled();
+
+        ImGui.Button(
+            "Retarget Animation... (Animation Profile Required)");
+
+        ImGui.EndDisabled();
     }
 }

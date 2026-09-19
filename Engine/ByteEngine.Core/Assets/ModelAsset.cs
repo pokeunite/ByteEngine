@@ -107,10 +107,10 @@ public sealed class ModelAsset
     }
 
     /// <summary>
-    /// Adds or replaces a runtime-generated animation clip without changing the
-    /// source model file. C9E uses this for Humanoid retarget caches so the
-    /// existing SkeletalMeshRenderer can play a retargeted clip exactly like a
-    /// native imported clip.
+    /// Adds or replaces a runtime/generated animation clip without changing the
+    /// source model file. Retargeted model-owned clips use the same collection
+    /// as native imported clips so existing pickers and Asset Browser expansion
+    /// keep working without another animation asset type.
     /// </summary>
     internal ImportedAnimation RegisterRuntimeAnimation(
         ImportedAnimation animation)
@@ -141,4 +141,37 @@ public sealed class ModelAsset
         return animation;
     }
 
+    /// <summary>
+    /// Removes one generated/model-owned animation by its stable generated key.
+    /// Native FBX/GLTF clips are never removed through this path because the
+    /// caller only receives keys persisted in ModelOwnedAnimationStore.
+    /// </summary>
+    internal bool RemoveRuntimeAnimation(
+        string animationKey)
+    {
+        if (string.IsNullOrWhiteSpace(
+                animationKey))
+        {
+            return false;
+        }
+
+        int index =
+            _animations.FindIndex(
+                candidate =>
+                    string.Equals(
+                        candidate.Key,
+                        animationKey,
+                        StringComparison.Ordinal));
+
+        if (index <
+            0)
+        {
+            return false;
+        }
+
+        _animations.RemoveAt(
+            index);
+
+        return true;
+    }
 }

@@ -397,8 +397,7 @@ internal sealed class AssetsPanel
         }
 
         ImGui.SameLine();
-        ImGui.TextDisabled("Icon Size");
-        ImGui.SameLine();
+        ImGui.TextDisabled("Icon Size");        ImGui.SameLine();
 
         ImGui.SetNextItemWidth(
             150.0f);
@@ -543,7 +542,7 @@ internal sealed class AssetsPanel
                     "Open"))
             {
                 SelectDirectory(
-                    directory);
+                        directory);
             }
 
             if (ImGui.MenuItem(
@@ -797,8 +796,7 @@ internal sealed class AssetsPanel
                 foreach (ImportedAnimation animation
                          in model.Animations)
                 {
-                    if (!MatchesSearch(animation.Name) &&
-                        !string.IsNullOrWhiteSpace(_assetSearch))
+                    if (!MatchesSearch(animation.Name) &&                        !string.IsNullOrWhiteSpace(_assetSearch))
                     {
                         continue;
                     }
@@ -1197,8 +1195,7 @@ internal sealed class AssetsPanel
             scale;
 
         float nameY =
-            iconTop +
-            iconSize +
+            iconTop +            iconSize +
             9.0f *
             scale;
 
@@ -2398,7 +2395,6 @@ state.SelectedObject =
         ImGui.EndDisabled();
 
         ImGui.SameLine();
-
         if (ImGui.Button(
                 "Cancel",
                 new Vector2(
@@ -3239,6 +3235,18 @@ state.SelectedObject =
             .Where(asset => asset.Type == AssetType.Blueprint)
             .DistinctBy(asset => asset.Guid)
             .ToArray();
+
+        // C9.5 UX: clear deleted Animation Profile references from live scene
+        // components at delete time instead of leaving dead GUID/path values.
+        AssetRecord[] affectedAnimationProfiles = ResolveAssetsForDeletion(targets, _deleteInteraction.IsDirectory)
+            .Where(asset => asset.Type == AssetType.AnimationProfile)
+            .DistinctBy(asset => asset.Guid)
+            .ToArray();
+
+        int animationProfileReferences = CountAnimationProfileReferences(
+            state.EditorScene,
+            affectedAnimationProfiles);
+
         int blueprintInstances = affectedBlueprints
             .Sum(asset => BlueprintPromotionService.CountInstances(
                 state.EditorScene,
@@ -3256,12 +3264,25 @@ state.SelectedObject =
                     : $"Delete asset '{Path.GetFileName(target)}'?");
         }
 
-        if (blueprintInstances > 0)
+        if (blueprintInstances > 0 ||
+            animationProfileReferences > 0)
         {
             ImGui.Separator();
-            ImGui.TextWrapped(
-                $"{blueprintInstances} scene object(s) use the selected Blueprint asset(s).");
-            ImGui.TextWrapped("Deleting will unpack those instances and keep their current objects and components.");
+
+            if (blueprintInstances > 0)
+            {
+                ImGui.TextWrapped(
+                    $"{blueprintInstances} scene object(s) use the selected Blueprint asset(s).");
+                ImGui.TextWrapped("Deleting will unpack those instances and keep their current objects and components.");
+            }
+
+            if (animationProfileReferences > 0)
+            {
+                ImGui.TextWrapped(
+                    $"{animationProfileReferences} Animation Controller(s) use the selected Animation Profile asset(s).");
+                ImGui.TextWrapped(
+                    "Deleting will automatically clear those Animation Profile component references.");
+            }
         }
         else
         {
@@ -3302,6 +3323,22 @@ state.SelectedObject =
                             BlueprintPromotionService.UnpackInstances(state.RuntimeScene,
                                 new AssetReference(blueprint.Guid, blueprint.ProjectPath));
                     }
+                    int clearedProfiles = ClearAnimationProfileReferences(
+                        state.EditorScene,
+                        affectedAnimationProfiles);
+
+                    if (clearedProfiles > 0)
+                    {
+                        state.MarkDirty();
+                    }
+
+                    if (state.RuntimeScene != null)
+                    {
+                        ClearAnimationProfileReferences(
+                            state.RuntimeScene,
+                            affectedAnimationProfiles);
+                    }
+
                     foreach (string item in targets.ToArray())
                     {
                         DeletePath(item, _deleteInteraction.IsDirectory);
@@ -3341,6 +3378,84 @@ state.SelectedObject =
         }
 
         ImGui.EndPopup();
+    }
+
+    private static int CountAnimationProfileReferences(
+        ByteEngine.Core.Scene.Scene scene,
+        IReadOnlyList<AssetRecord> profiles)
+    {
+        if (profiles.Count == 0)
+        {
+            return 0;
+        }
+
+        return scene.GameObjects
+            .SelectMany(gameObject => gameObject.Components.OfType<AnimationController>())
+            .Count(controller => AnimationProfileReferenceMatchesAny(
+                controller.AnimationProfile,
+                profiles));
+    }
+
+    private static int ClearAnimationProfileReferences(
+        ByteEngine.Core.Scene.Scene scene,
+        IReadOnlyList<AssetRecord> profiles)
+    {
+        if (profiles.Count == 0)
+        {
+            return 0;
+        }
+
+        int cleared = 0;
+
+        foreach (AnimationController controller in scene.GameObjects
+                     .SelectMany(gameObject => gameObject.Components.OfType<AnimationController>()))
+        {
+            if (!AnimationProfileReferenceMatchesAny(
+                    controller.AnimationProfile,
+                    profiles))
+            {
+                continue;
+            }
+
+            controller.AnimationProfile =
+                AssetReference.Empty;
+
+            controller.ApplyAnimationProfile();
+            cleared++;
+        }
+
+        return cleared;
+    }
+
+    private static bool AnimationProfileReferenceMatchesAny(
+        AssetReference? reference,
+        IReadOnlyList<AssetRecord> profiles)
+    {
+        if (reference == null ||
+            reference.IsEmpty)
+        {
+            return false;
+        }
+
+        foreach (AssetRecord profile in profiles)
+        {
+            if (reference.Guid != Guid.Empty &&
+                reference.Guid == profile.Guid)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(reference.CachedProjectPath) &&
+                string.Equals(
+                    reference.CachedProjectPath,
+                    profile.ProjectPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private AssetRecord? TryGetAsset(string fullPath)

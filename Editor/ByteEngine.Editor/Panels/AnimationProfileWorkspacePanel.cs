@@ -95,6 +95,10 @@ internal sealed class AnimationProfileWorkspacePanel
     public void Draw(
         EditorLog log)
     {
+        // C9.5 UX: retarget entry point. The popup draws once per ImGui frame,
+        // even if the AnimationController inspector also hosts it.
+        HumanoidRetargetBakeWindow.Draw();
+
         if (_visible &&
             _asset != null &&
             _project != null)
@@ -222,7 +226,7 @@ internal sealed class AnimationProfileWorkspacePanel
                 null);
 
         if (ImGui.MenuItem(
-                "Save",
+                "Apply & Save",
                 "Ctrl+S"))
         {
             Save(
@@ -279,6 +283,22 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.TextDisabled(
             _asset.ProjectPath);
 
+        if (_dirty)
+        {
+            ImGui.Spacing();
+
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.68f,
+                    0.25f,
+                    1.0f),
+                "UNSAVED CHANGES - NOT ACTIVE YET");
+
+            ImGui.TextWrapped(
+                "Press Apply & Save before testing the character. The saved profile is the runtime source of truth.");
+        }
+
         ImGui.Spacing();
 
         ImGui.BeginDisabled(
@@ -287,7 +307,7 @@ internal sealed class AnimationProfileWorkspacePanel
                 null);
 
         if (ImGui.Button(
-                "Save"))
+                "Apply & Save Changes"))
         {
             Save(
                 log);
@@ -395,10 +415,11 @@ internal sealed class AnimationProfileWorkspacePanel
         if (_profile ==
                 null ||
             _project ==
+                null ||
+            _asset ==
                 null)
         {
-            return false;
-        }
+            return false;        }
 
         bool changed =
             false;
@@ -428,6 +449,14 @@ internal sealed class AnimationProfileWorkspacePanel
         {
             ImGui.TextWrapped(
                 "Choose the character model that defines this profile's skeleton.");
+
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.68f,
+                    0.25f,
+                    1.0f),
+                "Retarget Animation is locked until a Reference Model is assigned and the profile is applied/saved.");
 
             return changed;
         }
@@ -463,6 +492,47 @@ internal sealed class AnimationProfileWorkspacePanel
             DrawAnimationSourceStatus(
                 modelReference,
                 animationSource);
+        }
+
+        ImGui.Spacing();
+        ImGui.SeparatorText(
+            "RETARGET & BAKE");
+
+        ImGui.TextWrapped(
+            "Retargeting uses this profile's Reference Model as the target owner. Preview is temporary; nothing is added to the character until Bake To Character is pressed.");
+
+        if (_dirty)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    0.68f,
+                    0.25f,
+                    1.0f),
+                "Apply & Save this profile before retargeting so the preview uses these exact settings.");
+        }
+
+        ImGui.BeginDisabled(
+            _dirty);
+
+        if (ImGui.Button(
+                "Retarget Animation To Reference Model..."))
+        {
+            HumanoidRetargetBakeWindow.Open(
+                new AssetReference(
+                    _asset.Guid,
+                    _asset.ProjectPath),
+                _project);
+        }
+
+        ImGui.EndDisabled();
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                _dirty
+                    ? "Apply & Save the Animation Profile first."
+                    : "Choose any ready Humanoid source model/clip, preview the result, then explicitly bake it onto this profile's Reference Model.");
         }
 
         AssetRecord? modelAsset =
@@ -797,8 +867,7 @@ internal sealed class AnimationProfileWorkspacePanel
 
         if (ImGui.Checkbox(
                 "Automatic Speed / State",
-                ref automatic))
-        {
+                ref automatic))        {
             locomotion.DriveFromCharacterController =
                 automatic;
 
@@ -1198,7 +1267,6 @@ internal sealed class AnimationProfileWorkspacePanel
 
         bool aim =
             procedural.AimEnabled;
-
         if (ImGui.Checkbox(
                 "Aim",
                 ref aim))
@@ -1597,8 +1665,7 @@ internal sealed class AnimationProfileWorkspacePanel
         string preview =
             string.IsNullOrWhiteSpace(
                 value)
-                ? "None"
-                : exists
+                ? "None"                : exists
                     ? value
                     : $"{value} (Missing)";
 

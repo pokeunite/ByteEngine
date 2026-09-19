@@ -145,11 +145,27 @@ internal static class ComponentPropertyRenderer
         ImGui.PushID(
             component.GetHashCode());
 
+        // C9.5 UX: profile owns locomotion. Do not show duplicate component
+        // authoring fields that will be overwritten by the assigned profile.
+        bool profileOwnsLocomotion =
+            component is AnimationController profileDrivenController &&
+            project != null &&
+            HasValidAnimationProfile(
+                profileDrivenController,
+                project);
+
         foreach (ComponentPropertyDescriptor descriptor
                  in Descriptors(
                      component.GetType(),
                      context))
         {
+            if (profileOwnsLocomotion &&
+                IsAnimationProfileOwnedControllerProperty(
+                    descriptor.Property.Name))
+            {
+                continue;
+            }
+
             if (descriptor.Metadata.Advanced &&
                 !advanced)
             {
@@ -397,8 +413,7 @@ internal static class ComponentPropertyRenderer
                         ref mask);
 
                 after =
-                    mask;
-            }
+                    mask;            }
             else if (descriptor.Property.PropertyType ==
                          typeof(Guid) &&
                      descriptor.Property.Name.EndsWith(
@@ -797,8 +812,7 @@ internal static class ComponentPropertyRenderer
                 AssetDragDrop.Accept();
 
             if (id.HasValue &&
-                project.AssetDatabase.TryGetAsset(
-                    id.Value,
+                project.AssetDatabase.TryGetAsset(                    id.Value,
                     out AssetRecord? dropped) &&
                 dropped != null &&
                 (!expectedType.HasValue ||
@@ -1035,7 +1049,7 @@ internal static class ComponentPropertyRenderer
                         .ToArray();
 
                 if (modelBones.Length >
-                    0)
+                0)
                 {
                     return modelBones;
                 }
@@ -1163,6 +1177,45 @@ internal static class ComponentPropertyRenderer
         }
     }
 
+    private static bool HasValidAnimationProfile(
+        AnimationController controller,
+        EditorProjectContext project)
+    {
+        AssetReference reference =
+            controller.AnimationProfile ??
+            AssetReference.Empty;
+
+        if (reference.IsEmpty)
+        {
+            return false;
+        }
+
+        AssetRecord? asset =
+            project.AssetDatabase.Resolve(
+                reference);
+
+        return
+            asset?.Type ==
+            AssetType.AnimationProfile;
+    }
+
+    private static bool IsAnimationProfileOwnedControllerProperty(
+        string propertyName)
+    {
+        return propertyName is
+            nameof(AnimationController.Idle) or
+            nameof(AnimationController.Walk) or
+            nameof(AnimationController.Run) or
+            nameof(AnimationController.Jump) or
+            nameof(AnimationController.Fall) or
+            nameof(AnimationController.Land) or
+            nameof(AnimationController.RunThreshold) or
+            nameof(AnimationController.DriveLocomotion) or
+            nameof(AnimationController.TransitionDuration) or
+            nameof(AnimationController.PlaybackSpeed) or
+            nameof(AnimationController.RootMotionMode);
+    }
+
     private static bool DrawAnimationClipSelector(
         AnimationController controller,
         EditorProjectContext project,
@@ -1197,8 +1250,7 @@ internal static class ComponentPropertyRenderer
             false;
 
         if (!ImGui.BeginCombo(
-                label,
-                preview))
+                label,                preview))
         {
             return false;
         }
@@ -1271,6 +1323,11 @@ internal static class ComponentPropertyRenderer
             changed,
             end);
 
+        bool profileOwnsLocomotion =
+            HasValidAnimationProfile(
+                controller,
+                project);
+
         ImGui.SeparatorText(
             "ANIMATION CLIPS");
 
@@ -1301,6 +1358,14 @@ internal static class ComponentPropertyRenderer
         if (context ==
             PropertyEditorContext.Runtime)
         {
+            return;
+        }
+
+        if (profileOwnsLocomotion)
+        {
+            ImGui.TextDisabled(
+                "Locomotion slots and playback settings are owned by the assigned Animation Profile.");
+
             return;
         }
 
