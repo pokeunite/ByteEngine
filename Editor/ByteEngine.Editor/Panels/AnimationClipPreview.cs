@@ -79,6 +79,33 @@ internal sealed class AnimationClipPreview : IDisposable
 
     private double _lastPreviewTickSeconds;
 
+    public float PlaybackTime =>
+        _renderer?.PlaybackTime ?? 0.0f;
+
+    public float Duration =>
+        _renderer?.Duration ?? 0.0f;
+
+    public bool IsPaused =>
+        _paused;
+
+    /// <summary>
+    /// Direct preview sampling used by animation authoring. This never routes
+    /// through AnimationController, so scrubbing cannot emit gameplay events or
+    /// window transitions.
+    /// </summary>
+    public bool Seek(float time)
+    {
+        if (_renderer == null || !_renderer.Seek(time))
+        {
+            return false;
+        }
+
+        _lastPreviewTickSeconds =
+            _previewClock.Elapsed.TotalSeconds;
+        _forceRender = true;
+        return true;
+    }
+
     public void Draw(
         EditorProjectContext project,
         AssetRecord asset,

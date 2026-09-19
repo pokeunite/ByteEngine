@@ -6,6 +6,8 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -15,7 +17,7 @@ using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
 
-internal sealed class AssetsPanel
+internal sealed class AssetsPanel : IDisposable
 {
     private readonly EditorProjectContext _project;
 
@@ -25,6 +27,9 @@ internal sealed class AssetsPanel
         new();
 
     private readonly AnimationProfileWorkspacePanel _animationProfileWorkspace =
+        new();
+
+    private readonly AnimationTimelineWorkspacePanel _animationTimelineWorkspace =
         new();
 
     private readonly List<string> _directories =
@@ -159,9 +164,23 @@ internal sealed class AssetsPanel
             $"Asset database contains {_project.AssetDatabase.Assets.Count} asset(s).");
     }
 
+    public bool HasUnsavedChanges =>
+        _animationTimelineWorkspace.HasUnsavedChanges;
+
+    public bool SaveUnsavedChanges(EditorLog log) =>
+        !HasUnsavedChanges ||
+        _animationTimelineWorkspace.Save(log);
+
+    public void DiscardUnsavedChanges(EditorLog log) =>
+        _animationTimelineWorkspace.DiscardUnsavedChanges(log);
+
     public void Draw(
         EditorState state,
-        EditorLog log)
+        EditorLog log,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
     {
         bool isOpen =
             IsOpen;
@@ -276,6 +295,13 @@ internal sealed class AssetsPanel
 
         _animationProfileWorkspace.Draw(
             log);
+
+        _animationTimelineWorkspace.Draw(
+            log,
+            renderer,
+            renderer3D,
+            windowWidth,
+            windowHeight);
     }
 
     // ========================================================
@@ -807,6 +833,7 @@ internal sealed class AssetsPanel
 
                     DrawAnimationTile(
                         state,
+                        log,
                         asset,
                         animation);
 
@@ -1058,6 +1085,7 @@ internal sealed class AssetsPanel
 
     private void DrawAnimationTile(
         EditorState state,
+        EditorLog log,
         AssetRecord asset,
         ImportedAnimation animation)
     {
@@ -1111,6 +1139,8 @@ internal sealed class AssetsPanel
             state.SelectedObject =
                 null;
         }
+
+        DrawAnimationOpenActions(asset, animation, log);
 
         if (hovered)
         {
@@ -1895,6 +1925,8 @@ internal sealed class AssetsPanel
                             null;
                     }
 
+                    DrawAnimationOpenActions(asset, animation, log);
+
                     if (ImGui.IsItemHovered())
                     {
                         ImGui.SetTooltip(
@@ -1921,6 +1953,26 @@ internal sealed class AssetsPanel
         }
 
         ImGui.TreePop();
+    }
+    private void DrawAnimationOpenActions(
+        AssetRecord asset,
+        ImportedAnimation animation,
+        EditorLog log)
+    {
+        if (ImGui.IsItemHovered() &&
+            ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        {
+            _animationTimelineWorkspace.Open(asset, animation, _project, log);
+        }
+
+        if (ImGui.BeginPopupContextItem(
+                $"AnimationContext##{asset.Guid}:{animation.Key}"))
+        {
+            if (ImGui.MenuItem("Open Animation Timeline"))
+                _animationTimelineWorkspace.Open(asset, animation, _project, log);
+
+            ImGui.EndPopup();
+        }
     }
     private void SyncPrimaryAssetSelection(EditorState state)
     {
@@ -3961,6 +4013,11 @@ state.SelectedObject =
         }
     }
 
+    public void Dispose()
+    {
+        _project.AssetDatabase.DatabaseChanged -= OnAssetDatabaseChanged;
+        _animationTimelineWorkspace.Dispose();
+    }
     private static string MakeSafeFileName(
         string name)
     {

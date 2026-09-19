@@ -598,6 +598,32 @@ public sealed class SkeletalMeshRenderer : Component
         return true;
     }
 
+    /// <summary>
+    /// Samples the active clip at an explicit editor/runtime time without
+    /// advancing playback or dispatching AnimationController events.
+    /// </summary>
+    public bool Seek(float time)
+    {
+        if (_currentAnimation == null || !float.IsFinite(time))
+        {
+            return false;
+        }
+
+        _currentTime =
+            Math.Clamp(
+                time,
+                0.0f,
+                Math.Max(_currentAnimation.Duration, 0.0f));
+
+        _previousAnimation = null;
+        _previousTime = 0.0f;
+        _transitionElapsed = 0.0f;
+        _activeTransitionDuration = 0.0f;
+        _poseDirty = true;
+
+        UpdatePoseAndMeshes();
+        return true;
+    }
     public void Pause()
     {
         IsPlaying = false;

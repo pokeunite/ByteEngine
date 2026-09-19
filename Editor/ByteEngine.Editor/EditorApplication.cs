@@ -210,7 +210,7 @@ public sealed class EditorApplication
         CancelEventArgs e)
     {
         if (!_allowClose &&
-            _state?.IsDirty == true)
+            HasUnsavedChanges)
         {
             e.Cancel =
                 true;
@@ -229,6 +229,8 @@ public sealed class EditorApplication
         _sceneView.Dispose();
         _gameView.Dispose();
         _blueprintWorkspace.Dispose();
+        _assets?.Dispose();
+        _assets = null;
         _projectContext?.Dispose();
         _projectContext = null;
 
@@ -332,7 +334,11 @@ public sealed class EditorApplication
         {
             _assets.Draw(
                 _state,
-                _log
+                _log,
+                Renderer,
+                Renderer3D,
+                FramebufferSize.X,
+                FramebufferSize.Y
             );
         }
 
@@ -1144,10 +1150,13 @@ public sealed class EditorApplication
         }
     }
 
+    private bool HasUnsavedChanges =>
+        _state?.IsDirty == true ||
+        _assets?.HasUnsavedChanges == true;
     private void RequestAfterUnsavedCheck(
         Action action)
     {
-        if (_state?.IsDirty != true)
+        if (!HasUnsavedChanges)
         {
             action();
             return;
@@ -1184,7 +1193,7 @@ public sealed class EditorApplication
         }
 
         ImGui.Text(
-            "The current scene has unsaved changes."
+            "The project has unsaved scene or animation timeline changes."
         );
 
         ImGui.Text(
@@ -1193,7 +1202,12 @@ public sealed class EditorApplication
 
         if (ImGui.Button("Save"))
         {
-            if (SaveScene())
+            bool timelineSaved =
+                _assets?.SaveUnsavedChanges(_log) ?? true;
+            bool sceneSaved =
+                _state?.IsDirty != true || SaveScene();
+
+            if (timelineSaved && sceneSaved)
             {
                 CompletePendingAction();
                 ImGui.CloseCurrentPopup();
@@ -1204,6 +1218,7 @@ public sealed class EditorApplication
 
         if (ImGui.Button("Discard"))
         {
+            _assets?.DiscardUnsavedChanges(_log);
             CompletePendingAction();
             ImGui.CloseCurrentPopup();
         }
@@ -1391,6 +1406,7 @@ public sealed class EditorApplication
         _projectContext =
             context;
 
+        _assets?.Dispose();
         _assets = new AssetsPanel(context, OpenAsset);
 
         _assets.Refresh(
@@ -2073,7 +2089,7 @@ public sealed class EditorApplication
                     );
 
             string dirtyMarker =
-                _state.IsDirty
+                HasUnsavedChanges
                     ? " *"
                     : string.Empty;
 
