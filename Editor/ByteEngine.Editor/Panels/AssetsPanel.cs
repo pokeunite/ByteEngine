@@ -271,39 +271,33 @@ internal sealed class AssetsPanel : IDisposable
 
         ImGui.End();
 
-        _eventWorkspaces.Draw(
-            log);
 
-        AssetReference? requestedProfile =
-            AnimationProfileWorkspaceRequest.Consume();
-
-        if (requestedProfile != null)
-        {
-            AssetRecord? requestedAsset =
-                _project.AssetDatabase.Resolve(
-                    requestedProfile);
-
-            if (requestedAsset?.Type ==
-                AssetType.AnimationProfile)
-            {
-                _animationProfileWorkspace.Open(
-                    requestedAsset,
-                    _project,
-                    log);
-            }
-        }
-
-        _animationProfileWorkspace.Draw(
-            log);
-
-        _animationTimelineWorkspace.Draw(
-            log,
-            renderer,
-            renderer3D,
-            windowWidth,
-            windowHeight);
     }
 
+    public void DrawWorkspaces(
+        EditorLog log,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
+    {
+        _eventWorkspaces.Draw(log);
+
+        AssetReference? requestedProfile = AnimationProfileWorkspaceRequest.Consume();
+        if (requestedProfile != null)
+        {
+            AssetRecord? requestedAsset = _project.AssetDatabase.Resolve(requestedProfile);
+            if (requestedAsset?.Type == AssetType.AnimationProfile)
+                _animationProfileWorkspace.Open(requestedAsset, _project, log);
+        }
+
+        _animationProfileWorkspace.Draw(log);
+        _animationTimelineWorkspace.Draw(
+            log, renderer, renderer3D, windowWidth, windowHeight);
+    }
+
+    public bool DrawActiveDocumentInspector() =>
+        _animationTimelineWorkspace.DrawContextInspector();
     // ========================================================
     // TOOLBAR
     // ========================================================

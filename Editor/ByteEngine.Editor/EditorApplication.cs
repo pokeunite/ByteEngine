@@ -282,7 +282,8 @@ public sealed class EditorApplication
                             asset,
                             _projectContext);
                     }
-                });
+                },
+                () => _assets?.DrawActiveDocumentInspector() == true);
         }
         if (_sceneView.IsOpen)
         {
@@ -341,6 +342,13 @@ public sealed class EditorApplication
                 FramebufferSize.Y
             );
         }
+
+        _assets?.DrawWorkspaces(
+            _log,
+            Renderer,
+            Renderer3D,
+            FramebufferSize.X,
+            FramebufferSize.Y);
 
         _blueprintWorkspace.Draw(
             Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);

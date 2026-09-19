@@ -29,6 +29,16 @@ internal static class EditorTheme
 
     public static readonly Vector4 TextMuted =
         new(0.50f, 0.55f, 0.62f, 1.0f);
+    public static readonly Vector4 Warning =
+        new(0.96f, 0.72f, 0.25f, 1.0f);
+
+    public static readonly Vector4 Error =
+        new(0.96f, 0.34f, 0.30f, 1.0f);
+
+    public const float SpaceXs = 4.0f;
+    public const float SpaceS = 8.0f;
+    public const float SpaceM = 12.0f;
+    public const float SpaceL = 18.0f;
 
     public static void ApplyGodotInspired()
     {

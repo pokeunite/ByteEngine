@@ -33,11 +33,19 @@ internal sealed class InspectorPanel
         Renderer3D renderer3D,
         int windowWidth,
         int windowHeight,
-        Action<AssetReference> openBlueprint)
+        Action<AssetReference> openBlueprint,
+        Func<bool>? drawActiveDocumentInspector = null)
     {
         bool isOpen = IsOpen;
         ImGui.Begin("Inspector", ref isOpen);
         IsOpen = isOpen;
+
+        if (drawActiveDocumentInspector?.Invoke() == true)
+        {
+            _animationPreview.Reset();
+            ImGui.End();
+            return;
+        }
 
         if (state.Selection.Count > 1)
         {
