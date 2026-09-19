@@ -94,12 +94,12 @@ internal sealed class AssetsPanel : IDisposable
     private string? _expandedModelPath;
 
     private float _assetTileScale =
-        1.0f;
+        EditorPreferences.AssetIconScale;
 
     private float BrowserTileScale =>
         Math.Clamp(
             _assetTileScale,
-            0.75f,
+            0.50f,
             1.65f);
 
     private float BrowserIconSize =>
@@ -277,159 +277,66 @@ internal sealed class AssetsPanel : IDisposable
         EditorState state,
         EditorLog log)
     {
-        if (ImGui.SmallButton("Assets"))
-        {
-            SelectDirectory(GetAssetsRoot());
-        }
+        float commandBarWidth = ImGui.GetContentRegionAvail().X;
+        bool compactCommandBar = commandBarWidth < 640.0f;
+        EditorUi.BeginToolbar("##AssetCommandBar",
+            compactCommandBar ? EditorTheme.StandardControlHeight * 2.0f + 10.0f : EditorTheme.ToolbarHeight);
 
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton("Scenes"))
-        {
-            SelectDirectory(GetScenesRoot());
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton("+ Create"))
-        {
+        if (EditorUi.PrimaryButton("+ Create", size: new Vector2(0.0f, EditorTheme.StandardControlHeight)))
             ImGui.OpenPopup("AssetBrowserCreateMenu");
-        }
 
         if (ImGui.BeginPopup("AssetBrowserCreateMenu"))
         {
-            if (ImGui.MenuItem("New Folder"))
-            {
-                _newFolderName = "New Folder";
-                _showCreateFolder = true;
-            }
-
-            if (ImGui.MenuItem("Byte Blueprint"))
-            {
-                _showCreateBlueprint = true;
-            }
-
-            if (ImGui.MenuItem("Event Module"))
-            {
-                _showCreateEventModule = true;
-            }
-
+            if (ImGui.MenuItem("New Folder")) { _newFolderName = "New Folder"; _showCreateFolder = true; }
+            if (ImGui.MenuItem("Byte Blueprint")) _showCreateBlueprint = true;
+            if (ImGui.MenuItem("Event Module")) _showCreateEventModule = true;
             if (ImGui.MenuItem("Animation Profile"))
             {
-                _animationProfileName =
-                    "New Animation Profile";
-
-                _showCreateAnimationProfile =
-                    true;
+                _animationProfileName = "New Animation Profile";
+                _showCreateAnimationProfile = true;
             }
 
-            bool canCreateFromSelection =
-                state.Mode == EditorMode.Edit &&
-                state.SelectedObject != null &&
-                IsInsideDirectory(
-                    _currentDirectory,
-                    GetAssetsRoot());
-
+            bool canCreateFromSelection = state.Mode == EditorMode.Edit && state.SelectedObject != null &&
+                IsInsideDirectory(_currentDirectory, GetAssetsRoot());
             ImGui.BeginDisabled(!canCreateFromSelection);
-
-            if (ImGui.MenuItem("Blueprint From Selected"))
-            {
-                CreateBlueprintFromSelectedObject(
-                    state,
-                    log);
-            }
-
+            if (ImGui.MenuItem("Blueprint From Selected")) CreateBlueprintFromSelectedObject(state, log);
             ImGui.EndDisabled();
             ImGui.EndPopup();
         }
 
         ImGui.SameLine();
+        if (EditorUi.ToolbarButton("Refresh", "Refresh the asset database")) Refresh(log);
+        EditorUi.ToolbarSeparator();
 
-        if (ImGui.SmallButton("Refresh"))
+        const float trailingControlsWidth = 252.0f;
+        float searchWidth = Math.Max(
+            ImGui.GetContentRegionAvail().X - (compactCommandBar ? 0.0f : trailingControlsWidth),
+            compactCommandBar ? 80.0f : 100.0f);
+        EditorUi.SearchField("##AssetBrowserSearch", ref _assetSearch, 128, searchWidth);
+        if (compactCommandBar)
+            ImGui.NewLine();
+        else
+            ImGui.SameLine();
+        if (EditorUi.ToolbarToggle("Grid", _gridView, "Grid view")) _gridView = true;
+        ImGui.SameLine();
+        if (EditorUi.ToolbarToggle("List", !_gridView, "List view")) _gridView = false;
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(100.0f);
+        if (ImGui.SliderFloat("##AssetIconSize", ref _assetTileScale, 0.50f, 1.65f, "%.2fx",
+                ImGuiSliderFlags.AlwaysClamp))
         {
-            Refresh(log);
+            EditorPreferences.AssetIconScale = _assetTileScale;
         }
+        EditorUi.Tooltip("Asset thumbnail size");
 
-        ImGui.SameLine();
-        ImGui.TextDisabled("Search");
-        ImGui.SameLine();
+        EditorUi.EndToolbar();
 
-        float searchWidth =
-            Math.Clamp(
-                ImGui.GetContentRegionAvail().X - 150.0f,
-                100.0f,
-                240.0f);
-
-        ImGui.SetNextItemWidth(searchWidth);
-
-        ImGui.InputText(
-            "##AssetBrowserSearch",
-            ref _assetSearch,
-            128);
-
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                _gridView
-                    ? "Grid*"
-                    : "Grid"))
-        {
-            _gridView = true;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                !_gridView
-                    ? "List*"
-                    : "List"))
-        {
-            _gridView = false;
-        }
-
-        ImGui.SameLine();
-        ImGui.TextDisabled("Icon Size");        ImGui.SameLine();
-
-        ImGui.SetNextItemWidth(
-            150.0f);
-
-        ImGui.SliderFloat(
-            "##AssetIconSize",
-            ref _assetTileScale,
-            0.75f,
-            1.65f,
-            "%.2fx",
-            ImGuiSliderFlags.AlwaysClamp);
-
-        ImGui.TextDisabled("PATH");
-        ImGui.SameLine();
-
-        string breadcrumb =
-            Breadcrumb();
-
-        float available =
-            Math.Max(
-                ImGui.GetContentRegionAvail().X,
-                40.0f);
-
-        string visibleBreadcrumb =
-            breadcrumb;
-
-        while (visibleBreadcrumb.Length > 8 &&
-               ImGui.CalcTextSize(visibleBreadcrumb).X > available)
-        {
-            visibleBreadcrumb =
-                "..." +
-                visibleBreadcrumb[4..];
-        }
-
-        ImGui.Text(visibleBreadcrumb);
-
-        if (ImGui.IsItemHovered() &&
-            visibleBreadcrumb != breadcrumb)
-        {
-            ImGui.SetTooltip(breadcrumb);
-        }
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.BackgroundRaised);
+        ImGui.BeginChild("##AssetBreadcrumb", new Vector2(0.0f, 28.0f), ImGuiChildFlags.Borders,
+            ImGuiWindowFlags.NoScrollbar);
+        ImGui.TextColored(EditorTheme.TextSecondary, Breadcrumb().Replace("/", "  >  "));
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
     }
 
     // ========================================================
@@ -439,10 +346,8 @@ internal sealed class AssetsPanel : IDisposable
     private void DrawFolderTree(
         EditorLog log)
     {
-        ImGui.TextDisabled(
-            "FILESYSTEM");
-
-        ImGui.Separator();
+        ImGui.TextColored(EditorTheme.TextMuted, "FOLDERS");
+        ImGui.Spacing();
 
         DrawFolderTreeNode(
             GetAssetsRoot(),
@@ -646,6 +551,9 @@ internal sealed class AssetsPanel : IDisposable
                 : $"{visibleFolderCount} folder(s), {visibleFileCount} asset(s) match");
 
         ImGui.Separator();
+
+        if (visibleFolderCount == 0 && visibleFileCount == 0)
+            EditorUi.EmptyState("This folder is empty.", "Drop assets here or use Create.");
 
         if (_gridView)
         {
@@ -1145,7 +1053,7 @@ internal sealed class AssetsPanel : IDisposable
                     EditorTheme.Accent.Z,
                     0.28f)
                 : hovered
-                    ? EditorTheme.PanelHovered
+                    ? EditorTheme.PanelHover
                     : EditorTheme.PanelRaised;
 
         drawList.AddRectFilled(
@@ -1153,7 +1061,7 @@ internal sealed class AssetsPanel : IDisposable
             maximum,
             ImGui.GetColorU32(
                 background),
-            4.0f);
+            EditorTheme.SmallCornerRadius);
 
         drawList.AddRect(
             minimum,
@@ -1162,7 +1070,7 @@ internal sealed class AssetsPanel : IDisposable
                 selected
                     ? EditorTheme.Accent
                     : EditorTheme.Border),
-            4.0f);
+            EditorTheme.SmallCornerRadius);
 
         float iconSize =
             BrowserIconSize;

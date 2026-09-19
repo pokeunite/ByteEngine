@@ -143,6 +143,11 @@ internal sealed class SceneViewPanel : IDisposable
             return;
         }
 
+        if (_is3D)
+            _gizmo3D.HandleShortcuts(IsFocused && state.Mode == EditorMode.Edit);
+        else
+            _gizmo.HandleShortcuts(IsFocused, state.Mode == EditorMode.Edit);
+
         DrawToolbar(
             state
         );
@@ -455,107 +460,42 @@ internal sealed class SceneViewPanel : IDisposable
     private void DrawToolbar(
         EditorState state)
     {
+        EditorUi.BeginToolbar("##SceneToolbar");
+
         if (EditorPreferences.Enable2DEditor)
         {
-            if (ImGui.SmallButton(
-                    _is3D
-                        ? "2D"
-                        : "[2D]"))
-            {
-                _is3D =
-                    false;
-            }
-
+            if (EditorUi.ToolbarToggle("2D", !_is3D, "Switch to 2D scene editing")) _is3D = false;
             ImGui.SameLine();
-
-            if (ImGui.SmallButton(
-                    _is3D
-                        ? "[3D]"
-                        : "3D"))
-            {
-                _is3D =
-                    true;
-            }
-
-            ImGui.SameLine();
+            if (EditorUi.ToolbarToggle("3D", _is3D, "Switch to 3D scene editing")) _is3D = true;
+            EditorUi.ToolbarSeparator();
         }
         else
         {
-            ImGui.TextDisabled(
-                "[3D]");
-
-            ImGui.SameLine();
+            EditorUi.StatusBadge("3D");
+            EditorUi.ToolbarSeparator();
         }
 
-        if (!_is3D)
-        {
-            _gizmo.DrawToolbar(
-                state
-            );
-        }
-        else
-        {
-            _gizmo3D.DrawToolbar();
-        }
+        if (!_is3D) _gizmo.DrawToolbar(state);
+        else _gizmo3D.DrawToolbar();
 
+        EditorUi.ToolbarSeparator();
+        if (EditorUi.ToolbarButton("Frame", "Frame Selected (F)")) FrameSelected(state);
         ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                "Frame"))
+        if (EditorUi.ToolbarButton("Reset Camera", "Reset the Scene camera"))
         {
-            FrameSelected(
-                state
-            );
+            if (_is3D) state.Camera3D.Reset();
+            else state.Camera.Reset();
         }
 
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                "Reset Camera"))
+        ImGui.SameLine(Math.Max(ImGui.GetWindowWidth() - 92.0f, ImGui.GetCursorPosX()));
+        EditorUi.StatusBadge(state.Mode.ToString().ToUpperInvariant(), state.Mode switch
         {
-            if (_is3D)
-            {
-                state.Camera3D.Reset();
-            }
-            else
-            {
-                state.Camera.Reset();
-            }
-        }
+            EditorMode.Play => EditorStatusKind.Success,
+            EditorMode.Paused => EditorStatusKind.Warning,
+            _ => EditorStatusKind.Neutral
+        });
 
-        ImGui.SameLine();
-
-        ImGui.TextColored(
-            state.Mode switch
-            {
-                EditorMode.Play =>
-                    new Vector4(
-                        0.35f,
-                        1.0f,
-                        0.45f,
-                        1.0f
-                    ),
-
-                EditorMode.Paused =>
-                    new Vector4(
-                        1.0f,
-                        0.75f,
-                        0.2f,
-                        1.0f
-                    ),
-
-                _ =>
-                    new Vector4(
-                        0.4f,
-                        0.8f,
-                        1.0f,
-                        1.0f
-                    )
-            },
-            state.Mode
-                .ToString()
-                .ToUpperInvariant()
-        );
+        EditorUi.EndToolbar();
     }
 
     private static void HandleCameraInput(

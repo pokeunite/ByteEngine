@@ -72,7 +72,9 @@ internal sealed class InspectorPanel
             {
                 bool variablesReadOnly = state.Mode != EditorMode.Edit;
                 ImGui.BeginDisabled(variablesReadOnly);
-                DrawStoreVariables("SCENE VARIABLES", state.EditorScene.Variables, state);
+                EditorUi.EmptyState("Nothing selected", "Select an object or asset to inspect its properties.");
+                if (EditorUi.SectionHeader("Scene Variables", false))
+                    DrawStoreVariables("SCENE VARIABLES", state.EditorScene.Variables, state);
                 DrawGlobalVariables(state.Project.GlobalVariables, state);
                 ImGui.EndDisabled();
             }
@@ -92,36 +94,19 @@ internal sealed class InspectorPanel
 
         GameObject selected = state.SelectedObject!;
 
-        ImGui.PushStyleColor(
-            ImGuiCol.ChildBg,
-            new Vector4(
-                0.105f,
-                0.12f,
-                0.15f,
-                1.0f));
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.PanelRaised);
 
         if (ImGui.BeginChild(
                 "##InspectorObjectHeader",
-                new Vector2(
-                    0.0f,
-                    54.0f),
+                new Vector2(0.0f, 58.0f),
                 ImGuiChildFlags.Borders,
                 ImGuiWindowFlags.NoScrollbar))
         {
-            ImGui.TextColored(
-                new Vector4(
-                    0.55f,
-                    0.78f,
-                    1.0f,
-                    1.0f),
-                "GAME OBJECT");
-
+            ImGui.TextColored(EditorTheme.Text, selected.Name);
+            ImGui.TextColored(EditorTheme.TextMuted, "GameObject");
             ImGui.SameLine();
-            ImGui.TextDisabled(
-                state.Mode.ToString());
-
-            ImGui.TextUnformatted(
-                selected.Name);
+            EditorUi.StatusBadge(state.Mode.ToString(),
+                state.Mode == EditorMode.Edit ? EditorStatusKind.Neutral : EditorStatusKind.Success);
         }
 
         ImGui.EndChild();
@@ -224,59 +209,33 @@ internal sealed class InspectorPanel
         DrawClassification(state, project.Project.Classification, selected);
 
         if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
-        bool showTransform = string.IsNullOrWhiteSpace(_search) || "Transform Position Rotation Scale".Contains(_search, StringComparison.OrdinalIgnoreCase);
-        ImGui.PushStyleColor(
-            ImGuiCol.Header,
-            new Vector4(
-                0.14f,
-                0.17f,
-                0.21f,
-                1.0f));
-
-        ImGui.PushStyleColor(
-            ImGuiCol.HeaderHovered,
-            new Vector4(
-                0.18f,
-                0.22f,
-                0.28f,
-                1.0f));
-
-        ImGui.PushStyleColor(
-            ImGuiCol.HeaderActive,
-            new Vector4(
-                0.20f,
-                0.30f,
-                0.40f,
-                1.0f));
-
-        bool transformOpen =
-            showTransform &&
-            ImGui.CollapsingHeader(
-                "Transform",
-                ImGuiTreeNodeFlags.DefaultOpen);
-
-        ImGui.PopStyleColor(3);
+        bool showTransform = string.IsNullOrWhiteSpace(_search) ||
+            "Transform Position Rotation Scale".Contains(_search, StringComparison.OrdinalIgnoreCase);
+        bool transformOpen = showTransform && EditorUi.SectionHeader("Transform");
 
         if (transformOpen)
         {
-        Vector3 oldPosition = selected.Transform.LocalPosition;
-        Vector3 position = oldPosition;
-        bool positionChanged = ImGui.DragFloat3("Position", ref position, .05f);
-        if (positionChanged) selected.Transform.LocalPosition = position;
-        TrackItem(state, "Move GameObject", positionChanged, () => selected.Transform.LocalPosition = oldPosition, () => selected.Transform.LocalPosition = position);
+            Vector3 oldPosition = selected.Transform.LocalPosition;
+            Vector3 position = oldPosition;
+            bool positionChanged = false;
+            EditorUi.PropertyRow("Position", () => positionChanged = ImGui.DragFloat3("##Position", ref position, .05f));
+            if (positionChanged) selected.Transform.LocalPosition = position;
+            TrackItem(state, "Move GameObject", positionChanged, () => selected.Transform.LocalPosition = oldPosition, () => selected.Transform.LocalPosition = position);
 
-        Vector3 oldRotation = selected.Transform.EulerAngles;
-        Vector3 rotation = oldRotation;
-        bool rotationChanged = ImGui.DragFloat3("Rotation", ref rotation, .25f);
-        if (rotationChanged) selected.Transform.EulerAngles = rotation;
-        TrackItem(state, "Rotate GameObject", rotationChanged, () => selected.Transform.EulerAngles = oldRotation, () => selected.Transform.EulerAngles = rotation);
+            Vector3 oldRotation = selected.Transform.EulerAngles;
+            Vector3 rotation = oldRotation;
+            bool rotationChanged = false;
+            EditorUi.PropertyRow("Rotation", () => rotationChanged = ImGui.DragFloat3("##Rotation", ref rotation, .25f));
+            if (rotationChanged) selected.Transform.EulerAngles = rotation;
+            TrackItem(state, "Rotate GameObject", rotationChanged, () => selected.Transform.EulerAngles = oldRotation, () => selected.Transform.EulerAngles = rotation);
 
-        Vector3 oldScale = selected.Transform.LocalScale;
-        Vector3 scale = oldScale;
-        bool scaleChanged = ImGui.DragFloat3("Scale", ref scale, .02f, .001f, 10000f);
-        Vector3 nextScale = Vector3.Max(scale, new Vector3(.001f));
-        if (scaleChanged) selected.Transform.LocalScale = nextScale;
-        TrackItem(state, "Scale GameObject", scaleChanged, () => selected.Transform.LocalScale = oldScale, () => selected.Transform.LocalScale = nextScale);
+            Vector3 oldScale = selected.Transform.LocalScale;
+            Vector3 scale = oldScale;
+            bool scaleChanged = false;
+            EditorUi.PropertyRow("Scale", () => scaleChanged = ImGui.DragFloat3("##Scale", ref scale, .02f, .001f, 10000f));
+            Vector3 nextScale = Vector3.Max(scale, new Vector3(.001f));
+            if (scaleChanged) selected.Transform.LocalScale = nextScale;
+            TrackItem(state, "Scale GameObject", scaleChanged, () => selected.Transform.LocalScale = oldScale, () => selected.Transform.LocalScale = nextScale);
         }
 
         ImGui.BeginDisabled(readOnly);
@@ -289,42 +248,9 @@ internal sealed class InspectorPanel
             ComponentMetadata metadata = ComponentMetadataRegistry.Get(component.GetType());
             if (!metadata.BeginnerVisible && !_showAdvanced) continue;
             if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
-            ImGuiTreeNodeFlags flags =
-                ImGuiTreeNodeFlags.None;
+            bool componentOpen = EditorUi.SectionHeader($"{metadata.DisplayName}##{component.GetHashCode()}", false);
 
-            ImGui.PushStyleColor(
-                ImGuiCol.Header,
-                new Vector4(
-                    0.14f,
-                    0.17f,
-                    0.21f,
-                    1.0f));
-
-            ImGui.PushStyleColor(
-                ImGuiCol.HeaderHovered,
-                new Vector4(
-                    0.18f,
-                    0.22f,
-                    0.28f,
-                    1.0f));
-
-            ImGui.PushStyleColor(
-                ImGuiCol.HeaderActive,
-                new Vector4(
-                    0.20f,
-                    0.30f,
-                    0.40f,
-                    1.0f));
-
-            bool componentOpen =
-                ImGui.CollapsingHeader(
-                    $"{metadata.DisplayName}##{component.GetHashCode()}",
-                    flags);
-
-            bool componentHeaderHovered =
-                ImGui.IsItemHovered();
-
-            ImGui.PopStyleColor(3);
+            bool componentHeaderHovered = ImGui.IsItemHovered();
 
             if (componentHeaderHovered)
             {
@@ -345,8 +271,7 @@ internal sealed class InspectorPanel
             ImGui.BeginDisabled(readOnly);
 
             bool removeRequested =
-                ImGui.SmallButton(
-                    $"Remove##{component.GetHashCode()}");
+                EditorUi.DestructiveButton($"Remove##{component.GetHashCode()}");
 
             if (removeRequested)
             {
@@ -380,11 +305,7 @@ internal sealed class InspectorPanel
 
         ImGui.BeginDisabled(readOnly);
 
-        if (ImGui.Button(
-                "+ Add Component",
-                new Vector2(
-                    -1.0f,
-                    34.0f)))
+        if (EditorUi.PrimaryButton("+ Add Component", size: new Vector2(-1.0f, 32.0f)))
         {
             ImGui.OpenPopup(
                 "Add Component Popup");

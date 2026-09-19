@@ -25,13 +25,7 @@ internal sealed class HierarchyPanel
         ImGui.Begin("Hierarchy", ref isOpen);
         IsOpen = isOpen;
 
-        ImGui.PushStyleColor(
-            ImGuiCol.ChildBg,
-            new Vector4(
-                0.105f,
-                0.12f,
-                0.15f,
-                1.0f));
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.PanelRaised);
 
         if (ImGui.BeginChild(
                 "##HierarchyHeader",

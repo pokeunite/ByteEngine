@@ -136,6 +136,9 @@ internal sealed class ImGuiController
         ImGuiIOPtr io =
             ImGui.GetIO();
 
+        io.AddFocusEvent(_window.IsFocused);
+
+
         int width =
             Math.Max(
                 _window.ClientSize.X,
@@ -311,7 +314,7 @@ internal sealed class ImGuiController
 
     private static void ConfigureStyle()
     {
-        EditorTheme.ApplyGodotInspired();
+        EditorTheme.ApplyByteEngine();
     }
 
     private unsafe void CreateDeviceResources()

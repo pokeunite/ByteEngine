@@ -19,7 +19,6 @@ internal sealed class TransformGizmoInteraction
     private Quaternion _rotation;
     private Vector3 _lastRingVector;
     private float _angle;
-    private bool _viewportFocused;
     public Gizmo3DMode Mode { get; set; }
     public GizmoOrientation Orientation { get; set; }
     public bool Dragging => _target != null;
@@ -28,38 +27,42 @@ internal sealed class TransformGizmoInteraction
     internal static bool CanUseShortcuts(bool focused, bool textInput, bool activeItem, bool captured) =>
         focused && !textInput && !activeItem && !captured;
 
+
+    public void HandleShortcuts(bool sceneFocused)
+    {
+        ImGuiIOPtr io = ImGui.GetIO();
+        if (Dragging || !CanUseShortcuts(sceneFocused, io.WantTextInput,
+                ImGui.IsAnyItemActive(), Input.IsGameInputCaptured)) return;
+        if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Gizmo3DMode.Move;
+        else if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Gizmo3DMode.Rotate;
+        else if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Gizmo3DMode.Scale;
+    }
     public void DrawToolbar()
     {
         foreach (Gizmo3DMode mode in Enum.GetValues<Gizmo3DMode>())
         {
             if (mode != Gizmo3DMode.Move) ImGui.SameLine();
-            bool active = Mode == mode;
-            if (active) ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.18f, .48f, .82f, 1));
-            if (ImGui.SmallButton(mode.ToString()) && !Dragging) Mode = mode;
-            if (active) ImGui.PopStyleColor();
+            string shortcut = mode switch
+            {
+                Gizmo3DMode.Move => "W",
+                Gizmo3DMode.Rotate => "E",
+                _ => "R"
+            };
+            if (EditorUi.ToolbarToggle(mode.ToString(), Mode == mode, $"{mode} Tool ({shortcut})") && !Dragging)
+                Mode = mode;
         }
         ImGui.SameLine();
-        ImGui.SetNextItemWidth(85);
+        ImGui.SetNextItemWidth(88.0f);
         int orientation = (int)Orientation;
-        if (ImGui.Combo("##Orientation", ref orientation, "World\0Local\0") && !Dragging)
+        if (ImGui.Combo("##GizmoOrientation", ref orientation, "World\0Local\0") && !Dragging)
             Orientation = (GizmoOrientation)orientation;
+        EditorUi.Tooltip("Transform orientation");
     }
 
     public bool Update(GameObject? selected, EditorCamera3D camera, bool hovered, Vector2 min, Vector2 size,
         Action begin, Action changed, Action end)
     {
         ImGuiIOPtr io = ImGui.GetIO();
-        if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-            _viewportFocused = hovered;
-        if (!Dragging && CanUseShortcuts(_viewportFocused && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows),
-            io.WantTextInput,
-            ImGui.IsAnyItemActive() || ImGui.IsMouseDown(ImGuiMouseButton.Right),
-            Input.IsGameInputCaptured))
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Gizmo3DMode.Move;
-            if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Gizmo3DMode.Rotate;
-            if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Gizmo3DMode.Scale;
-        }
         if (Dragging && (!ReferenceEquals(selected, _target) || !ImGui.IsMouseDown(ImGuiMouseButton.Left)))
         {
             _target = null;

@@ -22,6 +22,17 @@ internal sealed class GizmoController
     public int SnapSize { get; private set; } = 16;
     public GameObject? HoveredObject { get; private set; }
 
+
+    public void HandleShortcuts(bool sceneFocused, bool editMode)
+    {
+        ImGuiIOPtr io = ImGui.GetIO();
+        if (!editMode || !TransformGizmoInteraction.CanUseShortcuts(sceneFocused, io.WantTextInput,
+                ImGui.IsAnyItemActive(), ByteEngine.Core.Input.IsGameInputCaptured)) return;
+        if (ImGui.IsKeyPressed(ImGuiKey.Q)) Mode = GizmoMode.Select;
+        else if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = GizmoMode.Move;
+        else if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = GizmoMode.Rotate;
+        else if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = GizmoMode.Scale;
+    }
     public void DrawToolbar(EditorState state)
     {
         DrawModeButton("Q Select", GizmoMode.Select);
@@ -39,13 +50,6 @@ internal sealed class GizmoController
             ImGui.EndCombo();
         }
 
-        if (state.Mode == EditorMode.Edit && !ImGui.GetIO().WantTextInput)
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.Q)) Mode = GizmoMode.Select;
-            if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = GizmoMode.Move;
-            if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = GizmoMode.Rotate;
-            if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = GizmoMode.Scale;
-        }
     }
 
     public void Update(EditorState state, bool hovered, Vector2 minimum, Vector2 viewportSize)

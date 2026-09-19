@@ -24,6 +24,8 @@ internal sealed class Gizmo3DController
         if (rotatePressed) SetMode(Gizmo3DMode.Rotate);
         if (scalePressed) SetMode(Gizmo3DMode.Scale);
     }
+    public void HandleShortcuts(bool sceneFocused) => _interaction.HandleShortcuts(sceneFocused);
+
     public void DrawToolbar() => _interaction.DrawToolbar();
 
     public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered, Vector2 minimum, Vector2 size)

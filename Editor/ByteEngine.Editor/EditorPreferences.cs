@@ -13,6 +13,8 @@ internal static class EditorPreferences
         public int LayoutVersion { get; set; }
 
         public bool BottomWorkspaceCollapsed { get; set; }
+
+        public float AssetIconScale { get; set; } = 1.0f;
     }
 
     private static readonly string DirectoryPath =
@@ -81,6 +83,24 @@ internal static class EditorPreferences
         {
             if (Settings.BottomWorkspaceCollapsed == value) return;
             Settings.BottomWorkspaceCollapsed = value;
+            SaveSettings();
+        }
+    }
+
+    public static float AssetIconScale
+    {
+        get
+        {
+            float normalized = NormalizeAssetIconScale(Settings.AssetIconScale);
+            if (Math.Abs(Settings.AssetIconScale - normalized) > 0.0001f)
+                Settings.AssetIconScale = normalized;
+            return normalized;
+        }
+        set
+        {
+            float normalized = NormalizeAssetIconScale(value);
+            if (Math.Abs(AssetIconScale - normalized) <= 0.0001f) return;
+            Settings.AssetIconScale = normalized;
             SaveSettings();
         }
     }
@@ -213,6 +233,11 @@ internal static class EditorPreferences
                     0
             };
     }
+
+    private static float NormalizeAssetIconScale(float value) =>
+        float.IsFinite(value) && value > 0.0f
+            ? Math.Clamp(value, 0.50f, 1.65f)
+            : 1.0f;
 
     private static void SaveSettings()
     {
