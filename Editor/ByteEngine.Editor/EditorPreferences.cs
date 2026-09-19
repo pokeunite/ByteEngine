@@ -11,6 +11,8 @@ internal static class EditorPreferences
         public bool ShowFpsCounter { get; set; }
 
         public int LayoutVersion { get; set; }
+
+        public bool BottomWorkspaceCollapsed { get; set; }
     }
 
     private static readonly string DirectoryPath =
@@ -68,6 +70,17 @@ internal static class EditorPreferences
             Settings.Enable2DEditor =
                 value;
 
+            SaveSettings();
+        }
+    }
+
+    public static bool BottomWorkspaceCollapsed
+    {
+        get => Settings.BottomWorkspaceCollapsed;
+        set
+        {
+            if (Settings.BottomWorkspaceCollapsed == value) return;
+            Settings.BottomWorkspaceCollapsed = value;
             SaveSettings();
         }
     }

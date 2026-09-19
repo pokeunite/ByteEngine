@@ -4,6 +4,12 @@ namespace ByteEngine.Editor.Panels;
 
 internal sealed class EventWorkspaceCollection
 {
+    private readonly EditorDocumentManager _documentManager;
+
+    public EventWorkspaceCollection(EditorDocumentManager documents)
+    {
+        _documentManager = documents;
+    }
     private readonly Dictionary<Guid, EventWorkspacePanel> _documents =
         new();
 
@@ -22,7 +28,7 @@ internal sealed class EventWorkspaceCollection
                 out EventWorkspacePanel? workspace))
         {
             workspace =
-                new EventWorkspacePanel();
+                new EventWorkspacePanel(_documentManager);
 
             _documents.Add(
                 asset.Guid,

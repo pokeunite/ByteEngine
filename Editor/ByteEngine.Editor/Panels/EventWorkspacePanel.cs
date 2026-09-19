@@ -14,6 +14,12 @@ namespace ByteEngine.Editor.Panels;
 
 internal sealed class EventWorkspacePanel
 {
+    private readonly EditorDocumentManager _documents;
+
+    public EventWorkspacePanel(EditorDocumentManager documents)
+    {
+        _documents = documents;
+    }
     private readonly EventModuleSerializer _serializer =
         new();
 
@@ -108,6 +114,8 @@ internal sealed class EventWorkspacePanel
     private bool _dirty;
 
     private bool _requestFocus;
+    private bool _openUnsavedPopup;
+    private EditorDocumentId? _registeredDocumentId;
     private readonly EditorIdleDebounce _autoSaveIdle = new();
 
     public bool IsOpen =>
@@ -264,6 +272,8 @@ internal sealed class EventWorkspacePanel
             _requestFocus =
                 true;
 
+            RegisterDocument(log);
+
             log.Info(
                 $"Opened Event Module '{asset.ProjectPath}'.");
         }
@@ -350,14 +360,11 @@ internal sealed class EventWorkspacePanel
                 ref open,
                 workspaceFlags);
 
-        _open =
-            open;
+        if (!open) RequestClose();
 
-        if (!_open)
-        {
-            _eventNamePopup.Reset();
-            _viewSettings.Reset();
-        }
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            _registeredDocumentId.HasValue)
+            _documents.Activate(_registeredDocumentId.Value);
 
         if (ImGui.IsWindowFocused(
                 ImGuiFocusedFlags.RootAndChildWindows))
@@ -372,17 +379,14 @@ internal sealed class EventWorkspacePanel
         }
 
         if (!_open)
-        {
-            EventWorkspaceUndoRouter.ClearFocused(
-                this);
-        }
+            EventWorkspaceUndoRouter.ClearFocused(this);
 
         if (!visible)
         {
             _eventNamePopup.Reset();
             _viewSettings.Reset();
             ImGui.End();
-
+            DrawUnsavedPopup(log);
             return;
         }
 
@@ -449,6 +453,7 @@ internal sealed class EventWorkspacePanel
             2);
 
         ImGui.End();
+        DrawUnsavedPopup(log);
     }
 
     // ========================================================
@@ -622,6 +627,77 @@ internal sealed class EventWorkspacePanel
         }
 
         return true;
+    }
+
+    private void RegisterDocument(EditorLog log)
+    {
+        if (_asset == null || _module == null) return;
+        EditorDocumentId id = new(EditorDocumentType.EventSheet, _asset.Guid.ToString("N"));
+        _registeredDocumentId = id;
+        _documents.RegisterOrFocus(new EditorDocument(
+            id,
+            $"Event Sheet: {_module.Name}",
+            () => { _open = true; _requestFocus = true; },
+            RequestClose,
+            () => { Save(log, true); return !_dirty; },
+            DiscardChanges,
+            () => _dirty));
+    }
+
+    private void RequestClose()
+    {
+        if (_dirty) _openUnsavedPopup = true;
+        else CloseNow();
+    }
+
+    private void CloseNow()
+    {
+        _open = false;
+        _eventNamePopup.Reset();
+        _viewSettings.Reset();
+        EventWorkspaceUndoRouter.ClearFocused(this);
+        if (_registeredDocumentId.HasValue)
+        {
+            _documents.Unregister(_registeredDocumentId.Value);
+            _registeredDocumentId = null;
+        }
+    }
+
+    private void DiscardChanges()
+    {
+        if (_asset == null) return;
+        _module = _serializer.Load(_asset.FullPath);
+        InitializeMissingGraphLayout();
+        _history.Reset(_module);
+        _dirty = false;
+    }
+
+    private void DrawUnsavedPopup(EditorLog log)
+    {
+        if (_openUnsavedPopup)
+        {
+            ImGui.OpenPopup("Unsaved Event Sheet");
+            _openUnsavedPopup = false;
+        }
+        bool open = true;
+        if (!ImGui.BeginPopupModal("Unsaved Event Sheet", ref open,
+                ImGuiWindowFlags.AlwaysAutoResize)) return;
+        ImGui.Text("The Event Sheet has unsaved changes.");
+        if (ImGui.Button("Save"))
+        {
+            Save(log, true);
+            if (!_dirty) { CloseNow(); ImGui.CloseCurrentPopup(); }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Discard"))
+        {
+            DiscardChanges();
+            CloseNow();
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
+        ImGui.EndPopup();
     }
 
     private void Save(

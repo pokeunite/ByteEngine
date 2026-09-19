@@ -17,6 +17,12 @@ namespace ByteEngine.Editor.Panels;
 /// </summary>
 internal sealed class AnimationProfileWorkspacePanel
 {
+    private readonly EditorDocumentManager _documents;
+
+    public AnimationProfileWorkspacePanel(EditorDocumentManager documents)
+    {
+        _documents = documents;
+    }
     private readonly HumanoidRigConfiguratorPanel _humanoidConfigurator =
         new();
 
@@ -27,6 +33,11 @@ internal sealed class AnimationProfileWorkspacePanel
     private bool _visible;
     private bool _focusNextDraw;
     private bool _dirty;
+    private bool _openUnsavedPopup;
+    private EditorDocumentId? _registeredDocumentId;
+    private AssetRecord? _pendingOpenAsset;
+    private EditorProjectContext? _pendingOpenProject;
+    private bool _pendingClose;
 
     private string? _loadError;
 
@@ -50,6 +61,20 @@ internal sealed class AnimationProfileWorkspacePanel
         if (asset.Type !=
             AssetType.AnimationProfile)
         {
+            return;
+        }
+        if (_asset?.Guid == asset.Guid && _visible)
+        {
+            _focusNextDraw = true;
+            if (_registeredDocumentId.HasValue) _documents.Activate(_registeredDocumentId.Value);
+            return;
+        }
+        if (_dirty)
+        {
+            _pendingOpenAsset = asset;
+            _pendingOpenProject = project;
+            _pendingClose = false;
+            _openUnsavedPopup = true;
             return;
         }
 
@@ -78,6 +103,8 @@ internal sealed class AnimationProfileWorkspacePanel
             _profile =
                 AnimationProfileSerializer.Load(
                     asset.FullPath);
+            RegisterDocument(log);
+
         }
         catch (Exception exception)
         {
@@ -126,6 +153,8 @@ internal sealed class AnimationProfileWorkspacePanel
 
         _humanoidConfigurator.Draw(
             log);
+        DrawUnsavedPopup(log);
+
     }
 
     private void DrawWorkspace(
@@ -154,9 +183,13 @@ internal sealed class AnimationProfileWorkspacePanel
 
         bool visible =
             ImGui.Begin(
-                $"Animation Profile: {name}###AnimationProfileWorkspace",
+                $"Animation Profile: {name}{(_dirty ? " *" : string.Empty)}###AnimationProfileWorkspace",
                 ref open,
                 ImGuiWindowFlags.MenuBar);
+
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            _registeredDocumentId.HasValue)
+            _documents.Activate(_registeredDocumentId.Value);
 
         if (visible)
         {
@@ -200,16 +233,7 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.End();
 
         if (!open)
-        {
-            if (_dirty)
-            {
-                Save(
-                    log);
-            }
-
-            _visible =
-                false;
-        }
+            RequestClose();
     }
 
     private void DrawMenuBar(
@@ -244,17 +268,15 @@ internal sealed class AnimationProfileWorkspacePanel
 
         ImGui.Separator();
 
-        if (ImGui.MenuItem(
-                "Close"))
-        {
-            if (_dirty)
-            {
-                Save(
-                    log);
-            }
+        if (ImGui.MenuItem("Close"))
+            RequestClose();
 
-            _visible =
-                false;
+        if (_registeredDocumentId.HasValue)
+        {
+            if (ImGui.MenuItem("Close Others"))
+                _documents.RequestCloseOthers(_registeredDocumentId.Value);
+            if (ImGui.MenuItem("Close All"))
+                _documents.RequestCloseAll();
         }
 
         ImGui.EndMenuBar();
@@ -1757,6 +1779,91 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.EndCombo();
 
         return changed;
+    }
+
+    private void RegisterDocument(EditorLog log)
+    {
+        if (_asset == null) return;
+        EditorDocumentId id = new(EditorDocumentType.AnimationProfile, _asset.Guid.ToString("N"));
+        if (_registeredDocumentId.HasValue && _registeredDocumentId.Value != id)
+            _documents.Unregister(_registeredDocumentId.Value);
+        _registeredDocumentId = id;
+        _documents.RegisterOrFocus(new EditorDocument(
+            id,
+            $"Animation Profile: {Path.GetFileNameWithoutExtension(_asset.ProjectPath)}",
+            () => { _visible = true; _focusNextDraw = true; },
+            RequestClose,
+            () => { Save(log); return !_dirty; },
+            () => Reload(log),
+            () => _dirty));
+    }
+
+    private void RequestClose()
+    {
+        if (_dirty)
+        {
+            _pendingClose = true;
+            _pendingOpenAsset = null;
+            _pendingOpenProject = null;
+            _openUnsavedPopup = true;
+        }
+        else CloseNow();
+    }
+
+    private void CloseNow()
+    {
+        _visible = false;
+        if (_registeredDocumentId.HasValue)
+        {
+            _documents.Unregister(_registeredDocumentId.Value);
+            _registeredDocumentId = null;
+        }
+    }
+
+    private void DrawUnsavedPopup(EditorLog log)
+    {
+        if (_openUnsavedPopup)
+        {
+            ImGui.OpenPopup("Unsaved Animation Profile");
+            _openUnsavedPopup = false;
+        }
+        bool open = true;
+        if (!ImGui.BeginPopupModal("Unsaved Animation Profile", ref open,
+                ImGuiWindowFlags.AlwaysAutoResize)) return;
+        ImGui.Text("The animation profile has unsaved changes.");
+        if (ImGui.Button("Save"))
+        {
+            Save(log);
+            if (!_dirty) { CompletePendingAction(log); ImGui.CloseCurrentPopup(); }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Discard"))
+        {
+            Reload(log);
+            CompletePendingAction(log);
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel"))
+        {
+            _pendingOpenAsset = null;
+            _pendingOpenProject = null;
+            _pendingClose = false;
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.EndPopup();
+    }
+
+    private void CompletePendingAction(EditorLog log)
+    {
+        AssetRecord? asset = _pendingOpenAsset;
+        EditorProjectContext? project = _pendingOpenProject;
+        bool close = _pendingClose;
+        _pendingOpenAsset = null;
+        _pendingOpenProject = null;
+        _pendingClose = false;
+        if (asset != null && project != null) Open(asset, project, log);
+        else if (close) CloseNow();
     }
 
     private void Save(

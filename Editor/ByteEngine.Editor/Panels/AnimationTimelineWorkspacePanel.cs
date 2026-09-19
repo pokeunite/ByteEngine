@@ -12,6 +12,13 @@ namespace ByteEngine.Editor.Panels;
 
 internal sealed class AnimationTimelineWorkspacePanel : IDisposable
 {
+    private readonly EditorDocumentManager _documents;
+
+    public AnimationTimelineWorkspacePanel(EditorDocumentManager documents)
+    {
+        _documents = documents;
+    }
+
     private readonly AnimationClipPreview _preview = new();
 
     private EditorProjectContext? _project;
@@ -33,6 +40,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
     private float _dragOriginalStart;
     private float _dragOriginalEnd;
     private bool _dragActive;
+    private EditorDocumentId? _registeredDocumentId;
 
     public bool HasUnsavedChanges => _document?.IsDirty == true;
 
@@ -121,6 +129,8 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
 
     public void Dispose()
     {
+        if (_registeredDocumentId.HasValue)
+            _documents.Unregister(_registeredDocumentId.Value);
         _preview.Dispose();
     }
 
@@ -164,6 +174,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             _resolvedAsset = asset;
             _resolvedModel = model;
             _resolvedAnimation = animation;
+            RegisterDocument(log);
         }
         catch (Exception exception)
         {
@@ -192,6 +203,9 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             $"Animation: {document.AnimationName}{(document.IsDirty ? " *" : string.Empty)}###AnimationTimelineWorkspace",
             ref open,
             ImGuiWindowFlags.MenuBar);
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            _registeredDocumentId.HasValue)
+            _documents.Activate(_registeredDocumentId.Value);
 
         if (visible)
         {
@@ -238,6 +252,12 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         if (ImGui.MenuItem("Revert")) DiscardUnsavedChanges(log);
         ImGui.Separator();
         if (ImGui.MenuItem("Close")) RequestClose();
+        if (_registeredDocumentId.HasValue)
+        {
+            if (ImGui.MenuItem("Close Others"))
+                _documents.RequestCloseOthers(_registeredDocumentId.Value);
+            if (ImGui.MenuItem("Close All")) _documents.RequestCloseAll();
+        }
         ImGui.EndMenuBar();
     }
 
@@ -592,6 +612,36 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         }
     }
 
+    private void RegisterDocument(EditorLog log)
+    {
+        if (_document == null) return;
+        EditorDocumentId id = new(
+            EditorDocumentType.Animation,
+            $"{_document.ModelGuid:N}:{_document.AnimationKey}");
+        if (_registeredDocumentId.HasValue && _registeredDocumentId.Value != id)
+            _documents.Unregister(_registeredDocumentId.Value);
+        _registeredDocumentId = id;
+        _documents.RegisterOrFocus(new EditorDocument(
+            id,
+            $"Animation: {_document.AnimationName}",
+            () => { _visible = true; _focusNextDraw = true; },
+            RequestClose,
+            () => Save(log),
+            () => DiscardUnsavedChanges(log),
+            () => HasUnsavedChanges));
+    }
+
+    private void CloseNow()
+    {
+        _visible = false;
+        _preview.Reset();
+        if (_registeredDocumentId.HasValue)
+        {
+            _documents.Unregister(_registeredDocumentId.Value);
+            _registeredDocumentId = null;
+        }
+    }
+
     private void RequestClose()
     {
         if (HasUnsavedChanges)
@@ -602,8 +652,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         }
         else
         {
-            _visible = false;
-            _preview.Reset();
+            CloseNow();
         }
     }
 
@@ -654,8 +703,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             OpenNow(open.Value, _project, log);
         else if (close)
         {
-            _visible = false;
-            _preview.Reset();
+            CloseNow();
         }
     }
 

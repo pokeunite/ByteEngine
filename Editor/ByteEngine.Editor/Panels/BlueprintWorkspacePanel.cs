@@ -21,6 +21,17 @@ namespace ByteEngine.Editor.Panels;
 internal sealed class BlueprintWorkspacePanel
     : IDisposable
 {
+    private readonly EditorDocumentManager _documents;
+
+    public BlueprintWorkspacePanel()
+        : this(new EditorDocumentManager())
+    {
+    }
+
+    public BlueprintWorkspacePanel(EditorDocumentManager documents)
+    {
+        _documents = documents;
+    }
     private readonly SceneFramebuffer _framebuffer =
         new();
 
@@ -44,6 +55,9 @@ internal sealed class BlueprintWorkspacePanel
     private readonly CameraActivationPromptState _cameraActivationPrompt = new();
 
     private bool _open;
+    private bool _focusNextDraw;
+    private bool _openUnsavedPopup;
+    private EditorDocumentId? _registeredDocumentId;
     internal Guid? OpenAssetId => _asset?.Guid;
 
     internal void EvictDeletedAsset()
@@ -116,6 +130,13 @@ internal sealed class BlueprintWorkspacePanel
         ArgumentNullException.ThrowIfNull(
             project);
 
+        if (_asset?.Guid == asset.Guid && _open)
+        {
+            _focusNextDraw = true;
+            if (_registeredDocumentId.HasValue) _documents.Activate(_registeredDocumentId.Value);
+            return;
+        }
+
         _cameraActivationPrompt.Reset();
         if (_project != null) _project.AssetDatabase.DatabaseChanged -= EvictDeletedAsset;
         project.AssetDatabase.DatabaseChanged += EvictDeletedAsset;
@@ -143,6 +164,8 @@ internal sealed class BlueprintWorkspacePanel
 
         _open =
             true;
+
+        RegisterDocument();
     }
 
     public void Draw(
@@ -165,6 +188,12 @@ internal sealed class BlueprintWorkspacePanel
             return;
         }
 
+        if (_focusNextDraw)
+        {
+            ImGui.SetNextWindowFocus();
+            _focusNextDraw = false;
+        }
+
         ImGui.SetNextWindowSize(
             new Vector2(
                 1240.0f,
@@ -176,17 +205,23 @@ internal sealed class BlueprintWorkspacePanel
                 ? " *"
                 : string.Empty;
 
+        bool open = true;
         bool visible = ImGui.Begin(
-            $"{_blueprint.Name} — BLUEPRINT ASSET{dirtyMarker}###BlueprintWorkspace",
-            ref _open,
+            $"Blueprint: {_blueprint.Name}{dirtyMarker}###BlueprintWorkspace",
+            ref open,
             ImGuiWindowFlags.NoScrollbar |
             ImGuiWindowFlags.NoScrollWithMouse |
             (_transformGizmo.OwnsMouse ? ImGuiWindowFlags.NoMove : ImGuiWindowFlags.None));
 
-        if (!_open || !visible)
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            _registeredDocumentId.HasValue)
+            _documents.Activate(_registeredDocumentId.Value);
+
+        if (!open) RequestClose();
+        if (!visible)
         {
-            if (!_open) _cameraActivationPrompt.Reset();
             ImGui.End();
+            DrawUnsavedPopup();
             return;
         }
 
@@ -230,6 +265,7 @@ internal sealed class BlueprintWorkspacePanel
         DrawCameraActivationPrompt();
 
         ImGui.End();
+        DrawUnsavedPopup();
     }
 
     // ========================================================
@@ -273,7 +309,14 @@ internal sealed class BlueprintWorkspacePanel
             if (ImGui.MenuItem("Normalize Models##BlueprintNormalize")) NormalizeExistingModelScales();
             if (ImGui.MenuItem("Reimport Models##BlueprintReimport")) ReimportReferencedModels();
             if (ImGui.MenuItem("Write Debug Dump##BlueprintDebug"))
-                WriteDebugDump("Manual Blueprint debug dump");
+                WriteDebugDump("Manual Blueprint debug dump");            ImGui.Separator();
+            if (ImGui.MenuItem("Close")) RequestClose();
+            if (_registeredDocumentId.HasValue)
+            {
+                if (ImGui.MenuItem("Close Others"))
+                    _documents.RequestCloseOthers(_registeredDocumentId.Value);
+                if (ImGui.MenuItem("Close All")) _documents.RequestCloseAll();
+            }
             ImGui.EndPopup();
         }
 
@@ -2024,6 +2067,78 @@ internal sealed class BlueprintWorkspacePanel
             _statusIsError =
                 true;
         }
+    }
+
+    private void RegisterDocument()
+    {
+        if (_asset == null) return;
+        EditorDocumentId id = new(EditorDocumentType.Blueprint, _asset.Guid.ToString("N"));
+        if (_registeredDocumentId.HasValue && _registeredDocumentId.Value != id)
+            _documents.Unregister(_registeredDocumentId.Value);
+        _registeredDocumentId = id;
+        _documents.RegisterOrFocus(new EditorDocument(
+            id,
+            $"Blueprint: {_blueprint?.Name ?? Path.GetFileNameWithoutExtension(_asset.ProjectPath)}",
+            () => { _open = true; _focusNextDraw = true; },
+            RequestClose,
+            () => { SaveBlueprint(); return !_dirty; },
+            DiscardBlueprint,
+            () => _dirty));
+    }
+
+    private void RequestClose()
+    {
+        if (_dirty) _openUnsavedPopup = true;
+        else CloseNow();
+    }
+
+    private void CloseNow()
+    {
+        _open = false;
+        _cameraActivationPrompt.Reset();
+        if (_registeredDocumentId.HasValue)
+        {
+            _documents.Unregister(_registeredDocumentId.Value);
+            _registeredDocumentId = null;
+        }
+    }
+
+    private void DiscardBlueprint()
+    {
+        if (_asset == null) return;
+        _blueprint = new BlueprintSerializer().Load(_asset.FullPath);
+        RebuildPreview();
+        _propertyUndo.Clear();
+        _propertyRedo.Clear();
+        _dirty = false;
+    }
+
+    private void DrawUnsavedPopup()
+    {
+        if (_openUnsavedPopup)
+        {
+            ImGui.OpenPopup("Unsaved Blueprint");
+            _openUnsavedPopup = false;
+        }
+        bool open = true;
+        if (!ImGui.BeginPopupModal("Unsaved Blueprint", ref open,
+                ImGuiWindowFlags.AlwaysAutoResize)) return;
+        ImGui.Text("The Blueprint has unsaved changes.");
+        if (ImGui.Button("Save"))
+        {
+            SaveBlueprint();
+            if (!_dirty) { CloseNow(); ImGui.CloseCurrentPopup(); }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Discard"))
+        {
+            DiscardBlueprint();
+            CloseNow();
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
+        ImGui.EndPopup();
     }
 
     // ========================================================

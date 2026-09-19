@@ -16,6 +16,8 @@ internal sealed class ImGuiController
 {
     private readonly GameWindow _window;
 
+    private readonly IntPtr _context;
+
     private readonly string _settingsPath;
 
     private readonly List<uint> _pendingCharacters =
@@ -83,7 +85,8 @@ internal sealed class ImGuiController
         _settingsPath =
             settingsPath;
 
-        ImGui.CreateContext();
+        _context = ImGui.CreateContext();
+        ImGui.SetCurrentContext(_context);
 
         ImGuiIOPtr io =
             ImGui.GetIO();
@@ -118,6 +121,7 @@ internal sealed class ImGuiController
     public void AddInputCharacter(
         uint character)
     {
+        MakeCurrent();
         _pendingCharacters.Add(
             character
         );
@@ -127,6 +131,7 @@ internal sealed class ImGuiController
         float deltaTime)
     {
         ThrowIfDisposed();
+        MakeCurrent();
 
         ImGuiIOPtr io =
             ImGui.GetIO();
@@ -194,6 +199,7 @@ internal sealed class ImGuiController
     public void Render()
     {
         ThrowIfDisposed();
+        MakeCurrent();
 
         ImGui.Render();
 
@@ -805,6 +811,7 @@ internal sealed class ImGuiController
             return;
         }
 
+        MakeCurrent();
         SaveSettings();
 
         GL.DeleteTexture(
@@ -827,10 +834,12 @@ internal sealed class ImGuiController
             _vertexArray
         );
 
-        ImGui.DestroyContext();
+        ImGui.DestroyContext(_context);
 
         _disposed = true;
     }
+
+    public void MakeCurrent() => ImGui.SetCurrentContext(_context);
 
     private void SaveSettings()
     {

@@ -43,6 +43,8 @@ internal sealed class SceneViewPanel : IDisposable
     public bool IsOpen { get; set; } =
         true;
 
+    public bool IsFocused { get; private set; }
+
     public void RequestFocus()
     {
         IsOpen = true;
@@ -114,6 +116,8 @@ internal sealed class SceneViewPanel : IDisposable
 
         IsOpen =
             isOpen;
+
+        IsFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 
         /*
          * Remember the dock node used by Scene View.

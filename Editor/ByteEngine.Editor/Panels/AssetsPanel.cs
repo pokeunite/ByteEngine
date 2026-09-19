@@ -21,16 +21,14 @@ internal sealed class AssetsPanel : IDisposable
 {
     private readonly EditorProjectContext _project;
 
+    private readonly EditorDocumentManager _documents;
+
     private readonly Action<AssetRecord> _openAsset;
 
-    private readonly EventWorkspaceCollection _eventWorkspaces =
-        new();
+    private readonly EditorDocumentWindowManager _documentWindows;
 
-    private readonly AnimationProfileWorkspacePanel _animationProfileWorkspace =
-        new();
-
-    private readonly AnimationTimelineWorkspacePanel _animationTimelineWorkspace =
-        new();
+    private Renderer2D? _renderer;
+    private Renderer3D? _renderer3D;
 
     private readonly List<string> _directories =
         new();
@@ -131,13 +129,14 @@ internal sealed class AssetsPanel : IDisposable
 
     public AssetsPanel(
         EditorProjectContext project,
-        Action<AssetRecord> openAsset)
+        Action<AssetRecord> openAsset,
+        EditorDocumentManager documents,
+        EditorDocumentWindowManager documentWindows)
     {
-        _project =
-            project;
-
-        _openAsset =
-            openAsset;
+        _project = project;
+        _openAsset = openAsset;
+        _documents = documents;
+        _documentWindows = documentWindows;
 
         _currentDirectory =
             GetAssetsRoot();
@@ -164,15 +163,6 @@ internal sealed class AssetsPanel : IDisposable
             $"Asset database contains {_project.AssetDatabase.Assets.Count} asset(s).");
     }
 
-    public bool HasUnsavedChanges =>
-        _animationTimelineWorkspace.HasUnsavedChanges;
-
-    public bool SaveUnsavedChanges(EditorLog log) =>
-        !HasUnsavedChanges ||
-        _animationTimelineWorkspace.Save(log);
-
-    public void DiscardUnsavedChanges(EditorLog log) =>
-        _animationTimelineWorkspace.DiscardUnsavedChanges(log);
 
     public void Draw(
         EditorState state,
@@ -182,6 +172,8 @@ internal sealed class AssetsPanel : IDisposable
         int windowWidth,
         int windowHeight)
     {
+        _renderer = renderer;
+        _renderer3D = renderer3D;
         bool isOpen =
             IsOpen;
 
@@ -274,30 +266,9 @@ internal sealed class AssetsPanel : IDisposable
 
     }
 
-    public void DrawWorkspaces(
-        EditorLog log,
-        Renderer2D renderer,
-        Renderer3D renderer3D,
-        int windowWidth,
-        int windowHeight)
-    {
-        _eventWorkspaces.Draw(log);
+    public void DrawWorkspaces(EditorLog log, Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight) { }
 
-        AssetReference? requestedProfile = AnimationProfileWorkspaceRequest.Consume();
-        if (requestedProfile != null)
-        {
-            AssetRecord? requestedAsset = _project.AssetDatabase.Resolve(requestedProfile);
-            if (requestedAsset?.Type == AssetType.AnimationProfile)
-                _animationProfileWorkspace.Open(requestedAsset, _project, log);
-        }
-
-        _animationProfileWorkspace.Draw(log);
-        _animationTimelineWorkspace.Draw(
-            log, renderer, renderer3D, windowWidth, windowHeight);
-    }
-
-    public bool DrawActiveDocumentInspector() =>
-        _animationTimelineWorkspace.DrawContextInspector();
+    public bool DrawActiveDocumentInspector() => false;
     // ========================================================
     // TOOLBAR
     // ========================================================
@@ -1956,14 +1927,16 @@ internal sealed class AssetsPanel : IDisposable
         if (ImGui.IsItemHovered() &&
             ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
         {
-            _animationTimelineWorkspace.Open(asset, animation, _project, log);
+            if (_renderer != null && _renderer3D != null)
+                _documentWindows.OpenAnimation(asset, animation, _project, log, _renderer, _renderer3D);
         }
 
         if (ImGui.BeginPopupContextItem(
                 $"AnimationContext##{asset.Guid}:{animation.Key}"))
         {
             if (ImGui.MenuItem("Open Animation Timeline"))
-                _animationTimelineWorkspace.Open(asset, animation, _project, log);
+                if (_renderer != null && _renderer3D != null)
+                _documentWindows.OpenAnimation(asset, animation, _project, log, _renderer, _renderer3D);
 
             ImGui.EndPopup();
         }
@@ -2018,10 +1991,7 @@ state.SelectedObject =
         if (asset.Type ==
             AssetType.AnimationProfile)
         {
-            _animationProfileWorkspace.Open(
-                asset,
-                _project,
-                log);
+            _documentWindows.OpenProfile(asset, _project, log);
 
             return;
         }
@@ -2029,9 +1999,7 @@ state.SelectedObject =
         if (asset.Type ==
             AssetType.EventModule)
         {
-            _eventWorkspaces.Open(
-                asset,
-                log);
+            _documentWindows.OpenEvent(asset, log);
 
             return;
         }
@@ -2896,10 +2864,7 @@ state.SelectedObject =
                 out AssetRecord? asset) &&
             asset?.Type == AssetType.AnimationProfile)
         {
-            _animationProfileWorkspace.Open(
-                asset,
-                _project,
-                log);
+            _documentWindows.OpenProfile(asset, _project, log);
         }
 
         log.Info(
@@ -4010,7 +3975,7 @@ state.SelectedObject =
     public void Dispose()
     {
         _project.AssetDatabase.DatabaseChanged -= OnAssetDatabaseChanged;
-        _animationTimelineWorkspace.Dispose();
+
     }
     private static string MakeSafeFileName(
         string name)

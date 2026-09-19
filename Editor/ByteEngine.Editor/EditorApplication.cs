@@ -50,7 +50,9 @@ public sealed class EditorApplication
 
     private readonly ProjectBrowserPanel _projectBrowser = new();
 
-    private readonly BlueprintWorkspacePanel _blueprintWorkspace = new();
+    private readonly EditorDocumentManager _documents = new();
+
+    private readonly EditorDocumentWindowManager _documentWindows;
 
     private readonly EditorClipboard _clipboard = new();
 
@@ -67,6 +69,8 @@ public sealed class EditorApplication
     private bool _openUnsavedPopup;
 
     private bool _allowClose;
+
+    private EditorDocumentId? _sceneDocumentId;
 
     protected override bool CloseOnEscape =>
         false;
@@ -89,6 +93,8 @@ public sealed class EditorApplication
             $"ByteEngine Editor v{ByteEngineInfo.Version}"
         )
     {
+        _documentWindows = new EditorDocumentWindowManager(this, _documents, () => _imgui?.MakeCurrent());
+
         _startupProjectFile =
             string.IsNullOrWhiteSpace(
                 projectFile)
@@ -161,6 +167,8 @@ public sealed class EditorApplication
         UpdateWindowTitle();
 
         _imgui.Render();
+        _documentWindows.PumpAndRender(Math.Max((float)Time.DeltaTime, 1.0f / 1000.0f));
+        _imgui.MakeCurrent();
     }
 
     protected override void OnTextInput(
@@ -228,7 +236,7 @@ public sealed class EditorApplication
         _inspector.Dispose();
         _sceneView.Dispose();
         _gameView.Dispose();
-        _blueprintWorkspace.Dispose();
+        _documentWindows.Dispose();
         _assets?.Dispose();
         _assets = null;
         _projectContext?.Dispose();
@@ -278,9 +286,7 @@ public sealed class EditorApplication
 
                     if (asset != null)
                     {
-                        _blueprintWorkspace.Open(
-                            asset,
-                            _projectContext);
+                        _documentWindows.OpenBlueprint(asset, _projectContext, Renderer, Renderer3D);
                     }
                 },
                 () => _assets?.DrawActiveDocumentInspector() == true);
@@ -302,6 +308,8 @@ public sealed class EditorApplication
                 position => CreateObjectAtPosition("Camera", position, () => new Camera2D()),
                 PasteObjects
             );
+            if (_sceneView.IsFocused && _sceneDocumentId.HasValue)
+                _documents.Activate(_sceneDocumentId.Value);
         }
 
         if (_gameView.IsOpen)
@@ -342,16 +350,14 @@ public sealed class EditorApplication
                 FramebufferSize.Y
             );
         }
+        AssetReference? requestedProfile = AnimationProfileWorkspaceRequest.Consume();
+        if (requestedProfile != null &&
+            _projectContext!.AssetDatabase.Resolve(requestedProfile) is AssetRecord requestedAsset &&
+            requestedAsset.Type == AssetType.AnimationProfile)
+        {
+            _documentWindows.OpenProfile(requestedAsset, _projectContext, _log);
+        }
 
-        _assets?.DrawWorkspaces(
-            _log,
-            Renderer,
-            Renderer3D,
-            FramebufferSize.X,
-            FramebufferSize.Y);
-
-        _blueprintWorkspace.Draw(
-            Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
     }
 
     private void DrawMainMenu()
@@ -706,6 +712,22 @@ public sealed class EditorApplication
         ImGui.EndMenu();
     }
 
+    private void RegisterSceneDocument()
+    {
+        if (_state == null) return;
+        if (_sceneDocumentId.HasValue) _documents.Unregister(_sceneDocumentId.Value);
+        string key = _state.SceneFilePath ?? $"untitled:{_state.ProjectFilePath}";
+        string title = Path.GetFileNameWithoutExtension(_state.SceneFilePath) ?? _state.EditorScene.Name;
+        _sceneDocumentId = new EditorDocumentId(EditorDocumentType.Scene, key);
+        _documents.RegisterOrFocus(new EditorDocument(
+            _sceneDocumentId.Value,
+            $"Scene: {title}",
+            _sceneView.RequestFocus,
+            () => { },
+            SaveScene,
+            isDirty: () => _state?.IsDirty == true));
+    }
+
     private void DrawWindowMenu()
     {
         if (!ImGui.BeginMenu("Window"))
@@ -757,9 +779,14 @@ public sealed class EditorApplication
 
         ImGui.Separator();
 
-        if (ImGui.MenuItem(
-                "Reset Layout"))
+        if (ImGui.MenuItem("Restore Layout"))
         {
+            SetAllPanelsOpen();
+        }
+
+        if (ImGui.MenuItem("Reset Layout"))
+        {
+            EditorPreferences.BottomWorkspaceCollapsed = false;
             SetAllPanelsOpen();
             _layout.RequestReset();
         }
@@ -1083,11 +1110,11 @@ public sealed class EditorApplication
             ImGui.IsKeyPressed(
                 ImGuiKey.S))
         {
-            if (shift)
+            if (shift && _documents.ActiveDocumentType == EditorDocumentType.Scene)
             {
                 SaveSceneAs();
             }
-            else
+            else if (!_documents.SaveActive())
             {
                 SaveScene();
             }
@@ -1159,8 +1186,8 @@ public sealed class EditorApplication
     }
 
     private bool HasUnsavedChanges =>
-        _state?.IsDirty == true ||
-        _assets?.HasUnsavedChanges == true;
+        _documents.HasDirtyDocuments ||
+        _state?.IsDirty == true;
     private void RequestAfterUnsavedCheck(
         Action action)
     {
@@ -1201,7 +1228,7 @@ public sealed class EditorApplication
         }
 
         ImGui.Text(
-            "The project has unsaved scene or animation timeline changes."
+            "The project has unsaved document changes."
         );
 
         ImGui.Text(
@@ -1210,12 +1237,9 @@ public sealed class EditorApplication
 
         if (ImGui.Button("Save"))
         {
-            bool timelineSaved =
-                _assets?.SaveUnsavedChanges(_log) ?? true;
-            bool sceneSaved =
-                _state?.IsDirty != true || SaveScene();
+            bool documentsSaved = _documents.SaveAllDirty();
 
-            if (timelineSaved && sceneSaved)
+            if (documentsSaved)
             {
                 CompletePendingAction();
                 ImGui.CloseCurrentPopup();
@@ -1226,7 +1250,7 @@ public sealed class EditorApplication
 
         if (ImGui.Button("Discard"))
         {
-            _assets?.DiscardUnsavedChanges(_log);
+            _documents.DiscardAllDirty();
             CompletePendingAction();
             ImGui.CloseCurrentPopup();
         }
@@ -1414,14 +1438,19 @@ public sealed class EditorApplication
         _projectContext =
             context;
 
+        _documentWindows.CloseAllImmediately();
         _assets?.Dispose();
-        _assets = new AssetsPanel(context, OpenAsset);
+        _documents.Clear();
+        _sceneDocumentId = null;
+        _assets = new AssetsPanel(context, OpenAsset, _documents, _documentWindows);
+        SetAllPanelsOpen();
 
         _assets.Refresh(
             _log
         );
 
         _state =
+
             new EditorState
             {
                 EditorScene = scene,
@@ -1445,6 +1474,7 @@ public sealed class EditorApplication
             _state.ClearDirty();
         }
         InitializeUndo(_state, context, true);
+        RegisterSceneDocument();
 
         EditorPreferences.SaveLastProject(
             context.ProjectFilePath
@@ -1487,6 +1517,7 @@ public sealed class EditorApplication
 
         _state.MarkDirty();
         InitializeUndo(_state, _projectContext, false);
+        RegisterSceneDocument();
 
         _log.Info(
             "Created a new unsaved scene in Edit mode."
@@ -1560,7 +1591,7 @@ public sealed class EditorApplication
                 _state.ClearDirty();
             }
             InitializeUndo(_state, _projectContext, true);
-
+            RegisterSceneDocument();
             _log.Info(
                 $"Opened scene '{Path.GetFileName(scenePath)}'."
             );
@@ -1581,7 +1612,7 @@ public sealed class EditorApplication
         {
             if (asset.Type == AssetType.Blueprint)
             {
-                _blueprintWorkspace.Open(asset, _projectContext);
+                _documentWindows.OpenBlueprint(asset, _projectContext, Renderer, Renderer3D);
                 _log.Info($"Opened Blueprint '{asset.ProjectPath}'.");
             }
             else if (asset.Type == AssetType.Scene)
@@ -1629,6 +1660,7 @@ public sealed class EditorApplication
             _state.ClearDirty();
         }
         InitializeUndo(_state, _projectContext, true);
+        RegisterSceneDocument();
         _log.Info($"Opened scene '{asset.ProjectPath}'.");
     }
 
