@@ -1,4 +1,7 @@
 using System.Numerics;
+
+using ByteEngine.Core.Graphics;
+
 using OpenTK.Graphics.OpenGL4;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
@@ -11,9 +14,21 @@ public sealed class Mesh : IDisposable
     private readonly bool _dynamicVertices;
     private bool _vertexDataDirty;
 
-    private int _vertexArray;
+    /*
+     * OpenGL buffer objects are shared by the native asset-editor contexts
+     * because those windows are created with SharedContext = main.Context.
+     *
+     * Vertex-array objects are NOT shared between OpenGL contexts. Keeping a
+     * single VAO id here caused meshes uploaded/rendered in one ByteEngine
+     * window to disappear in another window. Keep one VAO per logical context
+     * while sharing the VBO/EBO.
+     */
+    private readonly Dictionary<int, VertexArrayState> _vertexArrays =
+        new();
+
     private int _vertexBuffer;
     private int _elementBuffer;
+    private int _bufferGeneration;
 
     public int IndexCount =>
         _indices.Length;
@@ -23,7 +38,9 @@ public sealed class Mesh : IDisposable
         8;
 
     public bool IsUploaded =>
-        _vertexArray !=
+        _vertexBuffer !=
+        0 &&
+        _elementBuffer !=
         0;
 
     /// <summary>
@@ -63,23 +80,22 @@ public sealed class Mesh : IDisposable
     {
         if (!IsUploaded)
         {
-            Upload();
+            UploadBuffers();
         }
         else if (_vertexDataDirty)
         {
             UploadVertexChanges();
         }
 
-        GL.BindVertexArray(
-            _vertexArray);
+        BindVertexArrayForCurrentContext();
     }
 
     /// <summary>
     /// Efficient same-layout vertex update for dynamic meshes.
     ///
-    /// Unlike ReplaceData this does not destroy/recreate the VAO/VBO/EBO.
-    /// The CPU copy is updated immediately and the existing VBO is refreshed
-    /// the next time the mesh is bound for rendering.
+    /// The shared VBO is refreshed the next time the mesh is bound. Context
+    /// specific VAOs remain valid because the buffer object and vertex layout
+    /// are unchanged.
     /// </summary>
     internal void UpdateVertices(
         float[] vertices,
@@ -133,7 +149,13 @@ public sealed class Mesh : IDisposable
         ValidateVertices(
             vertices);
 
-        DisposeGpuResources();
+        /*
+         * Delete only the shareable buffer objects here. Existing VAOs belong
+         * to their individual contexts and cannot safely be deleted from an
+         * arbitrary current context. Their generation will no longer match and
+         * each context replaces its own VAO the next time it binds this mesh.
+         */
+        ReleaseSharedBuffers();
 
         _vertices =
             vertices;
@@ -149,19 +171,13 @@ public sealed class Mesh : IDisposable
                 _vertices);
     }
 
-    private void Upload()
+    private void UploadBuffers()
     {
-        _vertexArray =
-            GL.GenVertexArray();
-
         _vertexBuffer =
             GL.GenBuffer();
 
         _elementBuffer =
             GL.GenBuffer();
-
-        GL.BindVertexArray(
-            _vertexArray);
 
         GL.BindBuffer(
             BufferTarget.ArrayBuffer,
@@ -176,16 +192,79 @@ public sealed class Mesh : IDisposable
                 ? BufferUsageHint.DynamicDraw
                 : BufferUsageHint.StaticDraw);
 
+        /*
+         * ELEMENT_ARRAY_BUFFER binding is VAO state in the core profile.
+         * Upload index data through COPY_WRITE_BUFFER so buffer creation does
+         * not accidentally depend on whichever context-local VAO is active.
+         */
         GL.BindBuffer(
-            BufferTarget.ElementArrayBuffer,
+            BufferTarget.CopyWriteBuffer,
             _elementBuffer);
 
         GL.BufferData(
-            BufferTarget.ElementArrayBuffer,
+            BufferTarget.CopyWriteBuffer,
             _indices.Length *
             sizeof(uint),
             _indices,
             BufferUsageHint.StaticDraw);
+
+        GL.BindBuffer(
+            BufferTarget.CopyWriteBuffer,
+            0);
+
+        GL.BindBuffer(
+            BufferTarget.ArrayBuffer,
+            0);
+
+        _bufferGeneration++;
+
+        _vertexDataDirty =
+            false;
+    }
+
+    private void BindVertexArrayForCurrentContext()
+    {
+        int contextId =
+            GraphicsContextScope.CurrentContextId;
+
+        if (_vertexArrays.TryGetValue(
+                contextId,
+                out VertexArrayState existing) &&
+            existing.BufferGeneration ==
+            _bufferGeneration &&
+            existing.VertexArray !=
+            0)
+        {
+            GL.BindVertexArray(
+                existing.VertexArray);
+
+            return;
+        }
+
+        /*
+         * If this logical context has an older VAO, the matching OpenGL
+         * context is current here, so deleting that one VAO is safe.
+         */
+        if (existing.VertexArray !=
+            0)
+        {
+            GL.DeleteVertexArray(
+                existing.VertexArray);
+        }
+
+        int vertexArray =
+            GL.GenVertexArray();
+
+        GL.BindVertexArray(
+            vertexArray);
+
+        GL.BindBuffer(
+            BufferTarget.ArrayBuffer,
+            _vertexBuffer);
+
+        GL.BindBuffer(
+            BufferTarget.ElementArrayBuffer,
+            _elementBuffer);
 
         int stride =
             8 *
@@ -226,11 +305,11 @@ public sealed class Mesh : IDisposable
             6 *
             sizeof(float));
 
-        GL.BindVertexArray(
-            0);
-
-        _vertexDataDirty =
-            false;
+        _vertexArrays[
+            contextId] =
+            new VertexArrayState(
+                vertexArray,
+                _bufferGeneration);
     }
 
     private void UploadVertexChanges()
@@ -247,8 +326,8 @@ public sealed class Mesh : IDisposable
 
         /*
          * Orphan the previous dynamic storage before uploading the new frame.
-         * This avoids waiting on the GPU when it is still consuming the prior
-         * animation frame and, critically, keeps the existing buffer/VAO alive.
+         * Because VBOs are shared by the ByteEngine native-window share group,
+         * one upload updates the data seen by every context-specific VAO.
          */
         GL.BufferData(
             BufferTarget.ArrayBuffer,
@@ -263,6 +342,10 @@ public sealed class Mesh : IDisposable
             _vertices.Length *
             sizeof(float),
             _vertices);
+
+        GL.BindBuffer(
+            BufferTarget.ArrayBuffer,
+            0);
 
         _vertexDataDirty =
             false;
@@ -286,7 +369,7 @@ public sealed class Mesh : IDisposable
         DisposeGpuResources();
     }
 
-    private void DisposeGpuResources()
+    private void ReleaseSharedBuffers()
     {
         if (_elementBuffer !=
             0)
@@ -302,23 +385,43 @@ public sealed class Mesh : IDisposable
                 _vertexBuffer);
         }
 
-        if (_vertexArray !=
-            0)
-        {
-            GL.DeleteVertexArray(
-                _vertexArray);
-        }
-
         _elementBuffer =
             0;
 
         _vertexBuffer =
             0;
 
-        _vertexArray =
-            0;
-
         _vertexDataDirty =
             false;
     }
+
+    private void DisposeGpuResources()
+    {
+        /*
+         * A VAO can only be deleted safely from the context that owns it.
+         * Delete the current context's VAO now. VAOs owned by other contexts
+         * are intentionally left to that OpenGL context's teardown; clearing
+         * the managed cache prevents a disposed Mesh from reusing them.
+         */
+        int currentContextId =
+            GraphicsContextScope.CurrentContextId;
+
+        if (_vertexArrays.TryGetValue(
+                currentContextId,
+                out VertexArrayState current) &&
+            current.VertexArray !=
+            0)
+        {
+            GL.DeleteVertexArray(
+                current.VertexArray);
+        }
+
+        _vertexArrays.Clear();
+
+        ReleaseSharedBuffers();
+    }
+
+    private readonly record struct VertexArrayState(
+        int VertexArray,
+        int BufferGeneration);
 }

@@ -104,6 +104,59 @@ internal static class ImGuiDockBuilder
             dockSpaceId);
     }
 
+    public static void BuildNativeDocumentLayout(
+        uint dockSpaceId,
+        Vector2 size,
+        string mainWindowName,
+        string? inspectorWindowName,
+        out uint mainNodeId,
+        out uint inspectorNodeId)
+    {
+        RemoveNode(
+            dockSpaceId);
+
+        AddNode(
+            dockSpaceId,
+            DockSpaceNodeFlag);
+
+        SetNodeSize(
+            dockSpaceId,
+            size);
+
+        mainNodeId =
+            dockSpaceId;
+
+        inspectorNodeId =
+            0;
+
+        if (!string.IsNullOrWhiteSpace(
+                inspectorWindowName))
+        {
+            SplitNode(
+                dockSpaceId,
+                ImGuiDir.Right,
+                0.24f,
+                out inspectorNodeId,
+                out mainNodeId);
+        }
+
+        DockWindow(
+            mainWindowName,
+            mainNodeId);
+
+        if (inspectorNodeId != 0 &&
+            !string.IsNullOrWhiteSpace(
+                inspectorWindowName))
+        {
+            DockWindow(
+                inspectorWindowName,
+                inspectorNodeId);
+        }
+
+        Finish(
+            dockSpaceId);
+    }
+
     [DllImport(
         "cimgui",
         CallingConvention = CallingConvention.Cdecl,

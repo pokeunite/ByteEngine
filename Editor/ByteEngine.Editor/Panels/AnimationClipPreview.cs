@@ -331,16 +331,42 @@ internal sealed class AnimationClipPreview : IDisposable
         ImGui.TextDisabled(
             "LMB Orbit  |  MMB Pan  |  Wheel Zoom  |  F Frame");
 
+        Vector2 availableRegion =
+            ImGui.GetContentRegionAvail();
+
         float availableWidth =
             Math.Max(
-                ImGui.GetContentRegionAvail().X,
+                availableRegion.X,
                 1.0f);
+
+        /*
+         * Leave enough vertical space below the preview for the playhead
+         * scrubber, timeline header/buttons and event/window lanes.
+         *
+         * This makes the preview expand vertically with the native asset
+         * window instead of being limited only by an arbitrary width cap.
+         */
+        const float ReservedTimelineHeight =
+            205.0f;
+
+        float previewHeightBudget =
+            Math.Max(
+                availableRegion.Y -
+                ReservedTimelineHeight,
+                180.0f);
+
+        float previewWidthFromHeight =
+            previewHeightBudget *
+            PreviewRenderWidth /
+            PreviewRenderHeight;
 
         float previewWidth =
             Math.Clamp(
-                availableWidth,
-                140.0f,
-                460.0f);
+                Math.Min(
+                    availableWidth,
+                    previewWidthFromHeight),
+                240.0f,
+                980.0f);
 
         float previewHeight =
             previewWidth *
