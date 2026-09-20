@@ -211,7 +211,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         {
             DrawMenuBar(log);
             bool resolved = ResolveCurrent(log, refreshCleanDocument: true);
-            DrawHeader(document, log);
+            DrawCommandBar(document, log);
 
             if (!resolved || _resolvedAsset == null || _resolvedModel == null || _resolvedAnimation == null)
             {
@@ -245,37 +245,52 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
     {
         if (!ImGui.BeginMenuBar()) return;
 
-        ImGui.BeginDisabled(!HasUnsavedChanges);
-        if (ImGui.MenuItem("Save", "Ctrl+S")) Save(log);
-        ImGui.EndDisabled();
-
-        if (ImGui.MenuItem("Revert")) DiscardUnsavedChanges(log);
-        ImGui.Separator();
-        if (ImGui.MenuItem("Close")) RequestClose();
-        if (_registeredDocumentId.HasValue)
+        if (ImGui.BeginMenu("File"))
         {
-            if (ImGui.MenuItem("Close Others"))
-                _documents.RequestCloseOthers(_registeredDocumentId.Value);
-            if (ImGui.MenuItem("Close All")) _documents.RequestCloseAll();
+            ImGui.BeginDisabled(!HasUnsavedChanges);
+            if (ImGui.MenuItem("Save", "Ctrl+S")) Save(log);
+            if (ImGui.MenuItem("Revert")) DiscardUnsavedChanges(log);
+            ImGui.EndDisabled();
+            ImGui.Separator();
+            if (ImGui.MenuItem("Close")) RequestClose();
+            if (_registeredDocumentId.HasValue)
+            {
+                if (ImGui.MenuItem("Close Others"))
+                    _documents.RequestCloseOthers(_registeredDocumentId.Value);
+                if (ImGui.MenuItem("Close All")) _documents.RequestCloseAll();
+            }
+            ImGui.EndMenu();
         }
         ImGui.EndMenuBar();
     }
 
-    private void DrawHeader(AnimationTimelineDocument document, EditorLog log)
+    private void DrawCommandBar(AnimationTimelineDocument document, EditorLog log)
     {
+        EditorUi.BeginToolbar("##AnimationCommandBar");
+
+        ImGui.BeginDisabled(!document.IsDirty);
         if (document.IsDirty)
-            ImGui.TextColored(EditorTheme.Warning, $"{document.AnimationName}  *");
+            EditorUi.PrimaryButton("Save", () => Save(log));
         else
-            ImGui.TextColored(EditorTheme.Text, document.AnimationName);
+            EditorUi.ToolbarButton("Save", "Save animation metadata (Ctrl+S)");
+        ImGui.EndDisabled();
 
         ImGui.SameLine();
-        ImGui.TextDisabled($"{document.Duration:0.000} s");
-        ImGui.SameLine();
         ImGui.BeginDisabled(!document.IsDirty);
-        EditorUi.PrimaryButton("Apply & Save", () => Save(log));
+        if (EditorUi.ToolbarButton("Revert", "Discard unsaved animation metadata changes"))
+            DiscardUnsavedChanges(log);
         ImGui.EndDisabled();
-        ImGui.SameLine();
-        ImGui.TextDisabled($"{document.Events.Count} events  |  {document.Windows.Count} windows");
+
+        EditorUi.ToolbarSeparator();
+        _preview.DrawPlaybackControls();
+
+        if (document.IsDirty)
+        {
+            ImGui.SameLine();
+            EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
+        }
+
+        EditorUi.EndToolbar();
 
         if (!string.IsNullOrWhiteSpace(_error))
             ImGui.TextColored(EditorTheme.Error, _error);
@@ -285,7 +300,6 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         {
             Save(log);
         }
-        ImGui.Separator();
     }
 
     private void DrawScrubber(AnimationTimelineDocument document)
@@ -301,48 +315,54 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
 
     private void DrawTimeline(AnimationTimelineDocument document)
     {
-        ImGui.SeparatorText("TIMELINE");
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.BackgroundRaised);
+        ImGui.BeginChild("##AnimationTimelineRegion", new Vector2(0.0f, 184.0f), ImGuiChildFlags.Borders);
 
-        if (ImGui.Button("+ Event"))
+        ImGui.TextColored(EditorTheme.TextSecondary, "TIMELINE");
+
+        ImGui.SameLine();
+        if (EditorUi.SecondaryButton("+ Event"))
         {
             AnimationEventMarker marker = document.AddEvent(_preview.PlaybackTime);
             _selectedEventId = marker.Id;
             _selectedWindowId = Guid.Empty;
         }
         ImGui.SameLine();
-        if (ImGui.Button("+ Window"))
+        if (EditorUi.SecondaryButton("+ Window"))
         {
             AnimationWindow window = document.AddWindow(_preview.PlaybackTime);
             _selectedWindowId = window.Id;
             _selectedEventId = Guid.Empty;
         }
-        ImGui.SameLine();
-        ImGui.TextDisabled("Drag markers, ranges, or range edges. Click empty space to scrub.");
+        EditorUi.Tooltip("Create an animation window at the current playhead");
 
-        float width = Math.Max(ImGui.GetContentRegionAvail().X, 240.0f);
+        float width = Math.Max(ImGui.GetContentRegionAvail().X, 1.0f);
         const float height = 132.0f;
         Vector2 origin = ImGui.GetCursorScreenPos();
         ImGui.InvisibleButton("##AnimationTimelineCanvas", new Vector2(width, height));
         bool canvasHovered = ImGui.IsItemHovered();
         Vector2 mouse = ImGui.GetMousePos();
         ImDrawListPtr draw = ImGui.GetWindowDrawList();
-        uint background = ImGui.GetColorU32(new Vector4(.075f, .085f, .105f, 1f));
-        uint grid = ImGui.GetColorU32(new Vector4(.28f, .31f, .36f, .75f));
+        uint background = ImGui.GetColorU32(EditorTheme.Background);
+        uint grid = ImGui.GetColorU32(EditorTheme.Border);
         uint text = ImGui.GetColorU32(EditorTheme.TextMuted);
         uint eventColor = ImGui.GetColorU32(EditorTheme.AccentHover);
-        uint windowColor = ImGui.GetColorU32(new Vector4(.95f, .58f, .2f, .68f));
-        uint selectedColor = ImGui.GetColorU32(new Vector4(1f, .9f, .35f, 1f));
-        uint hoverColor = ImGui.GetColorU32(new Vector4(1f, 1f, 1f, .95f));
+        uint windowColor = ImGui.GetColorU32(EditorTheme.Warning with { W = 0.68f });
+        uint selectedColor = ImGui.GetColorU32(EditorTheme.SelectionHover);
+        uint hoverColor = ImGui.GetColorU32(EditorTheme.AccentHover);
         draw.AddRectFilled(origin, origin + new Vector2(width, height), background, 4f);
 
-        float axisLeft = origin.X + 12f;
+        const float trackGutter = 70.0f;
+        float axisLeft = origin.X + trackGutter;
         float axisRight = origin.X + width - 12f;
         float axisWidth = Math.Max(axisRight - axisLeft, 1f);
         float rulerY = origin.Y + 25f;
         float eventY = origin.Y + 62f;
         float windowY = origin.Y + 101f;
-        draw.AddText(origin + new Vector2(8f, 43f), text, "Events");
-        draw.AddText(origin + new Vector2(8f, 81f), text, "Windows");
+        draw.AddLine(new Vector2(axisLeft - 8.0f, origin.Y),
+            new Vector2(axisLeft - 8.0f, origin.Y + height), grid);
+        draw.AddText(origin + new Vector2(8f, 52f), text, "Events");
+        draw.AddText(origin + new Vector2(8f, 91f), text, "Windows");
 
         for (int tick = 0; tick <= 10; tick++)
         {
@@ -370,7 +390,7 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             draw.AddTriangleFilled(new Vector2(x, eventY - 8f), new Vector2(x - 7f, eventY + 4f),
                 new Vector2(x + 7f, eventY + 4f), color);
             if (x + 10f < axisRight)
-                draw.AddText(new Vector2(x + 8f, eventY - 9f), color, marker.Name);
+                draw.AddText(new Vector2(x + 8f, eventY - 9f), color, TimelineLabel(marker.Name, 18));
         }
 
         foreach (AnimationWindow window in document.Windows)
@@ -391,21 +411,39 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             draw.AddLine(new Vector2(right, windowY - 12f), new Vector2(right, windowY + 12f), color, 3f);
             if (right - left > 34f)
                 draw.AddText(new Vector2(left + 5f, windowY - 8f),
-                    ImGui.GetColorU32(new Vector4(.08f, .08f, .08f, 1f)), window.Name);
+                    ImGui.GetColorU32(EditorTheme.Background),
+                    TimelineLabel(window.Name, Math.Max((int)((right - left - 10f) / 7f), 4)));
         }
 
         float playheadX = ToX(_preview.PlaybackTime);
         draw.AddLine(new Vector2(playheadX, rulerY), new Vector2(playheadX, origin.Y + height - 5f),
-            ImGui.GetColorU32(new Vector4(.3f, .85f, 1f, 1f)), 2f);
+            ImGui.GetColorU32(EditorTheme.Accent), 2f);
         draw.AddTriangleFilled(new Vector2(playheadX, rulerY), new Vector2(playheadX - 5f, rulerY - 7f),
-            new Vector2(playheadX + 5f, rulerY - 7f), ImGui.GetColorU32(new Vector4(.3f, .85f, 1f, 1f)));
+            new Vector2(playheadX + 5f, rulerY - 7f), ImGui.GetColorU32(EditorTheme.Accent));
 
         if (canvasHovered)
         {
             float hoverTime = document.Duration * Math.Clamp((mouse.X - axisLeft) / axisWidth, 0f, 1f);
             draw.AddLine(new Vector2(mouse.X, rulerY), new Vector2(mouse.X, origin.Y + height - 5f),
-                ImGui.GetColorU32(new Vector4(1f, 1f, 1f, .16f)));
-            ImGui.SetTooltip($"{hoverTime:0.000} s");
+                ImGui.GetColorU32(EditorTheme.TextMuted with { W = 0.18f }));
+            if (!_dragActive)
+            {
+                if (hoveredKind == TimelineDragKind.Event)
+                {
+                    AnimationEventMarker? hoveredEvent = document.Events.FirstOrDefault(item => item.Id == hoveredId);
+                    if (hoveredEvent != null) ImGui.SetTooltip($"{hoveredEvent.Name}\n{hoveredEvent.Time:0.000} s");
+                }
+                else if (hoveredKind != TimelineDragKind.None)
+                {
+                    AnimationWindow? hoveredWindow = document.Windows.FirstOrDefault(item => item.Id == hoveredId);
+                    if (hoveredWindow != null)
+                        ImGui.SetTooltip($"{hoveredWindow.Name}\n{hoveredWindow.StartTime:0.000}–{hoveredWindow.EndTime:0.000} s");
+                }
+                else
+                {
+                    ImGui.SetTooltip($"{hoverTime:0.000} s");
+                }
+            }
             if (hoveredKind is TimelineDragKind.WindowStart or TimelineDragKind.WindowEnd)
                 ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEW);
             else if (hoveredKind != TimelineDragKind.None)
@@ -483,6 +521,9 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
             _dragItemId = Guid.Empty;
             _dragActive = false;
         }
+
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
     }
 
     public bool DrawContextInspector()
@@ -496,71 +537,84 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
 
         if (marker != null)
         {
-            ImGui.SeparatorText("ANIMATION EVENT");
-            string name = marker.Name;
-            string payload = marker.Payload;
-            float time = marker.Time;
-            bool changed = ImGui.InputText("Name", ref name, 128);
-            changed |= ImGui.DragFloat("Time", ref time, .005f, 0f, document.Duration, "%.3f s");
-            changed |= ImGui.InputText("Payload", ref payload, 256);
-            if (changed)
+            if (EditorUi.SectionHeader("Animation Event"))
             {
-                marker.Name = name;
-                marker.Time = document.ClampTime(time);
-                marker.Payload = payload;
-                document.MarkDirty();
-            }
-            ImGui.Spacing();
-            if (ImGui.Button("Delete Event"))
-            {
-                document.DeleteEvent(marker.Id);
-                _selectedEventId = Guid.Empty;
+                string name = marker.Name;
+                string payload = marker.Payload;
+                float time = marker.Time;
+                bool changed = false;
+                EditorUi.PropertyRow("Name", () => changed |= ImGui.InputText("##AnimationEventName", ref name, 128));
+                EditorUi.PropertyRow("Time", () => changed |= ImGui.DragFloat("##AnimationEventTime", ref time,
+                    .005f, 0f, document.Duration, "%.3f s"));
+                EditorUi.PropertyRow("Payload", () => changed |= ImGui.InputText("##AnimationEventPayload", ref payload, 256));
+                if (changed)
+                {
+                    marker.Name = name;
+                    marker.Time = document.ClampTime(time);
+                    marker.Payload = payload;
+                    document.MarkDirty();
+                }
+
+                ImGui.Spacing();
+                if (EditorUi.DestructiveButton("Delete Event"))
+                {
+                    document.DeleteEvent(marker.Id);
+                    _selectedEventId = Guid.Empty;
+                }
             }
             return true;
         }
 
         if (window != null)
         {
-            ImGui.SeparatorText("ANIMATION WINDOW");
-            string name = window.Name;
-            string payload = window.Payload;
-            float start = window.StartTime;
-            float end = window.EndTime;
-            bool changed = ImGui.InputText("Name", ref name, 128);
-            changed |= ImGui.DragFloat("Start", ref start, .005f, 0f, document.Duration, "%.3f s");
-            changed |= ImGui.DragFloat("End", ref end, .005f, 0f, document.Duration, "%.3f s");
-            EditorUi.LabelValue("Duration", $"{Math.Max(end - start, 0f):0.000} s");
-            changed |= ImGui.InputText("Payload", ref payload, 256);
-            if (changed)
+            if (EditorUi.SectionHeader("Animation Window"))
             {
-                window.Name = name;
-                window.StartTime = start;
-                window.EndTime = end;
-                window.Payload = payload;
-                document.MarkDirty();
-            }
-            ImGui.Spacing();
-            if (ImGui.Button("Delete Window"))
-            {
-                document.DeleteWindow(window.Id);
-                _selectedWindowId = Guid.Empty;
+                string name = window.Name;
+                string payload = window.Payload;
+                float start = window.StartTime;
+                float end = window.EndTime;
+                bool changed = false;
+                EditorUi.PropertyRow("Name", () => changed |= ImGui.InputText("##AnimationWindowName", ref name, 128));
+                EditorUi.PropertyRow("Start", () => changed |= ImGui.DragFloat("##AnimationWindowStart", ref start,
+                    .005f, 0f, document.Duration, "%.3f s"));
+                EditorUi.PropertyRow("End", () => changed |= ImGui.DragFloat("##AnimationWindowEnd", ref end,
+                    .005f, 0f, document.Duration, "%.3f s"));
+                EditorUi.LabelValue("Duration", $"{Math.Max(end - start, 0f):0.000} s");
+                EditorUi.PropertyRow("Payload", () => changed |= ImGui.InputText("##AnimationWindowPayload", ref payload, 256));
+                if (changed)
+                {
+                    window.Name = name;
+                    window.StartTime = start;
+                    window.EndTime = end;
+                    window.Payload = payload;
+                    document.MarkDirty();
+                }
+
+                ImGui.Spacing();
+                if (EditorUi.DestructiveButton("Delete Window"))
+                {
+                    document.DeleteWindow(window.Id);
+                    _selectedWindowId = Guid.Empty;
+                }
             }
             return true;
         }
 
-        ImGui.SeparatorText("ANIMATION CLIP");
-        EditorUi.LabelValue("Name", document.AnimationName);
-        EditorUi.LabelValue("Source Model", Path.GetFileName(_resolvedAsset?.ProjectPath ?? string.Empty));
-        EditorUi.LabelValue("Duration", $"{document.Duration:0.000} s");
-        EditorUi.LabelValue("Channels", _resolvedAnimation.Channels.Count.ToString());
-        int keyframes = _resolvedAnimation.Channels.Sum(channel =>
-            (channel.Translation?.Keys.Count ?? 0) +
-            (channel.Rotation?.Keys.Count ?? 0) +
-            (channel.Scale?.Keys.Count ?? 0));
-        EditorUi.LabelValue("Keyframes", keyframes.ToString());
-        EditorUi.LabelValue("Skeleton Bones", (_resolvedModel.Skeleton?.Bones.Count ?? 0).ToString());
+        if (EditorUi.SectionHeader("Animation Clip"))
+        {
+            EditorUi.LabelValue("Name", document.AnimationName);
+            EditorUi.LabelValue("Source Model", Path.GetFileName(_resolvedAsset?.ProjectPath ?? string.Empty));
+            EditorUi.LabelValue("Duration", $"{document.Duration:0.000} s");
+            EditorUi.LabelValue("Channels", _resolvedAnimation.Channels.Count.ToString());
+            int keyframes = _resolvedAnimation.Channels.Sum(channel =>
+                (channel.Translation?.Keys.Count ?? 0) +
+                (channel.Rotation?.Keys.Count ?? 0) +
+                (channel.Scale?.Keys.Count ?? 0));
+            EditorUi.LabelValue("Keyframes", keyframes.ToString());
+            EditorUi.LabelValue("Skeleton Bones", (_resolvedModel.Skeleton?.Bones.Count ?? 0).ToString());
+        }
 
-        if (ImGui.CollapsingHeader("Advanced"))
+        if (EditorUi.SectionHeader("Advanced", defaultOpen: false))
         {
             EditorUi.LabelValue("Stable Key", document.AnimationKey);
             EditorUi.LabelValue("Model GUID", document.ModelGuid.ToString());
@@ -668,22 +722,23 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         if (!ImGui.BeginPopupModal("Unsaved Animation Timeline", ref open,
                 ImGuiWindowFlags.AlwaysAutoResize)) return;
 
-        ImGui.Text("The animation timeline has unsaved changes.");
-        ImGui.Text("Save before continuing?");
-        if (ImGui.Button("Save") && Save(log))
+        ImGui.TextColored(EditorTheme.Text, "The animation timeline has unsaved changes.");
+        ImGui.TextColored(EditorTheme.TextMuted, "Save before continuing?");
+        ImGui.Spacing();
+        if (EditorUi.PrimaryButton("Save") && Save(log))
         {
             CompletePendingAction(log);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Discard"))
+        if (EditorUi.DestructiveButton("Discard"))
         {
             DiscardUnsavedChanges(log);
             CompletePendingAction(log);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Cancel"))
+        if (EditorUi.SecondaryButton("Cancel"))
         {
             _pendingOpen = null;
             _pendingClose = false;
@@ -717,6 +772,12 @@ internal sealed class AnimationTimelineWorkspacePanel : IDisposable
         Guid ModelGuid,
         string ProjectPath,
         string AnimationKey);
+    private static string TimelineLabel(string value, int maximumCharacters)
+    {
+        maximumCharacters = Math.Max(maximumCharacters, 4);
+        if (string.IsNullOrEmpty(value) || value.Length <= maximumCharacters) return value;
+        return value[..(maximumCharacters - 3)] + "...";
+    }
     private enum TimelineDragKind
     {
         None,

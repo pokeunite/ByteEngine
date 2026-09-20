@@ -62,6 +62,11 @@ internal sealed class AnimationClipPreview : IDisposable
     private string _clipKey =
         string.Empty;
 
+    private string _animationName =
+        string.Empty;
+
+    private float _animationDuration;
+
     private string? _error;
 
     private bool _paused;
@@ -106,6 +111,38 @@ internal sealed class AnimationClipPreview : IDisposable
         return true;
     }
 
+    public void DrawPlaybackControls()
+    {
+        bool available = _renderer != null;
+        ImGui.BeginDisabled(!available);
+        if (EditorUi.ToolbarButton(_paused ? "Play" : "Pause", _paused ? "Resume preview" : "Pause preview"))
+        {
+            _paused = !_paused;
+            if (_paused)
+                _renderer?.Pause();
+            else
+            {
+                _lastPreviewTickSeconds = _previewClock.Elapsed.TotalSeconds;
+                _renderer?.Resume();
+            }
+            _forceRender = true;
+        }
+
+        ImGui.SameLine();
+        if (EditorUi.ToolbarButton("Restart", "Restart from the beginning") && _renderer != null)
+        {
+            _renderer.Play(_animationName, true, 0.0f);
+            if (_paused) _renderer.Pause();
+            _lastPreviewTickSeconds = _previewClock.Elapsed.TotalSeconds;
+            _forceRender = true;
+        }
+        ImGui.EndDisabled();
+
+        ImGui.SameLine();
+        float duration = Math.Max(_renderer?.Duration ?? 0.0f, _animationDuration);
+        ImGui.TextColored(EditorTheme.TextSecondary,
+            $"{(_renderer?.PlaybackTime ?? 0.0f):0.000} / {duration:0.000} s");
+    }
     public void Draw(
         EditorProjectContext project,
         AssetRecord asset,
@@ -146,63 +183,7 @@ internal sealed class AnimationClipPreview : IDisposable
         }
 
         double now =
-            _previewClock.Elapsed
-                .TotalSeconds;
-
-        if (ImGui.SmallButton(
-                _paused
-                    ? "Play"
-                    : "Pause"))
-        {
-            _paused =
-                !_paused;
-
-            if (_paused)
-            {
-                _renderer.Pause();
-            }
-            else
-            {
-                /*
-                 * Resume from the current pose without counting time spent
-                 * paused as animation time.
-                 */
-                _lastPreviewTickSeconds =
-                    now;
-
-                _renderer.Resume();
-            }
-
-            _forceRender =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.SmallButton(
-                "Restart"))
-        {
-            _renderer.Play(
-                animation.Name,
-                true,
-                0.0f);
-
-            if (_paused)
-            {
-                _renderer.Pause();
-            }
-
-            _lastPreviewTickSeconds =
-                now;
-
-            _forceRender =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            $"{_renderer.PlaybackTime:0.00} / {Math.Max(_renderer.Duration, animation.Duration):0.00} s");
+            _previewClock.Elapsed.TotalSeconds;
 
         bool previewTickDue =
             _forceRender ||
@@ -289,33 +270,11 @@ internal sealed class AnimationClipPreview : IDisposable
                 now;
         }
 
-        float duration =
-            Math.Max(
-                _renderer.Duration,
-                animation.Duration);
+        EditorUi.BeginToolbar("##AnimationPreviewToolbar");
 
-        float progress =
-            duration >
-                0.00001f
-                ? Math.Clamp(
-                    _renderer.PlaybackTime /
-                    duration,
-                    0.0f,
-                    1.0f)
-                : 0.0f;
-
-        ImGui.ProgressBar(
-            progress,
-            new Vector2(
-                -1.0f,
-                5.0f),
-            string.Empty);
-
-        ImGui.TextDisabled(
-            "Preview 30 FPS - lightweight lighting");
-
-        if (ImGui.SmallButton(
-                "Reset View") &&
+        if (EditorUi.ToolbarButton(
+                "Reset View",
+                "Frame the current pose") &&
             _renderer !=
                 null)
         {
@@ -328,8 +287,10 @@ internal sealed class AnimationClipPreview : IDisposable
 
         ImGui.SameLine();
 
-        ImGui.TextDisabled(
-            "LMB Orbit  |  MMB Pan  |  Wheel Zoom  |  F Frame");
+        ImGui.TextColored(EditorTheme.TextMuted,
+            "LMB Orbit   MMB Pan   Wheel Zoom   F Frame");
+
+        EditorUi.EndToolbar();
 
         Vector2 availableRegion =
             ImGui.GetContentRegionAvail();
@@ -390,6 +351,14 @@ internal sealed class AnimationClipPreview : IDisposable
                 horizontalPadding);
         }
 
+        Vector2 imageMinimum = ImGui.GetCursorScreenPos();
+        Vector2 imageMaximum = imageMinimum + new Vector2(previewWidth, previewHeight);
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(imageMinimum, imageMaximum,
+            ImGui.GetColorU32(EditorTheme.BackgroundRaised), EditorTheme.SmallCornerRadius);
+        drawList.AddRect(imageMinimum, imageMaximum, ImGui.GetColorU32(EditorTheme.Border),
+            EditorTheme.SmallCornerRadius);
+
         if (_hasRenderedFrame)
         {
             ImGui.Image(
@@ -424,6 +393,12 @@ internal sealed class AnimationClipPreview : IDisposable
 
         _clipKey =
             string.Empty;
+
+        _animationName =
+            string.Empty;
+
+        _animationDuration =
+            0.0f;
 
         _error =
             null;
@@ -481,6 +456,12 @@ internal sealed class AnimationClipPreview : IDisposable
 
         _clipKey =
             animation.Key;
+
+        _animationName =
+            animation.Name;
+
+        _animationDuration =
+            animation.Duration;
 
         _paused =
             false;
