@@ -222,38 +222,18 @@ internal sealed class HumanoidRigConfiguratorPanel
             return;
         }
 
-        ImGui.BeginDisabled(
-            !_dirty);
-
-        if (ImGui.MenuItem(
-                "Apply",
-                "Ctrl+S"))
+        if (ImGui.BeginMenu("File"))
         {
-            Apply(
-                log);
-        }
+            if (ImGui.MenuItem("Close"))
+            {
+                _visible = false;
+            }
 
-        ImGui.EndDisabled();
-
-        if (ImGui.MenuItem(
-                "Revert"))
-        {
-            Revert(
-                log);
-        }
-
-        ImGui.Separator();
-
-        if (ImGui.MenuItem(
-                "Close"))
-        {
-            _visible =
-                false;
+            ImGui.EndMenu();
         }
 
         ImGui.EndMenuBar();
     }
-
     private void DrawContent(
         EditorLog log)
     {
@@ -264,132 +244,64 @@ internal sealed class HumanoidRigConfiguratorPanel
             return;
         }
 
-        ImGui.TextColored(
-            EditorTheme.AccentHover,
-            "HUMANOID RIG CONFIGURATION");
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            _dirty
-                ? "Unsaved mapping changes"
-                : "Applied");
-
-        ImGui.TextDisabled(
-            _asset.ProjectPath);
-
-        ImGui.Spacing();
-
-        ImGui.BeginDisabled(
-            !_dirty);
-
-        if (ImGui.Button(
-                "Apply"))
+        if (EditorUi.BeginToolbar("##HumanoidRigToolbar"))
         {
-            Apply(
-                log);
-        }
-
-        ImGui.EndDisabled();
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Revert"))
-        {
-            Revert(
-                log);
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Auto Map"))
-        {
-            if (_model.Skeleton !=
-                null)
+            ImGui.BeginDisabled(!_dirty);
+            if (_dirty)
             {
-                _mapping =
-                    HumanoidRigMapper.AutoMap(
-                        _model.Skeleton);
-
-                _rigType =
-                    AnimationRigType.Humanoid;
-
-                SelectFirstMissingRequired();
-
-                _dirty =
-                    true;
+                if (EditorUi.PrimaryButton("Apply")) Apply(log);
             }
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Clear Mapping"))
-        {
-            _mapping =
-                new HumanoidBoneMap();
-
-            _dirty =
-                true;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Frame"))
-        {
-            FramePreview();
-        }
-
-        if (ImGui.IsWindowFocused(
-                ImGuiFocusedFlags.RootAndChildWindows) &&
-            ImGui.GetIO().KeyCtrl &&
-            ImGui.IsKeyPressed(
-                ImGuiKey.S))
-        {
-            Apply(
-                log);
-        }
-
-        int rigType =
-            (int)_rigType;
-
-        string[] rigNames =
-            Enum.GetNames<AnimationRigType>();
-
-        ImGui.SetNextItemWidth(
-            180.0f);
-
-        if (ImGui.Combo(
-                "Rig Type",
-                ref rigType,
-                rigNames,
-                rigNames.Length))
-        {
-            _rigType =
-                (AnimationRigType)rigType;
-
-            if (_rigType ==
-                    AnimationRigType.Humanoid &&
-                _mapping.MappedCount ==
-                    0 &&
-                _model.Skeleton !=
-                    null)
+            else
             {
-                _mapping =
-                    HumanoidRigMapper.AutoMap(
-                        _model.Skeleton);
-
-                SelectFirstMissingRequired();
+                EditorUi.ToolbarButton("Apply", "No unsaved mapping changes", enabled: false);
             }
-
-            _dirty =
-                true;
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("Revert", "Reload the applied mapping")) Revert(log);
+            EditorUi.ToolbarSeparator();
+            if (EditorUi.ToolbarButton("Auto Map", "Map recognized skeleton bone names"))
+            {
+                if (_model.Skeleton != null)
+                {
+                    _mapping = HumanoidRigMapper.AutoMap(_model.Skeleton);
+                    _rigType = AnimationRigType.Humanoid;
+                    SelectFirstMissingRequired();
+                    _dirty = true;
+                }
+            }
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("Clear Mapping", "Clear every Humanoid slot"))
+            {
+                _mapping = new HumanoidBoneMap();
+                _dirty = true;
+            }
+            EditorUi.ToolbarSeparator();
+            if (EditorUi.ToolbarButton("Frame", "Frame the rig preview (F)")) FramePreview();
+            EditorUi.ToolbarSeparator();
+            ImGui.SetNextItemWidth(145.0f);
+            int rigType = (int)_rigType;
+            string[] rigNames = Enum.GetNames<AnimationRigType>();
+            if (ImGui.Combo("##RigType", ref rigType, rigNames, rigNames.Length))
+            {
+                _rigType = (AnimationRigType)rigType;
+                if (_rigType == AnimationRigType.Humanoid && _mapping.MappedCount == 0 && _model.Skeleton != null)
+                {
+                    _mapping = HumanoidRigMapper.AutoMap(_model.Skeleton);
+                    SelectFirstMissingRequired();
+                }
+                _dirty = true;
+            }
+            EditorUi.Tooltip("Rig Type");
+            if (_dirty)
+            {
+                ImGui.SameLine(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - 105.0f));
+                EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
+            }
+            EditorUi.EndToolbar();
         }
 
-        ImGui.Separator();
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.S)) Apply(log);
 
         float leftWidth =
             Math.Clamp(
@@ -447,69 +359,25 @@ internal sealed class HumanoidRigConfiguratorPanel
             diagnostics.Errors.Count ==
                 0;
 
-        if (authoringReady)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    0.35f,
-                    0.86f,
-                    0.48f,
-                    1.0f),
-                "Humanoid Ready");
-        }
-        else
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.58f,
-                    0.24f,
-                    1.0f),
-                "Humanoid Needs Attention");
-        }
+        EditorUi.SectionHeader("Humanoid Status");
+        EditorUi.StatusBadge(authoringReady ? "READY" : "NEEDS ATTENTION",
+            authoringReady ? EditorStatusKind.Success : EditorStatusKind.Warning);
+        EditorUi.LabelValue("Required Bones", $"{validation.RequiredMappedCount} / {HumanoidBoneCatalog.Required.Count}");
+        EditorUi.LabelValue("Total Mapped", validation.MappedBoneCount.ToString());
+        EditorUi.LabelValue("Reference Pose", diagnostics.ApproximatelyTPose ? "Suitable" : "Not fully classified");
 
-        ImGui.TextDisabled(
-            $"{validation.RequiredMappedCount}/{HumanoidBoneCatalog.Required.Count} required | {validation.MappedBoneCount} total mapped");
-
-        if (diagnostics.Errors.Count >
-            0)
+        foreach (string error in diagnostics.Errors)
         {
-            foreach (string error
-                     in diagnostics.Errors)
-            {
-                ImGui.TextColored(
-                    new Vector4(
-                        1.0f,
-                        0.38f,
-                        0.30f,
-                        1.0f),
-                    error);
-            }
+            EditorUi.StatusBadge("ERROR", EditorStatusKind.Error);
+            ImGui.SameLine();
+            ImGui.TextWrapped(error);
         }
-
-        if (diagnostics.Warnings.Count >
-            0)
+        foreach (string warning in diagnostics.Warnings)
         {
-            foreach (string warning
-                     in diagnostics.Warnings)
-            {
-                ImGui.TextColored(
-                    new Vector4(
-                        1.0f,
-                        0.67f,
-                        0.25f,
-                        1.0f),
-                    warning);
-            }
+            EditorUi.StatusBadge("WARNING", EditorStatusKind.Warning);
+            ImGui.SameLine();
+            ImGui.TextWrapped(warning);
         }
-        else if (validation.IsReady)
-        {
-            ImGui.TextDisabled(
-                diagnostics.ApproximatelyTPose
-                    ? "Reference pose looks suitable for Humanoid retargeting."
-                    : "Reference pose could not be fully classified.");
-        }
-
         ImGui.SeparatorText(
             "BODY MAP");
 
@@ -560,6 +428,10 @@ internal sealed class HumanoidRigConfiguratorPanel
                     1.0f),
                 $"{selectedName}  ->  {current}");
         }
+
+        EditorUi.LabelValue("Humanoid Bone", selectedName);
+        EditorUi.LabelValue("Source Bone", current ?? "Not mapped");
+        EditorUi.LabelValue("Required", HumanoidBoneCatalog.IsRequired(_selectedSemantic) ? "Yes" : "No");
 
         DrawSearchableSourceBonePicker();
 
@@ -1172,38 +1044,21 @@ internal sealed class HumanoidRigConfiguratorPanel
             return;
         }
 
-        ImGui.TextDisabled(
-            "Bind/reference pose  |  LMB orbit  |  Wheel zoom  |  F frame");
-
-        ImGui.TextDisabled(
-            "Hover a joint to see its bone name. Select a Humanoid slot on the left, then click a joint to assign it.");
-
-        ImGui.Checkbox(
-            "Mesh",
-            ref _showMesh);
-
-        ImGui.SameLine();
-
-        ImGui.Checkbox(
-            "Skeleton",
-            ref _showSkeleton);
-
-        ImGui.SameLine();
-
-        ImGui.BeginDisabled(
-            !_showSkeleton);
-
-        ImGui.Checkbox(
-            "Mapped Only",
-            ref _mappedBonesOnly);
-
-        ImGui.EndDisabled();
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            "Blue = skeleton  Green = mapped  Orange = selected  Yellow = hovered");
-
+        if (EditorUi.BeginToolbar("##HumanoidPreviewToolbar"))
+        {
+            if (EditorUi.ToolbarToggle("Mesh", _showMesh, "Show mesh wireframe")) _showMesh = !_showMesh;
+            ImGui.SameLine();
+            if (EditorUi.ToolbarToggle("Skeleton", _showSkeleton, "Show skeleton")) _showSkeleton = !_showSkeleton;
+            ImGui.SameLine();
+            ImGui.BeginDisabled(!_showSkeleton);
+            if (EditorUi.ToolbarToggle("Mapped Only", _mappedBonesOnly, "Only show mapped skeleton bones"))
+                _mappedBonesOnly = !_mappedBonesOnly;
+            ImGui.EndDisabled();
+            EditorUi.ToolbarSeparator();
+            if (EditorUi.ToolbarButton("Frame", "Frame the preview (F)")) FramePreview();
+            EditorUi.EndToolbar();
+        }
+        EditorUi.MutedText("LMB orbit  •  Wheel zoom  •  Hover for bone names  •  Click a joint to assign");
         Vector2 available =
             ImGui.GetContentRegionAvail();
 

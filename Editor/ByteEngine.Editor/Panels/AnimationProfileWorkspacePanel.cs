@@ -196,8 +196,7 @@ internal sealed class AnimationProfileWorkspacePanel
             DrawMenuBar(
                 log);
 
-            DrawHeader(
-                log);
+            DrawCommandBar(log);
 
             if (_profile ==
                 null)
@@ -244,45 +243,25 @@ internal sealed class AnimationProfileWorkspacePanel
             return;
         }
 
-        ImGui.BeginDisabled(
-            !_dirty ||
-            _profile ==
-                null);
-
-        if (ImGui.MenuItem(
-                "Apply & Save",
-                "Ctrl+S"))
+        if (ImGui.BeginMenu("File"))
         {
-            Save(
-                log);
-        }
+            if (ImGui.MenuItem("Close")) RequestClose();
 
-        ImGui.EndDisabled();
+            if (_registeredDocumentId.HasValue)
+            {
+                ImGui.Separator();
+                if (ImGui.MenuItem("Close Others"))
+                    _documents.RequestCloseOthers(_registeredDocumentId.Value);
+                if (ImGui.MenuItem("Close All"))
+                    _documents.RequestCloseAll();
+            }
 
-        if (ImGui.MenuItem(
-                "Revert"))
-        {
-            Reload(
-                log);
-        }
-
-        ImGui.Separator();
-
-        if (ImGui.MenuItem("Close"))
-            RequestClose();
-
-        if (_registeredDocumentId.HasValue)
-        {
-            if (ImGui.MenuItem("Close Others"))
-                _documents.RequestCloseOthers(_registeredDocumentId.Value);
-            if (ImGui.MenuItem("Close All"))
-                _documents.RequestCloseAll();
+            ImGui.EndMenu();
         }
 
         ImGui.EndMenuBar();
     }
-
-    private void DrawHeader(
+    private void DrawCommandBar(
         EditorLog log)
     {
         if (_asset ==
@@ -291,61 +270,34 @@ internal sealed class AnimationProfileWorkspacePanel
             return;
         }
 
-        ImGui.TextColored(
-            EditorTheme.AccentHover,
-            "ANIMATION PROFILE");
-
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            _dirty
-                ? "Unsaved changes"
-                : "Saved");
-
-        ImGui.TextDisabled(
-            _asset.ProjectPath);
+        if (EditorUi.BeginToolbar("##AnimationProfileToolbar"))
+        {
+            ImGui.BeginDisabled(!_dirty || _profile == null);
+            if (_dirty)
+            {
+                if (EditorUi.PrimaryButton("Save")) Save(log);
+            }
+            else
+            {
+                EditorUi.ToolbarButton("Save", "No unsaved Profile changes", enabled: false);
+            }
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("Revert", "Reload the last saved Profile")) Reload(log);
+            if (_dirty)
+            {
+                ImGui.SameLine(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - 105.0f));
+                EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
+            }
+            EditorUi.EndToolbar();
+        }
 
         if (_dirty)
         {
-            ImGui.Spacing();
-
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.68f,
-                    0.25f,
-                    1.0f),
-                "UNSAVED CHANGES - NOT ACTIVE YET");
-
-            ImGui.TextWrapped(
-                "Press Apply & Save before testing the character. The saved profile is the runtime source of truth.");
+            EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
+            ImGui.SameLine();
+            EditorUi.MutedText("Runtime will continue using the last saved profile.");
         }
-
-        ImGui.Spacing();
-
-        ImGui.BeginDisabled(
-            !_dirty ||
-            _profile ==
-                null);
-
-        if (ImGui.Button(
-                "Apply & Save Changes"))
-        {
-            Save(
-                log);
-        }
-
-        ImGui.EndDisabled();
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Revert"))
-        {
-            Reload(
-                log);
-        }
-
         if (ImGui.IsWindowFocused(
                 ImGuiFocusedFlags.RootAndChildWindows) &&
             ImGui.GetIO().KeyCtrl &&
@@ -378,7 +330,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "RIG"))
+                "Rig"))
         {
             _dirty |=
                 DrawRig();
@@ -387,7 +339,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "LOCOMOTION"))
+                "Locomotion"))
         {
             _dirty |=
                 DrawLocomotion();
@@ -396,7 +348,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "ACTIONS"))
+                "Actions"))
         {
             _dirty |=
                 DrawActions();
@@ -405,7 +357,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "LAYERS"))
+                "Layers"))
         {
             DrawLayers();
 
@@ -413,7 +365,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "PROCEDURAL"))
+                "Procedural"))
         {
             _dirty |=
                 DrawProcedural();
@@ -422,7 +374,7 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
-                "DEBUG"))
+                "Debug"))
         {
             DrawDebug();
 
@@ -1830,21 +1782,23 @@ internal sealed class AnimationProfileWorkspacePanel
         bool open = true;
         if (!ImGui.BeginPopupModal("Unsaved Animation Profile", ref open,
                 ImGuiWindowFlags.AlwaysAutoResize)) return;
-        ImGui.Text("The animation profile has unsaved changes.");
-        if (ImGui.Button("Save"))
+        EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
+        ImGui.SameLine();
+        EditorUi.MutedText("Save before continuing?");
+        if (EditorUi.PrimaryButton("Save"))
         {
             Save(log);
             if (!_dirty) { CompletePendingAction(log); ImGui.CloseCurrentPopup(); }
         }
         ImGui.SameLine();
-        if (ImGui.Button("Discard"))
+        if (EditorUi.DestructiveButton("Discard"))
         {
             Reload(log);
             CompletePendingAction(log);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Cancel"))
+        if (EditorUi.SecondaryButton("Cancel"))
         {
             _pendingOpenAsset = null;
             _pendingOpenProject = null;

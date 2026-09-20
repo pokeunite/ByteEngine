@@ -313,35 +313,23 @@ internal static class HumanoidRetargetBakeWindow
         float available =
             ImGui.GetContentRegionAvail().X;
 
-        float leftWidth =
-            Math.Clamp(
-                available *
-                0.38f,
-                350.0f,
-                430.0f);
+        bool stacked = available < 760.0f;
+        float leftWidth = stacked
+            ? available
+            : Math.Clamp(available * 0.38f, 320.0f, 430.0f);
 
-        ImGui.BeginChild(
-            "##RetargetControls",
-            new Vector2(
-                leftWidth,
-                0.0f),
+        ImGui.BeginChild("##RetargetControls",
+            new Vector2(leftWidth, stacked ? Math.Max(ImGui.GetContentRegionAvail().Y * 0.52f, 330.0f) : 0.0f),
             ImGuiChildFlags.Borders);
-
         DrawControls();
-
         ImGui.EndChild();
 
-        ImGui.SameLine();
+        if (!stacked) ImGui.SameLine();
+        else ImGui.Spacing();
 
-        ImGui.BeginChild(
-            "##RetargetPreview",
-            Vector2.Zero,
-            ImGuiChildFlags.Borders);
-
+        ImGui.BeginChild("##RetargetPreview", Vector2.Zero, ImGuiChildFlags.Borders);
         DrawPreview();
-
         ImGui.EndChild();
-
         ImGui.End();
 
         if (!keepOpen)
@@ -358,12 +346,9 @@ internal static class HumanoidRetargetBakeWindow
             return;
         }
 
-        ImGui.TextColored(
-            EditorTheme.AccentHover,
-            "RETARGET & BAKE");
-
-        ImGui.TextWrapped(
-            "Preview is temporary. The target model is only changed after you explicitly bake the result.");
+        EditorUi.StatusBadge("TEMPORARY", EditorStatusKind.Neutral);
+        ImGui.SameLine();
+        EditorUi.MutedText("Nothing is written until Bake To Character.");
 
         ImGui.SeparatorText(
             "TARGET OWNER");
@@ -440,11 +425,7 @@ internal static class HumanoidRetargetBakeWindow
         ImGui.BeginDisabled(
             !canBuild);
 
-        if (ImGui.Button(
-                "Build / Refresh Preview",
-                new Vector2(
-                    -1.0f,
-                    34.0f)))
+        if (EditorUi.SecondaryButton("Build Preview", size: new Vector2(-1.0f, 34.0f)))
         {
             BuildPreview();
         }
@@ -454,18 +435,11 @@ internal static class HumanoidRetargetBakeWindow
         if (_previewAnimation ==
             null)
         {
-            ImGui.TextDisabled(
-                "No temporary retarget result has been built yet.");
+            EditorUi.EmptyState("No preview built", "Choose a source animation, then Build Preview.");
         }
         else
         {
-            ImGui.TextColored(
-                new Vector4(
-                    0.35f,
-                    0.86f,
-                    0.48f,
-                    1.0f),
-                "Technical retarget succeeded");
+            EditorUi.StatusBadge("PREVIEW READY", EditorStatusKind.Success);
 
             ImGui.TextDisabled(
                 "Visual approval is still required before baking.");
@@ -474,19 +448,10 @@ internal static class HumanoidRetargetBakeWindow
         if (!string.IsNullOrWhiteSpace(
                 _status))
         {
-            ImGui.TextColored(
-                _statusIsError
-                    ? new Vector4(
-                        1.0f,
-                        0.38f,
-                        0.30f,
-                        1.0f)
-                    : new Vector4(
-                        0.35f,
-                        0.86f,
-                        0.48f,
-                        1.0f),
-                _status);
+            EditorUi.StatusBadge(_statusIsError ? "ERROR" : "SUCCESS",
+                _statusIsError ? EditorStatusKind.Error : EditorStatusKind.Success);
+            ImGui.SameLine();
+            ImGui.TextWrapped(_status);
         }
 
         ImGui.SeparatorText(
@@ -546,11 +511,7 @@ internal static class HumanoidRetargetBakeWindow
         ImGui.BeginDisabled(
             !canBake);
 
-        if (ImGui.Button(
-                "Bake To Character",
-                new Vector2(
-                    -1.0f,
-                    38.0f)))
+        if (EditorUi.PrimaryButton("Bake To Character", size: new Vector2(-1.0f, 38.0f)))
         {
             Bake();
         }
@@ -569,11 +530,7 @@ internal static class HumanoidRetargetBakeWindow
 
         ImGui.Spacing();
 
-        if (ImGui.Button(
-                "Close",
-                new Vector2(
-                    -1.0f,
-                    30.0f)))
+        if (EditorUi.SecondaryButton("Close"))
         {
             Close();
         }
@@ -1301,47 +1258,26 @@ internal static class HumanoidRetargetBakeWindow
             return;
         }
 
-        bool playing =
-            _playing;
-
-        if (ImGui.Button(
-                playing
-                    ? "Pause"
-                    : "Play"))
+        if (EditorUi.BeginToolbar("##RetargetPreviewToolbar"))
         {
-            _playing =
-                !_playing;
+            if (EditorUi.ToolbarButton(_playing ? "Pause" : "Play", "Play or pause the temporary preview"))
+                _playing = !_playing;
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("Restart", "Restart preview playback"))
+            {
+                _previewTime = 0.0f;
+                _lastSampledPreviewTime = float.NaN;
+            }
+            ImGui.SameLine();
+            if (EditorUi.ToolbarToggle("Loop", _loop, "Loop preview playback")) _loop = !_loop;
+            EditorUi.ToolbarSeparator();
+            ImGui.SetNextItemWidth(115.0f);
+            ImGui.DragFloat("##PreviewSpeed", ref _playbackSpeed, 0.02f, 0.05f, 3.0f, "%.2fx");
+            EditorUi.Tooltip("Preview playback speed");
+            EditorUi.ToolbarSeparator();
+            if (EditorUi.ToolbarButton("Frame", "Frame the preview")) FramePreview();
+            EditorUi.EndToolbar();
         }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Restart"))
-        {
-            _previewTime =
-                0.0f;
-
-            _lastSampledPreviewTime =
-                float.NaN;
-        }
-
-        ImGui.SameLine();
-
-        ImGui.Checkbox(
-            "Loop",
-            ref _loop);
-
-        ImGui.SetNextItemWidth(
-            150.0f);
-
-        ImGui.DragFloat(
-            "Speed",
-            ref _playbackSpeed,
-            0.02f,
-            0.05f,
-            3.0f,
-            "%.2fx");
-
         float duration =
             Math.Max(
                 _previewAnimation.Duration,
