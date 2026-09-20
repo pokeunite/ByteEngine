@@ -75,6 +75,8 @@ internal sealed class ByteGraphCanvas
                 available.Y,
                 1.0f);
 
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.Background);
+
         bool visible =
             ImGui.BeginChild(
                 id,
@@ -82,6 +84,8 @@ internal sealed class ByteGraphCanvas
                 ImGuiChildFlags.Borders,
                 ImGuiWindowFlags.NoScrollbar |
                 ImGuiWindowFlags.NoScrollWithMouse);
+
+        ImGui.PopStyleColor();
 
         _origin =
             ImGui.GetCursorScreenPos();
@@ -415,16 +419,12 @@ internal sealed class ByteGraphCanvas
         Vector4 color,
         float radius = 6.0f)
     {
-        ImGui.GetWindowDrawList()
-            .AddCircleFilled(
-                ToScreen(
-                    graphPosition),
-                Math.Max(
-                    radius *
-                    Zoom,
-                    3.0f),
-                ImGui.GetColorU32(
-                    color));
+        Vector2 center = ToScreen(graphPosition);
+        float screenRadius = Math.Max(radius * Zoom, 3.0f);
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.AddCircleFilled(center, screenRadius + Math.Max(1.5f * Zoom, 1.0f),
+            ImGui.GetColorU32(EditorTheme.Border));
+        drawList.AddCircleFilled(center, screenRadius, ImGui.GetColorU32(color));
     }
 
     public void DrawSelectionRectangle(
@@ -464,21 +464,13 @@ internal sealed class ByteGraphCanvas
             minimum,
             maximum,
             ImGui.GetColorU32(
-                new Vector4(
-                    0.20f,
-                    0.52f,
-                    0.92f,
-                    0.12f)));
+                EditorTheme.Selection with { W = 0.12f }));
 
         drawList.AddRect(
             minimum,
             maximum,
             ImGui.GetColorU32(
-                new Vector4(
-                    0.35f,
-                    0.70f,
-                    1.0f,
-                    0.95f)),
+                EditorTheme.AccentHover with { W = 0.95f }),
             0.0f,
             ImDrawFlags.None,
             1.5f);
@@ -553,19 +545,11 @@ internal sealed class ByteGraphCanvas
 
         uint minorColor =
             ImGui.GetColorU32(
-                new Vector4(
-                    0.18f,
-                    0.20f,
-                    0.23f,
-                    0.55f));
+                EditorTheme.Border with { W = 0.38f });
 
         uint axisColor =
             ImGui.GetColorU32(
-                new Vector4(
-                    0.28f,
-                    0.31f,
-                    0.36f,
-                    0.75f));
+                EditorTheme.TextMuted with { W = 0.34f });
 
         for (float x =
                  startX;

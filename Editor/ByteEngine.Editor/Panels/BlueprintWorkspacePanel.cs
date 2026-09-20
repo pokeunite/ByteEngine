@@ -274,42 +274,51 @@ internal sealed class BlueprintWorkspacePanel
 
     private void DrawToolbar()
     {
-        if (ImGui.Button(_dirty ? "Save *##BlueprintSave" : "Save##BlueprintSave"))
-        {
-            SaveBlueprint();
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("+ Add##BlueprintAdd")) ImGui.OpenPopup("Blueprint Add Menu");
+        EditorUi.BeginToolbar("##BlueprintCommandBar");
+
+        ImGui.BeginDisabled(!_dirty);
+        if (_dirty)
+            EditorUi.PrimaryButton("Save", SaveBlueprint);
+        else
+            EditorUi.ToolbarButton("Save", "Save Blueprint");
+        ImGui.EndDisabled();
+
+        EditorUi.ToolbarSeparator();
+        if (EditorUi.PrimaryButton("+ Add")) ImGui.OpenPopup("Blueprint Add Menu");
         DrawBlueprintAddMenu();
-        ImGui.SameLine();
-        ImGui.TextDisabled("|");
-        ImGui.SameLine();
-        _transformGizmo.DrawToolbar();
-        ImGui.SameLine();
+
+        EditorUi.ToolbarSeparator();
         ImGui.BeginDisabled(_propertyUndo.Count == 0);
-        if (ImGui.SmallButton("Undo")) RestorePropertyEdit(false);
+        if (EditorUi.ToolbarButton("Undo", "Undo property edit")) RestorePropertyEdit(false);
         ImGui.EndDisabled();
         ImGui.SameLine();
         ImGui.BeginDisabled(_propertyRedo.Count == 0);
-        if (ImGui.SmallButton("Redo")) RestorePropertyEdit(true);
+        if (EditorUi.ToolbarButton("Redo", "Redo property edit")) RestorePropertyEdit(true);
         ImGui.EndDisabled();
-        ImGui.SameLine();
 
+        EditorUi.ToolbarSeparator();
+        _transformGizmo.DrawToolbar();
+
+        EditorUi.ToolbarSeparator();
         ImGui.BeginDisabled(!_previewBoundsMin.HasValue || !_previewBoundsMax.HasValue);
-        if (ImGui.Button("Frame##BlueprintFrame")) FramePreviewBounds();
+        if (EditorUi.ToolbarButton("Frame", "Frame Blueprint bounds")) FramePreviewBounds();
         ImGui.EndDisabled();
+
         ImGui.SameLine();
-        if (ImGui.Button("...##BlueprintMore")) ImGui.OpenPopup("More##BlueprintToolbarMore");
+        if (EditorUi.ToolbarButton("...", "More Blueprint actions"))
+            ImGui.OpenPopup("More##BlueprintToolbarMore");
         if (ImGui.BeginPopup("More##BlueprintToolbarMore"))
         {
             bool canDelete = GetSelectedPreviewObject()?.Parent != null;
             ImGui.BeginDisabled(!canDelete);
             if (ImGui.MenuItem("Delete Object##BlueprintDelete")) DeleteSelectedObject();
             ImGui.EndDisabled();
+            ImGui.Separator();
             if (ImGui.MenuItem("Normalize Models##BlueprintNormalize")) NormalizeExistingModelScales();
             if (ImGui.MenuItem("Reimport Models##BlueprintReimport")) ReimportReferencedModels();
             if (ImGui.MenuItem("Write Debug Dump##BlueprintDebug"))
-                WriteDebugDump("Manual Blueprint debug dump");            ImGui.Separator();
+                WriteDebugDump("Manual Blueprint debug dump");
+            ImGui.Separator();
             if (ImGui.MenuItem("Close")) RequestClose();
             if (_registeredDocumentId.HasValue)
             {
@@ -320,43 +329,18 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.EndPopup();
         }
 
-        ImGui.SameLine();
-
-        ImGui.TextDisabled(
-            _asset!.ProjectPath);
-
         if (_dirty)
         {
             ImGui.SameLine();
-
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.72f,
-                    0.25f,
-                    1.0f),
-                "Unsaved");
+            EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
         }
-
-        if (!string.IsNullOrWhiteSpace(
-                _statusMessage))
+        if (!string.IsNullOrWhiteSpace(_statusMessage))
         {
             ImGui.SameLine();
-
-            ImGui.TextColored(
-                _statusIsError
-                    ? new Vector4(
-                        1.0f,
-                        0.35f,
-                        0.30f,
-                        1.0f)
-                    : new Vector4(
-                        0.35f,
-                        0.95f,
-                        0.45f,
-                        1.0f),
-                _statusMessage);
+            EditorUi.StatusBadge(_statusMessage, _statusIsError ? EditorStatusKind.Error : EditorStatusKind.Success);
         }
+
+        EditorUi.EndToolbar();
     }
 
     // ========================================================
@@ -373,7 +357,7 @@ internal sealed class BlueprintWorkspacePanel
             ImGuiChildFlags.None,
             ImGuiWindowFlags.HorizontalScrollbar);
 
-        ImGui.SeparatorText("OBJECTS");
+        EditorUi.SectionHeader("Objects");
 
         foreach (GameObject root
                  in _preview!.GameObjects
@@ -392,25 +376,24 @@ internal sealed class BlueprintWorkspacePanel
                 0.0f,
                 8.0f));
 
-        ImGui.SeparatorText(
-            "BLUEPRINT");
-
-        int type =
-            (int)_blueprint!.Type;
-
-        if (ImGui.Combo(
-                "Type",
-                ref type,
-                "Generic Object\0Character\0"))
+        if (EditorUi.SectionHeader("Blueprint"))
         {
-            _blueprint.Type =
-                (BlueprintType)type;
-
-            MarkDirty();
+            int type = (int)_blueprint!.Type;
+            EditorUi.PropertyRow("Type", () =>
+            {
+                if (ImGui.Combo("##BlueprintType", ref type, "Generic Object\0Character\0"))
+                {
+                    _blueprint.Type = (BlueprintType)type;
+                    MarkDirty();
+                }
+            });
         }
 
-        ImGui.TextDisabled(
-            _asset!.ProjectPath);
+        if (EditorUi.SectionHeader("Advanced", defaultOpen: false))
+        {
+            EditorUi.LabelValue("Source", _asset!.ProjectPath);
+            EditorUi.LabelValue("GUID", _asset.Guid.ToString());
+        }
 
         ImGui.EndChild();
     }
@@ -681,7 +664,7 @@ internal sealed class BlueprintWorkspacePanel
             Vector2.Zero,
             ImGuiChildFlags.None);
 
-        ImGui.SeparatorText("DETAILS");
+        ImGui.TextColored(EditorTheme.TextSecondary, "DETAILS");
 
         GameObject? selected =
             GetSelectedPreviewObject();
@@ -689,8 +672,8 @@ internal sealed class BlueprintWorkspacePanel
         if (selected ==
             null)
         {
-            ImGui.TextDisabled(
-                "No Blueprint object selected.");
+            EditorUi.EmptyState("Nothing selected",
+                "Select an object in the Blueprint to edit its properties.");
 
             ImGui.EndChild();
 
@@ -727,48 +710,30 @@ internal sealed class BlueprintWorkspacePanel
     private void DrawObjectHeader(
         GameObject selected)
     {
-        string name =
-            selected.Name;
+        if (!EditorUi.SectionHeader("GameObject")) return;
 
-        if (ImGui.InputText(
-                "Name",
-                ref name,
-                256))
+        string name = selected.Name;
+        EditorUi.PropertyRow("Name", () =>
         {
-            selected.Name =
-                string.IsNullOrWhiteSpace(
-                    name)
-                    ? "GameObject"
-                    : name;
-
-            if (selected.Parent ==
-                null)
+            if (ImGui.InputText("##BlueprintObjectName", ref name, 256))
             {
-                _blueprint!.Name =
-                    selected.Name;
+                selected.Name = string.IsNullOrWhiteSpace(name) ? "GameObject" : name;
+                if (selected.Parent == null) _blueprint!.Name = selected.Name;
+                MarkDirty();
             }
+        });
 
-            MarkDirty();
-        }
-
-        bool active =
-            selected.Active;
-
-        if (ImGui.Checkbox(
-                "Active",
-                ref active))
+        bool active = selected.Active;
+        EditorUi.PropertyRow("Active", () =>
         {
-            selected.Active =
-                active;
+            if (ImGui.Checkbox("##BlueprintObjectActive", ref active))
+            {
+                selected.Active = active;
+                MarkDirty();
+            }
+        });
 
-            MarkDirty();
-        }
-
-        ImGui.TextDisabled(
-            selected.Parent ==
-                null
-                ? "Blueprint Root"
-                : $"Child of {selected.Parent.Name}");
+        EditorUi.LabelValue("Parent", selected.Parent == null ? "Blueprint Root" : selected.Parent.Name);
     }
 
     private void DrawClassification(
@@ -913,61 +878,43 @@ internal sealed class BlueprintWorkspacePanel
     private void DrawTransform(
         GameObject selected)
     {
-        ImGui.SeparatorText(
-            "TRANSFORM");
+        if (!EditorUi.SectionHeader("Transform")) return;
 
-        Vector3 position =
-            selected.Transform.LocalPosition;
-
-        if (ImGui.DragFloat3(
-                "Position",
-                ref position,
-                0.05f))
+        Vector3 position = selected.Transform.LocalPosition;
+        EditorUi.PropertyRow("Position", () =>
         {
-            selected.Transform.LocalPosition =
-                position;
+            if (ImGui.DragFloat3("##BlueprintPosition", ref position, 0.05f))
+            {
+                selected.Transform.LocalPosition = position;
+                MarkDirty();
+            }
+        });
 
-            MarkDirty();
-        }
-
-        Vector3 rotation =
-            selected.Transform.EulerAngles;
-
-        if (ImGui.DragFloat3(
-                "Rotation",
-                ref rotation,
-                0.25f))
+        Vector3 rotation = selected.Transform.EulerAngles;
+        EditorUi.PropertyRow("Rotation", () =>
         {
-            selected.Transform.EulerAngles =
-                rotation;
+            if (ImGui.DragFloat3("##BlueprintRotation", ref rotation, 0.25f))
+            {
+                selected.Transform.EulerAngles = rotation;
+                MarkDirty();
+            }
+        });
 
-            MarkDirty();
-        }
-
-        Vector3 scale =
-            selected.Transform.LocalScale;
-
-        if (ImGui.DragFloat3(
-                "Scale",
-                ref scale,
-                0.02f,
-                0.001f,
-                10000.0f))
+        Vector3 scale = selected.Transform.LocalScale;
+        EditorUi.PropertyRow("Scale", () =>
         {
-            selected.Transform.LocalScale =
-                Vector3.Max(
-                    scale,
-                    new Vector3(
-                        0.001f));
-
-            MarkDirty();
-        }
+            if (ImGui.DragFloat3("##BlueprintScale", ref scale, 0.02f, 0.001f, 10000.0f))
+            {
+                selected.Transform.LocalScale = Vector3.Max(scale, new Vector3(0.001f));
+                MarkDirty();
+            }
+        });
     }
 
     private void DrawComponents(
         GameObject selected)
     {
-        ImGui.SeparatorText("COMPONENTS");
+        if (!EditorUi.SectionHeader("Components")) return;
         ImGui.Checkbox("Show Advanced", ref _showAdvanced);
 
         Component[] components =
@@ -1032,6 +979,9 @@ internal sealed class BlueprintWorkspacePanel
 
             ImGui.PopID();
         }
+
+        if (EditorUi.SecondaryButton("+ Add Component"))
+            ImGui.OpenPopup("Blueprint Add Menu");
     }
 
     private void DrawKnownComponentProperties(Component component)
@@ -1321,7 +1271,7 @@ internal sealed class BlueprintWorkspacePanel
 
         string accept = request.Kind == CameraActivationPromptKind.UseAsFirstCamera ? "Yes" : "Make Active";
         string reject = request.Kind == CameraActivationPromptKind.UseAsFirstCamera ? "No" : "Keep Current";
-        if (ImGui.Button(accept))
+        if (EditorUi.PrimaryButton(accept))
         {
             CameraActivationPrompt.Apply(_preview, request, true);
             MarkDirty();
@@ -1329,7 +1279,7 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button(reject))
+        if (EditorUi.SecondaryButton(reject))
         {
             _cameraActivationPrompt.Reset();
             ImGui.CloseCurrentPopup();
@@ -2123,21 +2073,23 @@ internal sealed class BlueprintWorkspacePanel
         bool open = true;
         if (!ImGui.BeginPopupModal("Unsaved Blueprint", ref open,
                 ImGuiWindowFlags.AlwaysAutoResize)) return;
-        ImGui.Text("The Blueprint has unsaved changes.");
-        if (ImGui.Button("Save"))
+        ImGui.TextColored(EditorTheme.Text, "The Blueprint has unsaved changes.");
+        EditorUi.MutedText("Save before closing?");
+        ImGui.Spacing();
+        if (EditorUi.PrimaryButton("Save"))
         {
             SaveBlueprint();
             if (!_dirty) { CloseNow(); ImGui.CloseCurrentPopup(); }
         }
         ImGui.SameLine();
-        if (ImGui.Button("Discard"))
+        if (EditorUi.DestructiveButton("Discard"))
         {
             DiscardBlueprint();
             CloseNow();
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();
+        if (EditorUi.SecondaryButton("Cancel")) ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }
 
