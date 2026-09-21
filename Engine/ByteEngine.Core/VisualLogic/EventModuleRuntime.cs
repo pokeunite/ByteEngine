@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
@@ -16,6 +17,21 @@ public sealed class EventModuleRuntime
     private readonly HashSet<string> _reportedWarnings =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Dictionary<AnimationController, AnimationSubscription> _animationSubscriptions =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<AnimationController> _observedAnimationControllers =
+        new(ReferenceEqualityComparer.Instance);
+
+    private EventModuleDefinition? _activeModule;
+    private VariableStore? _activeGlobals;
+    private ByteEngine.Core.Scene.Scene? _activeScene;
+    private GameObject? _activeSelf;
+    private Action<string>? _activeWarningSink;
+
+    private sealed record AnimationSubscription(
+        Action<AnimationEventOccurrence> EventFired,
+        Action<AnimationWindowOccurrence> WindowEntered,
+        Action<AnimationWindowOccurrence> WindowExited);
     public EventModuleRuntime(
         VisualLogicRegistry? registry = null)
     {
@@ -26,10 +42,23 @@ public sealed class EventModuleRuntime
 
     public void Reset()
     {
+        foreach ((AnimationController controller, AnimationSubscription subscription) in _animationSubscriptions)
+        {
+            controller.AnimationEventFired -= subscription.EventFired;
+            controller.WindowEntered -= subscription.WindowEntered;
+            controller.WindowExited -= subscription.WindowExited;
+        }
+
+        _animationSubscriptions.Clear();
+        _observedAnimationControllers.Clear();
         _triggerOnceLatched.Clear();
         _reportedWarnings.Clear();
+        _activeModule = null;
+        _activeGlobals = null;
+        _activeScene = null;
+        _activeSelf = null;
+        _activeWarningSink = null;
     }
-
     public void Update(
         EventModuleDefinition module,
         VariableStore globals,
@@ -49,6 +78,12 @@ public sealed class EventModuleRuntime
         ArgumentNullException.ThrowIfNull(
             self);
 
+        _activeModule = module;
+        _activeGlobals = globals;
+        _activeScene = scene;
+        _activeSelf = self;
+        _activeWarningSink = warningSink;
+        _observedAnimationControllers.Clear();
         var context =
             new EventExecutionContext
             {
@@ -62,7 +97,10 @@ public sealed class EventModuleRuntime
                     self,
 
                 WarningSink =
-                    warningSink
+                    warningSink,
+
+                ObserveAnimationController =
+                    controller => _observedAnimationControllers.Add(controller)
             };
 
         foreach (EventRuleDefinition rule
@@ -73,8 +111,88 @@ public sealed class EventModuleRuntime
                 rule,
                 context);
         }
+
+        ReconcileAnimationSubscriptions();    }
+
+    private void ReconcileAnimationSubscriptions()
+    {
+        foreach (AnimationController controller in _animationSubscriptions.Keys
+                     .Where(controller => !_observedAnimationControllers.Contains(controller)).ToArray())
+        {
+            AnimationSubscription subscription = _animationSubscriptions[controller];
+            controller.AnimationEventFired -= subscription.EventFired;
+            controller.WindowEntered -= subscription.WindowEntered;
+            controller.WindowExited -= subscription.WindowExited;
+            _animationSubscriptions.Remove(controller);
+        }
+
+        foreach (AnimationController controller in _observedAnimationControllers)
+        {
+            if (_animationSubscriptions.ContainsKey(controller)) continue;
+            Action<AnimationEventOccurrence> eventFired = occurrence =>
+                DispatchAnimationSignal(AnimationSignalKind.EventFired, controller, occurrence, null);
+            Action<AnimationWindowOccurrence> windowEntered = occurrence =>
+                DispatchAnimationSignal(AnimationSignalKind.WindowEntered, controller, null, occurrence);
+            Action<AnimationWindowOccurrence> windowExited = occurrence =>
+                DispatchAnimationSignal(AnimationSignalKind.WindowExited, controller, null, occurrence);
+            controller.AnimationEventFired += eventFired;
+            controller.WindowEntered += windowEntered;
+            controller.WindowExited += windowExited;
+            _animationSubscriptions.Add(controller,
+                new AnimationSubscription(eventFired, windowEntered, windowExited));
+        }
     }
 
+    private void DispatchAnimationSignal(
+        AnimationSignalKind kind,
+        AnimationController source,
+        AnimationEventOccurrence? animationEvent,
+        AnimationWindowOccurrence? animationWindow)
+    {
+        if (_activeModule == null || _activeGlobals == null || _activeScene == null || _activeSelf == null) return;
+        string conditionId = kind switch
+        {
+            AnimationSignalKind.EventFired => "animation.eventFired",
+            AnimationSignalKind.WindowEntered => "animation.windowEntered",
+            AnimationSignalKind.WindowExited => "animation.windowExited",
+            _ => string.Empty
+        };
+        if (conditionId.Length == 0) return;
+
+        var context = new EventExecutionContext
+        {
+            Globals = _activeGlobals,
+            Scene = _activeScene,
+            Self = _activeSelf,
+            WarningSink = _activeWarningSink,
+            AnimationSignalKind = kind,
+            AnimationSignalSource = source,
+            AnimationEvent = animationEvent,
+            AnimationWindow = animationWindow
+        };
+        foreach (EventRuleDefinition rule in _activeModule.Rules)
+        {
+            if (RuleContainsActiveCondition(rule, conditionId)) EvaluateRule(_activeModule, rule, context);
+        }
+    }
+
+    private static bool RuleContainsActiveCondition(EventRuleDefinition rule, string conditionId)
+    {
+        Dictionary<Guid, VisualInstruction> map = rule.Conditions.ToDictionary(condition => condition.InstanceId);
+        HashSet<Guid> visited = new();
+        return GetActiveConditionIds(rule).Any(root => ContainsCondition(root, conditionId, map, visited));
+    }
+
+    private static bool ContainsCondition(
+        Guid id,
+        string conditionId,
+        IReadOnlyDictionary<Guid, VisualInstruction> map,
+        HashSet<Guid> visited)
+    {
+        if (!visited.Add(id) || !map.TryGetValue(id, out VisualInstruction? condition)) return false;
+        if (condition.Id.Equals(conditionId, StringComparison.OrdinalIgnoreCase)) return true;
+        return condition.ConditionInputIds.Any(inputId => ContainsCondition(inputId, conditionId, map, visited));
+    }
     private bool EvaluateRule(
         EventModuleDefinition module,
         EventRuleDefinition rule,
@@ -193,6 +311,7 @@ public sealed class EventModuleRuntime
             0)
         {
             bool triggerAllowed =
+                context.AnimationSignalKind != AnimationSignalKind.None ||
                 _triggerOnceLatched.Add(
                     rule.Id);
 

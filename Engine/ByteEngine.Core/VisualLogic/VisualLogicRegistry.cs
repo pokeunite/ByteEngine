@@ -2,6 +2,7 @@ using System.Numerics;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Audio;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
@@ -215,6 +216,28 @@ public sealed class VisualLogicRegistry
     private static void RegisterAnimation(
         VisualLogicRegistry registry)
     {
+        RegisterAnimationSignalCondition(registry, "animation.eventFired", "Animation Event Fired", AnimationSignalKind.EventFired);
+        RegisterAnimationSignalCondition(registry, "animation.windowEntered", "Animation Window Entered", AnimationSignalKind.WindowEntered);
+        RegisterAnimationSignalCondition(registry, "animation.windowExited", "Animation Window Exited", AnimationSignalKind.WindowExited);
+
+        registry.RegisterCondition(
+            new VisualConditionDefinition
+            {
+                Id = "animation.windowActive",
+                Category = "Animation",
+                DisplayName = "Animation Window Is Active",
+                TargetComponent = nameof(AnimationController),
+                Evaluate = (instruction, context) =>
+                {
+                    AnimationController? controller = ResolveAnimationController(instruction, context, warnIfMissing: false);
+                    if (controller == null) return false;
+                    string window = EventValueResolver.GetString(instruction, "window", context);
+                    string clip = EventValueResolver.GetString(instruction, "clip", context);
+                    return !string.IsNullOrWhiteSpace(window) && controller.IsWindowActive(window) &&
+                        (string.IsNullOrWhiteSpace(clip) ||
+                         string.Equals(controller.CurrentAnimation, clip, StringComparison.OrdinalIgnoreCase));
+                }
+            });
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
@@ -509,7 +532,59 @@ public sealed class VisualLogicRegistry
             });
     }
 
-    private static AnimationController? ResolveAnimationController(
+
+    private static void RegisterAnimationSignalCondition(
+        VisualLogicRegistry registry,
+        string id,
+        string displayName,
+        AnimationSignalKind kind)
+    {
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = id,
+            Category = "Animation",
+            DisplayName = displayName,
+            TargetComponent = nameof(AnimationController),
+            Evaluate = (instruction, context) => EvaluateAnimationSignal(instruction, context, kind)
+        });
+    }
+
+    private static bool EvaluateAnimationSignal(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        AnimationSignalKind expectedKind)
+    {
+        AnimationController? controller = ResolveAnimationController(instruction, context, warnIfMissing: false);
+        if (controller == null) return false;
+        context.ObserveAnimationController?.Invoke(controller);
+        if (context.AnimationSignalKind != expectedKind || !ReferenceEquals(context.AnimationSignalSource, controller))
+            return false;
+
+        string expectedName = EventValueResolver.GetString(instruction,
+            expectedKind == AnimationSignalKind.EventFired ? "event" : "window", context);
+        string expectedClip = EventValueResolver.GetString(instruction, "clip", context);
+        string expectedPayload = EventValueResolver.GetString(instruction, "payload", context);
+
+        if (expectedKind == AnimationSignalKind.EventFired && context.AnimationEvent is AnimationEventOccurrence animationEvent)
+            return MatchesAnimationSignal(expectedName, animationEvent.EventName, expectedClip,
+                animationEvent.AnimationName, animationEvent.AnimationKey, expectedPayload, animationEvent.Payload);
+        if (context.AnimationWindow is AnimationWindowOccurrence window)
+            return MatchesAnimationSignal(expectedName, window.WindowName, expectedClip,
+                window.AnimationName, window.AnimationKey, expectedPayload, window.Payload);
+        return false;
+    }
+
+    private static bool MatchesAnimationSignal(
+        string expectedName, string actualName,
+        string expectedClip, string animationName, string animationKey,
+        string expectedPayload, string actualPayload)
+    {
+        return (string.IsNullOrWhiteSpace(expectedName) || string.Equals(expectedName, actualName, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(expectedClip) ||
+             string.Equals(expectedClip, animationName, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(expectedClip, animationKey, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(expectedPayload) || string.Equals(expectedPayload, actualPayload, StringComparison.Ordinal));
+    }    internal static AnimationController? ResolveAnimationController(
         VisualInstruction instruction,
         EventExecutionContext context,
         bool warnIfMissing = true)
@@ -562,7 +637,7 @@ public sealed class VisualLogicRegistry
             {
                 Id = "audio.play",
                 Category = "Audio",
-                DisplayName = "Play",
+                DisplayName = "Play Assigned Clip",
                 TargetComponent = nameof(AudioSource3D),
                 Execute =
                     (instruction, context) =>
@@ -570,6 +645,59 @@ public sealed class VisualLogicRegistry
                             instruction,
                             context)?
                             .Play()
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "audio.playClip",
+                Category = "Audio",
+                DisplayName = "Play Audio Clip",
+                TargetComponent = nameof(AudioSource3D),
+                Execute =
+                    (instruction, context) =>
+                    {
+                        AudioSource3D? source =
+                            ResolveAudioSource(instruction, context);
+
+                        if (source == null)
+                        {
+                            return;
+                        }
+
+                        string guidText =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "clipGuid",
+                                context);
+                        string path =
+                            EventValueResolver.GetString(
+                                instruction,
+                                "clipPath",
+                                context);
+
+                        AssetReference reference;
+
+                        if (Guid.TryParse(guidText, out Guid guid))
+                        {
+                            reference = new AssetReference(guid, path);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(path))
+                        {
+                            reference = new AssetReference(path);
+                        }
+                        else
+                        {
+                            context.WarningSink?.Invoke(
+                                "Play Audio Clip requires an Audio Clip asset.");
+                            return;
+                        }
+
+                        AudioVisualLogicPlayback.PlayClip(
+                            source,
+                            reference,
+                            context.WarningSink);
+                    }
             });
 
         registry.RegisterAction(

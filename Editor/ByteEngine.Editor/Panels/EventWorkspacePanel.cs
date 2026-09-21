@@ -3,6 +3,7 @@ using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.VisualLogic;
@@ -32,6 +33,14 @@ internal sealed class EventWorkspacePanel
     private readonly GameObjectReferencePicker _objectPicker =
         new();
 
+    private string _audioClipSearch = string.Empty;
+
+    private readonly Dictionary<Guid, AnimationSignalCacheEntry>
+        _animationSignalCache = new();
+
+    private sealed record AnimationSignalCacheEntry(
+        string Key,
+        AnimationSignalAuthoringResult Result);
     private readonly EventModuleHistory _history =
         new();
 
@@ -4783,6 +4792,18 @@ internal sealed class EventWorkspacePanel
             "animation.currentStateIs" =>
                 "Checks the current locomotion animation state.",
 
+            "animation.eventFired" =>
+                "TRUE only while a matching animation marker occurrence is being dispatched.",
+
+            "animation.windowEntered" =>
+                "TRUE only while a matching animation window-enter occurrence is being dispatched.",
+
+            "animation.windowExited" =>
+                "TRUE only while a matching animation window-exit occurrence is being dispatched.",
+
+            "animation.windowActive" =>
+                "Checks whether a named animation window is currently active.",
+
             "animation.play" =>
                 "Plays the selected clip on the target AnimationController.",
 
@@ -4844,7 +4865,10 @@ internal sealed class EventWorkspacePanel
                 "Moves the target object to the selected layer.",
 
             "audio.play" =>
-                "Starts playback on the target AudioSource3D.",
+                "Plays the Audio Clip already assigned to the target AudioSource3D.",
+
+            "audio.playClip" =>
+                "Loads the selected Audio Clip into the target AudioSource3D and plays it.",
 
             "audio.pause" =>
                 "Pauses playback on the target AudioSource3D.",
@@ -5924,6 +5948,17 @@ internal sealed class EventWorkspacePanel
                 "animation.isPlaying" =>
                     190.0f,
 
+                "audio.playClip" =>
+                    300.0f,
+
+                "animation.eventFired" or
+                "animation.windowEntered" or
+                "animation.windowExited" =>
+                    610.0f,
+
+                "animation.windowActive" =>
+                    500.0f,
+
                 "animation.currentClipIs" or
                 "animation.currentStateIs" or
                 "animation.setSpeed" or
@@ -6643,6 +6678,26 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["value"] = EventValue.Number(-.5);
                 break;
 
+            case "animation.eventFired":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["event"] = EventValue.String(string.Empty);
+                instruction.Arguments["clip"] = EventValue.String(string.Empty);
+                instruction.Arguments["payload"] = EventValue.String(string.Empty);
+                break;
+
+            case "animation.windowEntered":
+            case "animation.windowExited":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["window"] = EventValue.String(string.Empty);
+                instruction.Arguments["clip"] = EventValue.String(string.Empty);
+                instruction.Arguments["payload"] = EventValue.String(string.Empty);
+                break;
+
+            case "animation.windowActive":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["window"] = EventValue.String(string.Empty);
+                instruction.Arguments["clip"] = EventValue.String(string.Empty);
+                break;
             case "animation.pause":
             case "animation.resume":
             case "animation.stop":
@@ -6727,6 +6782,17 @@ internal sealed class EventWorkspacePanel
                         "Self");
                 break;
 
+            case "audio.playClip":
+                instruction.Arguments["target"] =
+                    EventValue.String(
+                        "Self");
+                instruction.Arguments["clipGuid"] =
+                    EventValue.String(
+                        string.Empty);
+                instruction.Arguments["clipPath"] =
+                    EventValue.String(
+                        string.Empty);
+                break;
             case "audio.setVolume":
                 instruction.Arguments["target"] =
                     EventValue.String(
@@ -7007,6 +7073,33 @@ internal sealed class EventWorkspacePanel
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
                 break;
 
+            case "animation.eventFired":
+                DrawAnimationSignalCondition(
+                    instruction,
+                    state,
+                    "event",
+                    "Event",
+                    includePayload: true);
+                break;
+
+            case "animation.windowEntered":
+            case "animation.windowExited":
+                DrawAnimationSignalCondition(
+                    instruction,
+                    state,
+                    "window",
+                    "Window",
+                    includePayload: true);
+                break;
+
+            case "animation.windowActive":
+                DrawAnimationSignalCondition(
+                    instruction,
+                    state,
+                    "window",
+                    "Window",
+                    includePayload: false);
+                break;
             case "animation.pause":
             case "animation.resume":
             case "animation.stop":
@@ -7158,6 +7251,15 @@ internal sealed class EventWorkspacePanel
                     state);
                 break;
 
+            case "audio.playClip":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+                DrawAudioClipArgument(
+                    instruction);
+                break;
             case "audio.setVolume":
                 DrawObjectTargetArgument(
                     instruction,
@@ -7506,6 +7608,421 @@ internal sealed class EventWorkspacePanel
                     VariableType.Boolean,
                     state);
                 break;
+        }
+    }
+
+    //
+    // ========================================================
+    // ANIMATION SIGNAL AUTHORING
+    // ========================================================
+
+    private void DrawAnimationSignalCondition(
+        VisualInstruction instruction,
+        EditorState? state,
+        string signalArgument,
+        string signalLabel,
+        bool includePayload)
+    {
+        DrawObjectTargetArgument(instruction, "target", "Target Object", state);
+
+        GameObject? target =
+            state != null
+                ? ResolveAnimationTargetForEditor(instruction, state)
+                : null;
+
+        if (state == null || _project == null || target == null)
+        {
+            DrawAnimationSignalManualFallback(
+                instruction, signalArgument, signalLabel, includePayload, state,
+                "Target cannot be resolved in the current authoring context.");
+            return;
+        }
+
+        AnimationController? controller =
+            target.GetComponent<AnimationController>();
+
+        if (controller == null)
+        {
+            DrawDisabledAnimationSignalFields(
+                instruction, signalArgument, signalLabel, includePayload, state,
+                "Target has no AnimationController.");
+            return;
+        }
+
+        string cacheKey =
+            AnimationSignalAuthoringResolver.CreateCacheKey(target, controller);
+
+        if (!_animationSignalCache.TryGetValue(
+                instruction.InstanceId,
+                out AnimationSignalCacheEntry? cached) ||
+            !string.Equals(cached.Key, cacheKey, StringComparison.Ordinal))
+        {
+            cached = new AnimationSignalCacheEntry(
+                cacheKey,
+                AnimationSignalAuthoringResolver.Resolve(target, _project));
+
+            _animationSignalCache[instruction.InstanceId] = cached;
+        }
+
+        AnimationSignalAuthoringResult resolved = cached.Result;
+
+        if (!resolved.HasSelectors || resolved.Model == null)
+        {
+            DrawAnimationSignalManualFallback(
+                instruction, signalArgument, signalLabel, includePayload, state,
+                resolved.Message);
+            return;
+        }
+
+        string clipValue =
+            DrawAnimationSignalClipPicker(instruction, resolved.Model);
+
+        ImportedAnimation? selectedClip =
+            string.IsNullOrWhiteSpace(clipValue)
+                ? null
+                : AnimationSignalAuthoringResolver.FindClip(
+                    resolved.Model, clipValue);
+
+        if (!string.IsNullOrWhiteSpace(clipValue) &&
+            selectedClip == null)
+        {
+            DrawStaleAnimationValueWarning(
+                "clip", clipValue, "selected animation model");
+        }
+
+        DrawAnimationSignalMetadataPicker(
+            instruction, signalArgument, signalLabel, selectedClip);
+
+        if (includePayload)
+        {
+            DrawValueArgument(
+                instruction, "payload", "Payload (blank = Any)",
+                VariableType.String, EventValue.String(string.Empty),
+                state, false);
+        }
+    }
+
+    private void DrawAnimationSignalManualFallback(
+        VisualInstruction instruction,
+        string signalArgument,
+        string signalLabel,
+        bool includePayload,
+        EditorState? state,
+        string message)
+    {
+        DrawValueArgument(
+            instruction, "clip", "Animation Clip (manual)",
+            VariableType.String, EventValue.String(string.Empty),
+            state, false);
+        DrawValueArgument(
+            instruction, signalArgument, $"{signalLabel} (manual)",
+            VariableType.String, EventValue.String(string.Empty),
+            state, false);
+
+        if (includePayload)
+        {
+            DrawValueArgument(
+                instruction, "payload", "Payload (blank = Any)",
+                VariableType.String, EventValue.String(string.Empty),
+                state, false);
+        }
+
+        ImGui.TextWrapped(
+            $"{message} Manual filters will still work at runtime.");
+    }
+
+    private void DrawDisabledAnimationSignalFields(
+        VisualInstruction instruction,
+        string signalArgument,
+        string signalLabel,
+        bool includePayload,
+        EditorState? state,
+        string message)
+    {
+        ImGui.BeginDisabled();
+        try
+        {
+            DrawValueArgument(
+                instruction, "clip", "Animation Clip",
+                VariableType.String, EventValue.String(string.Empty),
+                state, false);
+            DrawValueArgument(
+                instruction, signalArgument, signalLabel,
+                VariableType.String, EventValue.String(string.Empty),
+                state, false);
+        }
+        finally
+        {
+            ImGui.EndDisabled();
+        }
+
+        if (includePayload)
+        {
+            DrawValueArgument(
+                instruction, "payload", "Payload (blank = Any)",
+                VariableType.String, EventValue.String(string.Empty),
+                state, false);
+        }
+
+        ImGui.TextColored(
+            new Vector4(1.0f, 0.72f, 0.28f, 1.0f),
+            message);
+    }
+
+    private string DrawAnimationSignalClipPicker(
+        VisualInstruction instruction,
+        ModelAsset model)
+    {
+        EventValue value = EnsureAnimationSignalString(instruction, "clip");
+
+        if (value.Kind != EventValueKind.Constant)
+        {
+            DrawValueArgument(
+                instruction, "clip", "Animation Clip",
+                VariableType.String, EventValue.String(string.Empty),
+                null, false);
+            ImGui.TextDisabled(
+                "Dynamic clip reference; metadata choices are unavailable.");
+            return string.Empty;
+        }
+
+        string current = value.Constant.String;
+        ImportedAnimation? selected =
+            string.IsNullOrWhiteSpace(current)
+                ? null
+                : AnimationSignalAuthoringResolver.FindClip(model, current);
+        string preview =
+            string.IsNullOrWhiteSpace(current)
+                ? "Any Clip"
+                : selected?.Name ?? current;
+
+        ImGui.TextDisabled("Animation Clip");
+        ImGui.SetNextItemWidth(-1.0f);
+
+        if (ImGui.BeginCombo("##AnimationSignalClip", preview))
+        {
+            if (ImGui.Selectable(
+                    "Any Clip",
+                    string.IsNullOrWhiteSpace(current)))
+            {
+                SetAnimationSignalString(
+                    instruction, "clip", string.Empty,
+                    "Change Animation Clip");
+                current = string.Empty;
+            }
+
+            foreach (ImportedAnimation animation in model.Animations)
+            {
+                if (string.IsNullOrWhiteSpace(animation.Key) &&
+                    string.IsNullOrWhiteSpace(animation.Name))
+                {
+                    continue;
+                }
+
+                string stored =
+                    string.IsNullOrWhiteSpace(animation.Key)
+                        ? animation.Name
+                        : animation.Key;
+                bool isSelected =
+                    string.Equals(current, animation.Key, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(current, animation.Name, StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        $"{animation.Name}##clip:{animation.Key}",
+                        isSelected))
+                {
+                    SetAnimationSignalString(
+                        instruction, "clip", stored,
+                        "Change Animation Clip");
+                    current = stored;
+                }
+
+                DrawFullValueTooltip(animation.Name);
+            }
+
+            ImGui.EndCombo();
+        }
+
+        DrawFullValueTooltip(preview);
+        return current;
+    }
+
+    private void DrawAnimationSignalMetadataPicker(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        ImportedAnimation? selectedClip)
+    {
+        EventValue value =
+            EnsureAnimationSignalString(instruction, argumentName);
+
+        if (value.Kind != EventValueKind.Constant)
+        {
+            DrawValueArgument(
+                instruction, argumentName, label,
+                VariableType.String, EventValue.String(string.Empty),
+                null, false);
+            return;
+        }
+
+        string current = value.Constant.String;
+        bool isEvent =
+            string.Equals(argumentName, "event", StringComparison.Ordinal);
+        string anyLabel = isEvent ? "Any Event" : "Any Window";
+        string preview =
+            string.IsNullOrWhiteSpace(current) ? anyLabel : current;
+
+        ImGui.TextDisabled(label);
+        ImGui.BeginDisabled(selectedClip == null);
+        try
+        {
+            ImGui.SetNextItemWidth(-1.0f);
+
+            if (ImGui.BeginCombo(
+                    $"##AnimationSignal:{argumentName}",
+                    preview))
+            {
+                if (ImGui.Selectable(
+                        anyLabel,
+                        string.IsNullOrWhiteSpace(current)))
+                {
+                    SetAnimationSignalString(
+                        instruction, argumentName, string.Empty,
+                        $"Change Animation {label}");
+                    current = string.Empty;
+                }
+
+                if (selectedClip != null && isEvent)
+                {
+                    foreach (AnimationEventMarker marker
+                             in selectedClip.Events.OrderBy(item => item.Time))
+                    {
+                        string display =
+                            $"{marker.Name}    {marker.Time:0.###}s";
+
+                        if (ImGui.Selectable(
+                                $"{display}##event:{marker.Id}",
+                                string.Equals(
+                                    current, marker.Name,
+                                    StringComparison.OrdinalIgnoreCase)))
+                        {
+                            SetAnimationSignalString(
+                                instruction, argumentName, marker.Name,
+                                "Change Animation Event");
+                            current = marker.Name;
+                        }
+
+                        DrawFullValueTooltip(display);
+                    }
+                }
+                else if (selectedClip != null)
+                {
+                    foreach (AnimationWindow window
+                             in selectedClip.Windows.OrderBy(item => item.StartTime))
+                    {
+                        string display =
+                            $"{window.Name}    {window.StartTime:0.###} - {window.EndTime:0.###}s";
+
+                        if (ImGui.Selectable(
+                                $"{display}##window:{window.Id}",
+                                string.Equals(
+                                    current, window.Name,
+                                    StringComparison.OrdinalIgnoreCase)))
+                        {
+                            SetAnimationSignalString(
+                                instruction, argumentName, window.Name,
+                                "Change Animation Window");
+                            current = window.Name;
+                        }
+
+                        DrawFullValueTooltip(display);
+                    }
+                }
+
+                ImGui.EndCombo();
+            }
+        }
+        finally
+        {
+            ImGui.EndDisabled();
+        }
+
+        DrawFullValueTooltip(preview);
+
+        if (selectedClip == null)
+        {
+            ImGui.TextDisabled(
+                "Select a concrete Animation Clip to browse metadata.");
+            return;
+        }
+
+        bool found =
+            isEvent
+                ? AnimationSignalAuthoringResolver.ContainsEvent(
+                    selectedClip, current)
+                : AnimationSignalAuthoringResolver.ContainsWindow(
+                    selectedClip, current);
+
+        if (!found)
+        {
+            DrawStaleAnimationValueWarning(
+                label.ToLowerInvariant(), current, "selected clip");
+        }
+    }
+
+    private EventValue EnsureAnimationSignalString(
+        VisualInstruction instruction,
+        string argumentName)
+    {
+        if (!instruction.Arguments.TryGetValue(
+                argumentName,
+                out EventValue? value) ||
+            value == null)
+        {
+            value = EventValue.String(string.Empty);
+            instruction.Arguments[argumentName] = value;
+        }
+
+        if (value.Kind == EventValueKind.Constant &&
+            value.Constant.Type != VariableType.String)
+        {
+            value = EventValue.String(string.Empty);
+            instruction.Arguments[argumentName] = value;
+        }
+
+        return value;
+    }
+
+    private void SetAnimationSignalString(
+        VisualInstruction instruction,
+        string argumentName,
+        string value,
+        string historyLabel)
+    {
+        RecordHistory(historyLabel);
+        instruction.Arguments[argumentName] = EventValue.String(value);
+        _dirty = true;
+    }
+
+    private static void DrawStaleAnimationValueWarning(
+        string valueKind,
+        string value,
+        string owner)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            ImGui.TextColored(
+                new Vector4(1.0f, 0.72f, 0.28f, 1.0f),
+                $"{value} - Not found on {owner} ({valueKind}).");
+        }
+    }
+
+    private static void DrawFullValueTooltip(string value)
+    {
+        if (ImGui.IsItemHovered() &&
+            !string.IsNullOrWhiteSpace(value))
+        {
+            ImGui.SetTooltip(value);
         }
     }
 
@@ -8417,6 +8934,209 @@ internal sealed class EventWorkspacePanel
         }
 
         return null;
+    }
+
+    // =
+    // ========================================================
+    // AUDIO CLIP ASSET PICKER
+    // ========================================================
+
+    private void DrawAudioClipArgument(
+        VisualInstruction instruction)
+    {
+        EventValue guidValue =
+            EnsureAnimationSignalString(
+                instruction,
+                "clipGuid");
+        EventValue pathValue =
+            EnsureAnimationSignalString(
+                instruction,
+                "clipPath");
+
+        string guidText =
+            guidValue.Kind == EventValueKind.Constant
+                ? guidValue.Constant.String
+                : string.Empty;
+        string cachedPath =
+            pathValue.Kind == EventValueKind.Constant
+                ? pathValue.Constant.String
+                : string.Empty;
+
+        AssetRecord? selected = null;
+
+        if (_project != null)
+        {
+            try
+            {
+                AssetReference reference =
+                    Guid.TryParse(guidText, out Guid guid)
+                        ? new AssetReference(guid, cachedPath)
+                        : !string.IsNullOrWhiteSpace(cachedPath)
+                            ? new AssetReference(cachedPath)
+                            : AssetReference.Empty;
+
+                if (!reference.IsEmpty)
+                {
+                    selected =
+                        _project.AssetDatabase.Resolve(reference);
+                }
+            }
+            catch
+            {
+                selected = null;
+            }
+        }
+
+        string display =
+            selected?.Type == AssetType.AudioClip
+                ? Path.GetFileName(selected.ProjectPath)
+                : string.IsNullOrWhiteSpace(cachedPath)
+                    ? "No Audio Clip"
+                    : Path.GetFileName(cachedPath);
+
+        ImGui.TextDisabled("Audio Clip");
+
+        if (ImGui.Button(
+                display,
+                new Vector2(-1.0f, 36.0f)))
+        {
+            _audioClipSearch = string.Empty;
+            ImGui.OpenPopup("AudioClipPicker");
+        }
+
+        DrawFullValueTooltip(
+            selected?.ProjectPath ?? cachedPath);
+
+        if (!ImGui.BeginPopup("AudioClipPicker"))
+        {
+            DrawAudioClipResolutionWarning(
+                guidText,
+                cachedPath,
+                selected);
+            return;
+        }
+
+        ImGui.SetNextItemWidth(320.0f);
+        ImGui.InputTextWithHint(
+            "##AudioSearch",
+            "Search audio...",
+            ref _audioClipSearch,
+            128);
+
+        ImGui.Separator();
+
+        if (ImGui.Selectable(
+                "No Audio Clip",
+                string.IsNullOrWhiteSpace(guidText) &&
+                string.IsNullOrWhiteSpace(cachedPath)))
+        {
+            SetAudioClipArguments(
+                instruction,
+                null);
+            ImGui.CloseCurrentPopup();
+        }
+
+        AssetRecord[] clips =
+            _project?.AssetDatabase.Assets
+                .Where(asset => asset.Type == AssetType.AudioClip)
+                .Where(asset =>
+                    string.IsNullOrWhiteSpace(_audioClipSearch) ||
+                    Path.GetFileName(asset.ProjectPath).Contains(
+                        _audioClipSearch,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    asset.ProjectPath.Contains(
+                        _audioClipSearch,
+                        StringComparison.OrdinalIgnoreCase))
+                .OrderBy(
+                    asset => Path.GetFileName(asset.ProjectPath),
+                    StringComparer.OrdinalIgnoreCase)
+                .ThenBy(
+                    asset => asset.ProjectPath,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            ?? Array.Empty<AssetRecord>();
+
+        if (clips.Length > 0)
+        {
+            ImGui.Separator();
+        }
+
+        foreach (AssetRecord clip in clips)
+        {
+            bool isSelected =
+                selected?.Guid == clip.Guid;
+
+            if (ImGui.Selectable(
+                    $"{Path.GetFileName(clip.ProjectPath)}##audio:{clip.Guid}",
+                    isSelected))
+            {
+                SetAudioClipArguments(
+                    instruction,
+                    clip);
+                ImGui.CloseCurrentPopup();
+            }
+
+            DrawFullValueTooltip(clip.ProjectPath);
+        }
+
+        if (_project == null)
+        {
+            ImGui.TextDisabled(
+                "Open a project to select an Audio Clip.");
+        }
+        else if (clips.Length == 0)
+        {
+            ImGui.TextDisabled(
+                "No matching Audio Clip assets.");
+        }
+
+        ImGui.EndPopup();
+
+        DrawAudioClipResolutionWarning(
+            guidText,
+            cachedPath,
+            selected);
+    }
+
+    private void SetAudioClipArguments(
+        VisualInstruction instruction,
+        AssetRecord? clip)
+    {
+        RecordHistory("Change Audio Clip");
+
+        instruction.Arguments["clipGuid"] =
+            EventValue.String(
+                clip?.Guid.ToString() ?? string.Empty);
+        instruction.Arguments["clipPath"] =
+            EventValue.String(
+                clip?.ProjectPath ?? string.Empty);
+
+        _dirty = true;
+    }
+
+    private static void DrawAudioClipResolutionWarning(
+        string guidText,
+        string cachedPath,
+        AssetRecord? selected)
+    {
+        if (string.IsNullOrWhiteSpace(guidText) &&
+            string.IsNullOrWhiteSpace(cachedPath))
+        {
+            return;
+        }
+
+        if (selected == null)
+        {
+            ImGui.TextColored(
+                new Vector4(1.0f, 0.72f, 0.28f, 1.0f),
+                "Selected Audio Clip no longer resolves.");
+        }
+        else if (selected.Type != AssetType.AudioClip)
+        {
+            ImGui.TextColored(
+                new Vector4(1.0f, 0.72f, 0.28f, 1.0f),
+                "Selected asset is not an Audio Clip.");
+        }
     }
 
     // ========================================================

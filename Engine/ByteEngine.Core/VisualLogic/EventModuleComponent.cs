@@ -68,11 +68,12 @@ public sealed class EventModuleComponent
         AddModuleReference(
             reference);
 
-        _runtimeModules.RemoveAll(
-            item =>
-                SameReference(
-                    item.Reference,
-                    reference));
+        foreach (RuntimeModule existing in _runtimeModules
+                     .Where(item => SameReference(item.Reference, reference)).ToArray())
+        {
+            existing.Runtime.Reset();
+            _runtimeModules.Remove(existing);
+        }
 
         _runtimeModules.Add(
             new RuntimeModule
@@ -163,17 +164,19 @@ public sealed class EventModuleComponent
                         reference)) >
             0;
 
-        _runtimeModules.RemoveAll(
-            item =>
-                SameReference(
-                    item.Reference,
-                    reference));
+        foreach (RuntimeModule existing in _runtimeModules
+                     .Where(item => SameReference(item.Reference, reference)).ToArray())
+        {
+            existing.Runtime.Reset();
+            _runtimeModules.Remove(existing);
+        }
 
         return removed;
     }
 
     public void ClearModules()
     {
+        foreach (RuntimeModule module in _runtimeModules) module.Runtime.Reset();
         _modules.Clear();
         _runtimeModules.Clear();
     }

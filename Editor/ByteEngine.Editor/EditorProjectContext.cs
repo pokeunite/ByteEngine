@@ -23,6 +23,8 @@ internal sealed class EditorProjectContext
 
     private readonly Guid _animationAssetRegistration;
 
+    private readonly Guid _audioAssetRegistration;
+
     public ProjectData Project { get; }
 
     public string ProjectFilePath { get; }
@@ -85,6 +87,11 @@ internal sealed class EditorProjectContext
         _animationAssetRegistration =
             AnimationRuntimeAssets.Configure(
                 Assets);
+
+        _audioAssetRegistration =
+            AudioRuntimeAssets.Configure(
+                AssetDatabase,
+                warningSink);
 
         ComponentSerializer components =
             new(
@@ -294,6 +301,9 @@ internal sealed class EditorProjectContext
 
         AnimationRuntimeAssets.Clear(
             _animationAssetRegistration);
+
+        AudioRuntimeAssets.Clear(
+            _audioAssetRegistration);
 
         if (ReferenceEquals(
                 Active,
