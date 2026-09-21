@@ -20,7 +20,6 @@ public static class AnimationSerializationRegistrar
         ArgumentNullException.ThrowIfNull(serializer);
 
         serializer.Register(new SkeletalMeshRendererCodec());
-        serializer.Register(new BoneSocket3DCodec());
     }
 
     private sealed class SkeletalMeshRendererCodec : IComponentCodec
@@ -138,59 +137,6 @@ public static class AnimationSerializationRegistrar
         }
     }
 
-    private sealed class BoneSocket3DCodec : IComponentCodec
-    {
-        public string TypeName => "BoneSocket3D";
-        public Type ComponentType => typeof(BoneSocket3D);
-
-        public ComponentData Serialize(
-            Component component,
-            ComponentSerializationContext context)
-        {
-            BoneSocket3D socket =
-                (BoneSocket3D)component;
-
-            return
-                new ComponentData
-                {
-                    Type = TypeName,
-                    Properties =
-                        new JsonObject
-                        {
-                            ["boneName"] = socket.BoneName,
-                            ["positionOffset"] = Vector3Node(socket.PositionOffset),
-                            ["rotationOffsetDegrees"] = Vector3Node(socket.RotationOffsetDegrees),
-                            ["scaleMultiplier"] = Vector3Node(socket.ScaleMultiplier),
-                            ["inheritBoneScale"] = socket.InheritBoneScale
-                        }
-                };
-        }
-
-        public Component Deserialize(
-            ComponentData data,
-            ComponentSerializationContext context) =>
-            new BoneSocket3D
-            {
-                BoneName =
-                    Text(data, "boneName", string.Empty),
-                PositionOffset =
-                    ReadVector3(
-                        data.Properties["positionOffset"],
-                        Vector3.Zero),
-                RotationOffsetDegrees =
-                    ReadVector3(
-                        data.Properties["rotationOffsetDegrees"],
-                        Vector3.Zero),
-                ScaleMultiplier =
-                    ReadVector3(
-                        data.Properties["scaleMultiplier"],
-                        Vector3.One),
-                InheritBoneScale =
-                    data.Properties["inheritBoneScale"]?
-                        .GetValue<bool>() ??
-                    false
-            };
-    }
 
     private static JsonArray Vector3Node(Vector3 value) =>
         new(

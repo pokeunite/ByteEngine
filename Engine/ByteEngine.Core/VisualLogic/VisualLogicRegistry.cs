@@ -100,6 +100,7 @@ public sealed class VisualLogicRegistry
         RegisterGameplay(registry);
         RegisterAudio(registry);
         RegisterAnimation(registry);
+        RegisterAttachment(registry);
 
         return registry;
     }
@@ -213,6 +214,53 @@ public sealed class VisualLogicRegistry
     }
 
 
+    private static void RegisterAttachment(VisualLogicRegistry registry)
+    {
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "attachment.attachToSocket", Category = "Attachment", DisplayName = "Attach Object To Socket",
+            Execute = (instruction, context) =>
+            {
+                GameObject? child = ResolveObjectArgument(instruction, "object", context);
+                GameObject? parent = ResolveObjectArgument(instruction, "parent", context);
+                string socket = EventValueResolver.GetString(instruction, "socket", context);
+                if (child == null || parent == null) return;
+                AttachmentTransformRule location = ParseAttachmentRule(EventValueResolver.GetString(instruction, "locationRule", context), AttachmentTransformRule.SnapToTarget);
+                AttachmentTransformRule rotation = ParseAttachmentRule(EventValueResolver.GetString(instruction, "rotationRule", context), AttachmentTransformRule.SnapToTarget);
+                AttachmentTransformRule scale = ParseAttachmentRule(EventValueResolver.GetString(instruction, "scaleRule", context), AttachmentTransformRule.KeepRelative);
+                if (!SkeletalAttachmentService.AttachToSocket(child, parent, socket, location, rotation, scale))
+                    context.WarningSink?.Invoke($"Socket '{socket}' was not found on {parent.Name}.");
+            }
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "attachment.detach", Category = "Attachment", DisplayName = "Detach Object",
+            Execute = (instruction, context) =>
+            {
+                GameObject? child = ResolveObjectArgument(instruction, "object", context);
+                if (child != null) SkeletalAttachmentService.Detach(child, EventValueResolver.GetBoolean(instruction, "keepWorld", context, true));
+            }
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "attachment.isAttached", Category = "Attachment", DisplayName = "Is Attached",
+            Evaluate = (instruction, context) => ResolveObjectArgument(instruction, "object", context, false)?.IsAttached == true
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "attachment.isAttachedToSocket", Category = "Attachment", DisplayName = "Is Attached To Socket",
+            Evaluate = (instruction, context) =>
+            {
+                GameObject? child = ResolveObjectArgument(instruction, "object", context, false);
+                GameObject? parent = ResolveObjectArgument(instruction, "parent", context, false);
+                string socket = EventValueResolver.GetString(instruction, "socket", context);
+                return child != null && SkeletalAttachmentService.IsAttachedToSocket(child, parent, socket);
+            }
+        });
+    }
+
+    private static AttachmentTransformRule ParseAttachmentRule(string value, AttachmentTransformRule fallback) =>
+        Enum.TryParse(value?.Replace(" ", string.Empty), true, out AttachmentTransformRule parsed) ? parsed : fallback;
     private static void RegisterAnimation(
         VisualLogicRegistry registry)
     {
@@ -1775,6 +1823,15 @@ public sealed class VisualLogicRegistry
         return false;
     }
 
+    private static GameObject? ResolveObjectArgument(VisualInstruction instruction, string argumentName, EventExecutionContext context, bool warnIfMissing = true)
+    {
+        string token = EventValueResolver.GetString(instruction, argumentName, context, SelfTarget);
+        if (string.IsNullOrWhiteSpace(token) || string.Equals(token, SelfTarget, StringComparison.OrdinalIgnoreCase)) return context.Self;
+        GameObject? target = token.StartsWith("id:", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(token[3..], out Guid id)
+            ? context.Scene.FindGameObject(id) : context.Scene.FindGameObject(token);
+        if (target == null && warnIfMissing) context.WarningSink?.Invoke($"Event object '{token}' was not found in scene '{context.Scene.Name}'.");
+        return target;
+    }
     private static GameObject? ResolveObjectTarget(
         VisualInstruction instruction,
         EventExecutionContext context,

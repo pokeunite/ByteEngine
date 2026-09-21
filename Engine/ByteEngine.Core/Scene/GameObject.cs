@@ -23,6 +23,14 @@ public sealed class GameObject
         _components.Select(component => component.RenderOrder)
             .FirstOrDefault(order => order.HasValue) ?? 0;
     public GameObject? Parent { get; private set; }
+    public string ParentSocket { get; set; } = string.Empty;
+    public AttachmentTransformRule AttachmentLocationRule { get; set; } = AttachmentTransformRule.KeepRelative;
+    public AttachmentTransformRule AttachmentRotationRule { get; set; } = AttachmentTransformRule.KeepRelative;
+    public AttachmentTransformRule AttachmentScaleRule { get; set; } = AttachmentTransformRule.KeepRelative;
+    public System.Numerics.Vector3 AttachmentPosition { get; set; }
+    public System.Numerics.Quaternion AttachmentRotation { get; set; } = System.Numerics.Quaternion.Identity;
+    public System.Numerics.Vector3 AttachmentScale { get; set; } = System.Numerics.Vector3.One;
+    public bool IsAttached => Parent != null && !string.IsNullOrWhiteSpace(ParentSocket);
     public IReadOnlyList<GameObject> Children => _children;
     public Scene? Scene => _scene;
     public IReadOnlyCollection<Guid> Tags => _tags;
@@ -63,6 +71,7 @@ public sealed class GameObject
         var scale = Transform.WorldScale;
         Parent?._children.Remove(this);
         Parent = parent;
+        if (parent == null) ParentSocket = string.Empty;
         Parent?._children.Add(this);
 
         _scene?.MoveObjectToEndOfSiblingGroup(this);

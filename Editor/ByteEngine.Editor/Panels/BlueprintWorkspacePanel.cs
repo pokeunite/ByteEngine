@@ -697,6 +697,8 @@ internal sealed class BlueprintWorkspacePanel
         DrawClassification(
             selected);
 
+        DrawAttachment(selected);
+
         DrawTransform(selected);
 
         DrawComponents(
@@ -886,6 +888,61 @@ internal sealed class BlueprintWorkspacePanel
         CommitPropertyEdit();
     }
 
+    private void DrawAttachment(GameObject selected)
+    {
+        if (selected.Parent == null || !EditorUi.SectionHeader("Attachment")) return;
+        GameObject parent = selected.Parent;
+        EditorUi.LabelValue("Parent", parent.Name);
+        IReadOnlyList<SkeletalSocketDefinition> sockets = SkeletalSocketResolver.GetSockets(parent);
+        bool socketExists = sockets.Any(item => string.Equals(item.Name, selected.ParentSocket, StringComparison.OrdinalIgnoreCase));
+        string preview = string.IsNullOrWhiteSpace(selected.ParentSocket) ? "None" : socketExists ? selected.ParentSocket : selected.ParentSocket + " (Missing)";
+        if (ImGui.BeginCombo("Parent Socket", preview))
+        {
+            if (ImGui.Selectable("None", string.IsNullOrWhiteSpace(selected.ParentSocket)))
+            {
+                selected.ParentSocket = string.Empty; MarkDirty();
+            }
+            foreach (SkeletalSocketDefinition socket in sockets)
+            {
+                if (ImGui.Selectable($"{socket.Name}##{socket.Id}", string.Equals(socket.Name, selected.ParentSocket, StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (!SkeletalAttachmentService.AttachToSocket(selected, parent, socket.Name, selected.AttachmentLocationRule, selected.AttachmentRotationRule, selected.AttachmentScaleRule)) selected.ParentSocket = socket.Name;
+                    MarkDirty();
+                }
+            }
+            ImGui.EndCombo();
+        }
+        AttachmentTransformRule locationRule=selected.AttachmentLocationRule, rotationRule=selected.AttachmentRotationRule, scaleRule=selected.AttachmentScaleRule;
+        bool changed = DrawAttachmentRule("Location Rule", ref locationRule);
+        changed |= DrawAttachmentRule("Rotation Rule", ref rotationRule);
+        changed |= DrawAttachmentRule("Scale Rule", ref scaleRule);
+        selected.AttachmentLocationRule=locationRule; selected.AttachmentRotationRule=rotationRule; selected.AttachmentScaleRule=scaleRule;
+        Vector3 offsetPosition=selected.AttachmentPosition, offsetScale=selected.AttachmentScale;
+        Vector3 offsetRotation=QuaternionToEuler(selected.AttachmentRotation);
+        if(ImGui.DragFloat3("Socket Position Offset",ref offsetPosition,.01f)){selected.AttachmentPosition=offsetPosition;changed=true;}
+        if(ImGui.DragFloat3("Socket Rotation Offset",ref offsetRotation,.25f)){selected.AttachmentRotation=Quaternion.CreateFromYawPitchRoll(offsetRotation.Y*MathF.PI/180f,offsetRotation.X*MathF.PI/180f,offsetRotation.Z*MathF.PI/180f);changed=true;}
+        if(ImGui.DragFloat3("Socket Scale Offset",ref offsetScale,.01f,.0001f,1000f)){selected.AttachmentScale=offsetScale;changed=true;}
+        if(changed){SkeletalAttachmentService.Apply(selected);MarkDirty();}
+    }
+
+    private static bool DrawAttachmentRule(string label, ref AttachmentTransformRule rule)
+    {
+        bool changed=false;
+        if(ImGui.BeginCombo(label, rule switch { AttachmentTransformRule.SnapToTarget=>"Snap To Target",AttachmentTransformRule.KeepWorld=>"Keep World",_=>"Keep Relative" }))
+        {
+            foreach(AttachmentTransformRule candidate in Enum.GetValues<AttachmentTransformRule>()) if(ImGui.Selectable(candidate switch { AttachmentTransformRule.SnapToTarget=>"Snap To Target",AttachmentTransformRule.KeepWorld=>"Keep World",_=>"Keep Relative" },candidate==rule)){rule=candidate;changed=true;}
+            ImGui.EndCombo();
+        }
+        return changed;
+    }
+
+    private static Vector3 QuaternionToEuler(Quaternion q)
+    {
+        q=Quaternion.Normalize(q); float x=MathF.Asin(Math.Clamp(2f*(q.W*q.X-q.Y*q.Z),-1f,1f));
+        float y=MathF.Atan2(2f*(q.W*q.Y+q.X*q.Z),1f-2f*(q.X*q.X+q.Y*q.Y));
+        float z=MathF.Atan2(2f*(q.W*q.Z+q.X*q.Y),1f-2f*(q.X*q.X+q.Z*q.Z));
+        return new(x*180f/MathF.PI,y*180f/MathF.PI,z*180f/MathF.PI);
+    }
     private void DrawTransform(
         GameObject selected)
     {

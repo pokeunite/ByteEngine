@@ -39,12 +39,6 @@ internal static class C7AnimationRegressionTests
             controller.RootMotionDelta == Vector3.Zero,
             "C7: RootMotionDelta must default to zero.");
 
-        var socket =
-            new BoneSocket3D();
-
-        Assert(
-            !socket.InheritBoneScale,
-            "C6/C7 regression: BoneSocket3D must default InheritBoneScale to false.");
 
         Assert(
             Enum.IsDefined(RootMotionMode.InPlace) &&
@@ -89,7 +83,7 @@ internal static class C7AnimationRegressionTests
             /*
              * The base serializer owns AnimationController persistence. Register
              * the existing supplemental animation codecs so this fixture can
-             * also verify BoneSocket3D without replacing that controller codec.
+             * also verify supplemental animation codecs without replacing that controller codec.
              */
             AnimationSerializationRegistrar.Register(
                 components);
@@ -121,18 +115,6 @@ internal static class C7AnimationRegressionTests
                         RootMotionMode.ApplyHorizontal
                 });
 
-            character.AddComponent(
-                new BoneSocket3D
-                {
-                    BoneName = "hand.r",
-                    PositionOffset =
-                        new Vector3(0.1f, 0.2f, 0.3f),
-                    RotationOffsetDegrees =
-                        new Vector3(10.0f, 20.0f, 30.0f),
-                    ScaleMultiplier =
-                        new Vector3(1.0f, 1.1f, 0.9f),
-                    InheritBoneScale = false
-                });
 
             Scene clone =
                 serializer.CloneForRuntime(scene);
@@ -177,39 +159,6 @@ internal static class C7AnimationRegressionTests
                     1.15f) < 0.0001f,
                 "C7: animation playback settings regressed during serialization.");
 
-            BoneSocket3D? clonedSocket =
-                clonedCharacter
-                    .GetComponent<BoneSocket3D>();
-
-            Assert(
-                clonedSocket != null,
-                "C6/C7 regression: BoneSocket3D failed scene round-trip.");
-
-            Assert(
-                clonedSocket!.BoneName == "hand.r" &&
-                !clonedSocket.InheritBoneScale,
-                "C6/C7 regression: BoneSocket3D authoring data changed during serialization.");
-
-            Assert(
-                Vector3.Distance(
-                    clonedSocket.PositionOffset,
-                    new Vector3(0.1f, 0.2f, 0.3f)) <
-                    0.0001f,
-                "C6/C7 regression: BoneSocket3D position offset failed round-trip.");
-
-            Assert(
-                Vector3.Distance(
-                    clonedSocket.RotationOffsetDegrees,
-                    new Vector3(10.0f, 20.0f, 30.0f)) <
-                    0.0001f,
-                "C6/C7 regression: BoneSocket3D rotation offset failed round-trip.");
-
-            Assert(
-                Vector3.Distance(
-                    clonedSocket.ScaleMultiplier,
-                    new Vector3(1.0f, 1.1f, 0.9f)) <
-                    0.0001f,
-                "C6/C7 regression: BoneSocket3D scale multiplier failed round-trip.");
             AnimationController? legacy =
                 components.Deserialize(
                     new ComponentData

@@ -111,6 +111,15 @@ public sealed class SkeletalMeshRenderer : Component
     public bool ModelLoaded =>
         _resolved && _model != null;
 
+    public ModelAsset? ResolvedModel
+    {
+        get
+        {
+            if (!_resolved) ResolveRuntimeResources();
+            return _model;
+        }
+    }
+
     public int SkinnedMeshCount =>
         _runtimeMeshes.Count;
 

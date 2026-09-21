@@ -6,6 +6,9 @@ namespace ByteEngine.Core.Assets;
 public sealed class ModelAsset
 {
     private readonly List<ImportedAnimation> _animations;
+    private readonly List<SkeletalSocketDefinition> _sockets = new();
+    private readonly Dictionary<string, SkeletalSocketDefinition> _socketsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Guid, SkeletalSocketDefinition> _socketsById = new();
 
     public Guid Guid { get; }
 
@@ -23,6 +26,22 @@ public sealed class ModelAsset
 
     public IReadOnlyList<ImportedAnimation> Animations =>
         _animations;
+
+    public IReadOnlyList<SkeletalSocketDefinition> Sockets => _sockets;
+
+    public SkeletalSocketDefinition? FindSocket(string name) =>
+        !string.IsNullOrWhiteSpace(name) && _socketsByName.TryGetValue(name.Trim(), out SkeletalSocketDefinition? socket) ? socket : null;
+
+    public SkeletalSocketDefinition? FindSocket(Guid id) => _socketsById.GetValueOrDefault(id);
+
+    public void ReplaceSockets(IEnumerable<SkeletalSocketDefinition> sockets)
+    {
+        _sockets.Clear(); _socketsByName.Clear(); _socketsById.Clear();
+        foreach (SkeletalSocketDefinition socket in sockets.Select(item => item.Clone()))
+        {
+            _sockets.Add(socket); _socketsByName[socket.Name] = socket; _socketsById[socket.Id] = socket;
+        }
+    }
 
     /// <summary>
     /// Rig classification captured from this model's importer metadata.

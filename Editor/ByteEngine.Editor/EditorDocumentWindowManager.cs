@@ -137,10 +137,9 @@ internal sealed class EditorDocumentWindowManager : IDisposable
             $"{Path.GetFileNameWithoutExtension(asset.ProjectPath)} — Animation Profile — ByteEngine",
             "###AnimationProfileWorkspace",
             null,
-            (_, _, _, _) =>
-                panel.Draw(
-                    log),
-            () => { });
+            (renderer, renderer3D, width, height) =>
+                panel.Draw(log, renderer, renderer3D, width, height),
+            panel.Dispose);
     }
 
     public void OpenBlueprint(
@@ -214,8 +213,7 @@ internal sealed class EditorDocumentWindowManager : IDisposable
             $"###EventWorkspace:{asset.Guid}",
             null,
             (_, _, _, _) =>
-                panel.Draw(
-                    log),
+                panel.Draw(log),
             () => { });
     }
 

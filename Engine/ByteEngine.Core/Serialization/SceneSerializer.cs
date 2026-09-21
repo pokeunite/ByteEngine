@@ -146,6 +146,16 @@ public sealed class SceneSerializer
                     Tags = gameObject.Tags.ToList(),
                     Layer = gameObject.Layer,
                     ParentId = gameObject.Parent?.Id,
+                    ParentSocket = gameObject.ParentSocket,
+                    AttachmentLocationRule = gameObject.AttachmentLocationRule,
+                    AttachmentRotationRule = gameObject.AttachmentRotationRule,
+                    AttachmentScaleRule = gameObject.AttachmentScaleRule,
+                    AttachmentOffset = new TransformData
+                    {
+                        LocalPosition = new Vector3Data { X = gameObject.AttachmentPosition.X, Y = gameObject.AttachmentPosition.Y, Z = gameObject.AttachmentPosition.Z },
+                        LocalRotation = new QuaternionData { X = gameObject.AttachmentRotation.X, Y = gameObject.AttachmentRotation.Y, Z = gameObject.AttachmentRotation.Z, W = gameObject.AttachmentRotation.W },
+                        LocalScale = new Vector3Data { X = gameObject.AttachmentScale.X, Y = gameObject.AttachmentScale.Y, Z = gameObject.AttachmentScale.Z }
+                    },
                     Transform =
                         new TransformData
                         {
@@ -319,6 +329,20 @@ public sealed class SceneSerializer
                 created.TryGetValue(gameObjectData.ParentId.Value, out GameObject? parent))
             {
                 child.SetParent(parent, false);
+                child.ParentSocket = gameObjectData.ParentSocket ?? string.Empty;
+                child.AttachmentLocationRule = gameObjectData.AttachmentLocationRule;
+                child.AttachmentRotationRule = gameObjectData.AttachmentRotationRule;
+                child.AttachmentScaleRule = gameObjectData.AttachmentScaleRule;
+                if (gameObjectData.AttachmentOffset is TransformData offset)
+                {
+                    Vector3Data p = offset.LocalPosition ?? new Vector3Data();
+                    QuaternionData r = offset.LocalRotation ?? new QuaternionData();
+                    Vector3Data s = offset.LocalScale ?? new Vector3Data { X = 1f, Y = 1f, Z = 1f };
+                    child.AttachmentPosition = new Vector3(p.X, p.Y, p.Z);
+                    child.AttachmentRotation = new Quaternion(r.X, r.Y, r.Z, r.W);
+                    child.AttachmentScale = new Vector3(s.X, s.Y, s.Z);
+                }
+                if (child.IsAttached) SkeletalAttachmentService.Apply(child);
             }
         }
 

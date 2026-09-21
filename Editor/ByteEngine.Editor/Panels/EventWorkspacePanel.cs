@@ -6684,6 +6684,26 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["value"] = EventValue.Number(-.5);
                 break;
 
+            case "attachment.attachToSocket":
+                instruction.Arguments["object"] = EventValue.String("Self");
+                instruction.Arguments["parent"] = EventValue.String("Self");
+                instruction.Arguments["socket"] = EventValue.String(string.Empty);
+                instruction.Arguments["locationRule"] = EventValue.String("SnapToTarget");
+                instruction.Arguments["rotationRule"] = EventValue.String("SnapToTarget");
+                instruction.Arguments["scaleRule"] = EventValue.String("KeepRelative");
+                break;
+            case "attachment.detach":
+                instruction.Arguments["object"] = EventValue.String("Self");
+                instruction.Arguments["keepWorld"] = EventValue.Boolean(true);
+                break;
+            case "attachment.isAttached":
+                instruction.Arguments["object"] = EventValue.String("Self");
+                break;
+            case "attachment.isAttachedToSocket":
+                instruction.Arguments["object"] = EventValue.String("Self");
+                instruction.Arguments["parent"] = EventValue.String("Self");
+                instruction.Arguments["socket"] = EventValue.String(string.Empty);
+                break;
             case "animation.eventFired":
                 instruction.Arguments["target"] = EventValue.String("Self");
                 instruction.Arguments["event"] = EventValue.String(string.Empty);
@@ -7093,6 +7113,26 @@ internal sealed class EventWorkspacePanel
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
                 break;
 
+            case "attachment.attachToSocket":
+                DrawObjectTargetArgument(instruction, "object", "Object", state);
+                DrawObjectTargetArgument(instruction, "parent", "Parent", state);
+                DrawAttachmentSocketArgument(instruction, state);
+                DrawAttachmentRuleArgument(instruction, "locationRule", "Location Rule", "SnapToTarget");
+                DrawAttachmentRuleArgument(instruction, "rotationRule", "Rotation Rule", "SnapToTarget");
+                DrawAttachmentRuleArgument(instruction, "scaleRule", "Scale Rule", "KeepRelative");
+                break;
+            case "attachment.detach":
+                DrawObjectTargetArgument(instruction, "object", "Object", state);
+                DrawValueArgument(instruction, "keepWorld", "Keep World", VariableType.Boolean, EventValue.Boolean(true), state, false);
+                break;
+            case "attachment.isAttached":
+                DrawObjectTargetArgument(instruction, "object", "Object", state);
+                break;
+            case "attachment.isAttachedToSocket":
+                DrawObjectTargetArgument(instruction, "object", "Object", state);
+                DrawObjectTargetArgument(instruction, "parent", "Parent", state);
+                DrawAttachmentSocketArgument(instruction, state);
+                break;
             case "animation.eventFired":
                 DrawAnimationSignalCondition(
                     instruction,
@@ -9218,6 +9258,62 @@ internal sealed class EventWorkspacePanel
         }
     }
 
+    private void DrawAttachmentSocketArgument(VisualInstruction instruction, EditorState? state)
+    {
+        string current = instruction.Arguments.TryGetValue("socket", out EventValue? value) && value.Constant.Type == VariableType.String ? value.Constant.String : string.Empty;
+        GameObject? parent = state == null ? null : ResolveEditorObjectArgument(instruction, "parent", state);
+        IReadOnlyList<SkeletalSocketDefinition> sockets = parent == null ? Array.Empty<SkeletalSocketDefinition>() : DiscoverAttachmentSockets(parent);
+        bool exists = sockets.Any(item => string.Equals(item.Name, current, StringComparison.OrdinalIgnoreCase));
+        ImGui.TextDisabled("Socket");
+        if (sockets.Count > 0)
+        {
+            string preview = string.IsNullOrWhiteSpace(current) ? "Select Socket..." : exists ? current : current + " (Missing)";
+            if (ImGui.BeginCombo("##AttachmentSocket", preview))
+            {
+                foreach (SkeletalSocketDefinition socket in sockets) if (ImGui.Selectable($"{socket.Name}##{socket.Id}", string.Equals(socket.Name,current,StringComparison.OrdinalIgnoreCase))) { instruction.Arguments["socket"]=EventValue.String(socket.Name);_dirty=true; }
+                ImGui.EndCombo();
+            }
+        }
+        else
+        {
+            if(ImGui.InputTextWithHint("##AttachmentSocket","Socket name...",ref current,128)){instruction.Arguments["socket"]=EventValue.String(current);_dirty=true;}
+            ImGui.TextDisabled("Parent is unresolved or has no model-owned sockets; manual value is preserved.");
+        }
+    }
+
+    private static IReadOnlyList<SkeletalSocketDefinition> DiscoverAttachmentSockets(GameObject parent)
+    {
+        IReadOnlyList<SkeletalSocketDefinition> live=SkeletalSocketResolver.GetSockets(parent); if(live.Count>0)return live;
+        EditorProjectContext? project=EditorProjectContext.Active; if(project==null)return live;
+        foreach(GameObject item in SelfAndDescendants(parent))
+        {
+            AnimationController? controller=item.GetComponent<AnimationController>();
+            if(controller!=null&&AnimationClipDiscovery.TryGetModel(controller,project,out ModelAsset? model,out _)&&model!=null&&model.Sockets.Count>0)return model.Sockets;
+        }
+        return live;
+    }
+
+    private static IEnumerable<GameObject> SelfAndDescendants(GameObject root)
+    {
+        yield return root; foreach(GameObject child in root.Children)foreach(GameObject item in SelfAndDescendants(child))yield return item;
+    }
+    private void DrawAttachmentRuleArgument(VisualInstruction instruction, string argument, string label, string fallback)
+    {
+        string current=instruction.Arguments.TryGetValue(argument,out EventValue? value)&&value.Constant.Type==VariableType.String?value.Constant.String:fallback;
+        string Display(string item)=>item switch{"SnapToTarget"=>"Snap To Target","KeepWorld"=>"Keep World",_=>"Keep Relative"};
+        if(ImGui.BeginCombo(label,Display(current)))
+        {
+            foreach(string item in new[]{"KeepRelative","KeepWorld","SnapToTarget"}) if(ImGui.Selectable(Display(item),string.Equals(item,current,StringComparison.OrdinalIgnoreCase))){instruction.Arguments[argument]=EventValue.String(item);_dirty=true;}
+            ImGui.EndCombo();
+        }
+    }
+
+    private GameObject? ResolveEditorObjectArgument(VisualInstruction instruction, string argument, EditorState state)
+    {
+        string token=instruction.Arguments.TryGetValue(argument,out EventValue? value)&&value.Constant.Type==VariableType.String?value.Constant.String:"Self";
+        if(string.IsNullOrWhiteSpace(token)||string.Equals(token,"Self",StringComparison.OrdinalIgnoreCase))return ResolveSelfContext(state);
+        return token.StartsWith("id:",StringComparison.OrdinalIgnoreCase)&&Guid.TryParse(token[3..],out Guid id)?state.EditorScene.FindGameObject(id):state.EditorScene.FindGameObject(token);
+    }
     // ========================================================
     // OBJECT TARGETS
     // ========================================================

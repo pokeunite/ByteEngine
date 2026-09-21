@@ -103,6 +103,8 @@ public sealed class AssetManager : IDisposable
             model,
             _warningSink);
 
+        ModelSocketMetadataStore.MergeInto(ProjectRoot, model, _warningSink);
+
         _models[asset.Guid] = model;
         _modelRevisions[asset.Guid] = CaptureRevision(asset);
         return model;
@@ -333,6 +335,8 @@ public sealed class AssetManager : IDisposable
             ProjectRoot,
             refreshed,
             _warningSink);
+
+        ModelSocketMetadataStore.MergeInto(ProjectRoot, refreshed, _warningSink);
 
         _models[guid] = refreshed;
         _modelRevisions[guid] = CaptureRevision(record);

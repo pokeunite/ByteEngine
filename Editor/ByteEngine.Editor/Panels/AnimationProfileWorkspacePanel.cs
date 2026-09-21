@@ -2,6 +2,7 @@ using System.Numerics;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 
 using ImGuiNET;
@@ -15,7 +16,7 @@ namespace ByteEngine.Editor.Panels;
 /// delegated to a dedicated rig window instead of expanding the profile into a
 /// long wall of bone dropdowns.
 /// </summary>
-internal sealed class AnimationProfileWorkspacePanel
+internal sealed class AnimationProfileWorkspacePanel : IDisposable
 {
     private readonly EditorDocumentManager _documents;
 
@@ -25,6 +26,7 @@ internal sealed class AnimationProfileWorkspacePanel
     }
     private readonly HumanoidRigConfiguratorPanel _humanoidConfigurator =
         new();
+    private readonly SkeletalSocketPreview _socketPreview = new();
 
     private AssetRecord? _asset;
     private EditorProjectContext? _project;
@@ -33,6 +35,10 @@ internal sealed class AnimationProfileWorkspacePanel
     private bool _visible;
     private bool _focusNextDraw;
     private bool _dirty;
+    private Guid _socketModelGuid;
+    private Guid _selectedSocketId;
+    private string _selectedSocketBone = string.Empty;
+    private List<SkeletalSocketDefinition> _socketDrafts = new();
     private bool _openUnsavedPopup;
     private EditorDocumentId? _registeredDocumentId;
     private AssetRecord? _pendingOpenAsset;
@@ -120,7 +126,11 @@ internal sealed class AnimationProfileWorkspacePanel
     }
 
     public void Draw(
-        EditorLog log)
+        EditorLog log,
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
     {
         // C9.5 UX: retarget entry point. The popup draws once per ImGui frame,
         // even if the AnimationController inspector also hosts it.
@@ -130,8 +140,7 @@ internal sealed class AnimationProfileWorkspacePanel
             _asset != null &&
             _project != null)
         {
-            DrawWorkspace(
-                log);
+            DrawWorkspace(log, renderer, renderer3D, windowWidth, windowHeight);
         }
 
         Guid? configureRequest =
@@ -157,8 +166,7 @@ internal sealed class AnimationProfileWorkspacePanel
 
     }
 
-    private void DrawWorkspace(
-        EditorLog log)
+    private void DrawWorkspace(EditorLog log, Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight)
     {
         if (_asset == null ||
             _project == null)
@@ -225,7 +233,7 @@ internal sealed class AnimationProfileWorkspacePanel
             }
             else
             {
-                DrawProfileTabs();
+                DrawProfileTabs(renderer, renderer3D, windowWidth, windowHeight);
             }
         }
 
@@ -315,7 +323,7 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.Separator();
     }
 
-    private void DrawProfileTabs()
+    private void DrawProfileTabs(Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight)
     {
         if (_profile ==
                 null ||
@@ -361,6 +369,12 @@ internal sealed class AnimationProfileWorkspacePanel
         }
 
         if (ImGui.BeginTabItem(
+                "Sockets"))
+        {
+            DrawSockets(renderer, renderer3D, windowWidth, windowHeight);
+            ImGui.EndTabItem();
+        }
+        if (ImGui.BeginTabItem(
                 "Layers"))
         {
             DrawLayers();
@@ -388,6 +402,94 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.EndTabBar();
     }
 
+    private void DrawSockets(Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight)
+    {
+        AssetReference reference = _profile?.Rig.ReferenceModel ?? AssetReference.Empty;
+        if (_project == null || reference.IsEmpty)
+        {
+            ImGui.TextDisabled("Assign a Reference Model on the Rig tab to author sockets.");
+            return;
+        }
+        ModelAsset model;
+        try { model = _project.Assets.LoadModel(reference); }
+        catch (Exception exception) { ImGui.TextDisabled(exception.Message); return; }
+        if (_socketModelGuid != model.Guid)
+        {
+            _socketModelGuid = model.Guid;
+            _socketDrafts = model.Sockets.Select(item => item.Clone()).ToList();
+            _selectedSocketId = Guid.Empty;
+        }
+        if (model.Skeleton == null)
+        {
+            ImGui.TextDisabled("The Reference Model has no skeleton.");
+            return;
+        }
+
+        ImGui.Columns(3, "SocketAuthoringColumns", true);
+        ImGui.SetColumnWidth(0, 250.0f);
+        ImGui.SeparatorText("SKELETON");
+        foreach (var bone in model.Skeleton.Bones)
+        {
+            bool boneSelected = string.Equals(_selectedSocketBone, bone.Name, StringComparison.OrdinalIgnoreCase);
+            if (ImGui.Selectable($"{bone.Name}##bone:{bone.Name}", boneSelected)) _selectedSocketBone = bone.Name;
+            foreach (SkeletalSocketDefinition socket in _socketDrafts.Where(item => string.Equals(item.BoneName, bone.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                ImGui.Indent();
+                if (ImGui.Selectable($"[Socket] {socket.Name}##{socket.Id}", socket.Id == _selectedSocketId)) { _selectedSocketId = socket.Id; _selectedSocketBone = bone.Name; }
+                ImGui.Unindent();
+            }
+        }
+        ImGui.BeginDisabled(string.IsNullOrWhiteSpace(_selectedSocketBone));
+        if (ImGui.Button("Add Socket"))
+        {
+            string baseName = _selectedSocketBone + "Socket"; string name = baseName; int suffix = 2;
+            while (_socketDrafts.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))) name = baseName + suffix++;
+            SkeletalSocketDefinition socket = new() { Name = name, BoneName = _selectedSocketBone };
+            _socketDrafts.Add(socket); _selectedSocketId = socket.Id; PersistSockets(model);
+        }
+        ImGui.EndDisabled();
+
+        ImGui.NextColumn();
+        ImGui.SeparatorText("3D PREVIEW");
+        _socketPreview.Draw(_project, reference, model, _socketDrafts, ref _selectedSocketId,
+            renderer, renderer3D, windowWidth, windowHeight, () => PersistSockets(model));
+
+        ImGui.NextColumn();
+        ImGui.SeparatorText("SOCKET DETAILS");
+        SkeletalSocketDefinition? selected = _socketDrafts.FirstOrDefault(item => item.Id == _selectedSocketId);
+        if (selected == null) ImGui.TextDisabled("Select a socket from the skeleton tree.");
+        else
+        {
+            bool changed = false;
+            string name = selected.Name;
+            if (ImGui.InputText("Name", ref name, 128) && !string.IsNullOrWhiteSpace(name) && !_socketDrafts.Any(item => item.Id != selected.Id && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))) { selected.Name = name.Trim(); changed = true; }
+            string previewBone = string.IsNullOrWhiteSpace(selected.BoneName) ? "Select Bone..." : selected.BoneName;
+            if (ImGui.BeginCombo("Bone", model.Skeleton.Bones.Any(b => string.Equals(b.Name, selected.BoneName, StringComparison.OrdinalIgnoreCase)) ? previewBone : previewBone + " (Missing)"))
+            {
+                foreach (var bone in model.Skeleton.Bones) if (ImGui.Selectable(bone.Name, string.Equals(bone.Name, selected.BoneName, StringComparison.OrdinalIgnoreCase))) { selected.BoneName = bone.Name; _selectedSocketBone = bone.Name; changed = true; }
+                ImGui.EndCombo();
+            }
+            Vector3 position=selected.PositionOffset, rotation=selected.RotationOffsetDegrees, scale=selected.Scale;
+            if(ImGui.DragFloat3("Position",ref position,.01f)){selected.PositionOffset=position;changed=true;}
+            if(ImGui.DragFloat3("Rotation",ref rotation,.25f)){selected.RotationOffsetDegrees=rotation;changed=true;}
+            if(ImGui.DragFloat3("Scale",ref scale,.01f,.0001f,1000f)){selected.Scale=scale;changed=true;}
+            bool inherit=selected.InheritBoneScale; if(ImGui.Checkbox("Inherit Bone Scale",ref inherit)){selected.InheritBoneScale=inherit;changed=true;}
+            AssetReference preview = selected.PreviewAssetGuid.HasValue ? new AssetReference(selected.PreviewAssetGuid.Value, selected.PreviewAssetPath) : AssetReference.Empty;
+            if(DrawAssetPicker("Preview Asset",AssetType.Model3D,ref preview)){selected.PreviewAssetGuid=preview.IsEmpty?null:preview.Guid;selected.PreviewAssetPath=preview.CachedProjectPath;changed=true;}
+            if(ImGui.Button("Duplicate")){SkeletalSocketDefinition copy=selected.Clone(false); string baseName=selected.Name+" Copy";copy.Name=baseName;int n=2;while(_socketDrafts.Any(item=>string.Equals(item.Name,copy.Name,StringComparison.OrdinalIgnoreCase)))copy.Name=baseName+n++;_socketDrafts.Add(copy);_selectedSocketId=copy.Id;changed=true;}
+            ImGui.SameLine(); if(ImGui.Button("Delete")){_socketDrafts.Remove(selected);_selectedSocketId=Guid.Empty;changed=true;}
+            if(changed) PersistSockets(model);
+            ImGui.Separator(); ImGui.TextDisabled("Preview alignment uses the model-owned socket transform. Runtime attachments do not depend on the preview asset.");
+        }
+        ImGui.Columns(1);
+    }
+
+    private void PersistSockets(ModelAsset model)
+    {
+        if (_project == null) return;
+        try { ModelSocketMetadataStore.Save(_project.ProjectRoot, model.Guid, _socketDrafts); model.ReplaceSockets(_socketDrafts); }
+        catch (Exception exception) { _loadError = exception.Message; }
+    }
     private bool DrawRig()
     {
         if (_profile ==
@@ -1966,6 +2068,8 @@ internal sealed class AnimationProfileWorkspacePanel
         }
     }
 
+    public void Dispose() => _socketPreview.Dispose();
+
     private void Reload(
         EditorLog log)
     {
@@ -2037,4 +2141,5 @@ internal static class AnimationProfileWorkspaceRequest
 
         return pending;
     }
+
 }

@@ -43,7 +43,6 @@ internal static class ComponentMetadataRegistry
         [typeof(CharacterController3D)] = new("Character Movement", "Character", "Controls grounded movement, jumping, slopes and air control.", "controller motor walking jump"),
         [typeof(PlayerController3D)] = new("Player Input", "Character", "Creates camera-relative movement intent and player control rotation.", "controls wasd mouse control yaw pitch", true, false, new[] { typeof(CharacterController3D) }),
         [typeof(AnimationController)] = new("Animation Controller", "Character", "Selects character animation states from movement.", "character animator"),
-        [typeof(BoneSocket3D)] = new("Bone Socket 3D", "Character", "Attaches this object to an animated skeleton bone at runtime.", "socket bone weapon hand attachment vfx"),
         [typeof(CameraBoom3D)] = new("Third Person Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow"),
         [typeof(Camera3D)] = new("Camera", "Camera", "Renders a perspective 3D game view.", "perspective fov"),
         [typeof(Camera2D)] = new("2D Camera", "Camera", "Renders a two-dimensional game view.", "orthographic zoom"),
@@ -97,13 +96,6 @@ internal static class ComponentMetadataRegistry
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.AutoFitSource))] = new("Auto-Fit Source", "Diagnostics", "Source used by capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Scale recorded when importing the hierarchy.", Advanced: true, ReadOnly: true),
 
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.BoneName))] = new("Bone", "Socket", "Skeleton bone this object follows. Parent the socket object under the animated character."),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.PositionOffset))] = new("Position Offset", "Socket", "Local-space position offset from the selected bone."),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.RotationOffsetDegrees))] = new("Rotation Offset", "Socket", "Local-space Euler rotation offset from the selected bone.", "degrees"),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.ScaleMultiplier))] = new("Scale Multiplier", "Socket", "Additional attachment scale applied after the bone transform."),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.InheritBoneScale))] = new("Inherit Bone Scale", "Socket", "Inherit animated/model scale from the selected bone."),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.IsBound))] = new("Is Bound", "Diagnostics", "True when the socket resolved its renderer and selected bone.", Advanced: true, ReadOnly: true),
-        [(typeof(BoneSocket3D), nameof(BoneSocket3D.SourceRendererName))] = new("Source Renderer", "Diagnostics", "Resolved skeletal renderer supplying the bone pose.", Advanced: true, ReadOnly: true),
 
         [(typeof(AudioSource3D), nameof(AudioSource3D.ClipReference))] = new("Audio Clip", "Audio", "Drag a PCM WAV asset here. Mono WAV is recommended for positional 3D audio."),
         [(typeof(AudioSource3D), nameof(AudioSource3D.PlayOnStart))] = new("Play On Start", "Playback", "Start playing automatically when the scene starts."),

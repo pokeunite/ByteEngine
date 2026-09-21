@@ -386,6 +386,8 @@ public sealed class Scene
                 if (_pendingDestroy.Contains(gameObject.Id)) continue;
                 gameObject.LateUpdateInternal();
             }
+
+            SkeletalAttachmentService.UpdateScene(this);
         }
         finally
         {
@@ -399,6 +401,7 @@ public sealed class Scene
         if (!_loaded) return;
 
         context.Begin3DFrame();
+        SkeletalAttachmentService.UpdateScene(this);
 
         foreach (GameObject gameObject in GetRenderOrder())
             gameObject.RenderInternal(context);
@@ -409,6 +412,7 @@ public sealed class Scene
     internal void RenderEditorInternal(RenderContext context)
     {
         context.Begin3DFrame();
+        SkeletalAttachmentService.UpdateScene(this);
 
         foreach (GameObject gameObject in GetRenderOrder())
             gameObject.RenderEditorInternal(context);

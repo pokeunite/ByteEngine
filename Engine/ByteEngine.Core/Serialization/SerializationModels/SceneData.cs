@@ -33,6 +33,12 @@ public sealed class GameObjectData
 
     public Guid? ParentId { get; set; }
 
+    public string ParentSocket { get; set; } = string.Empty;
+    public ByteEngine.Core.Scene.AttachmentTransformRule AttachmentLocationRule { get; set; } = ByteEngine.Core.Scene.AttachmentTransformRule.KeepRelative;
+    public ByteEngine.Core.Scene.AttachmentTransformRule AttachmentRotationRule { get; set; } = ByteEngine.Core.Scene.AttachmentTransformRule.KeepRelative;
+    public ByteEngine.Core.Scene.AttachmentTransformRule AttachmentScaleRule { get; set; } = ByteEngine.Core.Scene.AttachmentTransformRule.KeepRelative;
+    public TransformData? AttachmentOffset { get; set; }
+
     public TransformData Transform { get; set; } =
         new();
 
