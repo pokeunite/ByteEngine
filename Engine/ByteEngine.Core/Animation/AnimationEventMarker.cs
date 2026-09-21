@@ -3,8 +3,8 @@ namespace ByteEngine.Core.Animation;
 /// <summary>
 /// One instantaneous marker on an animation timeline.
 ///
-/// C10-A keeps the payload intentionally lightweight. C10-F can expose richer
-/// Event Sheet bindings without changing marker identity or timing.
+/// Event Sheets consume marker names and optional payload filters without changing
+/// marker identity, stable clip ownership, or timeline timing.
 /// </summary>
 public sealed class AnimationEventMarker
 {
@@ -18,8 +18,7 @@ public sealed class AnimationEventMarker
     public float Time { get; set; }
 
     /// <summary>
-    /// Optional lightweight author payload. It is deliberately a string for the
-    /// foundation pass; typed Event Sheet values can be layered on later.
+    /// Optional lightweight string payload used by animation-event conditions.
     /// </summary>
     public string Payload { get; set; } = string.Empty;
 

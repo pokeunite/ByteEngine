@@ -1,16 +1,13 @@
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets.Importers;
-using System.Runtime.CompilerServices;
 
 namespace ByteEngine.Tests;
 
 /// <summary>
-/// C10-A/B focused regressions. C10-G will wire these into the consolidated
-/// milestone runner when the editor authoring/persistence pieces are complete.
+/// C10-A/B focused regressions for authoritative marker crossing and clip-owned metadata.
 /// </summary>
 internal static class C10AnimationEventsTests
 {
-    [ModuleInitializer]
     public static void Run()
     {
         SnapshotIsSanitizedAndSorted();
@@ -22,8 +19,6 @@ internal static class C10AnimationEventsTests
         StartMarkerFiresOnce();
         EmptyTrackStillCountsLoops();
         ImportedAnimationOwnsRuntimeEventMetadata();
-        C10AnimationWindowTests.Run();
-        C10AnimationMetadataTests.Run();
     }
 
     private static void SnapshotIsSanitizedAndSorted()

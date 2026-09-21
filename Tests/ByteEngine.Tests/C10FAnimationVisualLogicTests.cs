@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
@@ -9,7 +8,6 @@ namespace ByteEngine.Tests;
 
 internal static class C10FAnimationVisualLogicTests
 {
-    [ModuleInitializer]
     public static void Run()
     {
         Registry(); EventFiltering(); MultipleListeners(); Windows(); ResetLifecycle(); OrdinaryIsolation();

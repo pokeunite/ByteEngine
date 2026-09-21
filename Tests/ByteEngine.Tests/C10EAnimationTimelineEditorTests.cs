@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
@@ -9,7 +8,6 @@ namespace ByteEngine.Tests;
 
 internal static class C10EAnimationTimelineEditorTests
 {
-    [ModuleInitializer]
     internal static void Run()
     {
         EventTimesClampAndDirtyStateTracks();
