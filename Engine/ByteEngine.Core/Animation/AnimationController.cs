@@ -27,6 +27,14 @@ public enum LocomotionDirection
     Right
 }
 
+internal enum NamedActionRequestDecision
+{
+    KeepCurrent,
+    RestartSame,
+    InterruptCurrent,
+    QueueRequested,
+    Reject
+}
 /// <summary>
 /// Character animation playback driver.
 ///
@@ -548,26 +556,69 @@ public sealed class AnimationController : Component
     public bool PlayNamedAction(string actionName, bool retrigger = false, bool queueIfBlocked = false, bool forceInterrupt = false)
     {
         if (!_namedActions.TryGetValue(actionName ?? string.Empty, out AnimationActionProfile? requested)) return false;
+
         if (_actionActive)
         {
             bool same = string.Equals(_currentAction, requested.Name, StringComparison.OrdinalIgnoreCase);
-            if (same && !retrigger) return true;
-            bool canInterrupt = forceInterrupt || (_currentNamedAction?.Interruptible == true &&
-                requested.Priority >= _currentNamedAction.Priority);
-            if (!canInterrupt)
+            NamedActionRequestDecision decision = ResolveNamedActionRequest(
+                same, retrigger, forceInterrupt, _currentNamedAction?.Interruptible == true,
+                _currentNamedAction?.Priority ?? int.MaxValue, requested.Priority, queueIfBlocked);
+
+            if (decision == NamedActionRequestDecision.KeepCurrent) return true;
+            if (decision == NamedActionRequestDecision.QueueRequested)
             {
-                if (queueIfBlocked) _queuedAction = requested.Name;
+                _queuedAction = requested.Name;
                 return false;
             }
-            if (same && retrigger)
+            if (decision == NamedActionRequestDecision.Reject) return false;
+
+            if (decision == NamedActionRequestDecision.RestartSame)
             {
-                foreach (SkeletalMeshRenderer renderer in _renderers) renderer.Stop();
+                foreach (SkeletalMeshRenderer renderer in _actionRenderers) renderer.Stop();
                 ResetAnimationEventTracking();
+                _activeAnimationWindows.Clear();
             }
+
+            _queuedAction = string.Empty;
         }
+
         return StartNamedAction(requested.Name);
     }
 
+    internal static NamedActionRequestDecision ResolveNamedActionRequest(
+        bool sameAction, bool retrigger, bool forceInterrupt, bool currentInterruptible,
+        int currentPriority, int requestedPriority, bool queueIfBlocked)
+    {
+        if (sameAction) return retrigger ? NamedActionRequestDecision.RestartSame : NamedActionRequestDecision.KeepCurrent;
+        if (forceInterrupt || (currentInterruptible && requestedPriority >= currentPriority))
+            return NamedActionRequestDecision.InterruptCurrent;
+        return queueIfBlocked ? NamedActionRequestDecision.QueueRequested : NamedActionRequestDecision.Reject;
+    }
+    public bool TriggerAction(string actionName)
+    {
+        string requestedAction = actionName ?? string.Empty;
+        if (!_namedActions.ContainsKey(requestedAction)) return false;
+        if (!_actionActive) return PlayNamedAction(requestedAction);
+        if (_currentNamedAction == null || !IsActionInChain(requestedAction, _currentNamedAction.Name)) return false;
+        return QueueCombo();
+    }
+
+    internal bool IsActionInChain(string startAction, string candidateAction)
+    {
+        if (string.IsNullOrWhiteSpace(startAction) || string.IsNullOrWhiteSpace(candidateAction)) return false;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string current = startAction;
+        int remaining = Math.Min(Math.Max(_namedActions.Count, 1), 128);
+
+        while (remaining-- > 0 && _namedActions.TryGetValue(current, out AnimationActionProfile? action) && visited.Add(current))
+        {
+            if (string.Equals(action.Name, candidateAction, StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.IsNullOrWhiteSpace(action.NextAction)) return false;
+            current = action.NextAction;
+        }
+
+        return false;
+    }
     public bool QueueNamedAction(string actionName)
     {
         if (!_namedActions.TryGetValue(actionName ?? string.Empty, out AnimationActionProfile? action)) return false;

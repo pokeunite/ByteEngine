@@ -468,6 +468,16 @@ public sealed class VisualLogicRegistry
             Id = "animation.cancelAction", Category = "Animation", DisplayName = "Cancel Action",
             TargetComponent = nameof(AnimationController), Execute = (instruction, context) => ResolveAnimationController(instruction, context)?.CancelCurrentAction()
         });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "animation.triggerAction",
+            Category = "Animation",
+            DisplayName = "Trigger Action / Combo",
+            TargetComponent = nameof(AnimationController),
+            Execute = (instruction, context) =>
+                ResolveAnimationController(instruction, context)?.TriggerAction(
+                    EventValueResolver.GetString(instruction, "action", context))
+        });
         registry.RegisterAction(
             new VisualActionDefinition
             {

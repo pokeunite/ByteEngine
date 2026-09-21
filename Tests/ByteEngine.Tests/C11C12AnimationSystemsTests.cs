@@ -4,7 +4,9 @@ using System.Runtime.CompilerServices;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Scene;
 using ByteEngine.Core.VisualLogic;
 
 namespace ByteEngine.Tests;
@@ -19,6 +21,8 @@ internal static class C11C12AnimationSystemsTests
         DirectionalClipFallbacks();
         StateHysteresis();
         NamedActionCacheAndVisualLogic();
+        NamedActionRequestRules();
+        NamedActionChainRules();
         C10MilestoneTests.Run();
     }
 
@@ -128,6 +132,82 @@ internal static class C11C12AnimationSystemsTests
             Assert(registry.TryGetCondition(id, out _), $"C11 condition registration {id}");
     }
 
+    private static void NamedActionRequestRules()
+    {
+        Assert(AnimationController.ResolveNamedActionRequest(true, false, false, false, 100, 0, false) == NamedActionRequestDecision.KeepCurrent,
+            "C11 same action without retrigger remains active");
+        Assert(AnimationController.ResolveNamedActionRequest(true, true, false, false, 100, 0, false) == NamedActionRequestDecision.RestartSame,
+            "C11 same action retriggers even when non-interruptible");
+        Assert(AnimationController.ResolveNamedActionRequest(false, false, false, true, 20, 10, false) == NamedActionRequestDecision.Reject,
+            "C11 lower-priority unrelated action is blocked");
+        Assert(AnimationController.ResolveNamedActionRequest(false, false, false, true, 20, 20, false) == NamedActionRequestDecision.InterruptCurrent &&
+               AnimationController.ResolveNamedActionRequest(false, false, false, true, 20, 30, false) == NamedActionRequestDecision.InterruptCurrent,
+            "C11 equal/higher priority interrupts an interruptible action");
+        Assert(AnimationController.ResolveNamedActionRequest(false, false, true, false, 100, 0, false) == NamedActionRequestDecision.InterruptCurrent,
+            "C11 force interrupt overrides priority and interruptibility");
+        Assert(AnimationController.ResolveNamedActionRequest(false, false, false, false, 20, 30, true) == NamedActionRequestDecision.QueueRequested,
+            "C11 blocked queueIfBlocked stores the pending request");
+    }
+    private static void NamedActionChainRules()
+    {
+        var actor = new GameObject("Action Test");
+        AnimationController controller = actor.AddComponent(new AnimationController { DriveLocomotion = false });
+        var actions = (Dictionary<string, AnimationActionProfile>)typeof(AnimationController)
+            .GetField("_namedActions", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(controller)!;
+        actions["Attack1"] = new AnimationActionProfile { Name="Attack1", Clip="A1", NextAction="Attack2", ComboWindow="CanCombo" };
+        actions["Attack2"] = new AnimationActionProfile { Name="Attack2", Clip="A2", NextAction="Attack3" };
+        actions["Attack3"] = new AnimationActionProfile { Name="Attack3", Clip="A3" };
+        actions["Dodge"] = new AnimationActionProfile { Name="Dodge", Clip="Dodge", Priority=50, Interruptible=false };
+
+        Assert(controller.IsActionInChain("Attack1", "Attack1"), "C11 trigger chain includes starting action");
+        Assert(controller.IsActionInChain("Attack1", "Attack2"), "C11 trigger chain includes second action");
+        Assert(controller.IsActionInChain("Attack1", "Attack3"), "C11 trigger chain includes third action");
+        Assert(!controller.IsActionInChain("Attack1", "Dodge"), "C11 trigger rejects unrelated active action");
+
+        actions["Attack3"].NextAction = "Attack1";
+        Assert(!controller.IsActionInChain("Attack1", "Missing"), "C11 malformed combo cycle terminates safely");
+
+        Set(controller, "_actionActive", true);
+        Set(controller, "_currentAction", "Attack1");
+        Set(controller, "_currentNamedAction", actions["Attack1"]);
+        Assert(!controller.TriggerAction("Attack1") && controller.QueuedAction == string.Empty,
+            "C11 trigger outside CanCombo does not queue");
+
+        Guid comboWindowId = Guid.NewGuid();
+        var comboWindow = new AnimationWindow { Id=comboWindowId, Name="CanCombo", StartTime=.1f, EndTime=.4f };
+        Set(controller, "_animationWindowSnapshot", AnimationWindowCrossing.BuildSnapshot(new[] { comboWindow }, 1f));
+        ((HashSet<Guid>)typeof(AnimationController).GetField("_activeAnimationWindows", BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(controller)!).Add(comboWindowId);
+        Assert(controller.TriggerAction("Attack1") && controller.QueuedAction == "Attack2",
+            "C11 trigger inside CanCombo queues Attack2");
+
+        Set(controller, "_currentAction", "Attack2");
+        Set(controller, "_currentNamedAction", actions["Attack2"]);
+        Assert(controller.TriggerAction("Attack1") && controller.QueuedAction == "Attack3",
+            "C11 trigger advances a three-action combo chain");
+
+        Set(controller, "_currentAction", "Dodge");
+        Set(controller, "_currentNamedAction", actions["Dodge"]);
+        Assert(!controller.TriggerAction("Attack1") && controller.QueuedAction == "Attack3",
+            "C11 trigger does not interrupt an unrelated action");
+
+        Set(controller, "_currentAction", "Attack1");
+        Set(controller, "_currentNamedAction", actions["Attack1"]);
+        controller.QueueNamedAction("Attack2");
+        controller.PlayNamedAction("Dodge", forceInterrupt: true);
+        Assert(controller.QueuedAction == string.Empty,
+            "C11 immediate force interrupt clears a stale queued action");
+        Set(controller, "_actionActive", false);
+        Set(controller, "_currentAction", string.Empty);
+        Set(controller, "_currentNamedAction", null!);
+        Assert(controller.QueueNamedAction("Attack2") && controller.QueuedAction == "Attack2", "C11 one pending named action");
+        Assert(controller.QueueNamedAction("Attack3") && controller.QueuedAction == "Attack3", "C11 pending queue is bounded to one replacement");
+        controller.CancelCurrentAction();
+        Assert(controller.QueuedAction == string.Empty, "C11 cancel clears queued action");
+
+        VisualLogicRegistry registry = VisualLogicRegistry.CreateDefault();
+        Assert(registry.TryGetAction("animation.triggerAction", out VisualActionDefinition? trigger) && trigger != null &&
+               trigger.DisplayName == "Trigger Action / Combo", "C11 Trigger Action / Combo registration");
+    }
     private static void Set(object target, string field, object value) => target.GetType().GetField(field, BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(target,value);
     private static bool Near(float a,float b) => Math.Abs(a-b)<.0001f;
     private static void Assert(bool condition,string message) { if(!condition) throw new InvalidOperationException(message); }

@@ -4810,6 +4810,9 @@ internal sealed class EventWorkspacePanel
             "animation.playAction" =>
                 "Plays a non-looping action override, suspends locomotion, then returns to the current locomotion state when it finishes.",
 
+            "animation.triggerAction" =>
+                "Starts the selected named action, or queues its next combo action when that chain is already playing.",
+
             "animation.pause" =>
                 "Pauses animation playback on the target AnimationController.",
 
@@ -5971,6 +5974,9 @@ internal sealed class EventWorkspacePanel
                 "animation.playAction" =>
                     610.0f,
 
+                "animation.triggerAction" =>
+                    430.0f,
+
                 "object.setActive" or
                 "audio.setVolume" or
                 "audio.setPitch" or
@@ -6744,6 +6750,10 @@ internal sealed class EventWorkspacePanel
             case "animation.cancelAction":
             case "animation.actionPlaying":
                 instruction.Arguments["target"]=EventValue.String("Self"); break;
+            case "animation.triggerAction":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["action"] = EventValue.String(string.Empty);
+                break;
             case "animation.setSpeed":
                 instruction.Arguments["target"] =
                     EventValue.String(
@@ -7191,6 +7201,10 @@ internal sealed class EventWorkspacePanel
             case "animation.cancelAction":
             case "animation.actionPlaying":
                 DrawObjectTargetArgument(instruction,"target","Target Object",state); break;
+            case "animation.triggerAction":
+                DrawObjectTargetArgument(instruction, "target", "Target Object", state);
+                DrawAnimationActionArgument(instruction, state, "Start Action");
+                break;
             case "animation.setSpeed":
                 DrawObjectTargetArgument(
                     instruction,
@@ -8052,13 +8066,13 @@ internal sealed class EventWorkspacePanel
     // ANIMATION CLIP PICKER
     // ========================================================
 
-    private void DrawAnimationActionArgument(VisualInstruction instruction, EditorState? state)
+    private void DrawAnimationActionArgument(VisualInstruction instruction, EditorState? state, string label = "Action")
     {
         GameObject? target = state != null ? ResolveAnimationTargetForEditor(instruction, state) : null;
         AnimationController? controller = target?.GetComponent<AnimationController>();
         if (_project == null || controller == null || controller.AnimationProfile.IsEmpty)
         {
-            DrawValueArgument(instruction, "action", "Action (manual)", VariableType.String,
+            DrawValueArgument(instruction, "action", label + " (manual)", VariableType.String,
                 EventValue.String(string.Empty), state, false);
             return;
         }
@@ -8067,7 +8081,7 @@ internal sealed class EventWorkspacePanel
         try { profile = _project.Assets.LoadAnimationProfile(controller.AnimationProfile); }
         catch
         {
-            DrawValueArgument(instruction, "action", "Action (manual)", VariableType.String,
+            DrawValueArgument(instruction, "action", label + " (manual)", VariableType.String,
                 EventValue.String(string.Empty), state, false);
             return;
         }
@@ -8075,13 +8089,13 @@ internal sealed class EventWorkspacePanel
         EventValue value = EnsureAnimationSignalString(instruction, "action");
         if (value.Kind != EventValueKind.Constant)
         {
-            DrawValueArgument(instruction, "action", "Action", VariableType.String,
+            DrawValueArgument(instruction, "action", label, VariableType.String,
                 EventValue.String(string.Empty), state, false);
             return;
         }
 
         string current = value.Constant.String;
-        ImGui.TextDisabled("Action");
+        ImGui.TextDisabled(label);
         ImGui.SetNextItemWidth(-1.0f);
         if (ImGui.BeginCombo("##NamedAnimationAction", string.IsNullOrWhiteSpace(current) ? "Select Action" : current))
         {

@@ -949,12 +949,34 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.SeparatorText("SPEED THRESHOLDS");
         float moveThreshold = locomotion.MoveThreshold;
         if (ImGui.DragFloat("Move Threshold", ref moveThreshold, 0.01f, 0.0f, 1000.0f)) { locomotion.MoveThreshold = Math.Max(moveThreshold, 0.0f); changed = true; }
+        float runThreshold =
+            locomotion.RunThreshold;
+
+        if (ImGui.DragFloat(
+                "Run Threshold",
+                ref runThreshold,
+                0.05f,
+                0.0f,
+                1000.0f))
+        {
+            locomotion.RunThreshold =
+                Math.Max(
+                    runThreshold,
+                    0.0f);
+
+            changed =
+                true;
+        }
+
         float stateHysteresis = locomotion.StateHysteresis;
         if (ImGui.DragFloat("State Hysteresis", ref stateHysteresis, 0.01f, 0.0f, 100.0f)) { locomotion.StateHysteresis = Math.Max(stateHysteresis, 0.0f); changed = true; }
 
-        ImGui.SeparatorText("DIRECTIONAL MOVEMENT");
+        ImGui.SeparatorText("DIRECTIONAL ANIMATION CLIPS");
         bool directional = locomotion.DirectionalMovement;
-        if (ImGui.Checkbox("Enable Directional Movement", ref directional)) { locomotion.DirectionalMovement = directional; changed = true; }
+        if (ImGui.Checkbox("Use Directional Animation Clips", ref directional)) { locomotion.DirectionalMovement = directional; changed = true; }
+        ImGui.TextDisabled("Optional. Empty directions use the base Walk or Run clip.");
+        ImGui.TextDisabled("Dedicated backward/strafe clips are recommended for fixed camera or aim facing.");
+
         ImGui.BeginDisabled(!directional);
         string[] directionLabels = { "Walk Forward", "Walk Backward", "Walk Left", "Walk Right", "Run Forward", "Run Backward", "Run Left", "Run Right" };
         string[] directionValues = { locomotion.WalkForward, locomotion.WalkBackward, locomotion.WalkLeft, locomotion.WalkRight, locomotion.RunForward, locomotion.RunBackward, locomotion.RunLeft, locomotion.RunRight };
@@ -991,25 +1013,6 @@ internal sealed class AnimationProfileWorkspacePanel
         ImGui.EndDisabled();
 
         ImGui.SeparatorText("PLAYBACK");
-        float runThreshold =
-            locomotion.RunThreshold;
-
-        if (ImGui.DragFloat(
-                "Run Threshold",
-                ref runThreshold,
-                0.05f,
-                0.0f,
-                1000.0f))
-        {
-            locomotion.RunThreshold =
-                Math.Max(
-                    runThreshold,
-                    0.0f);
-
-            changed =
-                true;
-        }
-
         float transition =
             locomotion.TransitionDuration;
 
@@ -1126,9 +1129,8 @@ internal sealed class AnimationProfileWorkspacePanel
 
             bool open =
                 ImGui.TreeNodeEx(
-                    title,
+                    $"{title}###ActionNode",
                     ImGuiTreeNodeFlags.DefaultOpen);
-
             ImGui.SameLine();
 
             if (ImGui.SmallButton(

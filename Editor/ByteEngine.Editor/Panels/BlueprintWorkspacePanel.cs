@@ -51,6 +51,7 @@ internal sealed class BlueprintWorkspacePanel
 
     private Component? _selectedComponent;
     private string _addComponentSearch = string.Empty;
+    private Guid _addComponentTargetId = Guid.Empty;
     private readonly BlueprintTransformGizmo3D _transformGizmo = new();
     private readonly CameraActivationPromptState _cameraActivationPrompt = new();
 
@@ -69,6 +70,7 @@ internal sealed class BlueprintWorkspacePanel
         _preview = null;
         _asset = null;
         _selectedPreviewObjectId = Guid.Empty;
+        _addComponentTargetId = Guid.Empty;
         _selectedComponent = null;
         _propertyUndo.Clear();
         _propertyRedo.Clear();
@@ -627,6 +629,15 @@ internal sealed class BlueprintWorkspacePanel
                         89.0f);
             }
 
+            if (ImGui.IsMouseDragging(ImGuiMouseButton.Middle))
+            {
+                Vector2 delta = io.MouseDelta;
+                Vector3 focus = GetPreviewFocus();
+                float distance = Vector3.Distance(_camera.Position, focus);
+                float panScale = Math.Max(distance * 0.0018f, 0.0025f);
+                Vector3 cameraUp = Vector3.Normalize(Vector3.Cross(_camera.Right, _camera.Forward));
+                _camera.Position += (-_camera.Right * delta.X + cameraUp * delta.Y) * panScale;
+            }
             if (io.MouseWheel !=
                 0.0f)
             {
@@ -980,8 +991,53 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.PopID();
         }
 
-        if (EditorUi.SecondaryButton("+ Add Component"))
-            ImGui.OpenPopup("Blueprint Add Menu");
+        if (EditorUi.SecondaryButton($"+ Add Component to \"{selected.Name}\""))
+        {
+            _addComponentTargetId = selected.Id;
+            _addComponentSearch = string.Empty;
+            ImGui.OpenPopup("BlueprintAddComponentPopup");
+        }
+
+        DrawComponentAddPopup();
+    }
+
+    private void DrawComponentAddPopup()
+    {
+        if (!ImGui.BeginPopup("BlueprintAddComponentPopup"))
+        {
+            _addComponentTargetId = Guid.Empty;
+            return;
+        }
+
+        GameObject? target = _addComponentTargetId == Guid.Empty
+            ? null
+            : _preview?.FindGameObject(_addComponentTargetId);
+
+        if (target == null)
+        {
+            ImGui.TextDisabled("The target object is no longer available.");
+        }
+        else
+        {
+            ImGui.TextDisabled("ADD COMPONENT TO");
+            ImGui.TextUnformatted(target.Name);
+            ImGui.Separator();
+            ImGui.InputTextWithHint(
+                "##BlueprintInspectorAddComponentSearch",
+                "Search components...",
+                ref _addComponentSearch,
+                96);
+            ComponentAddMenu.Draw(target, _addComponentSearch, (component, _) =>
+            {
+                Camera3D? previousActive = component is Camera3D ? target.Scene?.ActiveCamera : null;
+                Component added = BlueprintAuthoringService.AddComponent(target, component);
+                if (added is Camera3D camera)
+                    _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
+                MarkDirty();
+            });
+        }
+
+        ImGui.EndPopup();
     }
 
     private void DrawKnownComponentProperties(Component component)
