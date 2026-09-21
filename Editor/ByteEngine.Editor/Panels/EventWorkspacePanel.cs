@@ -6734,6 +6734,16 @@ internal sealed class EventWorkspacePanel
                         true);
                 break;
 
+            case "animation.playNamedAction":
+                instruction.Arguments["target"]=EventValue.String("Self"); instruction.Arguments["action"]=EventValue.String(string.Empty);
+                instruction.Arguments["retrigger"]=EventValue.Boolean(false); instruction.Arguments["queueIfBlocked"]=EventValue.Boolean(false); instruction.Arguments["forceInterrupt"]=EventValue.Boolean(false); break;
+            case "animation.queueNamedAction":
+            case "animation.currentActionIs":
+                instruction.Arguments["target"]=EventValue.String("Self"); instruction.Arguments["action"]=EventValue.String(string.Empty); break;
+            case "animation.queueCombo":
+            case "animation.cancelAction":
+            case "animation.actionPlaying":
+                instruction.Arguments["target"]=EventValue.String("Self"); break;
             case "animation.setSpeed":
                 instruction.Arguments["target"] =
                     EventValue.String(
@@ -7169,6 +7179,18 @@ internal sealed class EventWorkspacePanel
                     false);
                 break;
 
+            case "animation.playNamedAction":
+                DrawObjectTargetArgument(instruction,"target","Target Object",state); DrawAnimationActionArgument(instruction,state);
+                DrawValueArgument(instruction,"retrigger","Retrigger",VariableType.Boolean,EventValue.Boolean(false),state,false);
+                DrawValueArgument(instruction,"queueIfBlocked","Queue If Blocked",VariableType.Boolean,EventValue.Boolean(false),state,false);
+                DrawValueArgument(instruction,"forceInterrupt","Force Interrupt",VariableType.Boolean,EventValue.Boolean(false),state,false); break;
+            case "animation.queueNamedAction":
+            case "animation.currentActionIs":
+                DrawObjectTargetArgument(instruction,"target","Target Object",state); DrawAnimationActionArgument(instruction,state); break;
+            case "animation.queueCombo":
+            case "animation.cancelAction":
+            case "animation.actionPlaying":
+                DrawObjectTargetArgument(instruction,"target","Target Object",state); break;
             case "animation.setSpeed":
                 DrawObjectTargetArgument(
                     instruction,
@@ -8030,6 +8052,49 @@ internal sealed class EventWorkspacePanel
     // ANIMATION CLIP PICKER
     // ========================================================
 
+    private void DrawAnimationActionArgument(VisualInstruction instruction, EditorState? state)
+    {
+        GameObject? target = state != null ? ResolveAnimationTargetForEditor(instruction, state) : null;
+        AnimationController? controller = target?.GetComponent<AnimationController>();
+        if (_project == null || controller == null || controller.AnimationProfile.IsEmpty)
+        {
+            DrawValueArgument(instruction, "action", "Action (manual)", VariableType.String,
+                EventValue.String(string.Empty), state, false);
+            return;
+        }
+
+        AnimationProfile profile;
+        try { profile = _project.Assets.LoadAnimationProfile(controller.AnimationProfile); }
+        catch
+        {
+            DrawValueArgument(instruction, "action", "Action (manual)", VariableType.String,
+                EventValue.String(string.Empty), state, false);
+            return;
+        }
+
+        EventValue value = EnsureAnimationSignalString(instruction, "action");
+        if (value.Kind != EventValueKind.Constant)
+        {
+            DrawValueArgument(instruction, "action", "Action", VariableType.String,
+                EventValue.String(string.Empty), state, false);
+            return;
+        }
+
+        string current = value.Constant.String;
+        ImGui.TextDisabled("Action");
+        ImGui.SetNextItemWidth(-1.0f);
+        if (ImGui.BeginCombo("##NamedAnimationAction", string.IsNullOrWhiteSpace(current) ? "Select Action" : current))
+        {
+            foreach (AnimationActionProfile action in profile.Actions.Where(a => !string.IsNullOrWhiteSpace(a.Name)))
+            {
+                if (ImGui.Selectable(action.Name, string.Equals(current, action.Name, StringComparison.OrdinalIgnoreCase)))
+                    SetAnimationSignalString(instruction, "action", action.Name, "Change Animation Action");
+            }
+            ImGui.EndCombo();
+        }
+        if (!string.IsNullOrWhiteSpace(current) && !profile.Actions.Any(a => string.Equals(a.Name, current, StringComparison.OrdinalIgnoreCase)))
+            DrawStaleAnimationValueWarning("action", current, "Animation Profile");
+    }
     private void DrawAnimationClipArgument(
         VisualInstruction instruction,
         string argumentName,

@@ -322,6 +322,22 @@ public sealed class VisualLogicRegistry
                     }
             });
 
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "animation.actionPlaying", Category = "Animation", DisplayName = "Action Is Playing",
+            TargetComponent = nameof(AnimationController),
+            Evaluate = (instruction, context) => ResolveAnimationController(instruction, context, false)?.IsActionPlaying == true
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "animation.currentActionIs", Category = "Animation", DisplayName = "Current Action Is",
+            TargetComponent = nameof(AnimationController), Evaluate = (instruction, context) =>
+            {
+                AnimationController? controller = ResolveAnimationController(instruction, context, false);
+                return controller != null && string.Equals(controller.CurrentAction,
+                    EventValueResolver.GetString(instruction, "action", context), StringComparison.OrdinalIgnoreCase);
+            }
+        });
         registry.RegisterAction(
             new VisualActionDefinition
             {
@@ -424,6 +440,34 @@ public sealed class VisualLogicRegistry
                     }
             });
 
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "animation.playNamedAction", Category = "Animation", DisplayName = "Play Named Action",
+            TargetComponent = nameof(AnimationController), Execute = (instruction, context) =>
+            {
+                AnimationController? controller = ResolveAnimationController(instruction, context);
+                controller?.PlayNamedAction(EventValueResolver.GetString(instruction, "action", context),
+                    EventValueResolver.GetBoolean(instruction, "retrigger", context, false),
+                    EventValueResolver.GetBoolean(instruction, "queueIfBlocked", context, false),
+                    EventValueResolver.GetBoolean(instruction, "forceInterrupt", context, false));
+            }
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "animation.queueNamedAction", Category = "Animation", DisplayName = "Queue Named Action",
+            TargetComponent = nameof(AnimationController), Execute = (instruction, context) =>
+                ResolveAnimationController(instruction, context)?.QueueNamedAction(EventValueResolver.GetString(instruction, "action", context))
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "animation.queueCombo", Category = "Animation", DisplayName = "Queue Combo",
+            TargetComponent = nameof(AnimationController), Execute = (instruction, context) => ResolveAnimationController(instruction, context)?.QueueCombo()
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "animation.cancelAction", Category = "Animation", DisplayName = "Cancel Action",
+            TargetComponent = nameof(AnimationController), Execute = (instruction, context) => ResolveAnimationController(instruction, context)?.CancelCurrentAction()
+        });
         registry.RegisterAction(
             new VisualActionDefinition
             {

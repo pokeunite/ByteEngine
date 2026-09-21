@@ -270,7 +270,9 @@ internal sealed class AnimationProfileWorkspacePanel
             return;
         }
 
-        if (EditorUi.BeginToolbar("##AnimationProfileToolbar"))
+        bool toolbarVisible = EditorUi.BeginToolbar("##AnimationProfileToolbar");
+
+        if (toolbarVisible)
         {
             ImGui.BeginDisabled(!_dirty || _profile == null);
             if (_dirty)
@@ -289,8 +291,10 @@ internal sealed class AnimationProfileWorkspacePanel
                 ImGui.SameLine(Math.Max(ImGui.GetCursorPosX(), ImGui.GetWindowWidth() - 105.0f));
                 EditorUi.StatusBadge("UNSAVED", EditorStatusKind.Warning);
             }
-            EditorUi.EndToolbar();
+
         }
+
+        EditorUi.EndToolbar();
 
         if (_dirty)
         {
@@ -942,6 +946,51 @@ internal sealed class AnimationProfileWorkspacePanel
                 true;
         }
 
+        ImGui.SeparatorText("SPEED THRESHOLDS");
+        float moveThreshold = locomotion.MoveThreshold;
+        if (ImGui.DragFloat("Move Threshold", ref moveThreshold, 0.01f, 0.0f, 1000.0f)) { locomotion.MoveThreshold = Math.Max(moveThreshold, 0.0f); changed = true; }
+        float stateHysteresis = locomotion.StateHysteresis;
+        if (ImGui.DragFloat("State Hysteresis", ref stateHysteresis, 0.01f, 0.0f, 100.0f)) { locomotion.StateHysteresis = Math.Max(stateHysteresis, 0.0f); changed = true; }
+
+        ImGui.SeparatorText("DIRECTIONAL MOVEMENT");
+        bool directional = locomotion.DirectionalMovement;
+        if (ImGui.Checkbox("Enable Directional Movement", ref directional)) { locomotion.DirectionalMovement = directional; changed = true; }
+        ImGui.BeginDisabled(!directional);
+        string[] directionLabels = { "Walk Forward", "Walk Backward", "Walk Left", "Walk Right", "Run Forward", "Run Backward", "Run Left", "Run Right" };
+        string[] directionValues = { locomotion.WalkForward, locomotion.WalkBackward, locomotion.WalkLeft, locomotion.WalkRight, locomotion.RunForward, locomotion.RunBackward, locomotion.RunLeft, locomotion.RunRight };
+        for (int index = 0; index < directionLabels.Length; index++)
+        {
+            string value = directionValues[index];
+            string fallbackLabel = index < 4 ? "Use Base Walk" : "Use Base Run";
+            if (!DrawClipPicker(directionLabels[index], clips, ref value, fallbackLabel)) continue;
+            switch (index)
+            {
+                case 0: locomotion.WalkForward = value; break;
+                case 1: locomotion.WalkBackward = value; break;
+                case 2: locomotion.WalkLeft = value; break;
+                case 3: locomotion.WalkRight = value; break;
+                case 4: locomotion.RunForward = value; break;
+                case 5: locomotion.RunBackward = value; break;
+                case 6: locomotion.RunLeft = value; break;
+                case 7: locomotion.RunRight = value; break;
+            }
+            changed = true;
+        }
+        float directionHysteresis = locomotion.DirectionHysteresis;
+        if (ImGui.DragFloat("Direction Hysteresis", ref directionHysteresis, 0.01f, 0.0f, 1.0f)) { locomotion.DirectionHysteresis = Math.Max(directionHysteresis, 0.0f); changed = true; }
+        ImGui.EndDisabled();
+
+        ImGui.SeparatorText("PLAYBACK MATCHING");
+        bool matching = locomotion.MatchPlaybackToSpeed;
+        if (ImGui.Checkbox("Match Playback To Speed", ref matching)) { locomotion.MatchPlaybackToSpeed = matching; changed = true; }
+        ImGui.BeginDisabled(!matching);
+        float walkReference = locomotion.WalkReferenceSpeed; if (ImGui.DragFloat("Walk Reference Speed", ref walkReference, 0.05f, 0.001f, 1000.0f)) { locomotion.WalkReferenceSpeed = Math.Max(walkReference, 0.001f); changed = true; }
+        float runReference = locomotion.RunReferenceSpeed; if (ImGui.DragFloat("Run Reference Speed", ref runReference, 0.05f, 0.001f, 1000.0f)) { locomotion.RunReferenceSpeed = Math.Max(runReference, 0.001f); changed = true; }
+        float minimumRate = locomotion.MinimumPlaybackRate; if (ImGui.DragFloat("Minimum Rate", ref minimumRate, 0.01f, 0.0f, 10.0f)) { locomotion.MinimumPlaybackRate = Math.Max(minimumRate, 0.0f); changed = true; }
+        float maximumRate = locomotion.MaximumPlaybackRate; if (ImGui.DragFloat("Maximum Rate", ref maximumRate, 0.01f, locomotion.MinimumPlaybackRate, 10.0f)) { locomotion.MaximumPlaybackRate = Math.Max(maximumRate, locomotion.MinimumPlaybackRate); changed = true; }
+        ImGui.EndDisabled();
+
+        ImGui.SeparatorText("PLAYBACK");
         float runThreshold =
             locomotion.RunThreshold;
 
@@ -1123,6 +1172,9 @@ internal sealed class AnimationProfileWorkspacePanel
                         true;
                 }
 
+                ImGui.SeparatorText("PLAYBACK");
+                float actionSpeed = action.PlaybackSpeed;
+                if (ImGui.DragFloat("Playback Speed", ref actionSpeed, 0.01f, 0.0f, 10.0f)) { action.PlaybackSpeed = Math.Max(actionSpeed, 0.0f); changed = true; }
                 bool loop =
                     action.Loop;
 
@@ -1175,6 +1227,39 @@ internal sealed class AnimationProfileWorkspacePanel
                         true;
                 }
 
+                ImGui.SeparatorText("INTERRUPT");
+                int priority = action.Priority;
+                if (ImGui.DragInt("Priority", ref priority, 1.0f)) { action.Priority = priority; changed = true; }
+                bool interruptible = action.Interruptible;
+                if (ImGui.Checkbox("Interruptible", ref interruptible)) { action.Interruptible = interruptible; changed = true; }
+
+                ImGui.SeparatorText("COMBO");
+                string nextAction = action.NextAction ?? string.Empty;
+                if (ImGui.BeginCombo("Next Action", string.IsNullOrWhiteSpace(nextAction) ? "None" : nextAction))
+                {
+                    if (ImGui.Selectable("None", string.IsNullOrWhiteSpace(nextAction))) { action.NextAction = string.Empty; changed = true; }
+                    foreach (AnimationActionProfile candidate in _profile.Actions.Where(candidate => !ReferenceEquals(candidate, action) && !string.IsNullOrWhiteSpace(candidate.Name)))
+                        if (ImGui.Selectable(candidate.Name, string.Equals(nextAction, candidate.Name, StringComparison.OrdinalIgnoreCase))) { action.NextAction = candidate.Name; changed = true; }
+                    ImGui.EndCombo();
+                }
+                if (!string.IsNullOrWhiteSpace(nextAction) && !_profile.Actions.Any(candidate => string.Equals(candidate.Name, nextAction, StringComparison.OrdinalIgnoreCase)))
+                    ImGui.TextColored(new Vector4(1.0f, 0.72f, 0.28f, 1.0f), "Next Action is unresolved; the saved value is preserved.");
+
+                string comboWindow = action.ComboWindow ?? string.Empty;
+                IReadOnlyList<string> windows = GetAnimationWindowNames(action.Clip ?? string.Empty);
+                if (windows.Count > 0)
+                {
+                    if (ImGui.BeginCombo("Combo Window", string.IsNullOrWhiteSpace(comboWindow) ? "Any Time" : comboWindow))
+                    {
+                        if (ImGui.Selectable("Any Time", string.IsNullOrWhiteSpace(comboWindow))) { action.ComboWindow = string.Empty; changed = true; }
+                        foreach (string window in windows)
+                            if (ImGui.Selectable(window, string.Equals(comboWindow, window, StringComparison.OrdinalIgnoreCase))) { action.ComboWindow = window; changed = true; }
+                        ImGui.EndCombo();
+                    }
+                    if (!string.IsNullOrWhiteSpace(comboWindow) && !windows.Contains(comboWindow, StringComparer.OrdinalIgnoreCase))
+                        ImGui.TextColored(new Vector4(1.0f, 0.72f, 0.28f, 1.0f), "Combo Window is unresolved; the saved value is preserved.");
+                }
+                else if (ImGui.InputText("Combo Window (manual)", ref comboWindow, 128)) { action.ComboWindow = comboWindow; changed = true; }
                 ImGui.TreePop();
             }
 
@@ -1453,6 +1538,19 @@ internal sealed class AnimationProfileWorkspacePanel
         }
     }
 
+    private IReadOnlyList<string> GetAnimationWindowNames(string clipName)
+    {
+        if (_profile == null || _project == null || string.IsNullOrWhiteSpace(clipName)) return Array.Empty<string>();
+        AssetReference reference = !_profile.Rig.AnimationSourceModel.IsEmpty ? _profile.Rig.AnimationSourceModel : _profile.Rig.ReferenceModel;
+        if (reference.IsEmpty) return Array.Empty<string>();
+        try
+        {
+            ModelAsset model = _project.Assets.LoadModel(reference);
+            var animation = model.Animations.FirstOrDefault(candidate => string.Equals(candidate.Name, clipName, StringComparison.OrdinalIgnoreCase) || string.Equals(candidate.Key, clipName, StringComparison.OrdinalIgnoreCase));
+            return animation?.Windows.Select(window => window.Name).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray() ?? Array.Empty<string>();
+        }
+        catch { return Array.Empty<string>(); }
+    }
     private void InvalidateClipCache()
     {
         _clipCacheModelGuid =
@@ -1620,7 +1718,8 @@ internal sealed class AnimationProfileWorkspacePanel
     private bool DrawClipPicker(
         string label,
         IReadOnlyList<string> clips,
-        ref string value)
+        ref string value,
+        string emptyLabel = "None")
     {
         value ??=
             string.Empty;
@@ -1639,9 +1738,9 @@ internal sealed class AnimationProfileWorkspacePanel
         string preview =
             string.IsNullOrWhiteSpace(
                 value)
-                ? "None"                : exists
+                ? emptyLabel                : exists
                     ? value
-                    : $"{value} (Missing)";
+                    : $"{value}  ⚠ Missing";
 
         bool changed =
             false;
@@ -1668,7 +1767,7 @@ internal sealed class AnimationProfileWorkspacePanel
             128);
 
         if (ImGui.Selectable(
-                "None",
+                emptyLabel,
                 string.IsNullOrWhiteSpace(
                     value)))
         {

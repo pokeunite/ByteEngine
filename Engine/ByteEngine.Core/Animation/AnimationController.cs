@@ -18,6 +18,15 @@ public enum LocomotionState
     Land
 }
 
+public enum LocomotionDirection
+{
+    None,
+    Forward,
+    Backward,
+    Left,
+    Right
+}
+
 /// <summary>
 /// Character animation playback driver.
 ///
@@ -40,6 +49,11 @@ public sealed class AnimationController : Component
     private bool _actionActive;
     private bool _actionPaused;
     private string _currentAction = string.Empty;
+    private string _queuedAction = string.Empty;
+    private AnimationActionProfile? _currentNamedAction;
+    private readonly Dictionary<string, AnimationActionProfile> _namedActions = new(StringComparer.OrdinalIgnoreCase);
+    private string _currentLocomotionClip = string.Empty;
+    private float _actionPlaybackRate = 1.0f;
 
     private SkeletalMeshRenderer? _rootMotionSource;
     private string _rootMotionAnimation = string.Empty;
@@ -86,6 +100,23 @@ public sealed class AnimationController : Component
     public string Land { get; set; } = "Land";
 
     public float RunThreshold { get; set; } = 4.0f;
+    public float MoveThreshold { get; set; } = 0.05f;
+    public float StateHysteresis { get; set; } = 0.15f;
+    public bool DirectionalMovement { get; set; }
+    public string WalkForward { get; set; } = string.Empty;
+    public string WalkBackward { get; set; } = string.Empty;
+    public string WalkLeft { get; set; } = string.Empty;
+    public string WalkRight { get; set; } = string.Empty;
+    public string RunForward { get; set; } = string.Empty;
+    public string RunBackward { get; set; } = string.Empty;
+    public string RunLeft { get; set; } = string.Empty;
+    public string RunRight { get; set; } = string.Empty;
+    public float DirectionHysteresis { get; set; } = 0.10f;
+    public bool MatchPlaybackToSpeed { get; set; }
+    public float WalkReferenceSpeed { get; set; } = 2.0f;
+    public float RunReferenceSpeed { get; set; } = 5.0f;
+    public float MinimumPlaybackRate { get; set; } = 0.70f;
+    public float MaximumPlaybackRate { get; set; } = 1.40f;
 
     public bool DriveLocomotion { get; set; } = true;
 
@@ -99,6 +130,10 @@ public sealed class AnimationController : Component
     public Vector3 RootMotionDelta { get; private set; }
 
     public LocomotionState State { get; private set; }
+    public LocomotionDirection Direction { get; private set; }
+    public float LocomotionSpeed { get; private set; }
+    public float LocomotionPlaybackRate { get; private set; } = 1.0f;
+    public string CurrentLocomotionClip => _currentLocomotionClip;
 
     /// <summary>
     /// Fired once for every event marker crossed by the authoritative animation
@@ -152,6 +187,8 @@ public sealed class AnimationController : Component
             ? _currentAction
             : string.Empty;
 
+    public string QueuedAction => _queuedAction;
+
     protected override void OnStart()
     {
         ApplyAnimationProfile();
@@ -161,62 +198,37 @@ public sealed class AnimationController : Component
 
     protected override void OnUpdate()
     {
-        /*
-         * Do not reload/re-apply the Animation Profile every frame.
-         *
-         * Profiles are applied on start and explicitly when the editor assigns
-         * or saves one. Re-resolving the asset every update caused unnecessary
-         * AssetManager/database work and made the editor feel slower as soon as
-         * a profile was assigned.
-         */
-        if (_renderers.Count == 0)
-        {
-            RefreshRenderers();
-        }
+        if (_renderers.Count == 0) RefreshRenderers();
 
         foreach (SkeletalMeshRenderer renderer in _renderers)
         {
-            renderer.Speed =
-                Math.Max(PlaybackSpeed, 0.0f);
-
-            renderer.TransitionDuration =
-                Math.Max(TransitionDuration, 0.0f);
+            renderer.TransitionDuration = Math.Max(TransitionDuration, 0.0f);
         }
 
+        if (DriveLocomotion) ObserveLocomotion();
+        ApplyPlaybackRate();
         UpdateRootMotion();
 
         if (_actionActive)
         {
-            if (_actionPaused)
+            if (_actionPaused || _actionRenderers.Any(renderer => renderer.IsPlaying)) return;
+
+            float blendOut = _currentNamedAction?.BlendOut ?? TransitionDuration;
+            FinishAction();
+
+            if (!string.IsNullOrWhiteSpace(_queuedAction))
             {
-                return;
+                string queued = _queuedAction;
+                _queuedAction = string.Empty;
+                if (StartNamedAction(queued)) return;
             }
 
-            bool actionStillPlaying =
-                _actionRenderers.Any(
-                    renderer =>
-                        renderer.IsPlaying);
-
-            if (actionStillPlaying)
-            {
-                return;
-            }
-
-            _actionActive = false;
-            _actionPaused = false;
-            _currentAction = string.Empty;
-            _actionRenderers.Clear();
-            _stateInitialized = false;
-        }
-
-        if (!DriveLocomotion)
-        {
+            if (DriveLocomotion) ApplyObservedLocomotion(blendOut, true);
             return;
         }
 
-        UpdateLocomotion();
+        if (DriveLocomotion) ApplyObservedLocomotion(TransitionDuration, false);
     }
-
     protected override void OnLateUpdate()
     {
         /*
@@ -295,54 +307,68 @@ public sealed class AnimationController : Component
         TransitionDuration = locomotion.TransitionDuration;
         PlaybackSpeed = locomotion.PlaybackSpeed;
         RootMotionMode = locomotion.RootMotionMode;
+        MoveThreshold = locomotion.MoveThreshold;
+        StateHysteresis = locomotion.StateHysteresis;
+        DirectionalMovement = locomotion.DirectionalMovement;
+        WalkForward = locomotion.WalkForward;
+        WalkBackward = locomotion.WalkBackward;
+        WalkLeft = locomotion.WalkLeft;
+        WalkRight = locomotion.WalkRight;
+        RunForward = locomotion.RunForward;
+        RunBackward = locomotion.RunBackward;
+        RunLeft = locomotion.RunLeft;
+        RunRight = locomotion.RunRight;
+        DirectionHysteresis = locomotion.DirectionHysteresis;
+        MatchPlaybackToSpeed = locomotion.MatchPlaybackToSpeed;
+        WalkReferenceSpeed = locomotion.WalkReferenceSpeed;
+        RunReferenceSpeed = locomotion.RunReferenceSpeed;
+        MinimumPlaybackRate = locomotion.MinimumPlaybackRate;
+        MaximumPlaybackRate = locomotion.MaximumPlaybackRate;
+        _namedActions.Clear();
+        foreach (AnimationActionProfile action in profile.Actions)
+            if (!string.IsNullOrWhiteSpace(action.Name)) _namedActions[action.Name] = action;
 
         return true;
     }
 
-    private void UpdateLocomotion()
+    private void ObserveLocomotion()
     {
-        CharacterController3D? controller =
-            GameObject.GetComponent<CharacterController3D>();
-
-        /*
-         * A CharacterController3D is optional.
-         *
-         * Static NPCs, menu characters, preview characters and other animated
-         * objects still need a valid base pose. Without a movement controller,
-         * locomotion therefore settles on Idle instead of returning early and
-         * leaving the skinned model in its bind/T-pose.
-         *
-         * When a CharacterController3D is present the existing movement-driven
-         * state selection remains unchanged.
-         */
-        LocomotionState nextState =
-            ResolveLocomotionState(
-                controller,
-                RunThreshold);
-
-        if (_stateInitialized &&
-            nextState == State)
-        {
-            return;
-        }
-
-        State = nextState;
+        CharacterController3D? controller = GameObject.GetComponent<CharacterController3D>();
+        float speed = controller?.Speed ?? 0.0f;
+        LocomotionSpeed = speed;
+        State = ResolveLocomotionStateStable(controller, State, _stateInitialized, MoveThreshold, RunThreshold, StateHysteresis);
         _stateInitialized = true;
 
-        string clipName =
-            GetClipName(State);
-
-        bool loop =
-            State != LocomotionState.Land;
-
-        if (!string.IsNullOrWhiteSpace(clipName))
+        if (DirectionalMovement && controller != null &&
+            (State == LocomotionState.Walk || State == LocomotionState.Run))
         {
-            PlayInternal(
-                clipName,
-                loop);
+            Direction = ResolveDirection(Direction, controller.Velocity, Transform.Forward, Transform.Right, DirectionHysteresis);
         }
+        else
+        {
+            Direction = LocomotionDirection.None;
+        }
+
+        _currentLocomotionClip = GetClipName(State, Direction);
+        LocomotionPlaybackRate = ResolvePlaybackRate(State, speed, MatchPlaybackToSpeed,
+            WalkReferenceSpeed, RunReferenceSpeed, MinimumPlaybackRate, MaximumPlaybackRate);
     }
 
+    private void ApplyObservedLocomotion(float transition, bool force)
+    {
+        if (string.IsNullOrWhiteSpace(_currentLocomotionClip)) return;
+        bool loop = State != LocomotionState.Land;
+        bool changed = force || !_renderers.Any(renderer =>
+            string.Equals(renderer.CurrentAnimation, _currentLocomotionClip, StringComparison.OrdinalIgnoreCase));
+        if (changed) PlayInternal(_currentLocomotionClip, loop, null, transition, LocomotionPlaybackRate);
+    }
+
+    private void ApplyPlaybackRate()
+    {
+        float multiplier = _actionActive ? _actionPlaybackRate : LocomotionPlaybackRate;
+        foreach (SkeletalMeshRenderer renderer in _renderers)
+            renderer.Speed = Math.Max(PlaybackSpeed * multiplier, 0.0f);
+    }
     public void RefreshRenderers()
     {
         ResetAnimationEventTracking();
@@ -519,6 +545,82 @@ public sealed class AnimationController : Component
         return true;
     }
 
+    public bool PlayNamedAction(string actionName, bool retrigger = false, bool queueIfBlocked = false, bool forceInterrupt = false)
+    {
+        if (!_namedActions.TryGetValue(actionName ?? string.Empty, out AnimationActionProfile? requested)) return false;
+        if (_actionActive)
+        {
+            bool same = string.Equals(_currentAction, requested.Name, StringComparison.OrdinalIgnoreCase);
+            if (same && !retrigger) return true;
+            bool canInterrupt = forceInterrupt || (_currentNamedAction?.Interruptible == true &&
+                requested.Priority >= _currentNamedAction.Priority);
+            if (!canInterrupt)
+            {
+                if (queueIfBlocked) _queuedAction = requested.Name;
+                return false;
+            }
+            if (same && retrigger)
+            {
+                foreach (SkeletalMeshRenderer renderer in _renderers) renderer.Stop();
+                ResetAnimationEventTracking();
+            }
+        }
+        return StartNamedAction(requested.Name);
+    }
+
+    public bool QueueNamedAction(string actionName)
+    {
+        if (!_namedActions.TryGetValue(actionName ?? string.Empty, out AnimationActionProfile? action)) return false;
+        _queuedAction = action.Name;
+        return true;
+    }
+
+    public bool QueueCombo()
+    {
+        if (_currentNamedAction == null || string.IsNullOrWhiteSpace(_currentNamedAction.NextAction) ||
+            !_namedActions.TryGetValue(_currentNamedAction.NextAction, out AnimationActionProfile? next)) return false;
+        if (!string.IsNullOrWhiteSpace(_currentNamedAction.ComboWindow) && !IsWindowActive(_currentNamedAction.ComboWindow)) return false;
+        _queuedAction = next.Name;
+        return true;
+    }
+
+    public void CancelCurrentAction()
+    {
+        float blendOut = _currentNamedAction?.BlendOut ?? TransitionDuration;
+        FinishAction();
+        _queuedAction = string.Empty;
+        if (DriveLocomotion)
+        {
+            ObserveLocomotion();
+            ApplyObservedLocomotion(blendOut, true);
+        }
+    }
+
+    private bool StartNamedAction(string actionName)
+    {
+        if (!_namedActions.TryGetValue(actionName, out AnimationActionProfile? action) || string.IsNullOrWhiteSpace(action.Clip)) return false;
+        _actionRenderers.Clear();
+        bool played = PlayInternal(action.Clip, action.Loop, _actionRenderers, action.BlendIn, action.PlaybackSpeed);
+        if (!played) return false;
+        _currentNamedAction = action;
+        _currentAction = action.Name;
+        _actionPlaybackRate = action.PlaybackSpeed;
+        _actionActive = true;
+        _actionPaused = false;
+        ResetRootMotionTracking();
+        return true;
+    }
+
+    private void FinishAction()
+    {
+        _actionActive = false;
+        _actionPaused = false;
+        _currentAction = string.Empty;
+        _currentNamedAction = null;
+        _actionPlaybackRate = 1.0f;
+        _actionRenderers.Clear();
+        ResetRootMotionTracking();
+    }
     public void Pause()
     {
         foreach (SkeletalMeshRenderer renderer in _renderers)
@@ -566,7 +668,9 @@ public sealed class AnimationController : Component
     private bool PlayInternal(
         string clipName,
         bool loop,
-        ISet<SkeletalMeshRenderer>? playedRenderers = null)
+        ISet<SkeletalMeshRenderer>? playedRenderers = null,
+        float? transitionOverride = null,
+        float speedMultiplier = 1.0f)
     {
         if (_renderers.Count == 0)
         {
@@ -581,10 +685,7 @@ public sealed class AnimationController : Component
         foreach (SkeletalMeshRenderer renderer
                  in _renderers)
         {
-            renderer.Speed =
-                Math.Max(
-                    PlaybackSpeed,
-                    0.0f);
+            renderer.Speed = Math.Max(PlaybackSpeed * speedMultiplier, 0.0f);
 
             bool rendererPlayed;
 
@@ -601,9 +702,7 @@ public sealed class AnimationController : Component
                         _animationSourceModel,
                         clipName,
                         loop,
-                        Math.Max(
-                            TransitionDuration,
-                            0.0f));
+                        Math.Max(transitionOverride ?? TransitionDuration, 0.0f));
             }
             else
             {
@@ -611,9 +710,7 @@ public sealed class AnimationController : Component
                     renderer.Play(
                         clipName,
                         loop,
-                        Math.Max(
-                            TransitionDuration,
-                            0.0f));
+                        Math.Max(transitionOverride ?? TransitionDuration, 0.0f));
             }
 
             if (!rendererPlayed)
@@ -1312,47 +1409,82 @@ public sealed class AnimationController : Component
 
     private void CancelActionOverride()
     {
-        if (!_actionActive &&
-            string.IsNullOrWhiteSpace(_currentAction))
-        {
-            return;
-        }
-
-        _actionActive = false;
-        _actionPaused = false;
-        _currentAction = string.Empty;
-        _actionRenderers.Clear();
+        if (!_actionActive && string.IsNullOrWhiteSpace(_currentAction)) return;
+        FinishAction();
+        _queuedAction = string.Empty;
         _stateInitialized = false;
-
-        ResetRootMotionTracking();
     }
 
-    private static LocomotionState ResolveLocomotionState(
-        CharacterController3D? controller,
-        float runThreshold)
+    private static LocomotionState ResolveLocomotionState(CharacterController3D? controller, float runThreshold)
     {
-        if (controller == null)
-        {
-            return LocomotionState.Idle;
-        }
-
-        return
-            controller.JustLanded
-                ? LocomotionState.Land
-                : controller.IsFalling
-                    ? LocomotionState.Fall
-                    : !controller.IsGrounded
-                        ? LocomotionState.Jump
-                        : controller.Speed < 0.05f
-                            ? LocomotionState.Idle
-                            : controller.Speed >= runThreshold
-                                ? LocomotionState.Run
-                                : LocomotionState.Walk;
+        if (controller == null) return LocomotionState.Idle;
+        return controller.JustLanded ? LocomotionState.Land : controller.IsFalling ? LocomotionState.Fall :
+            !controller.IsGrounded ? LocomotionState.Jump : controller.Speed < 0.05f ? LocomotionState.Idle :
+            controller.Speed >= runThreshold ? LocomotionState.Run : LocomotionState.Walk;
+    }
+    internal static LocomotionState ResolveLocomotionStateStable(CharacterController3D? controller,
+        LocomotionState current, bool initialized, float moveThreshold, float runThreshold, float hysteresis)
+    {
+        if (controller == null) return LocomotionState.Idle;
+        if (controller.JustLanded) return LocomotionState.Land;
+        if (controller.IsFalling) return LocomotionState.Fall;
+        if (!controller.IsGrounded) return LocomotionState.Jump;
+        float speed = controller.Speed;
+        moveThreshold = Math.Max(moveThreshold, 0.0f);
+        runThreshold = Math.Max(runThreshold, moveThreshold);
+        hysteresis = Math.Max(hysteresis, 0.0f);
+        if (!initialized || current is LocomotionState.Jump or LocomotionState.Fall or LocomotionState.Land)
+            return speed <= moveThreshold ? LocomotionState.Idle : speed >= runThreshold ? LocomotionState.Run : LocomotionState.Walk;
+        if (current == LocomotionState.Idle)
+            return speed > moveThreshold + hysteresis ? (speed > runThreshold + hysteresis ? LocomotionState.Run : LocomotionState.Walk) : LocomotionState.Idle;
+        if (current == LocomotionState.Run)
+            return speed < Math.Max(moveThreshold, runThreshold - hysteresis) ?
+                (speed <= Math.Max(0.0f, moveThreshold - hysteresis) ? LocomotionState.Idle : LocomotionState.Walk) : LocomotionState.Run;
+        return speed <= Math.Max(0.0f, moveThreshold - hysteresis) ? LocomotionState.Idle :
+            speed > runThreshold + hysteresis ? LocomotionState.Run : LocomotionState.Walk;
     }
 
-    private string GetClipName(
-        LocomotionState state) =>
-        state switch
+    internal static LocomotionDirection ResolveDirection(LocomotionDirection previous, Vector3 velocity,
+        Vector3 forward, Vector3 right, float hysteresis)
+    {
+        velocity.Y = 0.0f;
+        if (velocity.LengthSquared() <= 0.000001f) return LocomotionDirection.None;
+        velocity = Vector3.Normalize(velocity);
+        forward.Y = 0.0f; right.Y = 0.0f;
+        if (forward.LengthSquared() > 0.000001f) forward = Vector3.Normalize(forward);
+        if (right.LengthSquared() > 0.000001f) right = Vector3.Normalize(right);
+        float f = Vector3.Dot(velocity, forward);
+        float r = Vector3.Dot(velocity, right);
+        bool previousForwardAxis = previous is LocomotionDirection.Forward or LocomotionDirection.Backward;
+        bool useForward = Math.Abs(f) >= Math.Abs(r) + (previousForwardAxis ? -Math.Max(hysteresis, 0.0f) : Math.Max(hysteresis, 0.0f));
+        return useForward ? (f >= 0 ? LocomotionDirection.Forward : LocomotionDirection.Backward) :
+            (r >= 0 ? LocomotionDirection.Right : LocomotionDirection.Left);
+    }
+
+    internal static float ResolvePlaybackRate(LocomotionState state, float speed, bool enabled,
+        float walkReference, float runReference, float minimum, float maximum)
+    {
+        if (!enabled || state is not (LocomotionState.Walk or LocomotionState.Run)) return 1.0f;
+        float reference = state == LocomotionState.Run ? runReference : walkReference;
+        return Math.Clamp(speed / Math.Max(reference, 0.001f), Math.Max(minimum, 0.0f), Math.Max(maximum, minimum));
+    }
+
+    private string GetClipName(LocomotionState state, LocomotionDirection direction)
+    {
+        string directional = (state, direction) switch
+        {
+            (LocomotionState.Walk, LocomotionDirection.Forward) => WalkForward,
+            (LocomotionState.Walk, LocomotionDirection.Backward) => WalkBackward,
+            (LocomotionState.Walk, LocomotionDirection.Left) => WalkLeft,
+            (LocomotionState.Walk, LocomotionDirection.Right) => WalkRight,
+            (LocomotionState.Run, LocomotionDirection.Forward) => RunForward,
+            (LocomotionState.Run, LocomotionDirection.Backward) => RunBackward,
+            (LocomotionState.Run, LocomotionDirection.Left) => RunLeft,
+            (LocomotionState.Run, LocomotionDirection.Right) => RunRight,
+            _ => string.Empty
+        };
+        if (!string.IsNullOrWhiteSpace(directional)) return directional;
+        return state switch
         {
             LocomotionState.Idle => Idle,
             LocomotionState.Walk => Walk,
@@ -1362,7 +1494,7 @@ public sealed class AnimationController : Component
             LocomotionState.Land => Land,
             _ => string.Empty
         };
-
+    }
     private void AddRenderer(
         SkeletalMeshRenderer renderer)
     {

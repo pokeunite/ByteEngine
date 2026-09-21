@@ -15,7 +15,7 @@ namespace ByteEngine.Core.Animation;
 /// </summary>
 public sealed class AnimationProfile
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -144,6 +144,26 @@ public sealed class AnimationLocomotionProfile
 
     public float RunThreshold { get; set; } = 4.0f;
 
+    public float MoveThreshold { get; set; } = 0.05f;
+    public float StateHysteresis { get; set; } = 0.15f;
+    public bool DirectionalMovement { get; set; }
+
+    public string WalkForward { get; set; } = string.Empty;
+    public string WalkBackward { get; set; } = string.Empty;
+    public string WalkLeft { get; set; } = string.Empty;
+    public string WalkRight { get; set; } = string.Empty;
+    public string RunForward { get; set; } = string.Empty;
+    public string RunBackward { get; set; } = string.Empty;
+    public string RunLeft { get; set; } = string.Empty;
+    public string RunRight { get; set; } = string.Empty;
+
+    public float DirectionHysteresis { get; set; } = 0.10f;
+    public bool MatchPlaybackToSpeed { get; set; }
+    public float WalkReferenceSpeed { get; set; } = 2.0f;
+    public float RunReferenceSpeed { get; set; } = 5.0f;
+    public float MinimumPlaybackRate { get; set; } = 0.70f;
+    public float MaximumPlaybackRate { get; set; } = 1.40f;
+
     public float TransitionDuration { get; set; } = 0.15f;
 
     public float PlaybackSpeed { get; set; } = 1.0f;
@@ -159,6 +179,22 @@ public sealed class AnimationLocomotionProfile
         Jump ??= string.Empty;
         Fall ??= string.Empty;
         Land ??= string.Empty;
+        WalkForward ??= string.Empty;
+        WalkBackward ??= string.Empty;
+        WalkLeft ??= string.Empty;
+        WalkRight ??= string.Empty;
+        RunForward ??= string.Empty;
+        RunBackward ??= string.Empty;
+        RunLeft ??= string.Empty;
+        RunRight ??= string.Empty;
+
+        MoveThreshold = Math.Max(MoveThreshold, 0.0f);
+        StateHysteresis = Math.Max(StateHysteresis, 0.0f);
+        DirectionHysteresis = Math.Max(DirectionHysteresis, 0.0f);
+        WalkReferenceSpeed = Math.Max(WalkReferenceSpeed, 0.001f);
+        RunReferenceSpeed = Math.Max(RunReferenceSpeed, 0.001f);
+        MinimumPlaybackRate = Math.Max(MinimumPlaybackRate, 0.0f);
+        MaximumPlaybackRate = Math.Max(MaximumPlaybackRate, MinimumPlaybackRate);
 
         RunThreshold =
             Math.Max(
@@ -200,6 +236,16 @@ public sealed class AnimationActionProfile
     public float BlendOut { get; set; } =
         0.15f;
 
+    public float PlaybackSpeed { get; set; } = 1.0f;
+
+    public int Priority { get; set; }
+
+    public bool Interruptible { get; set; } = true;
+
+    public string NextAction { get; set; } = string.Empty;
+
+    public string ComboWindow { get; set; } = string.Empty;
+
     internal void Normalize()
     {
         Name =
@@ -209,6 +255,10 @@ public sealed class AnimationActionProfile
 
         Clip ??=
             string.Empty;
+
+        NextAction ??= string.Empty;
+        ComboWindow ??= string.Empty;
+        PlaybackSpeed = Math.Max(PlaybackSpeed, 0.0f);
 
         BlendIn =
             Math.Max(

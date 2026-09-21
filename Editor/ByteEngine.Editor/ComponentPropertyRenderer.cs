@@ -461,7 +461,7 @@ internal static class ComponentPropertyRenderer
                      project != null &&
                      descriptor.Property.PropertyType ==
                          typeof(string) &&
-                     AnimationClipDiscovery.IsLocomotionClipProperty(
+                     IsAnimationControllerClipProperty(
                          descriptor.Property.Name))
             {
                 string clipName =
@@ -472,6 +472,7 @@ internal static class ComponentPropertyRenderer
                     DrawAnimationClipSelector(
                         clipController,
                         project,
+                        descriptor.Property.Name,
                         label,
                         ref clipName);
 
@@ -1213,12 +1214,65 @@ internal static class ComponentPropertyRenderer
             nameof(AnimationController.DriveLocomotion) or
             nameof(AnimationController.TransitionDuration) or
             nameof(AnimationController.PlaybackSpeed) or
-            nameof(AnimationController.RootMotionMode);
+            nameof(AnimationController.RootMotionMode) or
+            "MoveThreshold" or
+            "StateHysteresis" or
+            "DirectionalMovement" or
+            "WalkForward" or
+            "WalkBackward" or
+            "WalkLeft" or
+            "WalkRight" or
+            "RunForward" or
+            "RunBackward" or
+            "RunLeft" or
+            "RunRight" or
+            "DirectionHysteresis" or
+            "MatchPlaybackToSpeed" or
+            "WalkReferenceSpeed" or
+            "RunReferenceSpeed" or
+            "MinimumPlaybackRate" or
+            "MaximumPlaybackRate";
+    }
+
+    private static bool IsAnimationControllerClipProperty(
+        string propertyName)
+    {
+        return AnimationClipDiscovery.IsLocomotionClipProperty(
+                   propertyName) ||
+               propertyName is
+                   "WalkForward" or
+                   "WalkBackward" or
+                   "WalkLeft" or
+                   "WalkRight" or
+                   "RunForward" or
+                   "RunBackward" or
+                   "RunLeft" or
+                   "RunRight";
+    }
+
+    private static string AnimationClipEmptyLabel(
+        string propertyName)
+    {
+        return propertyName switch
+        {
+            "WalkForward" or
+            "WalkBackward" or
+            "WalkLeft" or
+            "WalkRight" => "Use Base Walk",
+
+            "RunForward" or
+            "RunBackward" or
+            "RunLeft" or
+            "RunRight" => "Use Base Run",
+
+            _ => "None"
+        };
     }
 
     private static bool DrawAnimationClipSelector(
         AnimationController controller,
         EditorProjectContext project,
+        string propertyName,
         string label,
         ref string clipName)
     {
@@ -1238,13 +1292,17 @@ internal static class ComponentPropertyRenderer
                         currentClipName,
                         StringComparison.OrdinalIgnoreCase));
 
+        string emptyLabel =
+            AnimationClipEmptyLabel(
+                propertyName);
+
         string preview =
             string.IsNullOrWhiteSpace(
                 clipName)
-                ? "None"
+                ? emptyLabel
                 : hasClip
                     ? clipName
-                    : $"{clipName} (Missing)";
+                    : $"{clipName} ⚠ Missing";
 
         bool changed =
             false;
@@ -1256,7 +1314,7 @@ internal static class ComponentPropertyRenderer
         }
 
         if (ImGui.Selectable(
-                "None",
+                emptyLabel,
                 string.IsNullOrWhiteSpace(
                     clipName)))
         {
