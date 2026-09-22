@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 
@@ -30,6 +31,42 @@ internal static class ModelImportScaleUtility
     private const float MaximumTypicalObjectSize =
         20.0f;
 
+    /*
+     * Character assets are commonly authored/exported in centimetres while
+     * ByteEngine gameplay content is authored in metre-like world units.
+     *
+     * Do not rewrite source vertices, bind poses or animation tracks here.
+     * The editor already applies ModelScaleAnalysis.AppliedScale at the model
+     * hierarchy root in both Scene authoring and Blueprint authoring, which
+     * keeps skeleton/animation data internally consistent.
+     */
+    private const float CharacterTargetSize =
+        1.80f;
+
+    private const float CharacterMinimumSaneSize =
+        0.75f;
+
+    private const float CharacterMaximumSaneSize =
+        3.50f;
+
+    private const float CharacterLargeUnitMismatchThreshold =
+        10.0f;
+
+    private const float CharacterSmallUnitMismatchThreshold =
+        0.05f;
+
+    private static readonly float[] CharacterUnitScaleCandidates =
+    {
+        10000.0f,
+        1000.0f,
+        100.0f,
+        10.0f,
+        0.1f,
+        0.01f,
+        0.001f,
+        0.0001f
+    };
+
     public static ModelScaleAnalysis Analyze(
         AssetRecord asset,
         ModelAsset model)
@@ -55,6 +92,33 @@ internal static class ModelImportScaleUtility
             GetLargestHierarchyDimension(
                 model);
 
+        /*
+         * New character-friendly normalization.
+         *
+         * Only infer a unit correction while Import Scale is still at the
+         * untouched default (1). An explicit user import scale always wins.
+         *
+         * The model must also look like a humanoid/skeletal character and be
+         * wildly outside a normal character-size range. This deliberately
+         * leaves ordinary props, environments and intentionally unusual
+         * explicit scales alone.
+         */
+        if (IsDefaultRequestedScale(
+                requestedScale) &&
+            LooksLikeHumanoidCharacter(
+                model) &&
+            TryChooseCharacterUnitScale(
+                hierarchyLargestDimension,
+                out float characterUnitScale))
+        {
+            return new ModelScaleAnalysis(
+                requestedScale,
+                characterUnitScale,
+                rawLargestDimension,
+                hierarchyLargestDimension,
+                true);
+        }
+
         string extension =
             Path.GetExtension(
                     asset.FullPath)
@@ -71,6 +135,12 @@ internal static class ModelImportScaleUtility
                 false);
         }
 
+        /*
+         * Preserve the existing FBX compatibility rules. These cover older
+         * assets where a tiny metadata scale was authored even though the FBX
+         * hierarchy was already in ByteEngine-sized units, and FBX hierarchies
+         * whose node transforms unexpectedly shrank otherwise sane geometry.
+         */
         bool suspiciousTinyRequestedScale =
             requestedScale >=
                 0.001f &&
@@ -307,6 +377,253 @@ internal static class ModelImportScaleUtility
         }
 
         return found;
+    }
+
+    private static bool IsDefaultRequestedScale(
+        float scale)
+    {
+        return
+            MathF.Abs(
+                scale -
+                1.0f) <=
+            0.0001f;
+    }
+
+    private static bool TryChooseCharacterUnitScale(
+        float hierarchyLargestDimension,
+        out float scale)
+    {
+        scale =
+            1.0f;
+
+        if (!float.IsFinite(
+                hierarchyLargestDimension) ||
+            hierarchyLargestDimension <=
+                0.000001f)
+        {
+            return false;
+        }
+
+        bool clearlyWrongUnits =
+            hierarchyLargestDimension >=
+                CharacterLargeUnitMismatchThreshold ||
+            hierarchyLargestDimension <=
+                CharacterSmallUnitMismatchThreshold;
+
+        if (!clearlyWrongUnits)
+        {
+            return false;
+        }
+
+        float bestScore =
+            float.PositiveInfinity;
+
+        bool found =
+            false;
+
+        foreach (float candidate
+                 in CharacterUnitScaleCandidates)
+        {
+            float finalSize =
+                hierarchyLargestDimension *
+                candidate;
+
+            if (!float.IsFinite(
+                    finalSize) ||
+                finalSize <
+                    CharacterMinimumSaneSize ||
+                finalSize >
+                    CharacterMaximumSaneSize)
+            {
+                continue;
+            }
+
+            /*
+             * Compare proportionally rather than linearly so 0.9 m and 3.6 m
+             * are treated as equally distant from the 1.8 m authoring target.
+             */
+            float score =
+                MathF.Abs(
+                    MathF.Log(
+                        finalSize /
+                        CharacterTargetSize));
+
+            if (score >=
+                bestScore)
+            {
+                continue;
+            }
+
+            bestScore =
+                score;
+
+            scale =
+                candidate;
+
+            found =
+                true;
+        }
+
+        return found;
+    }
+
+    private static bool LooksLikeHumanoidCharacter(
+        ModelAsset model)
+    {
+        if (model.RigType ==
+            AnimationRigType.Humanoid)
+        {
+            return true;
+        }
+
+        SkeletonAsset? skeleton =
+            model.Skeleton;
+
+        if (skeleton ==
+                null ||
+            skeleton.Bones.Count <
+                8)
+        {
+            return false;
+        }
+
+        string[] names =
+            skeleton.Bones
+                .Select(
+                    bone =>
+                        NormalizeBoneName(
+                            bone.Name))
+                .Where(
+                    name =>
+                        name.Length >
+                        0)
+                .ToArray();
+
+        bool hasHips =
+            names.Any(
+                name =>
+                    ContainsAny(
+                        name,
+                        "hip",
+                        "pelvis"));
+
+        bool hasSpine =
+            names.Any(
+                name =>
+                    ContainsAny(
+                        name,
+                        "spine",
+                        "chest",
+                        "torso"));
+
+        bool hasHead =
+            names.Any(
+                name =>
+                    name.Contains(
+                        "head",
+                        StringComparison.Ordinal));
+
+        bool hasLeftLimb =
+            names.Any(
+                name =>
+                    HasSideToken(
+                        name,
+                        true) &&
+                    ContainsAny(
+                        name,
+                        "arm",
+                        "hand",
+                        "shoulder",
+                        "leg",
+                        "thigh",
+                        "calf",
+                        "foot"));
+
+        bool hasRightLimb =
+            names.Any(
+                name =>
+                    HasSideToken(
+                        name,
+                        false) &&
+                    ContainsAny(
+                        name,
+                        "arm",
+                        "hand",
+                        "shoulder",
+                        "leg",
+                        "thigh",
+                        "calf",
+                        "foot"));
+
+        return
+            hasHips &&
+            hasSpine &&
+            hasHead &&
+            hasLeftLimb &&
+            hasRightLimb;
+    }
+
+    private static string NormalizeBoneName(
+        string? value)
+    {
+        return
+            string.IsNullOrWhiteSpace(
+                value)
+                ? string.Empty
+                : value
+                    .Trim()
+                    .ToLowerInvariant();
+    }
+
+    private static bool HasSideToken(
+        string name,
+        bool left)
+    {
+        string word =
+            left
+                ? "left"
+                : "right";
+
+        string suffix =
+            left
+                ? "_l"
+                : "_r";
+
+        string dot =
+            left
+                ? ".l"
+                : ".r";
+
+        string dash =
+            left
+                ? "-l"
+                : "-r";
+
+        return
+            name.Contains(
+                word,
+                StringComparison.Ordinal) ||
+            name.EndsWith(
+                suffix,
+                StringComparison.Ordinal) ||
+            name.Contains(
+                dot,
+                StringComparison.Ordinal) ||
+            name.Contains(
+                dash,
+                StringComparison.Ordinal);
+    }
+
+    private static bool ContainsAny(
+        string value,
+        params string[] terms)
+    {
+        return
+            terms.Any(
+                term =>
+                    value.Contains(
+                        term,
+                        StringComparison.Ordinal));
     }
 
     private static float GetLargestRawMeshDimension(

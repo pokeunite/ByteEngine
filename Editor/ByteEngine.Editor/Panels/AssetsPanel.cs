@@ -93,6 +93,14 @@ internal sealed class AssetsPanel : IDisposable
 
     private string? _expandedModelPath;
 
+    private const string DirectoryDragPayloadType =
+        "BYTEENGINE_ASSET_BROWSER_DIRECTORY";
+
+    private Guid _browserDragAssetGuid;
+    private string[] _browserDragAssetPaths =
+        Array.Empty<string>();
+    private string? _browserDragDirectoryPath;
+
     private float _assetTileScale =
         EditorPreferences.AssetIconScale;
 
@@ -282,6 +290,11 @@ internal sealed class AssetsPanel : IDisposable
         EditorUi.BeginToolbar("##AssetCommandBar",
             compactCommandBar ? EditorTheme.StandardControlHeight * 2.0f + 10.0f : EditorTheme.ToolbarHeight);
 
+        bool canNavigateBack = CanNavigateBack();
+        if (EditorUi.ToolbarButton("< Back", "Go to parent folder", canNavigateBack))
+            NavigateBack();
+        ImGui.SameLine();
+
         if (EditorUi.PrimaryButton("+ Create", size: new Vector2(0.0f, EditorTheme.StandardControlHeight)))
             ImGui.OpenPopup("AssetBrowserCreateMenu");
 
@@ -421,6 +434,9 @@ internal sealed class AssetsPanel : IDisposable
             SelectDirectory(
                 directory);
         }
+
+        DrawDirectoryDragSource(
+            directory);
 
         DrawAssetDropTarget(
             directory,
@@ -778,6 +794,9 @@ internal sealed class AssetsPanel : IDisposable
             ImGui.SetTooltip(folderName);
         }
 
+        DrawDirectoryDragSource(
+            directory);
+
         DrawAssetDropTarget(
             directory,
             log);
@@ -905,16 +924,11 @@ internal sealed class AssetsPanel : IDisposable
             }
             else
             {
-                ImGuiIOPtr io =
-                    ImGui.GetIO();
-
-                _assetSelection.Click(
+                HandleAssetSelectionClick(
+                    state,
                     orderedFiles,
                     fileIndex,
-                    io.KeyCtrl,
-                    io.KeyShift);
-
-                SyncPrimaryAssetSelection(state);
+                    file);
             }
         }
 
@@ -1435,7 +1449,10 @@ internal sealed class AssetsPanel : IDisposable
                     directory);
 
             ImGui.Selectable(
-                $"[DIR] {folderName}##content-folder:{directory}");
+                $"    {folderName}##content-folder:{directory}");
+
+            DrawListIcon(
+                EditorIconKind.Folder);
 
             /*
              * Double-click detection must not depend on Selectable() returning
@@ -1449,6 +1466,9 @@ internal sealed class AssetsPanel : IDisposable
                 SelectDirectory(
                     directory);
             }
+
+            DrawDirectoryDragSource(
+                directory);
 
             DrawAssetDropTarget(
                 directory,
@@ -1542,32 +1562,25 @@ internal sealed class AssetsPanel : IDisposable
                 continue;
             }
 
-            string icon =
-                GetAssetIcon(
-                    asset?.Type);
-
             bool selected =
                 _assetSelection.Contains(
                     file);
 
             bool clicked =
                 ImGui.Selectable(
-                    $"{icon} {Path.GetFileName(file)}##asset:{file}",
+                    $"    {Path.GetFileName(file)}##asset:{file}",
                     selected);
+
+            DrawListIcon(
+                EditorIcons.ForAsset(asset?.Type));
 
             if (clicked)
             {
-                ImGuiIOPtr io =
-                    ImGui.GetIO();
-
-                _assetSelection.Click(
+                HandleAssetSelectionClick(
+                    state,
                     orderedFiles,
                     fileIndex,
-                    io.KeyCtrl,
-                    io.KeyShift);
-
-                SyncPrimaryAssetSelection(
-                    state);
+                    file);
             }
 
             _assetBounds.Add(
@@ -1697,26 +1710,24 @@ internal sealed class AssetsPanel : IDisposable
 
         bool open =
             ImGui.TreeNodeEx(
-                $"[3D] {Path.GetFileName(file)}##model-asset:{file}",
+                $"      {Path.GetFileName(file)}##model-asset:{file}",
                 flags);
+
+        DrawListIcon(
+            EditorIconKind.Model,
+            20.0f);
 
         if (ImGui.IsItemClicked(
                 ImGuiMouseButton.Left))
         {
-            ImGuiIOPtr io =
-                ImGui.GetIO();
-
-            _assetSelection.Click(
+            HandleAssetSelectionClick(
+                state,
                 orderedFiles,
                 fileIndex,
-                io.KeyCtrl,
-                io.KeyShift);
+                file);
 
             state.SelectedModelAnimationKey =
                 null;
-
-            SyncPrimaryAssetSelection(
-                state);
         }
 
         _assetBounds.Add(
@@ -1761,7 +1772,11 @@ internal sealed class AssetsPanel : IDisposable
                 0)
             {
                 ImGui.TextDisabled(
-                    "  [ANIM] No animation clips");
+                    "      No animation clips");
+
+                DrawListIcon(
+                    EditorIconKind.Animation,
+                    20.0f);
             }
             else
             {
@@ -1777,11 +1792,18 @@ internal sealed class AssetsPanel : IDisposable
                             StringComparison.Ordinal);
 
                     string label =
-                        $"[ANIM] {animation.Name}  {animation.Duration:0.00}s##animation:{asset.Guid}:{animation.Key}";
+                        $"      {animation.Name}  {animation.Duration:0.00}s##animation:{asset.Guid}:{animation.Key}";
 
-                    if (ImGui.Selectable(
+                    bool animationClicked =
+                        ImGui.Selectable(
                             label,
-                            clipSelected))
+                            clipSelected);
+
+                    DrawListIcon(
+                        EditorIconKind.Animation,
+                        20.0f);
+
+                    if (animationClicked)
                     {
                         _assetSelection.Clear();
 
@@ -1916,38 +1938,52 @@ state.SelectedObject =
             asset);
     }
 
-    private static string GetAssetIcon(
-        AssetType? type)
+    private static void DrawListIcon(
+        EditorIconKind icon,
+        float xOffset = 4.0f)
     {
-        return type switch
+        Vector2 minimum =
+            ImGui.GetItemRectMin();
+
+        float size =
+            Math.Max(
+                ImGui.GetTextLineHeight() - 2.0f,
+                12.0f);
+
+        EditorIcons.DrawTileIcon(
+            icon,
+            new Vector2(
+                minimum.X + xOffset,
+                minimum.Y + 1.0f),
+            size);
+    }
+
+    private void HandleAssetSelectionClick(
+        EditorState state,
+        IReadOnlyList<string> orderedFiles,
+        int fileIndex,
+        string file)
+    {
+        ImGuiIOPtr io =
+            ImGui.GetIO();
+
+        bool keepExistingMultiSelection =
+            _assetSelection.Count > 1 &&
+            _assetSelection.Contains(file) &&
+            !io.KeyCtrl &&
+            !io.KeyShift;
+
+        if (!keepExistingMultiSelection)
         {
-            AssetType.Texture2D =>
-                "[IMG]",
+            _assetSelection.Click(
+                orderedFiles,
+                fileIndex,
+                io.KeyCtrl,
+                io.KeyShift);
+        }
 
-            AssetType.AudioClip =>
-                "[AUD]",
-
-            AssetType.Scene =>
-                "[SCN]",
-
-            AssetType.Model3D =>
-                "[3D]",
-
-            AssetType.Blueprint =>
-                "[BP]",
-
-            AssetType.EventModule =>
-                "[EVT]",
-
-            AssetType.AnimationEvents =>
-                "[ANIM]",
-
-            AssetType.AnimationProfile =>
-                "[ANIM]",
-
-            _ =>
-                "[FILE]"
-        };
+        SyncPrimaryAssetSelection(
+            state);
     }
 
     // ========================================================
@@ -2029,7 +2065,7 @@ state.SelectedObject =
         ImGui.EndPopup();
     }
 
-    private static void DrawAssetDragSource(
+    private void DrawAssetDragSource(
         AssetRecord? asset,
         string file)
     {
@@ -2044,13 +2080,91 @@ state.SelectedObject =
             return;
         }
 
+        string[] dragPaths =
+            _assetSelection.Count > 1 &&
+            _assetSelection.Contains(file)
+                ? _assetSelection.Paths
+                    .Where(File.Exists)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : new[] { file };
+
+        if (dragPaths.Length == 0)
+        {
+            dragPaths =
+                new[] { file };
+        }
+
+        _browserDragAssetGuid =
+            asset.Guid;
+
+        _browserDragAssetPaths =
+            dragPaths;
+
+        _browserDragDirectoryPath =
+            null;
+
+        // Keep the existing GUID payload so dragging an individual asset to
+        // Inspector/Hierarchy targets continues to work exactly as before.
         AssetDragDrop.Set(
             asset.Guid);
 
         ImGui.Text(
-            $"Move {Path.GetFileName(file)}");
+            dragPaths.Length > 1
+                ? $"Move {dragPaths.Length} assets"
+                : $"Move {Path.GetFileName(file)}");
 
         ImGui.EndDragDropSource();
+    }
+
+    private void DrawDirectoryDragSource(
+        string directory)
+    {
+        if (IsProtectedRoot(directory) ||
+            !Directory.Exists(directory))
+        {
+            return;
+        }
+
+        if (!ImGui.BeginDragDropSource())
+        {
+            return;
+        }
+
+        _browserDragDirectoryPath =
+            Path.GetFullPath(directory);
+
+        _browserDragAssetGuid =
+            Guid.Empty;
+
+        _browserDragAssetPaths =
+            Array.Empty<string>();
+
+        ImGui.SetDragDropPayload(
+            DirectoryDragPayloadType,
+            IntPtr.Zero,
+            0u,
+            ImGuiCond.Once);
+
+        ImGui.Text(
+            $"Move folder {Path.GetFileName(directory)}");
+
+        ImGui.EndDragDropSource();
+    }
+
+    private unsafe string? AcceptDirectoryDrag()
+    {
+        ImGuiPayloadPtr payload =
+            ImGui.AcceptDragDropPayload(
+                DirectoryDragPayloadType);
+
+        if (payload.NativePtr == null ||
+            !payload.Delivery)
+        {
+            return null;
+        }
+
+        return _browserDragDirectoryPath;
     }
 
     private void DrawAssetDropTarget(
@@ -2066,21 +2180,56 @@ state.SelectedObject =
             AssetDragDrop.Accept();
 
         if (assetGuid.HasValue &&
-            assetGuid.Value !=
-                Guid.Empty &&
-            _project.AssetDatabase.TryGetAsset(
-                assetGuid.Value,
-                out AssetRecord? asset) &&
-            asset !=
-                null)
+            assetGuid.Value != Guid.Empty)
         {
-            MoveAssetToFolder(
-                asset,
+            if (_browserDragAssetGuid == assetGuid.Value &&
+                _browserDragAssetPaths.Length > 0)
+            {
+                MoveAssetsToFolder(
+                    _browserDragAssetPaths,
+                    destinationDirectory,
+                    log);
+            }
+            else if (_project.AssetDatabase.TryGetAsset(
+                         assetGuid.Value,
+                         out AssetRecord? asset) &&
+                     asset != null)
+            {
+                MoveAssetToFolder(
+                    asset,
+                    destinationDirectory,
+                    log);
+            }
+
+            ClearBrowserDragState();
+        }
+
+        string? sourceDirectory =
+            AcceptDirectoryDrag();
+
+        if (!string.IsNullOrWhiteSpace(sourceDirectory))
+        {
+            MoveDirectoryToFolder(
+                sourceDirectory,
                 destinationDirectory,
                 log);
+
+            ClearBrowserDragState();
         }
 
         ImGui.EndDragDropTarget();
+    }
+
+    private void ClearBrowserDragState()
+    {
+        _browserDragAssetGuid =
+            Guid.Empty;
+
+        _browserDragAssetPaths =
+            Array.Empty<string>();
+
+        _browserDragDirectoryPath =
+            null;
     }
 
     // ========================================================
@@ -3475,7 +3624,7 @@ state.SelectedObject =
     }
 
     // ========================================================
-    // MOVE ASSETS
+    // MOVE ASSETS / FOLDERS
     // ========================================================
 
     private void MoveAssetToFolder(
@@ -3483,53 +3632,232 @@ state.SelectedObject =
         string destinationDirectory,
         EditorLog log)
     {
+        MoveAssetsToFolder(
+            new[] { asset.FullPath },
+            destinationDirectory,
+            log);
+    }
+
+    private void MoveAssetsToFolder(
+        IReadOnlyCollection<string> sourcePaths,
+        string destinationDirectory,
+        EditorLog log)
+    {
+        var completed =
+            new List<(string Source, string Destination)>();
+
         try
         {
-            if (!Directory.Exists(
-                    destinationDirectory))
+            if (!Directory.Exists(destinationDirectory))
             {
                 throw new DirectoryNotFoundException(
                     destinationDirectory);
             }
 
-            string source =
-                asset.FullPath;
+            string[] sources =
+                sourcePaths
+                    .Where(File.Exists)
+                    .Select(path => Path.GetFullPath(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
-            string destination =
-                Path.Combine(
-                    destinationDirectory,
-                    Path.GetFileName(
-                        source));
+            var moves =
+                new List<(string Source, string Destination)>();
 
-            if (PathsEqual(
-                    source,
-                    destination))
+            foreach (string source in sources)
+            {
+                string destination =
+                    Path.Combine(
+                        destinationDirectory,
+                        Path.GetFileName(source));
+
+                if (PathsEqual(source, destination))
+                {
+                    continue;
+                }
+
+                if (File.Exists(destination) ||
+                    Directory.Exists(destination))
+                {
+                    throw new IOException(
+                        $"'{Path.GetFileName(destination)}' already exists in '{GetDisplayFolderName(destinationDirectory)}'.");
+                }
+
+                string sourceMeta =
+                    source +
+                    ".meta";
+
+                string destinationMeta =
+                    destination +
+                    ".meta";
+
+                if (File.Exists(sourceMeta) &&
+                    File.Exists(destinationMeta))
+                {
+                    throw new IOException(
+                        $"Metadata for '{Path.GetFileName(destination)}' already exists in '{GetDisplayFolderName(destinationDirectory)}'.");
+                }
+
+                moves.Add((source, destination));
+            }
+
+            if (moves.Count == 0)
             {
                 return;
             }
 
-            if (File.Exists(
-                    destination) ||
-                Directory.Exists(
-                    destination))
+            try
             {
-                throw new IOException(
-                    $"'{Path.GetFileName(destination)}' already exists in '{GetDisplayFolderName(destinationDirectory)}'.");
-            }
+                foreach ((string source, string destination) in moves)
+                {
+                    MoveAssetFileAndMeta(
+                        source,
+                        destination);
 
-            MoveAssetFileAndMeta(
-                source,
-                destination);
+                    completed.Add((source, destination));
+                }
+            }
+            catch
+            {
+                for (int index = completed.Count - 1;
+                     index >= 0;
+                     index--)
+                {
+                    (string source, string destination) =
+                        completed[index];
+
+                    try
+                    {
+                        if (File.Exists(destination) &&
+                            !File.Exists(source))
+                        {
+                            MoveAssetFileAndMeta(
+                                destination,
+                                source);
+                        }
+                    }
+                    catch
+                    {
+                        // Best-effort rollback. The original exception is more
+                        // useful to the user and is logged below.
+                    }
+                }
+
+                throw;
+            }
 
             RefreshAfterFileOperation();
 
             log.Info(
-                $"Moved '{Path.GetFileName(source)}' to '{ToProjectPath(destinationDirectory)}'.");
+                moves.Count == 1
+                    ? $"Moved '{Path.GetFileName(moves[0].Source)}' to '{ToProjectPath(destinationDirectory)}'."
+                    : $"Moved {moves.Count} assets to '{ToProjectPath(destinationDirectory)}'.");
+        }
+        catch (Exception exception)
+        {
+            if (completed.Count > 0)
+            {
+                RefreshAfterFileOperation();
+            }
+
+            log.Error(
+                $"Could not move asset(s): {exception.Message}");
+        }
+    }
+
+    private void MoveDirectoryToFolder(
+        string sourceDirectory,
+        string destinationDirectory,
+        EditorLog log)
+    {
+        try
+        {
+            string source =
+                Path.GetFullPath(sourceDirectory);
+
+            string destinationRoot =
+                Path.GetFullPath(destinationDirectory);
+
+            if (!Directory.Exists(source))
+            {
+                throw new DirectoryNotFoundException(source);
+            }
+
+            if (!Directory.Exists(destinationRoot))
+            {
+                throw new DirectoryNotFoundException(destinationRoot);
+            }
+
+            if (IsProtectedRoot(source))
+            {
+                throw new InvalidOperationException(
+                    "Project root content folders cannot be moved.");
+            }
+
+            if (PathsEqual(source, destinationRoot))
+            {
+                return;
+            }
+
+            if (IsInsideDirectory(destinationRoot, source))
+            {
+                throw new InvalidOperationException(
+                    "A folder cannot be moved into itself or one of its descendants.");
+            }
+
+            string destination =
+                Path.Combine(
+                    destinationRoot,
+                    Path.GetFileName(source));
+
+            if (PathsEqual(source, destination))
+            {
+                return;
+            }
+
+            if (Directory.Exists(destination) ||
+                File.Exists(destination))
+            {
+                throw new IOException(
+                    $"'{Path.GetFileName(destination)}' already exists in '{GetDisplayFolderName(destinationRoot)}'.");
+            }
+
+            bool currentDirectoryMoved =
+                IsInsideDirectory(
+                    _currentDirectory,
+                    source);
+
+            string? currentRelative =
+                currentDirectoryMoved
+                    ? Path.GetRelativePath(
+                        source,
+                        _currentDirectory)
+                    : null;
+
+            Directory.Move(
+                source,
+                destination);
+
+            if (currentDirectoryMoved)
+            {
+                _currentDirectory =
+                    string.IsNullOrWhiteSpace(currentRelative) ||
+                    currentRelative == "."
+                        ? destination
+                        : Path.Combine(
+                            destination,
+                            currentRelative);
+            }
+
+            RefreshAfterFileOperation();
+
+            log.Info(
+                $"Moved folder '{Path.GetFileName(source)}' to '{ToProjectPath(destinationRoot)}'.");
         }
         catch (Exception exception)
         {
             log.Error(
-                $"Could not move asset: {exception.Message}");
+                $"Could not move folder: {exception.Message}");
         }
     }
 
@@ -3545,18 +3873,37 @@ state.SelectedObject =
             destination +
             ".meta";
 
+        if (File.Exists(destinationMeta) &&
+            File.Exists(sourceMeta))
+        {
+            throw new IOException(
+                $"Metadata destination already exists: '{destinationMeta}'.");
+        }
+
         File.Move(
             source,
             destination);
 
-        if (File.Exists(
-                sourceMeta) &&
-            !File.Exists(
-                destinationMeta))
+        try
         {
-            File.Move(
-                sourceMeta,
-                destinationMeta);
+            if (File.Exists(sourceMeta))
+            {
+                File.Move(
+                    sourceMeta,
+                    destinationMeta);
+            }
+        }
+        catch
+        {
+            if (File.Exists(destination) &&
+                !File.Exists(source))
+            {
+                File.Move(
+                    destination,
+                    source);
+            }
+
+            throw;
         }
     }
 
@@ -3639,6 +3986,77 @@ state.SelectedObject =
 
         _listingDirty =
             true;
+    }
+
+    private bool CanNavigateBack()
+    {
+        string assetsRoot =
+            GetAssetsRoot();
+
+        if (IsInsideDirectory(
+                _currentDirectory,
+                assetsRoot))
+        {
+            return !PathsEqual(
+                _currentDirectory,
+                assetsRoot);
+        }
+
+        string scenesRoot =
+            GetScenesRoot();
+
+        return
+            IsInsideDirectory(
+                _currentDirectory,
+                scenesRoot) &&
+            !PathsEqual(
+                _currentDirectory,
+                scenesRoot);
+    }
+
+    private void NavigateBack()
+    {
+        string assetsRoot =
+            GetAssetsRoot();
+
+        string scenesRoot =
+            GetScenesRoot();
+
+        string? root =
+            IsInsideDirectory(
+                _currentDirectory,
+                assetsRoot)
+                ? assetsRoot
+                : IsInsideDirectory(
+                    _currentDirectory,
+                    scenesRoot)
+                    ? scenesRoot
+                    : null;
+
+        if (root ==
+                null ||
+            PathsEqual(
+                _currentDirectory,
+                root))
+        {
+            return;
+        }
+
+        string? parent =
+            Path.GetDirectoryName(
+                _currentDirectory);
+
+        if (parent ==
+                null ||
+            !IsInsideDirectory(
+                parent,
+                root))
+        {
+            return;
+        }
+
+        SelectDirectory(
+            parent);
     }
 
     private void EnsureValidDirectory()
