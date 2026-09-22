@@ -14,6 +14,16 @@ public static class SkeletalAttachmentService
         AttachmentTransformRule locationRule = AttachmentTransformRule.SnapToTarget,
         AttachmentTransformRule rotationRule = AttachmentTransformRule.SnapToTarget,
         AttachmentTransformRule scaleRule = AttachmentTransformRule.KeepRelative)
+        => AttachToSocket(child, parent, socketName, locationRule, rotationRule, scaleRule,
+            Vector3.Zero, Vector3.Zero, Vector3.One);
+
+    public static bool AttachToSocket(GameObject child, GameObject parent, string socketName,
+        AttachmentTransformRule locationRule,
+        AttachmentTransformRule rotationRule,
+        AttachmentTransformRule scaleRule,
+        Vector3 positionOffset,
+        Vector3 rotationOffsetDegrees,
+        Vector3 scaleMultiplier)
     {
         ArgumentNullException.ThrowIfNull(child); ArgumentNullException.ThrowIfNull(parent);
         if (string.IsNullOrWhiteSpace(socketName) || !SkeletalSocketResolver.TryGetSocketWorldTransform(parent, socketName, out SkeletalSocketTransform socket)) return false;
@@ -25,11 +35,17 @@ public static class SkeletalAttachmentService
         if (!child.SetParent(parent, true)) return false;
         Invalidate(child);
         child.ParentSocket = socketName.Trim(); child.AttachmentLocationRule=locationRule; child.AttachmentRotationRule=rotationRule; child.AttachmentScaleRule=scaleRule;
-        child.AttachmentPosition = locationRule switch { AttachmentTransformRule.SnapToTarget=>Vector3.Zero, AttachmentTransformRule.KeepWorld=>Vector3.Transform(worldPosition-socket.Position,Quaternion.Inverse(socket.Rotation))/socket.Scale, _=>previousRelativePosition };
-        child.AttachmentRotation = rotationRule switch { AttachmentTransformRule.SnapToTarget=>Quaternion.Identity, AttachmentTransformRule.KeepWorld=>Quaternion.Normalize(worldRotation*Quaternion.Inverse(socket.Rotation)), _=>previousRelativeRotation };
-        child.AttachmentScale = scaleRule switch { AttachmentTransformRule.SnapToTarget=>Vector3.One, AttachmentTransformRule.KeepWorld=>worldScale/socket.Scale, _=>previousRelativeScale };
+        Vector3 basePosition = locationRule switch { AttachmentTransformRule.SnapToTarget=>Vector3.Zero, AttachmentTransformRule.KeepWorld=>Vector3.Transform(worldPosition-socket.Position,Quaternion.Inverse(socket.Rotation))/socket.Scale, _=>previousRelativePosition };
+        Quaternion baseRotation = rotationRule switch { AttachmentTransformRule.SnapToTarget=>Quaternion.Identity, AttachmentTransformRule.KeepWorld=>Quaternion.Normalize(worldRotation*Quaternion.Inverse(socket.Rotation)), _=>previousRelativeRotation };
+        Vector3 baseScale = scaleRule switch { AttachmentTransformRule.SnapToTarget=>Vector3.One, AttachmentTransformRule.KeepWorld=>worldScale/socket.Scale, _=>previousRelativeScale };
+        Quaternion offsetRotation = Quaternion.CreateFromYawPitchRoll(DegreesToRadians(rotationOffsetDegrees.Y), DegreesToRadians(rotationOffsetDegrees.X), DegreesToRadians(rotationOffsetDegrees.Z));
+        child.AttachmentPosition = basePosition + positionOffset;
+        child.AttachmentRotation = Quaternion.Normalize(offsetRotation * baseRotation);
+        child.AttachmentScale = baseScale * scaleMultiplier;
         Apply(child); return true;
     }
+
+    private static float DegreesToRadians(float value) => value * MathF.PI / 180f;
 
     public static bool Detach(GameObject child, bool keepWorldTransform=true)
     {

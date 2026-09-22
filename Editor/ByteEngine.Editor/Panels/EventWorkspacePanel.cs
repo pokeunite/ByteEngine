@@ -4753,6 +4753,9 @@ internal sealed class EventWorkspacePanel
             "input.vectorLengthGreater" =>
                 "Checks whether the selected vector Input Action exceeds the chosen magnitude.",
 
+            "attachment.attachToSocket" =>
+                "Attaches an object to a model-owned skeletal socket and follows the animated socket transform.",
+
             "logic.and" =>
                 "TRUE only when every Condition connected to this gate is TRUE.",
 
@@ -5974,6 +5977,9 @@ internal sealed class EventWorkspacePanel
                 "animation.playAction" =>
                     610.0f,
 
+                "attachment.attachToSocket" =>
+                    950.0f,
+
                 "animation.triggerAction" =>
                     430.0f,
 
@@ -6691,6 +6697,9 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["locationRule"] = EventValue.String("SnapToTarget");
                 instruction.Arguments["rotationRule"] = EventValue.String("SnapToTarget");
                 instruction.Arguments["scaleRule"] = EventValue.String("KeepRelative");
+                instruction.Arguments["positionOffset"] = EventValue.Vector3(Vector3.Zero);
+                instruction.Arguments["rotationOffset"] = EventValue.Vector3(Vector3.Zero);
+                instruction.Arguments["scaleMultiplier"] = EventValue.Vector3(Vector3.One);
                 break;
             case "attachment.detach":
                 instruction.Arguments["object"] = EventValue.String("Self");
@@ -7120,6 +7129,12 @@ internal sealed class EventWorkspacePanel
                 DrawAttachmentRuleArgument(instruction, "locationRule", "Location Rule", "SnapToTarget");
                 DrawAttachmentRuleArgument(instruction, "rotationRule", "Rotation Rule", "SnapToTarget");
                 DrawAttachmentRuleArgument(instruction, "scaleRule", "Scale Rule", "KeepRelative");
+                DrawValueArgument(instruction, "positionOffset", "Position Offset", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.Zero), state, false);
+                DrawValueArgument(instruction, "rotationOffset", "Rotation Offset", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.Zero), state, false);
+                DrawValueArgument(instruction, "scaleMultiplier", "Scale Multiplier", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.One), state, false);
                 break;
             case "attachment.detach":
                 DrawObjectTargetArgument(instruction, "object", "Object", state);

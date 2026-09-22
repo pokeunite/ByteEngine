@@ -228,7 +228,11 @@ public sealed class VisualLogicRegistry
                 AttachmentTransformRule location = ParseAttachmentRule(EventValueResolver.GetString(instruction, "locationRule", context), AttachmentTransformRule.SnapToTarget);
                 AttachmentTransformRule rotation = ParseAttachmentRule(EventValueResolver.GetString(instruction, "rotationRule", context), AttachmentTransformRule.SnapToTarget);
                 AttachmentTransformRule scale = ParseAttachmentRule(EventValueResolver.GetString(instruction, "scaleRule", context), AttachmentTransformRule.KeepRelative);
-                if (!SkeletalAttachmentService.AttachToSocket(child, parent, socket, location, rotation, scale))
+                Vector3 positionOffset = EventValueResolver.GetVector3(instruction, "positionOffset", context, Vector3.Zero);
+                Vector3 rotationOffsetDegrees = EventValueResolver.GetVector3(instruction, "rotationOffset", context, Vector3.Zero);
+                Vector3 scaleMultiplier = EventValueResolver.GetVector3(instruction, "scaleMultiplier", context, Vector3.One);
+                if (!SkeletalAttachmentService.AttachToSocket(child, parent, socket, location, rotation, scale,
+                        positionOffset, rotationOffsetDegrees, scaleMultiplier))
                     context.WarningSink?.Invoke($"Socket '{socket}' was not found on {parent.Name}.");
             }
         });

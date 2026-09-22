@@ -41,6 +41,30 @@ internal static class C125SkeletalSocketTests
             Assert(SkeletalAttachmentService.AttachToSocket(child,parent,"Weapon_R",AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.SnapToTarget),"valid socket attach");
             Assert(child.IsAttached&&Near(child.Transform.WorldPosition,socket.Position)&&Near(child.Transform.WorldScale,socket.Scale),"snap/snap/snap semantics");
             Assert(SkeletalAttachmentService.HasCachedBinding(child),"runtime binding cached after attach");
+
+            GameObject defaultChild=scene.CreateGameObject("Default Rifle");
+            Assert(SkeletalAttachmentService.AttachToSocket(defaultChild,parent,"Weapon_R"),"old attachment overload remains valid");
+            Assert(SkeletalSocketResolver.TryGetSocketWorldTransform(parent,"Weapon_R",out SkeletalSocketTransform defaultSocket)&&Near(defaultChild.Transform.WorldPosition,defaultSocket.Position),"zero-offset defaults preserve existing behavior");
+
+            GameObject offsetChild=scene.CreateGameObject("Offset Rifle");
+            Vector3 positionOffset=new(.1f,-.2f,.3f), rotationOffsetDegrees=new(30,45,-15), scaleMultiplier=new(.5f,.25f,2f);
+            Assert(SkeletalAttachmentService.AttachToSocket(offsetChild,parent,"Weapon_R",AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.SnapToTarget,positionOffset,rotationOffsetDegrees,scaleMultiplier),"offset attachment succeeds");
+            Assert(SkeletalSocketResolver.TryGetSocketWorldTransform(parent,"Weapon_R",out SkeletalSocketTransform offsetSocket),"offset socket resolves");
+            Vector3 expectedOffsetPosition=offsetSocket.Position+Vector3.Transform(positionOffset*offsetSocket.Scale,offsetSocket.Rotation);
+            Quaternion expectedOffsetRotation=Quaternion.Normalize(Quaternion.CreateFromYawPitchRoll(Radians(rotationOffsetDegrees.Y),Radians(rotationOffsetDegrees.X),Radians(rotationOffsetDegrees.Z))*offsetSocket.Rotation);
+            Assert(Near(offsetChild.Transform.WorldPosition,expectedOffsetPosition),"position offset applies in socket-local space");
+            Assert(Near(offsetChild.Transform.WorldRotation,expectedOffsetRotation),"degree rotation offset uses Transform Euler convention");
+            Assert(Near(offsetChild.Transform.WorldScale,offsetSocket.Scale*scaleMultiplier),"scale multiplier applies after rule scale");
+            SkeletalAttachmentService.Apply(offsetChild);
+            Assert(Near(offsetChild.Transform.WorldPosition,expectedOffsetPosition)&&Near(offsetChild.Transform.WorldRotation,expectedOffsetRotation)&&Near(offsetChild.Transform.WorldScale,offsetSocket.Scale*scaleMultiplier),"offsets survive repeated Apply calls");
+            BindPose(renderer,Matrix4x4.CreateFromYawPitchRoll(.35f,-.2f,.1f)*Matrix4x4.CreateTranslation(4,5,6));
+            Assert(SkeletalAttachmentService.Apply(offsetChild),"animated attachment reapplies");
+            Assert(SkeletalSocketResolver.TryGetSocketWorldTransform(parent,"Weapon_R",out SkeletalSocketTransform movedSocket),"animated parent socket continues resolving");
+            Assert(Near(offsetChild.Transform.WorldPosition,movedSocket.Position+Vector3.Transform(positionOffset*movedSocket.Scale,movedSocket.Rotation)),"animated socket retains position offset");
+            Assert(Near(offsetChild.Transform.WorldRotation,Quaternion.Normalize(Quaternion.CreateFromYawPitchRoll(Radians(rotationOffsetDegrees.Y),Radians(rotationOffsetDegrees.X),Radians(rotationOffsetDegrees.Z))*movedSocket.Rotation)),"animated socket retains rotation offset");
+            GameObject missingChild=scene.CreateGameObject("Missing Socket Rifle");
+            Assert(!SkeletalAttachmentService.AttachToSocket(missingChild,parent,"MissingSocket",AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.SnapToTarget,AttachmentTransformRule.KeepRelative,Vector3.One,Vector3.One,Vector3.One)&&!missingChild.IsAttached,"missing socket returns false without attaching");
+
             Assert(SkeletalAttachmentService.AttachToSocket(child,parent,"Back"),"socket switch succeeds"); SkeletalAttachmentService.Apply(child);
             Assert(child.ParentSocket=="Back"&&SkeletalAttachmentService.HasCachedBinding(child),"socket switch invalidates and rebuilds binding");
             GameObject secondParent=scene.CreateGameObject("Second Player"); SkeletalMeshRenderer secondRenderer=secondParent.AddComponent(new SkeletalMeshRenderer()); BindRenderer(secondRenderer,model,Matrix4x4.CreateTranslation(10,0,0));
@@ -57,7 +81,17 @@ internal static class C125SkeletalSocketTests
             Assert(cloned.ParentSocket=="Weapon_R"&&cloned.AttachmentLocationRule==AttachmentTransformRule.SnapToTarget&&Near(cloned.AttachmentPosition,child.AttachmentPosition),"Blueprint/scene attachment persistence");
 
             var registry=ByteEngine.Core.VisualLogic.VisualLogicRegistry.CreateDefault();
-            Assert(registry.TryGetAction("attachment.attachToSocket",out _)&&registry.TryGetAction("attachment.detach",out _)&&registry.TryGetCondition("attachment.isAttached",out _)&&registry.TryGetCondition("attachment.isAttachedToSocket",out _),"Attachment Visual Logic registration");
+            Assert(registry.TryGetAction("attachment.attachToSocket",out ByteEngine.Core.VisualLogic.VisualActionDefinition? attachAction)&&attachAction!=null&&registry.TryGetAction("attachment.detach",out _)&&registry.TryGetCondition("attachment.isAttached",out _)&&registry.TryGetCondition("attachment.isAttachedToSocket",out _),"Attachment Visual Logic registration");
+            GameObject actionChild=scene.CreateGameObject("Event Rifle");
+            var legacyInstruction=new ByteEngine.Core.VisualLogic.VisualInstruction{Id="attachment.attachToSocket"};
+            legacyInstruction.Arguments["object"]=ByteEngine.Core.VisualLogic.EventValue.String("id:"+actionChild.Id);
+            legacyInstruction.Arguments["parent"]=ByteEngine.Core.VisualLogic.EventValue.String("id:"+parent.Id);
+            legacyInstruction.Arguments["socket"]=ByteEngine.Core.VisualLogic.EventValue.String("Weapon_R");
+            var eventContext=new ByteEngine.Core.VisualLogic.EventExecutionContext{Globals=new ByteEngine.Core.Variables.VariableStore(),Scene=scene,Self=actionChild};
+            attachAction!.Execute(legacyInstruction,eventContext);
+            Assert(actionChild.IsAttached&&Near(actionChild.AttachmentPosition,Vector3.Zero)&&Near(actionChild.AttachmentRotation,Quaternion.Identity)&&Near(actionChild.AttachmentScale,Vector3.One),"missing new Event Sheet arguments use safe defaults");
+            Assert(SkeletalAttachmentService.IsAttachedToSocket(actionChild,parent,"Weapon_R"),"IsAttachedToSocket remains valid");
+            Assert(SkeletalAttachmentService.Detach(actionChild,true)&&!actionChild.IsAttached,"Event attachment still detaches");
             Console.WriteLine("C12.5 skeletal socket regressions passed.");
         }
         finally { try{Directory.Delete(root,true);}catch{} }
@@ -75,5 +109,7 @@ internal static class C125SkeletalSocketTests
     private static void BindPose(SkeletalMeshRenderer renderer,Matrix4x4 pose)=>Set(renderer,"_currentPoseGlobals",new[]{pose});
     private static void Set(object target,string field,object? value)=>target.GetType().GetField(field,BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(target,value);
     private static bool Near(Vector3 a,Vector3 b)=>Vector3.Distance(a,b)<.001f;
+    private static bool Near(Quaternion a,Quaternion b)=>MathF.Abs(Quaternion.Dot(a,b))>.999f;
+    private static float Radians(float value)=>value*MathF.PI/180f;
     private static void Assert(bool condition,string name){if(!condition)throw new InvalidOperationException("C12.5: "+name);}
 }

@@ -402,86 +402,709 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         ImGui.EndTabBar();
     }
 
-    private void DrawSockets(Renderer2D renderer, Renderer3D renderer3D, int windowWidth, int windowHeight)
+    private void DrawSockets(
+        Renderer2D renderer,
+        Renderer3D renderer3D,
+        int windowWidth,
+        int windowHeight)
     {
-        AssetReference reference = _profile?.Rig.ReferenceModel ?? AssetReference.Empty;
-        if (_project == null || reference.IsEmpty)
+        AssetReference reference =
+            _profile?.Rig.ReferenceModel ??
+            AssetReference.Empty;
+
+        if (_project ==
+                null ||
+            reference.IsEmpty)
         {
-            ImGui.TextDisabled("Assign a Reference Model on the Rig tab to author sockets.");
+            ImGui.TextDisabled(
+                "Assign a Reference Model on the Rig tab to author sockets.");
+
             return;
         }
+
         ModelAsset model;
-        try { model = _project.Assets.LoadModel(reference); }
-        catch (Exception exception) { ImGui.TextDisabled(exception.Message); return; }
-        if (_socketModelGuid != model.Guid)
+
+        try
         {
-            _socketModelGuid = model.Guid;
-            _socketDrafts = model.Sockets.Select(item => item.Clone()).ToList();
-            _selectedSocketId = Guid.Empty;
+            model =
+                _project.Assets.LoadModel(
+                    reference);
         }
-        if (model.Skeleton == null)
+        catch (Exception exception)
         {
-            ImGui.TextDisabled("The Reference Model has no skeleton.");
+            ImGui.TextDisabled(
+                exception.Message);
+
             return;
         }
 
-        ImGui.Columns(3, "SocketAuthoringColumns", true);
-        ImGui.SetColumnWidth(0, 250.0f);
-        ImGui.SeparatorText("SKELETON");
-        foreach (var bone in model.Skeleton.Bones)
+        if (_socketModelGuid !=
+            model.Guid)
         {
-            bool boneSelected = string.Equals(_selectedSocketBone, bone.Name, StringComparison.OrdinalIgnoreCase);
-            if (ImGui.Selectable($"{bone.Name}##bone:{bone.Name}", boneSelected)) _selectedSocketBone = bone.Name;
-            foreach (SkeletalSocketDefinition socket in _socketDrafts.Where(item => string.Equals(item.BoneName, bone.Name, StringComparison.OrdinalIgnoreCase)))
-            {
-                ImGui.Indent();
-                if (ImGui.Selectable($"[Socket] {socket.Name}##{socket.Id}", socket.Id == _selectedSocketId)) { _selectedSocketId = socket.Id; _selectedSocketBone = bone.Name; }
-                ImGui.Unindent();
-            }
+            _socketModelGuid =
+                model.Guid;
+
+            _socketDrafts =
+                model.Sockets
+                    .Select(item => item.Clone())
+                    .ToList();
+
+            _selectedSocketId =
+                Guid.Empty;
+
+            _selectedSocketBone =
+                string.Empty;
+
+            _socketPreview.Reset();
         }
-        ImGui.BeginDisabled(string.IsNullOrWhiteSpace(_selectedSocketBone));
-        if (ImGui.Button("Add Socket"))
+
+        if (model.Skeleton ==
+            null)
         {
-            string baseName = _selectedSocketBone + "Socket"; string name = baseName; int suffix = 2;
-            while (_socketDrafts.Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))) name = baseName + suffix++;
-            SkeletalSocketDefinition socket = new() { Name = name, BoneName = _selectedSocketBone };
-            _socketDrafts.Add(socket); _selectedSocketId = socket.Id; PersistSockets(model);
+            ImGui.TextDisabled(
+                "The Reference Model has no skeleton.");
+
+            return;
         }
-        ImGui.EndDisabled();
+
+        ImGui.Columns(
+            3,
+            "SocketAuthoringColumns",
+            true);
+
+        ImGui.SetColumnWidth(
+            0,
+            285.0f);
+
+        DrawSocketSkeletonColumn(
+            model);
 
         ImGui.NextColumn();
-        ImGui.SeparatorText("3D PREVIEW");
-        _socketPreview.Draw(_project, reference, model, _socketDrafts, ref _selectedSocketId,
-            renderer, renderer3D, windowWidth, windowHeight, () => PersistSockets(model));
+
+        ImGui.SeparatorText(
+            "3D PREVIEW");
+
+        _socketPreview.Draw(
+            _project,
+            reference,
+            model,
+            _socketDrafts,
+            ref _selectedSocketId,
+            renderer,
+            renderer3D,
+            windowWidth,
+            windowHeight,
+            () => PersistSockets(model));
+
+        SkeletalSocketDefinition? viewportSelected =
+            _socketDrafts.FirstOrDefault(socket =>
+                socket.Id ==
+                _selectedSocketId);
+
+        if (viewportSelected !=
+            null)
+        {
+            _selectedSocketBone =
+                viewportSelected.BoneName;
+        }
 
         ImGui.NextColumn();
-        ImGui.SeparatorText("SOCKET DETAILS");
-        SkeletalSocketDefinition? selected = _socketDrafts.FirstOrDefault(item => item.Id == _selectedSocketId);
-        if (selected == null) ImGui.TextDisabled("Select a socket from the skeleton tree.");
+
+        DrawSocketDetailsColumn(
+            model);
+
+        ImGui.Columns(
+            1);
+    }
+
+    private void DrawSocketSkeletonColumn(
+        ModelAsset model)
+    {
+        ImGui.SeparatorText(
+            "SKELETON");
+
+        if (string.IsNullOrWhiteSpace(
+                _selectedSocketBone))
+        {
+            ImGui.TextDisabled(
+                "Select a bone, then add a socket.");
+        }
         else
         {
-            bool changed = false;
-            string name = selected.Name;
-            if (ImGui.InputText("Name", ref name, 128) && !string.IsNullOrWhiteSpace(name) && !_socketDrafts.Any(item => item.Id != selected.Id && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))) { selected.Name = name.Trim(); changed = true; }
-            string previewBone = string.IsNullOrWhiteSpace(selected.BoneName) ? "Select Bone..." : selected.BoneName;
-            if (ImGui.BeginCombo("Bone", model.Skeleton.Bones.Any(b => string.Equals(b.Name, selected.BoneName, StringComparison.OrdinalIgnoreCase)) ? previewBone : previewBone + " (Missing)"))
-            {
-                foreach (var bone in model.Skeleton.Bones) if (ImGui.Selectable(bone.Name, string.Equals(bone.Name, selected.BoneName, StringComparison.OrdinalIgnoreCase))) { selected.BoneName = bone.Name; _selectedSocketBone = bone.Name; changed = true; }
-                ImGui.EndCombo();
-            }
-            Vector3 position=selected.PositionOffset, rotation=selected.RotationOffsetDegrees, scale=selected.Scale;
-            if(ImGui.DragFloat3("Position",ref position,.01f)){selected.PositionOffset=position;changed=true;}
-            if(ImGui.DragFloat3("Rotation",ref rotation,.25f)){selected.RotationOffsetDegrees=rotation;changed=true;}
-            if(ImGui.DragFloat3("Scale",ref scale,.01f,.0001f,1000f)){selected.Scale=scale;changed=true;}
-            bool inherit=selected.InheritBoneScale; if(ImGui.Checkbox("Inherit Bone Scale",ref inherit)){selected.InheritBoneScale=inherit;changed=true;}
-            AssetReference preview = selected.PreviewAssetGuid.HasValue ? new AssetReference(selected.PreviewAssetGuid.Value, selected.PreviewAssetPath) : AssetReference.Empty;
-            if(DrawAssetPicker("Preview Asset",AssetType.Model3D,ref preview)){selected.PreviewAssetGuid=preview.IsEmpty?null:preview.Guid;selected.PreviewAssetPath=preview.CachedProjectPath;changed=true;}
-            if(ImGui.Button("Duplicate")){SkeletalSocketDefinition copy=selected.Clone(false); string baseName=selected.Name+" Copy";copy.Name=baseName;int n=2;while(_socketDrafts.Any(item=>string.Equals(item.Name,copy.Name,StringComparison.OrdinalIgnoreCase)))copy.Name=baseName+n++;_socketDrafts.Add(copy);_selectedSocketId=copy.Id;changed=true;}
-            ImGui.SameLine(); if(ImGui.Button("Delete")){_socketDrafts.Remove(selected);_selectedSocketId=Guid.Empty;changed=true;}
-            if(changed) PersistSockets(model);
-            ImGui.Separator(); ImGui.TextDisabled("Preview alignment uses the model-owned socket transform. Runtime attachments do not depend on the preview asset.");
+            ImGui.TextColored(
+                EditorTheme.TextSecondary,
+                _selectedSocketBone);
         }
-        ImGui.Columns(1);
+
+        ImGui.BeginDisabled(
+            string.IsNullOrWhiteSpace(
+                _selectedSocketBone));
+
+        if (ImGui.Button(
+                "+ Add Socket",
+                new Vector2(-1.0f, 0.0f)))
+        {
+            AddSocketToBone(
+                model,
+                _selectedSocketBone);
+        }
+
+        ImGui.EndDisabled();
+
+        ImGui.Separator();
+
+        Vector2 available =
+            ImGui.GetContentRegionAvail();
+
+        bool treeVisible =
+            ImGui.BeginChild(
+                "##SocketSkeletonTree",
+                new Vector2(
+                    0.0f,
+                    Math.Max(
+                        available.Y,
+                        280.0f)),
+                ImGuiChildFlags.Borders);
+
+        if (treeVisible)
+        {
+            HashSet<int> visited =
+                new();
+
+            for (int boneIndex = 0;
+                 boneIndex < model.Skeleton!.Bones.Count;
+                 boneIndex++)
+            {
+                int parentIndex =
+                    model.Skeleton.Bones[boneIndex]
+                        .ParentIndex;
+
+                if (parentIndex >=
+                        0 &&
+                    parentIndex <
+                        model.Skeleton.Bones.Count &&
+                    parentIndex !=
+                        boneIndex)
+                {
+                    continue;
+                }
+
+                DrawSocketBoneNode(
+                    model,
+                    boneIndex,
+                    visited);
+            }
+
+            /*
+             * Imported skeletons should form one or more valid trees, but do
+             * not hide bones if an importer produced a malformed parent index
+             * or cycle. Any node not reached from a normal root is rendered as
+             * an additional top-level branch.
+             */
+            for (int boneIndex = 0;
+                 boneIndex < model.Skeleton.Bones.Count;
+                 boneIndex++)
+            {
+                if (!visited.Contains(
+                        boneIndex))
+                {
+                    DrawSocketBoneNode(
+                        model,
+                        boneIndex,
+                        visited);
+                }
+            }
+        }
+
+        ImGui.EndChild();
+    }
+
+    private void DrawSocketBoneNode(
+        ModelAsset model,
+        int boneIndex,
+        HashSet<int> visited)
+    {
+        if (model.Skeleton ==
+                null ||
+            boneIndex <
+                0 ||
+            boneIndex >=
+                model.Skeleton.Bones.Count ||
+            !visited.Add(
+                boneIndex))
+        {
+            return;
+        }
+
+        var bone =
+            model.Skeleton.Bones[boneIndex];
+
+        bool boneSelected =
+            _selectedSocketId ==
+                Guid.Empty &&
+            string.Equals(
+                _selectedSocketBone,
+                bone.Name,
+                StringComparison.OrdinalIgnoreCase);
+
+        bool hasBoneChildren =
+            model.Skeleton.Bones
+                .Any(candidate =>
+                    candidate.ParentIndex ==
+                    boneIndex);
+
+        bool hasSocketChildren =
+            _socketDrafts
+                .Any(socket =>
+                    string.Equals(
+                        socket.BoneName,
+                        bone.Name,
+                        StringComparison.OrdinalIgnoreCase));
+
+        ImGuiTreeNodeFlags flags =
+            ImGuiTreeNodeFlags.OpenOnArrow |
+            ImGuiTreeNodeFlags.SpanAvailWidth;
+
+        if (boneSelected)
+        {
+            flags |=
+                ImGuiTreeNodeFlags.Selected;
+        }
+
+        if (!hasBoneChildren &&
+            !hasSocketChildren)
+        {
+            flags |=
+                ImGuiTreeNodeFlags.Leaf;
+        }
+
+        if (bone.ParentIndex <
+            0)
+        {
+            flags |=
+                ImGuiTreeNodeFlags.DefaultOpen;
+        }
+
+        ImGui.PushID(
+            boneIndex);
+
+        bool open =
+            ImGui.TreeNodeEx(
+                bone.Name,
+                flags);
+
+        if (ImGui.IsItemClicked(
+                ImGuiMouseButton.Left))
+        {
+            _selectedSocketBone =
+                bone.Name;
+
+            _selectedSocketId =
+                Guid.Empty;
+        }
+
+        if (open)
+        {
+            foreach (SkeletalSocketDefinition socket
+                     in _socketDrafts.Where(item =>
+                         string.Equals(
+                             item.BoneName,
+                             bone.Name,
+                             StringComparison.OrdinalIgnoreCase)))
+            {
+                ImGui.PushID(
+                    socket.Id.ToString("N"));
+
+                ImGuiTreeNodeFlags socketFlags =
+                    ImGuiTreeNodeFlags.Leaf |
+                    ImGuiTreeNodeFlags.NoTreePushOnOpen |
+                    ImGuiTreeNodeFlags.SpanAvailWidth;
+
+                if (socket.Id ==
+                    _selectedSocketId)
+                {
+                    socketFlags |=
+                        ImGuiTreeNodeFlags.Selected;
+                }
+
+                ImGui.TreeNodeEx(
+                    $"Socket  {socket.Name}",
+                    socketFlags);
+
+                if (ImGui.IsItemClicked(
+                        ImGuiMouseButton.Left))
+                {
+                    _selectedSocketId =
+                        socket.Id;
+
+                    _selectedSocketBone =
+                        bone.Name;
+                }
+
+                ImGui.PopID();
+            }
+
+            for (int childIndex = 0;
+                 childIndex < model.Skeleton.Bones.Count;
+                 childIndex++)
+            {
+                if (model.Skeleton.Bones[childIndex]
+                        .ParentIndex ==
+                    boneIndex)
+                {
+                    DrawSocketBoneNode(
+                        model,
+                        childIndex,
+                        visited);
+                }
+            }
+
+            ImGui.TreePop();
+        }
+
+        ImGui.PopID();
+    }
+
+    private void DrawSocketDetailsColumn(
+        ModelAsset model)
+    {
+        ImGui.SeparatorText(
+            "SOCKET DETAILS");
+
+        SkeletalSocketDefinition? selected =
+            _socketDrafts.FirstOrDefault(item =>
+                item.Id ==
+                _selectedSocketId);
+
+        if (selected ==
+            null)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    _selectedSocketBone))
+            {
+                ImGui.TextDisabled(
+                    "Select a bone or socket from the skeleton tree.");
+
+                ImGui.TextWrapped(
+                    "Sockets are named attachment points stored on the skeletal model. Select a bone to create one.");
+
+                return;
+            }
+
+            ImGui.TextColored(
+                EditorTheme.TextSecondary,
+                "SELECTED BONE");
+
+            ImGui.Text(
+                _selectedSocketBone);
+
+            ImGui.Spacing();
+
+            if (ImGui.Button(
+                    $"+ Add Socket to {_selectedSocketBone}"))
+            {
+                AddSocketToBone(
+                    model,
+                    _selectedSocketBone);
+            }
+
+            ImGui.Spacing();
+            ImGui.TextWrapped(
+                "Create a socket here, then use the 3D preview to align a weapon, prop, VFX anchor, or other attachment.");
+
+            return;
+        }
+
+        bool changed =
+            false;
+
+        string name =
+            selected.Name;
+
+        if (ImGui.InputText(
+                "Name",
+                ref name,
+                128) &&
+            !string.IsNullOrWhiteSpace(
+                name) &&
+            !_socketDrafts.Any(item =>
+                item.Id !=
+                    selected.Id &&
+                string.Equals(
+                    item.Name,
+                    name,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            selected.Name =
+                name.Trim();
+
+            changed =
+                true;
+        }
+
+        string previewBone =
+            string.IsNullOrWhiteSpace(
+                selected.BoneName)
+                ? "Select Bone..."
+                : selected.BoneName;
+
+        bool boneExists =
+            model.Skeleton!.Bones
+                .Any(bone =>
+                    string.Equals(
+                        bone.Name,
+                        selected.BoneName,
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (ImGui.BeginCombo(
+                "Bone",
+                boneExists
+                    ? previewBone
+                    : previewBone + "  Missing"))
+        {
+            foreach (var bone
+                     in model.Skeleton.Bones)
+            {
+                bool boneSelected =
+                    string.Equals(
+                        bone.Name,
+                        selected.BoneName,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        bone.Name,
+                        boneSelected))
+                {
+                    selected.BoneName =
+                        bone.Name;
+
+                    _selectedSocketBone =
+                        bone.Name;
+
+                    changed =
+                        true;
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.SeparatorText(
+            "TRANSFORM");
+
+        Vector3 position =
+            selected.PositionOffset;
+
+        Vector3 rotation =
+            selected.RotationOffsetDegrees;
+
+        Vector3 scale =
+            selected.Scale;
+
+        if (ImGui.DragFloat3(
+                "Position",
+                ref position,
+                0.01f))
+        {
+            selected.PositionOffset =
+                position;
+
+            changed =
+                true;
+        }
+
+        if (ImGui.DragFloat3(
+                "Rotation",
+                ref rotation,
+                0.25f))
+        {
+            selected.RotationOffsetDegrees =
+                rotation;
+
+            changed =
+                true;
+        }
+
+        if (ImGui.DragFloat3(
+                "Scale",
+                ref scale,
+                0.01f,
+                0.0001f,
+                1000.0f))
+        {
+            selected.Scale =
+                Vector3.Max(
+                    scale,
+                    new Vector3(0.0001f));
+
+            changed =
+                true;
+        }
+
+        bool inheritBoneScale =
+            selected.InheritBoneScale;
+
+        if (ImGui.Checkbox(
+                "Inherit Bone Scale",
+                ref inheritBoneScale))
+        {
+            selected.InheritBoneScale =
+                inheritBoneScale;
+
+            changed =
+                true;
+        }
+
+        ImGui.SeparatorText(
+            "ALIGNMENT PREVIEW");
+
+        AssetReference preview =
+            selected.PreviewAssetGuid.HasValue
+                ? new AssetReference(
+                    selected.PreviewAssetGuid.Value,
+                    selected.PreviewAssetPath)
+                : AssetReference.Empty;
+
+        if (DrawAssetPicker(
+                "Preview Asset",
+                AssetType.Model3D,
+                ref preview))
+        {
+            selected.PreviewAssetGuid =
+                preview.IsEmpty
+                    ? null
+                    : preview.Guid;
+
+            selected.PreviewAssetPath =
+                preview.CachedProjectPath;
+
+            changed =
+                true;
+        }
+
+        ImGui.TextWrapped(
+            "Move/rotate the socket in the center viewport until the preview asset fits the animated bone. The preview asset is editor-only.");
+
+        ImGui.Separator();
+
+        if (ImGui.Button(
+                "Duplicate"))
+        {
+            SkeletalSocketDefinition copy =
+                selected.Clone(
+                    false);
+
+            string baseName =
+                selected.Name +
+                " Copy";
+
+            copy.Name =
+                baseName;
+
+            int suffix =
+                2;
+
+            while (_socketDrafts.Any(item =>
+                       string.Equals(
+                           item.Name,
+                           copy.Name,
+                           StringComparison.OrdinalIgnoreCase)))
+            {
+                copy.Name =
+                    baseName +
+                    suffix++;
+            }
+
+            _socketDrafts.Add(
+                copy);
+
+            _selectedSocketId =
+                copy.Id;
+
+            _selectedSocketBone =
+                copy.BoneName;
+
+            changed =
+                true;
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button(
+                "Delete"))
+        {
+            string formerBone =
+                selected.BoneName;
+
+            _socketDrafts.Remove(
+                selected);
+
+            _selectedSocketId =
+                Guid.Empty;
+
+            _selectedSocketBone =
+                formerBone;
+
+            changed =
+                true;
+        }
+
+        if (changed)
+        {
+            PersistSockets(
+                model);
+        }
+    }
+
+    private void AddSocketToBone(
+        ModelAsset model,
+        string boneName)
+    {
+        if (string.IsNullOrWhiteSpace(
+                boneName))
+        {
+            return;
+        }
+
+        string baseName =
+            boneName +
+            "Socket";
+
+        string name =
+            baseName;
+
+        int suffix =
+            2;
+
+        while (_socketDrafts.Any(item =>
+                   string.Equals(
+                       item.Name,
+                       name,
+                       StringComparison.OrdinalIgnoreCase)))
+        {
+            name =
+                baseName +
+                suffix++;
+        }
+
+        SkeletalSocketDefinition socket =
+            new()
+            {
+                Name = name,
+                BoneName = boneName
+            };
+
+        _socketDrafts.Add(
+            socket);
+
+        _selectedSocketId =
+            socket.Id;
+
+        _selectedSocketBone =
+            boneName;
+
+        PersistSockets(
+            model);
     }
 
     private void PersistSockets(ModelAsset model)
