@@ -521,10 +521,11 @@ internal sealed class AnimationClipPreview : IDisposable
         }
         if (source.Meshes.Count == 0)
             ImGui.TextDisabled("Preview only: the chosen model and source asset are not modified.");
-        if (!source.AnimationSourceRigModel.IsEmpty &&
-            source.RigType == AnimationRigType.Humanoid &&
-            source.ReferenceHumanoidPose?.IsReady == true)
-            ImGui.TextWrapped("This clip already has a usable skeleton. Preview uses it; clear the assigned Source Model in Import Settings before baking if you want the bake to match.");
+        if (current?.Guid != null && current.Guid != source.Guid)
+            ImGui.TextDisabled("Cross-model preview uses experimental animation retargeting.");
+        if (!source.AnimationSourceRigModel.IsEmpty)
+            ImGui.TextDisabled(
+                "Preview uses the assigned Animation Source Rig, matching Retarget & Save (Experimental).");
     }
     private void EnsurePreview(
         EditorProjectContext project,
@@ -591,16 +592,18 @@ internal sealed class AnimationClipPreview : IDisposable
 
             if (previewAsset.Guid != asset.Guid)
             {
-                // The source's own valid Humanoid hierarchy must win over an
-                // old optional Source Rig override; otherwise FBX helper-node
-                // rotations can be discarded before retargeting.
-                AssetReference sourceRig = model.RigType == AnimationRigType.Humanoid &&
-                    model.ReferenceHumanoidPose?.IsReady == true
-                    ? new AssetReference(asset.Guid, asset.ProjectPath)
-                    : AssetReference.Empty;
+                /*
+                 * Preview must use the same source-rig resolution as Retarget &
+                 * Save. The old preview-only override forced the animation
+                 * asset itself whenever it looked Humanoid-ready, which could
+                 * silently ignore AnimationSourceRigModel.
+                 */
                 ImportedAnimation generated = HumanoidRetargetRuntime.BuildClip(
-                    project.Assets, new AssetReference(asset.Guid, asset.ProjectPath), sourceRig,
-                    animation.Name, previewReference, animation.Name,
+                    project.Assets,
+                    new AssetReference(asset.Guid, asset.ProjectPath),
+                    animation.Name,
+                    previewReference,
+                    animation.Name,
                     model.RetargetSamplesPerSecond);
                 ImportedAnimation temporary = new()
                 {

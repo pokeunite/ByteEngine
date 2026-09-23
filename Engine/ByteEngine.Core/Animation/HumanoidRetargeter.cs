@@ -34,18 +34,16 @@ public sealed class HumanoidRetargetPose
 /// <summary>
 /// ByteEngine Humanoid source -> target pose conversion core.
 ///
-/// C9N keeps C9M's full FBX-node sampling, then normalizes animation through a
-/// semantic Humanoid BODY FRAME before applying it to the target.
+/// Retargeting is performed in semantic Humanoid/model space rather than by
+/// copying local bone rotations. This keeps animation reusable across rigs with
+/// different bone names, proportions, helper nodes and coordinate frames.
 ///
-/// Two valid Humanoids can face different model-space directions (+Z vs -Z)
-/// even when both map perfectly and both reference poses look correct in their
-/// own previews. Copying a model-space delta directly between those rigs makes
-/// anatomically-forward motion become backward on the target. C9N derives each
-/// avatar's Right/Up/Forward frame from semantic reference-pose landmarks and
-/// remaps rotation axes and Root/Hips translation through that canonical frame.
-///
-/// This is the missing avatar-space layer between raw skeleton coordinates and
-/// ByteEngine's Humanoid semantics.
+/// Rest-pose differences need more than a rotation-delta copy. For articulated
+/// limbs this implementation derives an anatomical frame from the animated
+/// source chain (limb direction + bend-plane normal), remaps that frame through
+/// the source/target Humanoid body frames, and solves the target limb from its
+/// own reference pose. This prevents incompatible source/target local bone-axis
+/// twist from corkscrewing elbows, wrists, knees and feet.
 /// </summary>
 public static class HumanoidRetargeter
 {
@@ -102,8 +100,6 @@ public static class HumanoidRetargeter
 
     /// <summary>
     /// Importer-neutral compatibility overload used by existing synthetic tests.
-    /// With no ImportedNode hierarchy available it retains the earlier direct
-    /// SkeletonAsset sampling path.
     /// </summary>
     public static HumanoidRetargetPose Retarget(
         SkeletonAsset sourceSkeleton,
@@ -163,12 +159,9 @@ public static class HumanoidRetargeter
     }
 
     /// <summary>
-    /// FBX/runtime-aware overload.
-    ///
-    /// The full ImportedNode hierarchy is evaluated before converting source
-    /// deform-bone transforms into SkeletonAsset bind space. This preserves FBX
-    /// helper/pre-rotation nodes that are intentionally absent from the compact
-    /// SkeletonAsset hierarchy.
+    /// FBX/runtime-aware overload. The complete ImportedNode hierarchy is
+    /// evaluated first so FBX helper/pre-rotation nodes participate in the
+    /// source pose before conversion into SkeletonAsset bind space.
     /// </summary>
     public static HumanoidRetargetPose Retarget(
         SkeletonAsset sourceSkeleton,
@@ -350,33 +343,37 @@ public static class HumanoidRetargeter
                     sourceReferenceModelRotation,
                     sourceCurrentModelRotation);
 
-            /*
-             * modelDelta is expressed in SOURCE MODEL axes. Two valid Humanoids
-             * can face opposite model-space directions, so apply it only after
-             * source model -> canonical Humanoid -> target model conversion.
-             */
             Quaternion targetModelDelta =
                 RemapRotationDelta(
                     modelDelta,
                     sourceBodyFrame,
                     targetBodyFrame);
 
-            Quaternion desiredModelRotation =
+            Quaternion candidateModelRotation =
                 ApplyRotationDelta(
                     targetReferenceModelRotation,
                     targetModelDelta);
 
-            // Bone names can be mapped perfectly while their bind poses differ.
-            // Rotation deltas alone leave a T-pose target's arms horizontal
-            // when the source animation has its arms down. Use the animated
-            // semantic joint chain to correct limb swing in avatar space;
-            // retain the existing delta rotation for twist around that limb.
+            /*
+             * A source/target rest-pose mismatch is not only a swing problem.
+             * Rigs such as SYNTY and Manny can encode different axial twist in
+             * their local bone frames. Copying the quaternion twist after merely
+             * aiming the limb direction produces corkscrewed elbows/wrists and
+             * splayed knees/feet.
+             *
+             * Solve articulated limbs from two geometric signals instead:
+             *  1) outgoing joint direction = swing
+             *  2) bend-plane normal       = anatomical twist reference
+             *
+             * Both are remapped through canonical Humanoid body space, so this
+             * is independent of local source/target bone-axis conventions.
+             */
             desiredModelRotations[targetIndex] =
-                AimLimbAtAnimatedSource(
+                SolveAnimatedLimbFrame(
                     semanticBone,
                     sourceIndex,
                     targetIndex,
-                    desiredModelRotation,
+                    candidateModelRotation,
                     targetReferenceModelRotation,
                     sourceMapping,
                     sourceIndices,
@@ -409,7 +406,7 @@ public static class HumanoidRetargeter
         Matrix4x4[] targetLocals =
             targetReferenceLocals.ToArray();
 
-        Matrix4x4[] targetModels =
+        var targetModels =
             new Matrix4x4[
                 targetSkeleton.Bones.Count];
 
@@ -463,8 +460,7 @@ public static class HumanoidRetargeter
 
             bool hasParent =
                 parentIndex >= 0 &&
-                parentIndex <
-                    targetSkeleton.Bones.Count;
+                parentIndex < targetSkeleton.Bones.Count;
 
             Matrix4x4 parentModel =
                 hasParent
@@ -568,11 +564,6 @@ public static class HumanoidRetargeter
         }
     }
 
-    /// <summary>
-    /// Evaluates the complete source ImportedNode hierarchy with the source
-    /// animation, then converts deform-bone globals from imported model space to
-    /// SkeletonAsset bind space.
-    /// </summary>
     private static Matrix4x4[] SampleSourceNodeModelsInSkeletonSpace(
         SkeletonAsset skeleton,
         ImportedAnimation animation,
@@ -670,10 +661,8 @@ public static class HumanoidRetargeter
             }
 
             result[boneIndex] =
-                boneIndex <
-                    referenceSkeletonModels.Count
-                    ? referenceSkeletonModels[
-                        boneIndex]
+                boneIndex < referenceSkeletonModels.Count
+                    ? referenceSkeletonModels[boneIndex]
                     : Matrix4x4.Identity;
         }
 
@@ -683,7 +672,7 @@ public static class HumanoidRetargeter
     private static int[] BuildNodeParentIndices(
         IReadOnlyList<ImportedNode> nodes)
     {
-        var byKey =
+        Dictionary<string, int> byKey =
             nodes
                 .Select(
                     (node, index) =>
@@ -795,8 +784,7 @@ public static class HumanoidRetargeter
                 1;
 
             int parent =
-                index <
-                    parentIndices.Count
+                index < parentIndices.Count
                     ? parentIndices[index]
                     : -1;
 
@@ -942,10 +930,6 @@ public static class HumanoidRetargeter
         return Matrix4x4.Identity;
     }
 
-    /// <summary>
-    /// Remaps a rotation delta from one Humanoid's model axes into another
-    /// Humanoid's model axes using semantic body frames.
-    /// </summary>
     internal static Quaternion RemapRotationDeltaForAvatarFrames(
         HumanoidReferencePose source,
         HumanoidReferencePose target,
@@ -960,9 +944,6 @@ public static class HumanoidRetargeter
             BuildBodyFrame(target));
     }
 
-    /// <summary>
-    /// Remaps a model-space vector through the same canonical Humanoid frame.
-    /// </summary>
     internal static Vector3 RemapVectorForAvatarFrames(
         HumanoidReferencePose source,
         HumanoidReferencePose target,
@@ -1024,7 +1005,8 @@ public static class HumanoidRetargeter
                 hips + Vector3.UnitX);
 
         Vector3 right =
-            rightAnchor - leftAnchor;
+            rightAnchor -
+            leftAnchor;
 
         right -=
             up *
@@ -1035,14 +1017,9 @@ public static class HumanoidRetargeter
         right =
             SafeNormalize(
                 right,
-                AnyPerpendicular(up));
+                AnyPerpendicular(
+                    up));
 
-        /*
-         * Canonical Humanoid axes:
-         * +X = anatomical right
-         * +Y = anatomical up
-         * +Z = anatomical forward
-         */
         Vector3 forward =
             SafeNormalize(
                 Vector3.Cross(
@@ -1230,7 +1207,8 @@ public static class HumanoidRetargeter
             return fallback;
         }
 
-        return Vector3.Normalize(value);
+        return Vector3.Normalize(
+            value);
     }
 
     private readonly record struct HumanoidBodyFrame(
@@ -1253,10 +1231,8 @@ public static class HumanoidRetargeter
             MeasureBody(
                 target);
 
-        if (!float.IsFinite(
-                sourceMeasure) ||
-            !float.IsFinite(
-                targetMeasure) ||
+        if (!float.IsFinite(sourceMeasure) ||
+            !float.IsFinite(targetMeasure) ||
             sourceMeasure <= 0.0001f ||
             targetMeasure <= 0.0001f)
         {
@@ -1403,8 +1379,7 @@ public static class HumanoidRetargeter
                     skeleton.Bones[index]
                         .BindPose,
                     out Matrix4x4 model) ||
-                !IsFinite(
-                    model))
+                !IsFinite(model))
             {
                 model =
                     Matrix4x4.Identity;
@@ -1537,9 +1512,7 @@ public static class HumanoidRetargeter
         IReadOnlyDictionary<string, int> targetIndices)
     {
         var result =
-            new Dictionary<
-                int,
-                HumanoidBone>();
+            new Dictionary<int, HumanoidBone>();
 
         foreach ((HumanoidBone semantic, string sourceName)
                  in mapping.Bones)
@@ -1556,7 +1529,7 @@ public static class HumanoidRetargeter
         return result;
     }
 
-    private static Quaternion AimLimbAtAnimatedSource(
+    private static Quaternion SolveAnimatedLimbFrame(
         HumanoidBone semanticBone,
         int sourceIndex,
         int targetIndex,
@@ -1571,66 +1544,576 @@ public static class HumanoidRetargeter
         HumanoidBodyFrame sourceBodyFrame,
         HumanoidBodyFrame targetBodyFrame)
     {
-        HumanoidBone? childSemantic = semanticBone switch
-        {
-            HumanoidBone.LeftShoulder => HumanoidBone.LeftUpperArm,
-            HumanoidBone.LeftUpperArm => HumanoidBone.LeftLowerArm,
-            HumanoidBone.LeftLowerArm => HumanoidBone.LeftHand,
-            HumanoidBone.RightShoulder => HumanoidBone.RightUpperArm,
-            HumanoidBone.RightUpperArm => HumanoidBone.RightLowerArm,
-            HumanoidBone.RightLowerArm => HumanoidBone.RightHand,
-            HumanoidBone.LeftUpperLeg => HumanoidBone.LeftLowerLeg,
-            HumanoidBone.LeftLowerLeg => HumanoidBone.LeftFoot,
-            HumanoidBone.RightUpperLeg => HumanoidBone.RightLowerLeg,
-            HumanoidBone.RightLowerLeg => HumanoidBone.RightFoot,
-            _ => null
-        };
+        GetLimbNeighbors(
+            semanticBone,
+            out HumanoidBone[] parentCandidates,
+            out HumanoidBone[] childCandidates);
 
-        if (childSemantic == null ||
-            !sourceMapping.TryGetBoneName(childSemantic.Value, out string sourceChildName) ||
-            !targetMapping.TryGetBoneName(childSemantic.Value, out string targetChildName) ||
-            !sourceIndices.TryGetValue(sourceChildName, out int sourceChildIndex) ||
-            !targetIndices.TryGetValue(targetChildName, out int targetChildIndex) ||
-            sourceChildIndex < 0 || sourceChildIndex >= sourceCurrentModels.Count ||
-            targetChildIndex < 0 || targetChildIndex >= targetReferenceModels.Count)
+        if (childCandidates.Length == 0)
         {
             return candidateModelRotation;
         }
 
-        Vector3 sourceDirection =
+        if (!TryResolveSharedBone(
+                childCandidates,
+                sourceMapping,
+                sourceIndices,
+                targetMapping,
+                targetIndices,
+                out int sourceChildIndex,
+                out int targetChildIndex) ||
+            !ValidIndex(
+                sourceIndex,
+                sourceCurrentModels.Count) ||
+            !ValidIndex(
+                sourceChildIndex,
+                sourceCurrentModels.Count) ||
+            !ValidIndex(
+                targetIndex,
+                targetReferenceModels.Count) ||
+            !ValidIndex(
+                targetChildIndex,
+                targetReferenceModels.Count))
+        {
+            return candidateModelRotation;
+        }
+
+        Vector3 sourceOutgoing =
             sourceCurrentModels[sourceChildIndex].Translation -
             sourceCurrentModels[sourceIndex].Translation;
-        Vector3 targetReferenceDirection =
+
+        Vector3 targetReferenceOutgoing =
             targetReferenceModels[targetChildIndex].Translation -
             targetReferenceModels[targetIndex].Translation;
 
-        if (!IsFinite(sourceDirection) || !IsFinite(targetReferenceDirection) ||
-            sourceDirection.LengthSquared() <= 0.0000001f ||
-            targetReferenceDirection.LengthSquared() <= 0.0000001f)
+        if (!TryDirection(
+                sourceOutgoing,
+                out Vector3 sourcePrimary) ||
+            !TryDirection(
+                targetReferenceOutgoing,
+                out Vector3 targetPrimary))
         {
             return candidateModelRotation;
         }
 
-        Vector3 desiredDirection = SafeNormalize(
-            RemapVector(sourceDirection, sourceBodyFrame, targetBodyFrame),
-            Vector3.UnitX);
-        Quaternion candidateDelta = RelativeRotation(
-            targetReferenceModelRotation, candidateModelRotation);
-        Vector3 candidateDirection = SafeNormalize(
-            Vector3.Transform(targetReferenceDirection, candidateDelta),
-            Vector3.UnitX);
-        float dot = Math.Clamp(Vector3.Dot(candidateDirection, desiredDirection), -1.0f, 1.0f);
-        if (dot > 0.99999f)
-            return candidateModelRotation;
+        Vector3 desiredPrimary =
+            SafeNormalize(
+                RemapVector(
+                    sourcePrimary,
+                    sourceBodyFrame,
+                    targetBodyFrame),
+                targetPrimary);
 
-        Vector3 axis = Vector3.Cross(candidateDirection, desiredDirection);
-        if (axis.LengthSquared() <= 0.0000001f)
-            axis = AnyPerpendicular(candidateDirection);
-        axis = SafeNormalize(axis, Vector3.UnitX);
+        /*
+         * If we cannot establish a stable anatomical bend plane, retain the
+         * existing rotation-delta twist but still make the segment point where
+         * the source segment points. This is the safe fallback for nearly
+         * straight limbs or rigs that omit the neighboring semantic joint.
+         */
+        if (!TryResolveSharedBone(
+                parentCandidates,
+                sourceMapping,
+                sourceIndices,
+                targetMapping,
+                targetIndices,
+                out int sourceParentIndex,
+                out int targetParentIndex) ||
+            !ValidIndex(
+                sourceParentIndex,
+                sourceCurrentModels.Count) ||
+            !ValidIndex(
+                targetParentIndex,
+                targetReferenceModels.Count))
+        {
+            return AimCandidateDirection(
+                candidateModelRotation,
+                targetReferenceModelRotation,
+                targetPrimary,
+                desiredPrimary);
+        }
 
-        Quaternion aimCorrection = Quaternion.CreateFromAxisAngle(
-            axis, MathF.Acos(dot));
-        return ApplyRotationDelta(candidateModelRotation, aimCorrection);
+        Vector3 sourceIncoming =
+            sourceCurrentModels[sourceIndex].Translation -
+            sourceCurrentModels[sourceParentIndex].Translation;
+
+        Vector3 targetReferenceIncoming =
+            targetReferenceModels[targetIndex].Translation -
+            targetReferenceModels[targetParentIndex].Translation;
+
+        Vector3 sourcePlane =
+            Vector3.Cross(
+                sourceIncoming,
+                sourceOutgoing);
+
+        Vector3 targetPlane =
+            Vector3.Cross(
+                targetReferenceIncoming,
+                targetReferenceOutgoing);
+
+        if (!TryDirection(
+                sourcePlane,
+                out Vector3 sourceNormal) ||
+            !TryDirection(
+                targetPlane,
+                out Vector3 targetNormal))
+        {
+            return AimCandidateDirection(
+                candidateModelRotation,
+                targetReferenceModelRotation,
+                targetPrimary,
+                desiredPrimary);
+        }
+
+        Vector3 desiredNormal =
+            RemapVector(
+                sourceNormal,
+                sourceBodyFrame,
+                targetBodyFrame);
+
+        desiredNormal =
+            RejectFromAxis(
+                desiredNormal,
+                desiredPrimary);
+
+        if (!TryDirection(
+                desiredNormal,
+                out desiredNormal))
+        {
+            return AimCandidateDirection(
+                candidateModelRotation,
+                targetReferenceModelRotation,
+                targetPrimary,
+                desiredPrimary);
+        }
+
+        /*
+         * Full anatomical-frame solve. Start from the TARGET reference frame,
+         * not from the raw source quaternion delta. That deliberately drops the
+         * incompatible local-axis twist which caused the bad Manny preview.
+         */
+        Quaternion swing =
+            FromToRotation(
+                targetPrimary,
+                desiredPrimary);
+
+        Quaternion corrected =
+            ApplyRotationDelta(
+                targetReferenceModelRotation,
+                swing);
+
+        Vector3 swungTargetNormal =
+            Vector3.Transform(
+                targetNormal,
+                swing);
+
+        swungTargetNormal =
+            RejectFromAxis(
+                swungTargetNormal,
+                desiredPrimary);
+
+        if (!TryDirection(
+                swungTargetNormal,
+                out swungTargetNormal))
+        {
+            return corrected;
+        }
+
+        float twistAngle =
+            SignedAngleAroundAxis(
+                swungTargetNormal,
+                desiredNormal,
+                desiredPrimary);
+
+        if (!float.IsFinite(twistAngle) ||
+            MathF.Abs(twistAngle) <= 0.000001f)
+        {
+            return corrected;
+        }
+
+        Quaternion twist =
+            NormalizeSafe(
+                Quaternion.CreateFromAxisAngle(
+                    desiredPrimary,
+                    twistAngle));
+
+        return ApplyRotationDelta(
+            corrected,
+            twist);
+    }
+
+    private static Quaternion AimCandidateDirection(
+        Quaternion candidateModelRotation,
+        Quaternion targetReferenceModelRotation,
+        Vector3 targetReferenceDirection,
+        Vector3 desiredDirection)
+    {
+        Quaternion candidateDelta =
+            RelativeRotation(
+                targetReferenceModelRotation,
+                candidateModelRotation);
+
+        Vector3 candidateDirection =
+            SafeNormalize(
+                Vector3.Transform(
+                    targetReferenceDirection,
+                    candidateDelta),
+                targetReferenceDirection);
+
+        Quaternion correction =
+            FromToRotation(
+                candidateDirection,
+                desiredDirection);
+
+        return ApplyRotationDelta(
+            candidateModelRotation,
+            correction);
+    }
+
+    private static void GetLimbNeighbors(
+        HumanoidBone semanticBone,
+        out HumanoidBone[] parentCandidates,
+        out HumanoidBone[] childCandidates)
+    {
+        parentCandidates =
+            Array.Empty<HumanoidBone>();
+
+        childCandidates =
+            Array.Empty<HumanoidBone>();
+
+        switch (semanticBone)
+        {
+            case HumanoidBone.LeftShoulder:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.UpperChest,
+                    HumanoidBone.Chest,
+                    HumanoidBone.Spine
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftUpperArm
+                };
+                break;
+
+            case HumanoidBone.LeftUpperArm:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.LeftShoulder,
+                    HumanoidBone.UpperChest,
+                    HumanoidBone.Chest
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftLowerArm
+                };
+                break;
+
+            case HumanoidBone.LeftLowerArm:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.LeftUpperArm
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftHand
+                };
+                break;
+
+            case HumanoidBone.LeftHand:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.LeftLowerArm
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftMiddleProximal,
+                    HumanoidBone.LeftIndexProximal,
+                    HumanoidBone.LeftRingProximal
+                };
+                break;
+
+            case HumanoidBone.RightShoulder:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.UpperChest,
+                    HumanoidBone.Chest,
+                    HumanoidBone.Spine
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightUpperArm
+                };
+                break;
+
+            case HumanoidBone.RightUpperArm:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.RightShoulder,
+                    HumanoidBone.UpperChest,
+                    HumanoidBone.Chest
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightLowerArm
+                };
+                break;
+
+            case HumanoidBone.RightLowerArm:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.RightUpperArm
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightHand
+                };
+                break;
+
+            case HumanoidBone.RightHand:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.RightLowerArm
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightMiddleProximal,
+                    HumanoidBone.RightIndexProximal,
+                    HumanoidBone.RightRingProximal
+                };
+                break;
+
+            case HumanoidBone.LeftUpperLeg:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.Hips
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftLowerLeg
+                };
+                break;
+
+            case HumanoidBone.LeftLowerLeg:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.LeftUpperLeg
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftFoot
+                };
+                break;
+
+            case HumanoidBone.LeftFoot:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.LeftLowerLeg
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.LeftToes
+                };
+                break;
+
+            case HumanoidBone.RightUpperLeg:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.Hips
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightLowerLeg
+                };
+                break;
+
+            case HumanoidBone.RightLowerLeg:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.RightUpperLeg
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightFoot
+                };
+                break;
+
+            case HumanoidBone.RightFoot:
+                parentCandidates = new[]
+                {
+                    HumanoidBone.RightLowerLeg
+                };
+                childCandidates = new[]
+                {
+                    HumanoidBone.RightToes
+                };
+                break;
+        }
+    }
+
+    private static bool TryResolveSharedBone(
+        IReadOnlyList<HumanoidBone> candidates,
+        HumanoidBoneMap sourceMapping,
+        IReadOnlyDictionary<string, int> sourceIndices,
+        HumanoidBoneMap targetMapping,
+        IReadOnlyDictionary<string, int> targetIndices,
+        out int sourceIndex,
+        out int targetIndex)
+    {
+        foreach (HumanoidBone candidate
+                 in candidates)
+        {
+            if (sourceMapping.TryGetBoneName(
+                    candidate,
+                    out string sourceName) &&
+                targetMapping.TryGetBoneName(
+                    candidate,
+                    out string targetName) &&
+                sourceIndices.TryGetValue(
+                    sourceName,
+                    out sourceIndex) &&
+                targetIndices.TryGetValue(
+                    targetName,
+                    out targetIndex))
+            {
+                return true;
+            }
+        }
+
+        sourceIndex =
+            -1;
+
+        targetIndex =
+            -1;
+
+        return false;
+    }
+
+    private static bool ValidIndex(
+        int index,
+        int count) =>
+        index >= 0 &&
+        index < count;
+
+    private static bool TryDirection(
+        Vector3 value,
+        out Vector3 normalized)
+    {
+        if (!IsFinite(value) ||
+            value.LengthSquared() <= 0.0000001f)
+        {
+            normalized =
+                Vector3.Zero;
+
+            return false;
+        }
+
+        normalized =
+            Vector3.Normalize(
+                value);
+
+        return true;
+    }
+
+    private static Vector3 RejectFromAxis(
+        Vector3 value,
+        Vector3 axis)
+    {
+        return value -
+            axis *
+            Vector3.Dot(
+                value,
+                axis);
+    }
+
+    private static Quaternion FromToRotation(
+        Vector3 from,
+        Vector3 to)
+    {
+        from =
+            Vector3.Normalize(
+                from);
+
+        to =
+            Vector3.Normalize(
+                to);
+
+        float dot =
+            Math.Clamp(
+                Vector3.Dot(
+                    from,
+                    to),
+                -1.0f,
+                1.0f);
+
+        if (dot >= 0.999999f)
+        {
+            return Quaternion.Identity;
+        }
+
+        if (dot <= -0.999999f)
+        {
+            Vector3 axis =
+                MathF.Abs(from.X) < 0.9f
+                    ? Vector3.Cross(
+                        from,
+                        Vector3.UnitX)
+                    : Vector3.Cross(
+                        from,
+                        Vector3.UnitY);
+
+            axis =
+                SafeNormalize(
+                    axis,
+                    AnyPerpendicular(
+                        from));
+
+            return Quaternion.CreateFromAxisAngle(
+                axis,
+                MathF.PI);
+        }
+
+        Vector3 cross =
+            Vector3.Cross(
+                from,
+                to);
+
+        if (!TryDirection(
+                cross,
+                out Vector3 rotationAxis))
+        {
+            return Quaternion.Identity;
+        }
+
+        return NormalizeSafe(
+            Quaternion.CreateFromAxisAngle(
+                rotationAxis,
+                MathF.Acos(
+                    dot)));
+    }
+
+    private static float SignedAngleAroundAxis(
+        Vector3 from,
+        Vector3 to,
+        Vector3 axis)
+    {
+        float cosine =
+            Math.Clamp(
+                Vector3.Dot(
+                    from,
+                    to),
+                -1.0f,
+                1.0f);
+
+        float sine =
+            Vector3.Dot(
+                Vector3.Cross(
+                    from,
+                    to),
+                axis);
+
+        return MathF.Atan2(
+            sine,
+            cosine);
     }
 
     private static Quaternion RelativeRotation(
@@ -1787,8 +2270,7 @@ public static class HumanoidRetargeter
                     hips.Position,
                     target.Position);
 
-            if (float.IsFinite(
-                    distance) &&
+            if (float.IsFinite(distance) &&
                 distance > 0.0001f)
             {
                 distances.Add(
@@ -1802,10 +2284,8 @@ public static class HumanoidRetargeter
         float time,
         bool loop)
     {
-        if (!float.IsFinite(
-                time) ||
-            !float.IsFinite(
-                duration) ||
+        if (!float.IsFinite(time) ||
+            !float.IsFinite(duration) ||
             duration <= 0.000001f)
         {
             return 0.0f;
@@ -1843,12 +2323,9 @@ public static class HumanoidRetargeter
                 out scale,
                 out rotation,
                 out translation) ||
-            !IsFinite(
-                scale) ||
-            !IsFinite(
-                rotation) ||
-            !IsFinite(
-                translation))
+            !IsFinite(scale) ||
+            !IsFinite(rotation) ||
+            !IsFinite(translation))
         {
             scale =
                 Vector3.One;
@@ -1886,8 +2363,7 @@ public static class HumanoidRetargeter
 
     private static Quaternion NormalizeSafe(
         Quaternion value) =>
-        value.LengthSquared() >
-            0.000001f
+        value.LengthSquared() > 0.000001f
             ? Quaternion.Normalize(
                 value)
             : Quaternion.Identity;

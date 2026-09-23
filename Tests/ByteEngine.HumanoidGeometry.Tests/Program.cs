@@ -9,6 +9,13 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
+        if (args.Length > 0 && string.Equals(args[0], "--animation-report",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            AnimationDiagnosticReport.Run(args[1..]);
+            return;
+        }
+
         if (args.Length == 0) return;
         string path = Path.GetFullPath(args[0]);
         AssetRecord record = new(Guid.NewGuid(), AssetType.Model3D,

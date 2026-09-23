@@ -86,7 +86,7 @@ internal static class HumanoidRigAuthoring
             AnimationRigType.Generic)
         {
             ImGui.TextWrapped(
-                "Generic keeps the source skeleton exactly as authored. Switch to Humanoid to enable reusable humanoid animation retargeting.");
+                "Generic keeps the source skeleton exactly as authored. Switch to Humanoid to enable experimental humanoid animation retargeting.");
 
             DrawSaveError(
                 saveError);

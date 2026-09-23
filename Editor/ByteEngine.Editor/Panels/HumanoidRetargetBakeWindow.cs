@@ -22,7 +22,7 @@ namespace ByteEngine.Editor.Panels;
 internal static class HumanoidRetargetBakeWindow
 {
     private const string WindowId =
-        "Retarget Animation To Character###HumanoidRetargetBake";
+        "Retarget Animation To Character (Experimental)###HumanoidRetargetBake";
 
     private const float PreviewSampleInterval =
         1.0f / 30.0f;
@@ -343,7 +343,10 @@ internal static class HumanoidRetargetBakeWindow
     {
         if (_project == null) return;
 
-        ImGui.SeparatorText("RETARGET ANIMATION");
+        ImGui.SeparatorText("RETARGET ANIMATION (EXPERIMENTAL)");
+        EditorUi.StatusBadge("EXPERIMENTAL", EditorStatusKind.Warning);
+        ImGui.SameLine();
+        ImGui.TextDisabled("Review the preview carefully before saving.");
         DrawSourceModelPicker();
         DrawSourceClipPicker();
 
@@ -362,12 +365,12 @@ internal static class HumanoidRetargetBakeWindow
 
         ImGui.Spacing();
         ImGui.BeginDisabled(!canBuild);
-        if (EditorUi.SecondaryButton("Preview", size: new Vector2(-1.0f, 34.0f)))
+        if (EditorUi.SecondaryButton("Build Preview (Experimental)", size: new Vector2(-1.0f, 34.0f)))
             BuildPreview();
         ImGui.EndDisabled();
 
         ImGui.BeginDisabled(!canSave);
-        if (EditorUi.PrimaryButton("Retarget & Save", size: new Vector2(-1.0f, 38.0f)))
+        if (EditorUi.PrimaryButton("Retarget & Save (Experimental)", size: new Vector2(-1.0f, 38.0f)))
         {
             if (_previewAnimation == null) BuildPreview();
             if (_previewAnimation != null) Bake();
@@ -396,7 +399,7 @@ internal static class HumanoidRetargetBakeWindow
                 ImGui.TextWrapped("This name belongs to an imported animation. Choose another name.");
             if (bakedConflict)
             {
-                ImGui.TextWrapped("A saved retarget with this name already exists.");
+                ImGui.TextWrapped("An experimental retarget with this name already exists.");
                 ImGui.Checkbox("Replace existing saved animation", ref _replaceExistingBaked);
             }
             ImGui.SeparatorText("Rig details");
@@ -421,19 +424,19 @@ internal static class HumanoidRetargetBakeWindow
 
         ImGui.Spacing();
         ImGui.SeparatorText(
-            "RETARGETED ANIMATIONS ON TARGET");
+            "RETARGETED ANIMATIONS ON TARGET (EXPERIMENTAL)");
 
         if (_bakedAnimations.Count ==
             0)
         {
             ImGui.TextDisabled(
-                "No baked retargeted animations belong to this character yet.");
+                "No experimental retargeted animations belong to this character yet.");
 
             return;
         }
 
         ImGui.TextDisabled(
-            "Only retargeted/baked animations can be removed here. Native FBX animations are protected.");
+            "Only experimental retargeted/baked animations can be removed here. Native FBX animations are protected.");
 
         string remove =
             string.Empty;
@@ -534,7 +537,7 @@ internal static class HumanoidRetargetBakeWindow
                 RefreshBakedAnimationCache();
 
                 SetStatus(
-                    $"Removed retargeted animation '{remove}' from '{_targetModel.Name}'.",
+                    $"Removed experimental retargeted animation '{remove}' from '{_targetModel.Name}'.",
                     false);
             }
         }
@@ -1023,7 +1026,7 @@ internal static class HumanoidRetargetBakeWindow
             FramePreview();
 
             SetStatus(
-                "Temporary retarget built successfully. Inspect the preview before baking.",
+                "Temporary experimental retarget built successfully. Inspect the preview before baking.",
                 false);
         }
         catch (Exception exception)
@@ -1145,7 +1148,7 @@ internal static class HumanoidRetargetBakeWindow
     {
         ImGui.TextColored(
             EditorTheme.AccentHover,
-            "LIGHTWEIGHT RETARGET PREVIEW");
+            "LIGHTWEIGHT RETARGET PREVIEW (EXPERIMENTAL)");
 
         ImGui.TextDisabled(
             "CPU skeleton preview - no framebuffer, scene physics, shadows or post-processing");

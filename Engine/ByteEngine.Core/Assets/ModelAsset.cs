@@ -223,7 +223,10 @@ public sealed class ModelAsset
                 0 &&
             !MappingsEquivalent(
                 settings.HumanoidMapping,
-                detected))
+                detected) &&
+            !MappingsEquivalent(
+                settings.HumanoidMapping,
+                HumanoidSkeletonAnalyzer.Analyze(imported.Skeleton).Mapping))
         {
             HumanoidRigValidationResult existingValidation =
                 HumanoidRigMapper.Validate(

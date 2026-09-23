@@ -232,7 +232,7 @@ public static class ModelOwnedAnimationStore
                         StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException(
-                $"Animation '{name}' already exists inside the imported target model. Choose a different name; native model clips are never overwritten by a retarget bake.");
+                $"Animation '{name}' already exists inside the imported target model. Choose a different name; native model clips are never overwritten by an experimental retarget bake.");
         }
 
         if (existing !=

@@ -313,7 +313,7 @@ public static class HumanoidRigDiagnostics
         if (!tPose)
         {
             warnings.Add(
-                "The bind/reference pose is not close to a clean T-pose. Humanoid retargeting corrects major limb directions, but shoulder, hand, and twist alignment should still be reviewed in the preview.");
+                "The bind/reference pose is not close to a clean T-pose. Experimental Humanoid retargeting corrects major limb directions, but shoulder, hand, and twist alignment should still be reviewed in the preview.");
         }
 
         return tPose;

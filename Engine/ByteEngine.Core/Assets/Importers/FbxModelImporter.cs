@@ -690,6 +690,15 @@ public sealed class FbxModelImporter
                         MaxChannelTime(importedChannel));
             }
 
+            // Some baked FBX clips arrive with extra Assimp quaternion keys
+            // between authored frame samples. A near half-turn on the Unity
+            // sample's spine lies between two ordinary 30 Hz frame poses.
+            // Remove only implausible off-grid spikes from tracks that are
+            // demonstrably sampled on the FBX animation's regular tick grid.
+            foreach (ImportedAnimationChannel channel in channels)
+                if (channel.Rotation is { } rotation)
+                    RemoveOffGridRotationKeys(rotation, (float)ticksPerSecond);
+
             result.Add(
                 new ImportedAnimation
                 {
@@ -768,6 +777,46 @@ public sealed class FbxModelImporter
         }
 
         return track;
+    }
+
+    internal static int RemoveOffGridRotationKeys(
+        ImportedQuaternionTrack track,
+        float framesPerSecond)
+    {
+        if (!float.IsFinite(framesPerSecond) || framesPerSecond < 15f ||
+            framesPerSecond > 120f || track.Keys.Count < 12)
+            return 0;
+
+        static bool OnGrid(float time, float rate) =>
+            MathF.Abs(time * rate - MathF.Round(time * rate)) < .02f;
+
+        int authoredFrames = track.Keys.Count(key => OnGrid(key.Time, framesPerSecond));
+        if (authoredFrames < 8 || authoredFrames < track.Keys.Count * .65f)
+            return 0;
+
+        ImportedQuaternionKey[] frameKeys = track.Keys
+            .Where(key => OnGrid(key.Time, framesPerSecond))
+            .OrderBy(key => key.Time)
+            .ToArray();
+        return track.Keys.RemoveAll(key => IsInterpolationSpike(key));
+
+        bool IsInterpolationSpike(ImportedQuaternionKey key)
+        {
+            if (OnGrid(key.Time, framesPerSecond)) return false;
+            ImportedQuaternionKey? before = null, after = null;
+            foreach (ImportedQuaternionKey frame in frameKeys)
+            {
+                if (frame.Time <= key.Time) before = frame;
+                else { after = frame; break; }
+            }
+            if (before is null || after is null) return false;
+            float span = after.Value.Time - before.Value.Time;
+            if (span <= 0.000001f) return false;
+            float amount = Math.Clamp((key.Time - before.Value.Time) / span, 0f, 1f);
+            Quaternion expected = Quaternion.Slerp(before.Value.Value, after.Value.Value, amount);
+            float cosine = Math.Clamp(MathF.Abs(Quaternion.Dot(expected, key.Value)), 0f, 1f);
+            return 2f * MathF.Acos(cosine) > MathF.PI / 3f;
+        }
     }
 
     private static ImportedAnimationInterpolation MapInterpolation(

@@ -97,7 +97,7 @@ internal sealed class ModelImporterInspector
             model);
 
         if (ImGui.Button(
-                "Import & Retarget Settings..."))
+                "Import Settings & Retarget (Experimental)..."))
         {
             _open =
                 true;
@@ -586,7 +586,7 @@ internal sealed class ModelImporterInspector
                 EditorStatusKind.Warning);
             ImGui.SameLine();
             ImGui.TextWrapped(
-                "Humanoid retargeting requires a skeleton hierarchy.");
+                "Experimental Humanoid retargeting requires a skeleton hierarchy.");
             return;
         }
 
@@ -595,7 +595,7 @@ internal sealed class ModelImporterInspector
         {
             ImGui.Spacing();
             ImGui.TextDisabled(
-                "Generic preserves the source skeleton exactly as authored and does not participate in Humanoid retargeting.");
+                "Generic preserves the source skeleton exactly as authored and does not participate in experimental Humanoid retargeting.");
             return;
         }
 
@@ -814,7 +814,7 @@ internal sealed class ModelImporterInspector
                 _draft.RetargetSamplesPerSecond;
 
             if (ImGui.DragFloat(
-                    "Retarget Sample Rate",
+                    "Retarget Sample Rate (Experimental)",
                     ref samples,
                     1.0f,
                     15.0f,
@@ -947,7 +947,7 @@ internal sealed class ModelImporterInspector
 
             if (DrawModelAssetPicker(
                     project,
-                    "Default Retarget Target",
+                    "Default Retarget Target (Experimental)",
                     "##ImporterDefaultTarget",
                     ref importerTargetReference,
                     ref _retargetTargetSearch,
@@ -1048,7 +1048,7 @@ internal sealed class ModelImporterInspector
             InvalidateRetargetPreview();
         }
 
-        if (ImGui.CollapsingHeader("Retarget to another character"))
+        if (ImGui.CollapsingHeader("Retarget to another character (Experimental)"))
             DrawUniversalRetargetSection(
                 project,
                 asset,
@@ -1063,7 +1063,8 @@ internal sealed class ModelImporterInspector
         ImportedAnimation? selectedAnimation)
     {
         ImGui.SeparatorText(
-            "UNIVERSAL HUMANOID RETARGET");
+            "UNIVERSAL HUMANOID RETARGET (EXPERIMENTAL)");
+        EditorUi.StatusBadge("EXPERIMENTAL", EditorStatusKind.Warning);
 
         ImGui.TextWrapped(
             "ByteEngine now treats the animation asset, source rig and target model as separate choices. This mirrors the useful part of Unity's Avatar/HumanPose workflow without requiring an export through Unity first.");
@@ -1345,7 +1346,7 @@ internal sealed class ModelImporterInspector
             !canBuild);
 
         if (EditorUi.SecondaryButton(
-                "Build Retarget",
+                "Build Retarget (Experimental)",
                 size:
                     new Vector2(
                         -1.0f,
@@ -1363,7 +1364,7 @@ internal sealed class ModelImporterInspector
             null)
         {
             EditorUi.StatusBadge(
-                "RETARGET READY",
+                "RETARGET READY (EXPERIMENTAL)",
                 EditorStatusKind.Success);
             ImGui.SameLine();
             ImGui.TextWrapped(
@@ -1439,7 +1440,7 @@ internal sealed class ModelImporterInspector
                 _replaceExistingRetarget;
 
             if (ImGui.Checkbox(
-                    "Replace existing baked animation",
+                    "Replace existing experimental baked animation",
                     ref replace))
             {
                 _replaceExistingRetarget =
@@ -1456,7 +1457,7 @@ internal sealed class ModelImporterInspector
             !canBake);
 
         if (EditorUi.PrimaryButton(
-                "Bake To Target Model",
+                "Bake To Target Model (Experimental)",
                 size:
                     new Vector2(
                         -1.0f,
@@ -1548,7 +1549,7 @@ internal sealed class ModelImporterInspector
                     rootMotionOverride);
 
             SetRetargetStatus(
-                "Retarget built successfully. Review the target/channel summary, then bake when ready.",
+                "Experimental retarget built successfully. Review the target/channel summary, then bake when ready.",
                 false);
         }
         catch (Exception exception)

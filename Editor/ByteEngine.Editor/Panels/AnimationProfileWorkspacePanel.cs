@@ -1159,7 +1159,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                     0.68f,
                     0.25f,
                     1.0f),
-                "Retarget Animation is locked until a Reference Model is assigned and the profile is applied/saved.");
+                "Retarget Animation (Experimental) is locked until a Reference Model is assigned and the profile is applied/saved.");
 
             return changed;
         }
@@ -1199,10 +1199,10 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
 
         ImGui.Spacing();
         ImGui.SeparatorText(
-            "RETARGET & BAKE");
+            "RETARGET & BAKE (EXPERIMENTAL)");
 
         ImGui.TextWrapped(
-            "Retargeting uses this profile's Reference Model as the target owner. Preview is temporary; nothing is added to the character until Bake To Character is pressed.");
+            "Experimental retargeting uses this profile's Reference Model as the target owner. Preview is temporary; nothing is added to the character until Bake To Character is pressed.");
 
         if (_dirty)
         {
@@ -1212,14 +1212,14 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                     0.68f,
                     0.25f,
                     1.0f),
-                "Apply & Save this profile before retargeting so the preview uses these exact settings.");
+                "Apply & Save this profile before experimental retargeting so the preview uses these exact settings.");
         }
 
         ImGui.BeginDisabled(
             _dirty);
 
         if (ImGui.Button(
-                "Retarget Animation To Reference Model..."))
+                "Retarget Animation To Reference Model (Experimental)..."))
         {
             HumanoidRetargetBakeWindow.Open(
                 new AssetReference(
@@ -1367,7 +1367,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
             if (sameModel)
             {
                 ImGui.TextDisabled(
-                    "Animation Source is the Reference Model. Clips play natively; no retargeting is required.");
+                    "Animation Source is the Reference Model. Clips play natively; no experimental retargeting is required.");
 
                 return;
             }
@@ -1411,10 +1411,10 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                         0.86f,
                         0.48f,
                         1.0f),
-                    "Humanoid Retarget Source Ready");
+                    "Humanoid Retarget Source Ready (Experimental)");
 
                 ImGui.TextDisabled(
-                    $"{sourceModel.Animations.Count} source clip(s) available for transparent runtime retargeting.");
+                    $"{sourceModel.Animations.Count} source clip(s) available for experimental runtime retargeting.");
             }
             else
             {
@@ -1424,7 +1424,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                         0.58f,
                         0.24f,
                         1.0f),
-                    "Humanoid Retarget Source Needs Attention");
+                    "Humanoid Retarget Source Needs Attention (Experimental)");
 
                 if (!targetReady)
                 {
@@ -1505,7 +1505,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                         0.67f,
                         0.25f,
                         1.0f),
-                    "Reference pose is not close to a clean T-pose. Retargeting quality may suffer.");
+                    "Reference pose is not close to a clean T-pose. Experimental retargeting quality may suffer.");
             }
 
             return;

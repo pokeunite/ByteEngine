@@ -11,6 +11,8 @@
     <Compile Include="..\ByteEngine.Tests\HumanoidGeometryMappingTests.cs" Link="HumanoidGeometryMappingTests.cs" />
     <Compile Include="..\ByteEngine.Tests\C9HumanoidAutoMapTests.cs" Link="C9HumanoidAutoMapTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="AnimationDiagnosticReport.cs" />
+    <Compile Include="AnimationImportFixTests.cs" />
   </ItemGroup>
 </Project>
 

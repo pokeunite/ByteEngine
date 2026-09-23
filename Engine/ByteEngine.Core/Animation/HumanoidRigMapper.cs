@@ -113,8 +113,6 @@ public static class HumanoidRigMapper
         SkeletonAsset? skeleton)
     {
         HumanoidMappingResult analyzed = HumanoidSkeletonAnalyzer.Analyze(skeleton);
-        if (analyzed.IsHumanoid)
-            return analyzed.Mapping;
         var result = analyzed.Mapping;
 
         if (skeleton?.Bones == null ||
@@ -136,6 +134,13 @@ public static class HumanoidRigMapper
                     candidate =>
                         candidate.Normalized.Length > 0)
                 .ToArray();
+
+        // Geometry establishes an anatomical fallback, but it cannot always
+        // distinguish a short clavicle from the first arm segment. When a
+        // complete named chain exists, use its actual hierarchy to correct
+        // that chain before filling optional roles (including fingers).
+        PreferNamedArmChain(true);
+        PreferNamedArmChain(false);
 
         Dictionary<string, int> indicesByName =
             skeleton.Bones
@@ -278,6 +283,45 @@ public static class HumanoidRigMapper
         result.Normalize();
 
         return result;
+
+        void PreferNamedArmChain(bool left)
+        {
+            HumanoidBone shoulder = left ? HumanoidBone.LeftShoulder : HumanoidBone.RightShoulder;
+            HumanoidBone upper = left ? HumanoidBone.LeftUpperArm : HumanoidBone.RightUpperArm;
+            HumanoidBone lower = left ? HumanoidBone.LeftLowerArm : HumanoidBone.RightLowerArm;
+            HumanoidBone hand = left ? HumanoidBone.LeftHand : HumanoidBone.RightHand;
+            int upperIndex = FindNamed(upper), lowerIndex = FindNamed(lower), handIndex = FindNamed(hand);
+            if (upperIndex < 0 || lowerIndex < 0 || handIndex < 0 ||
+                !IsDescendant(skeleton, lowerIndex, upperIndex) ||
+                !IsDescendant(skeleton, handIndex, lowerIndex))
+                return;
+
+            result.SetBone(upper, skeleton.Bones[upperIndex].Name);
+            result.SetBone(lower, skeleton.Bones[lowerIndex].Name);
+            result.SetBone(hand, skeleton.Bones[handIndex].Name);
+            int shoulderIndex = FindNamed(shoulder);
+            if (shoulderIndex >= 0 && IsDescendant(skeleton, upperIndex, shoulderIndex))
+                result.SetBone(shoulder, skeleton.Bones[shoulderIndex].Name);
+            else
+                result.ClearBone(shoulder);
+        }
+
+        int FindNamed(HumanoidBone role)
+        {
+            if (!Aliases.TryGetValue(role, out string[]? aliases)) return -1;
+            return candidates
+                .Where(candidate => !IsLikelyHelperBone(candidate.SourceName) &&
+                    !LooksLikeTwistOrRollBone(candidate.SourceName))
+                .Select(candidate => new
+                {
+                    candidate.Index,
+                    Score = aliases.Select(alias => Score(candidate.Normalized, alias)).DefaultIfEmpty(0).Max()
+                })
+                .Where(candidate => candidate.Score >= 800)
+                .OrderByDescending(candidate => candidate.Score)
+                .Select(candidate => candidate.Index)
+                .FirstOrDefault(-1);
+        }
     }
 
     private static int? FindMappedAncestorIndex(

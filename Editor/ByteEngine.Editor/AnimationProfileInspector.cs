@@ -143,7 +143,7 @@ internal static class AnimationProfileInspector
         ImGui.SameLine();
 
         if (ImGui.Button(
-                "Retarget Animation..."))
+                "Retarget Animation (Experimental)..."))
         {
             HumanoidRetargetBakeWindow.Open(
                 reference,
@@ -155,7 +155,7 @@ internal static class AnimationProfileInspector
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(
-                "Preview a temporary Humanoid retarget result. Nothing is baked into the target character until you explicitly choose Bake To Character.");
+                "Experimental: preview a temporary Humanoid retarget result. Nothing is baked into the target character until you explicitly choose Bake To Character.");
         }
     }
 
@@ -167,10 +167,10 @@ internal static class AnimationProfileInspector
                 0.68f,
                 0.25f,
                 1.0f),
-            "RETARGETING SETUP REQUIRED");
+            "RETARGETING (EXPERIMENTAL) SETUP REQUIRED");
 
         ImGui.TextWrapped(
-            "Retargeting needs an Animation Profile because the profile identifies the target character model and Humanoid skeleton.");
+            "Experimental retargeting needs an Animation Profile because the profile identifies the target character model and Humanoid skeleton.");
 
         ImGui.BulletText(
             "1. Assets > + Create > Animation Profile");
@@ -182,12 +182,12 @@ internal static class AnimationProfileInspector
             "3. Open the profile and set its Reference Model");
 
         ImGui.BulletText(
-            "4. Press Apply & Save, then use Retarget Animation");
+            "4. Press Apply & Save, then use Retarget Animation (Experimental)");
 
         ImGui.BeginDisabled();
 
         ImGui.Button(
-            "Retarget Animation... (Animation Profile Required)");
+            "Retarget Animation (Experimental)... (Animation Profile Required)");
 
         ImGui.EndDisabled();
     }
