@@ -14,6 +14,7 @@ internal static class C9HumanoidRetargeterTests
         VerifyRotationTransfersToDifferentTargetProportions();
         VerifyHipsTranslationScalesWithCharacterSize();
         VerifyLoopTimeWraps();
+        VerifyDifferentArmRestPosesFollowAnimatedSource();
     }
 
     private static void VerifyRotationTransfersToDifferentTargetProportions()
@@ -209,6 +210,47 @@ internal static class C9HumanoidRetargeterTests
             "C9D: looping source animation time did not wrap correctly.");
     }
 
+    private static void VerifyDifferentArmRestPosesFollowAnimatedSource()
+    {
+        RigFixture source = CreateHumanoidFixture(1.0f, loweredArms: true);
+        RigFixture target = CreateHumanoidFixture(1.0f);
+        ImportedAnimation clip = CreateClip(
+            source,
+            hipsEndTranslation: Vector3.Zero,
+            leftArmEndRotation: Quaternion.CreateFromAxisAngle(Vector3.UnitX, 0.6f));
+
+        foreach (float time in new[] { 0.0f, 1.0f })
+        {
+            HumanoidRetargetPose sourcePose = HumanoidRetargeter.Retarget(
+                source.Skeleton, source.Mapping, source.ReferencePose, clip, time,
+                source.Skeleton, source.Mapping, source.ReferencePose, loop: false);
+            HumanoidRetargetPose targetPose = HumanoidRetargeter.Retarget(
+                source.Skeleton, source.Mapping, source.ReferencePose, clip, time,
+                target.Skeleton, target.Mapping, target.ReferencePose, loop: false);
+
+            foreach (HumanoidBone upperArm in new[]
+                     { HumanoidBone.LeftUpperArm, HumanoidBone.RightUpperArm })
+            {
+                HumanoidBone lowerArm = upperArm == HumanoidBone.LeftUpperArm
+                    ? HumanoidBone.LeftLowerArm : HumanoidBone.RightLowerArm;
+                Vector3 sourceDirection = ArmDirection(source, sourcePose, upperArm, lowerArm);
+                Vector3 targetDirection = ArmDirection(target, targetPose, upperArm, lowerArm);
+                AssertNear(targetDirection, sourceDirection, 0.02f,
+                    $"C9: {upperArm} at {time:0.00}s did not preserve source arm direction across mismatched rest poses.");
+                Assert(targetDirection.Y < -0.7f,
+                    $"C9: {upperArm} stayed near the target's horizontal T-pose.");
+            }
+        }
+
+        static Vector3 ArmDirection(RigFixture rig, HumanoidRetargetPose pose,
+            HumanoidBone parent, HumanoidBone child)
+        {
+            Vector3 start = pose.ModelMatrices[rig.IndexOf(parent)].Translation;
+            Vector3 end = pose.ModelMatrices[rig.IndexOf(child)].Translation;
+            return Vector3.Normalize(end - start);
+        }
+    }
+
     private static ImportedAnimation CreateClip(
         RigFixture source,
         Vector3 hipsEndTranslation,
@@ -343,7 +385,8 @@ internal static class C9HumanoidRetargeterTests
     }
 
     private static RigFixture CreateHumanoidFixture(
-        float size)
+        float size,
+        bool loweredArms = false)
     {
         var skeleton =
             new SkeletonAsset
@@ -407,10 +450,9 @@ internal static class C9HumanoidRetargeterTests
         Add(
             HumanoidBone.LeftLowerArm,
             leftUpperArm,
-            new Vector3(
-                -1.0f,
-                2.0f,
-                0.0f));
+            loweredArms
+                ? new Vector3(-0.5f, 1.5f, 0.0f)
+                : new Vector3(-1.0f, 2.0f, 0.0f));
 
         int leftLowerArm =
             skeleton.Bones.Count -
@@ -419,10 +461,9 @@ internal static class C9HumanoidRetargeterTests
         Add(
             HumanoidBone.LeftHand,
             leftLowerArm,
-            new Vector3(
-                -1.4f,
-                2.0f,
-                0.0f));
+            loweredArms
+                ? new Vector3(-0.5f, 1.1f, 0.0f)
+                : new Vector3(-1.4f, 2.0f, 0.0f));
 
         Add(
             HumanoidBone.RightUpperArm,
@@ -439,10 +480,9 @@ internal static class C9HumanoidRetargeterTests
         Add(
             HumanoidBone.RightLowerArm,
             rightUpperArm,
-            new Vector3(
-                1.0f,
-                2.0f,
-                0.0f));
+            loweredArms
+                ? new Vector3(0.5f, 1.5f, 0.0f)
+                : new Vector3(1.0f, 2.0f, 0.0f));
 
         int rightLowerArm =
             skeleton.Bones.Count -
@@ -451,10 +491,9 @@ internal static class C9HumanoidRetargeterTests
         Add(
             HumanoidBone.RightHand,
             rightLowerArm,
-            new Vector3(
-                1.4f,
-                2.0f,
-                0.0f));
+            loweredArms
+                ? new Vector3(0.5f, 1.1f, 0.0f)
+                : new Vector3(1.4f, 2.0f, 0.0f));
 
         Add(
             HumanoidBone.LeftUpperLeg,

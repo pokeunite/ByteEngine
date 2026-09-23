@@ -479,10 +479,9 @@ public static class HumanoidRetargetClipBuilder
                 parentIndices);
 
         Matrix4x4 skeletonBindFrame =
-            ResolveSkeletonBindFrame(
-                targetNodes,
-                targetMeshes,
-                referenceNodeGlobals);
+            targetMeshes.Count == 0
+                ? InferNodeBindFrame(targetSkeleton, boneNodeIndices, referenceNodeGlobals)
+                : ResolveSkeletonBindFrame(targetNodes, targetMeshes, referenceNodeGlobals);
 
         return new NodeRuntime(
             targetNodes,
@@ -546,6 +545,45 @@ public static class HumanoidRetargetClipBuilder
         return parentIndices;
     }
 
+    // A meshless target has no skin mesh from which to recover its bind frame.
+    // Compare corresponding skeleton bind models and imported node reference
+    // globals; their common difference is the node hierarchy conversion root.
+    private static Matrix4x4 InferNodeBindFrame(
+        SkeletonAsset skeleton,
+        IReadOnlyList<int> boneNodeIndices,
+        IReadOnlyList<Matrix4x4> referenceNodeGlobals)
+    {
+        Matrix4x4? frame = null;
+        int matched = 0;
+        for (int boneIndex = 0; boneIndex < skeleton.Bones.Count; boneIndex++)
+        {
+            int nodeIndex = boneNodeIndices[boneIndex];
+            if (nodeIndex < 0 || nodeIndex >= referenceNodeGlobals.Count ||
+                !Matrix4x4.Invert(skeleton.Bones[boneIndex].BindPose, out Matrix4x4 bindModel) ||
+                !Matrix4x4.Invert(bindModel, out Matrix4x4 inverseBindModel))
+                continue;
+            Matrix4x4 candidate = inverseBindModel * referenceNodeGlobals[nodeIndex];
+            if (!float.IsFinite(candidate.M41) || !float.IsFinite(candidate.M42) ||
+                !float.IsFinite(candidate.M43)) continue;
+            if (frame.HasValue && !BindFramesMatch(frame.Value, candidate))
+                return Matrix4x4.Identity;
+            frame = candidate;
+            matched++;
+        }
+        return matched >= 2 ? frame!.Value : Matrix4x4.Identity;
+    }
+
+    private static bool BindFramesMatch(Matrix4x4 a, Matrix4x4 b)
+    {
+        float scale = MathF.Max(1f, a.Translation.Length());
+        return Vector3.Distance(a.Translation, b.Translation) < scale * .001f &&
+            Vector3.Distance(new Vector3(a.M11, a.M12, a.M13),
+                new Vector3(b.M11, b.M12, b.M13)) < .001f &&
+            Vector3.Distance(new Vector3(a.M21, a.M22, a.M23),
+                new Vector3(b.M21, b.M22, b.M23)) < .001f &&
+            Vector3.Distance(new Vector3(a.M31, a.M32, a.M33),
+                new Vector3(b.M31, b.M32, b.M33)) < .001f;
+    }
     private static Matrix4x4 ResolveSkeletonBindFrame(
         IReadOnlyList<ImportedNode> nodes,
         IReadOnlyList<ImportedMesh> meshes,

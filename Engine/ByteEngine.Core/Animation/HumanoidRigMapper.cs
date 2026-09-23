@@ -112,8 +112,10 @@ public static class HumanoidRigMapper
     public static HumanoidBoneMap AutoMap(
         SkeletonAsset? skeleton)
     {
-        var result =
-            new HumanoidBoneMap();
+        HumanoidMappingResult analyzed = HumanoidSkeletonAnalyzer.Analyze(skeleton);
+        if (analyzed.IsHumanoid)
+            return analyzed.Mapping;
+        var result = analyzed.Mapping;
 
         if (skeleton?.Bones == null ||
             skeleton.Bones.Count == 0)
@@ -160,12 +162,15 @@ public static class HumanoidRigMapper
                         group.First().Index,
                     StringComparer.OrdinalIgnoreCase);
 
-        var usedSourceBones =
-            new HashSet<int>();
+        var usedSourceBones = new HashSet<int>(result.Bones.Values
+            .Select(name => indicesByName.TryGetValue(name, out int index) ? index : -1)
+            .Where(index => index >= 0));
 
         foreach (HumanoidBone semanticBone
                  in MappingOrder)
         {
+            if (result.TryGetBoneName(semanticBone, out _))
+                continue;
             if (!Aliases.TryGetValue(
                     semanticBone,
                     out string[]? aliases))

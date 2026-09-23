@@ -928,7 +928,8 @@ internal sealed class InspectorPanel
             renderer,
             renderer3D,
             windowWidth,
-            windowHeight);
+            windowHeight,
+            showPlaybackControls: true);
     }
 
     public void Dispose()

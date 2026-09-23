@@ -43,6 +43,7 @@ internal static class HumanoidRetargetBakeWindow
 
     private static string _sourceClip =
         string.Empty;
+    private static string _targetSearch = string.Empty;
     private static string _sourceSearch =
         string.Empty;
     private static string _clipSearch =
@@ -340,202 +341,76 @@ internal static class HumanoidRetargetBakeWindow
 
     private static void DrawControls()
     {
-        if (_project ==
-            null)
-        {
-            return;
-        }
+        if (_project == null) return;
 
-        EditorUi.StatusBadge("TEMPORARY", EditorStatusKind.Neutral);
-        ImGui.SameLine();
-        EditorUi.MutedText("Nothing is written until Bake To Character.");
-
-        ImGui.SeparatorText(
-            "TARGET OWNER");
-
-        AssetRecord? targetAsset =
-            _targetReference.IsEmpty
-                ? null
-                : _project.AssetDatabase.Resolve(
-                    _targetReference);
-
-        ImGui.Text(
-            targetAsset?.ProjectPath ??
-            "No Reference Model");
-
-        if (_targetModel !=
-            null)
-        {
-            DrawRigStatus(
-                "Target",
-                _targetModel);
-
-            ImGui.TextDisabled(
-                $"Owned animations visible to engine: {_targetModel.Animations.Count}");
-        }
-
-        ImGui.SeparatorText(
-            "SOURCE");
-
+        ImGui.SeparatorText("RETARGET ANIMATION");
         DrawSourceModelPicker();
-
-        if (_sourceModel !=
-            null)
-        {
-            DrawRigStatus(
-                "Source",
-                _sourceModel);
-        }
-
         DrawSourceClipPicker();
 
-        ImGui.SetNextItemWidth(
-            -1.0f);
+        DrawTargetModelPicker();
 
-        if (ImGui.InputText(
-                "Bake Name",
-                ref _outputName,
-                128))
-        {
-            _replaceExistingBaked =
-                false;
+        if (_sourceModel != null) DrawRigStatus("Source avatar", _sourceModel);
+        if (_targetModel != null) DrawRigStatus("Target avatar", _targetModel);
 
-            _conflictDirty =
-                true;
-        }
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "The name that will appear under the target model's existing animation drop-down arrow.");
-        }
+        bool canBuild = _targetModel != null && _sourceModel != null &&
+            _sourceAnimation != null && !string.IsNullOrWhiteSpace(_sourceClip);
+        ModelOwnedAnimationConflictKind conflict = GetCurrentConflict();
+        bool importedConflict = conflict == ModelOwnedAnimationConflictKind.ImportedAnimation;
+        bool bakedConflict = conflict == ModelOwnedAnimationConflictKind.BakedAnimation;
+        bool canSave = canBuild && !string.IsNullOrWhiteSpace(_outputName) &&
+            !importedConflict && (!bakedConflict || _replaceExistingBaked);
 
         ImGui.Spacing();
-
-        bool canBuild =
-            _targetModel !=
-                null &&
-            _sourceModel !=
-                null &&
-            _sourceAnimation !=
-                null &&
-            !string.IsNullOrWhiteSpace(
-                _sourceClip);
-
-        ImGui.BeginDisabled(
-            !canBuild);
-
-        if (EditorUi.SecondaryButton("Build Preview", size: new Vector2(-1.0f, 34.0f)))
-        {
+        ImGui.BeginDisabled(!canBuild);
+        if (EditorUi.SecondaryButton("Preview", size: new Vector2(-1.0f, 34.0f)))
             BuildPreview();
-        }
-
         ImGui.EndDisabled();
 
-        if (_previewAnimation ==
-            null)
+        ImGui.BeginDisabled(!canSave);
+        if (EditorUi.PrimaryButton("Retarget & Save", size: new Vector2(-1.0f, 38.0f)))
         {
-            EditorUi.EmptyState("No preview built", "Choose a source animation, then Build Preview.");
+            if (_previewAnimation == null) BuildPreview();
+            if (_previewAnimation != null) Bake();
         }
-        else
-        {
+        ImGui.EndDisabled();
+
+        if (_previewAnimation != null)
             EditorUi.StatusBadge("PREVIEW READY", EditorStatusKind.Success);
-
-            ImGui.TextDisabled(
-                "Visual approval is still required before baking.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(
-                _status))
+        if (!string.IsNullOrWhiteSpace(_status))
         {
-            EditorUi.StatusBadge(_statusIsError ? "ERROR" : "SUCCESS",
-                _statusIsError ? EditorStatusKind.Error : EditorStatusKind.Success);
+            EditorUi.StatusBadge(_statusIsError ? "ERROR" : "STATUS",
+                _statusIsError ? EditorStatusKind.Error : EditorStatusKind.Neutral);
             ImGui.SameLine();
             ImGui.TextWrapped(_status);
         }
 
-        ImGui.SeparatorText(
-            "BAKE");
-
-        ModelOwnedAnimationConflictKind conflict =
-            GetCurrentConflict();
-
-        bool importedConflict =
-            conflict ==
-            ModelOwnedAnimationConflictKind.ImportedAnimation;
-
-        bool bakedConflict =
-            conflict ==
-            ModelOwnedAnimationConflictKind.BakedAnimation;
-
-        if (importedConflict)
+        if (ImGui.CollapsingHeader("Advanced"))
         {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.60f,
-                    0.22f,
-                    1.0f),
-                "That name belongs to an animation embedded in the source model. Choose another name; imported clips are protected.");
+            if (ImGui.InputText("Output Name", ref _outputName, 128))
+            {
+                _conflictDirty = true;
+                _replaceExistingBaked = false;
+                ClearPreview();
+            }
+            if (importedConflict)
+                ImGui.TextWrapped("This name belongs to an imported animation. Choose another name.");
+            if (bakedConflict)
+            {
+                ImGui.TextWrapped("A saved retarget with this name already exists.");
+                ImGui.Checkbox("Replace existing saved animation", ref _replaceExistingBaked);
+            }
+            ImGui.SeparatorText("Rig details");
+            if (_sourceModel != null)
+                ImGui.TextDisabled($"Source bones mapped: {_sourceModel.HumanoidMapping.MappedCount}");
+            if (_targetModel != null)
+                ImGui.TextDisabled($"Target bones mapped: {_targetModel.HumanoidMapping.MappedCount}");
+            DrawBakedAnimationManagement();
+            DrawLegacySourceMigration();
         }
-        else if (bakedConflict)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.68f,
-                    0.25f,
-                    1.0f),
-                "A baked animation with this name already exists.");
-
-            ImGui.Checkbox(
-                "Replace existing baked animation",
-                ref _replaceExistingBaked);
-        }
-
-        bool canBake =
-            _previewAnimation !=
-                null &&
-            _targetModel !=
-                null &&
-            _sourceModel !=
-                null &&
-            _sourceAnimation !=
-                null &&
-            !string.IsNullOrWhiteSpace(
-                _outputName) &&
-            !importedConflict &&
-            (!bakedConflict ||
-             _replaceExistingBaked);
-
-        ImGui.BeginDisabled(
-            !canBake);
-
-        if (EditorUi.PrimaryButton("Bake To Character", size: new Vector2(-1.0f, 38.0f)))
-        {
-            Bake();
-        }
-
-        ImGui.EndDisabled();
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "Only this button persists the temporary result. A failed or rejected preview leaves the target model untouched.");
-        }
-
-        DrawBakedAnimationManagement();
-
-        DrawLegacySourceMigration();
 
         ImGui.Spacing();
-
-        if (EditorUi.SecondaryButton("Close"))
-        {
-            Close();
-        }
+        if (EditorUi.SecondaryButton("Close")) Close();
     }
-
     private static void DrawBakedAnimationManagement()
     {
         if (_targetModel ==
@@ -754,6 +629,48 @@ internal static class HumanoidRetargetBakeWindow
         }
     }
 
+    private static void DrawTargetModelPicker()
+    {
+        if (_project == null) return;
+        AssetRecord? current = _targetReference.IsEmpty
+            ? null : _project.AssetDatabase.Resolve(_targetReference);
+        string preview = current?.ProjectPath ?? "Choose character...";
+        if (!ImGui.BeginCombo("Target Character", preview)) return;
+        if (ImGui.IsWindowAppearing())
+        {
+            _targetSearch = string.Empty;
+            ImGui.SetKeyboardFocusHere();
+        }
+        ImGui.InputTextWithHint("##RetargetTargetSearch", "Search character models...",
+            ref _targetSearch, 128);
+        foreach (AssetRecord asset in _project.AssetDatabase.Assets
+            .Where(item => item.Type == AssetType.Model3D &&
+                item.Guid != _sourceReference.Guid &&
+                (string.IsNullOrWhiteSpace(_targetSearch) ||
+                 item.ProjectPath.Contains(_targetSearch, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(item => item.ProjectPath, StringComparer.OrdinalIgnoreCase))
+        {
+            bool selected = asset.Guid == _targetReference.Guid;
+            if (ImGui.Selectable(asset.ProjectPath, selected))
+            {
+                try
+                {
+                    ModelAsset model = _project.Assets.LoadModel(
+                        new AssetReference(asset.Guid, asset.ProjectPath));
+                    _targetReference = new AssetReference(asset.Guid, asset.ProjectPath);
+                    _targetModel = model;
+                    ClearPreview();
+                    PreparePreviewRig();
+                    RefreshBakedAnimationCache();
+                    _conflictDirty = true;
+                    SetStatus($"Target character: {model.Name}.", false);
+                }
+                catch (Exception exception) { SetStatus(exception.Message, true); }
+            }
+            if (selected) ImGui.SetItemDefaultFocus();
+        }
+        ImGui.EndCombo();
+    }
     private static void DrawSourceModelPicker()
     {
         if (_project ==

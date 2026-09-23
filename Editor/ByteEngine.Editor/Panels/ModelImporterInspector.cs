@@ -18,6 +18,8 @@ namespace ByteEngine.Editor.Panels;
 internal sealed class ModelImporterInspector
 {
     private Guid _assetGuid;
+    private HumanoidMappingResult? _mappingAnalysis;
+    private ModelAsset? _analysisModel;
 
     private ModelImporterSettings _draft =
         new();
@@ -135,14 +137,19 @@ internal sealed class ModelImporterInspector
         AssetRecord asset,
         ModelAsset model)
     {
-        if (_assetGuid ==
-            asset.Guid)
+        if (_assetGuid == asset.Guid)
         {
+            if (!ReferenceEquals(_analysisModel, model))
+            {
+                _analysisModel = model;
+                _mappingAnalysis = HumanoidSkeletonAnalyzer.Analyze(model.Skeleton);
+            }
             return;
         }
 
-        _assetGuid =
-            asset.Guid;
+        _assetGuid = asset.Guid;
+        _analysisModel = model;
+        _mappingAnalysis = HumanoidSkeletonAnalyzer.Analyze(model.Skeleton);
 
         _draft =
             asset.Metadata.ModelImporter.Clone();
@@ -619,8 +626,13 @@ internal sealed class ModelImporterInspector
 
         ImGui.SameLine();
 
-        ImGui.TextDisabled(
-            $"{validation.RequiredMappedCount}/{HumanoidBoneCatalog.Required.Count} required, {validation.MappedBoneCount} total mapped");
+        ImGui.TextDisabled($"{validation.RequiredMappedCount}/{HumanoidBoneCatalog.Required.Count} required, {validation.MappedBoneCount} total mapped");
+        if (_mappingAnalysis?.IsHumanoid == true)
+        {
+            ImGui.TextDisabled($"Geometry auto-map confidence: {_mappingAnalysis.OverallConfidence:P0}");
+            if (_mappingAnalysis.NeedsReview.Count > 0)
+                ImGui.TextWrapped("Review: " + string.Join(", ", _mappingAnalysis.NeedsReview));
+        }
 
         foreach (string error
                  in diagnostics.Errors)
@@ -775,7 +787,9 @@ internal sealed class ModelImporterInspector
         ImportedAnimation? selectedAnimation)
     {
         ImGui.TextWrapped(
-            "Animation import, source-rig assignment and Humanoid retarget settings are stored on the source asset. Retarget baking writes a ByteEngine-owned clip onto the chosen target model without touching either source file.");
+            model.Meshes.Count == 0
+                ? "Animation-only FBX: no render mesh is needed. Use its embedded Humanoid hierarchy, or assign the character model this clip was authored for."
+                : "Import embedded clips and choose a source rig only when the file does not contain a usable Humanoid hierarchy.");
 
         bool importAnimations =
             _draft.ImportAnimations;
@@ -791,67 +805,70 @@ internal sealed class ModelImporterInspector
             InvalidateRetargetPreview();
         }
 
-        ImGui.BeginDisabled(
-            !_draft.ImportAnimations);
-
-        float samples =
-            _draft.RetargetSamplesPerSecond;
-
-        if (ImGui.DragFloat(
-                "Retarget Sample Rate",
-                ref samples,
-                1.0f,
-                15.0f,
-                240.0f,
-                "%.0f fps"))
+        if (ImGui.CollapsingHeader("Advanced animation settings"))
         {
-            _draft.RetargetSamplesPerSecond =
-                Math.Clamp(
-                    samples,
+            ImGui.BeginDisabled(
+                !_draft.ImportAnimations);
+
+            float samples =
+                _draft.RetargetSamplesPerSecond;
+
+            if (ImGui.DragFloat(
+                    "Retarget Sample Rate",
+                    ref samples,
+                    1.0f,
                     15.0f,
-                    240.0f);
-
-            MarkDirty();
-            InvalidateRetargetPreview();
-        }
-
-        int rootMotionSource =
-            (int)_draft.RootMotionSource;
-
-        string[] rootMotionNames =
-        {
-            "Automatic",
-            "Skeleton Root",
-            "Hips / Pelvis"
-        };
-
-        if (ImGui.Combo(
-                "Root Motion Source",
-                ref rootMotionSource,
-                rootMotionNames,
-                rootMotionNames.Length))
-        {
-            _draft.RootMotionSource =
-                (AnimationRootMotionSource)rootMotionSource;
-
-            MarkDirty();
-            InvalidateRetargetPreview();
-        }
-
-        ImGui.TextDisabled(
-            _draft.RootMotionSource switch
+                    240.0f,
+                    "%.0f fps"))
             {
-                AnimationRootMotionSource.SkeletonRoot =>
-                    "Use only explicit skeleton-root travel; never generate root motion from the pelvis.",
+                _draft.RetargetSamplesPerSecond =
+                    Math.Clamp(
+                        samples,
+                        15.0f,
+                        240.0f);
 
-                AnimationRootMotionSource.Hips =>
-                    "Generate the target root trajectory from Hips/Pelvis travel.",
+                MarkDirty();
+                InvalidateRetargetPreview();
+            }
 
-                _ =>
-                    "Prefer explicit root travel; fall back to Hips/Pelvis when the source has no useful root track."
-            });
+            int rootMotionSource =
+                (int)_draft.RootMotionSource;
 
-        ImGui.EndDisabled();
+            string[] rootMotionNames =
+            {
+                "Automatic",
+                "Skeleton Root",
+                "Hips / Pelvis"
+            };
+
+            if (ImGui.Combo(
+                    "Root Motion Source",
+                    ref rootMotionSource,
+                    rootMotionNames,
+                    rootMotionNames.Length))
+            {
+                _draft.RootMotionSource =
+                    (AnimationRootMotionSource)rootMotionSource;
+
+                MarkDirty();
+                InvalidateRetargetPreview();
+            }
+
+            ImGui.TextDisabled(
+                _draft.RootMotionSource switch
+                {
+                    AnimationRootMotionSource.SkeletonRoot =>
+                        "Use only explicit skeleton-root travel; never generate root motion from the pelvis.",
+
+                    AnimationRootMotionSource.Hips =>
+                        "Generate the target root trajectory from Hips/Pelvis travel.",
+
+                    _ =>
+                        "Prefer explicit root travel; fall back to Hips/Pelvis when the source has no useful root track."
+                });
+
+            ImGui.EndDisabled();
+        }
 
         if (!_draft.ImportAnimations)
         {
@@ -877,7 +894,9 @@ internal sealed class ModelImporterInspector
                 EditorStatusKind.Success);
             ImGui.SameLine();
             ImGui.TextWrapped(
-                "No external rig is required unless you deliberately want to interpret these tracks against a different compatible Humanoid skeleton.");
+                model.Meshes.Count == 0
+                    ? "No render mesh, but this FBX contains a complete Humanoid hierarchy. Source Model can stay on Auto."
+                    : "The embedded Humanoid rig is ready. No source-model assignment is needed.");
         }
         else
         {
@@ -896,11 +915,11 @@ internal sealed class ModelImporterInspector
 
         if (DrawModelAssetPicker(
                 project,
-                "Animation Source Rig",
+                sourceHasReadyEmbeddedRig ? "Source Model (optional)" : "Assign Source Model",
                 "##ImporterSourceRig",
                 ref importerRigReference,
                 ref _retargetRigSearch,
-                "Embedded / source asset",
+                "Auto (embedded hierarchy)",
                 allowNone:
                     true))
         {
@@ -921,38 +940,42 @@ internal sealed class ModelImporterInspector
             InvalidateRetargetPreview();
         }
 
-        AssetReference importerTargetReference =
-            _draft.DefaultRetargetTargetModel;
-
-        if (DrawModelAssetPicker(
-                project,
-                "Default Retarget Target",
-                "##ImporterDefaultTarget",
-                ref importerTargetReference,
-                ref _retargetTargetSearch,
-                "None",
-                allowNone:
-                    true))
+        if (ImGui.CollapsingHeader("Advanced target default"))
         {
-            _draft.DefaultRetargetTargetModel =
-                importerTargetReference;
+            AssetReference importerTargetReference =
+                _draft.DefaultRetargetTargetModel;
 
-            if (SameReference(
-                    _retargetSourceReference,
-                    new AssetReference(
-                        asset.Guid,
-                        asset.ProjectPath)))
+            if (DrawModelAssetPicker(
+                    project,
+                    "Default Retarget Target",
+                    "##ImporterDefaultTarget",
+                    ref importerTargetReference,
+                    ref _retargetTargetSearch,
+                    "None",
+                    allowNone:
+                        true))
             {
-                _retargetTargetReference =
+                _draft.DefaultRetargetTargetModel =
                     importerTargetReference;
+
+                if (SameReference(
+                        _retargetSourceReference,
+                        new AssetReference(
+                            asset.Guid,
+                            asset.ProjectPath)))
+                {
+                    _retargetTargetReference =
+                        importerTargetReference;
+                }
+
+                MarkDirty();
+                InvalidateRetargetPreview();
             }
 
-            MarkDirty();
-            InvalidateRetargetPreview();
         }
 
-        ImGui.TextDisabled(
-            "A truly skeleton-less clip cannot invent bone hierarchy/rest pose from keyframes alone. Assigning a Source Rig is the universal fallback; mesh data is never required.");
+        if (!sourceHasReadyEmbeddedRig)
+            ImGui.TextDisabled("A clip without a usable embedded hierarchy needs a compatible Source Model; render mesh data is not required.");
 
         ImGui.SeparatorText(
             "AVAILABLE CLIPS");
@@ -1025,11 +1048,12 @@ internal sealed class ModelImporterInspector
             InvalidateRetargetPreview();
         }
 
-        DrawUniversalRetargetSection(
-            project,
-            asset,
-            model,
-            selectedAnimation);
+        if (ImGui.CollapsingHeader("Retarget to another character"))
+            DrawUniversalRetargetSection(
+                project,
+                asset,
+                model,
+                selectedAnimation);
     }
 
     private void DrawUniversalRetargetSection(
@@ -1438,11 +1462,7 @@ internal sealed class ModelImporterInspector
                         -1.0f,
                         38.0f)))
         {
-            BakeRetarget(
-                project,
-                sourceModel,
-                sourceClip,
-                targetModel);
+            BakeRetarget(project, sourceModel, sourceClip!, targetModel);
         }
 
         ImGui.EndDisabled();

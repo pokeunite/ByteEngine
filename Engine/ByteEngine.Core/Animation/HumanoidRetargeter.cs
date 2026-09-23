@@ -361,10 +361,31 @@ public static class HumanoidRetargeter
                     sourceBodyFrame,
                     targetBodyFrame);
 
-            desiredModelRotations[targetIndex] =
+            Quaternion desiredModelRotation =
                 ApplyRotationDelta(
                     targetReferenceModelRotation,
                     targetModelDelta);
+
+            // Bone names can be mapped perfectly while their bind poses differ.
+            // Rotation deltas alone leave a T-pose target's arms horizontal
+            // when the source animation has its arms down. Use the animated
+            // semantic joint chain to correct limb swing in avatar space;
+            // retain the existing delta rotation for twist around that limb.
+            desiredModelRotations[targetIndex] =
+                AimLimbAtAnimatedSource(
+                    semanticBone,
+                    sourceIndex,
+                    targetIndex,
+                    desiredModelRotation,
+                    targetReferenceModelRotation,
+                    sourceMapping,
+                    sourceIndices,
+                    sourceCurrentModels,
+                    targetMapping,
+                    targetIndices,
+                    targetReferenceModels,
+                    sourceBodyFrame,
+                    targetBodyFrame);
 
             if (semanticBone == HumanoidBone.Root ||
                 semanticBone == HumanoidBone.Hips)
@@ -1533,6 +1554,83 @@ public static class HumanoidRetargeter
         }
 
         return result;
+    }
+
+    private static Quaternion AimLimbAtAnimatedSource(
+        HumanoidBone semanticBone,
+        int sourceIndex,
+        int targetIndex,
+        Quaternion candidateModelRotation,
+        Quaternion targetReferenceModelRotation,
+        HumanoidBoneMap sourceMapping,
+        IReadOnlyDictionary<string, int> sourceIndices,
+        IReadOnlyList<Matrix4x4> sourceCurrentModels,
+        HumanoidBoneMap targetMapping,
+        IReadOnlyDictionary<string, int> targetIndices,
+        IReadOnlyList<Matrix4x4> targetReferenceModels,
+        HumanoidBodyFrame sourceBodyFrame,
+        HumanoidBodyFrame targetBodyFrame)
+    {
+        HumanoidBone? childSemantic = semanticBone switch
+        {
+            HumanoidBone.LeftShoulder => HumanoidBone.LeftUpperArm,
+            HumanoidBone.LeftUpperArm => HumanoidBone.LeftLowerArm,
+            HumanoidBone.LeftLowerArm => HumanoidBone.LeftHand,
+            HumanoidBone.RightShoulder => HumanoidBone.RightUpperArm,
+            HumanoidBone.RightUpperArm => HumanoidBone.RightLowerArm,
+            HumanoidBone.RightLowerArm => HumanoidBone.RightHand,
+            HumanoidBone.LeftUpperLeg => HumanoidBone.LeftLowerLeg,
+            HumanoidBone.LeftLowerLeg => HumanoidBone.LeftFoot,
+            HumanoidBone.RightUpperLeg => HumanoidBone.RightLowerLeg,
+            HumanoidBone.RightLowerLeg => HumanoidBone.RightFoot,
+            _ => null
+        };
+
+        if (childSemantic == null ||
+            !sourceMapping.TryGetBoneName(childSemantic.Value, out string sourceChildName) ||
+            !targetMapping.TryGetBoneName(childSemantic.Value, out string targetChildName) ||
+            !sourceIndices.TryGetValue(sourceChildName, out int sourceChildIndex) ||
+            !targetIndices.TryGetValue(targetChildName, out int targetChildIndex) ||
+            sourceChildIndex < 0 || sourceChildIndex >= sourceCurrentModels.Count ||
+            targetChildIndex < 0 || targetChildIndex >= targetReferenceModels.Count)
+        {
+            return candidateModelRotation;
+        }
+
+        Vector3 sourceDirection =
+            sourceCurrentModels[sourceChildIndex].Translation -
+            sourceCurrentModels[sourceIndex].Translation;
+        Vector3 targetReferenceDirection =
+            targetReferenceModels[targetChildIndex].Translation -
+            targetReferenceModels[targetIndex].Translation;
+
+        if (!IsFinite(sourceDirection) || !IsFinite(targetReferenceDirection) ||
+            sourceDirection.LengthSquared() <= 0.0000001f ||
+            targetReferenceDirection.LengthSquared() <= 0.0000001f)
+        {
+            return candidateModelRotation;
+        }
+
+        Vector3 desiredDirection = SafeNormalize(
+            RemapVector(sourceDirection, sourceBodyFrame, targetBodyFrame),
+            Vector3.UnitX);
+        Quaternion candidateDelta = RelativeRotation(
+            targetReferenceModelRotation, candidateModelRotation);
+        Vector3 candidateDirection = SafeNormalize(
+            Vector3.Transform(targetReferenceDirection, candidateDelta),
+            Vector3.UnitX);
+        float dot = Math.Clamp(Vector3.Dot(candidateDirection, desiredDirection), -1.0f, 1.0f);
+        if (dot > 0.99999f)
+            return candidateModelRotation;
+
+        Vector3 axis = Vector3.Cross(candidateDirection, desiredDirection);
+        if (axis.LengthSquared() <= 0.0000001f)
+            axis = AnyPerpendicular(candidateDirection);
+        axis = SafeNormalize(axis, Vector3.UnitX);
+
+        Quaternion aimCorrection = Quaternion.CreateFromAxisAngle(
+            axis, MathF.Acos(dot));
+        return ApplyRotationDelta(candidateModelRotation, aimCorrection);
     }
 
     private static Quaternion RelativeRotation(

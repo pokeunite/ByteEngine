@@ -1188,7 +1188,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         if (animationSource.IsEmpty)
         {
             ImGui.TextDisabled(
-                "Using Reference Model animations. Choose another ready Humanoid model to reuse/retarget its clips.");
+                "Using Reference Model animations. To use an imported animation-only FBX, select it here as the Animation Source Model.");
         }
         else
         {

@@ -3,6 +3,7 @@ using System.Numerics;
 
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -61,6 +62,13 @@ internal sealed class AnimationClipPreview : IDisposable
     private SkeletalMeshRenderer? _renderer;
 
     private Guid _modelGuid;
+    private Guid _previewModelGuid;
+    private Guid _selectionSourceGuid;
+    private readonly Guid _previewInstanceGuid = Guid.NewGuid();
+    private AssetReference _previewModelReference = AssetReference.Empty;
+    private string _previewModelSearch = string.Empty;
+    private ModelAsset? _temporaryClipOwner;
+    private string _temporaryClipKey = string.Empty;
 
     private string _clipKey =
         string.Empty;
@@ -154,7 +162,8 @@ internal sealed class AnimationClipPreview : IDisposable
         Renderer2D renderer,
         Renderer3D renderer3D,
         int windowWidth,
-        int windowHeight)
+        int windowHeight,
+        bool showPlaybackControls = false)
     {
         /*
          * Imported animation assets finally have a real importer surface rather
@@ -181,11 +190,23 @@ internal sealed class AnimationClipPreview : IDisposable
             return;
         }
 
-        EnsurePreview(
-            project,
-            asset,
-            model,
-            animation);
+        if (_selectionSourceGuid != asset.Guid)
+        {
+            Reset();
+            _selectionSourceGuid = asset.Guid;
+            _previewModelReference = model.Meshes.Count > 0
+                ? new AssetReference(asset.Guid, asset.ProjectPath)
+                : model.DefaultRetargetTargetModel;
+        }
+
+        DrawPreviewModelPicker(project, model);
+        if (_previewModelReference.IsEmpty)
+        {
+            ImGui.TextDisabled("Choose a skinned Humanoid model to preview this animation.");
+            return;
+        }
+
+        EnsurePreview(project, asset, model, animation);
 
         if (_renderer ==
                 null ||
@@ -210,6 +231,20 @@ internal sealed class AnimationClipPreview : IDisposable
             return;
         }
 
+        if (showPlaybackControls)
+        {
+            EditorUi.BeginToolbar("##InspectorClipPlayback");
+            DrawPlaybackControls();
+            EditorUi.EndToolbar();
+            float duration = Math.Max(_renderer.Duration, _animationDuration);
+            if (duration > 0.0001f)
+            {
+                float playhead = _renderer.PlaybackTime;
+                if (ImGui.SliderFloat("##InspectorClipPlayhead", ref playhead,
+                    0.0f, duration, "%.3f s"))
+                    Seek(playhead);
+            }
+        }
         double now =
             _previewClock.Elapsed.TotalSeconds;
 
@@ -418,6 +453,7 @@ internal sealed class AnimationClipPreview : IDisposable
 
         _modelGuid =
             Guid.Empty;
+        _previewModelGuid = Guid.Empty;
 
         _clipKey =
             string.Empty;
@@ -457,6 +493,39 @@ internal sealed class AnimationClipPreview : IDisposable
         _framebuffer.Dispose();
     }
 
+    private void DrawPreviewModelPicker(EditorProjectContext project, ModelAsset source)
+    {
+        AssetRecord? current = _previewModelReference.IsEmpty
+            ? null : project.AssetDatabase.Resolve(_previewModelReference);
+        string label = current?.ProjectPath ?? "Choose model...";
+        if (ImGui.BeginCombo("Preview Model", label))
+        {
+            ImGui.InputTextWithHint("##PreviewModelSearch", "Search models...",
+                ref _previewModelSearch, 96);
+            foreach (AssetRecord record in project.AssetDatabase.Assets
+                .Where(item => item.Type == AssetType.Model3D)
+                .OrderBy(item => item.ProjectPath, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(_previewModelSearch) &&
+                    !record.ProjectPath.Contains(_previewModelSearch,
+                        StringComparison.OrdinalIgnoreCase)) continue;
+                bool selected = record.Guid == current?.Guid;
+                if (ImGui.Selectable(record.ProjectPath, selected))
+                {
+                    Reset();
+                    _previewModelReference = new AssetReference(record.Guid, record.ProjectPath);
+                }
+                if (selected) ImGui.SetItemDefaultFocus();
+            }
+            ImGui.EndCombo();
+        }
+        if (source.Meshes.Count == 0)
+            ImGui.TextDisabled("Preview only: the chosen model and source asset are not modified.");
+        if (!source.AnimationSourceRigModel.IsEmpty &&
+            source.RigType == AnimationRigType.Humanoid &&
+            source.ReferenceHumanoidPose?.IsReady == true)
+            ImGui.TextWrapped("This clip already has a usable skeleton. Preview uses it; clear the assigned Source Model in Import Settings before baking if you want the bake to match.");
+    }
     private void EnsurePreview(
         EditorProjectContext project,
         AssetRecord asset,
@@ -469,6 +538,7 @@ internal sealed class AnimationClipPreview : IDisposable
                 null &&
             _modelGuid ==
                 asset.Guid &&
+            _previewModelGuid == _previewModelReference.Guid &&
             string.Equals(
                 _clipKey,
                 animation.Key,
@@ -481,6 +551,7 @@ internal sealed class AnimationClipPreview : IDisposable
 
         _modelGuid =
             asset.Guid;
+        _previewModelGuid = _previewModelReference.Guid;
 
         _clipKey =
             animation.Key;
@@ -509,6 +580,41 @@ internal sealed class AnimationClipPreview : IDisposable
 
         try
         {
+            AssetRecord previewAsset = project.AssetDatabase.Resolve(_previewModelReference)
+                ?? throw new InvalidOperationException("Preview Model could not be found.");
+            AssetReference previewReference = new(previewAsset.Guid, previewAsset.ProjectPath);
+            ModelAsset previewModel = project.Assets.LoadModel(previewReference);
+            if (previewModel.Meshes.Count == 0)
+                throw new InvalidOperationException("Preview Model has no render mesh. Choose a character model.");
+            if (previewModel.Skeleton == null)
+                throw new InvalidOperationException("Preview Model has no skeleton.");
+
+            if (previewAsset.Guid != asset.Guid)
+            {
+                // The source's own valid Humanoid hierarchy must win over an
+                // old optional Source Rig override; otherwise FBX helper-node
+                // rotations can be discarded before retargeting.
+                AssetReference sourceRig = model.RigType == AnimationRigType.Humanoid &&
+                    model.ReferenceHumanoidPose?.IsReady == true
+                    ? new AssetReference(asset.Guid, asset.ProjectPath)
+                    : AssetReference.Empty;
+                ImportedAnimation generated = HumanoidRetargetRuntime.BuildClip(
+                    project.Assets, new AssetReference(asset.Guid, asset.ProjectPath), sourceRig,
+                    animation.Name, previewReference, animation.Name,
+                    model.RetargetSamplesPerSecond);
+                ImportedAnimation temporary = new()
+                {
+                    Key = $"inspector-preview:{_previewInstanceGuid:N}:{animation.Key}:{previewAsset.Guid:N}",
+                    Name = $"__Preview_{_previewInstanceGuid:N}",
+                    Duration = generated.Duration,
+                    Channels = generated.Channels
+                };
+                previewModel.RegisterRuntimeAnimation(temporary);
+                _temporaryClipOwner = previewModel;
+                _temporaryClipKey = temporary.Key;
+                _animationName = temporary.Name;
+            }
+
             _scene =
                 new Scene(
                     "Animation Clip Preview",
@@ -522,13 +628,9 @@ internal sealed class AnimationClipPreview : IDisposable
                 _modelObject.AddComponent(
                     new SkeletalMeshRenderer
                     {
-                        Model =
-                            new AssetReference(
-                                asset.Guid,
-                                asset.ProjectPath),
+                        Model = previewReference,
 
-                        SkeletonKey =
-                            model.Skeleton?.Key,
+                        SkeletonKey = previewModel.Skeleton.Key,
 
                         PlayOnStart =
                             false,
@@ -596,7 +698,7 @@ internal sealed class AnimationClipPreview : IDisposable
             _scene.LoadInternal();
 
             if (!_renderer.Play(
-                    animation.Name,
+                    _animationName,
                     true,
                     0.0f))
             {
@@ -645,6 +747,11 @@ internal sealed class AnimationClipPreview : IDisposable
                 }
             }
         }
+
+        if (_temporaryClipOwner != null && _temporaryClipKey.Length > 0)
+            _temporaryClipOwner.RemoveRuntimeAnimation(_temporaryClipKey);
+        _temporaryClipOwner = null;
+        _temporaryClipKey = string.Empty;
 
         _renderer =
             null;
