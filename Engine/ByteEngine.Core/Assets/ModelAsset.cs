@@ -44,10 +44,47 @@ public sealed class ModelAsset
     }
 
     /// <summary>
-    /// Rig classification captured from this model's importer metadata.
-    /// Existing assets remain Generic unless explicitly changed to Humanoid.
+    /// Effective rig classification for this import. When Auto Detect is active,
+    /// a source that passes ByteEngine's complete Humanoid auto-map/validation
+    /// is promoted to Humanoid before editor/runtime consumers see it.
     /// </summary>
     public AnimationRigType RigType { get; }
+
+    /// <summary>
+    /// True when this load selected Humanoid through automatic rig detection.
+    /// </summary>
+    public bool HumanoidRigWasAutoDetected { get; }
+
+    /// <summary>
+    /// Whether automatic Humanoid detection is active in importer metadata.
+    /// </summary>
+    public bool AutoDetectHumanoidRig { get; }
+
+    /// <summary>
+    /// Whether embedded animation tracks were enabled by the importer.
+    /// </summary>
+    public bool ImportAnimations { get; }
+
+    /// <summary>
+    /// Source trajectory policy used by Humanoid retargeting.
+    /// </summary>
+    public AnimationRootMotionSource RootMotionSource { get; }
+
+    /// <summary>
+    /// Default target-bake sampling frequency when this asset is the source.
+    /// </summary>
+    public float RetargetSamplesPerSecond { get; }
+
+    /// <summary>
+    /// Optional external Humanoid rig that supplies bind/reference data when
+    /// this asset carries animation tracks but no usable skeleton of its own.
+    /// </summary>
+    public AssetReference AnimationSourceRigModel { get; }
+
+    /// <summary>
+    /// Importer/editor convenience target used to prefill retarget authoring.
+    /// </summary>
+    public AssetReference DefaultRetargetTargetModel { get; }
 
     /// <summary>
     /// Snapshot of the source model's semantic Humanoid bone mapping.
@@ -107,6 +144,29 @@ public sealed class ModelAsset
             imported.Animations
                 .ToList();
 
+        HumanoidRigWasAutoDetected =
+            TryApplyAutomaticHumanoidRig(
+                settings,
+                imported);
+
+        AutoDetectHumanoidRig =
+            settings.AutoDetectHumanoidRig;
+
+        ImportAnimations =
+            settings.ImportAnimations;
+
+        RootMotionSource =
+            settings.RootMotionSource;
+
+        RetargetSamplesPerSecond =
+            settings.RetargetSamplesPerSecond;
+
+        AnimationSourceRigModel =
+            settings.AnimationSourceRigModel;
+
+        DefaultRetargetTargetModel =
+            settings.DefaultRetargetTargetModel;
+
         RigType =
             settings.RigType;
 
@@ -123,6 +183,127 @@ public sealed class ModelAsset
                     Skeleton,
                     HumanoidMapping);
         }
+    }
+
+    /// <summary>
+    /// Auto is deliberately conservative: only assets with a skeleton, a
+    /// complete recognized Humanoid map and a valid hierarchy are promoted.
+    /// Animation clips are NOT required, because a character may legitimately
+    /// be imported as a target-only model. Props, animals and incomplete
+    /// skeletons remain Generic.
+    ///
+    /// Settings are updated in memory as well as the ModelAsset so every editor
+    /// surface sees the detected result immediately. The Import Settings Apply
+    /// button persists that result to the .meta sidecar.
+    /// </summary>
+    private static bool TryApplyAutomaticHumanoidRig(
+        ModelImporterSettings settings,
+        ImportedModel imported)
+    {
+        if (!settings.AutoDetectHumanoidRig ||
+            imported.Skeleton ==
+                null)
+        {
+            return false;
+        }
+
+        HumanoidBoneMap detected =
+            HumanoidRigMapper.AutoMap(
+                imported.Skeleton);
+
+        /*
+         * Preserve legacy/manual Humanoid work. Old metadata predates the Auto
+         * flag, so a custom valid mapping may deserialize with Auto enabled by
+         * the new default. If that mapping differs from what Auto Map would
+         * produce, treat it as an explicit/manual rig and leave it untouched.
+         */
+        if (settings.RigType ==
+                AnimationRigType.Humanoid &&
+            settings.HumanoidMapping.MappedCount >
+                0 &&
+            !MappingsEquivalent(
+                settings.HumanoidMapping,
+                detected))
+        {
+            HumanoidRigValidationResult existingValidation =
+                HumanoidRigMapper.Validate(
+                    imported.Skeleton,
+                    settings.HumanoidMapping);
+
+            HumanoidRigDiagnosticReport existingDiagnostics =
+                HumanoidRigDiagnostics.Analyze(
+                    imported.Skeleton,
+                    settings.HumanoidMapping);
+
+            if (existingValidation.IsReady &&
+                existingDiagnostics.Errors.Count ==
+                    0)
+            {
+                settings.AutoDetectHumanoidRig =
+                    false;
+
+                return false;
+            }
+        }
+
+        HumanoidRigValidationResult validation =
+            HumanoidRigMapper.Validate(
+                imported.Skeleton,
+                detected);
+
+        if (!validation.IsReady)
+        {
+            settings.RigType =
+                AnimationRigType.Generic;
+
+            return false;
+        }
+
+        HumanoidRigDiagnosticReport diagnostics =
+            HumanoidRigDiagnostics.Analyze(
+                imported.Skeleton,
+                detected);
+
+        if (diagnostics.Errors.Count >
+            0)
+        {
+            settings.RigType =
+                AnimationRigType.Generic;
+
+            return false;
+        }
+
+        settings.RigType =
+            AnimationRigType.Humanoid;
+
+        settings.HumanoidMapping =
+            detected;
+
+        return true;
+    }
+
+    private static bool MappingsEquivalent(
+        HumanoidBoneMap left,
+        HumanoidBoneMap right)
+    {
+        left.Normalize();
+        right.Normalize();
+
+        foreach (HumanoidBone bone
+                 in Enum.GetValues<HumanoidBone>())
+        {
+            if (!string.Equals(
+                    left.GetBoneName(
+                        bone),
+                    right.GetBoneName(
+                        bone),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

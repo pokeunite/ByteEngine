@@ -1,3 +1,5 @@
+using System.Text;
+
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
 using ByteEngine.Core.Graphics.ThreeD;
@@ -7,19 +9,20 @@ namespace ByteEngine.Core.Animation;
 /// <summary>
 /// Runtime/editor bridge for Humanoid animation reuse.
 ///
-/// C9.5 separates BUILD from REGISTER:
-/// - BuildClip creates a temporary target-skeleton clip for preview/approval.
-/// - EnsureClip keeps the legacy runtime-retarget cache path working.
-/// - ModelOwnedAnimationStore persists an approved clip onto the target model.
+/// A retarget source is intentionally split into TWO concepts:
+/// - Animation asset: owns the animation tracks and importer root-motion/sample settings.
+/// - Source rig: owns the Humanoid skeleton, semantic map and reference pose used to interpret those tracks.
 ///
-/// This allows editor retarget previews to remain non-destructive until the
-/// user explicitly chooses Bake To Character.
+/// For normal FBX/glTF characters these are the same asset. For animation-only
+/// files they may be different, which lets ByteEngine consume clips that carry
+/// no render mesh or no usable skeleton as long as a compatible Humanoid rig is
+/// assigned in the importer.
 /// </summary>
 public static class HumanoidRetargetRuntime
 {
     /// <summary>
-    /// Builds a target-skeleton animation without registering it on the target
-    /// ModelAsset. This is the safe path for preview/validation before baking.
+    /// Backward-compatible source-model API. If the source importer has an
+    /// Animation Source Rig override, it is resolved automatically.
     /// </summary>
     public static ImportedAnimation BuildClip(
         AssetManager assets,
@@ -30,11 +33,44 @@ public static class HumanoidRetargetRuntime
         float samplesPerSecond =
             HumanoidRetargetClipBuilder.DefaultSamplesPerSecond)
     {
+        return BuildClip(
+            assets,
+            sourceModelReference,
+            AssetReference.Empty,
+            sourceClipName,
+            targetModelReference,
+            outputName,
+            samplesPerSecond);
+    }
+
+    /// <summary>
+    /// Builds a target-skeleton clip from an animation asset plus an optional
+    /// external Humanoid rig provider.
+    ///
+    /// sourceAnimationReference owns the clip. sourceRigReference may be empty;
+    /// in that case ByteEngine uses the source asset's persisted importer
+    /// override, then finally falls back to the source asset itself.
+    /// </summary>
+    public static ImportedAnimation BuildClip(
+        AssetManager assets,
+        AssetReference sourceAnimationReference,
+        AssetReference sourceRigReference,
+        string sourceClipName,
+        AssetReference targetModelReference,
+        string? outputName = null,
+        float samplesPerSecond =
+            HumanoidRetargetClipBuilder.DefaultSamplesPerSecond,
+        AnimationRootMotionSource? rootMotionSourceOverride =
+            null)
+    {
         ArgumentNullException.ThrowIfNull(
             assets);
 
         ArgumentNullException.ThrowIfNull(
-            sourceModelReference);
+            sourceAnimationReference);
+
+        ArgumentNullException.ThrowIfNull(
+            sourceRigReference);
 
         ArgumentNullException.ThrowIfNull(
             targetModelReference);
@@ -47,78 +83,112 @@ public static class HumanoidRetargetRuntime
                 nameof(sourceClipName));
         }
 
-        ModelAsset sourceModel =
+        ModelAsset animationSource =
             assets.LoadModel(
-                sourceModelReference);
+                sourceAnimationReference);
+
+        ImportedAnimation sourceAnimation =
+            FindAnimation(
+                animationSource,
+                sourceClipName);
+
+        ModelAsset sourceRig =
+            ResolveSourceRig(
+                assets,
+                animationSource,
+                sourceRigReference);
 
         ModelAsset targetModel =
             assets.LoadModel(
                 targetModelReference);
 
-        ImportedAnimation sourceAnimation =
-            FindAnimation(
-                sourceModel,
-                sourceClipName);
-
         string requestedName =
             string.IsNullOrWhiteSpace(
                 outputName)
                 ? ResolveRuntimeName(
-                    sourceModel,
+                    animationSource,
                     sourceAnimation,
                     targetModel)
                 : outputName.Trim();
 
-        if (sourceModel.Guid ==
-            targetModel.Guid)
+        if (animationSource.Guid ==
+                targetModel.Guid &&
+            sourceRig.Guid ==
+                targetModel.Guid)
         {
-            /*
-             * The editor normally filters the target from the source list, but
-             * keep this path deterministic for API callers. It is a copy only;
-             * no retarget mapping is necessary.
-             */
             return
-                new ImportedAnimation
-                {
-                    Key =
-                        sourceAnimation.Key,
-
-                    Name =
-                        requestedName,
-
-                    Duration =
-                        sourceAnimation.Duration,
-
-                    Channels =
-                        sourceAnimation.Channels.ToList()
-                };
+                CloneAnimation(
+                    sourceAnimation,
+                    sourceAnimation.Key,
+                    requestedName);
         }
 
         ValidateHumanoid(
-            sourceModel,
-            "source");
+            sourceRig,
+            "source rig");
 
         ValidateHumanoid(
             targetModel,
             "target");
 
-        return
+        ImportedAnimation boundAnimation =
+            sourceRig.Guid ==
+                    animationSource.Guid
+                ? sourceAnimation
+                : BindAnimationToRig(
+                    animationSource,
+                    sourceAnimation,
+                    sourceRig);
+
+        float effectiveSamplesPerSecond =
+            !float.IsFinite(
+                samplesPerSecond) ||
+            samplesPerSecond <=
+                0.0f ||
+            MathF.Abs(
+                samplesPerSecond -
+                HumanoidRetargetClipBuilder.DefaultSamplesPerSecond) <=
+                0.0001f
+                ? animationSource.RetargetSamplesPerSecond
+                : samplesPerSecond;
+
+        ImportedAnimation generated =
             HumanoidRetargetClipBuilder.Build(
-                sourceModel.Skeleton!,
-                sourceModel.HumanoidMapping,
-                sourceModel.ReferenceHumanoidPose!,
-                sourceAnimation,
-                sourceModel.Nodes,
-                sourceModel.Meshes,
+                sourceRig.Skeleton!,
+                sourceRig.HumanoidMapping,
+                sourceRig.ReferenceHumanoidPose!,
+                boundAnimation,
+                sourceRig.Nodes,
+                sourceRig.Meshes,
                 targetModel.Skeleton!,
                 targetModel.HumanoidMapping,
                 targetModel.ReferenceHumanoidPose!,
                 targetModel.Nodes,
                 targetModel.Meshes,
-                sourceModel.Guid,
+                animationSource.Guid,
                 targetModel.Guid,
                 requestedName,
-                samplesPerSecond);
+                effectiveSamplesPerSecond);
+
+        generated =
+            HumanoidRetargetRootMotion.Normalize(
+                rootMotionSourceOverride ??
+                animationSource.RootMotionSource,
+                targetModel,
+                generated);
+
+        string runtimeKey =
+            BuildRuntimeKey(
+                animationSource,
+                sourceAnimation,
+                sourceRig,
+                targetModel);
+
+        return
+            CloneAnimation(
+                generated,
+                runtimeKey,
+                requestedName);
     }
 
     public static ImportedAnimation EnsureClip(
@@ -129,26 +199,36 @@ public static class HumanoidRetargetRuntime
         float samplesPerSecond =
             HumanoidRetargetClipBuilder.DefaultSamplesPerSecond)
     {
+        return EnsureClip(
+            assets,
+            sourceModelReference,
+            AssetReference.Empty,
+            sourceClipName,
+            targetModelReference,
+            samplesPerSecond);
+    }
+
+    public static ImportedAnimation EnsureClip(
+        AssetManager assets,
+        AssetReference sourceAnimationReference,
+        AssetReference sourceRigReference,
+        string sourceClipName,
+        AssetReference targetModelReference,
+        float samplesPerSecond =
+            HumanoidRetargetClipBuilder.DefaultSamplesPerSecond)
+    {
         ArgumentNullException.ThrowIfNull(
             assets);
 
-        ArgumentNullException.ThrowIfNull(
-            sourceModelReference);
-
-        ArgumentNullException.ThrowIfNull(
-            targetModelReference);
-
-        if (string.IsNullOrWhiteSpace(
-                sourceClipName))
-        {
-            throw new ArgumentException(
-                "Source Humanoid animation clip name cannot be empty.",
-                nameof(sourceClipName));
-        }
-
-        ModelAsset sourceModel =
+        ModelAsset animationSource =
             assets.LoadModel(
-                sourceModelReference);
+                sourceAnimationReference);
+
+        ModelAsset sourceRig =
+            ResolveSourceRig(
+                assets,
+                animationSource,
+                sourceRigReference);
 
         ModelAsset targetModel =
             assets.LoadModel(
@@ -156,25 +236,31 @@ public static class HumanoidRetargetRuntime
 
         ImportedAnimation sourceAnimation =
             FindAnimation(
-                sourceModel,
+                animationSource,
                 sourceClipName);
 
-        if (sourceModel.Guid ==
-            targetModel.Guid)
+        if (animationSource.Guid ==
+                targetModel.Guid &&
+            sourceRig.Guid ==
+                targetModel.Guid)
         {
             return sourceAnimation;
         }
 
         ValidateHumanoid(
-            sourceModel,
-            "source");
+            sourceRig,
+            "source rig");
 
         ValidateHumanoid(
             targetModel,
             "target");
 
         string runtimeKey =
-            $"humanoid-retarget:{sourceModel.Guid:N}:{sourceAnimation.Key}:{targetModel.Guid:N}";
+            BuildRuntimeKey(
+                animationSource,
+                sourceAnimation,
+                sourceRig,
+                targetModel);
 
         ImportedAnimation? cached =
             targetModel.Animations.FirstOrDefault(
@@ -192,14 +278,15 @@ public static class HumanoidRetargetRuntime
 
         string runtimeName =
             ResolveRuntimeName(
-                sourceModel,
+                animationSource,
                 sourceAnimation,
                 targetModel);
 
         ImportedAnimation generated =
             BuildClip(
                 assets,
-                sourceModelReference,
+                sourceAnimationReference,
+                sourceRigReference,
                 sourceClipName,
                 targetModelReference,
                 runtimeName,
@@ -230,13 +317,6 @@ public static class HumanoidRetargetRuntime
             return false;
         }
 
-        /*
-         * C9.5 ownership rule: an explicitly BAKED target-owned clip wins over
-         * the legacy AnimationSourceModel path. Do not use HasAnimation alone
-         * here: a target FBX may already contain an imported clip with the same
-         * name, and old profiles must keep their existing runtime-retarget
-         * behaviour until that source clip has actually been baked.
-         */
         try
         {
             ModelAsset targetModel =
@@ -256,7 +336,7 @@ public static class HumanoidRetargetRuntime
         }
         catch
         {
-            // Fall through to the legacy source-retarget path below.
+            // Fall through to the runtime-retarget path below.
         }
 
         ImportedAnimation runtimeClip;
@@ -282,6 +362,375 @@ public static class HumanoidRetargetRuntime
             transitionDuration);
     }
 
+    /// <summary>
+    /// Resolves the rig that interprets the source tracks. Explicit editor/API
+    /// choice wins, then the source importer's persisted rig override, then the
+    /// animation asset itself.
+    /// </summary>
+    private static ModelAsset ResolveSourceRig(
+        AssetManager assets,
+        ModelAsset animationSource,
+        AssetReference explicitRigReference)
+    {
+        AssetReference reference =
+            !explicitRigReference.IsEmpty
+                ? explicitRigReference
+                : animationSource.AnimationSourceRigModel;
+
+        if (reference.IsEmpty)
+        {
+            return animationSource;
+        }
+
+        return assets.LoadModel(
+            reference);
+    }
+
+    /// <summary>
+    /// Rebinds animation-channel names to an assigned source rig without
+    /// rewriting source files. This is the ByteEngine equivalent of supplying a
+    /// compatible Avatar to a Humanoid clip before baking it in Unity.
+    ///
+    /// Matching order:
+    /// 1. exact rig node/bone name;
+    /// 2. semantic Humanoid mapping when the animation asset has one;
+    /// 3. canonical leaf-name matching (namespace/prefix tolerant).
+    ///
+    /// A genuinely skeleton-less clip still needs SOME compatible rig/rest pose;
+    /// raw keyframes alone cannot describe bone hierarchy or reference pose.
+    /// </summary>
+    private static ImportedAnimation BindAnimationToRig(
+        ModelAsset animationSource,
+        ImportedAnimation animation,
+        ModelAsset sourceRig)
+    {
+        var rigNames =
+            sourceRig.Nodes
+                .Select(
+                    node =>
+                        node.Name)
+                .Concat(
+                    sourceRig.Skeleton?.Bones.Select(
+                        bone =>
+                            bone.Name) ??
+                    Enumerable.Empty<string>())
+                .Where(
+                    name =>
+                        !string.IsNullOrWhiteSpace(
+                            name))
+                .Distinct(
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (rigNames.Length ==
+            0)
+        {
+            throw new InvalidOperationException(
+                $"Assigned source rig '{sourceRig.Name}' has no usable node/bone names.");
+        }
+
+        var exactNames =
+            rigNames.ToDictionary(
+                name =>
+                    name,
+                name =>
+                    name,
+                StringComparer.OrdinalIgnoreCase);
+
+        var canonicalNames =
+            rigNames
+                .Select(
+                    name =>
+                        new
+                        {
+                            Name =
+                                name,
+                            Canonical =
+                                CanonicalBoneName(
+                                    name)
+                        })
+                .Where(
+                    item =>
+                        item.Canonical.Length >
+                        0)
+                .GroupBy(
+                    item =>
+                        item.Canonical,
+                    StringComparer.Ordinal)
+                .Where(
+                    group =>
+                        group.Count() ==
+                        1)
+                .ToDictionary(
+                    group =>
+                        group.Key,
+                    group =>
+                        group.First().Name,
+                    StringComparer.Ordinal);
+
+        var semanticBySourceName =
+            new Dictionary<string, HumanoidBone>(
+                StringComparer.OrdinalIgnoreCase);
+
+        var semanticByCanonicalSourceName =
+            new Dictionary<string, HumanoidBone>(
+                StringComparer.Ordinal);
+
+        foreach ((HumanoidBone semantic, string sourceName)
+                 in animationSource.HumanoidMapping.Bones)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    sourceName))
+            {
+                continue;
+            }
+
+            semanticBySourceName[sourceName] =
+                semantic;
+
+            string canonical =
+                CanonicalBoneName(
+                    sourceName);
+
+            if (canonical.Length >
+                0)
+            {
+                semanticByCanonicalSourceName[canonical] =
+                    semantic;
+            }
+        }
+
+        var chosen =
+            new Dictionary<string, BoundChannel>(
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (ImportedAnimationChannel channel
+                 in animation.Channels)
+        {
+            string? targetName =
+                null;
+
+            int score =
+                0;
+
+            if (exactNames.TryGetValue(
+                    channel.NodeName,
+                    out string? exact))
+            {
+                targetName =
+                    exact;
+
+                score =
+                    40;
+            }
+            else
+            {
+                HumanoidBone semantic;
+
+                string canonical =
+                    CanonicalBoneName(
+                        channel.NodeName);
+
+                bool hasSemantic =
+                    semanticBySourceName.TryGetValue(
+                        channel.NodeName,
+                        out semantic) ||
+                    canonical.Length >
+                        0 &&
+                    semanticByCanonicalSourceName.TryGetValue(
+                        canonical,
+                        out semantic);
+
+                if (hasSemantic &&
+                    sourceRig.HumanoidMapping.TryGetBoneName(
+                        semantic,
+                        out string semanticTarget) &&
+                    exactNames.TryGetValue(
+                        semanticTarget,
+                        out string? resolvedSemanticTarget))
+                {
+                    targetName =
+                        resolvedSemanticTarget;
+
+                    score =
+                        35;
+                }
+                else if (canonical.Length >
+                             0 &&
+                         canonicalNames.TryGetValue(
+                             canonical,
+                             out string? canonicalTarget))
+                {
+                    targetName =
+                        canonicalTarget;
+
+                    score =
+                        25;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(
+                    targetName))
+            {
+                continue;
+            }
+
+            if (chosen.TryGetValue(
+                    targetName,
+                    out BoundChannel existing) &&
+                existing.Score >=
+                    score)
+            {
+                continue;
+            }
+
+            chosen[targetName] =
+                new BoundChannel(
+                    score,
+                    new ImportedAnimationChannel
+                    {
+                        NodeName =
+                            targetName,
+
+                        Translation =
+                            channel.Translation,
+
+                        Rotation =
+                            channel.Rotation,
+
+                        Scale =
+                            channel.Scale
+                    });
+        }
+
+        if (chosen.Count ==
+            0)
+        {
+            throw new InvalidOperationException(
+                $"Animation '{animation.Name}' could not bind any channels to source rig '{sourceRig.Name}'. Assign the model/rig the clip was authored for, or use an animation file that carries its own Humanoid skeleton.");
+        }
+
+        return
+            new ImportedAnimation
+            {
+                Key =
+                    animation.Key,
+
+                Name =
+                    animation.Name,
+
+                Duration =
+                    animation.Duration,
+
+                Channels =
+                    chosen.Values
+                        .Select(
+                            item =>
+                                item.Channel)
+                        .ToList(),
+
+                Events =
+                    animation.Events.ToList(),
+
+                Windows =
+                    animation.Windows.ToList()
+            };
+    }
+
+    private static string CanonicalBoneName(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(
+                value))
+        {
+            return string.Empty;
+        }
+
+        string leaf =
+            value.Trim();
+
+        int separator =
+            leaf.LastIndexOfAny(
+                new[]
+                {
+                    '/',
+                    '\\',
+                    '|',
+                    ':'
+                });
+
+        if (separator >=
+                0 &&
+            separator +
+                1 <
+            leaf.Length)
+        {
+            leaf =
+                leaf[(separator +
+                      1)..];
+        }
+
+        var builder =
+            new StringBuilder(
+                leaf.Length);
+
+        foreach (char character
+                 in leaf)
+        {
+            if (char.IsLetterOrDigit(
+                    character))
+            {
+                builder.Append(
+                    char.ToLowerInvariant(
+                        character));
+            }
+        }
+
+        string canonical =
+            builder.ToString();
+
+        string[] disposablePrefixes =
+        {
+            "mixamorig",
+            "armature",
+            "def",
+            "bip001",
+            "bip01"
+        };
+
+        bool removed;
+
+        do
+        {
+            removed =
+                false;
+
+            foreach (string prefix
+                     in disposablePrefixes)
+            {
+                if (!canonical.StartsWith(
+                        prefix,
+                        StringComparison.Ordinal) ||
+                    canonical.Length <=
+                        prefix.Length)
+                {
+                    continue;
+                }
+
+                canonical =
+                    canonical[prefix.Length..];
+
+                removed =
+                    true;
+
+                break;
+            }
+        }
+        while (removed);
+
+        return canonical;
+    }
+
     private static ImportedAnimation FindAnimation(
         ModelAsset sourceModel,
         string sourceClipName)
@@ -300,7 +749,7 @@ public static class HumanoidRetargetRuntime
                         sourceClipName,
                         StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException(
-                $"Animation '{sourceClipName}' was not found in source model '{sourceModel.Name}'.");
+                $"Animation '{sourceClipName}' was not found in animation asset '{sourceModel.Name}'.");
     }
 
     private static void ValidateHumanoid(
@@ -311,7 +760,7 @@ public static class HumanoidRetargetRuntime
             AnimationRigType.Humanoid)
         {
             throw new InvalidOperationException(
-                $"The {role} model '{model.Name}' is not classified as Humanoid.");
+                $"The {role} '{model.Name}' is not classified as Humanoid.");
         }
 
         if (model.Skeleton ==
@@ -321,7 +770,7 @@ public static class HumanoidRetargetRuntime
             !model.ReferenceHumanoidPose.IsReady)
         {
             throw new InvalidOperationException(
-                $"The {role} model '{model.Name}' does not have a ready Humanoid reference pose.");
+                $"The {role} '{model.Name}' does not have a ready Humanoid skeleton/reference pose.");
         }
 
         HumanoidRigValidationResult validation =
@@ -332,7 +781,7 @@ public static class HumanoidRetargetRuntime
         if (!validation.IsReady)
         {
             throw new InvalidOperationException(
-                $"The {role} model '{model.Name}' has an incomplete Humanoid mapping.");
+                $"The {role} '{model.Name}' has an incomplete Humanoid mapping.");
         }
 
         HumanoidRigDiagnosticReport diagnostics =
@@ -344,8 +793,43 @@ public static class HumanoidRetargetRuntime
             0)
         {
             throw new InvalidOperationException(
-                $"The {role} model '{model.Name}' has an invalid Humanoid hierarchy: {string.Join(" | ", diagnostics.Errors)}");
+                $"The {role} '{model.Name}' has an invalid Humanoid hierarchy: {string.Join(" | ", diagnostics.Errors)}");
         }
+    }
+
+    private static string BuildRuntimeKey(
+        ModelAsset animationSource,
+        ImportedAnimation sourceAnimation,
+        ModelAsset sourceRig,
+        ModelAsset targetModel) =>
+        $"humanoid-retarget:{animationSource.Guid:N}:{sourceAnimation.Key}:{sourceRig.Guid:N}:{targetModel.Guid:N}";
+
+    private static ImportedAnimation CloneAnimation(
+        ImportedAnimation source,
+        string key,
+        string name)
+    {
+        return
+            new ImportedAnimation
+            {
+                Key =
+                    key,
+
+                Name =
+                    name,
+
+                Duration =
+                    source.Duration,
+
+                Channels =
+                    source.Channels.ToList(),
+
+                Events =
+                    source.Events.ToList(),
+
+                Windows =
+                    source.Windows.ToList()
+            };
     }
 
     private static string ResolveRuntimeName(
@@ -390,4 +874,8 @@ public static class HumanoidRetargetRuntime
 
         return candidate;
     }
+
+    private readonly record struct BoundChannel(
+        int Score,
+        ImportedAnimationChannel Channel);
 }

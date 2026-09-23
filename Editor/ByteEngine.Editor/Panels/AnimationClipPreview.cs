@@ -51,6 +51,9 @@ internal sealed class AnimationClipPreview : IDisposable
     private readonly Stopwatch _previewClock =
         Stopwatch.StartNew();
 
+    private readonly ModelImporterInspector _importerInspector =
+        new();
+
     private Scene? _scene;
 
     private GameObject? _modelObject;
@@ -153,6 +156,31 @@ internal sealed class AnimationClipPreview : IDisposable
         int windowWidth,
         int windowHeight)
     {
+        /*
+         * Imported animation assets finally have a real importer surface rather
+         * than inheriting an invisible Generic default. Keep it beside the clip
+         * preview so selecting an animation in the Asset Browser is enough to
+         * configure Model/Rig/Animation settings and reimport immediately.
+         */
+        bool reimported =
+            _importerInspector.Draw(
+                project,
+                asset,
+                model,
+                animation);
+
+        ImGui.Spacing();
+
+        if (reimported)
+        {
+            Reset();
+
+            ImGui.TextDisabled(
+                "Asset reimported. The preview will refresh from the new import on the next editor frame.");
+
+            return;
+        }
+
         EnsurePreview(
             project,
             asset,
@@ -866,6 +894,4 @@ internal sealed class AnimationClipPreview : IDisposable
             _camera3D.Forward *
             _cameraDistance;
     }
-
-
 }
