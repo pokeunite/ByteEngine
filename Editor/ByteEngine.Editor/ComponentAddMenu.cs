@@ -1,4 +1,5 @@
 using ByteEngine.Core.Blueprints;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using ImGuiNET;
@@ -11,6 +12,9 @@ internal static class ComponentAddMenu
     {
         IEnumerable<Type> candidates = ComponentMetadataRegistry.RegisteredTypes
             .Where(type => type != typeof(BlueprintInstance) && typeof(Component).IsAssignableFrom(type))
+            .Where(type => type != typeof(VisualModelOverride) ||
+                target.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase) && target.Parent != null ||
+                target.Parent == null && target.Children.Any(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase)))
             .Where(type => ComponentMetadataRegistry.Matches(type, search));
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -48,7 +52,10 @@ internal static class ComponentAddMenu
     private static void DrawItem(GameObject target, Type type, Action<Component, string> add)
     {
         ComponentMetadata metadata = ComponentMetadataRegistry.Get(type);
-        bool exists = target.Components.Any(component => component.GetType() == type);
+        GameObject componentTarget = type == typeof(VisualModelOverride) && target.Parent == null
+            ? target.Children.First(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+            : target;
+        bool exists = componentTarget.Components.Any(component => component.GetType() == type);
 
         if (ImGui.MenuItem(metadata.DisplayName, string.Empty, false, !exists) &&
             Activator.CreateInstance(type) is Component component)

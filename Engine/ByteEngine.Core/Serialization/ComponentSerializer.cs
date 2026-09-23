@@ -90,6 +90,10 @@ public sealed class ComponentSerializer
         );
 
         Register(
+            new VisualModelOverrideCodec()
+        );
+
+        Register(
             new SkeletalMeshRendererCodec()
         );
 
@@ -1973,6 +1977,22 @@ public sealed class ComponentSerializer
             };
         }
     }
+
+    private sealed class VisualModelOverrideCodec : IComponentCodec
+    {
+        public string TypeName => "VisualModelOverride";
+        public Type ComponentType => typeof(VisualModelOverride);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var visual = (VisualModelOverride)component;
+            return Data(TypeName, new JsonObject { ["importScale"] = visual.ImportScale });
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) =>
+            new VisualModelOverride { ImportScale = Float(data, "importScale", 1.0f) };
+    }
+
 
     private sealed class EventModuleComponentCodec
         : IComponentCodec

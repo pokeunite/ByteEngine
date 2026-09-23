@@ -1088,6 +1088,8 @@ internal sealed class BlueprintWorkspacePanel
             {
                 Camera3D? previousActive = component is Camera3D ? target.Scene?.ActiveCamera : null;
                 Component added = BlueprintAuthoringService.AddComponent(target, component);
+                if (added is VisualModelOverride)
+                    _selectedPreviewObjectId = added.GameObject.Id;
                 if (added is Camera3D camera)
                     _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                 MarkDirty();
@@ -1285,6 +1287,8 @@ internal sealed class BlueprintWorkspacePanel
             {
                 Camera3D? previousActive = component is Camera3D ? selected.Scene?.ActiveCamera : null;
                 Component added = BlueprintAuthoringService.AddComponent(selected, component);
+                if (added is VisualModelOverride)
+                    _selectedPreviewObjectId = added.GameObject.Id;
                 if (added is Camera3D camera)
                 {
                     _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
@@ -1528,6 +1532,15 @@ internal sealed class BlueprintWorkspacePanel
                     AppliedImportScale =
                         appliedScale
                 });
+            if (_blueprint.Type == BlueprintType.Character &&
+                visualParent.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+            {
+                VisualModelOverride? visualOverride = visualParent.GetComponent<VisualModelOverride>();
+                if (visualOverride == null)
+                    visualOverride = visualParent.AddComponent(new VisualModelOverride());
+                visualOverride.ImportScale = appliedScale;
+            }
+
 
             var objects =
                 new Dictionary<string, GameObject>();
@@ -1990,20 +2003,42 @@ internal sealed class BlueprintWorkspacePanel
             GameObject container =
                 instance.GameObject;
 
-            if (Vector3.DistanceSquared(
-                    container.Transform.LocalScale,
-                    desired) <
-                0.0000001f)
+            GameObject? visual = _blueprint?.Type == BlueprintType.Character &&
+                container.Parent?.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase) == true
+                    ? container.Parent
+                    : null;
+
+            if (visual != null)
             {
-                continue;
+                VisualModelOverride? visualOverride = visual.GetComponent<VisualModelOverride>();
+                Vector3 multiplier = visualOverride?.ScaleMultiplier ?? Vector3.One;
+                bool needsUpdate =
+                    Vector3.DistanceSquared(container.Transform.LocalScale, Vector3.One) > 0.0000001f ||
+                    visualOverride == null &&
+                    Vector3.DistanceSquared(visual.Transform.LocalScale, desired) > 0.0000001f ||
+                    MathF.Abs(instance.AppliedImportScale - analysis.AppliedScale) > 0.0001f;
+                if (!needsUpdate)
+                    continue;
+
+                container.Transform.LocalScale = Vector3.One;
+                if (visualOverride != null)
+                {
+                    visualOverride.ImportScale = analysis.AppliedScale;
+                    visualOverride.ScaleMultiplier = multiplier;
+                }
+                else
+                {
+                    visual.Transform.LocalScale = desired;
+                }
+            }
+            else
+            {
+                if (Vector3.DistanceSquared(container.Transform.LocalScale, desired) < 0.0000001f)
+                    continue;
+                container.Transform.LocalScale = desired;
             }
 
-            container.Transform.LocalScale =
-                desired;
-
-            instance.AppliedImportScale =
-                analysis.AppliedScale;
-
+            instance.AppliedImportScale = analysis.AppliedScale;
             changed++;
         }
 

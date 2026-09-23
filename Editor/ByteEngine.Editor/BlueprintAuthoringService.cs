@@ -15,13 +15,50 @@ internal static class BlueprintAuthoringService
     public static T AddComponent<T>(GameObject target, T component) where T : Component
     {
         AddDependencies(target, component.GetType());
+        target = ResolveComponentTarget(target, component);
+        PrepareVisualOverride(target, component);
         return target.AddComponent(component);
     }
 
     public static Component AddComponent(GameObject target, Component component)
     {
         AddDependencies(target, component.GetType());
+        target = ResolveComponentTarget(target, component);
+        PrepareVisualOverride(target, component);
         return target.AddComponent(component);
+    }
+
+    private static GameObject ResolveComponentTarget(GameObject target, Component component)
+    {
+        if (component is not VisualModelOverride || target.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+            return target;
+
+        GameObject? visual = target.Children.FirstOrDefault(
+            child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
+        return visual ?? throw new InvalidOperationException(
+            "Visual Model Override requires a Character Blueprint Visual child.");
+    }
+
+    private static void PrepareVisualOverride(GameObject target, Component component)
+    {
+        if (component is not VisualModelOverride visualOverride)
+            return;
+
+        ModelHierarchyInstance? model = target.Children
+            .Select(child => child.GetComponent<ModelHierarchyInstance>())
+            .FirstOrDefault(instance => instance != null);
+        if (model == null)
+            return;
+
+        visualOverride.ImportScale = model.AppliedImportScale;
+
+        // Repair legacy Blueprints whose recorded import correction was lost.
+        // A deliberately authored non-unit Visual scale is preserved.
+        if (Vector3.DistanceSquared(target.Transform.LocalScale, Vector3.One) < 0.000001f &&
+            MathF.Abs(visualOverride.ImportScale - 1.0f) > 0.0001f)
+        {
+            target.Transform.LocalScale = Vector3.One * visualOverride.ImportScale;
+        }
     }
 
     private static void AddDependencies(GameObject target, Type componentType)

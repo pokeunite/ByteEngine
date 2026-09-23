@@ -110,6 +110,7 @@ internal static class AuthoringUxTests
             "Saved Blueprint child propagates to live instances");
 
         TestVisualTransform(project, applied);
+        TestVisualModelOverride(project);
         TestPresetAndDependencies();
     }
 
@@ -161,6 +162,37 @@ internal static class AuthoringUxTests
             "Visual rotation correction survives Blueprint serialization");
         Assert(loaded.Root.Transform.LocalScale is { X: 1f, Y: 1f, Z: 1f },
             "Gameplay root remains normalized while Visual owns correction");
+    }
+
+    private static void TestVisualModelOverride(EditorProjectContext project)
+    {
+        var scene = new Scene("Visual Override");
+        GameObject player = scene.CreateGameObject("Player");
+        GameObject visual = BlueprintAuthoringService.EnsureVisualRoot(player);
+        GameObject imported = scene.CreateGameObject("Imported Model");
+        imported.SetParent(visual, false);
+        imported.AddComponent(new ModelHierarchyInstance { AppliedImportScale = 100f });
+
+        var visualOverride = BlueprintAuthoringService.AddComponent(player, new VisualModelOverride());
+        Assert(Near(visual.Transform.LocalScale.X, 100f) &&
+            Near(visualOverride.ScaleMultiplier.X, 1f) &&
+            player.Transform.LocalScale == Vector3.One,
+            "Visual override repairs missing import unit scale without scaling gameplay root");
+        Assert(ReferenceEquals(visualOverride.GameObject, visual), "Root Add Component places visual override on Visual");
+
+        visualOverride.RotationDegrees = new Vector3(0f, 180f, 0f);
+        visualOverride.ScaleMultiplier = Vector3.One * 1.5f;
+        Assert(Near(visual.Transform.LocalScale.X, 150f) &&
+            Vector3.Transform(Vector3.UnitZ, visual.Transform.LocalRotation).Z < -.99f,
+            "Visual override edits the authoritative Visual transform");
+
+        Scene restored = project.Scenes.CloneForRuntime(scene);
+        GameObject restoredVisual = restored.FindGameObject("Visual")!;
+        VisualModelOverride restoredOverride = restoredVisual.GetComponent<VisualModelOverride>()!;
+        Assert(Near(restoredOverride.ImportScale, 100f) &&
+            Near(restoredOverride.ScaleMultiplier.X, 1.5f) &&
+            restored.FindGameObject("Player")!.Transform.LocalScale == Vector3.One,
+            "Visual override and transform survive runtime scene serialization");
     }
 
     private static void TestPresetAndDependencies()

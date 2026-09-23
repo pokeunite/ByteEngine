@@ -47,6 +47,12 @@ try
         return;
     }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
+    if (args.Contains("--authoring-ux"))
+    {
+        AuthoringUxTests.Run(root, database, assets);
+        Console.WriteLine("Blueprint authoring UX regressions passed.");
+        return;
+    }
     var serializer = new SceneSerializer(new ComponentSerializer(root, database, assets));
 
     var scene = new Scene("3D Test"); scene.Variables.Set("Wave", VariableValue.FromNumber(2)); scene.Variables.Set("Wind", VariableValue.FromVector3(new(1, 2, 3)));
