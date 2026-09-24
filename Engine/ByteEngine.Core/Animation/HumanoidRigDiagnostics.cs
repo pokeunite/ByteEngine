@@ -8,7 +8,7 @@ namespace ByteEngine.Core.Animation;
 /// Extra authoring diagnostics for a Humanoid mapping.
 ///
 /// "Humanoid Ready" only proves that required semantic slots resolve to source
-/// bones. Retarget quality also depends on hierarchy and the source reference
+/// bones. Mapping quality also depends on hierarchy and the source reference
 /// pose. These diagnostics deliberately stay separate from runtime validation so
 /// unusual but intentional rigs are not rejected automatically.
 /// </summary>
@@ -313,7 +313,7 @@ public static class HumanoidRigDiagnostics
         if (!tPose)
         {
             warnings.Add(
-                "The bind/reference pose is not close to a clean T-pose. Experimental Humanoid retargeting corrects major limb directions, but shoulder, hand, and twist alignment should still be reviewed in the preview.");
+                "The bind/reference pose is not close to a clean T-pose. Review shoulder, hand, and twist orientation in the native animation preview.");
         }
 
         return tPose;
@@ -354,7 +354,7 @@ public static class HumanoidRigDiagnostics
             /*
              * T-pose arms should be mostly perpendicular to the body-up axis.
              * A moderately relaxed A-pose is accepted, but a strongly downward
-             * or vertical arm is flagged because C9 retargeting is sensitive to
+             * or vertical arm is flagged because humanoid diagnostics are sensitive to
              * reference-pose differences.
              */
             return

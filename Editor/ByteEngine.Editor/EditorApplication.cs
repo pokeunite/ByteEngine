@@ -2029,8 +2029,12 @@ public sealed class EditorApplication
         if (_state == null || _projectContext == null) return;
         try
         {
-            Action create = () => EditorSceneCommands.CreateBlueprintInstance(
-                _state, _projectContext, asset, worldPosition, _log);
+            Action create = () =>
+            {
+                EditorSceneCommands.CreateBlueprintInstance(
+                    _state, _projectContext, asset, worldPosition, _log);
+                _sceneView.FrameSelected(_state);
+            };
             if (_state.Undo != null) _state.Undo.Execute(_state, "Instantiate Blueprint", create);
             else create();
         }

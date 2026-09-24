@@ -1947,8 +1947,8 @@ public sealed class ComponentSerializer
                     ["modelPath"] =
                         instance.Model.CachedProjectPath,
 
-                    ["appliedImportScale"] =
-                        instance.AppliedImportScale
+                    ["appliedImportScale"] = instance.AppliedImportScale,
+                    ["autoGrounded"] = instance.AutoGrounded
                 });
         }
 
@@ -1969,11 +1969,8 @@ public sealed class ComponentSerializer
                         data.Properties["modelPath"]?
                             .GetValue<string>()),
 
-                AppliedImportScale =
-                    Float(
-                        data,
-                        "appliedImportScale",
-                        1.0f)
+                AppliedImportScale = Float(data, "appliedImportScale", 1.0f),
+                AutoGrounded = data.Properties["autoGrounded"]?.GetValue<bool>() ?? false
             };
         }
     }

@@ -26,7 +26,7 @@ namespace ByteEngine.Core.Assets.Importers;
 /// animated nodes but no Skin object.
 ///
 /// The resulting asset is still a normal ModelAsset so the existing Humanoid
-/// mapper/retargeter, GUID metadata and animation pickers keep one code path.
+/// mapper, GUID metadata and animation pickers keep one code path.
 /// </summary>
 internal sealed class AnimationSourceCompatibleImporter
     : ModelImporter
@@ -75,7 +75,7 @@ internal sealed class AnimationSourceCompatibleImporter
         {
             imported =
                 ImportAnimationOnlyFbx(
-                    source);
+                    source, settings);
         }
 
         /*
@@ -173,7 +173,7 @@ internal sealed class AnimationSourceCompatibleImporter
                         channel.HasKeys));
 
     private static ImportedModel ImportAnimationOnlyFbx(
-        AssetRecord source)
+        AssetRecord source, ModelImporterSettings settings)
     {
         using var context =
             new AssimpContext();
@@ -228,8 +228,7 @@ internal sealed class AnimationSourceCompatibleImporter
                 $"FBX '{source.ProjectPath}' contains animation tracks but no usable node hierarchy.");
         }
 
-        return
-            new ImportedModel
+        return ImportedModelSpace.Apply(new ImportedModel
             {
                 Guid =
                     source.Guid,
@@ -255,7 +254,7 @@ internal sealed class AnimationSourceCompatibleImporter
 
                 Animations =
                     animations
-            };
+            }, ImportedModelSpace.FbxCorrection(scene, settings.ImportScale));
     }
 
     private static void ReadNodeRecursive(
@@ -395,6 +394,7 @@ internal sealed class AnimationSourceCompatibleImporter
                     item =>
                         !string.IsNullOrWhiteSpace(
                             item.Name))
+                .Where(item => nodes[item.Index].Key != ImportedModelSpace.CorrectionNodeKey)
                 .GroupBy(
                     item =>
                         item.Name,

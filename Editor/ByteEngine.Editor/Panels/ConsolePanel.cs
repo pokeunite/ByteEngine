@@ -35,47 +35,21 @@ internal sealed class ConsolePanel
         );
 
         ImGui.Separator();
-
-        foreach (EditorLogEntry entry
-                 in log.Entries)
+        string selectableText = string.Join(Environment.NewLine,
+            log.Entries.Select(entry =>
+                $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"));
+        if (ImGui.SmallButton("Copy All"))
         {
-            Vector4 color =
-                entry.Level switch
-                {
-                    EditorLogLevel.Warning =>
-                        new Vector4(
-                            1.0f,
-                            0.72f,
-                            0.2f,
-                            1.0f
-                        ),
-                    EditorLogLevel.Error =>
-                        new Vector4(
-                            1.0f,
-                            0.3f,
-                            0.3f,
-                            1.0f
-                        ),
-                    _ =>
-                        new Vector4(
-                            0.82f,
-                            0.85f,
-                            0.9f,
-                            1.0f
-                        )
-                };
-
-            ImGui.PushStyleColor(
-                ImGuiCol.Text,
-                color
-            );
-
-            ImGui.TextWrapped(
-                $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"
-            );
-
-            ImGui.PopStyleColor();
+            ImGui.SetClipboardText(selectableText);
         }
+
+        // Read-only input supports mouse selection and Ctrl+C, unlike TextWrapped.
+        ImGui.InputTextMultiline("##ConsoleText", ref selectableText,
+            (uint)Math.Max(selectableText.Length + 1, 1),
+            new Vector2(-1, Math.Max(1, ImGui.GetContentRegionAvail().Y)),
+            ImGuiInputTextFlags.ReadOnly);
+
+
 
         ImGui.End();
     }

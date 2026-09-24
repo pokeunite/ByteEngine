@@ -78,7 +78,7 @@ public enum HumanoidBone
 /// Shared Humanoid bone requirements.
 ///
 /// C9A intentionally defines only the canonical contract. Automatic mapping,
-/// validation UI, reference-pose solving and retargeting are layered onto this
+/// validation UI and reference-pose diagnostics are layered onto this
 /// contract in later C9 slices.
 /// </summary>
 public static class HumanoidBoneCatalog

@@ -37,7 +37,7 @@ public sealed class HumanoidReferenceBonePose
 }
 
 /// <summary>
-/// Derived Humanoid reference pose used by later C9 retargeting work.
+/// Derived Humanoid reference pose used by mapping diagnostics.
 ///
 /// The pose is intentionally derived from imported inverse-bind matrices rather
 /// than persisted separately. This keeps the model's source bind pose as the

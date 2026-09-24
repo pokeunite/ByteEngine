@@ -129,8 +129,7 @@ public sealed class FbxModelImporter
         List<ImportedAnimation> animations =
             ReadAnimations(source, scene);
 
-        return
-            new ImportedModel
+        return ImportedModelSpace.Apply(new ImportedModel
             {
                 Guid = source.Guid,
                 SourceAssetGuid = source.Guid,
@@ -140,7 +139,7 @@ public sealed class FbxModelImporter
                 Materials = materials,
                 Skeleton = skeleton,
                 Animations = animations
-            };
+            }, ImportedModelSpace.FbxCorrection(scene, settings.ImportScale));
     }
 
     private static List<ImportedMaterial> ReadMaterials(

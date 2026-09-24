@@ -2514,39 +2514,37 @@ state.SelectedObject =
                     safeName
             };
 
-        if (type ==
-            BlueprintType.Character)
+        var children = new List<GameObjectData>();
+        if (type == BlueprintType.Character)
         {
-            root.Components.Add(
-                new ComponentData
+            Guid cameraId = Guid.NewGuid();
+            children.Add(new GameObjectData { Id = Guid.NewGuid(), ParentId = root.Id, Name = "Model" });
+            children.Add(new GameObjectData
+            {
+                Id = cameraId,
+                ParentId = root.Id,
+                Name = "Camera",
+                Components = new List<ComponentData> { new() { Type = "Camera3D" } }
+            });
+
+            root.Components.Add(new ComponentData { Type = "CharacterController3D" });
+            root.Components.Add(new ComponentData
+            {
+                Type = "CapsuleCollider3D",
+                Properties = new JsonObject
                 {
-                    Type =
-                        "CharacterController3D"
-                });
-
-            root.Components.Add(
-                new ComponentData
-                {
-                    Type =
-                        "CapsuleCollider3D",
-
-                    Properties =
-                        new JsonObject
-                        {
-                            ["radius"] =
-                                0.5f,
-
-                            ["height"] =
-                                2.0f
-                        }
-                });
-
-            root.Components.Add(
-                new ComponentData
-                {
-                    Type =
-                        "AnimationController"
-                });
+                    ["radius"] = 0.5f,
+                    ["height"] = 2.0f,
+                    ["center"] = new JsonArray(JsonValue.Create(0f), JsonValue.Create(1f), JsonValue.Create(0f))
+                }
+            });
+            root.Components.Add(new ComponentData { Type = "AnimationController" });
+            root.Components.Add(new ComponentData { Type = "PlayerController3D" });
+            root.Components.Add(new ComponentData
+            {
+                Type = "CameraBoom3D",
+                Properties = new JsonObject { ["cameraObjectId"] = cameraId.ToString() }
+            });
         }
 
         var blueprint =
@@ -2558,8 +2556,8 @@ state.SelectedObject =
                 Type =
                     type,
 
-                Root =
-                    root,
+                Root = root,
+                Children = children,
 
                 Variables =
                     type ==

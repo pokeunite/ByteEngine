@@ -16,44 +16,7 @@ internal static class HumanoidGeometryMappingTests
         Check(Matrix4x4.CreateFromYawPitchRoll(-.6f, .2f, -.4f), "x", extraSpine: 5, fingers: 5);
         Check(Matrix4x4.Identity, "jointA", fingers: 3);
         Check(Matrix4x4.Identity, "wrapped_", fingers: 3, clavicles: true, wrappers: true);
-        string sourceHips = source.Map.GetBoneName(HumanoidBone.Hips)!;
-        ImportedAnimation clip = new()
-        {
-            Name = "Meshless Walk", Duration = 1,
-            Channels = new()
-            {
-                new ImportedAnimationChannel
-                {
-                    NodeName = sourceHips,
-                    Translation = new ImportedVectorTrack
-                    {
-                        Keys = new()
-                        {
-                            new ImportedVectorKey(0, new Vector3(0, 1, 0), default, default),
-                            new ImportedVectorKey(1, new Vector3(0, 1, -.3f), default, default)
-                        }
-                    }
-                }
-            }
-        };
-        HumanoidRetargetPose pose = HumanoidRetargeter.Retarget(
-            source.Skeleton, source.Map, HumanoidReferencePose.Capture(source.Skeleton, source.Map),
-            clip, 1, target.Skeleton, target.Map,
-            HumanoidReferencePose.Capture(target.Skeleton, target.Map), loop: false);
-        Assert(pose.ModelMatrices.Count == target.Skeleton.Bones.Count &&
-            pose.ModelMatrices.All(matrix => float.IsFinite(matrix.Translation.X) &&
-                float.IsFinite(matrix.Translation.Y) && float.IsFinite(matrix.Translation.Z)),
-            "meshless cross-rig retarget produces finite target pose");
-        int targetHips = target.Skeleton.Bones.FindIndex(bone =>
-            bone.Name == target.Map.GetBoneName(HumanoidBone.Hips));
-        Matrix4x4 targetBind = default;
-        Assert(targetHips >= 0 && Matrix4x4.Invert(
-            target.Skeleton.Bones[targetHips].BindPose, out targetBind),
-            "target bind pose is invertible");
-        Assert(Vector3.Distance(pose.ModelMatrices[targetHips].Translation,
-            targetBind.Translation) > 1f,
-            "meshless source trajectory transfers across proportions and facing direction");
-        Console.WriteLine("Humanoid geometry mapping and meshless retarget regressions passed.");
+        Console.WriteLine("Humanoid geometry mapping regressions passed.");
     }
 
     private static (SkeletonAsset Skeleton, HumanoidBoneMap Map) Check(Matrix4x4 root, string prefix,

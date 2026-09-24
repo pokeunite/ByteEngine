@@ -134,7 +134,7 @@ public sealed class ImportedAnimation
     ///
     /// Importers leave this list empty. C10-D persists/restores it from
     /// ByteEngine model-animation metadata, so native FBX clips and baked
-    /// retargeted clips share the same runtime representation without rewriting
+    /// legacy model-owned clips share the same runtime representation without rewriting
     /// the source model file.
     /// </summary>
     [JsonIgnore]

@@ -1,4 +1,6 @@
 using System.Numerics;
+using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Scene;
 
 namespace ByteEngine.Editor;
 
@@ -38,10 +40,45 @@ internal sealed class EditorCamera3D
         Pitch = -22f;
     }
 
-    public void Frame(ByteEngine.Core.Scene.GameObject target)
+    public void Frame(GameObject target)
     {
-        Vector3 size = target.Transform.WorldScale;
-        float largestDimension = Math.Max(Math.Max(Math.Abs(size.X), Math.Abs(size.Y)), Math.Abs(size.Z));
-        Position = target.Transform.WorldPosition - Forward * (largestDimension * 3f + 2f);
+        Vector3 minimum = new(float.PositiveInfinity);
+        Vector3 maximum = new(float.NegativeInfinity);
+        bool hasGeometry = false;
+
+        void Include(GameObject item)
+        {
+            foreach (MeshRenderer renderer in item.Components.OfType<MeshRenderer>())
+            {
+                if (!renderer.Visible || renderer.Mesh == null)
+                    continue;
+
+                BoundingBox3D bounds = renderer.Mesh.LocalBounds.Transform(item.Transform.WorldMatrix);
+                if (!bounds.IsValid)
+                    continue;
+
+                minimum = Vector3.Min(minimum, bounds.Minimum);
+                maximum = Vector3.Max(maximum, bounds.Maximum);
+                hasGeometry = true;
+            }
+
+            foreach (GameObject child in item.Children)
+                Include(child);
+        }
+
+        Include(target);
+        if (!hasGeometry)
+        {
+            Vector3 size = target.Transform.WorldScale;
+            float largestDimension = Math.Max(Math.Max(Math.Abs(size.X), Math.Abs(size.Y)), Math.Abs(size.Z));
+            Position = target.Transform.WorldPosition - Forward * (largestDimension * 3f + 2f);
+            return;
+        }
+
+        Vector3 center = (minimum + maximum) * 0.5f;
+        float radius = (maximum - minimum).Length() * 0.5f;
+        float halfFov = Math.Clamp(FieldOfView, 1f, 170f) * MathF.PI / 360f;
+        float distance = MathF.Max(radius / MathF.Sin(halfFov) * 1.35f, radius + 0.065f);
+        Position = center - Forward * distance;
     }
 }

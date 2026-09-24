@@ -1000,6 +1000,10 @@ public sealed class SkeletalMeshRenderer : Component
                 meshGlobal *
                 rootMotionCorrection;
         }
+
+        // Followers consume the same completed pose as the skinned mesh.
+        // This also covers a clip change or Seek outside Scene.UpdateInternal.
+        SkeletalAttachmentService.UpdateForRenderer(this);
     }
 
     private Matrix4x4[] BuildLocalPose()

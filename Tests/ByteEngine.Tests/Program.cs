@@ -19,6 +19,13 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Length >= 6 && args[0] == "--socket-pose")
+    {
+        using var diagnostic = new SocketPoseDiagnostic(args[1], args[2], args[3], args[4], args[5]);
+        diagnostic.Run();
+        return;
+    }
+
     if (args.Length >= 3 && args[0] == "--gpu-blueprint")
     {
         using var diagnostic = new GpuBlueprintRenderDiagnostic(args[1], args[2]);
@@ -47,6 +54,11 @@ try
         return;
     }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
+    if (args.Contains("--import-space"))
+    {
+        ImportSpaceRegressionTests.Run();
+        return;
+    }
     if (args.Contains("--authoring-ux"))
     {
         AuthoringUxTests.Run(root, database, assets);
@@ -87,8 +99,8 @@ try
     Assert(starterTemplate.GameObjectCount == 4 && starterTemplate.FindComponent<Camera3D>() != null && starterTemplate.FindComponent<DirectionalLight>() != null && starterTemplate.FindGameObject("Ground")?.GetComponent<GroundSurface>() != null, "3D starter project template");
     Assert(starterTemplate.FindComponent<DirectionalLight>()!.Direction.Y < 0, "Starter directional light points toward the ground");
 
-    string gltfPath = Path.Combine(root, "Assets", "Triangle.gltf"); WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.gltf", out AssetRecord? gltfRecord) && gltfRecord != null, "GLTF asset registration"); Guid stableModelGuid = gltfRecord!.Guid; ImportedModel imported = new GltfModelImporter().Import(gltfRecord, gltfRecord.Metadata.ModelImporter); Assert(imported.Nodes.Count == 2 && imported.Meshes.Count == 1 && imported.Meshes[0].Vertices.Length == 24 && imported.Materials.Count == 1, "GLTF hierarchy mesh and material parsing"); ModelAsset loadedModel = assets.LoadModel(new AssetReference(stableModelGuid, gltfRecord.ProjectPath)); Assert(loadedModel.Meshes.Count == 1, "ModelAsset load");
-    string glbPath = Path.Combine(root, "Assets", "Triangle.glb"); SharpGLTF.Schema2.ModelRoot.Load(gltfPath).SaveGLB(glbPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.glb", out AssetRecord? glbRecord) && glbRecord != null, "GLB asset registration"); ImportedModel importedGlb = new GltfModelImporter().Import(glbRecord!, glbRecord!.Metadata.ModelImporter); Assert(importedGlb.Nodes.Count == 2 && importedGlb.Meshes.Count == 1, "Binary GLB hierarchy and mesh parsing");
+    string gltfPath = Path.Combine(root, "Assets", "Triangle.gltf"); WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.gltf", out AssetRecord? gltfRecord) && gltfRecord != null, "GLTF asset registration"); Guid stableModelGuid = gltfRecord!.Guid; ImportedModel imported = new GltfModelImporter().Import(gltfRecord, gltfRecord.Metadata.ModelImporter); Assert(imported.Nodes.Count == 3 && imported.Nodes[0].Key == ImportedModelSpace.CorrectionNodeKey && imported.Meshes.Count == 1 && imported.Meshes[0].Vertices.Length == 24 && imported.Materials.Count == 1, "GLTF hierarchy mesh and material parsing"); ModelAsset loadedModel = assets.LoadModel(new AssetReference(stableModelGuid, gltfRecord.ProjectPath)); Assert(loadedModel.Meshes.Count == 1, "ModelAsset load");
+    string glbPath = Path.Combine(root, "Assets", "Triangle.glb"); SharpGLTF.Schema2.ModelRoot.Load(gltfPath).SaveGLB(glbPath); database.Scan(); Assert(database.TryGetAsset("Assets/Triangle.glb", out AssetRecord? glbRecord) && glbRecord != null, "GLB asset registration"); ImportedModel importedGlb = new GltfModelImporter().Import(glbRecord!, glbRecord!.Metadata.ModelImporter); Assert(importedGlb.Nodes.Count == 3 && importedGlb.Nodes[0].Key == ImportedModelSpace.CorrectionNodeKey && importedGlb.Meshes.Count == 1, "Binary GLB hierarchy and mesh parsing");
     WriteTriangleGltf(gltfPath); database.Scan(); Assert(database.TryGetAsset(stableModelGuid, out AssetRecord? rescanned) && rescanned != null, "Model GUID stable after source change"); Assert(assets.ReimportModel(stableModelGuid).Guid == stableModelGuid, "Model reimport preserves GUID");
 
     string editorTrianglePath = Path.Combine(editorProject.ProjectRoot, "Assets", "Triangle.gltf");
@@ -105,6 +117,28 @@ try
     Scene restoredModelScene = editorProject.Scenes.Deserialize(modelSnapshot);
     Assert(restoredModelScene.GameObjects.SelectMany(item => item.Components).OfType<MeshRenderer>().Any(item => item.Mesh != null),
         "Blueprint/scene round-trip rehydrates imported model meshes");
+    modelRoot.Transform.LocalScale = new Vector3(0.01f);
+    var tinyModelCamera = new EditorCamera3D();
+    tinyModelCamera.Frame(modelRoot);
+    Assert(Vector3.Distance(tinyModelCamera.Position, modelRoot.Transform.WorldPosition) < 1f,
+        "Scene framing uses actual tiny Blueprint mesh bounds rather than root scale");
+    modelRoot.Transform.LocalScale = Vector3.One;
+    GameObject fitCharacter = modelScene.CreateGameObject("Fit Character");
+    fitCharacter.AddComponent(new CharacterController3D());
+    modelRoot.SetParent(fitCharacter, false);
+    Assert(ModelImportScaleUtility.TryCalculateHierarchyBounds(
+            editorProject.Assets.LoadModel(new AssetReference(editorModel!.Guid, editorModel.ProjectPath)),
+            out Vector3 importedMinimum, out Vector3 importedMaximum),
+        "Character fit fixture has model bounds");
+    var importedBounds = new BoundingBox3D(importedMinimum, importedMaximum);
+    float originalFeetY = importedBounds.Transform(modelRoot.Transform.WorldMatrix).Minimum.Y;
+    Assert(BlueprintAuthoringService.FitCharacterModelHeight(modelRoot, editorProject.Assets),
+        "Explicit Blueprint model-height fit succeeds");
+    BoundingBox3D fittedBounds = importedBounds.Transform(modelRoot.Transform.WorldMatrix);
+    Assert(Math.Abs(fittedBounds.Size.Y - 1.8f) < .02f &&
+        Math.Abs(fittedBounds.Minimum.Y - originalFeetY) < .02f &&
+        fitCharacter.GetComponent<CapsuleCollider3D>() != null,
+        "Character model-height fit preserves feet and refits collider");
     var framedCamera = new EditorCamera3D
     {
         Position = new Vector3(2.800691f, 2.185876f, 2.696458f),

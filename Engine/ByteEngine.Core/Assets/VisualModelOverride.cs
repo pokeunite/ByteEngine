@@ -4,8 +4,9 @@ using ByteEngine.Core.Scene;
 namespace ByteEngine.Core.Assets;
 
 /// <summary>
-/// Exposes the Character Blueprint's Visual transform as a model-only override.
-/// The Transform stays authoritative for preview, runtime and serialization.
+/// Optional authored rotation and scale of the Character Model child.
+/// Import units and axes are corrected inside the imported model, not here.
+/// ImportScale is retained only for reading older serialized Blueprints.
 /// </summary>
 public sealed class VisualModelOverride : Component
 {
@@ -29,12 +30,12 @@ public sealed class VisualModelOverride : Component
 
     public Vector3 ScaleMultiplier
     {
-        get => Transform.LocalScale / _importScale;
+        get => Transform.LocalScale;
         set
         {
             if (!float.IsFinite(value.X) || !float.IsFinite(value.Y) || !float.IsFinite(value.Z))
                 return;
-            Transform.LocalScale = Vector3.Max(value, new Vector3(0.001f)) * _importScale;
+            Transform.LocalScale = Vector3.Max(value, new Vector3(0.001f));
         }
     }
 }

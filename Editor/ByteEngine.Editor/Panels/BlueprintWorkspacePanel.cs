@@ -161,8 +161,10 @@ internal sealed class BlueprintWorkspacePanel
 
         RebuildPreview();
 
-        _dirty =
-            false;
+        _dirty = false;
+        if (_blueprint.Type == BlueprintType.Character)
+            NormalizeExistingModelScales();
+        RefreshPreviewImportSpaces();
 
         _open =
             true;
@@ -409,8 +411,9 @@ internal sealed class BlueprintWorkspacePanel
 
         ImGuiTreeNodeFlags flags =
             ImGuiTreeNodeFlags.OpenOnArrow |
-            ImGuiTreeNodeFlags.SpanFullWidth |
-            ImGuiTreeNodeFlags.DefaultOpen;
+            ImGuiTreeNodeFlags.SpanFullWidth;
+        if (gameObject.Parent == null)
+            flags |= ImGuiTreeNodeFlags.DefaultOpen;
 
         if (selected)
         {
@@ -977,6 +980,47 @@ internal sealed class BlueprintWorkspacePanel
                 MarkDirty();
             }
         });
+
+        if (_project != null &&
+            selected.GetComponent<ModelHierarchyInstance>() != null &&
+            _preview?.GameObjects.Any(item =>
+                item.Parent == null &&
+                item.GetComponent<CharacterController3D>() != null) == true)
+        {
+            float visualHeight = _previewBoundsMin.HasValue && _previewBoundsMax.HasValue
+                ? _previewBoundsMax.Value.Y - _previewBoundsMin.Value.Y
+                : 0f;
+            if (float.IsFinite(visualHeight) && visualHeight > 0f)
+                ImGui.TextDisabled($"Character visual height: {visualHeight:0.###} m");
+
+            if (ImGui.SmallButton("Fit Character Height to 1.8 m"))
+            {
+                try
+                {
+                    if (BlueprintAuthoringService.FitCharacterModelHeight(
+                            selected, _project.Assets))
+                    {
+                        RefreshPreviewBoundsFromScene();
+                        FramePreviewBounds();
+                        MarkDirty();
+                        _statusMessage = "Character model fitted to 1.8 m; capsule updated.";
+                        _statusIsError = false;
+                    }
+                    else
+                    {
+                        _statusMessage = "Could not fit the character model: no valid mesh bounds.";
+                        _statusIsError = true;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    _statusMessage = $"Could not fit character model: {exception.Message}";
+                    _statusIsError = true;
+                }
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Scales only the Blueprint Model, keeps its feet in place, and refits the character capsule. The imported model asset is unchanged.");
+        }
     }
 
     private void DrawComponents(
@@ -1478,8 +1522,12 @@ internal sealed class BlueprintWorkspacePanel
                 asset.FullPath)
             .ToLowerInvariant();
 
-        GameObject? container =
-            null;
+        GameObject? container = null;
+        bool reusedModelContainer = false;
+        Vector3 previousModelPosition = Vector3.Zero;
+        Quaternion previousModelRotation = Quaternion.Identity;
+        Vector3 previousModelScale = Vector3.One;
+        var createdImportedObjects = new List<GameObject>();
 
         try
         {
@@ -1497,51 +1545,42 @@ internal sealed class BlueprintWorkspacePanel
                 _project.Assets.LoadModel(
                     reference);
 
-            container =
-                _preview.CreateGameObject(
-                    model.Name);
-
             GameObject? selected = GetSelectedPreviewObject();
             GameObject? blueprintRoot = _preview.GameObjects.FirstOrDefault(item => item.Parent == null);
-            GameObject visualParent = _blueprint!.Type == BlueprintType.Character && blueprintRoot != null
-                ? BlueprintAuthoringService.EnsureVisualRoot(blueprintRoot)
-                : selected ?? blueprintRoot ?? container;
-            if (!ReferenceEquals(visualParent, container)) container.SetParent(visualParent, false);
-
-            ModelScaleAnalysis scaleAnalysis =
-                ModelImportScaleUtility.Analyze(
-                    asset,
-                    model);
-
-            float appliedScale =
-                scaleAnalysis.AppliedScale;
-
-            if (_blueprint.Type == BlueprintType.Character && visualParent.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+            if (_blueprint!.Type == BlueprintType.Character && blueprintRoot != null)
             {
-                visualParent.Transform.LocalScale = Vector3.One * appliedScale;
-                container.Transform.LocalScale = Vector3.One;
-            }
-            else container.Transform.LocalScale = Vector3.One * appliedScale;
-
-            container.AddComponent(
-                new ModelHierarchyInstance
+                container = BlueprintAuthoringService.EnsureModelRoot(blueprintRoot);
+                reusedModelContainer = true;
+                previousModelPosition = container.Transform.LocalPosition;
+                previousModelRotation = container.Transform.LocalRotation;
+                previousModelScale = container.Transform.LocalScale;
+                if (container.GetComponent<ModelHierarchyInstance>() != null)
                 {
-                    Model =
-                        reference,
-
-                    AppliedImportScale =
-                        appliedScale
-                });
-            if (_blueprint.Type == BlueprintType.Character &&
-                visualParent.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+                    _statusMessage = "This Character Blueprint already has a Model. Replace it explicitly before importing another.";
+                    _statusIsError = true;
+                    return;
+                }
+                container.Name = "Model";
+            }
+            else
             {
-                VisualModelOverride? visualOverride = visualParent.GetComponent<VisualModelOverride>();
-                if (visualOverride == null)
-                    visualOverride = visualParent.AddComponent(new VisualModelOverride());
-                visualOverride.ImportScale = appliedScale;
+                container = _preview.CreateGameObject(model.Name);
+                GameObject parent = selected ?? blueprintRoot ?? container;
+                if (!ReferenceEquals(parent, container))
+                    container.SetParent(parent, false);
             }
 
+            if (!reusedModelContainer)
+                container.Transform.LocalScale = Vector3.One;
+            container.AddComponent(new ModelHierarchyInstance
+            {
+                Model = reference,
+                AppliedImportScale = 1.0f
+            });
 
+
+            if (_blueprint.Type == BlueprintType.Character)
+                BlueprintAuthoringService.GroundModelAtFeet(container, _project.Assets);
             var objects =
                 new Dictionary<string, GameObject>();
 
@@ -1552,8 +1591,8 @@ internal sealed class BlueprintWorkspacePanel
                     _preview.CreateGameObject(
                         node.Name);
 
-                objects[node.Key] =
-                    gameObject;
+                objects[node.Key] = gameObject;
+                createdImportedObjects.Add(gameObject);
             }
 
             foreach (ImportedNode node
@@ -1646,13 +1685,8 @@ internal sealed class BlueprintWorkspacePanel
             _selectedPreviewObjectId =
                 container.Id;
 
-            string scaleNote =
-                scaleAnalysis.Normalized
-                    ? $" | {scaleAnalysis.Summary}"
-                    : string.Empty;
-
             _statusMessage =
-                $"Added {Path.GetFileName(asset.ProjectPath)} ({model.Meshes.Count} mesh(es)){scaleNote}";
+                $"Added {Path.GetFileName(asset.ProjectPath)} ({model.Meshes.Count} mesh(es))";
 
             _statusIsError =
                 false;
@@ -1666,11 +1700,22 @@ internal sealed class BlueprintWorkspacePanel
         }
         catch (Exception exception)
         {
-            if (container !=
-                null)
+            foreach (GameObject created in createdImportedObjects.ToArray())
+                if (_preview.GameObjects.Contains(created))
+                    _preview.DestroyGameObject(created);
+
+            if (container != null)
             {
-                _preview.DestroyGameObject(
-                    container);
+                if (reusedModelContainer)
+                {
+                    if (container.GetComponent<ModelHierarchyInstance>() is { } marker)
+                        container.RemoveComponent(marker);
+                    container.Transform.LocalPosition = previousModelPosition;
+                    container.Transform.LocalRotation = previousModelRotation;
+                    container.Transform.LocalScale = previousModelScale;
+                }
+                else if (_preview.GameObjects.Contains(container))
+                    _preview.DestroyGameObject(container);
             }
 
             _statusMessage =
@@ -1953,117 +1998,69 @@ internal sealed class BlueprintWorkspacePanel
 
     private void NormalizeExistingModelScales()
     {
-        if (_project ==
-                null ||
-            _preview ==
-                null)
+        if (_preview == null || _blueprint?.Type != BlueprintType.Character)
         {
+            _statusMessage = "Only Character Blueprints need model-structure normalization.";
+            _statusIsError = false;
             return;
         }
 
-        int changed =
-            0;
+        GameObject? root = _preview.GameObjects.FirstOrDefault(item => item.Parent == null);
+        if (root == null)
+            return;
 
-        foreach (ModelHierarchyInstance instance
-                 in _preview.GameObjects
-                     .SelectMany(
-                         gameObject =>
-                             gameObject.Components
-                                 .OfType<ModelHierarchyInstance>()))
+        bool hasLegacyVisual = root.Children.Any(child =>
+            child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
+        bool hasRootModel = root.GetComponent<ModelHierarchyInstance>() != null;
+        bool hasRootScale = Vector3.DistanceSquared(root.Transform.LocalScale, Vector3.One) > 0.000001f;
+        bool hasRootFacing = root.GetComponent<PlayerController3D>() != null &&
+            MathF.Abs(root.Transform.EulerAngles.Y) > 0.001f;
+        if (!hasLegacyVisual && !hasRootModel && !hasRootScale && !hasRootFacing)
         {
-            if (!_project.AssetDatabase.TryGetAsset(
-                    instance.Model.Guid,
-                    out AssetRecord? asset) ||
-                asset ==
-                    null ||
-                asset.Type !=
-                    AssetType.Model3D)
-            {
-                continue;
-            }
-
-            var reference =
-                new AssetReference(
-                    asset.Guid,
-                    asset.ProjectPath);
-
-            ModelAsset model =
-                _project.Assets.LoadModel(
-                    reference);
-
-            ModelScaleAnalysis analysis =
-                ModelImportScaleUtility.Analyze(
-                    asset,
-                    model);
-
-            Vector3 desired =
-                Vector3.One *
-                analysis.AppliedScale;
-
-            GameObject container =
-                instance.GameObject;
-
-            GameObject? visual = _blueprint?.Type == BlueprintType.Character &&
-                container.Parent?.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase) == true
-                    ? container.Parent
-                    : null;
-
-            if (visual != null)
-            {
-                VisualModelOverride? visualOverride = visual.GetComponent<VisualModelOverride>();
-                Vector3 multiplier = visualOverride?.ScaleMultiplier ?? Vector3.One;
-                bool needsUpdate =
-                    Vector3.DistanceSquared(container.Transform.LocalScale, Vector3.One) > 0.0000001f ||
-                    visualOverride == null &&
-                    Vector3.DistanceSquared(visual.Transform.LocalScale, desired) > 0.0000001f ||
-                    MathF.Abs(instance.AppliedImportScale - analysis.AppliedScale) > 0.0001f;
-                if (!needsUpdate)
-                    continue;
-
-                container.Transform.LocalScale = Vector3.One;
-                if (visualOverride != null)
-                {
-                    visualOverride.ImportScale = analysis.AppliedScale;
-                    visualOverride.ScaleMultiplier = multiplier;
-                }
-                else
-                {
-                    visual.Transform.LocalScale = desired;
-                }
-            }
-            else
-            {
-                if (Vector3.DistanceSquared(container.Transform.LocalScale, desired) < 0.0000001f)
-                    continue;
-                container.Transform.LocalScale = desired;
-            }
-
-            instance.AppliedImportScale = analysis.AppliedScale;
-            changed++;
+            _statusMessage = "Character model structure is already canonical.";
+            _statusIsError = false;
+            return;
         }
 
+        try
+        {
+            BlueprintAuthoringService.NormalizeCharacterStructure(root);
+        }
+        catch (InvalidOperationException exception)
+        {
+            _statusMessage = $"Character migration paused: {exception.Message}";
+            _statusIsError = true;
+            return;
+        }
         RefreshPreviewBoundsFromScene();
-
         FramePreviewBounds();
-
-        if (changed >
-            0)
-        {
-            MarkDirty();
-
-            _statusMessage =
-                $"Normalized {changed} model hierarchy(s). Save Blueprint to keep the correction.";
-        }
-        else
-        {
-            _statusMessage =
-                "No model scale changes were needed.";
-        }
-
-        _statusIsError =
-            false;
+        MarkDirty();
+        _statusMessage = "Migrated the Character model to a direct Model child. Save to keep it.";
+        _statusIsError = false;
     }
 
+    private void RefreshPreviewImportSpaces()
+    {
+        if (_project == null || _preview == null)
+            return;
+        foreach (ModelHierarchyInstance instance in _preview.GameObjects
+                     .SelectMany(item => item.Components.OfType<ModelHierarchyInstance>()))
+        {
+            if (instance.Model.IsEmpty)
+                continue;
+            try
+            {
+                ModelAsset model = _project.Assets.LoadModel(instance.Model);
+                if (EditorSceneCommands.RefreshImportSpace(instance.GameObject, model))
+                    MarkDirty();
+            }
+            catch (Exception exception)
+            {
+                _statusMessage = $"Could not refresh model import space: {exception.Message}";
+                _statusIsError = true;
+            }
+        }
+    }
     private void ReimportReferencedModels()
     {
         if (_project ==
@@ -2074,24 +2071,12 @@ internal sealed class BlueprintWorkspacePanel
             return;
         }
 
-        Guid[] modelGuids =
-            _preview.GameObjects
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<MeshRenderer>())
-                .Select(
-                    renderer =>
-                        renderer.MeshReference?
-                            .Model
-                            .Guid ??
-                        Guid.Empty)
-                .Where(
-                    guid =>
-                        guid !=
-                        Guid.Empty)
-                .Distinct()
-                .ToArray();
+        Guid[] modelGuids = _preview.GameObjects
+            .SelectMany(item => item.Components.OfType<ModelHierarchyInstance>())
+            .Select(item => item.Model.Guid)
+            .Where(guid => guid != Guid.Empty)
+            .Distinct()
+            .ToArray();
 
         int refreshed =
             0;
@@ -2099,8 +2084,12 @@ internal sealed class BlueprintWorkspacePanel
         foreach (Guid guid
                  in modelGuids)
         {
-            _project.Assets.ReimportModel(
-                guid);
+            ModelAsset model = _project.Assets.ReimportModel(guid);
+            foreach (ModelHierarchyInstance instance in _preview.GameObjects
+                         .SelectMany(item => item.Components.OfType<ModelHierarchyInstance>())
+                         .Where(item => item.Model.Guid == guid))
+                if (EditorSceneCommands.RefreshImportSpace(instance.GameObject, model))
+                    MarkDirty();
 
             refreshed++;
         }

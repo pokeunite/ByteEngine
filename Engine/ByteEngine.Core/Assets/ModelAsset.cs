@@ -66,25 +66,10 @@ public sealed class ModelAsset
     public bool ImportAnimations { get; }
 
     /// <summary>
-    /// Source trajectory policy used by Humanoid retargeting.
-    /// </summary>
-    public AnimationRootMotionSource RootMotionSource { get; }
-
-    /// <summary>
-    /// Default target-bake sampling frequency when this asset is the source.
-    /// </summary>
-    public float RetargetSamplesPerSecond { get; }
-
-    /// <summary>
     /// Optional external Humanoid rig that supplies bind/reference data when
     /// this asset carries animation tracks but no usable skeleton of its own.
     /// </summary>
     public AssetReference AnimationSourceRigModel { get; }
-
-    /// <summary>
-    /// Importer/editor convenience target used to prefill retarget authoring.
-    /// </summary>
-    public AssetReference DefaultRetargetTargetModel { get; }
 
     /// <summary>
     /// Snapshot of the source model's semantic Humanoid bone mapping.
@@ -155,17 +140,8 @@ public sealed class ModelAsset
         ImportAnimations =
             settings.ImportAnimations;
 
-        RootMotionSource =
-            settings.RootMotionSource;
-
-        RetargetSamplesPerSecond =
-            settings.RetargetSamplesPerSecond;
-
         AnimationSourceRigModel =
             settings.AnimationSourceRigModel;
-
-        DefaultRetargetTargetModel =
-            settings.DefaultRetargetTargetModel;
 
         RigType =
             settings.RigType;
@@ -311,7 +287,7 @@ public sealed class ModelAsset
 
     /// <summary>
     /// Adds or replaces a runtime/generated animation clip without changing the
-    /// source model file. Retargeted model-owned clips use the same collection
+    /// source model file. Legacy model-owned clips use the same collection
     /// as native imported clips so existing pickers and Asset Browser expansion
     /// keep working without another animation asset type.
     /// </summary>

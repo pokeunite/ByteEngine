@@ -111,6 +111,7 @@ internal static class AuthoringUxTests
 
         TestVisualTransform(project, applied);
         TestVisualModelOverride(project);
+        TestModelGrounding(project);
         TestPresetAndDependencies();
     }
 
@@ -140,61 +141,119 @@ internal static class AuthoringUxTests
 
     private static void TestVisualTransform(EditorProjectContext project, BlueprintDefinition source)
     {
-        var scene = new Scene("Visual Transform");
+        var scene = new Scene("Legacy Character Migration");
         GameObject player = scene.CreateGameObject("Player");
-        GameObject visual = BlueprintAuthoringService.EnsureVisualRoot(player);
+        GameObject visual = scene.CreateGameObject("Visual");
+        visual.SetParent(player, false);
         visual.Transform.EulerAngles = new Vector3(0f, 180f, 0f);
+        visual.Transform.LocalScale = new Vector3(1.5f);
+        GameObject imported = scene.CreateGameObject("Imported Model");
+        imported.SetParent(visual, false);
+        imported.AddComponent(new ModelHierarchyInstance { AppliedImportScale = 1f });
+        imported.Transform.LocalPosition = new Vector3(0.2f, 0.3f, 0.4f);
+        Vector3 position = imported.Transform.WorldPosition;
+        Quaternion rotation = imported.Transform.WorldRotation;
+        Vector3 scale = imported.Transform.WorldScale;
+
+        GameObject model = BlueprintAuthoringService.NormalizeCharacterStructure(player);
+        Assert(model.Name == "Model" && ReferenceEquals(model.Parent, player) &&
+            player.Children.All(child => child.Name != "Visual"), "Legacy Visual wrapper flattens into Model");
+        Assert(Vector3.Distance(model.Transform.WorldPosition, position) < 0.001f &&
+            Vector3.Distance(model.Transform.WorldScale, scale) < 0.001f &&
+            MathF.Abs(Quaternion.Dot(model.Transform.WorldRotation, rotation)) > 0.999f,
+            "Legacy model world pose is preserved");
+        BlueprintAuthoringService.NormalizeCharacterStructure(player);
+        Assert(player.Children.Count(child => child.Name == "Model") == 1 &&
+            Vector3.Distance(model.Transform.WorldScale, scale) < 0.001f,
+            "Character normalization is idempotent");
+
         SceneData serialized = project.Scenes.Serialize(scene);
         var blueprint = new BlueprintDefinition
         {
-            Name = "BP_Visual",
+            Name = "BP_Model",
             Type = BlueprintType.Character,
             Root = serialized.GameObjects.Single(item => item.Id == player.Id),
             Children = serialized.GameObjects.Where(item => item.Id != player.Id).ToList()
         };
-        string path = Path.Combine(project.ProjectRoot, "Assets", "BP_Visual.byteblueprint");
+        string path = Path.Combine(project.ProjectRoot, "Assets", "BP_Model.byteblueprint");
         var serializer = new BlueprintSerializer();
         serializer.Save(blueprint, path);
         BlueprintDefinition loaded = serializer.Load(path);
-        QuaternionData rotation = loaded.Children.Single(item => item.Name == "Visual").Transform.LocalRotation!;
-        Quaternion quaternion = new(rotation.X, rotation.Y, rotation.Z, rotation.W);
-        Assert(Math.Abs(Vector3.Transform(Vector3.UnitZ, quaternion).Z + 1f) < .001f,
-            "Visual rotation correction survives Blueprint serialization");
-        Assert(loaded.Root.Transform.LocalScale is { X: 1f, Y: 1f, Z: 1f },
-            "Gameplay root remains normalized while Visual owns correction");
+        Assert(loaded.Children.Any(item => item.Name == "Model" && item.ParentId == player.Id) &&
+            loaded.Children.All(item => item.Name != "Visual"), "Migrated Model persists in Blueprint");
+
+        var customScene = new Scene("Custom Legacy Visual");
+        GameObject customRoot = customScene.CreateGameObject("Player");
+        GameObject customVisual = customScene.CreateGameObject("Visual");
+        customVisual.SetParent(customRoot, false);
+        customVisual.AddComponent(new HealthComponent());
+        GameObject customModel = customScene.CreateGameObject("Model");
+        customModel.SetParent(customVisual, false);
+        customModel.AddComponent(new ModelHierarchyInstance());
+        bool refusedUnsafeMigration = false;
+        try { BlueprintAuthoringService.NormalizeCharacterStructure(customRoot); }
+        catch (InvalidOperationException) { refusedUnsafeMigration = true; }
+        Assert(refusedUnsafeMigration &&
+            ReferenceEquals(customModel.Parent, customVisual) &&
+            customVisual.GetComponent<HealthComponent>() != null,
+            "Custom Visual components are never silently discarded by migration");
     }
 
     private static void TestVisualModelOverride(EditorProjectContext project)
     {
-        var scene = new Scene("Visual Override");
+        var scene = new Scene("Model Override");
         GameObject player = scene.CreateGameObject("Player");
-        GameObject visual = BlueprintAuthoringService.EnsureVisualRoot(player);
-        GameObject imported = scene.CreateGameObject("Imported Model");
-        imported.SetParent(visual, false);
-        imported.AddComponent(new ModelHierarchyInstance { AppliedImportScale = 100f });
+        GameObject model = BlueprintAuthoringService.EnsureModelRoot(player);
+        model.AddComponent(new ModelHierarchyInstance { AppliedImportScale = 1f });
 
-        var visualOverride = BlueprintAuthoringService.AddComponent(player, new VisualModelOverride());
-        Assert(Near(visual.Transform.LocalScale.X, 100f) &&
-            Near(visualOverride.ScaleMultiplier.X, 1f) &&
+        var modelOverride = BlueprintAuthoringService.AddComponent(player, new VisualModelOverride());
+        Assert(ReferenceEquals(modelOverride.GameObject, model) &&
+            Near(modelOverride.ScaleMultiplier.X, 1f) &&
             player.Transform.LocalScale == Vector3.One,
-            "Visual override repairs missing import unit scale without scaling gameplay root");
-        Assert(ReferenceEquals(visualOverride.GameObject, visual), "Root Add Component places visual override on Visual");
-
-        visualOverride.RotationDegrees = new Vector3(0f, 180f, 0f);
-        visualOverride.ScaleMultiplier = Vector3.One * 1.5f;
-        Assert(Near(visual.Transform.LocalScale.X, 150f) &&
-            Vector3.Transform(Vector3.UnitZ, visual.Transform.LocalRotation).Z < -.99f,
-            "Visual override edits the authoritative Visual transform");
+            "Root Add Component routes Model visual override to Model");
+        modelOverride.RotationDegrees = new Vector3(0f, 180f, 0f);
+        modelOverride.ScaleMultiplier = Vector3.One * 1.5f;
+        Assert(Near(model.Transform.LocalScale.X, 1.5f) &&
+            Vector3.Transform(Vector3.UnitZ, model.Transform.LocalRotation).Z < -.99f,
+            "Model override edits only the Model transform");
 
         Scene restored = project.Scenes.CloneForRuntime(scene);
-        GameObject restoredVisual = restored.FindGameObject("Visual")!;
-        VisualModelOverride restoredOverride = restoredVisual.GetComponent<VisualModelOverride>()!;
-        Assert(Near(restoredOverride.ImportScale, 100f) &&
+        GameObject restoredModel = restored.FindGameObject("Model")!;
+        VisualModelOverride restoredOverride = restoredModel.GetComponent<VisualModelOverride>()!;
+        Assert(Near(restoredOverride.ImportScale, 1f) &&
             Near(restoredOverride.ScaleMultiplier.X, 1.5f) &&
             restored.FindGameObject("Player")!.Transform.LocalScale == Vector3.One,
-            "Visual override and transform survive runtime scene serialization");
+            "Model override survives scene serialization");
     }
 
+    private static void TestModelGrounding(EditorProjectContext project)
+    {
+        string path = Path.Combine(project.ProjectRoot, "Assets", "GroundProbe.obj");
+        File.WriteAllText(path,
+            "v 0 -0.25 0\nv 0 1.25 0\nv 0.2 1.25 0\nf 1 2 3\n");
+        project.AssetDatabase.Scan();
+        Assert(project.AssetDatabase.TryGetAsset("Assets/GroundProbe.obj", out AssetRecord? asset) &&
+            asset != null, "Grounding fixture is registered");
+        var scene = new Scene("Grounding");
+        GameObject root = scene.CreateGameObject("Character");
+        GameObject model = BlueprintAuthoringService.EnsureModelRoot(root);
+        model.AddComponent(new ModelHierarchyInstance
+        {
+            Model = new AssetReference(asset!.Guid, asset.ProjectPath)
+        });
+        Assert(BlueprintAuthoringService.GroundModelAtFeet(model, project.Assets) &&
+            Near(model.Transform.LocalPosition.Y, 0.25f),
+            "Model-only offset puts authored feet at root plane");
+        Assert(!BlueprintAuthoringService.GroundModelAtFeet(model, project.Assets) &&
+            Near(model.Transform.LocalPosition.Y, 0.25f),
+            "Grounding does not accumulate on repeated setup");
+        Scene restored = project.Scenes.CloneForRuntime(scene);
+        ModelHierarchyInstance restoredMarker =
+            restored.FindGameObject("Model")!.GetComponent<ModelHierarchyInstance>()!;
+        Assert(restoredMarker.AutoGrounded &&
+            Near(restored.FindGameObject("Model")!.Transform.LocalPosition.Y, 0.25f),
+            "Grounding offset and one-time marker survive save/load");
+    }
     private static void TestPresetAndDependencies()
     {
         var scene = new Scene("Preset");
@@ -203,6 +262,11 @@ internal static class AuthoringUxTests
         Assert(player.GetComponent<CharacterController3D>() != null,
             "Adding Player Input automatically adds Character Movement dependency");
         BlueprintAuthoringService.SetupThirdPersonCharacter(player);
+        Assert(player.Children.Count(child => child.Name == "Model") == 1 &&
+            player.Children.All(child => child.Name != "Visual") &&
+            player.Transform.LocalScale == Vector3.One &&
+            MathF.Abs(player.Transform.EulerAngles.Y) < 0.001f,
+            "New Character preset has one direct Model child and a unit gameplay root");
         GameObject camera = player.Children.Single(item => item.GetComponent<Camera3D>() != null);
         Assert(player.GetComponent<CapsuleCollider3D>() != null && player.GetComponent<CharacterController3D>() != null &&
             player.GetComponent<PlayerController3D>() != null && player.GetComponent<CameraBoom3D>() != null &&

@@ -697,9 +697,9 @@ internal sealed class SkeletalSocketPreview : IDisposable
 
         Quaternion localRotation =
             Quaternion.Normalize(
-                _gizmoProxy.Transform.WorldRotation *
                 Quaternion.Inverse(
-                    boneRotation));
+                    boneRotation) *
+                _gizmoProxy.Transform.WorldRotation);
 
         socket.RotationOffsetDegrees =
             Euler(

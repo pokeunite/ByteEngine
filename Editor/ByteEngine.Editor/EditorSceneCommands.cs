@@ -217,9 +217,7 @@ internal static class EditorSceneCommands
         float appliedScale =
             scaleAnalysis.AppliedScale;
 
-        root.Transform.LocalScale =
-            Vector3.One *
-            appliedScale;
+        root.Transform.LocalScale = Vector3.One;
 
         root.AddComponent(
             new ModelHierarchyInstance
@@ -543,6 +541,72 @@ internal static class EditorSceneCommands
         return child;
     }
 
+    public static bool RefreshImportSpace(GameObject modelRoot, ModelAsset model)
+    {
+        ImportedNode? correction = model.Nodes.FirstOrDefault(node =>
+            node.Key == ImportedModelSpace.CorrectionNodeKey);
+        GameObject? correctionObject = modelRoot.Children.FirstOrDefault(child =>
+            child.Name.Equals("Import Space", StringComparison.Ordinal));
+        if (correctionObject == null)
+            return RebaseLegacyImportSpace(modelRoot, model);
+
+        Matrix4x4 target = correction?.LocalTransform ?? Matrix4x4.Identity;
+        if (!Matrix4x4.Decompose(target, out Vector3 scale,
+                out Quaternion rotation, out Vector3 translation))
+            return false;
+        Transform current = correctionObject.Transform;
+        if (Vector3.DistanceSquared(current.LocalPosition, translation) < 0.0000001f &&
+            Vector3.DistanceSquared(current.LocalScale, scale) < 0.0000001f &&
+            MathF.Abs(Quaternion.Dot(current.LocalRotation, rotation)) > 0.999999f)
+            return false;
+
+        ApplyLocalTransform(correctionObject, target);
+        return true;
+    }
+    private static bool RebaseLegacyImportSpace(GameObject modelRoot, ModelAsset model)
+    {
+        ImportedNode? correction = model.Nodes.FirstOrDefault(node =>
+            node.Key == ImportedModelSpace.CorrectionNodeKey);
+        if (correction == null || modelRoot.Scene == null ||
+            !Matrix4x4.Invert(correction.LocalTransform, out Matrix4x4 inverse))
+            return false;
+
+        // Old scenes put import compensation on Visual/Model. The new asset
+        // contains it internally. Insert that internal node and multiply the
+        // outer authored pose by its inverse so every child keeps its current
+        // effective world matrix. Repeating this is a no-op.
+        Matrix4x4 rebasedOuter = inverse * modelRoot.Transform.LocalMatrix;
+        if (!Matrix4x4.Decompose(rebasedOuter, out Vector3 scale,
+                out Quaternion rotation, out Vector3 position) ||
+            !float.IsFinite(scale.X) || !float.IsFinite(scale.Y) ||
+            !float.IsFinite(scale.Z))
+            return false;
+
+        GameObject[] priorChildren = modelRoot.Children.ToArray();
+        var attachedChildren = priorChildren
+            .Where(child => !string.IsNullOrWhiteSpace(child.ParentSocket))
+            .Select(child => (Object: child, Position: child.Transform.WorldPosition,
+                Rotation: child.Transform.WorldRotation, Scale: child.Transform.WorldScale))
+            .ToArray();
+        GameObject internalNode = modelRoot.Scene.CreateGameObject("Import Space");
+        internalNode.SetParent(modelRoot, false);
+        foreach (GameObject child in priorChildren)
+            if (string.IsNullOrWhiteSpace(child.ParentSocket))
+                child.SetParent(internalNode, false);
+        ApplyLocalTransform(internalNode, correction.LocalTransform);
+        modelRoot.Transform.LocalPosition = position;
+        modelRoot.Transform.LocalRotation = rotation;
+        modelRoot.Transform.LocalScale = scale;
+        foreach (var attached in attachedChildren)
+        {
+            attached.Object.Transform.WorldPosition = attached.Position;
+            attached.Object.Transform.WorldRotation = attached.Rotation;
+            attached.Object.Transform.WorldScale = attached.Scale;
+        }
+        if (modelRoot.GetComponent<ModelHierarchyInstance>() is { } instance)
+            instance.AppliedImportScale = 1.0f;
+        return true;
+    }
     private static void ApplyLocalTransform(
         GameObject gameObject,
         Matrix4x4 matrix)

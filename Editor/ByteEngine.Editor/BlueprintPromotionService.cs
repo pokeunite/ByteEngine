@@ -29,6 +29,8 @@ internal static class BlueprintPromotionService
         if (selected.GetComponent<BlueprintInstance>() != null)
             throw new InvalidOperationException("The selected object is already a Blueprint instance. Unpack it before creating a new Blueprint.");
 
+        if (selected.GetComponent<CharacterController3D>() != null)
+            BlueprintAuthoringService.SetupThirdPersonCharacter(selected, project.Assets);
         SceneData serialized = project.Scenes.Serialize(selected.Scene);
         HashSet<Guid> hierarchyIds = Descendants(selected).Select(item => item.Id).Append(selected.Id).ToHashSet();
         GameObjectData root = serialized.GameObjects.FirstOrDefault(item => item.Id == selected.Id)

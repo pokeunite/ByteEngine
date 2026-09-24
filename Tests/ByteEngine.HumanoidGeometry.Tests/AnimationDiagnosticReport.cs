@@ -11,7 +11,7 @@ using ByteEngine.Core.Assets.Importers;
 namespace ByteEngine.HumanoidGeometry.Tests;
 
 /// <summary>
-/// Read-only, reproducible import/pose/retarget diagnostics. Never refreshes the asset database.
+/// Read-only, reproducible import, pose, and native channel diagnostics. Never refreshes the asset database.
 /// </summary>
 internal static class AnimationDiagnosticReport
 {
@@ -63,7 +63,7 @@ internal static class AnimationDiagnosticReport
             for (int i = 0; i < 2; i++)
                 if (inputs[i] is { } source)
                 {
-                    try { CompareAndRetarget(source, target, Line); }
+                    try { CompareNativeRig(source, target, Line); }
                     catch (Exception ex) { Line($"\n[{source.Label} -> TARGET] COMPARISON FAILED: {ex}"); }
                 }
 
@@ -104,7 +104,7 @@ internal static class AnimationDiagnosticReport
         ModelAsset effective = input.Effective;
         SkeletonAsset? skeleton = model.Skeleton;
         line($"Saved rig={input.SavedSettings.RigType} auto={input.SavedSettings.AutoDetectHumanoidRig} importScale={F(input.SavedSettings.ImportScale)} importAnimations={input.SavedSettings.ImportAnimations}");
-        line($"Effective rig={effective.RigType} autoDetected={effective.HumanoidRigWasAutoDetected} rootMotion={effective.RootMotionSource}");
+        line($"Effective rig={effective.RigType} autoDetected={effective.HumanoidRigWasAutoDetected}");
         line($"Counts: nodes={model.Nodes.Count} meshes={model.Meshes.Count} bones={skeleton?.Bones.Count ?? 0} clips={model.Animations.Count}");
         if (skeleton is not null)
         {
@@ -170,7 +170,7 @@ internal static class AnimationDiagnosticReport
         }
     }
 
-    private static void CompareAndRetarget(Input source, Input target, Action<string> line)
+    private static void CompareNativeRig(Input source, Input target, Action<string> line)
     {
         line($"\n[{source.Label} -> TARGET]");
         SkeletonAsset? a = source.Raw.Skeleton, b = target.Raw.Skeleton;
@@ -200,17 +200,6 @@ internal static class AnimationDiagnosticReport
         line($"Direct target node matches={clip.Channels.Count(c => targetNames.Contains(c.NodeName))}/{clip.Channels.Count}; direct finger matches={clip.Channels.Count(c => IsFinger(c.NodeName) && targetNames.Contains(c.NodeName))}/{clip.Channels.Count(c => IsFinger(c.NodeName))}");
         foreach (ImportedAnimationChannel channel in clip.Channels.Where(c => !targetNames.Contains(c.NodeName)))
             line($"  UNMATCHED target node: {channel.NodeName}");
-        if (source.Effective.ReferenceHumanoidPose is null || target.Effective.ReferenceHumanoidPose is null)
-        { line("Retarget unavailable: source or target has no effective Humanoid reference pose"); return; }
-        ImportedAnimation baked = HumanoidRetargetClipBuilder.Build(a, source.Effective.HumanoidMapping,
-            source.Effective.ReferenceHumanoidPose, clip, source.Raw.Nodes, source.Raw.Meshes,
-            b, target.Effective.HumanoidMapping, target.Effective.ReferenceHumanoidPose,
-            target.Raw.Nodes, target.Raw.Meshes, source.Raw.Guid, target.Raw.Guid,
-            "Diagnostic_Only", 30f);
-        line($"Baked clip (in memory only): channels={baked.Channels.Count} fingerChannels={baked.Channels.Count(c => IsFinger(c.NodeName))} duration={F(baked.Duration)}");
-        foreach (ImportedAnimationChannel channel in baked.Channels) line($"  BAKED {channel.NodeName} T={channel.Translation?.Keys.Count ?? 0} R={channel.Rotation?.Keys.Count ?? 0} S={channel.Scale?.Keys.Count ?? 0}");
-        foreach (float fraction in new[] { 0f, .25f, .5f, .75f })
-            SamplePose(target.Raw, baked, baked.Duration * fraction, line);
     }
 
     private static void SamplePose(ImportedModel model, ImportedAnimation clip, float time, Action<string> line)

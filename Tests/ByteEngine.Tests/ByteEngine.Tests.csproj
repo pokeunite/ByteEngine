@@ -13,5 +13,9 @@
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
     <ProjectReference Include="..\..\Editor\ByteEngine.Editor\ByteEngine.Editor.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Historical, protected local test for the retired retargeter. Keep the file untouched. -->
+    <Compile Remove="C9HumanoidSourceNodeRetargetTests.cs" />
+  </ItemGroup>
 
 </Project>

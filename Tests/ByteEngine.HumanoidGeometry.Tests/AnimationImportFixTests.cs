@@ -100,19 +100,6 @@ internal static class AnimationImportFixTests
             "finger roles absent");
         Check(HumanoidRigMapper.Validate(skeleton, map).IsReady, "full map did not validate");
 
-        ImportedAnimation source = new() { Name = "Finger", Duration = 1,
-            Channels = new() { new ImportedAnimationChannel { NodeName = "mixamorig1:LeftHandIndex1",
-                Rotation = new ImportedQuaternionTrack { Keys = new() {
-                    new ImportedQuaternionKey(0, Quaternion.Identity, default, default),
-                    new ImportedQuaternionKey(1, Quaternion.CreateFromAxisAngle(Vector3.UnitX, .3f), default, default)
-                } } } } };
-        HumanoidReferencePose reference = HumanoidReferencePose.Capture(skeleton, map);
-        ImportedAnimation baked = HumanoidRetargetClipBuilder.Build(skeleton, map, reference,
-            source, skeleton, map, reference, nodes, Guid.NewGuid(), Guid.NewGuid(), "Baked", 15f);
-        Check(baked.Channels.Count(channel => channel.NodeName.Contains("Hand", StringComparison.Ordinal) &&
-            new[] { "Thumb", "Index", "Middle", "Ring", "Pinky" }.Any(finger =>
-                channel.NodeName.Contains(finger, StringComparison.Ordinal))) == 30,
-            "retarget bake discarded finger channels");
     }
 
     private static void Check(bool condition, string message)

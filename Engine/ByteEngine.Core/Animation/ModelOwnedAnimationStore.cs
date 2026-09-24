@@ -20,7 +20,7 @@ public enum ModelOwnedAnimationConflictKind
 /// <summary>
 /// Editor-facing source information retained with a baked animation. Runtime
 /// playback does not depend on this source asset; it only exists so tooling can
-/// explain where the animation came from and support a future Re-Retarget flow.
+/// explain where a historical model-owned animation came from.
 /// </summary>
 public sealed class ModelOwnedAnimationProvenance
 {
@@ -53,7 +53,7 @@ public readonly record struct ModelOwnedAnimationSummary(
 /// <summary>
 /// Persistent model-owned animation storage introduced by C9.5.
 ///
-/// Retargeted animations are NOT written back into the FBX/GLTF source file.
+/// Historical model-owned animations are NOT written into FBX/GLTF source files.
 /// They are stored in project-internal data keyed by the target model GUID and
 /// merged into ModelAsset.Animations whenever the target model is loaded.
 ///
@@ -66,7 +66,7 @@ public static class ModelOwnedAnimationStore
         1;
 
     /*
-     * Animation libraries can contain thousands of keyframes. Retarget editor
+     * Animation libraries can contain thousands of keyframes. Editor
      * UI must never deserialize that JSON every frame, so keep the parsed
      * library hot and invalidate it only when the backing file changes.
      */
@@ -183,7 +183,7 @@ public static class ModelOwnedAnimationStore
     }
 
     /// <summary>
-    /// Persists a temporary retarget result as an animation owned by the target
+    /// Persists an animation owned by the target
     /// model. Imported/native clips can never be silently replaced. An existing
     /// baked clip may only be replaced when replaceExistingBaked is explicitly
     /// true.
@@ -232,7 +232,7 @@ public static class ModelOwnedAnimationStore
                         StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException(
-                $"Animation '{name}' already exists inside the imported target model. Choose a different name; native model clips are never overwritten by an experimental retarget bake.");
+                $"Animation '{name}' already exists inside the imported target model. Choose a different name; native model clips are never overwritten by a model-owned clip.");
         }
 
         if (existing !=
@@ -249,7 +249,7 @@ public static class ModelOwnedAnimationStore
 
         string key =
             existing?.Animation.Key ??
-            $"owned-retarget:{targetModel.Guid:N}:{Guid.NewGuid():N}";
+            $"owned-animation:{targetModel.Guid:N}:{Guid.NewGuid():N}";
 
         var ownedAnimation =
             new ImportedAnimation
@@ -463,7 +463,7 @@ public static class ModelOwnedAnimationStore
     }
 
     /// <summary>
-    /// Removes one retargeted/model-owned animation from persistent storage and
+    /// Removes one model-owned animation from persistent storage and
     /// from the currently loaded target ModelAsset. Native imported animations
     /// are not represented by this store and therefore cannot be removed here.
     /// </summary>

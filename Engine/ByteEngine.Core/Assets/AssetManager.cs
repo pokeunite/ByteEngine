@@ -89,7 +89,7 @@ public sealed class AssetManager : IDisposable
                 asset.Metadata.ModelImporter);
 
         /*
-         * C9.5: merge editor-approved retargeted animations into the target
+         * Merge historical model-owned animations into the target
          * model before it enters the cache. The existing Asset Browser model
          * expand-arrow and all animation pickers already read ModelAsset.Animations,
          * so no parallel animation asset hierarchy is required.

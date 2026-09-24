@@ -196,7 +196,7 @@ internal sealed class AnimationClipPreview : IDisposable
             _selectionSourceGuid = asset.Guid;
             _previewModelReference = model.Meshes.Count > 0
                 ? new AssetReference(asset.Guid, asset.ProjectPath)
-                : model.DefaultRetargetTargetModel;
+                : model.AnimationSourceRigModel;
         }
 
         DrawPreviewModelPicker(project, model);
@@ -522,10 +522,7 @@ internal sealed class AnimationClipPreview : IDisposable
         if (source.Meshes.Count == 0)
             ImGui.TextDisabled("Preview only: the chosen model and source asset are not modified.");
         if (current?.Guid != null && current.Guid != source.Guid)
-            ImGui.TextDisabled("Cross-model preview uses experimental animation retargeting.");
-        if (!source.AnimationSourceRigModel.IsEmpty)
-            ImGui.TextDisabled(
-                "Preview uses the assigned Animation Source Rig, matching Retarget & Save (Experimental).");
+            ImGui.TextDisabled("A different model can preview this clip only when its node names match the source rig.");
     }
     private void EnsurePreview(
         EditorProjectContext project,
@@ -592,25 +589,21 @@ internal sealed class AnimationClipPreview : IDisposable
 
             if (previewAsset.Guid != asset.Guid)
             {
-                /*
-                 * Preview must use the same source-rig resolution as Retarget &
-                 * Save. The old preview-only override forced the animation
-                 * asset itself whenever it looked Humanoid-ready, which could
-                 * silently ignore AnimationSourceRigModel.
-                 */
-                ImportedAnimation generated = HumanoidRetargetRuntime.BuildClip(
-                    project.Assets,
-                    new AssetReference(asset.Guid, asset.ProjectPath),
-                    animation.Name,
-                    previewReference,
-                    animation.Name,
-                    model.RetargetSamplesPerSecond);
+                var targetNodeNames = previewModel.Nodes
+                    .Select(node => node.Name)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                int matchedChannels = animation.Channels.Count(channel =>
+                    targetNodeNames.Contains(channel.NodeName));
+                if (animation.Channels.Count == 0 ||
+                    matchedChannels < Math.Ceiling(animation.Channels.Count * 0.8))
+                    throw new InvalidOperationException(
+                        $"Preview model is not compatible with this animation's skeleton ({matchedChannels}/{animation.Channels.Count} channels match). Choose the original rig or a model with matching bone names.");
                 ImportedAnimation temporary = new()
                 {
                     Key = $"inspector-preview:{_previewInstanceGuid:N}:{animation.Key}:{previewAsset.Guid:N}",
                     Name = $"__Preview_{_previewInstanceGuid:N}",
-                    Duration = generated.Duration,
-                    Channels = generated.Channels
+                    Duration = animation.Duration,
+                    Channels = animation.Channels
                 };
                 previewModel.RegisterRuntimeAnimation(temporary);
                 _temporaryClipOwner = previewModel;

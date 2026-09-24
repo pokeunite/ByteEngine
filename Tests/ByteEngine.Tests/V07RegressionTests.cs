@@ -463,12 +463,10 @@ internal static class V07RegressionTests
                 new ModelAsset(imported));
 
         Assert(
-            analysis.Normalized &&
-            MathF.Abs(
-                analysis.FinalLargestDimension -
-                1.0f) <
-            0.0001f,
-            "FBX hierarchy scale normalization uses transformed bounds");
+            !analysis.Normalized &&
+            MathF.Abs(analysis.AppliedScale - 1.0f) < 0.0001f &&
+            MathF.Abs(analysis.FinalLargestDimension - 0.01f) < 0.0001f,
+            "Editor does not infer physical units from apparent humanoid height");
     }
 
     private static void TestModelInstancePersistence(

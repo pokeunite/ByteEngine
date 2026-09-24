@@ -125,10 +125,6 @@ public static class AnimationProfileSerializer
             ToAssetReference(
                 rigDocument.ReferenceModel);
 
-        AssetReference animationSourceModel =
-            ToAssetReference(
-                rigDocument.AnimationSourceModel);
-
         return
             new AnimationProfile
             {
@@ -148,10 +144,7 @@ public static class AnimationProfileSerializer
                             rigDocument.Type,
 
                         ReferenceModel =
-                            referenceModel,
-
-                        AnimationSourceModel =
-                            animationSourceModel
+                            referenceModel
                     },
 
                 Locomotion =
@@ -188,11 +181,7 @@ public static class AnimationProfileSerializer
 
                         ReferenceModel =
                             FromAssetReference(
-                                profile.Rig.ReferenceModel),
-
-                        AnimationSourceModel =
-                            FromAssetReference(
-                                profile.Rig.AnimationSourceModel)
+                                profile.Rig.ReferenceModel)
                     },
 
                 Locomotion =
@@ -330,8 +319,6 @@ public static class AnimationProfileSerializer
         public AssetReferenceDocument? ReferenceModel { get; set; } =
             new();
 
-        public AssetReferenceDocument? AnimationSourceModel { get; set; } =
-            new();
     }
 
     /// <summary>

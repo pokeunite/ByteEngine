@@ -48,7 +48,7 @@ internal static class ComponentMetadataRegistry
         [typeof(Camera2D)] = new("2D Camera", "Camera", "Renders a two-dimensional game view.", "orthographic zoom"),
         [typeof(ThirdPersonCamera3D)] = new("Legacy Third Person Camera", "Camera", "Legacy standalone follow camera kept for older projects.", "tps orbit follow", false, true),
         [typeof(ModelHierarchyInstance)] = new("Model", "Rendering", "References an imported model hierarchy.", "fbx mesh asset"),
-        [typeof(VisualModelOverride)] = new("Visual Model Override", "Character", "Adjusts a Character Blueprint Visual's rotation and scale without affecting its controller or imported bones.", "model facing rotation scale visual override"),
+        [typeof(VisualModelOverride)] = new("Visual Model Override", "Character", "Adjusts the Character Model child rotation and scale without changing the gameplay root or imported bones.", "model facing rotation scale visual override"),
         [typeof(MeshRenderer)] = new("Mesh Renderer", "Rendering", "Draws a static 3D mesh.", "material primitive"),
         [typeof(SkeletalMeshRenderer)] = new("Skeletal Mesh Renderer", "Rendering", "Draws an animated skinned mesh.", "character bones model"),
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
@@ -95,10 +95,11 @@ internal static class ComponentMetadataRegistry
     {
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.VisualBounds))] = new("Visual Bounds", "Diagnostics", "Measured bounds from capsule auto-fit.", Advanced: true, ReadOnly: true),
         [(typeof(CapsuleCollider3D), nameof(CapsuleCollider3D.AutoFitSource))] = new("Auto-Fit Source", "Diagnostics", "Source used by capsule auto-fit.", Advanced: true, ReadOnly: true),
-        [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Scale recorded when importing the hierarchy.", Advanced: true, ReadOnly: true),
-        [(typeof(VisualModelOverride), nameof(VisualModelOverride.ImportScale))] = new("Import Unit Scale", "Model", "Unit correction inherited from the imported model.", ReadOnly: true),
+        [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AppliedImportScale))] = new("Applied Import Scale", "Diagnostics", "Legacy editor scale metadata; new imports apply units inside the model.", Advanced: true, ReadOnly: true),
+        [(typeof(ModelHierarchyInstance), nameof(ModelHierarchyInstance.AutoGrounded))] = new("Auto Grounded", "Diagnostics", "Model-only feet-origin offset has been applied once.", Advanced: true, ReadOnly: true),
+        [(typeof(VisualModelOverride), nameof(VisualModelOverride.ImportScale))] = new("Import Unit Scale", "Model", "Legacy import-scale metadata; new models store unit conversion in the imported hierarchy.", ReadOnly: true),
         [(typeof(VisualModelOverride), nameof(VisualModelOverride.RotationDegrees))] = new("Visual Rotation", "Model", "Model-only rotation in degrees."),
-        [(typeof(VisualModelOverride), nameof(VisualModelOverride.ScaleMultiplier))] = new("Visual Scale", "Model", "Multiplier after import unit correction; 1 means intended model size."),
+        [(typeof(VisualModelOverride), nameof(VisualModelOverride.ScaleMultiplier))] = new("Visual Scale", "Model", "Model-only authored scale; 1 means the imported physical size."),
 
 
         [(typeof(AudioSource3D), nameof(AudioSource3D.ClipReference))] = new("Audio Clip", "Audio", "Drag a PCM WAV asset here. Mono WAV is recommended for positional 3D audio."),

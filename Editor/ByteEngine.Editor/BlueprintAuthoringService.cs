@@ -4,6 +4,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Classification;
 using ByteEngine.Core.InputSystem;
@@ -30,35 +31,21 @@ internal static class BlueprintAuthoringService
 
     private static GameObject ResolveComponentTarget(GameObject target, Component component)
     {
-        if (component is not VisualModelOverride || target.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+        if (component is not VisualModelOverride || target.GetComponent<ModelHierarchyInstance>() != null ||
+            target.Name.Equals("Model", StringComparison.OrdinalIgnoreCase))
             return target;
 
-        GameObject? visual = target.Children.FirstOrDefault(
-            child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
-        return visual ?? throw new InvalidOperationException(
-            "Visual Model Override requires a Character Blueprint Visual child.");
+        GameObject? model = target.Children.FirstOrDefault(child =>
+            child.GetComponent<ModelHierarchyInstance>() != null ||
+            child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase));
+        return model ?? throw new InvalidOperationException(
+            "Visual Model Override requires a Character Blueprint Model child.");
     }
 
     private static void PrepareVisualOverride(GameObject target, Component component)
     {
-        if (component is not VisualModelOverride visualOverride)
-            return;
-
-        ModelHierarchyInstance? model = target.Children
-            .Select(child => child.GetComponent<ModelHierarchyInstance>())
-            .FirstOrDefault(instance => instance != null);
-        if (model == null)
-            return;
-
-        visualOverride.ImportScale = model.AppliedImportScale;
-
-        // Repair legacy Blueprints whose recorded import correction was lost.
-        // A deliberately authored non-unit Visual scale is preserved.
-        if (Vector3.DistanceSquared(target.Transform.LocalScale, Vector3.One) < 0.000001f &&
-            MathF.Abs(visualOverride.ImportScale - 1.0f) > 0.0001f)
-        {
-            target.Transform.LocalScale = Vector3.One * visualOverride.ImportScale;
-        }
+        if (component is VisualModelOverride visualOverride)
+            visualOverride.ImportScale = 1.0f;
     }
 
     private static void AddDependencies(GameObject target, Type componentType)
@@ -93,7 +80,11 @@ internal static class BlueprintAuthoringService
         bool createInitialCapsule =
             player.GetComponent<CapsuleCollider3D>() == null;
 
-        NormalizeCharacterStructure(player);
+        bool promoteRawModel = player.GetComponent<ModelHierarchyInstance>() != null &&
+            !player.Children.Any(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
+        GameObject modelRoot = NormalizeCharacterStructure(player);
+        if (promoteRawModel && assets != null)
+            GroundModelAtFeet(modelRoot, assets);
 
         /*
          * The character root is treated as a feet/pivot origin by the movement
@@ -230,161 +221,173 @@ internal static class BlueprintAuthoringService
 
     public static GameObject NormalizeCharacterStructure(GameObject player)
     {
-        GameObject[] originalChildren = player.Children.ToArray();
-        ModelHierarchyInstance? rootModel = player.GetComponent<ModelHierarchyInstance>();
-        GameObject visual = EnsureVisualRoot(player);
-
-        if (rootModel != null)
-        {
-            Vector3 rootScale = player.Transform.LocalScale;
-            if (NearlyUniform(rootScale, rootModel.AppliedImportScale))
-            {
-                visual.Transform.LocalScale *= rootScale;
-                player.Transform.LocalScale = Vector3.One;
-            }
-
-            GameObject importedModel =
-                visual.Children.FirstOrDefault(
-                    child => child.GetComponent<ModelHierarchyInstance>() != null)
-                ?? player.Scene!.CreateGameObject(
-                    player.Name.EndsWith(
-                        "Model",
-                        StringComparison.OrdinalIgnoreCase)
-                        ? player.Name
-                        : player.Name + "Model");
-
-            importedModel.SetParent(visual, false);
-
-            if (!importedModel.HasComponent<ModelHierarchyInstance>())
-            {
-                importedModel.AddComponent(
-                    new ModelHierarchyInstance
-                    {
-                        Model = rootModel.Model,
-                        AppliedImportScale = rootModel.AppliedImportScale
-                    });
-            }
-
-            player.RemoveComponent(rootModel);
-
-            foreach (GameObject child in originalChildren)
-            {
-                if (ReferenceEquals(child, visual) ||
-                    child.GetComponent<Camera3D>() != null)
-                {
-                    continue;
-                }
-
-                child.SetParent(importedModel, false);
-            }
-        }
-
-        RemoveGameplayComponentsFromDescendants(player);
-
-        /*
-         * The PlayerController3D owns the runtime character yaw in FaceCamera
-         * and FaceMovement modes. Any authored yaw left on the Blueprint root
-         * would therefore be overwritten as soon as Play starts.
-         *
-         * Character model facing corrections belong on the Visual child, not
-         * on the gameplay/collision root.
-         */
-        MoveRuntimeOwnedCharacterFacingToVisual(
-            player);
-
-        return visual;
-    }
-
-    public static bool MoveRuntimeOwnedCharacterFacingToVisual(
-        GameObject player)
-    {
-        ArgumentNullException.ThrowIfNull(
-            player);
-
-        PlayerController3D? playerInput =
-            player.GetComponent<PlayerController3D>();
-
-        if (playerInput ==
-                null ||
-            playerInput.CharacterRotation ==
-                CharacterRotationMode.Independent)
-        {
-            return false;
-        }
-
-        Vector3 rootEuler =
-            player.Transform.EulerAngles;
-
-        float authoredYaw =
-            NormalizeAngle(
-                rootEuler.Y);
-
-        if (MathF.Abs(
-                authoredYaw) <
-            0.001f)
-        {
-            return false;
-        }
-
-        GameObject visual =
-            EnsureVisualRoot(
-                player);
-
-        /*
-         * Preserve the Visual's exact world pose while removing Y rotation
-         * from the gameplay root. Restoring the Visual world pose causes the
-         * authored facing correction to become a Visual-local offset instead.
-         *
-         * Example:
-         *   Before: Player Y = -180, Visual Y = 0
-         *   After : Player Y =    0, Visual carries the equivalent -180 offset
-         *
-         * The runtime PlayerController can now rotate Player freely without
-         * destroying the model's imported-facing correction.
-         */
-        Vector3 visualWorldPosition =
-            visual.Transform.WorldPosition;
-
-        Quaternion visualWorldRotation =
-            visual.Transform.WorldRotation;
-
-        rootEuler.Y =
-            0.0f;
-
-        player.Transform.EulerAngles =
-            rootEuler;
-
-        visual.Transform.WorldPosition =
-            visualWorldPosition;
-
-        visual.Transform.WorldRotation =
-            visualWorldRotation;
-
-        return true;
-    }
-
-    public static GameObject EnsureVisualRoot(GameObject player)
-    {
-        GameObject? visual =
-            player.Children.FirstOrDefault(
-                child =>
-                    child.Name.Equals(
-                        "Visual",
-                        StringComparison.OrdinalIgnoreCase));
+        Scene scene = player.Scene ?? throw new InvalidOperationException("The character must belong to a scene.");
+        GameObject? visual = player.Children.FirstOrDefault(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase));
+        GameObject? model = visual?.Children.FirstOrDefault(child => child.GetComponent<ModelHierarchyInstance>() != null);
+        model ??= player.Children.FirstOrDefault(child => child.GetComponent<ModelHierarchyInstance>() != null || child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase));
 
         if (visual != null)
         {
-            return visual;
+            if (model == null)
+                model = visual;
+            else
+            {
+                if (visual.Components.Any(component => component is not VisualModelOverride))
+                    throw new InvalidOperationException(
+                        "Legacy Visual contains custom components; move them explicitly before flattening the model.");
+                model.SetParent(player, true);
+                foreach (GameObject child in visual.Children.ToArray())
+                    child.SetParent(model, true);
+                if (visual.GetComponent<VisualModelOverride>() != null && model.GetComponent<VisualModelOverride>() == null)
+                    model.AddComponent(new VisualModelOverride());
+                scene.DestroyGameObject(visual);
+            }
         }
 
-        Scene scene =
-            player.Scene ??
-            throw new InvalidOperationException(
-                "The Blueprint root must belong to a preview scene.");
+        model ??= EnsureModelRoot(player);
+        if (!ReferenceEquals(model.Parent, player))
+            model.SetParent(player, true);
+        model.Name = "Model";
 
-        visual = scene.CreateGameObject("Visual");
-        visual.SetParent(player, false);
-        return visual;
+        ModelHierarchyInstance? rootModel = player.GetComponent<ModelHierarchyInstance>();
+        if (rootModel != null)
+        {
+            if (model.GetComponent<ModelHierarchyInstance>() == null)
+                model.AddComponent(new ModelHierarchyInstance { Model = rootModel.Model, AppliedImportScale = rootModel.AppliedImportScale });
+            player.RemoveComponent(rootModel);
+            foreach (GameObject child in player.Children.ToArray())
+                if (!ReferenceEquals(child, model) && child.GetComponent<Camera3D>() == null)
+                    child.SetParent(model, true);
+        }
+
+        if (Vector3.DistanceSquared(player.Transform.LocalScale, Vector3.One) > 0.000001f)
+        {
+            Vector3 worldPosition = model.Transform.WorldPosition;
+            Vector3 worldScale = model.Transform.WorldScale;
+            var cameras = player.Children
+                .Where(child => child.GetComponent<Camera3D>() != null)
+                .Select(child => (Object: child, Position: child.Transform.WorldPosition,
+                    Rotation: child.Transform.WorldRotation, Scale: child.Transform.WorldScale))
+                .ToArray();
+            player.Transform.LocalScale = Vector3.One;
+            model.Transform.WorldPosition = worldPosition;
+            model.Transform.WorldScale = worldScale;
+            foreach (var camera in cameras)
+            {
+                camera.Object.Transform.WorldPosition = camera.Position;
+                camera.Object.Transform.WorldRotation = camera.Rotation;
+                camera.Object.Transform.WorldScale = camera.Scale;
+            }
+        }
+
+        if (model.GetComponent<VisualModelOverride>() is { } modelOverride)
+            modelOverride.ImportScale = 1.0f;
+        RemoveGameplayComponentsFromDescendants(player);
+        MoveRuntimeOwnedCharacterFacingToVisual(player);
+        return model;
+    }
+
+    // Compatibility entry point; corrections now live on Model rather than Visual.
+    public static bool MoveRuntimeOwnedCharacterFacingToVisual(GameObject player)
+    {
+        PlayerController3D? controller = player.GetComponent<PlayerController3D>();
+        if (controller == null || controller.CharacterRotation == CharacterRotationMode.Independent)
+            return false;
+        Vector3 rootEuler = player.Transform.EulerAngles;
+        if (MathF.Abs(NormalizeAngle(rootEuler.Y)) < 0.001f)
+            return false;
+        GameObject model = EnsureModelRoot(player);
+        Vector3 position = model.Transform.WorldPosition;
+        Quaternion rotation = model.Transform.WorldRotation;
+        var cameras = player.Children
+            .Where(child => child.GetComponent<Camera3D>() != null)
+            .Select(child => (Object: child, Position: child.Transform.WorldPosition,
+                Rotation: child.Transform.WorldRotation))
+            .ToArray();
+        rootEuler.Y = 0.0f;
+        player.Transform.EulerAngles = rootEuler;
+        model.Transform.WorldPosition = position;
+        model.Transform.WorldRotation = rotation;
+        foreach (var camera in cameras)
+        {
+            camera.Object.Transform.WorldPosition = camera.Position;
+            camera.Object.Transform.WorldRotation = camera.Rotation;
+        }
+        return true;
+    }
+
+    public static GameObject EnsureModelRoot(GameObject player)
+    {
+        GameObject? model = player.Children.FirstOrDefault(child =>
+            child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+            child.GetComponent<ModelHierarchyInstance>() != null);
+        if (model != null) return model;
+        Scene scene = player.Scene ?? throw new InvalidOperationException("The Blueprint root must belong to a scene.");
+        model = scene.CreateGameObject("Model");
+        model.SetParent(player, false);
+        return model;
+    }
+
+    public static bool GroundModelAtFeet(GameObject modelObject, AssetManager assets)
+    {
+        ModelHierarchyInstance? instance = modelObject.GetComponent<ModelHierarchyInstance>();
+        if (instance == null || instance.AutoGrounded || instance.Model.IsEmpty)
+            return false;
+
+        ModelAsset model = assets.LoadModel(instance.Model);
+        if (!ModelImportScaleUtility.TryCalculateHierarchyBounds(
+                model, out Vector3 minimum, out _))
+            return false;
+        if (!float.IsFinite(minimum.Y) || MathF.Abs(minimum.Y) > 10000f)
+            return false;
+
+        modelObject.Transform.LocalPosition += new Vector3(0f, -minimum.Y, 0f);
+        instance.AutoGrounded = true;
+        return true;
+    }
+    public static bool FitCharacterModelHeight(
+        GameObject modelObject,
+        AssetManager assets,
+        float targetHeight = 1.8f)
+    {
+        if (modelObject.GetComponent<ModelHierarchyInstance>() is not { } instance ||
+            instance.Model.IsEmpty ||
+            !float.IsFinite(targetHeight) ||
+            targetHeight <= 0f)
+            return false;
+
+        GameObject root = modelObject;
+        while (root.Parent != null)
+            root = root.Parent;
+        if (root.GetComponent<CharacterController3D>() == null)
+            return false;
+
+        ModelAsset model = assets.LoadModel(instance.Model);
+        if (!ModelImportScaleUtility.TryCalculateHierarchyBounds(
+                model, out Vector3 minimum, out Vector3 maximum))
+            return false;
+
+        BoundingBox3D importedBounds = new(minimum, maximum);
+        BoundingBox3D before = importedBounds.Transform(modelObject.Transform.WorldMatrix);
+        float currentHeight = before.Size.Y;
+        if (!before.IsValid || !float.IsFinite(currentHeight) ||
+            currentHeight <= 0.00001f)
+            return false;
+
+        float multiplier = targetHeight / currentHeight;
+        Vector3 fittedScale = modelObject.Transform.LocalScale * multiplier;
+        if (!float.IsFinite(multiplier) || multiplier <= 0f ||
+            !float.IsFinite(fittedScale.X) ||
+            !float.IsFinite(fittedScale.Y) ||
+            !float.IsFinite(fittedScale.Z) ||
+            fittedScale.X <= 0f || fittedScale.Y <= 0f || fittedScale.Z <= 0f)
+            return false;
+
+        modelObject.Transform.LocalScale = fittedScale;
+        BoundingBox3D after = importedBounds.Transform(modelObject.Transform.WorldMatrix);
+        modelObject.Transform.WorldPosition += new Vector3(0f, before.Minimum.Y - after.Minimum.Y, 0f);
+        CharacterCapsuleAutoFit.TryFit(root, assets, out _);
+        return true;
     }
 
     private static bool IsLegacyUnfittedCharacterCapsule(

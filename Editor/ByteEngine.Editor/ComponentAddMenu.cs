@@ -13,8 +13,11 @@ internal static class ComponentAddMenu
         IEnumerable<Type> candidates = ComponentMetadataRegistry.RegisteredTypes
             .Where(type => type != typeof(BlueprintInstance) && typeof(Component).IsAssignableFrom(type))
             .Where(type => type != typeof(VisualModelOverride) ||
-                target.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase) && target.Parent != null ||
-                target.Parent == null && target.Children.Any(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase)))
+                target.GetComponent<ModelHierarchyInstance>() != null ||
+                target.Name.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+                target.Parent == null && target.Children.Any(child =>
+                    child.GetComponent<ModelHierarchyInstance>() != null ||
+                    child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase)))
             .Where(type => ComponentMetadataRegistry.Matches(type, search));
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -53,7 +56,9 @@ internal static class ComponentAddMenu
     {
         ComponentMetadata metadata = ComponentMetadataRegistry.Get(type);
         GameObject componentTarget = type == typeof(VisualModelOverride) && target.Parent == null
-            ? target.Children.First(child => child.Name.Equals("Visual", StringComparison.OrdinalIgnoreCase))
+            ? target.Children.First(child =>
+                child.GetComponent<ModelHierarchyInstance>() != null ||
+                child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase))
             : target;
         bool exists = componentTarget.Components.Any(component => component.GetType() == type);
 

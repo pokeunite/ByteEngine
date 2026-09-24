@@ -132,10 +132,6 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         int windowWidth,
         int windowHeight)
     {
-        // C9.5 UX: retarget entry point. The popup draws once per ImGui frame,
-        // even if the AnimationController inspector also hosts it.
-        HumanoidRetargetBakeWindow.Draw();
-
         if (_visible &&
             _asset != null &&
             _project != null)
@@ -1153,89 +1149,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
             ImGui.TextWrapped(
                 "Choose the character model that defines this profile's skeleton.");
 
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.68f,
-                    0.25f,
-                    1.0f),
-                "Retarget Animation (Experimental) is locked until a Reference Model is assigned and the profile is applied/saved.");
-
             return changed;
-        }
-
-        ImGui.SeparatorText(
-            "ANIMATION SOURCE");
-
-        AssetReference animationSource =
-            _profile.Rig.AnimationSourceModel ??
-            AssetReference.Empty;
-
-        if (DrawAssetPicker(
-                "Animation Source Model",
-                AssetType.Model3D,
-                ref animationSource))
-        {
-            _profile.Rig.AnimationSourceModel =
-                animationSource;
-
-            InvalidateClipCache();
-
-            changed =
-                true;
-        }
-
-        if (animationSource.IsEmpty)
-        {
-            ImGui.TextDisabled(
-                "Using Reference Model animations. To use an imported animation-only FBX, select it here as the Animation Source Model.");
-        }
-        else
-        {
-            DrawAnimationSourceStatus(
-                modelReference,
-                animationSource);
-        }
-
-        ImGui.Spacing();
-        ImGui.SeparatorText(
-            "RETARGET & BAKE (EXPERIMENTAL)");
-
-        ImGui.TextWrapped(
-            "Experimental retargeting uses this profile's Reference Model as the target owner. Preview is temporary; nothing is added to the character until Bake To Character is pressed.");
-
-        if (_dirty)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.68f,
-                    0.25f,
-                    1.0f),
-                "Apply & Save this profile before experimental retargeting so the preview uses these exact settings.");
-        }
-
-        ImGui.BeginDisabled(
-            _dirty);
-
-        if (ImGui.Button(
-                "Retarget Animation To Reference Model (Experimental)..."))
-        {
-            HumanoidRetargetBakeWindow.Open(
-                new AssetReference(
-                    _asset.Guid,
-                    _asset.ProjectPath),
-                _project);
-        }
-
-        ImGui.EndDisabled();
-
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                _dirty
-                    ? "Apply & Save the Animation Profile first."
-                    : "Choose any ready Humanoid source model/clip, preview the result, then explicitly bake it onto this profile's Reference Model.");
         }
 
         AssetRecord? modelAsset =
@@ -1323,150 +1237,6 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         return changed;
     }
 
-    private void DrawAnimationSourceStatus(
-        AssetReference referenceModel,
-        AssetReference animationSource)
-    {
-        if (_project ==
-            null)
-        {
-            return;
-        }
-
-        AssetRecord? sourceAsset =
-            _project.AssetDatabase.Resolve(
-                animationSource);
-
-        if (sourceAsset ==
-                null ||
-            sourceAsset.Type !=
-                AssetType.Model3D)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.38f,
-                    0.30f,
-                    1.0f),
-                "Animation Source Model is missing or invalid.");
-
-            return;
-        }
-
-        try
-        {
-            ModelAsset sourceModel =
-                _project.Assets.LoadModel(
-                    animationSource);
-
-            bool sameModel =
-                SameAssetReference(
-                    referenceModel,
-                    animationSource);
-
-            if (sameModel)
-            {
-                ImGui.TextDisabled(
-                    "Animation Source is the Reference Model. Clips play natively; no experimental retargeting is required.");
-
-                return;
-            }
-
-            ModelAsset targetModel =
-                _project.Assets.LoadModel(
-                    referenceModel);
-
-            HumanoidRigDiagnosticReport sourceDiagnostics =
-                HumanoidRigDiagnostics.Analyze(
-                    sourceModel.Skeleton,
-                    sourceModel.HumanoidMapping);
-
-            HumanoidRigDiagnosticReport targetDiagnostics =
-                HumanoidRigDiagnostics.Analyze(
-                    targetModel.Skeleton,
-                    targetModel.HumanoidMapping);
-
-            bool sourceReady =
-                sourceModel.RigType ==
-                    AnimationRigType.Humanoid &&
-                sourceModel.ReferenceHumanoidPose?.IsReady ==
-                    true &&
-                sourceDiagnostics.Errors.Count ==
-                    0;
-
-            bool targetReady =
-                targetModel.RigType ==
-                    AnimationRigType.Humanoid &&
-                targetModel.ReferenceHumanoidPose?.IsReady ==
-                    true &&
-                targetDiagnostics.Errors.Count ==
-                    0;
-
-            if (sourceReady &&
-                targetReady)
-            {
-                ImGui.TextColored(
-                    new Vector4(
-                        0.35f,
-                        0.86f,
-                        0.48f,
-                        1.0f),
-                    "Humanoid Retarget Source Ready (Experimental)");
-
-                ImGui.TextDisabled(
-                    $"{sourceModel.Animations.Count} source clip(s) available for experimental runtime retargeting.");
-            }
-            else
-            {
-                ImGui.TextColored(
-                    new Vector4(
-                        1.0f,
-                        0.58f,
-                        0.24f,
-                        1.0f),
-                    "Humanoid Retarget Source Needs Attention (Experimental)");
-
-                if (!targetReady)
-                {
-                    ImGui.BulletText(
-                        targetDiagnostics.Errors.Count >
-                            0
-                            ? "Reference Model Humanoid hierarchy has mapping errors."
-                            : "Reference Model must be a ready Humanoid.");
-                }
-
-                if (!sourceReady)
-                {
-                    ImGui.BulletText(
-                        sourceDiagnostics.Errors.Count >
-                            0
-                            ? "Animation Source Humanoid hierarchy has mapping errors."
-                            : "Animation Source Model must be a ready Humanoid.");
-                }
-            }
-
-            if (ImGui.SmallButton(
-                    $"Configure Animation Source Humanoid...##{sourceAsset.Guid}"))
-            {
-                HumanoidRigConfiguratorRequest.Request(
-                    sourceAsset.Guid);
-            }
-        }
-        catch (Exception exception)
-        {
-            ImGui.TextColored(
-                new Vector4(
-                    1.0f,
-                    0.38f,
-                    0.30f,
-                    1.0f),
-                "Could not inspect Animation Source Model.");
-
-            ImGui.TextWrapped(
-                exception.Message);
-        }
-    }
-
     private static void DrawReferencePoseStatus(
         ModelAsset model,
         HumanoidBoneMap mapping)
@@ -1505,7 +1275,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                         0.67f,
                         0.25f,
                         1.0f),
-                    "Reference pose is not close to a clean T-pose. Experimental retargeting quality may suffer.");
+                    "Reference pose is not close to a clean T-pose.");
             }
 
             return;
@@ -2199,12 +1969,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                 Array.Empty<string>();
         }
 
-        AssetReference reference =
-            _profile.Rig.AnimationSourceModel !=
-                    null &&
-                !_profile.Rig.AnimationSourceModel.IsEmpty
-                ? _profile.Rig.AnimationSourceModel
-                : _profile.Rig.ReferenceModel;
+        AssetReference reference = _profile.Rig.ReferenceModel;
 
         if (_clipCacheValid &&
             _clipCacheModelGuid ==
@@ -2268,7 +2033,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
     private IReadOnlyList<string> GetAnimationWindowNames(string clipName)
     {
         if (_profile == null || _project == null || string.IsNullOrWhiteSpace(clipName)) return Array.Empty<string>();
-        AssetReference reference = !_profile.Rig.AnimationSourceModel.IsEmpty ? _profile.Rig.AnimationSourceModel : _profile.Rig.ReferenceModel;
+        AssetReference reference = _profile.Rig.ReferenceModel;
         if (reference.IsEmpty) return Array.Empty<string>();
         try
         {
@@ -2291,26 +2056,6 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
 
         _clipCacheValid =
             false;
-    }
-
-    private static bool SameAssetReference(
-        AssetReference left,
-        AssetReference right)
-    {
-        if (left.Guid !=
-                Guid.Empty &&
-            right.Guid !=
-                Guid.Empty)
-        {
-            return left.Guid ==
-                right.Guid;
-        }
-
-        return
-            string.Equals(
-                left.CachedProjectPath,
-                right.CachedProjectPath,
-                StringComparison.OrdinalIgnoreCase);
     }
 
     private bool DrawAssetPicker(

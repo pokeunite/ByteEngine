@@ -35,9 +35,6 @@ internal static class C9AnimationSourceProfileTests
             Guid targetGuid =
                 Guid.NewGuid();
 
-            Guid sourceGuid =
-                Guid.NewGuid();
-
             var profile =
                 new AnimationProfile
                 {
@@ -53,12 +50,7 @@ internal static class C9AnimationSourceProfileTests
                             ReferenceModel =
                                 new AssetReference(
                                     targetGuid,
-                                    "Assets/Characters/Player.fbx"),
-
-                            AnimationSourceModel =
-                                new AssetReference(
-                                    sourceGuid,
-                                    "Assets/Animations/HumanoidLibrary.fbx")
+                                    "Assets/Characters/Player.fbx")
                         }
                 };
 
@@ -81,16 +73,11 @@ internal static class C9AnimationSourceProfileTests
                 "C9F: Reference Model did not survive .byteanim round-trip.");
 
             Assert(
-                clone.Rig.AnimationSourceModel.Guid ==
-                    sourceGuid,
-                "C9F: Animation Source Model did not survive .byteanim round-trip.");
-
-            Assert(
                 string.Equals(
-                    clone.Rig.AnimationSourceModel.CachedProjectPath,
-                    "Assets/Animations/HumanoidLibrary.fbx",
+                    clone.Rig.ReferenceModel.CachedProjectPath,
+                    "Assets/Characters/Player.fbx",
                     StringComparison.Ordinal),
-                "C9F: Animation Source Model path did not survive .byteanim round-trip.");
+                "C9F: Reference Model path did not survive .byteanim round-trip.");
         }
         finally
         {
@@ -146,8 +133,11 @@ internal static class C9AnimationSourceProfileTests
                     path);
 
             Assert(
-                profile.Rig.AnimationSourceModel.IsEmpty,
-                "C9F: old profiles without Animation Source Model must preserve the native Reference Model workflow.");
+                string.Equals(
+                    profile.Rig.ReferenceModel.CachedProjectPath,
+                    "Assets/Characters/Legacy.fbx",
+                    StringComparison.Ordinal),
+                "C9F: old profiles preserve the native Reference Model workflow.");
 
             Assert(
                 profile.Version ==

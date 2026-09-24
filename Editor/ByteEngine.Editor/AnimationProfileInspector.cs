@@ -26,12 +26,6 @@ internal static class AnimationProfileInspector
         Action changed,
         Action end)
     {
-        /*
-         * Safe to call from multiple editor surfaces. The retarget window
-         * internally draws at most once per ImGui frame.
-         */
-        HumanoidRetargetBakeWindow.Draw();
-
         ImGui.SeparatorText(
             "ANIMATION PROFILE");
 
@@ -140,23 +134,8 @@ internal static class AnimationProfileInspector
                 reference);
         }
 
-        ImGui.SameLine();
-
-        if (ImGui.Button(
-                "Retarget Animation (Experimental)..."))
-        {
-            HumanoidRetargetBakeWindow.Open(
-                reference,
-                project);
-        }
-
         ImGui.EndDisabled();
 
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(
-                "Experimental: preview a temporary Humanoid retarget result. Nothing is baked into the target character until you explicitly choose Bake To Character.");
-        }
     }
 
     private static void DrawProfileRequiredHelp()
@@ -167,10 +146,10 @@ internal static class AnimationProfileInspector
                 0.68f,
                 0.25f,
                 1.0f),
-            "RETARGETING (EXPERIMENTAL) SETUP REQUIRED");
+            "ANIMATION PROFILE REQUIRED");
 
         ImGui.TextWrapped(
-            "Experimental retargeting needs an Animation Profile because the profile identifies the target character model and Humanoid skeleton.");
+            "Assign an Animation Profile to choose the character model and native animation clips.");
 
         ImGui.BulletText(
             "1. Assets > + Create > Animation Profile");
@@ -181,14 +160,5 @@ internal static class AnimationProfileInspector
         ImGui.BulletText(
             "3. Open the profile and set its Reference Model");
 
-        ImGui.BulletText(
-            "4. Press Apply & Save, then use Retarget Animation (Experimental)");
-
-        ImGui.BeginDisabled();
-
-        ImGui.Button(
-            "Retarget Animation (Experimental)... (Animation Profile Required)");
-
-        ImGui.EndDisabled();
     }
 }

@@ -87,8 +87,7 @@ public sealed class GltfModelImporter : ModelImporter
                 .Select(animation => ReadAnimation(source.Guid, animation))
                 .ToList();
 
-        return
-            new ImportedModel
+        return ImportedModelSpace.Apply(new ImportedModel
             {
                 Guid = source.Guid,
                 SourceAssetGuid = source.Guid,
@@ -98,7 +97,7 @@ public sealed class GltfModelImporter : ModelImporter
                 Materials = materials,
                 Skeleton = skeleton,
                 Animations = animations
-            };
+            }, ImportedModelSpace.GltfCorrection(settings.ImportScale));
     }
 
     private static ImportedMesh ReadMesh(

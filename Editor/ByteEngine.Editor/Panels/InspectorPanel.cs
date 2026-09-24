@@ -793,8 +793,15 @@ internal sealed class InspectorPanel
                 if (ImGui.Button(
                         "Reimport"))
                 {
-                    project.Assets.ReimportModel(
-                        asset.Guid);
+                    ModelAsset refreshed = project.Assets.ReimportModel(asset.Guid);
+                    if (EditorState.Active is { } activeState)
+                    {
+                        foreach (ModelHierarchyInstance instance in activeState.EditorScene.GameObjects
+                                     .SelectMany(item => item.Components.OfType<ModelHierarchyInstance>())
+                                     .Where(item => item.Model.Guid == asset.Guid))
+                            if (EditorSceneCommands.RefreshImportSpace(instance.GameObject, refreshed))
+                                activeState.MarkDirty();
+                    }
                 }
             }
             catch (Exception exception)

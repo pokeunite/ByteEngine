@@ -51,9 +51,6 @@ public sealed class AnimationProfile
         Rig.ReferenceModel ??=
             AssetReference.Empty;
 
-        Rig.AnimationSourceModel ??=
-            AssetReference.Empty;
-
         Locomotion ??=
             new AnimationLocomotionProfile();
 
@@ -84,11 +81,7 @@ public sealed class AnimationProfile
 }
 
 /// <summary>
-/// The two authoring paths planned for ByteEngine animation.
-///
-/// Generic keeps the imported skeleton exactly as authored.
-/// Humanoid will use ByteEngine's canonical human-bone mapping/retargeting
-/// foundation introduced in C9.
+/// Rig classification for native animation and humanoid bone diagnostics.
 /// </summary>
 public enum AnimationRigType
 {
@@ -108,15 +101,6 @@ public sealed class AnimationRigProfile
     public AssetReference ReferenceModel { get; set; } =
         AssetReference.Empty;
 
-    /// <summary>
-    /// Optional model that owns the animation clips used by this profile.
-    ///
-    /// Empty means "use ReferenceModel", preserving the simple one-model
-    /// workflow. When this points at a different ready Humanoid model, C9
-    /// transparently retargets its clips onto the ReferenceModel character.
-    /// </summary>
-    public AssetReference AnimationSourceModel { get; set; } =
-        AssetReference.Empty;
 }
 
 /// <summary>

@@ -32,6 +32,12 @@ public sealed class RuntimeDiagnosticWriter
 public static class RuntimeDiagnostics
 {
     public static Action<string>? OutputSink { get; set; }
+    private static RuntimeScene? _socketTraceScene;
+    private static DateTime _socketTraceStartUtc;
+    private static DateTime _lastSocketTraceSampleUtc;
+    private static int _socketTraceSamples;
+    private static readonly StringBuilder SocketTrace = new();
+
 
     public static string CreateDump(RuntimeScene scene)
     {
@@ -66,6 +72,8 @@ public static class RuntimeDiagnostics
                 .Select(other => other.Name));
             writer.Add($"{layer.Name} interacts with", interactions);
         }
+        foreach (GameObject attached in scene.GameObjects.Where(item => item.IsAttached))
+            SkeletalAttachmentService.WriteDiagnostics(attached, writer);
         int sources = 0;
         foreach (GameObject gameObject in scene.GameObjects)
             foreach (IRuntimeDiagnosticSource source in gameObject.Components.OfType<IRuntimeDiagnosticSource>())
@@ -88,5 +96,75 @@ public static class RuntimeDiagnostics
     internal static void Update(RuntimeScene scene)
     {
         if (Input.IsKeyPressed(Key.F8)) Dump(scene);
+
+        DateTime now = DateTime.UtcNow;
+        if (Input.IsKeyPressed(Key.F9))
+        {
+            if (_socketTraceScene != null) FinishSocketTrace("stopped by F9");
+            else StartSocketTrace(scene, now);
+        }
+
+        if (_socketTraceScene == null) return;
+        if (!ReferenceEquals(_socketTraceScene, scene))
+        {
+            FinishSocketTrace("scene changed");
+            return;
+        }
+
+        if (_socketTraceSamples == 0 ||
+            (now - _lastSocketTraceSampleUtc).TotalMilliseconds >= 66)
+        {
+            _lastSocketTraceSampleUtc = now;
+            _socketTraceSamples++;
+            string elapsed = (now - _socketTraceStartUtc).TotalSeconds
+                .ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+            GameObject[] attached = scene.GameObjects.Where(item => item.IsAttached).ToArray();
+            if (attached.Length == 0)
+                SocketTrace.AppendLine($"t={elapsed} attachments=none");
+            foreach (GameObject child in attached)
+            {
+                try
+                {
+                    SocketTrace.Append("t=").Append(elapsed).Append(' ')
+                        .AppendLine(SkeletalAttachmentService.BuildTraceSample(child));
+                }
+                catch (Exception error)
+                {
+                    SocketTrace.Append("t=").Append(elapsed).Append(" object=")
+                        .Append(child.Name).Append(" traceError=").AppendLine(error.Message);
+                }
+            }
+        }
+
+        if ((now - _socketTraceStartUtc).TotalSeconds >= 6 || _socketTraceSamples >= 90)
+            FinishSocketTrace("six-second capture complete");
+    }
+
+    private static void StartSocketTrace(RuntimeScene scene, DateTime now)
+    {
+        _socketTraceScene = scene;
+        _socketTraceStartUtc = now;
+        _lastSocketTraceSampleUtc = now;
+        _socketTraceSamples = 0;
+        SocketTrace.Clear();
+        SocketTrace.AppendLine("[Socket Trace] scene=" + scene.Name);
+        SocketTrace.AppendLine("Sampled after scene animation, physics and attachment updates; " +
+            "position/rotation errors compare the live gun to the same-frame socket.");
+        Emit("Socket trace recording for six seconds. Move and jump now; press F9 again to stop early.");
+    }
+
+    private static void FinishSocketTrace(string reason)
+    {
+        if (_socketTraceScene == null) return;
+        SocketTrace.Append("[Socket Trace End] ").Append(reason)
+            .Append("; samples=").AppendLine(_socketTraceSamples.ToString());
+        _socketTraceScene = null;
+        Emit(SocketTrace.ToString());
+    }
+
+    private static void Emit(string message)
+    {
+        if (OutputSink != null) OutputSink(message);
+        else Console.WriteLine(message);
     }
 }

@@ -35,7 +35,7 @@ public sealed class AnimationEventMarker
 /// <summary>
 /// Runtime event delivered by AnimationController when playback crosses a
 /// marker. AnimationKey identifies the target-model-owned clip, regardless of
-/// whether that clip was native to the FBX or baked by the retarget workflow.
+/// whether that clip was imported or loaded from legacy model-owned animation data.
 /// </summary>
 public readonly record struct AnimationEventOccurrence(
     Guid ModelGuid,

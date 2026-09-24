@@ -35,41 +35,7 @@ internal sealed class ModelImporterInspector
     private string _boneSearch =
         string.Empty;
 
-    private string _retargetSourceSearch =
-        string.Empty;
-
-    private string _retargetRigSearch =
-        string.Empty;
-
-    private string _retargetTargetSearch =
-        string.Empty;
-
-    private AssetReference _retargetSourceReference =
-        AssetReference.Empty;
-
-    private AssetReference _retargetSourceRigReference =
-        AssetReference.Empty;
-
-    private AssetReference _retargetTargetReference =
-        AssetReference.Empty;
-
-    private string _retargetClipKey =
-        string.Empty;
-
-    private string _retargetOutputName =
-        string.Empty;
-
-    private ImportedAnimation? _retargetPreview;
-
-    private string _retargetStatus =
-        string.Empty;
-
-    private bool _retargetStatusIsError;
-
-    private bool _replaceExistingRetarget;
-
-    private string _lastSelectedAnimationKey =
-        string.Empty;
+    private string _sourceRigSearch = string.Empty;
 
     /// <summary>
     /// Draws the launcher beside the animation preview and, when requested, the
@@ -97,7 +63,7 @@ internal sealed class ModelImporterInspector
             model);
 
         if (ImGui.Button(
-                "Import Settings & Retarget (Experimental)..."))
+                "Import Settings..."))
         {
             _open =
                 true;
@@ -182,51 +148,7 @@ internal sealed class ModelImporterInspector
         _boneSearch =
             string.Empty;
 
-        _retargetSourceSearch =
-            string.Empty;
-
-        _retargetRigSearch =
-            string.Empty;
-
-        _retargetTargetSearch =
-            string.Empty;
-
-        _retargetSourceReference =
-            new AssetReference(
-                asset.Guid,
-                asset.ProjectPath);
-
-        _retargetSourceRigReference =
-            _draft.AnimationSourceRigModel;
-
-        _retargetTargetReference =
-            _draft.DefaultRetargetTargetModel;
-
-        ImportedAnimation? initialClip =
-            model.Animations.FirstOrDefault();
-
-        _retargetClipKey =
-            initialClip?.Key ??
-            string.Empty;
-
-        _retargetOutputName =
-            initialClip?.Name ??
-            string.Empty;
-
-        _retargetPreview =
-            null;
-
-        _retargetStatus =
-            string.Empty;
-
-        _retargetStatusIsError =
-            false;
-
-        _replaceExistingRetarget =
-            false;
-
-        _lastSelectedAnimationKey =
-            string.Empty;
+        _sourceRigSearch = string.Empty;
     }
 
     private bool DrawWindow(
@@ -430,6 +352,7 @@ internal sealed class ModelImporterInspector
             MarkDirty();
         }
 
+        ImGui.TextDisabled("FBX units and axes are converted automatically; glTF uses metres. Import Scale is an advanced override for incorrectly authored files.");
         ImGui.BeginDisabled(
             !hasMeshes);
 
@@ -586,7 +509,7 @@ internal sealed class ModelImporterInspector
                 EditorStatusKind.Warning);
             ImGui.SameLine();
             ImGui.TextWrapped(
-                "Experimental Humanoid retargeting requires a skeleton hierarchy.");
+                "Humanoid mapping requires a skeleton hierarchy.");
             return;
         }
 
@@ -595,7 +518,7 @@ internal sealed class ModelImporterInspector
         {
             ImGui.Spacing();
             ImGui.TextDisabled(
-                "Generic preserves the source skeleton exactly as authored and does not participate in experimental Humanoid retargeting.");
+                "Generic preserves the source skeleton exactly as authored.");
             return;
         }
 
@@ -802,72 +725,6 @@ internal sealed class ModelImporterInspector
                 importAnimations;
 
             MarkDirty();
-            InvalidateRetargetPreview();
-        }
-
-        if (ImGui.CollapsingHeader("Advanced animation settings"))
-        {
-            ImGui.BeginDisabled(
-                !_draft.ImportAnimations);
-
-            float samples =
-                _draft.RetargetSamplesPerSecond;
-
-            if (ImGui.DragFloat(
-                    "Retarget Sample Rate (Experimental)",
-                    ref samples,
-                    1.0f,
-                    15.0f,
-                    240.0f,
-                    "%.0f fps"))
-            {
-                _draft.RetargetSamplesPerSecond =
-                    Math.Clamp(
-                        samples,
-                        15.0f,
-                        240.0f);
-
-                MarkDirty();
-                InvalidateRetargetPreview();
-            }
-
-            int rootMotionSource =
-                (int)_draft.RootMotionSource;
-
-            string[] rootMotionNames =
-            {
-                "Automatic",
-                "Skeleton Root",
-                "Hips / Pelvis"
-            };
-
-            if (ImGui.Combo(
-                    "Root Motion Source",
-                    ref rootMotionSource,
-                    rootMotionNames,
-                    rootMotionNames.Length))
-            {
-                _draft.RootMotionSource =
-                    (AnimationRootMotionSource)rootMotionSource;
-
-                MarkDirty();
-                InvalidateRetargetPreview();
-            }
-
-            ImGui.TextDisabled(
-                _draft.RootMotionSource switch
-                {
-                    AnimationRootMotionSource.SkeletonRoot =>
-                        "Use only explicit skeleton-root travel; never generate root motion from the pelvis.",
-
-                    AnimationRootMotionSource.Hips =>
-                        "Generate the target root trajectory from Hips/Pelvis travel.",
-
-                    _ =>
-                        "Prefer explicit root travel; fall back to Hips/Pelvis when the source has no useful root track."
-                });
-
-            ImGui.EndDisabled();
         }
 
         if (!_draft.ImportAnimations)
@@ -907,7 +764,7 @@ internal sealed class ModelImporterInspector
                 EditorStatusKind.Warning);
             ImGui.SameLine();
             ImGui.TextWrapped(
-                "Assign the Humanoid model/rig this animation was authored for. That model supplies the missing skeleton, semantic map and reference pose.");
+                "Assign the model this animation was authored for. Native preview requires matching bone names.");
         }
 
         AssetReference importerRigReference =
@@ -918,7 +775,7 @@ internal sealed class ModelImporterInspector
                 sourceHasReadyEmbeddedRig ? "Source Model (optional)" : "Assign Source Model",
                 "##ImporterSourceRig",
                 ref importerRigReference,
-                ref _retargetRigSearch,
+                ref _sourceRigSearch,
                 "Auto (embedded hierarchy)",
                 allowNone:
                     true))
@@ -926,52 +783,7 @@ internal sealed class ModelImporterInspector
             _draft.AnimationSourceRigModel =
                 importerRigReference;
 
-            if (SameReference(
-                    _retargetSourceReference,
-                    new AssetReference(
-                        asset.Guid,
-                        asset.ProjectPath)))
-            {
-                _retargetSourceRigReference =
-                    importerRigReference;
-            }
-
             MarkDirty();
-            InvalidateRetargetPreview();
-        }
-
-        if (ImGui.CollapsingHeader("Advanced target default"))
-        {
-            AssetReference importerTargetReference =
-                _draft.DefaultRetargetTargetModel;
-
-            if (DrawModelAssetPicker(
-                    project,
-                    "Default Retarget Target (Experimental)",
-                    "##ImporterDefaultTarget",
-                    ref importerTargetReference,
-                    ref _retargetTargetSearch,
-                    "None",
-                    allowNone:
-                        true))
-            {
-                _draft.DefaultRetargetTargetModel =
-                    importerTargetReference;
-
-                if (SameReference(
-                        _retargetSourceReference,
-                        new AssetReference(
-                            asset.Guid,
-                            asset.ProjectPath)))
-                {
-                    _retargetTargetReference =
-                        importerTargetReference;
-                }
-
-                MarkDirty();
-                InvalidateRetargetPreview();
-            }
-
         }
 
         if (!sourceHasReadyEmbeddedRig)
@@ -1024,655 +836,8 @@ internal sealed class ModelImporterInspector
             }
         }
 
-        if (selectedAnimation !=
-                null &&
-            SameReference(
-                _retargetSourceReference,
-                new AssetReference(
-                    asset.Guid,
-                    asset.ProjectPath)) &&
-            !string.Equals(
-                _lastSelectedAnimationKey,
-                selectedAnimation.Key,
-                StringComparison.Ordinal))
-        {
-            _lastSelectedAnimationKey =
-                selectedAnimation.Key;
-
-            _retargetClipKey =
-                selectedAnimation.Key;
-
-            _retargetOutputName =
-                selectedAnimation.Name;
-
-            InvalidateRetargetPreview();
-        }
-
-        if (ImGui.CollapsingHeader("Retarget to another character (Experimental)"))
-            DrawUniversalRetargetSection(
-                project,
-                asset,
-                model,
-                selectedAnimation);
     }
 
-    private void DrawUniversalRetargetSection(
-        EditorProjectContext project,
-        AssetRecord inspectedAsset,
-        ModelAsset inspectedModel,
-        ImportedAnimation? selectedAnimation)
-    {
-        ImGui.SeparatorText(
-            "UNIVERSAL HUMANOID RETARGET (EXPERIMENTAL)");
-        EditorUi.StatusBadge("EXPERIMENTAL", EditorStatusKind.Warning);
-
-        ImGui.TextWrapped(
-            "ByteEngine now treats the animation asset, source rig and target model as separate choices. This mirrors the useful part of Unity's Avatar/HumanPose workflow without requiring an export through Unity first.");
-
-        AssetReference inspectedReference =
-            new(
-                inspectedAsset.Guid,
-                inspectedAsset.ProjectPath);
-
-        if (EditorUi.SecondaryButton(
-                "Use This Asset As Source"))
-        {
-            _retargetSourceReference =
-                inspectedReference;
-
-            _retargetSourceRigReference =
-                _draft.AnimationSourceRigModel;
-
-            if (!_draft.DefaultRetargetTargetModel.IsEmpty)
-            {
-                _retargetTargetReference =
-                    _draft.DefaultRetargetTargetModel;
-            }
-
-            ImportedAnimation? initial =
-                selectedAnimation ??
-                inspectedModel.Animations.FirstOrDefault();
-
-            _retargetClipKey =
-                initial?.Key ??
-                string.Empty;
-
-            _retargetOutputName =
-                initial?.Name ??
-                string.Empty;
-
-            InvalidateRetargetPreview();
-        }
-
-        ImGui.SameLine();
-
-        if (EditorUi.SecondaryButton(
-                "Use This Asset As Target"))
-        {
-            _retargetTargetReference =
-                inspectedReference;
-
-            if (SameReference(
-                    _retargetSourceReference,
-                    inspectedReference))
-            {
-                _retargetSourceReference =
-                    AssetReference.Empty;
-
-                _retargetSourceRigReference =
-                    AssetReference.Empty;
-
-                _retargetClipKey =
-                    string.Empty;
-
-                _retargetOutputName =
-                    string.Empty;
-            }
-
-            InvalidateRetargetPreview();
-        }
-
-        ImGui.Spacing();
-
-        AssetReference sourceReference =
-            _retargetSourceReference;
-
-        if (DrawModelAssetPicker(
-                project,
-                "Animation Source",
-                "##UniversalAnimationSource",
-                ref sourceReference,
-                ref _retargetSourceSearch,
-                "Choose animation asset...",
-                allowNone:
-                    false))
-        {
-            _retargetSourceReference =
-                sourceReference;
-
-            InitializeRetargetSource(
-                project,
-                sourceReference);
-        }
-
-        ModelAsset? sourceModel =
-            TryLoadModel(
-                project,
-                _retargetSourceReference,
-                out string? sourceError);
-
-        if (sourceModel ==
-                null)
-        {
-            if (!string.IsNullOrWhiteSpace(
-                    sourceError))
-            {
-                EditorUi.StatusBadge(
-                    "SOURCE ERROR",
-                    EditorStatusKind.Error);
-                ImGui.SameLine();
-                ImGui.TextWrapped(
-                    sourceError);
-            }
-
-            return;
-        }
-
-        if (sourceModel.Animations.Count ==
-            0)
-        {
-            EditorUi.StatusBadge(
-                "NO ANIMATION CLIPS",
-                EditorStatusKind.Warning);
-            ImGui.SameLine();
-            ImGui.TextWrapped(
-                "Choose another Animation Source. The source may be meshless, but it must contain animation tracks.");
-        }
-
-        AssetReference sourceRigReference =
-            _retargetSourceRigReference;
-
-        if (DrawModelAssetPicker(
-                project,
-                "Source Rig",
-                "##UniversalSourceRig",
-                ref sourceRigReference,
-                ref _retargetRigSearch,
-                "Auto / source asset",
-                allowNone:
-                    true))
-        {
-            _retargetSourceRigReference =
-                sourceRigReference;
-
-            if (SameReference(
-                    _retargetSourceReference,
-                    inspectedReference))
-            {
-                _draft.AnimationSourceRigModel =
-                    sourceRigReference;
-
-                MarkDirty();
-            }
-
-            InvalidateRetargetPreview();
-        }
-
-        string resolvedRigLabel =
-            ResolveRigLabel(
-                project,
-                sourceModel,
-                _retargetSourceRigReference);
-
-        EditorUi.LabelValue(
-            "Rig Provider",
-            resolvedRigLabel);
-
-        AssetReference targetReference =
-            _retargetTargetReference;
-
-        if (DrawModelAssetPicker(
-                project,
-                "Target Model",
-                "##UniversalTargetModel",
-                ref targetReference,
-                ref _retargetTargetSearch,
-                "Choose target model...",
-                allowNone:
-                    false))
-        {
-            _retargetTargetReference =
-                targetReference;
-
-            if (SameReference(
-                    _retargetSourceReference,
-                    inspectedReference))
-            {
-                _draft.DefaultRetargetTargetModel =
-                    targetReference;
-
-                MarkDirty();
-            }
-
-            InvalidateRetargetPreview();
-        }
-
-        ImportedAnimation? sourceClip =
-            ResolveRetargetClip(
-                sourceModel);
-
-        string clipPreview =
-            sourceClip?.Name ??
-            "Choose clip...";
-
-        ImGui.BeginDisabled(
-            sourceModel.Animations.Count ==
-            0);
-
-        if (ImGui.BeginCombo(
-                "Source Clip",
-                clipPreview))
-        {
-            foreach (ImportedAnimation clip
-                     in sourceModel.Animations)
-            {
-                bool selected =
-                    string.Equals(
-                        clip.Key,
-                        _retargetClipKey,
-                        StringComparison.Ordinal);
-
-                if (ImGui.Selectable(
-                        clip.Name,
-                        selected))
-                {
-                    _retargetClipKey =
-                        clip.Key;
-
-                    _retargetOutputName =
-                        clip.Name;
-
-                    InvalidateRetargetPreview();
-                }
-
-                if (selected)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
-            }
-
-            ImGui.EndCombo();
-        }
-
-        ImGui.EndDisabled();
-
-        if (sourceClip !=
-            null)
-        {
-            EditorUi.LabelValue(
-                "Source Duration",
-                $"{sourceClip.Duration:0.###} s");
-
-            EditorUi.LabelValue(
-                "Source Channels",
-                sourceClip.Channels.Count.ToString());
-        }
-
-        string outputName =
-            _retargetOutputName;
-
-        if (ImGui.InputText(
-                "Output Name",
-                ref outputName,
-                128))
-        {
-            _retargetOutputName =
-                outputName;
-
-            _replaceExistingRetarget =
-                false;
-
-            InvalidateRetargetPreview();
-        }
-
-        bool canBuild =
-            sourceClip !=
-                null &&
-            !_retargetTargetReference.IsEmpty &&
-            !string.IsNullOrWhiteSpace(
-                _retargetOutputName);
-
-        ImGui.BeginDisabled(
-            !canBuild);
-
-        if (EditorUi.SecondaryButton(
-                "Build Retarget (Experimental)",
-                size:
-                    new Vector2(
-                        -1.0f,
-                        34.0f)))
-        {
-            BuildRetarget(
-                project,
-                sourceModel,
-                sourceClip!);
-        }
-
-        ImGui.EndDisabled();
-
-        if (_retargetPreview !=
-            null)
-        {
-            EditorUi.StatusBadge(
-                "RETARGET READY (EXPERIMENTAL)",
-                EditorStatusKind.Success);
-            ImGui.SameLine();
-            ImGui.TextWrapped(
-                $"{_retargetPreview.Duration:0.###} s, {_retargetPreview.Channels.Count} target channels. Nothing has been written yet.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(
-                _retargetStatus))
-        {
-            EditorUi.StatusBadge(
-                _retargetStatusIsError
-                    ? "ERROR"
-                    : "OK",
-                _retargetStatusIsError
-                    ? EditorStatusKind.Error
-                    : EditorStatusKind.Success);
-            ImGui.SameLine();
-            ImGui.TextWrapped(
-                _retargetStatus);
-        }
-
-        if (_retargetPreview ==
-                null)
-        {
-            return;
-        }
-
-        ModelAsset? targetModel =
-            TryLoadModel(
-                project,
-                _retargetTargetReference,
-                out string? targetError);
-
-        if (targetModel ==
-            null)
-        {
-            EditorUi.StatusBadge(
-                "TARGET ERROR",
-                EditorStatusKind.Error);
-            ImGui.SameLine();
-            ImGui.TextWrapped(
-                targetError ??
-                "Target model could not be loaded.");
-            return;
-        }
-
-        ModelOwnedAnimationConflictKind conflict =
-            ModelOwnedAnimationStore.GetConflict(
-                project.Assets.ProjectRoot,
-                targetModel,
-                _retargetOutputName);
-
-        bool importedConflict =
-            conflict ==
-            ModelOwnedAnimationConflictKind.ImportedAnimation;
-
-        bool bakedConflict =
-            conflict ==
-            ModelOwnedAnimationConflictKind.BakedAnimation;
-
-        if (importedConflict)
-        {
-            EditorUi.StatusBadge(
-                "NAME CONFLICT",
-                EditorStatusKind.Warning);
-            ImGui.SameLine();
-            ImGui.TextWrapped(
-                "That output name belongs to a native clip inside the target model. Native imported animations are never overwritten.");
-        }
-        else if (bakedConflict)
-        {
-            bool replace =
-                _replaceExistingRetarget;
-
-            if (ImGui.Checkbox(
-                    "Replace existing experimental baked animation",
-                    ref replace))
-            {
-                _replaceExistingRetarget =
-                    replace;
-            }
-        }
-
-        bool canBake =
-            !importedConflict &&
-            (!bakedConflict ||
-             _replaceExistingRetarget);
-
-        ImGui.BeginDisabled(
-            !canBake);
-
-        if (EditorUi.PrimaryButton(
-                "Bake To Target Model (Experimental)",
-                size:
-                    new Vector2(
-                        -1.0f,
-                        38.0f)))
-        {
-            BakeRetarget(project, sourceModel, sourceClip!, targetModel);
-        }
-
-        ImGui.EndDisabled();
-    }
-
-    private void InitializeRetargetSource(
-        EditorProjectContext project,
-        AssetReference sourceReference)
-    {
-        _retargetSourceRigReference =
-            AssetReference.Empty;
-
-        _retargetClipKey =
-            string.Empty;
-
-        _retargetOutputName =
-            string.Empty;
-
-        ModelAsset? sourceModel =
-            TryLoadModel(
-                project,
-                sourceReference,
-                out _);
-
-        if (sourceModel !=
-            null)
-        {
-            _retargetSourceRigReference =
-                sourceModel.AnimationSourceRigModel;
-
-            if (_retargetTargetReference.IsEmpty &&
-                !sourceModel.DefaultRetargetTargetModel.IsEmpty)
-            {
-                _retargetTargetReference =
-                    sourceModel.DefaultRetargetTargetModel;
-            }
-
-            ImportedAnimation? initial =
-                sourceModel.Animations.FirstOrDefault();
-
-            _retargetClipKey =
-                initial?.Key ??
-                string.Empty;
-
-            _retargetOutputName =
-                initial?.Name ??
-                string.Empty;
-        }
-
-        InvalidateRetargetPreview();
-    }
-
-    private void BuildRetarget(
-        EditorProjectContext project,
-        ModelAsset sourceModel,
-        ImportedAnimation sourceClip)
-    {
-        try
-        {
-            bool currentImporterIsSource =
-                _retargetSourceReference.Guid ==
-                _assetGuid;
-
-            float samplesPerSecond =
-                currentImporterIsSource
-                    ? _draft.RetargetSamplesPerSecond
-                    : sourceModel.RetargetSamplesPerSecond;
-
-            AnimationRootMotionSource? rootMotionOverride =
-                currentImporterIsSource
-                    ? _draft.RootMotionSource
-                    : null;
-
-            _retargetPreview =
-                HumanoidRetargetRuntime.BuildClip(
-                    project.Assets,
-                    _retargetSourceReference,
-                    _retargetSourceRigReference,
-                    sourceClip.Name,
-                    _retargetTargetReference,
-                    _retargetOutputName,
-                    samplesPerSecond,
-                    rootMotionOverride);
-
-            SetRetargetStatus(
-                "Experimental retarget built successfully. Review the target/channel summary, then bake when ready.",
-                false);
-        }
-        catch (Exception exception)
-        {
-            _retargetPreview =
-                null;
-
-            SetRetargetStatus(
-                exception.Message,
-                true);
-        }
-    }
-
-    private void BakeRetarget(
-        EditorProjectContext project,
-        ModelAsset sourceModel,
-        ImportedAnimation sourceClip,
-        ModelAsset targetModel)
-    {
-        if (_retargetPreview ==
-            null)
-        {
-            return;
-        }
-
-        try
-        {
-            AssetRecord? sourceAsset =
-                project.AssetDatabase.Resolve(
-                    _retargetSourceReference);
-
-            ModelOwnedAnimationBakeResult result =
-                ModelOwnedAnimationStore.Bake(
-                    project.Assets.ProjectRoot,
-                    targetModel,
-                    _retargetPreview,
-                    _retargetOutputName,
-                    sourceModel.Guid,
-                    sourceAsset?.ProjectPath,
-                    sourceClip.Key,
-                    sourceClip.Name,
-                    _replaceExistingRetarget);
-
-            _replaceExistingRetarget =
-                false;
-
-            SetRetargetStatus(
-                result.Replaced
-                    ? $"Replaced '{result.Animation.Name}' on target '{targetModel.Name}'."
-                    : $"Baked '{result.Animation.Name}' onto target '{targetModel.Name}'. It now behaves like a target-owned animation clip.",
-                false);
-        }
-        catch (Exception exception)
-        {
-            SetRetargetStatus(
-                exception.Message,
-                true);
-        }
-    }
-
-    private ImportedAnimation? ResolveRetargetClip(
-        ModelAsset sourceModel)
-    {
-        ImportedAnimation? selected =
-            sourceModel.Animations.FirstOrDefault(
-                animation =>
-                    string.Equals(
-                        animation.Key,
-                        _retargetClipKey,
-                        StringComparison.Ordinal));
-
-        if (selected !=
-            null)
-        {
-            return selected;
-        }
-
-        selected =
-            sourceModel.Animations.FirstOrDefault();
-
-        if (selected !=
-            null)
-        {
-            _retargetClipKey =
-                selected.Key;
-
-            if (string.IsNullOrWhiteSpace(
-                    _retargetOutputName))
-            {
-                _retargetOutputName =
-                    selected.Name;
-            }
-        }
-
-        return selected;
-    }
-
-    private static ModelAsset? TryLoadModel(
-        EditorProjectContext project,
-        AssetReference reference,
-        out string? error)
-    {
-        error =
-            null;
-
-        if (reference.IsEmpty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return project.Assets.LoadModel(
-                reference);
-        }
-        catch (Exception exception)
-        {
-            error =
-                exception.Message;
-
-            return null;
-        }
-    }
 
     private static bool IsHumanoidReady(
         ModelAsset model)
@@ -1704,32 +869,6 @@ internal sealed class ModelImporterInspector
 
         return diagnostics.Errors.Count ==
             0;
-    }
-
-    private static string ResolveRigLabel(
-        EditorProjectContext project,
-        ModelAsset sourceModel,
-        AssetReference explicitReference)
-    {
-        AssetReference effective =
-            !explicitReference.IsEmpty
-                ? explicitReference
-                : sourceModel.AnimationSourceRigModel;
-
-        if (effective.IsEmpty)
-        {
-            return IsHumanoidReady(
-                    sourceModel)
-                ? $"Embedded: {sourceModel.Name}"
-                : "Embedded source rig is not Humanoid-ready - assign a Source Rig model.";
-        }
-
-        AssetRecord? record =
-            project.AssetDatabase.Resolve(
-                effective);
-
-        return record?.ProjectPath ??
-               effective.ToString();
     }
 
     private bool DrawModelAssetPicker(
@@ -1835,51 +974,6 @@ internal sealed class ModelImporterInspector
         return changed;
     }
 
-    private static bool SameReference(
-        AssetReference left,
-        AssetReference right)
-    {
-        if (left.Guid !=
-                Guid.Empty &&
-            right.Guid !=
-                Guid.Empty)
-        {
-            return left.Guid ==
-                   right.Guid;
-        }
-
-        return string.Equals(
-            left.CachedProjectPath,
-            right.CachedProjectPath,
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void InvalidateRetargetPreview()
-    {
-        _retargetPreview =
-            null;
-
-        _retargetStatus =
-            string.Empty;
-
-        _retargetStatusIsError =
-            false;
-
-        _replaceExistingRetarget =
-            false;
-    }
-
-    private void SetRetargetStatus(
-        string message,
-        bool isError)
-    {
-        _retargetStatus =
-            message;
-
-        _retargetStatusIsError =
-            isError;
-    }
-
     private void ApplyAutomaticMapping(
         ModelAsset model)
     {
@@ -1949,9 +1043,15 @@ internal sealed class ModelImporterInspector
 
         try
         {
-            ModelAsset refreshed =
-                project.Assets.ReimportModel(
-                    asset.Guid);
+            ModelAsset refreshed = project.Assets.ReimportModel(asset.Guid);
+            if (EditorState.Active is { } state)
+            {
+                foreach (ModelHierarchyInstance instance in state.EditorScene.GameObjects
+                             .SelectMany(item => item.Components.OfType<ModelHierarchyInstance>())
+                             .Where(item => item.Model.Guid == asset.Guid))
+                    if (EditorSceneCommands.RefreshImportSpace(instance.GameObject, refreshed))
+                        state.MarkDirty();
+            }
 
             _draft =
                 asset.Metadata.ModelImporter.Clone();
@@ -1969,16 +1069,6 @@ internal sealed class ModelImporterInspector
 
             _dirty =
                 false;
-
-            if (_retargetSourceReference.Guid ==
-                asset.Guid)
-            {
-                _retargetSourceRigReference =
-                    _draft.AnimationSourceRigModel;
-
-                _retargetTargetReference =
-                    _draft.DefaultRetargetTargetModel;
-            }
 
             SetStatus(
                 $"Reimported '{asset.ProjectPath}' with the new importer settings.",
@@ -2016,18 +1106,6 @@ internal sealed class ModelImporterInspector
 
         _dirty =
             false;
-
-        if (_retargetSourceReference.Guid ==
-            asset.Guid)
-        {
-            _retargetSourceRigReference =
-                _draft.AnimationSourceRigModel;
-
-            _retargetTargetReference =
-                _draft.DefaultRetargetTargetModel;
-
-            InvalidateRetargetPreview();
-        }
 
         _status =
             string.Empty;

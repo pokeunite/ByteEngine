@@ -38,31 +38,6 @@ public abstract class ModelImporter
 }
 
 /// <summary>
-/// Selects which source trajectory ByteEngine uses when a Humanoid clip is
-/// retargeted onto another character.
-/// </summary>
-public enum AnimationRootMotionSource
-{
-    /// <summary>
-    /// Prefer meaningful Skeleton Root motion. If the source does not provide
-    /// it, promote meaningful Hips/Pelvis travel to the target root.
-    /// </summary>
-    Automatic,
-
-    /// <summary>
-    /// Only use explicit Skeleton Root travel. Hips translation remains pose
-    /// motion and is never promoted to the target root.
-    /// </summary>
-    SkeletonRoot,
-
-    /// <summary>
-    /// Treat Hips/Pelvis model-space travel as the authoritative trajectory and
-    /// generate the target root track from it.
-    /// </summary>
-    Hips
-}
-
-/// <summary>
 /// Persistent model/animation-import settings stored in the asset's .meta file.
 ///
 /// ByteEngine keeps mesh, rig and embedded animation settings together because
@@ -110,19 +85,6 @@ public sealed class ModelImporterSettings
         new();
 
     /// <summary>
-    /// Root-motion trajectory used when this asset acts as a retarget source.
-    /// </summary>
-    public AnimationRootMotionSource RootMotionSource { get; set; } =
-        AnimationRootMotionSource.Automatic;
-
-    /// <summary>
-    /// Sampling frequency used when this Humanoid's clips are baked onto a
-    /// different target skeleton.
-    /// </summary>
-    public float RetargetSamplesPerSecond { get; set; } =
-        60.0f;
-
-    /// <summary>
     /// Optional Humanoid rig provider for animation sources that do not carry a
     /// usable skeleton/reference pose of their own.
     ///
@@ -132,14 +94,6 @@ public sealed class ModelImporterSettings
     /// otherwise animation-only tracks.
     /// </summary>
     public AssetReference AnimationSourceRigModel { get; set; } =
-        AssetReference.Empty;
-
-    /// <summary>
-    /// Convenience target remembered by the importer UI. Retargeting remains
-    /// explicit and non-destructive until the user bakes a generated clip onto
-    /// the selected target model.
-    /// </summary>
-    public AssetReference DefaultRetargetTargetModel { get; set; } =
         AssetReference.Empty;
 
     public void Normalize()
@@ -152,23 +106,6 @@ public sealed class ModelImporterSettings
                 ? ImportScale
                 : 1.0f;
 
-        RetargetSamplesPerSecond =
-            float.IsFinite(
-                RetargetSamplesPerSecond)
-                ? Math.Clamp(
-                    RetargetSamplesPerSecond,
-                    15.0f,
-                    240.0f)
-                : 60.0f;
-
-        if (!Enum.IsDefined(
-                typeof(AnimationRootMotionSource),
-                RootMotionSource))
-        {
-            RootMotionSource =
-                AnimationRootMotionSource.Automatic;
-        }
-
         HumanoidMapping ??=
             new HumanoidBoneMap();
 
@@ -177,8 +114,6 @@ public sealed class ModelImporterSettings
         AnimationSourceRigModel ??=
             AssetReference.Empty;
 
-        DefaultRetargetTargetModel ??=
-            AssetReference.Empty;
     }
 
     public ModelImporterSettings Clone()
@@ -209,17 +144,9 @@ public sealed class ModelImporterSettings
                 HumanoidMapping =
                     HumanoidMapping.Clone(),
 
-                RootMotionSource =
-                    RootMotionSource,
-
-                RetargetSamplesPerSecond =
-                    RetargetSamplesPerSecond,
-
                 AnimationSourceRigModel =
                     AnimationSourceRigModel,
 
-                DefaultRetargetTargetModel =
-                    DefaultRetargetTargetModel
             };
     }
 }

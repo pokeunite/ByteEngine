@@ -14,4 +14,5 @@ public sealed class ModelHierarchyInstance : Component
     public AssetReference Model { get; set; } = AssetReference.Empty;
 
     public float AppliedImportScale { get; set; } = 1.0f;
+    public bool AutoGrounded { get; set; }
 }

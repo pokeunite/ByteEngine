@@ -79,7 +79,7 @@ public sealed class ObjModelImporter : ModelImporter
 
         ImportedMaterial material = ReadMaterial(source, materialLibrary, selectedMaterial);
         string meshKey = $"{source.Guid:N}:mesh:{Path.GetFileNameWithoutExtension(source.FullPath)}";
-        return new ImportedModel
+        return ImportedModelSpace.Apply(new ImportedModel
         {
             Guid = source.Guid,
             SourceAssetGuid = source.Guid,
@@ -105,7 +105,7 @@ public sealed class ObjModelImporter : ModelImporter
                     MeshKeys = new List<string> { meshKey }
                 }
             }
-        };
+        }, Matrix4x4.CreateScale(settings.ImportScale));
     }
 
     private static ImportedMaterial ReadMaterial(AssetRecord source, string? library, string? selectedName)

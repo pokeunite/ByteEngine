@@ -50,9 +50,6 @@ public sealed class AnimationController : Component
     private readonly HashSet<SkeletalMeshRenderer> _actionRenderers =
         new();
 
-    private AssetReference _animationSourceModel =
-        AssetReference.Empty;
-
     private bool _stateInitialized;
     private bool _actionActive;
     private bool _actionPaused;
@@ -262,18 +259,12 @@ public sealed class AnimationController : Component
         if (AnimationProfile == null ||
             AnimationProfile.IsEmpty)
         {
-            _animationSourceModel =
-                AssetReference.Empty;
-
             return false;
         }
 
         if (!AnimationRuntimeAssets.TryGet(out AssetManager? assets) ||
             assets == null)
         {
-            _animationSourceModel =
-                AssetReference.Empty;
-
             return false;
         }
 
@@ -287,17 +278,10 @@ public sealed class AnimationController : Component
         }
         catch
         {
-            _animationSourceModel =
-                AssetReference.Empty;
-
             return false;
         }
 
         profile.Normalize();
-
-        _animationSourceModel =
-            profile.Rig.AnimationSourceModel ??
-            AssetReference.Empty;
 
         AnimationLocomotionProfile locomotion =
             profile.Locomotion;
@@ -730,39 +714,16 @@ public sealed class AnimationController : Component
 
         bool played = false;
 
-        AnimationRuntimeAssets.TryGet(
-            out AssetManager? assets);
-
         foreach (SkeletalMeshRenderer renderer
                  in _renderers)
         {
             renderer.Speed = Math.Max(PlaybackSpeed * speedMultiplier, 0.0f);
 
-            bool rendererPlayed;
-
-            if (assets != null &&
-                !_animationSourceModel.IsEmpty &&
-                !SameModel(
-                    _animationSourceModel,
-                    renderer.Model))
-            {
-                rendererPlayed =
-                    HumanoidRetargetRuntime.Play(
-                        assets,
-                        renderer,
-                        _animationSourceModel,
-                        clipName,
-                        loop,
-                        Math.Max(transitionOverride ?? TransitionDuration, 0.0f));
-            }
-            else
-            {
-                rendererPlayed =
-                    renderer.Play(
-                        clipName,
-                        loop,
-                        Math.Max(transitionOverride ?? TransitionDuration, 0.0f));
-            }
+            bool rendererPlayed =
+                renderer.Play(
+                    clipName,
+                    loop,
+                    Math.Max(transitionOverride ?? TransitionDuration, 0.0f));
 
             if (!rendererPlayed)
             {
