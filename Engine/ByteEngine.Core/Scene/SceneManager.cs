@@ -1,5 +1,4 @@
 using ByteEngine.Core.Graphics;
-using ByteEngine.Core.Diagnostics;
 
 namespace ByteEngine.Core.Scene;
 
@@ -112,7 +111,6 @@ public sealed class SceneManager
     internal void UpdateInternal()
     {
         ActiveScene?.UpdateInternal();
-        if (ActiveScene != null) RuntimeDiagnostics.Update(ActiveScene);
     }
 
     internal void RenderInternal(

@@ -59,6 +59,16 @@ internal sealed class GameObjectReferencePicker
             }
         }
 
+        if (Matches("Last Ray Hit"))
+        {
+            if (ImGui.Selectable("Last Ray Hit (from Cast Ray or Ray Hits Anything)"))
+            {
+                selectedToken = "Last Ray Hit";
+                changed = true;
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
         if (state.EditorScene.GameObjects.Count >
             0)
         {

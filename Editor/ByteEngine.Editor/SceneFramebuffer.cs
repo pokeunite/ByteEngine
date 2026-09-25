@@ -26,6 +26,9 @@ internal sealed class SceneFramebuffer
     private readonly PostProcess3D _postProcess =
         new();
 
+    private readonly EditorSkeletalPreviewCache _skeletalPreview =
+        new();
+
     private int _width;
 
     private int _height;
@@ -33,6 +36,12 @@ internal sealed class SceneFramebuffer
     public nint TextureId =>
         _displayTexture;
 
+    internal bool TryGetEditorModelWorldBounds(
+        Scene scene, GameObject modelRoot, out BoundingBox3D bounds)
+    {
+        try { _skeletalPreview.Prepare(scene); return _skeletalPreview.TryGetWorldBounds(modelRoot, out bounds); }
+        finally { _skeletalPreview.RestoreStaticMeshes(); }
+    }
     public void Render(
         Renderer2D renderer,
         Renderer3D renderer3D,
@@ -143,7 +152,7 @@ internal sealed class SceneFramebuffer
             EditorMode.Edit)
         {
             scene.RenderEditorInternal(
-                context
+                context, is3D ? _skeletalPreview : null
             );
         }
         else
@@ -277,7 +286,7 @@ internal sealed class SceneFramebuffer
             EditorMode.Edit)
         {
             scene.RenderEditorInternal(
-                context
+                context, camera3D != null ? _skeletalPreview : null
             );
         }
         else
@@ -907,6 +916,7 @@ internal sealed class SceneFramebuffer
     public void Dispose()
     {
         DestroyResources();
+        _skeletalPreview.Dispose();
         _postProcess.Dispose();
     }
 }

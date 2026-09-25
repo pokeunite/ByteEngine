@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
@@ -62,9 +63,28 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (_is3D)
         {
-            state.Camera3D.Frame(
-                state.SelectedObject
-            );
+            GameObject selected = state.DisplayedScene.FindGameObject(state.SelectedObject.Id)
+                ?? state.SelectedObject;
+            Vector3 minimum = new(float.PositiveInfinity);
+            Vector3 maximum = new(float.NegativeInfinity);
+            bool foundPose = false;
+            foreach (GameObject item in state.DisplayedScene.GameObjects)
+            {
+                if (item.GetComponent<ModelHierarchyInstance>() == null ||
+                    !ReferenceEquals(item, selected) &&
+                    !item.IsDescendantOf(selected) &&
+                    !selected.IsDescendantOf(item) ||
+                    !_framebuffer.TryGetEditorModelWorldBounds(state.DisplayedScene, item,
+                        out BoundingBox3D bounds))
+                    continue;
+                minimum = Vector3.Min(minimum, bounds.Minimum);
+                maximum = Vector3.Max(maximum, bounds.Maximum);
+                foundPose = true;
+            }
+            if (foundPose)
+                state.Camera3D.Frame(new BoundingBox3D(minimum, maximum));
+            else
+                state.Camera3D.Frame(selected);
         }
         else
         {
@@ -167,6 +187,7 @@ internal sealed class SceneViewPanel : IDisposable
                 1.0f
             );
 
+
         _lastViewportSize =
             viewportSize;
 
@@ -183,6 +204,9 @@ internal sealed class SceneViewPanel : IDisposable
             windowWidth,
             windowHeight
         );
+
+        if (RuntimeDiagnostics.DebugBlueprintVisibility)
+            BlueprintVisibilityTrace.Sample(state, viewportSize, _is3D, _framebuffer);
 
         ImGui.Image(
             _framebuffer.TextureId,

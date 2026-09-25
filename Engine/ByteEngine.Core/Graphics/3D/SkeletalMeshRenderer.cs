@@ -22,7 +22,7 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// Once animation behaviour is stable this component can move skinning to the
 /// GPU without changing imported clips, controller logic or authoring data.
 /// </summary>
-public sealed class SkeletalMeshRenderer : Component
+public sealed partial class SkeletalMeshRenderer : Component
 {
     private readonly List<RuntimeSkinnedMesh> _runtimeMeshes = new();
 
@@ -834,6 +834,7 @@ public sealed class SkeletalMeshRenderer : Component
         _rootMotionRanges.Clear();
         _modelSpaceRootTravel =
             Vector3.Zero;
+        RebindAdvancedPose();
     }
 
     private void BuildRuntimeMeshes(AssetManager assets)
@@ -926,8 +927,9 @@ public sealed class SkeletalMeshRenderer : Component
         Matrix4x4[] locals = BuildLocalPose();
         Matrix4x4[] globals = ComputeGlobals(locals);
 
-        Matrix4x4 rootMotionCorrection =
-            BuildModelSpaceRootMotionCorrection();
+        Matrix4x4 rootMotionCorrection = HasAdvancedPose
+            ? _currentRootMotionCorrection
+            : BuildModelSpaceRootMotionCorrection();
 
         _currentPoseGlobals = globals;
         _currentRootMotionCorrection = rootMotionCorrection;
@@ -950,8 +952,9 @@ public sealed class SkeletalMeshRenderer : Component
                     ? inverse
                     : Matrix4x4.Identity;
 
-            Matrix4x4[] skinMatrices =
-                new Matrix4x4[_skeleton.Bones.Count];
+            Matrix4x4[] skinMatrices = runtime.SkinMatrices.Length == _skeleton.Bones.Count
+                ? runtime.SkinMatrices
+                : runtime.SkinMatrices = new Matrix4x4[_skeleton.Bones.Count];
 
             for (int boneIndex = 0;
                  boneIndex < skinMatrices.Length;
@@ -1008,8 +1011,10 @@ public sealed class SkeletalMeshRenderer : Component
 
     private Matrix4x4[] BuildLocalPose()
     {
-        Matrix4x4[] result =
-            new Matrix4x4[_nodes.Length];
+        if (HasAdvancedPose) return BuildAdvancedLocalPose();
+        Matrix4x4[] result = _localPoseMatrices.Length == _nodes.Length
+            ? _localPoseMatrices
+            : _localPoseMatrices = new Matrix4x4[_nodes.Length];
 
         float blend =
             _previousAnimation == null ||
@@ -1070,7 +1075,7 @@ public sealed class SkeletalMeshRenderer : Component
         }
 
         ImportedAnimationChannel? channel =
-            animation.FindChannel(_nodes[nodeIndex].Name);
+            CachedChannel(animation, nodeIndex);
 
         if (channel == null)
         {
@@ -1117,6 +1122,32 @@ public sealed class SkeletalMeshRenderer : Component
             _rootMotionChainIndices.Length == 0)
         {
             return Matrix4x4.Identity;
+        }
+
+        if (_activeBlendSpace != null && _spaceClips.Length == _blendWeights.Length)
+        {
+            float phase = _currentAnimation.Duration > 1e-6f
+                ? Math.Clamp(_currentTime / _currentAnimation.Duration, 0f, 1f) : 0f;
+            Vector3 blendedTravel = Vector3.Zero;
+            float totalWeight = 0f;
+            for (int i = 0; i < _spaceClips.Length; i++)
+            {
+                ImportedAnimation? clip = _spaceClips[i];
+                float weight = _blendWeights[i];
+                if (clip == null || weight <= 1e-6f) continue;
+                blendedTravel += CalculateClipRootTravel(clip, phase * clip.Duration) * weight;
+                totalWeight += weight;
+            }
+            if (totalWeight > 1e-6f)
+            {
+                _modelSpaceRootTravel = blendedTravel / totalWeight;
+                if (_sourceTransitionActive && _sourceTransitionDuration > 1e-6f)
+                    _modelSpaceRootTravel = Vector3.Lerp(_sourceTransitionRootTravel,
+                        _modelSpaceRootTravel,
+                        Math.Clamp(_sourceTransitionElapsed / _sourceTransitionDuration, 0f, 1f));
+                return Matrix4x4.CreateTranslation(
+                    -_modelSpaceRootTravel.X, 0f, -_modelSpaceRootTravel.Z);
+            }
         }
 
         Vector3 currentTravel =
@@ -1281,10 +1312,14 @@ public sealed class SkeletalMeshRenderer : Component
     private Matrix4x4[] ComputeGlobals(
         IReadOnlyList<Matrix4x4> locals)
     {
-        Matrix4x4[] globals =
-            new Matrix4x4[locals.Count];
+        Matrix4x4[] globals = _globalPoseMatrices.Length == locals.Count
+            ? _globalPoseMatrices
+            : _globalPoseMatrices = new Matrix4x4[locals.Count];
 
-        byte[] states = new byte[locals.Count];
+        byte[] states = _globalPoseStates.Length == locals.Count
+            ? _globalPoseStates
+            : _globalPoseStates = new byte[locals.Count];
+        Array.Clear(states);
 
         for (int index = 0; index < locals.Count; index++)
         {
@@ -1619,6 +1654,7 @@ public sealed class SkeletalMeshRenderer : Component
         /// eliminates a full float[] allocation on every animation tick.
         /// </summary>
         public float[] DeformedVertices { get; }
+        public Matrix4x4[] SkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
 
         public Matrix4x4 MeshToModelMatrix { get; set; } =
             Matrix4x4.Identity;

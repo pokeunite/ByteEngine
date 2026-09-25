@@ -29,10 +29,10 @@ public class ByteEngineApplication : GameWindow
 
     public bool IsGameInputCaptured => Input.IsGameInputCaptured;
 
-    public void CaptureGameInput()
+    public void CaptureGameInput(bool grabCursor = true)
     {
         if (Input.IsGameInputCaptured) return;
-        CursorState = CursorState.Grabbed;
+        CursorState = grabCursor ? CursorState.Grabbed : CursorState.Normal;
         Input.SetGameInputCaptured(true);
     }
 

@@ -43,7 +43,7 @@ internal enum NamedActionRequestDecision
 /// source of truth for locomotion settings while gameplay continues to talk to
 /// this one AnimationController.
 /// </summary>
-public sealed class AnimationController : Component
+public sealed partial class AnimationController : Component
 {
     private readonly List<SkeletalMeshRenderer> _renderers = new();
 
@@ -211,6 +211,7 @@ public sealed class AnimationController : Component
         }
 
         if (DriveLocomotion) ObserveLocomotion();
+        UpdateAdvancedPoseControls();
         ApplyPlaybackRate();
         UpdateRootMotion();
 
@@ -228,11 +229,11 @@ public sealed class AnimationController : Component
                 if (StartNamedAction(queued)) return;
             }
 
-            if (DriveLocomotion) ApplyObservedLocomotion(blendOut, true);
+            if (DriveLocomotion || _poseGraph != null) ApplyObservedLocomotion(blendOut, true);
             return;
         }
 
-        if (DriveLocomotion) ApplyObservedLocomotion(TransitionDuration, false);
+        if (DriveLocomotion || _poseGraph != null) ApplyObservedLocomotion(TransitionDuration, false);
     }
     protected override void OnLateUpdate()
     {
@@ -319,6 +320,7 @@ public sealed class AnimationController : Component
         _namedActions.Clear();
         foreach (AnimationActionProfile action in profile.Actions)
             if (!string.IsNullOrWhiteSpace(action.Name)) _namedActions[action.Name] = action;
+        ConfigureAdvancedProfile(profile);
 
         return true;
     }
@@ -349,17 +351,20 @@ public sealed class AnimationController : Component
     private void ApplyObservedLocomotion(float transition, bool force)
     {
         if (string.IsNullOrWhiteSpace(_currentLocomotionClip)) return;
-        bool loop = State != LocomotionState.Land;
+        bool loop = _poseGraph?.Current?.Loop ?? State != LocomotionState.Land;
         bool changed = force || !_renderers.Any(renderer =>
             string.Equals(renderer.CurrentAnimation, _currentLocomotionClip, StringComparison.OrdinalIgnoreCase));
-        if (changed) PlayInternal(_currentLocomotionClip, loop, null, transition, LocomotionPlaybackRate);
+        if (changed) PlayInternal(_currentLocomotionClip, loop, null,
+            _poseGraph?.TransitionDuration ?? transition,
+            _poseGraph?.Current?.PlaybackSpeed ?? LocomotionPlaybackRate);
     }
 
     private void ApplyPlaybackRate()
     {
-        float multiplier = _actionActive ? _actionPlaybackRate : LocomotionPlaybackRate;
+        float multiplier = _actionActive ? _actionPlaybackRate :
+            _poseGraph?.Current?.PlaybackSpeed ?? LocomotionPlaybackRate;
         foreach (SkeletalMeshRenderer renderer in _renderers)
-            renderer.Speed = Math.Max(PlaybackSpeed * multiplier, 0.0f);
+            renderer.Speed = Math.Max(PlaybackSpeed * multiplier * renderer.BlendPlaybackScale, 0.0f);
     }
     public void RefreshRenderers()
     {
@@ -719,6 +724,8 @@ public sealed class AnimationController : Component
         {
             renderer.Speed = Math.Max(PlaybackSpeed * speedMultiplier, 0.0f);
 
+            string previousClip = renderer.CurrentAnimation;
+            float previousPhase = renderer.NormalizedPlaybackPhase;
             bool rendererPlayed =
                 renderer.Play(
                     clipName,
@@ -732,6 +739,8 @@ public sealed class AnimationController : Component
 
             played =
                 true;
+            if (playedRenderers == null)
+                AlignSynchronizedClip(renderer, previousClip, previousPhase, clipName);
 
             playedRenderers?.Add(
                 renderer);
@@ -1496,6 +1505,20 @@ public sealed class AnimationController : Component
             _ => string.Empty
         };
         if (!string.IsNullOrWhiteSpace(directional)) return directional;
+        // Aim/strafe profiles commonly have one backward/strafe set but no
+        // separate run variants. Keep those directions instead of playing
+        // the forward run clip whenever movement crosses RunThreshold.
+        if (state == LocomotionState.Run && DirectionalMovement)
+        {
+            string walkDirection = direction switch
+            {
+                LocomotionDirection.Backward => WalkBackward,
+                LocomotionDirection.Left => WalkLeft,
+                LocomotionDirection.Right => WalkRight,
+                _ => string.Empty
+            };
+            if (!string.IsNullOrWhiteSpace(walkDirection)) return walkDirection;
+        }
         return state switch
         {
             LocomotionState.Idle => Idle,
@@ -1513,6 +1536,7 @@ public sealed class AnimationController : Component
         if (!_renderers.Contains(renderer))
         {
             _renderers.Add(renderer);
+            if (_loadedPoseProfile != null) renderer.ConfigurePoseProfile(_loadedPoseProfile);
         }
     }
 

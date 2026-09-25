@@ -51,6 +51,21 @@ internal static class CharacterCapsuleAutoFit
             return false;
         }
 
+        // Use the same deformed/reference pose seen in the editor and Play.
+        // A face-down imported bind mesh is not a valid character height.
+        GameObject? modelRoot = root.Children.FirstOrDefault(child =>
+            child.GetComponent<ModelHierarchyInstance>() != null);
+        if (modelRoot != null &&
+            CharacterModelPoseBounds.TryGetWorldBounds(modelRoot, out BoundingBox3D poseBounds))
+        {
+            BoundingBox3D localBounds = poseBounds.Transform(worldToRoot);
+            if (localBounds.IsValid)
+            {
+                result = FitBounds(root, localBounds.Minimum, localBounds.Maximum,
+                    "Skinned character pose");
+                return true;
+            }
+        }
         Vector3 minimum =
             new(float.PositiveInfinity);
 

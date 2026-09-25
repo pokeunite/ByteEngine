@@ -1,4 +1,5 @@
 using ByteEngine.Core.Animation;
+using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
 
@@ -14,6 +15,10 @@ public enum AnimationSignalKind
 public sealed class EventExecutionContext
 {
     public required VariableStore Globals { get; init; }
+
+    // Shared by ordered rules in one Event Module update; never retained across frames.
+    public RaycastHit3D? LastRaycastHit { get; set; }
+    public bool RaycastPerformed { get; set; }
 
     public required ByteEngine.Core.Scene.Scene Scene { get; init; }
 

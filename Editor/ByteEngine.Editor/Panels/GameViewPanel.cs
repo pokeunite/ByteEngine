@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ImGuiNET;
@@ -25,7 +26,7 @@ internal sealed class GameViewPanel : IDisposable
         Renderer3D renderer3D,
         int windowWidth,
         int windowHeight,
-        Action captureInput,
+        Action<bool> captureInput,
         Action releaseInput)
     {
         bool isOpen = IsOpen;
@@ -152,13 +153,18 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y >= imageMin.Y &&
             mouse.Y <= imageMax.Y;
 
+        bool pointerAim = state.DisplayedScene.ActiveCamera?.GameObject.Parent?
+            .GetComponent<PlayerShooter3D>()?.AimAtPointer == true;
+        if (pointerAim && Input.IsGameInputCaptured && !pointerInside)
+            releaseInput();
+
         if (state.Mode == EditorMode.Play &&
             !Input.IsGameInputCaptured &&
             pointerInside &&
             ImGui.IsMouseClicked(
                 ImGuiMouseButton.Left))
         {
-            captureInput();
+            captureInput(!pointerAim);
         }
         else if (state.Mode != EditorMode.Play &&
                  Input.IsGameInputCaptured)

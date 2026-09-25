@@ -61,6 +61,19 @@ internal sealed class EditorCamera3D
                 maximum = Vector3.Max(maximum, bounds.Maximum);
                 hasGeometry = true;
             }
+            foreach (SkeletalMeshRenderer renderer in item.Components.OfType<SkeletalMeshRenderer>())
+            {
+                if (!renderer.Visible || !renderer.TryGetCurrentModelBounds(out BoundingBox3D modelBounds))
+                    continue;
+
+                BoundingBox3D bounds = modelBounds.Transform(item.Transform.WorldMatrix);
+                if (!bounds.IsValid)
+                    continue;
+
+                minimum = Vector3.Min(minimum, bounds.Minimum);
+                maximum = Vector3.Max(maximum, bounds.Maximum);
+                hasGeometry = true;
+            }
 
             foreach (GameObject child in item.Children)
                 Include(child);
@@ -75,8 +88,14 @@ internal sealed class EditorCamera3D
             return;
         }
 
-        Vector3 center = (minimum + maximum) * 0.5f;
-        float radius = (maximum - minimum).Length() * 0.5f;
+        Frame(new BoundingBox3D(minimum, maximum));
+    }
+
+    public void Frame(BoundingBox3D bounds)
+    {
+        if (!bounds.IsValid) return;
+        Vector3 center = bounds.Center;
+        float radius = bounds.Size.Length() * 0.5f;
         float halfFov = Math.Clamp(FieldOfView, 1f, 170f) * MathF.PI / 360f;
         float distance = MathF.Max(radius / MathF.Sin(halfFov) * 1.35f, radius + 0.065f);
         Position = center - Forward * distance;

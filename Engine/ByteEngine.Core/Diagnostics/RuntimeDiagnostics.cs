@@ -32,11 +32,59 @@ public sealed class RuntimeDiagnosticWriter
 public static class RuntimeDiagnostics
 {
     public static Action<string>? OutputSink { get; set; }
-    private static RuntimeScene? _socketTraceScene;
-    private static DateTime _socketTraceStartUtc;
-    private static DateTime _lastSocketTraceSampleUtc;
-    private static int _socketTraceSamples;
-    private static readonly StringBuilder SocketTrace = new();
+    private static readonly object FootIkTraceLock = new();
+    private static readonly Queue<string> FootIkTrace = new();
+    private const int MaxFootIkTraceLines = 600;
+    public static bool DebugFootIk { get; set; }
+
+    private static readonly object BlueprintVisibilityTraceLock = new();
+    private static readonly Queue<string> BlueprintVisibilityTrace = new();
+    private const int MaxBlueprintVisibilityTraceLines = 400;
+    public static bool DebugBlueprintVisibility { get; set; }
+
+    public static void ClearBlueprintVisibilityTrace()
+    {
+        lock (BlueprintVisibilityTraceLock) BlueprintVisibilityTrace.Clear();
+    }
+
+    public static string GetBlueprintVisibilityTrace()
+    {
+        lock (BlueprintVisibilityTraceLock)
+            return string.Join(Environment.NewLine, BlueprintVisibilityTrace);
+    }
+
+    public static void RecordBlueprintVisibility(string message)
+    {
+        if (!DebugBlueprintVisibility) return;
+        string line = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+        lock (BlueprintVisibilityTraceLock)
+        {
+            BlueprintVisibilityTrace.Enqueue(line);
+            while (BlueprintVisibilityTrace.Count > MaxBlueprintVisibilityTraceLines)
+                BlueprintVisibilityTrace.Dequeue();
+        }
+    }
+
+    public static void ClearFootIkTrace()
+    {
+        lock (FootIkTraceLock) FootIkTrace.Clear();
+    }
+
+    public static string GetFootIkTrace()
+    {
+        lock (FootIkTraceLock) return string.Join(Environment.NewLine, FootIkTrace);
+    }
+
+    public static void RecordFootIk(string message)
+    {
+        if (!DebugFootIk) return;
+        string line = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+        lock (FootIkTraceLock)
+        {
+            FootIkTrace.Enqueue(line);
+            while (FootIkTrace.Count > MaxFootIkTraceLines) FootIkTrace.Dequeue();
+        }
+    }
 
 
     public static string CreateDump(RuntimeScene scene)
@@ -93,78 +141,4 @@ public static class RuntimeDiagnostics
         else Console.WriteLine(message);
     }
 
-    internal static void Update(RuntimeScene scene)
-    {
-        if (Input.IsKeyPressed(Key.F8)) Dump(scene);
-
-        DateTime now = DateTime.UtcNow;
-        if (Input.IsKeyPressed(Key.F9))
-        {
-            if (_socketTraceScene != null) FinishSocketTrace("stopped by F9");
-            else StartSocketTrace(scene, now);
-        }
-
-        if (_socketTraceScene == null) return;
-        if (!ReferenceEquals(_socketTraceScene, scene))
-        {
-            FinishSocketTrace("scene changed");
-            return;
-        }
-
-        if (_socketTraceSamples == 0 ||
-            (now - _lastSocketTraceSampleUtc).TotalMilliseconds >= 66)
-        {
-            _lastSocketTraceSampleUtc = now;
-            _socketTraceSamples++;
-            string elapsed = (now - _socketTraceStartUtc).TotalSeconds
-                .ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
-            GameObject[] attached = scene.GameObjects.Where(item => item.IsAttached).ToArray();
-            if (attached.Length == 0)
-                SocketTrace.AppendLine($"t={elapsed} attachments=none");
-            foreach (GameObject child in attached)
-            {
-                try
-                {
-                    SocketTrace.Append("t=").Append(elapsed).Append(' ')
-                        .AppendLine(SkeletalAttachmentService.BuildTraceSample(child));
-                }
-                catch (Exception error)
-                {
-                    SocketTrace.Append("t=").Append(elapsed).Append(" object=")
-                        .Append(child.Name).Append(" traceError=").AppendLine(error.Message);
-                }
-            }
-        }
-
-        if ((now - _socketTraceStartUtc).TotalSeconds >= 6 || _socketTraceSamples >= 90)
-            FinishSocketTrace("six-second capture complete");
-    }
-
-    private static void StartSocketTrace(RuntimeScene scene, DateTime now)
-    {
-        _socketTraceScene = scene;
-        _socketTraceStartUtc = now;
-        _lastSocketTraceSampleUtc = now;
-        _socketTraceSamples = 0;
-        SocketTrace.Clear();
-        SocketTrace.AppendLine("[Socket Trace] scene=" + scene.Name);
-        SocketTrace.AppendLine("Sampled after scene animation, physics and attachment updates; " +
-            "position/rotation errors compare the live gun to the same-frame socket.");
-        Emit("Socket trace recording for six seconds. Move and jump now; press F9 again to stop early.");
-    }
-
-    private static void FinishSocketTrace(string reason)
-    {
-        if (_socketTraceScene == null) return;
-        SocketTrace.Append("[Socket Trace End] ").Append(reason)
-            .Append("; samples=").AppendLine(_socketTraceSamples.ToString());
-        _socketTraceScene = null;
-        Emit(SocketTrace.ToString());
-    }
-
-    private static void Emit(string message)
-    {
-        if (OutputSink != null) OutputSink(message);
-        else Console.WriteLine(message);
-    }
 }

@@ -54,6 +54,12 @@ try
         return;
     }
     using var database = new AssetDatabase(root, new[] { "Assets", "Scenes" }); using var assets = new AssetManager(database);
+    if (args.Contains("--playable-presets"))
+    {
+        PlayablePresetCombatTests.Run(root, database, assets);
+        Console.WriteLine("Playable player, view preset, raycast and combat regressions passed.");
+        return;
+    }
     if (args.Contains("--import-space"))
     {
         ImportSpaceRegressionTests.Run();

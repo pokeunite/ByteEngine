@@ -1,21 +1,20 @@
 using ByteEngine.Core.Assets;
+using System.Numerics;
 
 namespace ByteEngine.Core.Animation;
 
 /// <summary>
 /// ByteEngine's single animation authoring asset.
 ///
-/// The goal is intentionally simple: one AnimationController points at one
-/// AnimationProfile. Rig, locomotion, actions and procedural animation settings
-/// all live here instead of being scattered across unrelated components.
+/// One AnimationController points at one AnimationProfile. Rig, locomotion,
+/// blend spaces, actions, layers, sync and procedural settings live here.
 ///
-/// C8 establishes the profile/data foundation. Later animation milestones add
-/// runtime/editor behaviour to the existing sections without changing the
-/// character-facing architecture.
+/// Runtime pose features and their editor settings live in this asset without
+/// changing the character-facing AnimationController architecture.
 /// </summary>
 public sealed class AnimationProfile
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 5;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -26,6 +25,14 @@ public sealed class AnimationProfile
     public AnimationLocomotionProfile Locomotion { get; set; } = new();
 
     public List<AnimationActionProfile> Actions { get; set; } = new();
+
+    public List<AnimationBlendSpace> BlendSpaces { get; set; } = new();
+
+    public List<AnimationLayerProfile> Layers { get; set; } = new();
+
+    public List<AnimationSyncGroup> SyncGroups { get; set; } = new();
+
+    public AnimationStateGraph StateGraph { get; set; } = new();
 
     public AnimationProceduralProfile Procedural { get; set; } = new();
 
@@ -59,8 +66,17 @@ public sealed class AnimationProfile
 
         Procedural ??=
             new AnimationProceduralProfile();
+        Procedural.Normalize();
 
+        BlendSpaces ??= new();
+        Layers ??= new();
+        SyncGroups ??= new();
+        StateGraph ??= new();
         Locomotion.Normalize();
+        foreach (AnimationBlendSpace space in BlendSpaces) space.Normalize();
+        foreach (AnimationLayerProfile layer in Layers) layer.Normalize();
+        foreach (AnimationSyncGroup group in SyncGroups) group.Normalize();
+        StateGraph.Normalize();
 
         for (int index = Actions.Count - 1;
              index >= 0;
@@ -131,6 +147,8 @@ public sealed class AnimationLocomotionProfile
     public float MoveThreshold { get; set; } = 0.05f;
     public float StateHysteresis { get; set; } = 0.15f;
     public bool DirectionalMovement { get; set; }
+    public string BlendSpace { get; set; } = string.Empty;
+    public string SyncGroup { get; set; } = string.Empty;
 
     public string WalkForward { get; set; } = string.Empty;
     public string WalkBackward { get; set; } = string.Empty;
@@ -171,6 +189,8 @@ public sealed class AnimationLocomotionProfile
         RunBackward ??= string.Empty;
         RunLeft ??= string.Empty;
         RunRight ??= string.Empty;
+        BlendSpace ??= string.Empty;
+        SyncGroup ??= string.Empty;
 
         MoveThreshold = Math.Max(MoveThreshold, 0.0f);
         StateHysteresis = Math.Max(StateHysteresis, 0.0f);
@@ -257,9 +277,7 @@ public sealed class AnimationActionProfile
 }
 
 /// <summary>
-/// Home for automatic pose-adjustment features. The flags intentionally do not
-/// implement IK/aim yet; they establish the single place those systems belong
-/// when C14-C17 arrive.
+/// Authoring settings for final-pose aim, look-at and IK corrections.
 /// </summary>
 public sealed class AnimationProceduralProfile
 {
@@ -270,4 +288,45 @@ public sealed class AnimationProceduralProfile
     public bool FootIkEnabled { get; set; }
 
     public bool HandIkEnabled { get; set; }
+
+    public float AimWeight { get; set; } = 1f;
+    public float AimYawLimit { get; set; } = 80f;
+    public float AimPitchLimit { get; set; } = 65f;
+    public float AimSmoothing { get; set; } = 12f;
+    public string AimBone { get; set; } = string.Empty;
+    public string LookAtBone { get; set; } = string.Empty;
+    public string LookAtTarget { get; set; } = string.Empty;
+    public float LookAtWeight { get; set; } = 1f;
+    public float FootRayDistance { get; set; } = .75f;
+    public float FootOffset { get; set; }
+    public float PelvisCompensation { get; set; } = .5f;
+    public List<AnimationIkChainProfile> IkChains { get; set; } = new();
+
+    public void Normalize()
+    {
+        AimBone ??= string.Empty;
+        LookAtBone ??= string.Empty;
+        LookAtTarget ??= string.Empty;
+        AimWeight = Math.Clamp(float.IsFinite(AimWeight) ? AimWeight : 0f, 0f, 1f);
+        LookAtWeight = Math.Clamp(float.IsFinite(LookAtWeight) ? LookAtWeight : 0f, 0f, 1f);
+        AimYawLimit = Math.Clamp(float.IsFinite(AimYawLimit) ? AimYawLimit : 0f, 0f, 180f);
+        AimPitchLimit = Math.Clamp(float.IsFinite(AimPitchLimit) ? AimPitchLimit : 0f, 0f, 180f);
+        AimSmoothing = Math.Clamp(float.IsFinite(AimSmoothing) ? AimSmoothing : 0f, 0f, 100f);
+        FootRayDistance = Math.Clamp(float.IsFinite(FootRayDistance) ? FootRayDistance : 0f, 0f, 10f);
+        FootOffset = float.IsFinite(FootOffset) ? FootOffset : 0f;
+        PelvisCompensation = Math.Clamp(float.IsFinite(PelvisCompensation) ? PelvisCompensation : 0f, 0f, 1f);
+        IkChains ??= new();
+        IkChains.RemoveAll(chain => chain == null);
+        foreach (AnimationIkChainProfile chain in IkChains)
+        {
+            chain.Name ??= string.Empty;
+            chain.RootBone ??= string.Empty;
+            chain.MidBone ??= string.Empty;
+            chain.EndBone ??= string.Empty;
+            chain.TargetObject ??= string.Empty;
+            chain.Weight = Math.Clamp(float.IsFinite(chain.Weight) ? chain.Weight : 0f, 0f, 1f);
+            if (!float.IsFinite(chain.PoleOffset.X) || !float.IsFinite(chain.PoleOffset.Y) ||
+                !float.IsFinite(chain.PoleOffset.Z)) chain.PoleOffset = Vector3.UnitZ;
+        }
+    }
 }

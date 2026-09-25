@@ -4,6 +4,7 @@ using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
+using ByteEngine.Core.Scene;
 
 using ImGuiNET;
 
@@ -16,13 +17,15 @@ namespace ByteEngine.Editor.Panels;
 /// delegated to a dedicated rig window instead of expanding the profile into a
 /// long wall of bone dropdowns.
 /// </summary>
-internal sealed class AnimationProfileWorkspacePanel : IDisposable
+internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
 {
     private readonly EditorDocumentManager _documents;
+    private readonly Func<Scene?> _activeScene;
 
-    public AnimationProfileWorkspacePanel(EditorDocumentManager documents)
+    public AnimationProfileWorkspacePanel(EditorDocumentManager documents, Func<Scene?> activeScene)
     {
         _documents = documents;
+        _activeScene = activeScene;
     }
     private readonly HumanoidRigConfiguratorPanel _humanoidConfigurator =
         new();
@@ -364,6 +367,12 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
             ImGui.EndTabItem();
         }
 
+        if (ImGui.BeginTabItem("Blend Spaces"))
+        {
+            _dirty |= DrawBlendSpaces();
+            ImGui.EndTabItem();
+        }
+
         if (ImGui.BeginTabItem(
                 "Sockets"))
         {
@@ -373,8 +382,14 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         if (ImGui.BeginTabItem(
                 "Layers"))
         {
-            DrawLayers();
+            _dirty |= DrawLayers();
 
+            ImGui.EndTabItem();
+        }
+
+        if (ImGui.BeginTabItem("State Graph"))
+        {
+            _dirty |= DrawStateGraph();
             ImGui.EndTabItem();
         }
 
@@ -1351,6 +1366,8 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         IReadOnlyList<string> clips =
             GetAnimationClipNames();
 
+        changed |= DrawLocomotionSource();
+
         string idle =
             locomotion.Idle;
 
@@ -1469,7 +1486,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         ImGui.SeparatorText("DIRECTIONAL ANIMATION CLIPS");
         bool directional = locomotion.DirectionalMovement;
         if (ImGui.Checkbox("Use Directional Animation Clips", ref directional)) { locomotion.DirectionalMovement = directional; changed = true; }
-        ImGui.TextDisabled("Optional. Empty directions use the base Walk or Run clip.");
+        ImGui.TextDisabled("Empty run backward/strafe slots use the matching Walk direction, then base Run.");
         ImGui.TextDisabled("Dedicated backward/strafe clips are recommended for fixed camera or aim facing.");
 
         ImGui.BeginDisabled(!directional);
@@ -1478,7 +1495,14 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         for (int index = 0; index < directionLabels.Length; index++)
         {
             string value = directionValues[index];
-            string fallbackLabel = index < 4 ? "Use Base Walk" : "Use Base Run";
+            string fallbackLabel = index switch
+            {
+                5 when !string.IsNullOrWhiteSpace(locomotion.WalkBackward) => "Use Walk Backward",
+                6 when !string.IsNullOrWhiteSpace(locomotion.WalkLeft) => "Use Walk Left",
+                7 when !string.IsNullOrWhiteSpace(locomotion.WalkRight) => "Use Walk Right",
+                < 4 => "Use Base Walk",
+                _ => "Use Base Run"
+            };
             if (!DrawClipPicker(directionLabels[index], clips, ref value, fallbackLabel)) continue;
             switch (index)
             {
@@ -1572,6 +1596,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                 "Choose a Reference Model in RIG. Optionally choose a different Animation Source Model.");
         }
 
+        changed |= DrawSyncGroups();
         return changed;
     }
 
@@ -1783,26 +1808,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
         return changed;
     }
 
-    private static void DrawLayers()
-    {
-        ImGui.SeparatorText(
-            "ANIMATION LAYERS");
-
-        ImGui.TextWrapped(
-            "Layer definitions and body-region masks arrive in C13. They stay inside the Animation Profile.");
-
-        ImGui.BulletText(
-            "Full Body");
-
-        ImGui.BulletText(
-            "Upper Body");
-
-        ImGui.BulletText(
-            "Lower Body");
-
-        ImGui.BulletText(
-            "Arms / Head / Custom regions");
-    }
+    private bool DrawLayers() => DrawAdvancedLayers();
 
     private bool DrawProcedural()
     {
@@ -1876,9 +1882,7 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
                 true;
         }
 
-        ImGui.TextDisabled(
-            "Aim and IK solvers arrive in later animation milestones.");
-
+        changed |= DrawAdvancedProcedural();
         return changed;
     }
 
@@ -1951,6 +1955,8 @@ internal sealed class AnimationProfileWorkspacePanel : IDisposable
             ImGui.TextDisabled(
                 "No duplicate action names detected.");
         }
+
+        DrawAdvancedDebug();
     }
 
     private IReadOnlyList<string> GetAnimationClipNames()

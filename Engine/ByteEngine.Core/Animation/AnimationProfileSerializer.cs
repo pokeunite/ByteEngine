@@ -155,6 +155,11 @@ public static class AnimationProfileSerializer
                     document.Actions ??
                     new List<AnimationActionProfile>(),
 
+                BlendSpaces = document.BlendSpaces ?? new(),
+                Layers = document.Layers ?? new(),
+                SyncGroups = document.SyncGroups ?? new(),
+                StateGraph = document.StateGraph ?? new(),
+
                 Procedural =
                     document.Procedural ??
                     new AnimationProceduralProfile()
@@ -189,6 +194,11 @@ public static class AnimationProfileSerializer
 
                 Actions =
                     profile.Actions,
+
+                BlendSpaces = profile.BlendSpaces,
+                Layers = profile.Layers,
+                SyncGroups = profile.SyncGroups,
+                StateGraph = profile.StateGraph,
 
                 Procedural =
                     profile.Procedural
@@ -270,6 +280,9 @@ public static class AnimationProfileSerializer
                 WriteIndented =
                     true,
 
+                IncludeFields =
+                    true,
+
                 AllowTrailingCommas =
                     true,
 
@@ -305,6 +318,11 @@ public static class AnimationProfileSerializer
 
         public AnimationProceduralProfile? Procedural { get; set; } =
             new();
+
+        public List<AnimationBlendSpace>? BlendSpaces { get; set; } = new();
+        public List<AnimationLayerProfile>? Layers { get; set; } = new();
+        public List<AnimationSyncGroup>? SyncGroups { get; set; } = new();
+        public AnimationStateGraph? StateGraph { get; set; } = new();
     }
 
     /// <summary>

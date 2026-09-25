@@ -71,6 +71,7 @@ public sealed class PlayerController3D : Component
     /// When true, movement uses the character's local forward/right axes.
     /// </summary>
     public bool UseLocalOrientation { get; set; }
+    public bool AcceptLookInput { get; set; } = true;
 
     /// <summary>
     /// Standard TPS defaults to FaceMovement. FaceCamera is intended for
@@ -204,7 +205,7 @@ public sealed class PlayerController3D : Component
         CameraBoom3D? boom =
             player.GetComponent<CameraBoom3D>();
 
-        if (InputActions.GameplayEnabled)
+        if (AcceptLookInput && InputActions.GameplayEnabled)
         {
             Vector2 lookInput =
                 InputActions.ReadAxis2D(LookAction);

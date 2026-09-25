@@ -117,7 +117,7 @@ internal static class C125SkeletalSocketTests
             Assert(socketDump.Contains("Socket Attachment: Event Rifle",StringComparison.Ordinal)&&
                 socketDump.Contains("Imported Payload Rotation",StringComparison.Ordinal)&&
                 socketDump.Contains("Socket World Rotation",StringComparison.Ordinal),
-                "F8 runtime diagnostics include the live socket and attached object rotations");
+                "Runtime diagnostics include the live socket and attached object rotations");
             Assert(SkeletalAttachmentService.Detach(actionChild,true)&&!actionChild.IsAttached,"Event attachment still detaches");
             Console.WriteLine("C12.5 skeletal socket regressions passed.");
         }

@@ -409,15 +409,24 @@ public sealed class Scene
         context.Flush3D();
     }
 
-    internal void RenderEditorInternal(RenderContext context)
+    internal void RenderEditorInternal(RenderContext context, EditorSkeletalPreviewCache? skeletalPreview = null)
     {
-        context.Begin3DFrame();
-        SkeletalAttachmentService.UpdateScene(this);
+        try
+        {
+            skeletalPreview?.Prepare(this);
+            context.Begin3DFrame();
+            SkeletalAttachmentService.UpdateScene(this);
 
-        foreach (GameObject gameObject in GetRenderOrder())
-            gameObject.RenderEditorInternal(context);
+            foreach (GameObject gameObject in GetRenderOrder())
+                gameObject.RenderEditorInternal(context);
 
-        context.Flush3D();
+            skeletalPreview?.Render(context);
+            context.Flush3D();
+        }
+        finally
+        {
+            skeletalPreview?.RestoreStaticMeshes();
+        }
     }
 
     internal void UnloadInternal()

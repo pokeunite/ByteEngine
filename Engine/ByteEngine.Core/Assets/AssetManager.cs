@@ -358,6 +358,10 @@ public sealed class AssetManager : IDisposable
         target.Rig = source.Rig;
         target.Locomotion = source.Locomotion;
         target.Actions = source.Actions;
+        target.BlendSpaces = source.BlendSpaces;
+        target.Layers = source.Layers;
+        target.SyncGroups = source.SyncGroups;
+        target.StateGraph = source.StateGraph;
         target.Procedural = source.Procedural;
         target.Normalize();
     }

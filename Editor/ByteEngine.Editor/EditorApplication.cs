@@ -6,6 +6,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Scene;
@@ -315,7 +316,7 @@ public sealed class EditorApplication
         if (_gameView.IsOpen)
         {
             _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y,
-                CaptureGameInput, ReleaseGameInput);
+                grabCursor => CaptureGameInput(grabCursor), ReleaseGameInput);
         }
 
         // Draw background bottom-workspace tabs first. Assets is drawn last
@@ -639,6 +640,11 @@ public sealed class EditorApplication
             if (ImGui.MenuItem("Cube")) CreateMeshPrimitive("Cube", PrimitiveMeshType.Cube);
             if (ImGui.MenuItem("Sphere")) CreateMeshPrimitive("Sphere", PrimitiveMeshType.Sphere);
             if (ImGui.MenuItem("Plane")) CreateMeshPrimitive("Plane", PrimitiveMeshType.Plane);
+            ImGui.EndMenu();
+        }
+        if (ImGui.BeginMenu("Gameplay", canEdit))
+        {
+            if (ImGui.MenuItem("Damage Target")) CreateDamageTarget();
             ImGui.EndMenu();
         }
         if (ImGui.BeginMenu("Camera", canEdit))
@@ -2082,6 +2088,38 @@ public sealed class EditorApplication
             GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
             gameObject.AddComponent(componentFactory());
         });
+    }
+
+    private void CreateDamageTarget()
+    {
+        if (_state == null || _state.Mode != EditorMode.Edit) return;
+        GameObject? selected = _state.SelectedObject;
+        Vector3 position = new(0f, 1f, -7f);
+        if (selected != null)
+        {
+            Vector3 forward = selected.Transform.Forward;
+            forward.Y = 0f;
+            if (forward.LengthSquared() < .000001f) forward = -Vector3.UnitZ;
+            position = selected.Transform.WorldPosition + Vector3.Normalize(forward) * 7f;
+            position.Y = 1f;
+        }
+        Action create = () =>
+        {
+            GameObject target = EditorSceneCommands.CreateGameObject(_state, "Damage Target", _log);
+            target.Transform.WorldPosition = position;
+            target.AddComponent(new MeshRenderer
+            {
+                Primitive = PrimitiveMeshType.Cube,
+                Material = new Material { BaseColor = new Vector4(.9f, .2f, .18f, 1f) }
+            });
+            target.AddComponent(new BoxCollider3D { Size = Vector3.One });
+            target.AddComponent(new HealthComponent
+            {
+                MaxHealth = 100f, CurrentHealth = 100f, DestroyOnDeath = true
+            });
+        };
+        if (_state.Undo != null) _state.Undo.Execute(_state, "Create Damage Target", create);
+        else create();
     }
 
     private void CreateMeshPrimitive(string name, PrimitiveMeshType primitive)

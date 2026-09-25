@@ -125,7 +125,8 @@ internal sealed class EditorDocumentWindowManager : IDisposable
 
         var panel =
             new AnimationProfileWorkspacePanel(
-                _documents);
+                _documents,
+                () => (_owner as ByteEngine.Core.ByteEngineApplication)?.Scenes.ActiveScene);
 
         panel.Open(
             asset,

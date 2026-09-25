@@ -866,9 +866,13 @@ internal sealed class EventWorkspacePanel
 
     private float GetNodeVisualScale()
     {
+        float scale = _graphCanvas.Zoom * GetNodeScale();
+        // Keep node copy readable at the normal graph view without enlarging
+        // node geometry or changing saved positions and wire endpoints.
+        if (_graphCanvas.Zoom >= 0.85f)
+            scale = MathF.Max(scale, 0.88f);
         return Math.Clamp(
-            _graphCanvas.Zoom *
-            GetNodeScale(),
+            scale,
             0.25f,
             1.65f);
     }
@@ -1676,6 +1680,17 @@ internal sealed class EventWorkspacePanel
 
         if (visible)
         {
+            // The instruction's name is the node title, not a detail hidden
+            // below the generic Condition/Action label. Selection and dragging
+            // use node bounds, so wrapped text remains a usable drag region.
+            float bodyScale = GetNodeVisualScale();
+            ImGui.SetWindowFontScale(MathF.Max(bodyScale, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.94f, 0.96f, 1.0f, 1.0f));
+            ImGui.TextWrapped(displayName);
+            ImGui.PopStyleColor();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip($"{(condition ? "Condition" : "Action")}: {displayName}");
+
             ImGui.SetWindowFontScale(
                 GetNodeVisualScale());
 
@@ -1715,15 +1730,6 @@ internal sealed class EventWorkspacePanel
                 remove =
                     true;
             }
-
-            ImGui.Selectable(
-                $"{displayName}##NodeMoveHandle",
-                false,
-                ImGuiSelectableFlags.None,
-                new Vector2(
-                    -1.0f,
-                    30.0f *
-                    GetNodeVisualScale()));
 
             string description =
                 GetInstructionDescription(
@@ -6690,6 +6696,39 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["value"] = EventValue.Number(-.5);
                 break;
 
+            case "physics.castRay":
+            case "physics.rayHitsAnything":
+                instruction.Arguments["source"] = EventValue.String("Self");
+                instruction.Arguments["originOffset"] = EventValue.Vector3(Vector3.Zero);
+                instruction.Arguments["direction"] = EventValue.Vector3(new Vector3(0f, 0f, -1f));
+                instruction.Arguments["worldSpace"] = EventValue.Boolean(false);
+                instruction.Arguments["distance"] = EventValue.Number(100);
+                instruction.Arguments["layer"] = EventValue.Number(-1);
+                instruction.Arguments["includeTriggers"] = EventValue.Boolean(false);
+                break;
+            case "physics.lastRayHitObject":
+            case "combat.fireWeapon":
+            case "combat.canFire":
+            case "health.isDead":
+            case "projectile.fire":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                break;
+            case "health.percentAtMost":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["value"] = EventValue.Number(.25);
+                break;
+            case "health.damage":
+            case "health.heal":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["amount"] = EventValue.Number(20);
+                break;
+            case "combat.damageLastRayHit":
+                instruction.Arguments["amount"] = EventValue.Number(20);
+                break;
+            case "physics.saveRayHit":
+                instruction.Arguments["prefix"] = EventValue.String("Ray");
+                break;
+
             case "attachment.attachToSocket":
                 instruction.Arguments["object"] = EventValue.String("Self");
                 instruction.Arguments["parent"] = EventValue.String("Self");
@@ -7120,6 +7159,57 @@ internal sealed class EventWorkspacePanel
                 DrawInputActionArgument(instruction, "action", "Input Action", "Move");
                 DrawValueArgument(instruction, "value", "Value", VariableType.Number,
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
+                break;
+
+            case "physics.castRay":
+            case "physics.rayHitsAnything":
+                DrawObjectTargetArgument(instruction, "source", "Ray Origin Object", state);
+                DrawValueArgument(instruction, "originOffset", "Local Origin Offset", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.Zero), state, false);
+                DrawValueArgument(instruction, "direction", "Direction", VariableType.Vector3,
+                    EventValue.Vector3(new Vector3(0f, 0f, -1f)), state, false);
+                DrawValueArgument(instruction, "worldSpace", "Direction Is World Space", VariableType.Boolean,
+                    EventValue.Boolean(false), state, false);
+                DrawValueArgument(instruction, "distance", "Maximum Distance", VariableType.Number,
+                    EventValue.Number(100), state, false);
+                DrawValueArgument(instruction, "layer", "Collision Layer (-1 = All)", VariableType.Number,
+                    EventValue.Number(-1), state, false);
+                DrawValueArgument(instruction, "includeTriggers", "Include Triggers", VariableType.Boolean,
+                    EventValue.Boolean(false), state, false);
+                ImGui.TextDisabled("Result is available to later nodes as Last Ray Hit.");
+                break;
+            case "physics.lastRayHit":
+            case "physics.lastRayMissed":
+                ImGui.TextDisabled("Reads the latest raycast in this Event Sheet update.");
+                break;
+            case "physics.lastRayHitObject":
+                DrawObjectTargetArgument(instruction, "target", "Object To Compare", state);
+                break;
+            case "physics.saveRayHit":
+                DrawValueArgument(instruction, "prefix", "Self Variable Prefix", VariableType.String,
+                    EventValue.String("Ray"), state, false);
+                ImGui.TextDisabled("Writes Hit, ObjectId, Point, Normal, and Distance variables.");
+                break;
+            case "combat.canFire":
+            case "combat.fireWeapon":
+            case "health.isDead":
+            case "projectile.fire":
+                DrawObjectTargetArgument(instruction, "target", "Object", state);
+                break;
+            case "health.percentAtMost":
+                DrawObjectTargetArgument(instruction, "target", "Object", state);
+                DrawValueArgument(instruction, "value", "Health Fraction (0-1)", VariableType.Number,
+                    EventValue.Number(.25), state, false);
+                break;
+            case "health.damage":
+            case "health.heal":
+                DrawObjectTargetArgument(instruction, "target", "Object", state);
+                DrawValueArgument(instruction, "amount", "Amount", VariableType.Number,
+                    EventValue.Number(20), state, false);
+                break;
+            case "combat.damageLastRayHit":
+                DrawValueArgument(instruction, "amount", "Damage", VariableType.Number,
+                    EventValue.Number(20), state, false);
                 break;
 
             case "attachment.attachToSocket":

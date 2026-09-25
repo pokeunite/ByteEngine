@@ -2012,6 +2012,29 @@ state.SelectedObject =
                 log);
         }
 
+        if (asset?.Type == AssetType.Model3D)
+        {
+            ImGui.Separator();
+            bool canCreatePlayer = state.Mode == EditorMode.Edit &&
+                IsInsideDirectory(_currentDirectory, GetAssetsRoot());
+            ImGui.BeginDisabled(!canCreatePlayer);
+            if (ImGui.BeginMenu("Create Player Blueprint"))
+            {
+                if (ImGui.MenuItem("Third Person Shooter"))
+                    CreatePlayablePlayerFromModel(state, log, asset, PlayerViewPreset.ThirdPerson);
+                if (ImGui.MenuItem("First Person Shooter"))
+                    CreatePlayablePlayerFromModel(state, log, asset, PlayerViewPreset.FirstPerson);
+                if (ImGui.MenuItem("Top-Down Twin-Stick"))
+                    CreatePlayablePlayerFromModel(state, log, asset, PlayerViewPreset.TopDownTwinStick);
+                if (ImGui.MenuItem("Isometric"))
+                    CreatePlayablePlayerFromModel(state, log, asset, PlayerViewPreset.Isometric);
+                ImGui.EndMenu();
+            }
+            ImGui.EndDisabled();
+            if (!canCreatePlayer)
+                ImGui.TextDisabled("Open a scene in Edit mode to create a player.");
+        }
+
         if (asset?.Type ==
             AssetType.EventModule)
         {
@@ -2434,11 +2457,13 @@ state.SelectedObject =
         ImGui.Combo(
             "Type",
             ref _blueprintType,
-            "Generic Object\0Character\0");
+            "Generic Object\0Character (Empty)\0Third Person Shooter\0First Person Shooter\0Top-Down Twin-Stick\0Isometric\0");
 
         bool valid =
             !string.IsNullOrWhiteSpace(
                 _blueprintName);
+        if (_blueprintType >= 2)
+            ImGui.TextDisabled("Creates a playable Character Blueprint. Add a render model to its Model child.");
 
         ImGui.BeginDisabled(
             !valid);
@@ -2502,9 +2527,9 @@ state.SelectedObject =
         }
 
         BlueprintType type =
-            (BlueprintType)_blueprintType;
+            _blueprintType == 0 ? BlueprintType.GenericObject : BlueprintType.Character;
 
-        var root =
+        GameObjectData root =
             new GameObjectData
             {
                 Id =
@@ -2515,7 +2540,12 @@ state.SelectedObject =
             };
 
         var children = new List<GameObjectData>();
-        if (type == BlueprintType.Character)
+        if (_blueprintType >= 2)
+        {
+            (root, children) = BlueprintAuthoringService.CreatePlayableBlueprintHierarchy(
+                _project, safeName, (PlayerViewPreset)(_blueprintType - 2));
+        }
+        else if (type == BlueprintType.Character)
         {
             Guid cameraId = Guid.NewGuid();
             children.Add(new GameObjectData { Id = Guid.NewGuid(), ParentId = root.Id, Name = "Model" });
@@ -2615,6 +2645,41 @@ state.SelectedObject =
 
         log.Info(
             $"Created {type} Blueprint '{Path.GetFileName(path)}'.");
+    }
+
+    private void CreatePlayablePlayerFromModel(EditorState state, EditorLog log, AssetRecord asset, PlayerViewPreset preset)
+    {
+        try
+        {
+            var model = _project.Assets.LoadModel(new AssetReference(asset.Guid, asset.ProjectPath));
+            if (model.Meshes.Count == 0)
+                throw new InvalidOperationException("The source model has no render mesh. Choose a visible character model.");
+
+            string directory = GetAssetCreationDirectory();
+            string name = MakeSafeFileName(Path.GetFileNameWithoutExtension(asset.ProjectPath) + " Player");
+            string path = GetUniqueAssetPath(directory, name, ".byteblueprint");
+            Vector3 spawn = BlueprintAuthoringService.FindClearPlayerSpawn(state.EditorScene);
+            GameObject player = EditorSceneCommands.CreateModel(state, _project, asset, spawn, log);
+            player.Name = name;
+            BlueprintAuthoringService.SetupPlayablePlayer(player, _project.Assets, preset);
+            BlueprintPromotionService.Promote(_project, player, path);
+            state.SelectedObject = player;
+            state.SelectedAssetId = null;
+            state.SelectedAssetPath = null;
+            state.MarkDirty();
+            RefreshAfterFileOperation();
+
+            GameObject modelRoot = BlueprintAuthoringService.EnsureModelRoot(player);
+            if (CharacterModelPoseBounds.TryGetWorldBounds(modelRoot, out BoundingBox3D bounds))
+                state.Camera3D.Frame(bounds);
+            else
+                state.Camera3D.Frame(player);
+            log.Info($"Created playable {preset} Blueprint '{Path.GetFileName(path)}'. Press Play to move, aim, and fire.");
+        }
+        catch (Exception exception)
+        {
+            log.Error($"Could not create player from '{asset.ProjectPath}': {exception.Message}");
+        }
     }
 
     private void CreateBlueprintFromSelectedObject(

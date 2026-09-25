@@ -959,6 +959,7 @@ public sealed class ComponentSerializer
             Data(TypeName, new JsonObject
             {
                 ["useLocalOrientation"] = ((PlayerController3D)component).UseLocalOrientation,
+                ["acceptLookInput"] = ((PlayerController3D)component).AcceptLookInput,
                 ["characterRotation"] = ((PlayerController3D)component).CharacterRotation.ToString(),
                 ["turnSpeed"] = ((PlayerController3D)component).TurnSpeed,
                 ["controlYaw"] = ((PlayerController3D)component).ControlYaw,
@@ -975,6 +976,7 @@ public sealed class ComponentSerializer
         public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerController3D
         {
             UseLocalOrientation = data.Properties["useLocalOrientation"]?.GetValue<bool>() ?? true,
+            AcceptLookInput = data.Properties["acceptLookInput"]?.GetValue<bool>() ?? true,
             CharacterRotation = Enum.TryParse(
                 Text(data, "characterRotation", nameof(CharacterRotationMode.FaceCamera)),
                 true,
@@ -1002,10 +1004,15 @@ public sealed class ComponentSerializer
         public string TypeName => "PlayerShooter3D";
         public Type ComponentType => typeof(PlayerShooter3D);
         public ComponentData Serialize(Component component, ComponentSerializationContext context) =>
-            Data(TypeName, new JsonObject { ["automatic"] = ((PlayerShooter3D)component).Automatic });
+            Data(TypeName, new JsonObject
+            {
+                ["automatic"] = ((PlayerShooter3D)component).Automatic,
+                ["aimAtPointer"] = ((PlayerShooter3D)component).AimAtPointer
+            });
         public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new PlayerShooter3D
         {
-            Automatic = data.Properties["automatic"]?.GetValue<bool>() ?? true
+            Automatic = data.Properties["automatic"]?.GetValue<bool>() ?? true,
+            AimAtPointer = data.Properties["aimAtPointer"]?.GetValue<bool>() ?? false
         };
     }
 

@@ -987,9 +987,12 @@ internal sealed class BlueprintWorkspacePanel
                 item.Parent == null &&
                 item.GetComponent<CharacterController3D>() != null) == true)
         {
-            float visualHeight = _previewBoundsMin.HasValue && _previewBoundsMax.HasValue
-                ? _previewBoundsMax.Value.Y - _previewBoundsMin.Value.Y
-                : 0f;
+            float visualHeight = _preview != null &&
+                _framebuffer.TryGetEditorModelWorldBounds(_preview, selected, out BoundingBox3D currentPoseBounds)
+                    ? currentPoseBounds.Size.Y
+                    : _previewBoundsMin.HasValue && _previewBoundsMax.HasValue
+                        ? _previewBoundsMax.Value.Y - _previewBoundsMin.Value.Y
+                        : 0f;
             if (float.IsFinite(visualHeight) && visualHeight > 0f)
                 ImGui.TextDisabled($"Character visual height: {visualHeight:0.###} m");
 
@@ -1387,10 +1390,34 @@ internal sealed class BlueprintWorkspacePanel
 
         if (root != null && ImGui.BeginMenu("Setup"))
         {
-            if (ImGui.MenuItem("Third Person Character")) SetupThirdPersonCharacter(root);
+            if (ImGui.MenuItem("Playable TPS Player")) SetupPlayablePlayer(root, PlayerViewPreset.ThirdPerson);
+            if (ImGui.BeginMenu("View Preset"))
+            {
+                if (ImGui.MenuItem("Third Person Shooter")) SetupPlayablePlayer(root, PlayerViewPreset.ThirdPerson);
+                if (ImGui.MenuItem("First Person Shooter")) SetupPlayablePlayer(root, PlayerViewPreset.FirstPerson);
+                if (ImGui.MenuItem("Top-Down Twin-Stick")) SetupPlayablePlayer(root, PlayerViewPreset.TopDownTwinStick);
+                if (ImGui.MenuItem("Isometric")) SetupPlayablePlayer(root, PlayerViewPreset.Isometric);
+                ImGui.Separator();
+                ImGui.TextDisabled("Click-to-move is a separate control option.");
+                ImGui.EndMenu();
+            }
+            if (ImGui.MenuItem("Movement + Camera Only (Legacy)")) SetupThirdPersonCharacter(root);
             ImGui.EndMenu();
         }
         ImGui.EndPopup();
+    }
+
+    private void SetupPlayablePlayer(GameObject root, PlayerViewPreset preset)
+    {
+        Camera3D? previousActive = root.Scene?.ActiveCamera;
+        CameraBoom3D boom = BlueprintAuthoringService.SetupPlayablePlayer(root, _project!.Assets, preset);
+        Camera3D? camera = _preview!.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
+        if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
+            _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
+        _selectedPreviewObjectId = root.Id;
+        _selectedComponent = null;
+        RefreshPreviewBoundsFromScene();
+        MarkDirty();
     }
 
     private void SetupThirdPersonCharacter(GameObject root)
@@ -1676,9 +1703,7 @@ internal sealed class BlueprintWorkspacePanel
                 }
             }
 
-            UpdatePreviewBounds(
-                model,
-                objects);
+            RefreshPreviewBoundsFromScene();
 
             FramePreviewBounds();
 
@@ -2379,10 +2404,23 @@ internal sealed class BlueprintWorkspacePanel
 
         bool foundVertex =
             false;
+        var skinnedRoots = new HashSet<GameObject>();
+        foreach (GameObject item in _preview.GameObjects)
+        {
+            if (item.GetComponent<ModelHierarchyInstance>() == null ||
+                !_framebuffer.TryGetEditorModelWorldBounds(_preview, item, out BoundingBox3D poseBounds))
+                continue;
+            skinnedRoots.Add(item);
+            minimum = Vector3.Min(minimum, poseBounds.Minimum);
+            maximum = Vector3.Max(maximum, poseBounds.Maximum);
+            foundVertex = true;
+        }
 
         foreach (GameObject gameObject
                  in _preview.GameObjects)
         {
+            if (skinnedRoots.Any(item => ReferenceEquals(gameObject, item) || gameObject.IsDescendantOf(item)))
+                continue;
             foreach (MeshRenderer renderer
                      in gameObject.Components
                          .OfType<MeshRenderer>())

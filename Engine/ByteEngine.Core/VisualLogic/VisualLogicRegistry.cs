@@ -38,7 +38,7 @@ public sealed class VisualActionDefinition
     { get; init; }
 }
 
-public sealed class VisualLogicRegistry
+public sealed partial class VisualLogicRegistry
 {
     private const string SelfTarget = "Self";
 
@@ -98,6 +98,7 @@ public sealed class VisualLogicRegistry
         RegisterTransform(registry);
         RegisterVariables(registry);
         RegisterGameplay(registry);
+        RegisterPhysicsAndCombat(registry);
         RegisterAudio(registry);
         RegisterAnimation(registry);
         RegisterAttachment(registry);
@@ -963,7 +964,7 @@ public sealed class VisualLogicRegistry
         registry.RegisterCondition(new VisualConditionDefinition
         {
             Id = "health.isDead",
-            Category = "Gameplay",
+            Category = "Combat / Health",
             DisplayName = "Health Is Dead",
             TargetComponent = nameof(HealthComponent),
             Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<HealthComponent>()?.IsDead == true
@@ -971,7 +972,7 @@ public sealed class VisualLogicRegistry
         registry.RegisterCondition(new VisualConditionDefinition
         {
             Id = "health.percentAtMost",
-            Category = "Gameplay",
+            Category = "Combat / Health",
             DisplayName = "Health Percent <= Value",
             TargetComponent = nameof(HealthComponent),
             Evaluate = (instruction, context) => ResolveObjectTarget(instruction, context, false)?.GetComponent<HealthComponent>() is { } health &&
@@ -996,7 +997,7 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(new VisualActionDefinition
         {
             Id = "health.damage",
-            Category = "Gameplay",
+            Category = "Combat / Damage",
             DisplayName = "Damage Object",
             TargetComponent = nameof(HealthComponent),
             Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<HealthComponent>()?
@@ -1005,7 +1006,7 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(new VisualActionDefinition
         {
             Id = "health.heal",
-            Category = "Gameplay",
+            Category = "Combat / Health",
             DisplayName = "Heal Object",
             TargetComponent = nameof(HealthComponent),
             Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<HealthComponent>()?
@@ -1014,7 +1015,7 @@ public sealed class VisualLogicRegistry
         registry.RegisterAction(new VisualActionDefinition
         {
             Id = "projectile.fire",
-            Category = "Gameplay",
+            Category = "Combat / Weapons",
             DisplayName = "Fire Projectile",
             TargetComponent = nameof(ProjectileLauncher3D),
             Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<ProjectileLauncher3D>()?.Fire()
@@ -1830,6 +1831,8 @@ public sealed class VisualLogicRegistry
     private static GameObject? ResolveObjectArgument(VisualInstruction instruction, string argumentName, EventExecutionContext context, bool warnIfMissing = true)
     {
         string token = EventValueResolver.GetString(instruction, argumentName, context, SelfTarget);
+        if (string.Equals(token, "Last Ray Hit", StringComparison.OrdinalIgnoreCase))
+            return context.LastRaycastHit?.GameObject;
         if (string.IsNullOrWhiteSpace(token) || string.Equals(token, SelfTarget, StringComparison.OrdinalIgnoreCase)) return context.Self;
         GameObject? target = token.StartsWith("id:", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(token[3..], out Guid id)
             ? context.Scene.FindGameObject(id) : context.Scene.FindGameObject(token);
@@ -1847,6 +1850,9 @@ public sealed class VisualLogicRegistry
                 "target",
                 context,
                 SelfTarget);
+
+        if (string.Equals(token, "Last Ray Hit", StringComparison.OrdinalIgnoreCase))
+            return context.LastRaycastHit?.GameObject;
 
         if (string.IsNullOrWhiteSpace(
                 token) ||

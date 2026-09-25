@@ -6,10 +6,20 @@ using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.Classification;
 using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Editor;
+internal enum PlayerViewPreset
+{
+    ThirdPerson,
+    FirstPerson,
+    TopDownTwinStick,
+    Isometric
+}
+
 
 internal static class BlueprintAuthoringService
 {
@@ -54,6 +64,140 @@ internal static class BlueprintAuthoringService
         {
             if (target.Components.Any(existing => existing.GetType() == requirement)) continue;
             if (requirement == typeof(CharacterController3D)) target.AddComponent(new CharacterController3D());
+        }
+    }
+
+    public static Vector3 FindClearPlayerSpawn(Scene scene)
+    {
+        Vector2[] candidates =
+        [
+            Vector2.Zero, new(0f, 3f), new(3f, 0f), new(-3f, 0f),
+            new(0f, -3f), new(3f, 3f), new(-3f, 3f),
+            new(6f, 0f), new(-6f, 0f)
+        ];
+        Vector3? fallback = null;
+        foreach (Vector2 candidate in candidates)
+        {
+            Vector3 origin = new(candidate.X, 50f, candidate.Y);
+            if (!GameplayQuery3D.Raycast(scene, origin, -Vector3.UnitY,
+                    out RaycastHit3D hit, 100f, includeTriggers: false) ||
+                hit.Normal.Y < .65f)
+                continue;
+
+            Vector3 feet = new(candidate.X, hit.Point.Y + .03f, candidate.Y);
+            IReadOnlyList<OverlapHit3D> blockers = GameplayQuery3D.OverlapCapsule(
+                scene, feet + Vector3.UnitY * .35f, feet + Vector3.UnitY * 1.45f,
+                .3f, ignore: hit.GameObject, includeTriggers: false);
+            if (blockers.Count != 0) continue;
+            if (GameplayQuery3D.OverlapSphere(scene, feet + Vector3.UnitY,
+                    2f, ignore: hit.GameObject, includeTriggers: false).Count != 0)
+                continue;
+            if (hit.GameObject.GetComponent<GroundSurface>() is { Walkable: true })
+                return feet;
+            fallback ??= feet;
+        }
+        return fallback ?? Vector3.Zero;
+    }
+
+    public static (GameObjectData Root, List<GameObjectData> Children) CreatePlayableBlueprintHierarchy(
+        EditorProjectContext project, string name, PlayerViewPreset preset)
+    {
+        var scene = new Scene("Player Blueprint Authoring");
+        GameObject player = scene.CreateGameObject(name);
+        SetupPlayablePlayer(player, project.Assets, preset);
+        SceneData data = project.Scenes.Serialize(scene);
+        GameObjectData root = data.GameObjects.Single(item => item.Id == player.Id);
+        List<GameObjectData> children = data.GameObjects.Where(item => item.Id != player.Id).ToList();
+        return (root, children);
+    }
+
+    public static CameraBoom3D SetupPlayablePlayer(
+        GameObject player,
+        AssetManager? assets = null,
+        PlayerViewPreset preset = PlayerViewPreset.ThirdPerson)
+    {
+        CameraBoom3D boom = SetupThirdPersonCharacter(player, assets);
+        EnsureSingleRootComponent(player, () => new HealthComponent
+        {
+            MaxHealth = 100f,
+            CurrentHealth = 100f
+        });
+        EnsureSingleRootComponent(player, () => new ProjectileLauncher3D
+        {
+            Damage = 20f,
+            ProjectileSpeed = 45f,
+            FireCooldown = .18f,
+            MuzzleOffset = new Vector3(0f, 1.35f, -.35f)
+        });
+        EnsureSingleRootComponent(player, () => new PlayerShooter3D());
+
+        GameObject model = EnsureModelRoot(player);
+        if (assets != null && model.GetComponent<ModelHierarchyInstance>() != null)
+        {
+            FitCharacterModelHeight(model, assets, 1.8f);
+            GroundModelAtFeet(model, assets);
+            CharacterCapsuleAutoFit.TryFit(player, assets, out _);
+        }
+
+        ApplyPlayerViewPreset(player, preset);
+        return boom;
+    }
+
+    public static void ApplyPlayerViewPreset(GameObject player, PlayerViewPreset preset)
+    {
+        PlayerController3D controller = EnsureSingleRootComponent(player, () => new PlayerController3D());
+        CameraBoom3D boom = EnsureSingleRootComponent(player, () => new CameraBoom3D());
+        PlayerShooter3D shooter = EnsureSingleRootComponent(player, () => new PlayerShooter3D());
+        controller.UseLocalOrientation = false;
+        controller.AcceptLookInput = preset is PlayerViewPreset.ThirdPerson or PlayerViewPreset.FirstPerson;
+        boom.CameraLagEnabled = false;
+        boom.RotationLagEnabled = false;
+        boom.EnableCameraCollision = true;
+        shooter.AimAtPointer = preset is PlayerViewPreset.TopDownTwinStick or PlayerViewPreset.Isometric;
+        switch (preset)
+        {
+            case PlayerViewPreset.FirstPerson:
+                controller.CharacterRotation = CharacterRotationMode.FaceCamera;
+                boom.UseControlRotation = true;
+                boom.MinPitch = -40f;
+                boom.MaxPitch = 65f;
+                boom.ArmLength = .15f;
+                boom.PivotHeight = 1.65f;
+                boom.ShoulderOffset = 0f;
+                break;
+            case PlayerViewPreset.TopDownTwinStick:
+                controller.CharacterRotation = CharacterRotationMode.Independent;
+                boom.UseControlRotation = false;
+                boom.Yaw = 0f;
+                controller.ControlYaw = boom.Yaw;
+                boom.Pitch = 75f;
+                boom.MinPitch = 75f;
+                boom.MaxPitch = 75f;
+                boom.ArmLength = 11f;
+                boom.PivotHeight = 1f;
+                boom.ShoulderOffset = 0f;
+                break;
+            case PlayerViewPreset.Isometric:
+                controller.CharacterRotation = CharacterRotationMode.Independent;
+                boom.UseControlRotation = false;
+                boom.Yaw = 45f;
+                controller.ControlYaw = boom.Yaw;
+                boom.MinPitch = 40f;
+                boom.MaxPitch = 40f;
+                boom.Pitch = 40f;
+                boom.ArmLength = 10f;
+                boom.PivotHeight = 1f;
+                boom.ShoulderOffset = 0f;
+                break;
+            default:
+                controller.CharacterRotation = CharacterRotationMode.FaceCamera;
+                boom.UseControlRotation = true;
+                boom.MinPitch = -40f;
+                boom.MaxPitch = 65f;
+                boom.ArmLength = 4.75f;
+                boom.PivotHeight = 1.6f;
+                boom.ShoulderOffset = .45f;
+                break;
         }
     }
 
@@ -334,14 +478,20 @@ internal static class BlueprintAuthoringService
         if (instance == null || instance.AutoGrounded || instance.Model.IsEmpty)
             return false;
 
-        ModelAsset model = assets.LoadModel(instance.Model);
-        if (!ModelImportScaleUtility.TryCalculateHierarchyBounds(
-                model, out Vector3 minimum, out _))
-            return false;
-        if (!float.IsFinite(minimum.Y) || MathF.Abs(minimum.Y) > 10000f)
-            return false;
-
-        modelObject.Transform.LocalPosition += new Vector3(0f, -minimum.Y, 0f);
+        if (CharacterModelPoseBounds.TryGetWorldBounds(modelObject, out BoundingBox3D poseBounds))
+        {
+            float parentY = modelObject.Parent?.Transform.WorldPosition.Y ?? 0f;
+            modelObject.Transform.WorldPosition += new Vector3(0f, parentY - poseBounds.Minimum.Y, 0f);
+        }
+        else
+        {
+            ModelAsset model = assets.LoadModel(instance.Model);
+            if (!ModelImportScaleUtility.TryCalculateHierarchyBounds(
+                    model, out Vector3 minimum, out _) ||
+                !float.IsFinite(minimum.Y) || MathF.Abs(minimum.Y) > 10000f)
+                return false;
+            modelObject.Transform.LocalPosition += new Vector3(0f, -minimum.Y, 0f);
+        }
         instance.AutoGrounded = true;
         return true;
     }
@@ -368,7 +518,8 @@ internal static class BlueprintAuthoringService
             return false;
 
         BoundingBox3D importedBounds = new(minimum, maximum);
-        BoundingBox3D before = importedBounds.Transform(modelObject.Transform.WorldMatrix);
+        bool hasPose = CharacterModelPoseBounds.TryGetWorldBounds(modelObject, out BoundingBox3D poseBounds);
+        BoundingBox3D before = hasPose ? poseBounds : importedBounds.Transform(modelObject.Transform.WorldMatrix);
         float currentHeight = before.Size.Y;
         if (!before.IsValid || !float.IsFinite(currentHeight) ||
             currentHeight <= 0.00001f)
@@ -383,8 +534,19 @@ internal static class BlueprintAuthoringService
             fittedScale.X <= 0f || fittedScale.Y <= 0f || fittedScale.Z <= 0f)
             return false;
 
+        Vector3 originalScale = modelObject.Transform.LocalScale;
         modelObject.Transform.LocalScale = fittedScale;
-        BoundingBox3D after = importedBounds.Transform(modelObject.Transform.WorldMatrix);
+        BoundingBox3D after;
+        if (hasPose)
+        {
+            if (!CharacterModelPoseBounds.TryGetWorldBounds(modelObject, out after))
+            {
+                modelObject.Transform.LocalScale = originalScale;
+                return false;
+            }
+        }
+        else
+            after = importedBounds.Transform(modelObject.Transform.WorldMatrix);
         modelObject.Transform.WorldPosition += new Vector3(0f, before.Minimum.Y - after.Minimum.Y, 0f);
         CharacterCapsuleAutoFit.TryFit(root, assets, out _);
         return true;

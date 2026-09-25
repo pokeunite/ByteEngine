@@ -96,20 +96,26 @@ internal static class C11C12AnimationSystemsTests
         }
 
         controller.WalkBackward = "WalkBackward";
+        controller.WalkLeft = "WalkLeft";
+        controller.WalkRight = "WalkRight";
         Assert((string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Backward })! == "WalkBackward",
             "C12 individual Walk backward override");
+        Assert((string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Backward })! == "WalkBackward" &&
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Left })! == "WalkLeft" &&
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Right })! == "WalkRight",
+            "C12 Run preserves authored directions when run-specific clips are empty");
         Assert((string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Forward })! == "BaseWalk" &&
-               (string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Left })! == "BaseWalk" &&
-               (string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Right })! == "BaseWalk",
-            "C12 partial Walk overrides preserve per-direction fallback");
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Left })! == "WalkLeft" &&
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Walk, LocomotionDirection.Right })! == "WalkRight",
+            "C12 Walk preserves authored strafe clips and forward fallback");
 
         controller.RunRight = "RunRight";
         Assert((string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Right })! == "RunRight",
             "C12 individual Run right override");
         Assert((string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Forward })! == "BaseRun" &&
-               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Backward })! == "BaseRun" &&
-               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Left })! == "BaseRun",
-            "C12 partial Run overrides preserve per-direction fallback");
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Backward })! == "WalkBackward" &&
+               (string)selector.Invoke(controller, new object[] { LocomotionState.Run, LocomotionDirection.Left })! == "WalkLeft",
+            "C12 explicit Run override wins while missing directions keep authored strafe/back clips");
     }
     private static void StateHysteresis()
     {
