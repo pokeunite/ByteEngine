@@ -37,9 +37,14 @@ public enum CharacterRotationMode
 ///
 /// TPS-E adds idle turn-in-place and fixes the transform/control yaw convention:
 /// - control yaw +90 looks toward world +X;
-/// - Transform Euler yaw +90 faces world -X;
-/// - character-facing targets therefore convert control yaw into transform yaw;
+/// - gameplay character yaw +90 faces world -X;
+/// - character-facing targets therefore convert control yaw into character yaw;
 /// - idle FaceMovement can free-orbit before smoothly catching up.
+///
+/// TPS-F keeps gameplay-character rotation quaternion-native. It never performs
+/// a read/modify/write round-trip through Transform.EulerAngles while turning.
+/// That avoids the Euler decomposition feedback that can alternate the reported
+/// yaw every frame once a character has a non-zero pitch/roll basis.
 ///
 /// Camera placement remains in CameraBoom3D.
 /// </summary>
@@ -157,7 +162,8 @@ public sealed class PlayerController3D : Component
         if (player != null)
         {
             _desiredCharacterYaw =
-                NormalizeAngle(player.Transform.EulerAngles.Y);
+                CurrentCharacterYaw(
+                    player.Transform);
         }
 
         _idleTurnInPlaceActive = false;
@@ -237,10 +243,12 @@ public sealed class PlayerController3D : Component
         if (UseLocalOrientation)
         {
             forward =
-                Horizontal(player.Transform.Forward);
+                Horizontal(
+                    player.Transform.Forward);
 
             right =
-                Horizontal(player.Transform.Right);
+                Horizontal(
+                    player.Transform.Right);
         }
         else
         {
@@ -249,7 +257,8 @@ public sealed class PlayerController3D : Component
              * input follows camera/control yaw independently of body facing.
              */
             forward =
-                ForwardFromYaw(ControlYaw);
+                ForwardFromYaw(
+                    ControlYaw);
 
             right =
                 Vector3.Normalize(
@@ -306,17 +315,30 @@ public sealed class PlayerController3D : Component
                 .LengthSquared() >
             .0001f;
 
-        Vector3 euler =
-            player.Transform.EulerAngles;
+        /*
+         * Never use Transform.EulerAngles as the live feedback value here.
+         *
+         * Transform's quaternion -> Euler decomposition is useful for editor
+         * display, but read/modify/write feedback can change the decomposed
+         * yaw when the quaternion also contains pitch/roll. At high headings
+         * this showed up as alternating ~20-degree yaw changes every frame.
+         *
+         * The gameplay root is an upright capsule, so its authoritative yaw is
+         * derived from the world-space forward vector and written back as a
+         * pure world-Y quaternion.
+         */
+        float currentYaw =
+            CurrentCharacterYaw(
+                player.Transform);
 
         if (CharacterRotation ==
                 CharacterRotationMode.FaceMovement &&
             !hasMovement)
         {
             /*
-             * Control yaw and Transform yaw have opposite signs in ByteEngine's
-             * current conventions. Convert first, then measure the real body
-             * heading difference.
+             * Control yaw and gameplay character yaw have opposite signs in
+             * ByteEngine's current conventions. Convert first, then measure
+             * the real body heading difference.
              */
             float cameraFacingYaw =
                 TransformYawFromControlYaw(
@@ -324,7 +346,7 @@ public sealed class PlayerController3D : Component
 
             float cameraBodyDelta =
                 DeltaAngle(
-                    euler.Y,
+                    currentYaw,
                     cameraFacingYaw);
 
             float absoluteDelta =
@@ -336,7 +358,7 @@ public sealed class PlayerController3D : Component
                     IdleTurnStartAngle)
                 {
                     _desiredCharacterYaw =
-                        NormalizeAngle(euler.Y);
+                        currentYaw;
                     return;
                 }
 
@@ -353,25 +375,24 @@ public sealed class PlayerController3D : Component
             if (absoluteDelta <=
                 IdleTurnFinishAngle)
             {
-                euler.Y =
-                    cameraFacingYaw;
-
-                player.Transform.EulerAngles =
-                    euler;
+                SetCharacterYaw(
+                    player.Transform,
+                    cameraFacingYaw);
 
                 _idleTurnInPlaceActive = false;
                 return;
             }
 
-            euler.Y =
+            float nextYaw =
                 MoveTowardsAngle(
-                    euler.Y,
+                    currentYaw,
                     _desiredCharacterYaw,
                     IdleTurnSpeed *
                     Math.Max(deltaTime, 0f));
 
-            player.Transform.EulerAngles =
-                euler;
+            SetCharacterYaw(
+                player.Transform,
+                nextYaw);
 
             return;
         }
@@ -389,20 +410,21 @@ public sealed class PlayerController3D : Component
                 : YawFromDirection(
                     movement);
 
-        euler.Y =
+        float movingYaw =
             MoveTowardsAngle(
-                euler.Y,
+                currentYaw,
                 _desiredCharacterYaw,
                 TurnSpeed *
                 Math.Max(deltaTime, 0f));
 
-        player.Transform.EulerAngles =
-            euler;
+        SetCharacterYaw(
+            player.Transform,
+            movingYaw);
     }
 
     /// <summary>
-    /// Converts camera/control yaw into Transform Euler yaw.
-    /// Camera/control +90 looks toward +X, while Transform +90 faces -X.
+    /// Converts camera/control yaw into gameplay-character yaw.
+    /// Camera/control +90 looks toward +X, while character +90 faces -X.
     /// </summary>
     public static float TransformYawFromControlYaw(
         float controlYaw) =>
@@ -436,7 +458,7 @@ public sealed class PlayerController3D : Component
     }
 
     /// <summary>
-    /// Returns Transform Euler yaw that makes Transform.Forward face direction.
+    /// Returns gameplay-character yaw that makes Transform.Forward face direction.
     /// </summary>
     public static float YawFromDirection(
         Vector3 direction)
@@ -505,6 +527,39 @@ public sealed class PlayerController3D : Component
         return new Vector2(
             horizontal,
             vertical);
+    }
+
+    private static float CurrentCharacterYaw(
+        Transform transform)
+    {
+        Vector3 forward =
+            Horizontal(
+                transform.Forward);
+
+        return forward.LengthSquared() >
+               .0001f
+            ? YawFromDirection(
+                forward)
+            : 0f;
+    }
+
+    private static void SetCharacterYaw(
+        Transform transform,
+        float yawDegrees)
+    {
+        /*
+         * CharacterController3D owns an upright world-space capsule. Any
+         * imported/model-facing correction belongs on the model/visual child,
+         * not on the gameplay root. Writing a pure world-Y quaternion therefore
+         * removes accidental pitch/roll feedback without touching visual-model
+         * correction.
+         */
+        transform.WorldRotation =
+            Quaternion.CreateFromAxisAngle(
+                Vector3.UnitY,
+                yawDegrees *
+                MathF.PI /
+                180f);
     }
 
     private static Vector3 Horizontal(

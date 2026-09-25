@@ -1,3 +1,4 @@
+using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.Graphics;
 
 namespace ByteEngine.Core.Scene;
@@ -111,6 +112,18 @@ public sealed class SceneManager
     internal void UpdateInternal()
     {
         ActiveScene?.UpdateInternal();
+
+        /*
+         * TPS jitter diagnostics are sampled here, after Scene.UpdateInternal
+         * has completed gameplay updates, physics, LateUpdate camera follow and
+         * the final skeletal-attachment pass. This gives the trace one coherent
+         * end-of-frame snapshot instead of mixing pre/post movement state.
+         */
+        if (ActiveScene != null)
+        {
+            RuntimeDiagnostics.SampleTpsJitter(
+                ActiveScene);
+        }
     }
 
     internal void RenderInternal(
