@@ -114,24 +114,45 @@ public sealed partial class VisualLogicRegistry
         GameObject? source = ResolveObjectArgument(instruction, "source", context);
         if (source == null) return false;
 
+        GameObject muzzle =
+            ResolveRayMuzzlePoint(
+                instruction,
+                context,
+                source);
+
         Vector3 localDirection = EventValueResolver.GetVector3(
             instruction, "direction", context, new Vector3(0f, 0f, -1f));
-        bool worldSpace = EventValueResolver.GetBoolean(instruction, "worldSpace", context, false);
-        Vector3 worldDirection = worldSpace
-            ? localDirection
-            : Vector3.Transform(localDirection, source.Transform.WorldRotation);
+
+        bool legacyWorldSpace =
+            EventValueResolver.GetBoolean(
+                instruction,
+                "worldSpace",
+                context,
+                false);
+
+        string directionMode =
+            EventValueResolver.GetString(
+                instruction,
+                "directionMode",
+                context,
+                string.Empty)
+            .Trim();
+
+
         float distance = (float)EventValueResolver.GetNumber(instruction, "distance", context, 100f);
         bool drawDebug = EventValueResolver.GetBoolean(instruction, "drawDebug", context, false);
         float debugDuration = (float)EventValueResolver.GetNumber(instruction, "debugDuration", context, .25);
 
-        if (!float.IsFinite(distance) || distance <= 0f ||
-            !float.IsFinite(worldDirection.X) || !float.IsFinite(worldDirection.Y) ||
-            !float.IsFinite(worldDirection.Z) || worldDirection.LengthSquared() < .000001f)
+        if (!float.IsFinite(distance) || distance <= 0f)
             return false;
 
         Vector3 localOrigin = EventValueResolver.GetVector3(
             instruction, "originOffset", context, Vector3.Zero);
-        Vector3 origin = Vector3.Transform(localOrigin, source.Transform.WorldMatrix);
+
+        Vector3 origin =
+            Vector3.Transform(
+                localOrigin,
+                muzzle.Transform.WorldMatrix);
         int layer = (int)EventValueResolver.GetNumber(instruction, "layer", context, -1);
         LayerMask mask = layer is >= 0 and < 32 ? LayerMask.FromLayers(layer) : LayerMask.All;
         bool includeTriggers = EventValueResolver.GetBoolean(
@@ -145,6 +166,47 @@ public sealed partial class VisualLogicRegistry
             break;
         }
 
+        string aimMode = EventValueResolver.GetString(
+            instruction, "aimMode", context, "MuzzleDirection").Trim();
+        bool cameraAim = aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase) ||
+            aimMode.Equals("ThirdPersonCrosshair", StringComparison.OrdinalIgnoreCase) ||
+            aimMode.Equals("FirstPersonCrosshair", StringComparison.OrdinalIgnoreCase);
+        Camera3D? camera = context.Scene.ActiveCamera;
+        Vector2 screenPoint = aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase)
+            ? Input.GameViewPointerNormalized : new Vector2(.5f);
+        Vector3 cameraRayOrigin = Vector3.Zero;
+        Vector3 cameraRayDirection = Vector3.Zero;
+        Vector3 aimPoint = Vector3.Zero;
+        RaycastHit3D cameraHit = default;
+        bool cameraTargetHit = false;
+        Vector3 worldDirection = ResolveRayDirection(
+            muzzle, directionMode, localDirection, legacyWorldSpace);
+        if (cameraAim && camera != null)
+        {
+            float aspect = Input.GameViewSize.X / Math.Max(Input.GameViewSize.Y, 1f);
+            (cameraRayOrigin, cameraRayDirection) = camera.ScreenPointToRay(screenPoint, aspect);
+            cameraTargetHit = GameplayQuery3D.Raycast(context.Scene, cameraRayOrigin,
+                cameraRayDirection, out cameraHit, distance, ignoredOwner, mask, source,
+                includeTriggers: includeTriggers);
+            aimPoint = cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * distance;
+            string aimStyle = EventValueResolver.GetString(instruction, "topDownAimStyle", context, "Exact3D");
+            if (aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase) &&
+                aimStyle.Equals("Planar", StringComparison.OrdinalIgnoreCase))
+                aimPoint.Y = origin.Y;
+            worldDirection = aimPoint - origin;
+            if (drawDebug)
+                DrawDebugRay(context.Scene, cameraRayOrigin,
+                    cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * distance,
+                    cameraTargetHit, debugDuration,
+                    $"Camera_{source.Id:N}_{instruction.InstanceId:N}", new Vector4(.08f, .75f, 1f, 1f));
+        }
+        else if (cameraAim)
+            context.WarningSink?.Invoke($"Cast Ray Aim Mode '{aimMode}' needs an active camera; using Muzzle Direction.");
+
+        if (!float.IsFinite(worldDirection.X) || !float.IsFinite(worldDirection.Y) ||
+            !float.IsFinite(worldDirection.Z) || worldDirection.LengthSquared() < .000001f)
+            return false;
+
         bool found = GameplayQuery3D.Raycast(context.Scene, origin, worldDirection,
             out RaycastHit3D hit, distance, ignoredOwner, mask, source,
             includeTriggers: includeTriggers);
@@ -153,23 +215,47 @@ public sealed partial class VisualLogicRegistry
         Vector3 normalizedWorldDirection =
             Vector3.Normalize(worldDirection);
 
-        Camera3D? debugCamera =
-            context.Scene.ActiveCamera;
+        if (RuntimeDiagnostics.DebugWeaponRaycast)
+        {
+            Camera3D? debugCamera = camera;
 
-        string hitText =
-            found
-                ? $"HIT object=\"{hit.GameObject.Name}\" point={DebugV3(hit.Point)} normal={DebugV3(hit.Normal)} hitDistance={hit.Distance:0.000}"
-                : "MISS";
+            string hitText =
+                found
+                    ? $"HIT object=\"{hit.GameObject.Name}\" point={DebugV3(hit.Point)} normal={DebugV3(hit.Normal)} hitDistance={hit.Distance:0.000}"
+                    : "MISS";
 
-        RuntimeDiagnostics.RecordWeaponRaycast(
-            $"EVENT RAY self=\"{context.Self.Name}\" source=\"{source.Name}\" parent=\"{source.Parent?.Name ?? "<none>"}\" " +
-            $"sourcePos={DebugV3(source.Transform.WorldPosition)} sourceEuler={DebugV3(source.Transform.EulerAngles)} " +
-            $"sourceFwd={DebugV3(source.Transform.Forward)} sourceRight={DebugV3(source.Transform.Right)} sourceUp={DebugV3(source.Transform.Up)} " +
-            $"localOrigin={DebugV3(localOrigin)} origin={DebugV3(origin)} localDir={DebugV3(localDirection)} worldSpace={worldSpace} " +
-            $"worldDir={DebugV3(normalizedWorldDirection)} maxDistance={distance:0.000} layer={layer} triggers={includeTriggers} " +
-            $"ignoredOwner=\"{ignoredOwner.Name}\" ownerFwd={DebugV3(ignoredOwner.Transform.Forward)} " +
-            $"cameraPos={(debugCamera != null ? DebugV3(debugCamera.Transform.WorldPosition) : "<none>")} " +
-            $"cameraFwd={(debugCamera != null ? DebugV3(debugCamera.Transform.Forward) : "<none>")} result={hitText}");
+            string muzzlePath =
+                EventValueResolver.GetString(
+                    instruction,
+                    "muzzlePath",
+                    context,
+                    string.Empty);
+
+            string resolvedDirectionMode =
+                string.IsNullOrWhiteSpace(
+                    directionMode)
+                    ? legacyWorldSpace
+                        ? "LegacyCustomWorld"
+                        : "LegacyCustomLocal"
+                    : directionMode;
+
+            RuntimeDiagnostics.RecordWeaponRaycast(
+                $"EVENT RAY self=\"{context.Self.Name}\" source=\"{source.Name}\" parent=\"{source.Parent?.Name ?? "<none>"}\" " +
+                $"muzzle=\"{muzzle.Name}\" muzzleParent=\"{muzzle.Parent?.Name ?? "<none>"}\" muzzlePath=\"{muzzlePath}\" " +
+                $"sourcePos={DebugV3(source.Transform.WorldPosition)} sourceFwd={DebugV3(source.Transform.Forward)} " +
+                $"muzzlePos={DebugV3(muzzle.Transform.WorldPosition)} muzzleEuler={DebugV3(muzzle.Transform.EulerAngles)} " +
+                $"muzzleFwd={DebugV3(muzzle.Transform.Forward)} muzzleRight={DebugV3(muzzle.Transform.Right)} muzzleUp={DebugV3(muzzle.Transform.Up)} " +
+                $"localOrigin={DebugV3(localOrigin)} origin={DebugV3(origin)} localDir={DebugV3(localDirection)} " +
+                $"aimMode={aimMode} screen=({screenPoint.X:0.000},{screenPoint.Y:0.000}) " +
+                $"cameraRayOrigin={DebugV3(cameraRayOrigin)} cameraRayDir={DebugV3(cameraRayDirection)} " +
+                $"cameraTarget={(cameraTargetHit ? cameraHit.GameObject.Name : "<none>")} " +
+                $"cameraHitPoint={(cameraTargetHit ? DebugV3(cameraHit.Point) : "<none>")} aimPoint={DebugV3(aimPoint)} " +
+                $"directionMode={resolvedDirectionMode} worldSpace={legacyWorldSpace} worldDir={DebugV3(normalizedWorldDirection)} " +
+                $"maxDistance={distance:0.000} layer={layer} triggers={includeTriggers} " +
+                $"ignoredOwner=\"{ignoredOwner.Name}\" ownerFwd={DebugV3(ignoredOwner.Transform.Forward)} " +
+                $"cameraPos={(debugCamera != null ? DebugV3(debugCamera.Transform.WorldPosition) : "<none>")} " +
+                $"cameraFwd={(debugCamera != null ? DebugV3(debugCamera.Transform.Forward) : "<none>")} result={hitText}");
+        }
 
         if (drawDebug)
         {
@@ -177,10 +263,121 @@ public sealed partial class VisualLogicRegistry
             Vector3 end = found
                 ? hit.Point
                 : origin + normalizedDirection * distance;
-            DrawDebugRay(context.Scene, origin, end, found, debugDuration);
+            DrawDebugRay(context.Scene, origin, end, found, debugDuration,
+                $"Muzzle_{source.Id:N}_{instruction.InstanceId:N}");
         }
 
         return found;
+    }
+
+    private static GameObject ResolveRayMuzzlePoint(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        GameObject source)
+    {
+        string path =
+            EventValueResolver.GetString(
+                instruction,
+                "muzzlePath",
+                context,
+                string.Empty)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                path))
+        {
+            return source;
+        }
+
+        GameObject current =
+            source;
+
+        foreach (string segment
+                 in path.Split(
+                     '/',
+                     StringSplitOptions.RemoveEmptyEntries |
+                     StringSplitOptions.TrimEntries))
+        {
+            GameObject? next =
+                current.Children.FirstOrDefault(
+                    child =>
+                        string.Equals(
+                            child.Name,
+                            segment,
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (next == null)
+            {
+                context.WarningSink?.Invoke(
+                    $"Cast Ray Muzzle Point '{path}' was not found under '{source.Name}'. Using the Ray Owner instead.");
+
+                return source;
+            }
+
+            current =
+                next;
+        }
+
+        return current;
+    }
+
+    private static Vector3 ResolveRayDirection(
+        GameObject muzzle,
+        string directionMode,
+        Vector3 storedDirection,
+        bool legacyWorldSpace)
+    {
+        string normalizedMode =
+            directionMode
+                .Trim()
+                .Replace(
+                    " ",
+                    string.Empty)
+                .ToLowerInvariant();
+
+        return normalizedMode switch
+        {
+            "forward" or
+            "muzzleforward" =>
+                muzzle.Transform.Forward,
+
+            "back" or
+            "muzzleback" =>
+                -muzzle.Transform.Forward,
+
+            "right" or
+            "muzzleright" =>
+                muzzle.Transform.Right,
+
+            "left" or
+            "muzzleleft" =>
+                -muzzle.Transform.Right,
+
+            "up" or
+            "muzzleup" =>
+                muzzle.Transform.Up,
+
+            "down" or
+            "muzzledown" =>
+                -muzzle.Transform.Up,
+
+            "customlocal" or
+            "customlocaldirection" =>
+                Vector3.Transform(
+                    storedDirection,
+                    muzzle.Transform.WorldRotation),
+
+            "customworld" or
+            "customworlddirection" =>
+                storedDirection,
+
+            _ =>
+                legacyWorldSpace
+                    ? storedDirection
+                    : Vector3.Transform(
+                        storedDirection,
+                        muzzle.Transform.WorldRotation)
+        };
     }
 
     /// <summary>
@@ -197,8 +394,28 @@ public sealed partial class VisualLogicRegistry
         Vector3 start,
         Vector3 end,
         bool hit,
-        float duration)
+        float duration,
+        string markerKey,
+        Vector4? color = null)
     {
+        // The physics ray starts at the real origin. Only the visual is clipped:
+        // drawing a cube through the camera near plane fills the whole screen.
+        if (scene.ActiveCamera is { } camera)
+        {
+            Vector3 cameraPosition = camera.Transform.WorldPosition;
+            Vector3 cameraForward = camera.Transform.Forward;
+            float safeDepth = MathF.Max(camera.NearClip + .3f, .5f);
+            float startDepth = Vector3.Dot(start - cameraPosition, cameraForward);
+            float endDepth = Vector3.Dot(end - cameraPosition, cameraForward);
+            if (startDepth < safeDepth)
+            {
+                float depthSpan = endDepth - startDepth;
+                if (depthSpan <= .00001f || endDepth <= safeDepth) return;
+                start = Vector3.Lerp(start, end,
+                    Math.Clamp((safeDepth - startDepth) / depthSpan, 0f, 1f));
+            }
+        }
+
         Vector3 delta = end - start;
         float length = delta.Length();
         if (!float.IsFinite(length) || length <= .0001f) return;
@@ -207,41 +424,48 @@ public sealed partial class VisualLogicRegistry
             ? Math.Clamp(duration, .05f, 10f)
             : .25f;
 
-        GameObject debugRay = scene.CreateGameObject(
-            hit ? "__DebugRay_Hit" : "__DebugRay_Miss");
+        // One camera and one muzzle marker per Cast Ray instruction and owner.
+        // Repeated fire refreshes them instead of stacking hundreds of cubes.
+        string markerName = "__DebugRay_" + markerKey;
+        GameObject debugRay = scene.GameObjects.FirstOrDefault(
+            item => item.Name == markerName && item.ActiveInHierarchy) ??
+            scene.CreateGameObject(markerName);
 
         debugRay.Transform.WorldPosition = (start + end) * .5f;
         debugRay.Transform.WorldRotation = RotationFromTo(
             Vector3.UnitZ,
             delta / length);
-        debugRay.Transform.LocalScale = new Vector3(.018f, .018f, length);
+        debugRay.Transform.LocalScale = new Vector3(.008f, .008f, length);
 
-        debugRay.AddComponent(new MeshRenderer
-        {
-            Primitive = PrimitiveMeshType.Cube,
-            UsePrimitive = true,
-            FrustumCulling = false,
-            CastShadows = false,
-            ReceiveShadows = false,
-            AutomaticRenderQueue = true,
-            Material = new Material
+        Vector4 rayColor = color ?? (hit
+            ? new Vector4(1f, .08f, .04f, 1f)
+            : new Vector4(.05f, 1f, .18f, 1f));
+        if (debugRay.GetComponent<MeshRenderer>() is { } renderer)
+            renderer.Material.BaseColor = rayColor;
+        else
+            debugRay.AddComponent(new MeshRenderer
             {
-                // Red = a blocking hit, green = the ray reached full distance.
-                BaseColor = hit
-                    ? new Vector4(1f, .08f, .04f, 1f)
-                    : new Vector4(.05f, 1f, .18f, 1f),
-                Roughness = .15f,
-                BlendMode = BlendMode3D.Additive,
-                DepthTest = false,
-                DepthWriteMode = DepthWriteMode3D.Disabled,
-                CullMode = CullMode3D.None
-            }
-        });
+                Primitive = PrimitiveMeshType.Cube,
+                UsePrimitive = true,
+                FrustumCulling = false,
+                CastShadows = false,
+                ReceiveShadows = false,
+                AutomaticRenderQueue = true,
+                Material = new Material
+                {
+                    BaseColor = rayColor,
+                    Roughness = .15f,
+                    BlendMode = BlendMode3D.Additive,
+                    DepthTest = false,
+                    DepthWriteMode = DepthWriteMode3D.Disabled,
+                    CullMode = CullMode3D.None
+                }
+            });
 
-        debugRay.AddComponent(new LifetimeComponent
-        {
-            LifetimeSeconds = duration
-        });
+        if (debugRay.GetComponent<LifetimeComponent>() is { } lifetime)
+            lifetime.Restart(duration);
+        else
+            debugRay.AddComponent(new LifetimeComponent { LifetimeSeconds = duration });
     }
 
     private static string DebugV3(

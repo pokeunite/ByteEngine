@@ -104,14 +104,14 @@ public sealed class ProjectileLauncher3D : Component
         Vector3 normalizedDirection =
             Vector3.Normalize(direction);
 
-        GameObject? root =
+        GameObject? blueprintRoot =
             null;
 
         if (!ProjectileBlueprint.IsEmpty &&
             RuntimeSpawnService
                 .IsBlueprintSpawnerConfigured)
         {
-            root =
+            blueprintRoot =
                 RuntimeSpawnService
                     .SpawnBlueprint(
                         scene,
@@ -120,9 +120,115 @@ public sealed class ProjectileLauncher3D : Component
         }
 
         bool usedFallback =
-            root == null;
+            blueprintRoot ==
+            null;
 
-        if (root == null)
+        GameObject root;
+        GameObject? visualRoot =
+            null;
+        Projectile3D projectile;
+
+        if (blueprintRoot !=
+            null)
+        {
+            visualRoot =
+                blueprintRoot;
+
+            /*
+             * A projectile Blueprint can carry an authored root rotation that
+             * corrects the imported model's raw axis. That correction belongs
+             * to the visual, not to the gameplay direction.
+             *
+             * Create a clean gameplay root whose ByteEngine Forward (-Z)
+             * points along velocity, then place the original Blueprint root
+             * underneath it without changing the Blueprint's local rotation
+             * or scale. This keeps import correction intact while giving
+             * gameplay one unambiguous facing convention.
+             */
+            root =
+                scene.CreateGameObject(
+                    $"{visualRoot.Name} Projectile");
+
+            root.Transform.WorldPosition =
+                muzzle;
+
+            root.Transform.WorldRotation =
+                RotationFromTo(
+                    -Vector3.UnitZ,
+                    normalizedDirection);
+
+            root.Layer =
+                visualRoot.Layer;
+
+            Projectile3D? blueprintProjectile =
+                FindProjectile(
+                    visualRoot);
+
+            projectile =
+                root.AddComponent(
+                    blueprintProjectile == null
+                        ? new Projectile3D()
+                        : new Projectile3D
+                        {
+                            Radius =
+                                blueprintProjectile.Radius,
+
+                            DestroyOnHit =
+                                blueprintProjectile.DestroyOnHit,
+
+                            CollisionMask =
+                                blueprintProjectile.CollisionMask
+                        });
+
+            /*
+             * Projectile3D moves its attached GameObject. Once the Blueprint is
+             * a visual child, no nested Projectile3D may also move that child or
+             * it would fight the new gameplay root.
+             */
+            DisableProjectileComponents(
+                visualRoot);
+
+            /*
+             * A lifetime authored on the Blueprint root previously destroyed
+             * the complete projectile. Move that ownership to the gameplay
+             * root as well; child effect lifetimes remain untouched.
+             */
+            LifetimeComponent? visualLifetime =
+                visualRoot.GetComponent<LifetimeComponent>();
+
+            if (visualLifetime !=
+                null)
+            {
+                float remainingLifetime =
+                    visualLifetime.RemainingSeconds >
+                        0f
+                        ? visualLifetime.RemainingSeconds
+                        : visualLifetime.LifetimeSeconds;
+
+                visualLifetime.Enabled =
+                    false;
+
+                root.AddComponent(
+                    new LifetimeComponent
+                    {
+                        LifetimeSeconds =
+                            remainingLifetime
+                    });
+            }
+
+            /*
+             * SetParent(false) deliberately keeps the Blueprint's authored
+             * LocalRotation/LocalScale. Its old root position was the spawn
+             * position, so reset only LocalPosition after parenting.
+             */
+            visualRoot.SetParent(
+                root,
+                false);
+
+            visualRoot.Transform.LocalPosition =
+                Vector3.Zero;
+        }
+        else
         {
             root =
                 scene.CreateGameObject(
@@ -130,6 +236,11 @@ public sealed class ProjectileLauncher3D : Component
 
             root.Transform.WorldPosition =
                 muzzle;
+
+            root.Transform.WorldRotation =
+                RotationFromTo(
+                    -Vector3.UnitZ,
+                    normalizedDirection);
 
             /*
              * Keep fallback projectiles very obvious in a fast arena game.
@@ -161,12 +272,13 @@ public sealed class ProjectileLauncher3D : Component
                         }
                 });
 
-            root.AddComponent(
-                new Projectile3D
-                {
-                    Radius =
-                        .12f
-                });
+            projectile =
+                root.AddComponent(
+                    new Projectile3D
+                    {
+                        Radius =
+                            .12f
+                    });
 
             root.AddComponent(
                 new LifetimeComponent
@@ -175,12 +287,6 @@ public sealed class ProjectileLauncher3D : Component
                         5f
                 });
         }
-
-        Projectile3D projectile =
-            FindProjectile(
-                root) ??
-            root.AddComponent(
-                new Projectile3D());
 
         projectile.OwnerId =
             shooter.Id;
@@ -206,6 +312,11 @@ public sealed class ProjectileLauncher3D : Component
                 projectileForward,
                 normalizedDirection);
 
+        string visualDiagnostics =
+            visualRoot == null
+                ? " visual=<fallback>"
+                : $" visual=\"{visualRoot.Name}\" visualLocalEuler={V3(visualRoot.Transform.EulerAngles)} visualWorldFwd={V3(visualRoot.Transform.Forward)}";
+
         RuntimeDiagnostics.RecordWeaponRaycast(
             $"PROJECTILE FIRE route={route} " +
             $"shooter=\"{shooter.Name}\" pos={V3(shooter.Transform.WorldPosition)} euler={V3(shooter.Transform.EulerAngles)} " +
@@ -214,7 +325,8 @@ public sealed class ProjectileLauncher3D : Component
             $"speed={ProjectileSpeed:0.000} velocity={V3(projectile.Velocity)} " +
             $"cameraPos={(camera != null ? V3(camera.Transform.WorldPosition) : "<none>")} cameraFwd={(camera != null ? V3(camera.Transform.Forward) : "<none>")} " +
             $"blueprint={(ProjectileBlueprint.IsEmpty ? "<empty>" : ProjectileBlueprint.ToString())} fallback={usedFallback} " +
-            $"spawn=\"{root.Name}\" spawnFwd={V3(projectileForward)} spawnEuler={V3(root.Transform.EulerAngles)} visualVsVelocity={visualToVelocityAngle:0.00}deg");
+            $"spawn=\"{root.Name}\" spawnFwd={V3(projectileForward)} spawnEuler={V3(root.Transform.EulerAngles)} visualVsVelocity={visualToVelocityAngle:0.00}deg" +
+            visualDiagnostics);
 
         if (RuntimeDiagnostics.DebugWeaponRaycast)
         {
@@ -265,6 +377,24 @@ public sealed class ProjectileLauncher3D : Component
         }
 
         return null;
+    }
+
+    private static void DisableProjectileComponents(
+        GameObject root)
+    {
+        foreach (Projectile3D projectile
+                 in root.Components.OfType<Projectile3D>())
+        {
+            projectile.Enabled =
+                false;
+        }
+
+        foreach (GameObject child
+                 in root.Children)
+        {
+            DisableProjectileComponents(
+                child);
+        }
     }
 
     private static void DrawDebugDirection(

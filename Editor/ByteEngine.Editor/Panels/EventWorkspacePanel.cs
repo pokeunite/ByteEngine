@@ -6112,10 +6112,10 @@ internal sealed class EventWorkspacePanel
 
                 "physics.castRay" or
                 "physics.rayHitsAnything" =>
-                    1030.0f,
+                    620.0f,
 
                 "attachment.attachToSocket" =>
-                    950.0f,
+                    520.0f,
 
                 "animation.triggerAction" =>
                     430.0f,
@@ -6830,9 +6830,28 @@ internal sealed class EventWorkspacePanel
             case "physics.castRay":
             case "physics.rayHitsAnything":
                 instruction.Arguments["source"] = EventValue.String("Self");
+                instruction.Arguments["muzzlePath"] = EventValue.String(string.Empty);
+                instruction.Arguments["aimMode"] = EventValue.String("TopDownCursor");
+                instruction.Arguments["topDownAimStyle"] = EventValue.String("Exact3D");
+                instruction.Arguments["directionMode"] = EventValue.String("Forward");
                 instruction.Arguments["originOffset"] = EventValue.Vector3(Vector3.Zero);
-                instruction.Arguments["direction"] = EventValue.Vector3(new Vector3(0f, 0f, -1f));
-                instruction.Arguments["worldSpace"] = EventValue.Boolean(false);
+
+                /*
+                 * Keep the legacy direction/worldSpace values serialized too.
+                 * This preserves compatibility with existing Event Sheets and
+                 * older runtime data while the editor presents presets.
+                 */
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            0f,
+                            0f,
+                            -1f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+
                 instruction.Arguments["distance"] = EventValue.Number(100);
                 instruction.Arguments["layer"] = EventValue.Number(-1);
                 instruction.Arguments["includeTriggers"] = EventValue.Boolean(false);
@@ -7308,24 +7327,9 @@ internal sealed class EventWorkspacePanel
 
             case "physics.castRay":
             case "physics.rayHitsAnything":
-                DrawObjectTargetArgument(instruction, "source", "Ray Origin Object", state);
-                DrawValueArgument(instruction, "originOffset", "Local Origin Offset", VariableType.Vector3,
-                    EventValue.Vector3(Vector3.Zero), state, false);
-                DrawValueArgument(instruction, "direction", "Direction", VariableType.Vector3,
-                    EventValue.Vector3(new Vector3(0f, 0f, -1f)), state, false);
-                DrawValueArgument(instruction, "worldSpace", "Direction Is World Space", VariableType.Boolean,
-                    EventValue.Boolean(false), state, false);
-                DrawValueArgument(instruction, "distance", "Maximum Distance", VariableType.Number,
-                    EventValue.Number(100), state, false);
-                DrawValueArgument(instruction, "layer", "Collision Layer (-1 = All)", VariableType.Number,
-                    EventValue.Number(-1), state, false);
-                DrawValueArgument(instruction, "includeTriggers", "Include Triggers", VariableType.Boolean,
-                    EventValue.Boolean(false), state, false);
-                DrawValueArgument(instruction, "drawDebug", "Draw Debug Ray", VariableType.Boolean,
-                    EventValue.Boolean(false), state, false);
-                DrawValueArgument(instruction, "debugDuration", "Debug Duration (seconds)", VariableType.Number,
-                    EventValue.Number(.25), state, false);
-                ImGui.TextDisabled("Debug ray: red = hit, green = miss. Result is saved as Last Ray Hit.");
+                DrawRaycastArguments(
+                    instruction,
+                    state);
                 break;
             case "physics.lastRayHit":
             case "physics.lastRayMissed":
@@ -7368,12 +7372,16 @@ internal sealed class EventWorkspacePanel
                 DrawAttachmentRuleArgument(instruction, "locationRule", "Location Rule", "SnapToTarget");
                 DrawAttachmentRuleArgument(instruction, "rotationRule", "Rotation Rule", "SnapToTarget");
                 DrawAttachmentRuleArgument(instruction, "scaleRule", "Scale Rule", "KeepRelative");
-                DrawValueArgument(instruction, "positionOffset", "Position Offset", VariableType.Vector3,
-                    EventValue.Vector3(Vector3.Zero), state, false);
-                DrawValueArgument(instruction, "rotationOffset", "Rotation Offset", VariableType.Vector3,
-                    EventValue.Vector3(Vector3.Zero), state, false);
-                DrawValueArgument(instruction, "scaleMultiplier", "Scale Multiplier", VariableType.Vector3,
-                    EventValue.Vector3(Vector3.One), state, false);
+                if (ImGui.TreeNode($"Offsets (optional)##{instruction.InstanceId}"))
+                {
+                    DrawValueArgument(instruction, "positionOffset", "Position Offset", VariableType.Vector3,
+                        EventValue.Vector3(Vector3.Zero), state, false);
+                    DrawValueArgument(instruction, "rotationOffset", "Rotation Offset", VariableType.Vector3,
+                        EventValue.Vector3(Vector3.Zero), state, false);
+                    DrawValueArgument(instruction, "scaleMultiplier", "Scale Multiplier", VariableType.Vector3,
+                        EventValue.Vector3(Vector3.One), state, false);
+                    ImGui.TreePop();
+                }
                 break;
             case "attachment.detach":
                 DrawObjectTargetArgument(instruction, "object", "Object", state);
@@ -7970,6 +7978,887 @@ internal sealed class EventWorkspacePanel
                     state);
                 break;
         }
+    }
+
+    // ========================================================
+    // RAYCAST AUTHORING
+    // ========================================================
+
+    private void DrawRaycastArguments(
+        VisualInstruction instruction,
+        EditorState? state)
+    {
+        DrawObjectTargetArgument(
+            instruction,
+            "source",
+            "Weapon Owner",
+            state);
+
+        DrawRayMuzzlePointArgument(
+            instruction,
+            state);
+
+        string aimMode = DrawRayAimModeArgument(instruction);
+        if (aimMode == "TopDownCursor") DrawTopDownAimStyleArgument(instruction);
+        string directionMode = aimMode == "MuzzleDirection"
+            ? DrawRayDirectionModeArgument(instruction) : string.Empty;
+
+        if (string.Equals(
+                directionMode,
+                "CustomLocal",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            DrawValueArgument(
+                instruction,
+                "direction",
+                "Custom Local Direction",
+                VariableType.Vector3,
+                EventValue.Vector3(
+                    new Vector3(
+                        0f,
+                        0f,
+                        -1f)),
+                state,
+                false);
+        }
+        else if (string.Equals(
+                     directionMode,
+                     "CustomWorld",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            DrawValueArgument(
+                instruction,
+                "direction",
+                "Custom World Direction",
+                VariableType.Vector3,
+                EventValue.Vector3(
+                    new Vector3(
+                        0f,
+                        0f,
+                        -1f)),
+                state,
+                false);
+        }
+
+        DrawCompactRayValueArgument(instruction, "distance", "Maximum Distance",
+            VariableType.Number, EventValue.Number(100), state);
+        DrawRayCollisionLayerArgument(instruction, state);
+        DrawCompactRayValueArgument(instruction, "includeTriggers", "Include Triggers",
+            VariableType.Boolean, EventValue.Boolean(false), state);
+        DrawCompactRayValueArgument(instruction, "drawDebug", "Draw Debug Ray",
+            VariableType.Boolean, EventValue.Boolean(false), state);
+
+        if (ImGui.TreeNode($"Advanced Ray Settings##{instruction.InstanceId}"))
+        {
+            DrawValueArgument(instruction, "originOffset", "Muzzle Local Offset",
+                VariableType.Vector3, EventValue.Vector3(Vector3.Zero), state, false);
+            DrawValueArgument(instruction, "debugDuration", "Debug Duration (seconds)",
+                VariableType.Number, EventValue.Number(.25), state, false);
+            ImGui.TreePop();
+        }
+
+        ImGui.TextDisabled("Camera target -> muzzle hit");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Camera selects the aim point. The muzzle ray determines the real hit. Cyan = camera; red = hit; green = miss.");
+    }
+
+    private void DrawCompactRayValueArgument(VisualInstruction instruction, string argumentName,
+        string label, VariableType type, EventValue fallback, EditorState? state)
+    {
+        if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value) || value == null)
+            instruction.Arguments[argumentName] = value = fallback;
+        if (value.Kind != EventValueKind.Constant || value.Constant.Type != type)
+        {
+            DrawValueArgument(instruction, argumentName, label, type, fallback, state, false);
+            return;
+        }
+
+        ImGui.PushID(argumentName);
+        if (type == VariableType.Boolean)
+        {
+            bool checkedValue = value.Constant.Boolean;
+            if (ImGui.Checkbox(label, ref checkedValue))
+            {
+                instruction.Arguments[argumentName] = EventValue.Boolean(checkedValue);
+                _dirty = true;
+            }
+            ImGui.SameLine();
+        }
+        else
+        {
+            ImGui.TextDisabled(label);
+            ImGui.SameLine();
+        }
+
+        if (ImGui.SmallButton("Reference"))
+        {
+            RecordHistory("Use Ray Value Reference");
+            instruction.Arguments[argumentName] = new EventValue { Kind = EventValueKind.Reference };
+            _dirty = true;
+        }
+
+        if (type == VariableType.Number)
+        {
+            float number = (float)value.Constant.Number;
+            ImGui.SetNextItemWidth(-1f);
+            if (ImGui.DragFloat("##Value", ref number, .1f, .01f, 100000f))
+            {
+                instruction.Arguments[argumentName] = EventValue.Number(MathF.Max(.01f, number));
+                _dirty = true;
+            }
+        }
+        ImGui.PopID();
+    }
+
+    private string DrawRayAimModeArgument(VisualInstruction instruction)
+    {
+        string current = instruction.Arguments.TryGetValue("aimMode", out EventValue? value) &&
+            value.Kind == EventValueKind.Constant && value.Constant.Type == VariableType.String
+                ? value.Constant.String : "MuzzleDirection";
+        (string Mode, string Label)[] options =
+        [
+            ("TopDownCursor", "Top Down Cursor"),
+            ("ThirdPersonCrosshair", "Third Person Crosshair"),
+            ("FirstPersonCrosshair", "First Person Crosshair"),
+            ("MuzzleDirection", "Muzzle Direction")
+        ];
+        string preview = options.FirstOrDefault(item => item.Mode == current).Label ?? "Muzzle Direction";
+        ImGui.PushID("RayAimMode");
+        ImGui.TextDisabled("Aim Mode");
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.BeginCombo("##AimMode", preview))
+        {
+            foreach ((string mode, string label) in options)
+            {
+                bool selected = current == mode;
+                if (ImGui.Selectable(label, selected))
+                {
+                    RecordHistory("Change Ray Aim Mode");
+                    instruction.Arguments["aimMode"] = EventValue.String(mode);
+                    current = mode;
+                    _dirty = true;
+                }
+                if (selected) ImGui.SetItemDefaultFocus();
+            }
+            ImGui.EndCombo();
+        }
+        ImGui.PopID();
+        return current;
+    }
+
+    private void DrawTopDownAimStyleArgument(VisualInstruction instruction)
+    {
+        string current = instruction.Arguments.TryGetValue("topDownAimStyle", out EventValue? value) &&
+            value.Kind == EventValueKind.Constant && value.Constant.Type == VariableType.String
+                ? value.Constant.String : "Exact3D";
+        ImGui.PushID("TopDownAimStyle");
+        ImGui.TextDisabled("Top Down Aim Style");
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.BeginCombo("##AimStyle", current == "Planar" ? "Horizontal / Planar" : "Exact 3D Target"))
+        {
+            foreach ((string mode, string label) in new[]
+                     { ("Exact3D", "Exact 3D Target"), ("Planar", "Horizontal / Planar") })
+            {
+                bool selected = current == mode;
+                if (ImGui.Selectable(label, selected))
+                {
+                    RecordHistory("Change Top Down Aim Style");
+                    instruction.Arguments["topDownAimStyle"] = EventValue.String(mode);
+                    current = mode;
+                    _dirty = true;
+                }
+                if (selected) ImGui.SetItemDefaultFocus();
+            }
+            ImGui.EndCombo();
+        }
+        ImGui.PopID();
+    }
+
+
+    private void DrawRayCollisionLayerArgument(VisualInstruction instruction, EditorState? state)
+    {
+        ClassificationSettings? settings = EditorProjectContext.Active?.Project.Classification;
+        if (settings == null ||
+            (instruction.Arguments.TryGetValue("layer", out EventValue? existing) &&
+             (existing.Kind != EventValueKind.Constant || existing.Constant.Type != VariableType.Number)))
+        {
+            DrawValueArgument(instruction, "layer", "Collision Layer (-1 = All)",
+                VariableType.Number, EventValue.Number(-1), state, false);
+            return;
+        }
+
+        int current = instruction.Arguments.TryGetValue("layer", out EventValue? value)
+            ? (int)value.Constant.Number : -1;
+        string preview = current == -1 ? "All" : settings.FindLayer(current)?.Name ?? $"Layer {current}";
+        ImGui.PushID("RayCollisionLayer");
+        ImGui.TextDisabled("Collision Layer");
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.BeginCombo("##CollisionLayer", preview))
+        {
+            if (ImGui.Selectable("All", current == -1))
+            {
+                RecordHistory("Change Ray Collision Layer");
+                instruction.Arguments["layer"] = EventValue.Number(-1);
+                _dirty = true;
+            }
+            foreach (ObjectLayerDefinition layer in settings.Layers.OrderBy(item => item.Index))
+            {
+                if (ImGui.Selectable($"{layer.Index}  {layer.Name}##RayLayer{layer.Index}",
+                        current == layer.Index))
+                {
+                    RecordHistory("Change Ray Collision Layer");
+                    instruction.Arguments["layer"] = EventValue.Number(layer.Index);
+                    _dirty = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
+        ImGui.PopID();
+    }
+
+    private void DrawRayMuzzlePointArgument(
+        VisualInstruction instruction,
+        EditorState? state)
+    {
+        string currentPath =
+            instruction.Arguments.TryGetValue(
+                "muzzlePath",
+                out EventValue? existing) &&
+            existing != null &&
+            existing.Kind == EventValueKind.Constant &&
+            existing.Constant.Type == VariableType.String
+                ? existing.Constant.String
+                : string.Empty;
+
+        GameObject? owner =
+            state != null
+                ? ResolveEditorObjectArgument(
+                    instruction,
+                    "source",
+                    state)
+                : null;
+
+        ImGui.PushID(
+            "RayMuzzlePoint");
+
+        ImGui.TextDisabled(
+            "Muzzle Point");
+
+        if (owner == null)
+        {
+            ImGui.TextDisabled(
+                "Ray Owner is unresolved. Runtime will use the Ray Owner as the muzzle.");
+
+            if (!string.IsNullOrWhiteSpace(
+                    currentPath))
+            {
+                ImGui.TextDisabled(
+                    $"Saved child path: {currentPath}");
+            }
+
+            ImGui.PopID();
+            return;
+        }
+
+        GameObject? selectedObject =
+            ResolveEditorRayMuzzlePath(
+                owner,
+                currentPath);
+
+        string preview =
+            string.IsNullOrWhiteSpace(
+                currentPath)
+                ? $"Use Ray Owner ({owner.Name})"
+                : selectedObject != null
+                    ? currentPath
+                    : currentPath + " (Missing)";
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##MuzzlePoint",
+                preview))
+        {
+            bool useOwner =
+                string.IsNullOrWhiteSpace(
+                    currentPath);
+
+            if (ImGui.Selectable(
+                    $"Use Ray Owner ({owner.Name})",
+                    useOwner))
+            {
+                RecordHistory(
+                    "Change Ray Muzzle Point");
+
+                instruction.Arguments["muzzlePath"] =
+                    EventValue.String(
+                        string.Empty);
+
+                currentPath =
+                    string.Empty;
+
+                selectedObject =
+                    owner;
+
+                _dirty =
+                    true;
+            }
+
+            (GameObject Object, string Path)[] candidates =
+                EnumerateRayMuzzleCandidates(
+                    owner)
+                .ToArray();
+
+            if (candidates.Length > 0)
+            {
+                ImGui.Separator();
+            }
+
+            foreach ((GameObject Object, string Path) candidate
+                     in candidates)
+            {
+                bool selected =
+                    string.Equals(
+                        currentPath,
+                        candidate.Path,
+                        StringComparison.OrdinalIgnoreCase);
+
+                bool isEmpty =
+                    candidate.Object.Components.Count == 0;
+
+                string emptyHint =
+                    isEmpty
+                        ? "  [Empty]"
+                        : string.Empty;
+
+                if (ImGui.Selectable(
+                        $"{candidate.Path}{emptyHint}##rayMuzzle:{candidate.Object.Id}",
+                        selected))
+                {
+                    RecordHistory(
+                        "Change Ray Muzzle Point");
+
+                    instruction.Arguments["muzzlePath"] =
+                        EventValue.String(
+                            candidate.Path);
+
+                    currentPath =
+                        candidate.Path;
+
+                    selectedObject =
+                        candidate.Object;
+
+                    _dirty =
+                        true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            if (candidates.Length == 0)
+            {
+                ImGui.TextDisabled(
+                    "This Ray Owner has no child objects. Add an Empty under the gun first.");
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                currentPath) &&
+            selectedObject == null)
+        {
+            ImGui.TextColored(
+                new Vector4(
+                    1.0f,
+                    .72f,
+                    .28f,
+                    1.0f),
+                "The saved Muzzle Point no longer exists under the Ray Owner.");
+        }
+        else if (selectedObject != null &&
+                 !ReferenceEquals(
+                     selectedObject,
+                     owner) &&
+                 selectedObject.Components.Count > 0)
+        {
+            ImGui.TextDisabled(
+                "Tip: a component-free Empty is recommended for a clean muzzle transform.");
+        }
+
+        ImGui.PopID();
+    }
+
+    private string DrawRayDirectionModeArgument(
+        VisualInstruction instruction)
+    {
+        string current =
+            InferRayDirectionMode(
+                instruction);
+
+        (string Mode, string Label)[] options =
+        {
+            ("Forward", "Muzzle Forward"),
+            ("Back", "Muzzle Back"),
+            ("Right", "Muzzle Right"),
+            ("Left", "Muzzle Left"),
+            ("Up", "Muzzle Up"),
+            ("Down", "Muzzle Down"),
+            ("CustomLocal", "Custom Local Direction"),
+            ("CustomWorld", "Custom World Direction")
+        };
+
+        string preview =
+            options
+                .FirstOrDefault(
+                    item =>
+                        string.Equals(
+                            item.Mode,
+                            current,
+                            StringComparison.OrdinalIgnoreCase))
+                .Label
+            ?? current;
+
+        ImGui.PushID(
+            "RayDirectionMode");
+
+        ImGui.TextDisabled(
+            "Direction");
+
+        ImGui.SetNextItemWidth(
+            -1.0f);
+
+        if (ImGui.BeginCombo(
+                "##DirectionMode",
+                preview))
+        {
+            foreach ((string Mode, string Label) option
+                     in options)
+            {
+                bool selected =
+                    string.Equals(
+                        current,
+                        option.Mode,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        option.Label,
+                        selected))
+                {
+                    SetRayDirectionMode(
+                        instruction,
+                        option.Mode);
+
+                    current =
+                        option.Mode;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        string hint =
+            current switch
+            {
+                "Forward" =>
+                    "Uses the Muzzle Point's local Forward axis (-Z).",
+
+                "Back" =>
+                    "Uses the opposite of the Muzzle Point's Forward axis.",
+
+                "Right" =>
+                    "Uses the Muzzle Point's local Right axis (+X).",
+
+                "Left" =>
+                    "Uses the opposite of the Muzzle Point's Right axis.",
+
+                "Up" =>
+                    "Uses the Muzzle Point's local Up axis (+Y).",
+
+                "Down" =>
+                    "Uses the opposite of the Muzzle Point's Up axis.",
+
+                "CustomWorld" =>
+                    "Uses an absolute world-space vector. It does not rotate with the Muzzle Point.",
+
+                _ =>
+                    "Uses a custom vector in the Muzzle Point's local space."
+            };
+
+        ImGui.TextWrapped(
+            hint);
+
+        ImGui.PopID();
+
+        return current;
+    }
+
+    private void SetRayDirectionMode(
+        VisualInstruction instruction,
+        string mode)
+    {
+        RecordHistory(
+            "Change Ray Direction");
+
+        instruction.Arguments["directionMode"] =
+            EventValue.String(
+                mode);
+
+        switch (mode)
+        {
+            case "Forward":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            0f,
+                            0f,
+                            -1f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "Back":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            0f,
+                            0f,
+                            1f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "Right":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            1f,
+                            0f,
+                            0f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "Left":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            -1f,
+                            0f,
+                            0f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "Up":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            0f,
+                            1f,
+                            0f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "Down":
+                instruction.Arguments["direction"] =
+                    EventValue.Vector3(
+                        new Vector3(
+                            0f,
+                            -1f,
+                            0f));
+
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+
+            case "CustomWorld":
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        true);
+                break;
+
+            default:
+                instruction.Arguments["worldSpace"] =
+                    EventValue.Boolean(
+                        false);
+                break;
+        }
+
+        _dirty =
+            true;
+    }
+
+    private static string InferRayDirectionMode(
+        VisualInstruction instruction)
+    {
+        if (instruction.Arguments.TryGetValue(
+                "directionMode",
+                out EventValue? modeValue) &&
+            modeValue != null &&
+            modeValue.Kind == EventValueKind.Constant &&
+            modeValue.Constant.Type == VariableType.String)
+        {
+            string normalized =
+                NormalizeRayDirectionMode(
+                    modeValue.Constant.String);
+
+            if (!string.IsNullOrWhiteSpace(
+                    normalized))
+            {
+                return normalized;
+            }
+        }
+
+        bool legacyWorldSpace =
+            instruction.Arguments.TryGetValue(
+                "worldSpace",
+                out EventValue? worldValue) &&
+            worldValue != null &&
+            worldValue.Kind == EventValueKind.Constant &&
+            worldValue.Constant.Type == VariableType.Boolean &&
+            worldValue.Constant.Boolean;
+
+        if (legacyWorldSpace)
+        {
+            return "CustomWorld";
+        }
+
+        if (!instruction.Arguments.TryGetValue(
+                "direction",
+                out EventValue? directionValue) ||
+            directionValue == null ||
+            directionValue.Kind != EventValueKind.Constant ||
+            directionValue.Constant.Type != VariableType.Vector3)
+        {
+            return "CustomLocal";
+        }
+
+        Vector3 direction =
+            directionValue.Constant.Vector3;
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    0f,
+                    0f,
+                    -1f)))
+        {
+            return "Forward";
+        }
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    0f,
+                    0f,
+                    1f)))
+        {
+            return "Back";
+        }
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    1f,
+                    0f,
+                    0f)))
+        {
+            return "Right";
+        }
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    -1f,
+                    0f,
+                    0f)))
+        {
+            return "Left";
+        }
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    0f,
+                    1f,
+                    0f)))
+        {
+            return "Up";
+        }
+
+        if (RayDirectionNearlyEquals(
+                direction,
+                new Vector3(
+                    0f,
+                    -1f,
+                    0f)))
+        {
+            return "Down";
+        }
+
+        return "CustomLocal";
+    }
+
+    private static string NormalizeRayDirectionMode(
+        string value)
+    {
+        return value
+            .Trim()
+            .Replace(
+                " ",
+                string.Empty)
+            .ToLowerInvariant() switch
+        {
+            "forward" or
+            "muzzleforward" =>
+                "Forward",
+
+            "back" or
+            "muzzleback" =>
+                "Back",
+
+            "right" or
+            "muzzleright" =>
+                "Right",
+
+            "left" or
+            "muzzleleft" =>
+                "Left",
+
+            "up" or
+            "muzzleup" =>
+                "Up",
+
+            "down" or
+            "muzzledown" =>
+                "Down",
+
+            "customlocal" or
+            "customlocaldirection" =>
+                "CustomLocal",
+
+            "customworld" or
+            "customworlddirection" =>
+                "CustomWorld",
+
+            _ =>
+                string.Empty
+        };
+    }
+
+    private static bool RayDirectionNearlyEquals(
+        Vector3 left,
+        Vector3 right)
+    {
+        return Vector3.DistanceSquared(
+                   left,
+                   right) <=
+               .000001f;
+    }
+
+    private static IEnumerable<(GameObject Object, string Path)>
+        EnumerateRayMuzzleCandidates(
+            GameObject owner)
+    {
+        return EnumerateRayMuzzleCandidates(
+            owner,
+            string.Empty);
+    }
+
+    private static IEnumerable<(GameObject Object, string Path)>
+        EnumerateRayMuzzleCandidates(
+            GameObject parent,
+            string prefix)
+    {
+        foreach (GameObject child
+                 in parent.Children
+                     .OrderBy(
+                         item =>
+                             item.Name,
+                         StringComparer.OrdinalIgnoreCase))
+        {
+            string path =
+                string.IsNullOrWhiteSpace(
+                    prefix)
+                    ? child.Name
+                    : $"{prefix}/{child.Name}";
+
+            yield return
+                (
+                    child,
+                    path
+                );
+
+            foreach ((GameObject Object, string Path) descendant
+                     in EnumerateRayMuzzleCandidates(
+                         child,
+                         path))
+            {
+                yield return
+                    descendant;
+            }
+        }
+    }
+
+    private static GameObject? ResolveEditorRayMuzzlePath(
+        GameObject owner,
+        string path)
+    {
+        if (string.IsNullOrWhiteSpace(
+                path))
+        {
+            return owner;
+        }
+
+        GameObject current =
+            owner;
+
+        foreach (string segment
+                 in path.Split(
+                     '/',
+                     StringSplitOptions.RemoveEmptyEntries |
+                     StringSplitOptions.TrimEntries))
+        {
+            GameObject? next =
+                current.Children.FirstOrDefault(
+                    child =>
+                        string.Equals(
+                            child.Name,
+                            segment,
+                            StringComparison.OrdinalIgnoreCase));
+
+            if (next == null)
+            {
+                return null;
+            }
+
+            current =
+                next;
+        }
+
+        return current;
     }
 
     //

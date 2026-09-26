@@ -13,6 +13,13 @@ public sealed class LifetimeComponent : Component
         set => _lifetimeSeconds = float.IsFinite(value) ? Math.Max(0f, value) : 0f;
     }
 
+    public void Restart(float seconds)
+    {
+        LifetimeSeconds = seconds;
+        RemainingSeconds = LifetimeSeconds;
+        _expired = false;
+    }
+
     public float RemainingSeconds { get; private set; }
 
     protected override void OnStart()

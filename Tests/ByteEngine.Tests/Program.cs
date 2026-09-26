@@ -33,6 +33,13 @@ try
         return;
     }
 
+    if (args.Contains("--cast-ray-aim"))
+    {
+        CastRayAimTests.Run();
+        Console.WriteLine("Cast Ray camera/muzzle aiming regressions passed.");
+        return;
+    }
+
     if (args.Contains("--v085"))
     {
         V085ProfessionalEditorTests.Run(root);

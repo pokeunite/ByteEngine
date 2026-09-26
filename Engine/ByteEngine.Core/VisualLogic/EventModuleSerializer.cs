@@ -1,11 +1,16 @@
+using System.Numerics;
 using System.Text.Json;
 
 using ByteEngine.Core.Serialization;
+using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.VisualLogic;
 
 public sealed class EventModuleSerializer
 {
+    private const int CurrentVersion =
+        2;
+
     public void Save(
         EventModuleDefinition module,
         string path)
@@ -68,6 +73,13 @@ public sealed class EventModuleSerializer
                 1;
         }
 
+        int sourceVersion =
+            module.Version;
+
+        bool migrateLegacyRayForward =
+            sourceVersion <
+            CurrentVersion;
+
         module.Name =
             string.IsNullOrWhiteSpace(
                 module.Name)
@@ -107,13 +119,22 @@ public sealed class EventModuleSerializer
         {
             NormalizeRule(
                 module.Rules[index],
-                $"Event {index + 1}");
+                $"Event {index + 1}",
+                migrateLegacyRayForward);
+        }
+
+        if (module.Version <
+            CurrentVersion)
+        {
+            module.Version =
+                CurrentVersion;
         }
     }
 
     private static void NormalizeRule(
         EventRuleDefinition rule,
-        string fallbackName)
+        string fallbackName,
+        bool migrateLegacyRayForward)
     {
         if (rule.Id ==
             Guid.Empty)
@@ -162,6 +183,12 @@ public sealed class EventModuleSerializer
 
             instruction.ConditionInputIds ??=
                 new List<Guid>();
+
+            if (migrateLegacyRayForward)
+            {
+                MigrateLegacyRayForwardDirection(
+                    instruction);
+            }
         }
 
         /*
@@ -242,7 +269,74 @@ public sealed class EventModuleSerializer
         {
             NormalizeRule(
                 rule.SubEvents[index],
-                $"{rule.DisplayName} Event {index + 1}");
+                $"{rule.DisplayName} Event {index + 1}",
+                migrateLegacyRayForward);
         }
+    }
+
+    /// <summary>
+    /// Event Modules authored before version 2 used local +Z as the default
+    /// Cast Ray forward direction. ByteEngine's Transform.Forward convention is
+    /// local -Z, so those old default rays point exactly backward.
+    ///
+    /// Migrate only the exact legacy default: constant local +Z with world-space
+    /// disabled. Custom local vectors, world-space vectors and variable-backed
+    /// values are left untouched.
+    /// </summary>
+    private static void MigrateLegacyRayForwardDirection(
+        VisualInstruction instruction)
+    {
+        if (!instruction.Id.Equals(
+                "physics.castRay",
+                StringComparison.OrdinalIgnoreCase) &&
+            !instruction.Id.Equals(
+                "physics.rayHitsAnything",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!instruction.Arguments.TryGetValue(
+                "direction",
+                out EventValue? directionValue) ||
+            directionValue.Kind !=
+                EventValueKind.Constant ||
+            directionValue.Constant.Type !=
+                VariableType.Vector3)
+        {
+            return;
+        }
+
+        if (instruction.Arguments.TryGetValue(
+                "worldSpace",
+                out EventValue? worldSpaceValue))
+        {
+            if (worldSpaceValue.Kind !=
+                    EventValueKind.Constant ||
+                worldSpaceValue.Constant.Type !=
+                    VariableType.Boolean ||
+                worldSpaceValue.Constant.Boolean)
+            {
+                return;
+            }
+        }
+
+        Vector3 direction =
+            directionValue.Constant.Vector3;
+
+        if (!float.IsFinite(direction.X) ||
+            !float.IsFinite(direction.Y) ||
+            !float.IsFinite(direction.Z) ||
+            Vector3.DistanceSquared(
+                direction,
+                Vector3.UnitZ) >
+                .000001f)
+        {
+            return;
+        }
+
+        instruction.Arguments["direction"] =
+            EventValue.Vector3(
+                -Vector3.UnitZ);
     }
 }
