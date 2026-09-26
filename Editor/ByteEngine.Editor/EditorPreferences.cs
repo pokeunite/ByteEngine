@@ -15,6 +15,17 @@ internal static class EditorPreferences
         public bool BottomWorkspaceCollapsed { get; set; }
 
         public float AssetIconScale { get; set; } = 1.0f;
+
+        // Debug-box visibility is editor UI state, not runtime debug enablement.
+        // Keep these true by default so existing preference files (which do not
+        // contain these properties yet) retain the current visible behaviour.
+        public bool ShowDebugFootIk { get; set; } = true;
+
+        public bool ShowDebugBlueprintVisibility { get; set; } = true;
+
+        public bool ShowDebugTpsJitter { get; set; } = true;
+
+        public bool ShowDebugWeaponRaycast { get; set; } = true;
     }
 
     private static readonly string DirectoryPath =
@@ -125,6 +136,50 @@ internal static class EditorPreferences
         }
     }
 
+    public static bool ShowDebugFootIk
+    {
+        get => Settings.ShowDebugFootIk;
+        set
+        {
+            if (Settings.ShowDebugFootIk == value) return;
+            Settings.ShowDebugFootIk = value;
+            SaveSettings();
+        }
+    }
+
+    public static bool ShowDebugBlueprintVisibility
+    {
+        get => Settings.ShowDebugBlueprintVisibility;
+        set
+        {
+            if (Settings.ShowDebugBlueprintVisibility == value) return;
+            Settings.ShowDebugBlueprintVisibility = value;
+            SaveSettings();
+        }
+    }
+
+    public static bool ShowDebugTpsJitter
+    {
+        get => Settings.ShowDebugTpsJitter;
+        set
+        {
+            if (Settings.ShowDebugTpsJitter == value) return;
+            Settings.ShowDebugTpsJitter = value;
+            SaveSettings();
+        }
+    }
+
+    public static bool ShowDebugWeaponRaycast
+    {
+        get => Settings.ShowDebugWeaponRaycast;
+        set
+        {
+            if (Settings.ShowDebugWeaponRaycast == value) return;
+            Settings.ShowDebugWeaponRaycast = value;
+            SaveSettings();
+        }
+    }
+
     private static SettingsData Settings =>
         _settings ??=
             LoadSettings();
@@ -230,7 +285,19 @@ internal static class EditorPreferences
                     false,
 
                 LayoutVersion =
-                    0
+                    0,
+
+                ShowDebugFootIk =
+                    true,
+
+                ShowDebugBlueprintVisibility =
+                    true,
+
+                ShowDebugTpsJitter =
+                    true,
+
+                ShowDebugWeaponRaycast =
+                    true
             };
     }
 

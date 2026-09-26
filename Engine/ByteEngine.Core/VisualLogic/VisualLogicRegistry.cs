@@ -637,6 +637,86 @@ public sealed partial class VisualLogicRegistry
                                 0.0f);
                     }
             });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.setLayerWeight",
+                Category = "Animation",
+                DisplayName = "Set Layer Weight",
+                TargetComponent = nameof(AnimationController),
+                Execute = (instruction, context) =>
+                    ExecuteAnimationLayerWeight(instruction, context, null)
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.enableLayer",
+                Category = "Animation",
+                DisplayName = "Enable Layer",
+                TargetComponent = nameof(AnimationController),
+                Execute = (instruction, context) =>
+                    ExecuteAnimationLayerWeight(instruction, context, 1f)
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
+                Id = "animation.disableLayer",
+                Category = "Animation",
+                DisplayName = "Disable Layer",
+                TargetComponent = nameof(AnimationController),
+                Execute = (instruction, context) =>
+                    ExecuteAnimationLayerWeight(instruction, context, 0f)
+            });
+    }
+
+    private static void ExecuteAnimationLayerWeight(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        float? forcedWeight)
+    {
+        AnimationController? controller =
+            ResolveAnimationController(
+                instruction,
+                context);
+
+        if (controller == null)
+        {
+            return;
+        }
+
+        string layer =
+            EventValueResolver.GetString(
+                instruction,
+                "layer",
+                context);
+
+        if (string.IsNullOrWhiteSpace(layer))
+        {
+            context.WarningSink?.Invoke(
+                "Animation layer action requires a non-empty layer name.");
+            return;
+        }
+
+        float weight = forcedWeight ??
+            (float)EventValueResolver.GetNumber(
+                instruction,
+                "weight",
+                context,
+                1.0);
+
+        weight = Math.Clamp(
+            float.IsFinite(weight) ? weight : 0f,
+            0f,
+            1f);
+
+        if (!controller.SetAnimationLayerWeight(layer, weight))
+        {
+            context.WarningSink?.Invoke(
+                $"Animation layer '{layer}' was not found on the target Animation Profile.");
+        }
     }
 
 

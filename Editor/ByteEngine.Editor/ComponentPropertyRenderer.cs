@@ -608,6 +608,18 @@ internal static class ComponentPropertyRenderer
                 end);
         }
 
+        if (component is ModelHierarchyInstance modelInstance &&
+            project != null)
+        {
+            DrawModelMeshParts(
+                modelInstance,
+                project,
+                context,
+                begin,
+                changed,
+                end);
+        }
+
         if (component is MeshRenderer mesh)
         {
             Vector4 color =
@@ -858,6 +870,13 @@ internal static class ComponentPropertyRenderer
                 nameof(SkyEnvironment.EnvironmentMapReference))
         {
             return AssetType.Texture2D;
+        }
+
+        if (component is ProjectileLauncher3D &&
+            propertyName ==
+                nameof(ProjectileLauncher3D.ProjectileBlueprint))
+        {
+            return AssetType.Blueprint;
         }
 
         if (component is ModelHierarchyInstance &&
@@ -1146,6 +1165,117 @@ internal static class ComponentPropertyRenderer
         {
             ImGui.SetTooltip(
                 "Matches common Idle, Walk, Run, Jump, Fall and Land names from the imported model.");
+        }
+    }
+
+    private static void DrawModelMeshParts(
+        ModelHierarchyInstance instance,
+        EditorProjectContext project,
+        PropertyEditorContext context,
+        Action begin,
+        Action changed,
+        Action end)
+    {
+        ImGui.SeparatorText(
+            "MESH PARTS");
+
+        ImGui.TextDisabled(
+            "Choose which skinned parts this model instance renders.");
+
+        if (instance.Model.IsEmpty)
+        {
+            ImGui.TextDisabled(
+                "Assign a Model to edit mesh visibility.");
+            return;
+        }
+
+        ModelAsset model;
+
+        try
+        {
+            model =
+                project.Assets.LoadModel(
+                    instance.Model);
+        }
+        catch (Exception exception)
+        {
+            ImGui.TextDisabled(
+                "Model could not be loaded.");
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    exception.Message);
+            }
+
+            return;
+        }
+
+        var skinnedMeshes =
+            model.Meshes
+                .Where(
+                    mesh =>
+                        mesh.JointIndices.Length > 0 &&
+                        mesh.JointWeights.Length ==
+                        mesh.JointIndices.Length)
+                .ToArray();
+
+        if (skinnedMeshes.Length ==
+            0)
+        {
+            ImGui.TextDisabled(
+                "This model has no skinned mesh parts.");
+            return;
+        }
+
+        bool editable =
+            context !=
+            PropertyEditorContext.Runtime;
+
+        ImGui.BeginDisabled(
+            !editable);
+
+        foreach (var mesh in skinnedMeshes)
+        {
+            bool visible =
+                instance.IsMeshVisible(
+                    mesh.Key);
+
+            string displayName =
+                string.IsNullOrWhiteSpace(
+                    mesh.Name)
+                    ? mesh.Key
+                    : mesh.Name;
+
+            if (ImGui.Checkbox(
+                    $"{displayName}##mesh-part:{mesh.Key}",
+                    ref visible))
+            {
+                begin();
+
+                instance.SetMeshVisible(
+                    mesh.Key,
+                    visible);
+
+                changed();
+                end();
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    $"Skinned mesh: {displayName}\nKey: {mesh.Key}");
+            }
+        }
+
+        ImGui.EndDisabled();
+
+        if (skinnedMeshes.Length ==
+            1)
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped(
+                "This model contains one skinned mesh. Individual body parts cannot be hidden separately.");
         }
     }
 

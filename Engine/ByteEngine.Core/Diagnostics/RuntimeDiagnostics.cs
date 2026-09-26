@@ -53,6 +53,11 @@ public static class RuntimeDiagnostics
     private const int MaxTpsJitterTraceLines = 1200;
     public static bool DebugTpsJitter { get; set; }
 
+    private static readonly object WeaponRaycastTraceLock = new();
+    private static readonly Queue<string> WeaponRaycastTrace = new();
+    private const int MaxWeaponRaycastTraceLines = 1000;
+    public static bool DebugWeaponRaycast { get; set; }
+
     public static void ClearBlueprintVisibilityTrace()
     {
         lock (BlueprintVisibilityTraceLock) BlueprintVisibilityTrace.Clear();
@@ -327,6 +332,45 @@ public static class RuntimeDiagnostics
                         hasRootBone,
                         rootYaw,
                         player.ControlYaw);
+            }
+        }
+    }
+
+    public static void ClearWeaponRaycastTrace()
+    {
+        lock (WeaponRaycastTraceLock)
+            WeaponRaycastTrace.Clear();
+    }
+
+    public static string GetWeaponRaycastTrace()
+    {
+        lock (WeaponRaycastTraceLock)
+            return string.Join(Environment.NewLine, WeaponRaycastTrace);
+    }
+
+    /// <summary>
+    /// Records concise weapon/raycast diagnostics only while the dedicated
+    /// debug option is enabled. Callers provide already-resolved world-space
+    /// values so the trace exposes exactly which transform/direction the
+    /// gameplay system used instead of trying to reconstruct it later.
+    /// </summary>
+    public static void RecordWeaponRaycast(
+        string message)
+    {
+        if (!DebugWeaponRaycast)
+            return;
+
+        string line =
+            $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+
+        lock (WeaponRaycastTraceLock)
+        {
+            WeaponRaycastTrace.Enqueue(line);
+
+            while (WeaponRaycastTrace.Count >
+                   MaxWeaponRaycastTraceLines)
+            {
+                WeaponRaycastTrace.Dequeue();
             }
         }
     }

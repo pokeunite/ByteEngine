@@ -199,12 +199,12 @@ public sealed partial class SkeletalMeshRenderer
         int layerCount = _poseProfile?.Layers.Count ?? 0;
         _layerWeights = new float[layerCount];
         _layerTargetWeights = new float[layerCount];
-        Array.Fill(_layerTargetWeights, 1f);
         _layerMasks = new float[layerCount][];
         _layerClips = new ImportedAnimation?[layerCount];
         for (int i = 0; i < layerCount; i++)
         {
             AnimationLayerProfile layer = _poseProfile!.Layers[i];
+            _layerTargetWeights[i] = layer.Enabled ? 1f : 0f;
             _layerClips[i] = FindAnimation(layer.Clip);
             _layerMasks[i] = new float[count];
             BuildMask(layer.Mask, _layerMasks[i]);
@@ -388,7 +388,7 @@ public sealed partial class SkeletalMeshRenderer
         {
             AnimationLayerProfile layer = _poseProfile!.Layers[i];
             ImportedAnimation? clip = _layerClips[i];
-            float goal = layer.Enabled && clip != null ? layer.Weight * _layerTargetWeights[i] : 0f;
+            float goal = clip != null ? layer.Weight * _layerTargetWeights[i] : 0f;
             float seconds = goal > _layerWeights[i] ? layer.BlendIn : layer.BlendOut;
             float step = seconds <= 1e-6f ? 1f :
                 Math.Clamp((float)ByteEngine.Core.Time.DeltaTime / seconds, 0f, 1f);

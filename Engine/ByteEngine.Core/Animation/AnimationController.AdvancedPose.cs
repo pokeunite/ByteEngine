@@ -11,6 +11,8 @@ public sealed partial class AnimationController
     private readonly Dictionary<string, AnimationBlendSpace> _blendSpaceByName =
         new(StringComparer.OrdinalIgnoreCase);
     private AnimationBlendSpace? _selectedBlendSpace;
+    private readonly Dictionary<string, float> _layerWeightOverrides =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<SkeletalMeshRenderer> AnimationRenderers => _renderers;
     public string CurrentSyncGroup => _loadedPoseProfile?.Locomotion.SyncGroup ?? string.Empty;
@@ -21,6 +23,48 @@ public sealed partial class AnimationController
     public bool SetAnimationFloat(string name, float value) => _poseGraph?.SetFloat(name, value) ?? false;
     public bool SetAnimationBool(string name, bool value) => _poseGraph?.SetBool(name, value) ?? false;
     public bool FireAnimationTrigger(string name) => _poseGraph?.Trigger(name) ?? false;
+
+    public bool SetAnimationLayerWeight(string layerName, float weight)
+    {
+        if (string.IsNullOrWhiteSpace(layerName)) return false;
+        if (_loadedPoseProfile == null && !ApplyAnimationProfile()) return false;
+
+        int index = FindAnimationLayerIndex(layerName);
+        if (index < 0) return false;
+
+        float clamped = Math.Clamp(float.IsFinite(weight) ? weight : 0f, 0f, 1f);
+        string canonicalName = _loadedPoseProfile!.Layers[index].Name;
+        _layerWeightOverrides[canonicalName] = clamped;
+
+        foreach (SkeletalMeshRenderer renderer in _renderers)
+            renderer.SetLayerParameterWeight(index, clamped);
+
+        return true;
+    }
+
+    public bool EnableAnimationLayer(string layerName) =>
+        SetAnimationLayerWeight(layerName, 1f);
+
+    public bool DisableAnimationLayer(string layerName) =>
+        SetAnimationLayerWeight(layerName, 0f);
+
+    private int FindAnimationLayerIndex(string layerName)
+    {
+        if (_loadedPoseProfile == null) return -1;
+
+        for (int i = 0; i < _loadedPoseProfile.Layers.Count; i++)
+        {
+            if (string.Equals(
+                    _loadedPoseProfile.Layers[i].Name,
+                    layerName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 
     public void SetAim(float yawDegrees, float pitchDegrees)
     {
@@ -46,6 +90,7 @@ public sealed partial class AnimationController
     private void ConfigureAdvancedProfile(AnimationProfile profile)
     {
         _loadedPoseProfile = profile;
+        _layerWeightOverrides.Clear();
         _blendSpaceByName.Clear();
         foreach (AnimationBlendSpace space in profile.BlendSpaces)
             if (!string.IsNullOrWhiteSpace(space.Name))
@@ -101,9 +146,23 @@ public sealed partial class AnimationController
                 _poseGraph?.TransitionDuration ?? TransitionDuration);
             for (int i = 0; i < _loadedPoseProfile.Layers.Count; i++)
             {
-                string parameter = _loadedPoseProfile.Layers[i].WeightParameter;
-                float weight = !string.IsNullOrWhiteSpace(parameter) &&
-                    _poseGraph?.TryGetFloat(parameter, out float graphValue) == true ? graphValue : 1f;
+                AnimationLayerProfile layer = _loadedPoseProfile.Layers[i];
+                float weight;
+
+                if (_layerWeightOverrides.TryGetValue(layer.Name, out float runtimeWeight))
+                {
+                    weight = runtimeWeight;
+                }
+                else if (!string.IsNullOrWhiteSpace(layer.WeightParameter) &&
+                         _poseGraph?.TryGetFloat(layer.WeightParameter, out float graphValue) == true)
+                {
+                    weight = graphValue;
+                }
+                else
+                {
+                    weight = layer.Enabled ? 1f : 0f;
+                }
+
                 renderer.SetLayerParameterWeight(i, weight);
             }
         }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text;
 using ByteEngine.Core.Diagnostics;
 
 using ImGuiNET;
@@ -28,31 +29,31 @@ internal sealed class ConsolePanel
         {
             if (ImGui.BeginTabItem("Console"))
             {
-        if (ImGui.SmallButton("Clear"))
-        {
-            log.Clear();
-        }
+                if (ImGui.SmallButton("Clear"))
+                {
+                    log.Clear();
+                }
 
-        ImGui.SameLine();
+                ImGui.SameLine();
 
-        ImGui.TextDisabled(
-            $"{log.Entries.Count} messages"
-        );
+                ImGui.TextDisabled(
+                    $"{log.Entries.Count} messages"
+                );
 
-        ImGui.Separator();
-        string selectableText = string.Join(Environment.NewLine,
-            log.Entries.Select(entry =>
-                $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"));
-        if (ImGui.SmallButton("Copy All"))
-        {
-            ImGui.SetClipboardText(selectableText);
-        }
+                ImGui.Separator();
+                string selectableText = string.Join(Environment.NewLine,
+                    log.Entries.Select(entry =>
+                        $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"));
+                if (ImGui.SmallButton("Copy All"))
+                {
+                    ImGui.SetClipboardText(selectableText);
+                }
 
-        // Read-only input supports mouse selection and Ctrl+C, unlike TextWrapped.
-        ImGui.InputTextMultiline("##ConsoleText", ref selectableText,
-            (uint)Math.Max(selectableText.Length + 1, 1),
-            new Vector2(-1, Math.Max(1, ImGui.GetContentRegionAvail().Y)),
-            ImGuiInputTextFlags.ReadOnly);
+                // Read-only input supports mouse selection and Ctrl+C, unlike TextWrapped.
+                ImGui.InputTextMultiline("##ConsoleText", ref selectableText,
+                    (uint)Math.Max(selectableText.Length + 1, 1),
+                    new Vector2(-1, Math.Max(1, ImGui.GetContentRegionAvail().Y)),
+                    ImGuiInputTextFlags.ReadOnly);
                 ImGui.EndTabItem();
             }
             if (ImGui.BeginTabItem("Debug"))
@@ -63,38 +64,86 @@ internal sealed class ConsolePanel
             ImGui.EndTabBar();
         }
 
-
-
         ImGui.End();
     }
 
     private static void DrawDebug()
     {
-        bool enabled = RuntimeDiagnostics.DebugFootIk;
-        if (ImGui.Checkbox("Debug Foot IK", ref enabled))
-            RuntimeDiagnostics.DebugFootIk = enabled;
+        bool anyVisible =
+            EditorPreferences.ShowDebugFootIk ||
+            EditorPreferences.ShowDebugBlueprintVisibility ||
+            EditorPreferences.ShowDebugTpsJitter ||
+            EditorPreferences.ShowDebugWeaponRaycast;
 
-        ImGui.SameLine();
+        if (!anyVisible)
+        {
+            ImGui.TextDisabled(
+                "No debug boxes are visible. Use Debug > Console Debug Boxes from the top menu.");
+            return;
+        }
 
-        bool blueprintEnabled = RuntimeDiagnostics.DebugBlueprintVisibility;
-        if (ImGui.Checkbox("Debug Blueprint Visibility", ref blueprintEnabled))
-            RuntimeDiagnostics.DebugBlueprintVisibility = blueprintEnabled;
+        bool firstControl =
+            true;
 
-        ImGui.SameLine();
+        if (EditorPreferences.ShowDebugFootIk)
+        {
+            bool enabled = RuntimeDiagnostics.DebugFootIk;
+            if (ImGui.Checkbox("Debug Foot IK", ref enabled))
+                RuntimeDiagnostics.DebugFootIk = enabled;
+            firstControl = false;
+        }
 
-        bool tpsJitterEnabled = RuntimeDiagnostics.DebugTpsJitter;
-        if (ImGui.Checkbox("Debug TPS Jitter", ref tpsJitterEnabled))
-            RuntimeDiagnostics.DebugTpsJitter = tpsJitterEnabled;
+        if (EditorPreferences.ShowDebugBlueprintVisibility)
+        {
+            if (!firstControl) ImGui.SameLine();
+
+            bool enabled = RuntimeDiagnostics.DebugBlueprintVisibility;
+            if (ImGui.Checkbox("Debug Blueprint Visibility", ref enabled))
+                RuntimeDiagnostics.DebugBlueprintVisibility = enabled;
+            firstControl = false;
+        }
+
+        if (EditorPreferences.ShowDebugTpsJitter)
+        {
+            if (!firstControl) ImGui.SameLine();
+
+            bool enabled = RuntimeDiagnostics.DebugTpsJitter;
+            if (ImGui.Checkbox("Debug TPS Jitter", ref enabled))
+                RuntimeDiagnostics.DebugTpsJitter = enabled;
+            firstControl = false;
+        }
+
+        if (EditorPreferences.ShowDebugWeaponRaycast)
+        {
+            if (!firstControl) ImGui.SameLine();
+
+            bool enabled = RuntimeDiagnostics.DebugWeaponRaycast;
+            if (ImGui.Checkbox("Debug Weapons / Raycasts", ref enabled))
+                RuntimeDiagnostics.DebugWeaponRaycast = enabled;
+        }
+
+        var description =
+            new List<string>();
+
+        if (EditorPreferences.ShowDebugFootIk)
+            description.Add("Foot IK records during Play.");
+
+        if (EditorPreferences.ShowDebugBlueprintVisibility)
+            description.Add("Blueprint Visibility samples the Scene View while open.");
+
+        if (EditorPreferences.ShowDebugTpsJitter)
+            description.Add("TPS Jitter records one end-of-frame sample after movement, physics and camera LateUpdate.");
+
+        if (EditorPreferences.ShowDebugWeaponRaycast)
+            description.Add("Weapons / Raycasts records Event Sheet ray origins/directions plus projectile and PlayerShooter aim/velocity data. Projectile shots also draw a short cyan launch-direction line while enabled.");
+
+        description.Add("Untick a debug option to freeze its trace, then copy it.");
 
         ImGui.TextWrapped(
-            "Foot IK records during Play. Blueprint Visibility samples the Scene View while open. " +
-            "TPS Jitter records one end-of-frame sample after movement, physics and camera LateUpdate. " +
-            "Untick a debug option to freeze its trace, then copy it.");
+            string.Join(" ", description));
 
         string trace =
-            $"[Foot IK]{Environment.NewLine}{RuntimeDiagnostics.GetFootIkTrace()}" +
-            $"{Environment.NewLine}{Environment.NewLine}[Blueprint Visibility]{Environment.NewLine}{RuntimeDiagnostics.GetBlueprintVisibilityTrace()}" +
-            $"{Environment.NewLine}{Environment.NewLine}[TPS Jitter]{Environment.NewLine}{RuntimeDiagnostics.GetTpsJitterTrace()}";
+            BuildVisibleDebugTrace();
 
         if (ImGui.SmallButton("Copy Debug"))
             ImGui.SetClipboardText(trace);
@@ -103,9 +152,7 @@ internal sealed class ConsolePanel
 
         if (ImGui.SmallButton("Clear Debug"))
         {
-            RuntimeDiagnostics.ClearFootIkTrace();
-            RuntimeDiagnostics.ClearBlueprintVisibilityTrace();
-            RuntimeDiagnostics.ClearTpsJitterTrace();
+            ClearVisibleDebugTrace();
             trace = string.Empty;
         }
 
@@ -115,5 +162,53 @@ internal sealed class ConsolePanel
             (uint)Math.Max(trace.Length + 1, 1),
             new Vector2(-1, Math.Max(1, ImGui.GetContentRegionAvail().Y)),
             ImGuiInputTextFlags.ReadOnly);
+    }
+
+    private static string BuildVisibleDebugTrace()
+    {
+        var text =
+            new StringBuilder();
+
+        void Append(
+            string title,
+            string value)
+        {
+            if (text.Length > 0)
+                text.AppendLine().AppendLine();
+
+            text.Append('[')
+                .Append(title)
+                .AppendLine("]")
+                .Append(value);
+        }
+
+        if (EditorPreferences.ShowDebugFootIk)
+            Append("Foot IK", RuntimeDiagnostics.GetFootIkTrace());
+
+        if (EditorPreferences.ShowDebugBlueprintVisibility)
+            Append("Blueprint Visibility", RuntimeDiagnostics.GetBlueprintVisibilityTrace());
+
+        if (EditorPreferences.ShowDebugTpsJitter)
+            Append("TPS Jitter", RuntimeDiagnostics.GetTpsJitterTrace());
+
+        if (EditorPreferences.ShowDebugWeaponRaycast)
+            Append("Weapons / Raycasts", RuntimeDiagnostics.GetWeaponRaycastTrace());
+
+        return text.ToString();
+    }
+
+    private static void ClearVisibleDebugTrace()
+    {
+        if (EditorPreferences.ShowDebugFootIk)
+            RuntimeDiagnostics.ClearFootIkTrace();
+
+        if (EditorPreferences.ShowDebugBlueprintVisibility)
+            RuntimeDiagnostics.ClearBlueprintVisibilityTrace();
+
+        if (EditorPreferences.ShowDebugTpsJitter)
+            RuntimeDiagnostics.ClearTpsJitterTrace();
+
+        if (EditorPreferences.ShowDebugWeaponRaycast)
+            RuntimeDiagnostics.ClearWeaponRaycastTrace();
     }
 }

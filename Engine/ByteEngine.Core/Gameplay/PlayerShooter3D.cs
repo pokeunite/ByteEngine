@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Diagnostics;
 using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Physics;
@@ -85,8 +86,41 @@ public sealed class PlayerShooter3D : Component
 
         if (fire)
         {
-            player.GetComponent<ProjectileLauncher3D>()?
-                .Fire(aimDirection);
+            float aspectRatio =
+                Input.GameViewSize.X /
+                Math.Max(
+                    Input.GameViewSize.Y,
+                    1f);
+
+            Vector2 debugScreenPoint =
+                AimAtPointer
+                    ? Input.GameViewPointerNormalized
+                    : new Vector2(.5f);
+
+            (Vector3 debugRayOrigin, Vector3 debugRayDirection) =
+                camera.ScreenPointToRay(
+                    debugScreenPoint,
+                    aspectRatio);
+
+            ProjectileLauncher3D? launcher =
+                player.GetComponent<ProjectileLauncher3D>();
+
+            Vector3 muzzle =
+                launcher != null
+                    ? Vector3.Transform(
+                        launcher.MuzzleOffset,
+                        player.Transform.WorldMatrix)
+                    : player.Transform.WorldPosition;
+
+            RuntimeDiagnostics.RecordWeaponRaycast(
+                $"PLAYER AIM player=\"{player.Name}\" aimAtPointer={AimAtPointer} automatic={Automatic} " +
+                $"playerPos={DebugV3(player.Transform.WorldPosition)} playerFwd={DebugV3(player.Transform.Forward)} " +
+                $"cameraPos={DebugV3(camera.Transform.WorldPosition)} cameraFwd={DebugV3(camera.Transform.Forward)} " +
+                $"screen=({debugScreenPoint.X:0.000},{debugScreenPoint.Y:0.000}) cameraRayOrigin={DebugV3(debugRayOrigin)} cameraRayDir={DebugV3(debugRayDirection)} " +
+                $"muzzle={DebugV3(muzzle)} resolvedAimDir={DebugV3(aimDirection)}");
+
+            launcher?.Fire(
+                aimDirection);
         }
     }
 
@@ -253,6 +287,10 @@ public sealed class PlayerShooter3D : Component
             ? Vector3.Normalize(direction)
             : Vector3.Normalize(forward);
     }
+
+    private static string DebugV3(
+        Vector3 value) =>
+        $"({value.X:0.000},{value.Y:0.000},{value.Z:0.000})";
 
     private static void FaceAimDirection(
         GameObject player,

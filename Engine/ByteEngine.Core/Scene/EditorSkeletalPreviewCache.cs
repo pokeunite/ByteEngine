@@ -62,6 +62,7 @@ internal sealed class EditorSkeletalPreviewCache : IDisposable
             if (authored != null)
             {
                 Remove(item.Id);
+                authored.SetHiddenMeshKeys(instance.HiddenMeshKeys);
                 if (authored.Enabled && authored.Visible)
                     HideBindPoseMeshes(item, instance.Model, keys);
                 continue;
@@ -117,6 +118,7 @@ internal sealed class EditorSkeletalPreviewCache : IDisposable
                 _previews[item.Id] = preview;
             }
 
+            preview.Renderer.SetHiddenMeshKeys(instance.HiddenMeshKeys);
             preview.Proxy.Transform.WorldPosition = item.Transform.WorldPosition;
             preview.Proxy.Transform.WorldRotation = item.Transform.WorldRotation;
             preview.Proxy.Transform.WorldScale = item.Transform.WorldScale;

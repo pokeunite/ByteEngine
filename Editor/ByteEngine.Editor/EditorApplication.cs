@@ -396,6 +396,7 @@ public sealed class EditorApplication
         {
             DrawGameObjectMenu();
             DrawWindowMenu();
+            DrawDebugMenu();
             DrawPlayControls();
             DrawEditorStatus();
         }
@@ -798,6 +799,97 @@ public sealed class EditorApplication
         }
 
         ImGui.EndMenu();
+    }
+
+    private static void DrawDebugMenu()
+    {
+        if (!ImGui.BeginMenu("Debug"))
+        {
+            return;
+        }
+
+        if (ImGui.BeginMenu("Console Debug Boxes"))
+        {
+            bool showFootIk =
+                EditorPreferences.ShowDebugFootIk;
+
+            if (ImGui.MenuItem(
+                    "Foot IK",
+                    string.Empty,
+                    showFootIk))
+            {
+                EditorPreferences.ShowDebugFootIk =
+                    !showFootIk;
+            }
+
+            bool showBlueprintVisibility =
+                EditorPreferences.ShowDebugBlueprintVisibility;
+
+            if (ImGui.MenuItem(
+                    "Blueprint Visibility",
+                    string.Empty,
+                    showBlueprintVisibility))
+            {
+                EditorPreferences.ShowDebugBlueprintVisibility =
+                    !showBlueprintVisibility;
+            }
+
+            bool showTpsJitter =
+                EditorPreferences.ShowDebugTpsJitter;
+
+            if (ImGui.MenuItem(
+                    "TPS Jitter",
+                    string.Empty,
+                    showTpsJitter))
+            {
+                EditorPreferences.ShowDebugTpsJitter =
+                    !showTpsJitter;
+            }
+
+            bool showWeaponRaycast =
+                EditorPreferences.ShowDebugWeaponRaycast;
+
+            if (ImGui.MenuItem(
+                    "Weapons / Raycasts",
+                    string.Empty,
+                    showWeaponRaycast))
+            {
+                EditorPreferences.ShowDebugWeaponRaycast =
+                    !showWeaponRaycast;
+            }
+
+            ImGui.Separator();
+
+            if (ImGui.MenuItem("Show All"))
+            {
+                SetAllDebugBoxVisibility(true);
+            }
+
+            if (ImGui.MenuItem("Hide All"))
+            {
+                SetAllDebugBoxVisibility(false);
+            }
+
+            ImGui.EndMenu();
+        }
+
+        ImGui.EndMenu();
+    }
+
+    private static void SetAllDebugBoxVisibility(
+        bool visible)
+    {
+        EditorPreferences.ShowDebugFootIk =
+            visible;
+
+        EditorPreferences.ShowDebugBlueprintVisibility =
+            visible;
+
+        EditorPreferences.ShowDebugTpsJitter =
+            visible;
+
+        EditorPreferences.ShowDebugWeaponRaycast =
+            visible;
     }
 
     private void DrawPlayControls()

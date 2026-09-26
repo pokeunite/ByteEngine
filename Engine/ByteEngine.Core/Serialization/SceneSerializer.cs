@@ -1,6 +1,8 @@
 using System.Numerics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization.SerializationModels;
@@ -23,6 +25,9 @@ public sealed class SceneSerializer
 
     private const string TpsEIdleTurnSpeedProperty =
         "idleTurnSpeed";
+
+    private const string ModelHiddenMeshKeysProperty =
+        "hiddenMeshKeys";
 
     private readonly ComponentSerializer _components;
     private readonly ClassificationSettings? _classification;
@@ -359,6 +364,25 @@ public sealed class SceneSerializer
         Component component,
         ComponentData componentData)
     {
+        if (component is ModelHierarchyInstance modelInstance)
+        {
+            var hiddenMeshKeys =
+                new JsonArray();
+
+            foreach (string key in modelInstance.HiddenMeshKeys)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    hiddenMeshKeys.Add(
+                        JsonValue.Create(
+                            key));
+                }
+            }
+
+            componentData.Properties[ModelHiddenMeshKeysProperty] =
+                hiddenMeshKeys;
+        }
+
         if (component is CameraBoom3D boom)
         {
             componentData.Properties[TpsDCollisionSafetyMarginProperty] =
@@ -394,6 +418,29 @@ public sealed class SceneSerializer
         Component component,
         ComponentData componentData)
     {
+        if (component is ModelHierarchyInstance modelInstance &&
+            componentData.Properties[ModelHiddenMeshKeysProperty]
+                is JsonArray hiddenMeshKeys)
+        {
+            var keys =
+                new List<string>();
+
+            foreach (JsonNode? node in hiddenMeshKeys)
+            {
+                if (node is JsonValue value &&
+                    value.TryGetValue(
+                        out string? key) &&
+                    !string.IsNullOrWhiteSpace(key))
+                {
+                    keys.Add(
+                        key);
+                }
+            }
+
+            modelInstance.SetHiddenMeshKeys(
+                keys);
+        }
+
         if (component is PlayerController3D player)
         {
             /*

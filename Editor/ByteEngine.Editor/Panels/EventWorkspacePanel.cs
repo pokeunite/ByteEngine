@@ -50,6 +50,12 @@ internal sealed class EventWorkspacePanel
     private readonly HashSet<Guid> _selectedGraphNodes =
         new();
 
+    private readonly Dictionary<Guid, float> _measuredInstructionNodeLogicalHeights =
+        new();
+
+    private readonly Dictionary<Guid, float> _measuredEventNodeLogicalHeights =
+        new();
+
     private enum WireDragKind
     {
         None,
@@ -850,18 +856,71 @@ internal sealed class EventWorkspacePanel
         return _module.EditorNodeScale;
     }
 
-    private Vector2 GetEventGraphNodeSize()
+    private Vector2 GetEventGraphNodeSize(
+        Guid? ruleId = null)
     {
-        return BaseEventGraphNodeSize *
-               GetNodeScale();
+        float layoutScale =
+            GetNodeLayoutScale();
+
+        Vector2 logicalSize =
+            BaseEventGraphNodeSize *
+            layoutScale;
+
+        if (ruleId.HasValue &&
+            _measuredEventNodeLogicalHeights.TryGetValue(
+                ruleId.Value,
+                out float measuredHeight))
+        {
+            // Measured content height is authoritative. The old code only
+            // allowed nodes to grow beyond hard-coded estimates, which meant
+            // stale/undersized estimates could still clip dynamic content.
+            logicalSize.Y =
+                MathF.Max(
+                    measuredHeight,
+                    120.0f *
+                    layoutScale);
+        }
+
+        return logicalSize;
     }
 
     private Vector2 GetScaledInstructionNodeSize(
         VisualInstruction instruction)
     {
-        return GetInstructionNodeBaseSize(
-                   instruction) *
-               GetNodeScale();
+        float layoutScale =
+            GetNodeLayoutScale();
+
+        Vector2 logicalSize =
+            GetInstructionNodeBaseSize(
+                instruction) *
+            layoutScale;
+
+        if (_measuredInstructionNodeLogicalHeights.TryGetValue(
+                instruction.InstanceId,
+                out float measuredHeight))
+        {
+            // Once rendered, the node's real content height replaces the
+            // per-id estimate. This keeps every current and future action /
+            // condition node aligned with what it actually draws.
+            logicalSize.Y =
+                MathF.Max(
+                    measuredHeight,
+                    96.0f *
+                    layoutScale);
+        }
+
+        return logicalSize;
+    }
+
+    private float GetNodeLayoutScale()
+    {
+        float zoom =
+            MathF.Max(
+                _graphCanvas.Zoom,
+                0.01f);
+
+        return GetNodeVisualScale() /
+               zoom;
     }
 
     private float GetNodeVisualScale()
@@ -1203,7 +1262,8 @@ internal sealed class EventWorkspacePanel
                 logicalPosition);
 
         Vector2 logicalSize =
-            GetEventGraphNodeSize();
+            GetEventGraphNodeSize(
+                rule.Id);
 
         Vector2 screenSize =
             _graphCanvas.ScaleSize(
@@ -1253,8 +1313,11 @@ internal sealed class EventWorkspacePanel
         bool visible =
             ImGui.BeginChild(
                 $"EventGraphNode##{rule.Id}",
-                screenSize,
-                ImGuiChildFlags.Borders,
+                new Vector2(
+                    screenSize.X,
+                    0.0f),
+                ImGuiChildFlags.Borders |
+                ImGuiChildFlags.AutoResizeY,
                 ImGuiWindowFlags.NoScrollbar |
                 ImGuiWindowFlags.NoScrollWithMouse);
 
@@ -1416,6 +1479,24 @@ internal sealed class EventWorkspacePanel
                     24.0f *
                     GetNodeVisualScale()));
 
+            float measuredLogicalHeight =
+                (ImGui.GetCursorPosY() +
+                 ImGui.GetStyle().WindowPadding.Y) /
+                MathF.Max(
+                    _graphCanvas.Zoom,
+                    0.01f);
+
+            if (!_measuredEventNodeLogicalHeights.TryGetValue(
+                    rule.Id,
+                    out float cachedHeight) ||
+                MathF.Abs(
+                    cachedHeight -
+                    measuredLogicalHeight) >
+                1.0f)
+            {
+                _measuredEventNodeLogicalHeights[rule.Id] =
+                    measuredLogicalHeight;
+            }
         }
 
         ImGui.EndChild();
@@ -1659,12 +1740,18 @@ internal sealed class EventWorkspacePanel
 
         PushGraphNodeStyle();
 
+        Vector2 requestedScreenSize =
+            _graphCanvas.ScaleSize(
+                logicalSize);
+
         bool visible =
             ImGui.BeginChild(
                 $"InstructionGraphNode##{instruction.InstanceId}",
-                _graphCanvas.ScaleSize(
-                    logicalSize),
-                ImGuiChildFlags.Borders,
+                new Vector2(
+                    requestedScreenSize.X,
+                    0.0f),
+                ImGuiChildFlags.Borders |
+                ImGuiChildFlags.AutoResizeY,
                 ImGuiWindowFlags.NoScrollbar |
                 ImGuiWindowFlags.NoScrollWithMouse);
 
@@ -1799,6 +1886,24 @@ internal sealed class EventWorkspacePanel
             DrawInstructionArguments(
                 instruction,
                 state);
+            float measuredLogicalHeight =
+                (ImGui.GetCursorPosY() +
+                 ImGui.GetStyle().WindowPadding.Y) /
+                MathF.Max(
+                    _graphCanvas.Zoom,
+                    0.01f);
+
+            if (!_measuredInstructionNodeLogicalHeights.TryGetValue(
+                    instruction.InstanceId,
+                    out float cachedHeight) ||
+                MathF.Abs(
+                    cachedHeight -
+                    measuredLogicalHeight) >
+                1.0f)
+            {
+                _measuredInstructionNodeLogicalHeights[instruction.InstanceId] =
+                    measuredLogicalHeight;
+            }
         }
 
         ImGui.EndChild();
@@ -4759,6 +4864,12 @@ internal sealed class EventWorkspacePanel
             "input.vectorLengthGreater" =>
                 "Checks whether the selected vector Input Action exceeds the chosen magnitude.",
 
+            "physics.castRay" =>
+                "Casts a 3D physics ray and stores the result for later raycast actions and conditions.",
+
+            "physics.rayHitsAnything" =>
+                "Casts a 3D physics ray and returns TRUE when it hits a collider.",
+
             "attachment.attachToSocket" =>
                 "Attaches an object to a model-owned skeletal socket and follows the animated socket transform.",
 
@@ -4836,6 +4947,15 @@ internal sealed class EventWorkspacePanel
 
             "animation.setTransitionDuration" =>
                 "Changes cross-fade transition duration on the target AnimationController.",
+
+            "animation.setLayerWeight" =>
+                "Sets a named Animation Profile layer's runtime weight from 0 to 1 while preserving its authored Blend In and Blend Out.",
+
+            "animation.enableLayer" =>
+                "Blends a named Animation Profile layer toward full runtime weight using the layer's authored Blend In.",
+
+            "animation.disableLayer" =>
+                "Blends a named Animation Profile layer toward zero runtime weight using the layer's authored Blend Out.",
 
             "character.isGrounded" =>
                 "Checks whether the Character Controller is touching the ground.",
@@ -5977,11 +6097,22 @@ internal sealed class EventWorkspacePanel
                 "animation.setTransitionDuration" =>
                     350.0f,
 
+                "animation.enableLayer" or
+                "animation.disableLayer" =>
+                    430.0f,
+
+                "animation.setLayerWeight" =>
+                    540.0f,
+
                 "animation.play" =>
                     500.0f,
 
                 "animation.playAction" =>
                     610.0f,
+
+                "physics.castRay" or
+                "physics.rayHitsAnything" =>
+                    1030.0f,
 
                 "attachment.attachToSocket" =>
                     950.0f,
@@ -6705,6 +6836,8 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["distance"] = EventValue.Number(100);
                 instruction.Arguments["layer"] = EventValue.Number(-1);
                 instruction.Arguments["includeTriggers"] = EventValue.Boolean(false);
+                instruction.Arguments["drawDebug"] = EventValue.Boolean(false);
+                instruction.Arguments["debugDuration"] = EventValue.Number(.25);
                 break;
             case "physics.lastRayHitObject":
             case "combat.fireWeapon":
@@ -6838,6 +6971,18 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["duration"] =
                     EventValue.Number(
                         0.15);
+                break;
+
+            case "animation.setLayerWeight":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["layer"] = EventValue.String(string.Empty);
+                instruction.Arguments["weight"] = EventValue.Number(1.0);
+                break;
+
+            case "animation.enableLayer":
+            case "animation.disableLayer":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["layer"] = EventValue.String(string.Empty);
                 break;
 
             case "animation.currentClipIs":
@@ -7176,7 +7321,11 @@ internal sealed class EventWorkspacePanel
                     EventValue.Number(-1), state, false);
                 DrawValueArgument(instruction, "includeTriggers", "Include Triggers", VariableType.Boolean,
                     EventValue.Boolean(false), state, false);
-                ImGui.TextDisabled("Result is available to later nodes as Last Ray Hit.");
+                DrawValueArgument(instruction, "drawDebug", "Draw Debug Ray", VariableType.Boolean,
+                    EventValue.Boolean(false), state, false);
+                DrawValueArgument(instruction, "debugDuration", "Debug Duration (seconds)", VariableType.Number,
+                    EventValue.Number(.25), state, false);
+                ImGui.TextDisabled("Debug ray: red = hit, green = miss. Result is saved as Last Ray Hit.");
                 break;
             case "physics.lastRayHit":
             case "physics.lastRayMissed":
@@ -7384,6 +7533,37 @@ internal sealed class EventWorkspacePanel
                         0.15),
                     state,
                     false);
+                break;
+
+            case "animation.setLayerWeight":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+                DrawAnimationLayerArgument(
+                    instruction,
+                    state);
+                DrawValueArgument(
+                    instruction,
+                    "weight",
+                    "Weight (0 - 1)",
+                    VariableType.Number,
+                    EventValue.Number(1.0),
+                    state,
+                    false);
+                break;
+
+            case "animation.enableLayer":
+            case "animation.disableLayer":
+                DrawObjectTargetArgument(
+                    instruction,
+                    "target",
+                    "Target Object",
+                    state);
+                DrawAnimationLayerArgument(
+                    instruction,
+                    state);
                 break;
 
             case "animation.currentClipIs":
@@ -8208,8 +8388,154 @@ internal sealed class EventWorkspacePanel
     }
 
     // ========================================================
-    // ANIMATION CLIP PICKER
+    // ANIMATION CLIP / PROFILE PICKERS
     // ========================================================
+
+    private void DrawAnimationLayerArgument(
+        VisualInstruction instruction,
+        EditorState? state)
+    {
+        const string label = "Layer";
+        GameObject? target =
+            state != null
+                ? ResolveAnimationTargetForEditor(instruction, state)
+                : null;
+        AnimationController? controller =
+            target?.GetComponent<AnimationController>();
+
+        if (_project == null ||
+            controller == null ||
+            controller.AnimationProfile.IsEmpty)
+        {
+            DrawValueArgument(
+                instruction,
+                "layer",
+                label + " (manual)",
+                VariableType.String,
+                EventValue.String(string.Empty),
+                state,
+                false);
+            return;
+        }
+
+        AnimationProfile profile;
+        try
+        {
+            profile = _project.Assets.LoadAnimationProfile(controller.AnimationProfile);
+        }
+        catch
+        {
+            DrawValueArgument(
+                instruction,
+                "layer",
+                label + " (manual)",
+                VariableType.String,
+                EventValue.String(string.Empty),
+                state,
+                false);
+            return;
+        }
+
+        EventValue value = EnsureAnimationSignalString(instruction, "layer");
+        if (value.Kind != EventValueKind.Constant)
+        {
+            DrawValueArgument(
+                instruction,
+                "layer",
+                label,
+                VariableType.String,
+                EventValue.String(string.Empty),
+                state,
+                false);
+            return;
+        }
+
+        string current = value.Constant.String;
+        AnimationLayerProfile[] layers =
+            profile.Layers
+                .Where(layer => !string.IsNullOrWhiteSpace(layer.Name))
+                .ToArray();
+
+        ImGui.TextDisabled(label);
+        ImGui.SetNextItemWidth(-1.0f);
+
+        string preview = string.IsNullOrWhiteSpace(current)
+            ? "Select Layer"
+            : current;
+
+        if (ImGui.BeginCombo("##AnimationLayer", preview))
+        {
+            if (ImGui.Selectable("<None>", string.IsNullOrWhiteSpace(current)))
+            {
+                SetAnimationSignalString(
+                    instruction,
+                    "layer",
+                    string.Empty,
+                    "Change Animation Layer");
+                current = string.Empty;
+            }
+
+            if (layers.Length > 0)
+            {
+                ImGui.Separator();
+            }
+
+            for (int i = 0; i < layers.Length; i++)
+            {
+                AnimationLayerProfile layer = layers[i];
+                bool selected = string.Equals(
+                    current,
+                    layer.Name,
+                    StringComparison.OrdinalIgnoreCase);
+                string status = layer.Enabled ? string.Empty : "  (Default Off)";
+
+                if (ImGui.Selectable(
+                        $"{layer.Name}{status}##animationLayer:{i}",
+                        selected))
+                {
+                    SetAnimationSignalString(
+                        instruction,
+                        "layer",
+                        layer.Name,
+                        "Change Animation Layer");
+                    current = layer.Name;
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    string clip = string.IsNullOrWhiteSpace(layer.Clip)
+                        ? "<No Clip>"
+                        : layer.Clip;
+                    ImGui.SetTooltip(
+                        $"Clip: {clip}\nMode: {layer.BlendMode}\nMask: {layer.Mask.Kind}\nBlend In: {layer.BlendIn:0.###}s\nBlend Out: {layer.BlendOut:0.###}s");
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            if (layers.Length == 0)
+            {
+                ImGui.TextDisabled("The target Animation Profile has no animation layers.");
+            }
+
+            ImGui.EndCombo();
+        }
+
+        if (!string.IsNullOrWhiteSpace(current) &&
+            !layers.Any(layer => string.Equals(
+                layer.Name,
+                current,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            DrawStaleAnimationValueWarning(
+                "layer",
+                current,
+                "Animation Profile");
+        }
+    }
 
     private void DrawAnimationActionArgument(VisualInstruction instruction, EditorState? state, string label = "Action")
     {
