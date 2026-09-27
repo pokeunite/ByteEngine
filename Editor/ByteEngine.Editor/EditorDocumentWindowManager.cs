@@ -143,6 +143,29 @@ internal sealed class EditorDocumentWindowManager : IDisposable
             panel.Dispose);
     }
 
+    public void OpenMaterial(AssetRecord asset, EditorProjectContext project, EditorLog log)
+    {
+        EditorDocumentId id = new(EditorDocumentType.Material, asset.Guid.ToString("N"));
+        if (TryFocus(id)) return;
+        var panel = new MaterialWorkspacePanel(_documents);
+        try
+        {
+            panel.Open(asset, project, log);
+            Add(id,
+                $"{Path.GetFileNameWithoutExtension(asset.ProjectPath)} - Material - ByteEngine",
+                "###MaterialWorkspace",
+                null,
+                (renderer, renderer3D, width, height) =>
+                    panel.Draw(log, renderer, renderer3D, width, height),
+                panel.Dispose);
+        }
+        catch
+        {
+            panel.Dispose();
+            throw;
+        }
+    }
+
     public void OpenBlueprint(
         AssetRecord asset,
         EditorProjectContext project,

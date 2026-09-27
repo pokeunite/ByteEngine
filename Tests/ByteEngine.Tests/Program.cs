@@ -33,6 +33,13 @@ try
         return;
     }
 
+    if (args.Contains("--material-foundation"))
+    {
+        MaterialFoundationTests.Run(root);
+        Console.WriteLine("Material asset foundation regressions passed.");
+        return;
+    }
+
     if (args.Contains("--cast-ray-aim"))
     {
         CastRayAimTests.Run();

@@ -339,6 +339,10 @@ public sealed class AssetDatabase : IDisposable
     private static AssetType DetectType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".png" => AssetType.Texture2D,
+        ".jpg" => AssetType.Texture2D,
+        ".jpeg" => AssetType.Texture2D,
+        ".tga" => AssetType.Texture2D,
+        ".bmp" => AssetType.Texture2D,
         ".hdr" => AssetType.Texture2D,
         ".wav" => AssetType.AudioClip,
         ".bytescene" => AssetType.Scene,
@@ -350,6 +354,7 @@ public sealed class AssetDatabase : IDisposable
         ".byteblueprint" => AssetType.Blueprint,
         ".byteanimevents" => AssetType.AnimationEvents,
         ".byteanim" => AssetType.AnimationProfile,
+        ".bmat" => AssetType.Material,
         _ => AssetType.Unknown
     };
 

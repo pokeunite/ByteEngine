@@ -39,6 +39,17 @@ public sealed class ImportedMesh
 
 public sealed class ImportedMaterial
 {
+    public MaterialSurfaceType SurfaceType { get; init; } = MaterialSurfaceType.Opaque;
+    public float AlphaCutoff { get; init; } = .5f;
+    public bool DoubleSided { get; init; } = true;
+    public bool Unlit { get; init; }
+    public float AmbientOcclusionStrength { get; init; } = 1f;
+    public Vector3 EmissionColor { get; init; }
+    public ImportedTexture? MetallicRoughnessTexture { get; init; }
+    public ImportedTexture? MetallicTexture { get; init; }
+    public ImportedTexture? RoughnessTexture { get; init; }
+    public ImportedTexture? AmbientOcclusionTexture { get; init; }
+    public ImportedTexture? EmissionTexture { get; init; }
     public string Key { get; init; } = string.Empty;
     public string Name { get; init; } = "Material";
     public Vector4 BaseColor { get; init; } = Vector4.One;

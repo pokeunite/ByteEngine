@@ -11,6 +11,9 @@ public sealed class AssetManager : IDisposable
     private readonly Action<string>? _warningSink;
     private readonly Dictionary<Guid, Texture2D> _textures = new();
     private readonly Dictionary<Guid, ModelAsset> _models = new();
+    private readonly Dictionary<Guid, Material> _runtimeMaterials = new();
+    private readonly Dictionary<Guid, MaterialAsset> _materialAssets = new();
+    private readonly Dictionary<Guid, AssetRevision> _materialRevisions = new();
     private readonly Dictionary<Guid, AnimationProfile> _animationProfiles = new();
     private readonly Dictionary<Guid, AssetRevision> _textureRevisions = new();
     private readonly Dictionary<Guid, AssetRevision> _modelRevisions = new();
@@ -158,6 +161,49 @@ public sealed class AssetManager : IDisposable
         return refreshed;
     }
 
+    public MaterialAsset LoadMaterialAsset(AssetReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        AssetRecord? asset = _database.Resolve(reference);
+        if (asset == null || asset.Type != AssetType.Material)
+            throw new FileNotFoundException($"Material asset '{reference}' could not be resolved.");
+        if (_materialAssets.TryGetValue(asset.Guid, out MaterialAsset? cached))
+            return cached;
+        MaterialAsset material = MaterialAssetSerializer.Load(asset.FullPath);
+        _materialAssets[asset.Guid] = material;
+        _materialRevisions[asset.Guid] = CaptureRevision(asset);
+        return material;
+    }
+
+    public Material LoadMaterial(AssetReference reference)
+    {
+        AssetRecord? record = _database.Resolve(reference);
+        if (record == null || record.Type != AssetType.Material)
+            throw new FileNotFoundException($"Material asset '{reference}' could not be resolved.");
+        if (_runtimeMaterials.TryGetValue(record.Guid, out Material? cached))
+            return cached;
+        var material = new Material();
+        ApplyMaterialParameters(ResolveMaterialParameters(reference), material);
+        _runtimeMaterials[record.Guid] = material;
+        return material;
+    }
+
+    public MaterialAsset ReloadMaterialAsset(AssetReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        AssetRecord? record = _database.Resolve(reference);
+        if (record == null || record.Type != AssetType.Material)
+            throw new FileNotFoundException($"Material asset '{reference}' could not be resolved.");
+        MaterialAsset refreshed = MaterialAssetSerializer.Load(record.FullPath);
+        _materialAssets[record.Guid] = refreshed;
+        _materialRevisions[record.Guid] = CaptureRevision(record);
+        RefreshRuntimeMaterials();
+        return refreshed;
+    }
+
+    public MaterialParameters ResolveMaterialParameters(AssetReference reference) =>
+        MaterialAssetSerializer.Resolve(reference, LoadMaterialAsset);
+
     public ModelAsset ReimportModel(Guid guid)
     {
         if (!_database.TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D)
@@ -289,6 +335,107 @@ public sealed class AssetManager : IDisposable
                 _warningSink?.Invoke($"Could not reload Animation Profile '{record.ProjectPath}': {exception.Message}");
             }
         }
+        ReloadChangedMaterialAssets();
+        RefreshRuntimeMaterials();
+    }
+
+    private void RefreshRuntimeMaterials()
+    {
+        foreach ((Guid guid, Material material) in _runtimeMaterials.ToArray())
+        {
+            if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
+                record?.Type != AssetType.Material)
+            {
+                _runtimeMaterials.Remove(guid);
+                continue;
+            }
+            try
+            {
+                ApplyMaterialParameters(ResolveMaterialParameters(
+                    new AssetReference(guid, record.ProjectPath)), material);
+            }
+            catch (Exception exception)
+            {
+                _warningSink?.Invoke($"Could not refresh material '{record.ProjectPath}': {exception.Message}");
+            }
+        }
+    }
+
+    public void ApplyMaterialParameters(MaterialParameters source, Material target)
+    {
+        source.Normalize();
+        target.BaseColor = source.BaseColor;
+        target.Metallic = source.Metallic;
+        target.Roughness = source.Roughness;
+        target.MainTexture = LoadOptionalTexture(source.BaseColorTexture);
+        target.NormalTexture = LoadOptionalTexture(source.NormalTexture);
+        target.NormalStrength = source.NormalStrength;
+        target.DirectXNormalMap = source.NormalConvention == MaterialNormalConvention.DirectX ||
+            source.NormalConvention == MaterialNormalConvention.Auto &&
+            (source.NormalTexture.CachedProjectPath ?? string.Empty)
+                .Contains("_NormalDX", StringComparison.OrdinalIgnoreCase);
+        target.MetallicTexture = LoadOptionalTexture(source.MetallicTexture);
+        target.RoughnessTexture = LoadOptionalTexture(source.RoughnessTexture);
+        target.AmbientOcclusionTexture = LoadOptionalTexture(source.AmbientOcclusionTexture);
+        target.AmbientOcclusionStrength = source.AmbientOcclusionStrength;
+        target.PbrMapMode = source.PbrMapMode;
+        target.PackedPbrTexture = LoadOptionalTexture(source.PackedPbrTexture);
+        target.PackedAoChannel = source.PackedAoChannel;
+        target.PackedRoughnessChannel = source.PackedRoughnessChannel;
+        target.PackedMetallicChannel = source.PackedMetallicChannel;
+        target.EmissionEnabled = source.EmissionEnabled;
+        target.EmissionColor = source.EmissionColor;
+        target.EmissionTexture = LoadOptionalTexture(source.EmissionTexture);
+        target.EmissionIntensity = source.EmissionIntensity;
+        target.UvTiling = source.UvTiling;
+        target.UvOffset = source.UvOffset;
+        target.Shading = source.Shading;
+        target.DecodeColorTexturesSrgb = true;
+        target.BlendMode = source.SurfaceType switch
+        {
+            MaterialSurfaceType.Cutout => BlendMode3D.Cutout,
+            MaterialSurfaceType.Transparent => BlendMode3D.AlphaBlend,
+            MaterialSurfaceType.Additive => BlendMode3D.Additive,
+            _ => BlendMode3D.Opaque
+        };
+        target.AlphaCutoff = source.AlphaCutoff;
+        target.DepthTest = source.DepthTest;
+        target.DepthWriteMode = source.DepthWriteMode;
+        target.CullMode = source.DoubleSided ? CullMode3D.None :
+            source.CullMode == CullMode3D.None ? CullMode3D.Back : source.CullMode;
+        target.FrontFace = source.FrontFace;
+        target.PolygonMode = source.PolygonMode;
+    }
+
+    private Texture2D? LoadOptionalTexture(AssetReference reference) =>
+        reference.IsEmpty ? null : LoadTexture(reference);
+
+    private void ReloadChangedMaterialAssets()
+    {
+        foreach ((Guid guid, MaterialAsset _) in _materialAssets.ToArray())
+        {
+            if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
+                record?.Type != AssetType.Material)
+            {
+                _materialAssets.Remove(guid);
+                _materialRevisions.Remove(guid);
+                continue;
+            }
+
+            AssetRevision revision = CaptureRevision(record);
+            if (_materialRevisions.TryGetValue(guid, out AssetRevision previous) &&
+                previous == revision)
+                continue;
+            try
+            {
+                _materialAssets[guid] = MaterialAssetSerializer.Load(record.FullPath);
+                _materialRevisions[guid] = revision;
+            }
+            catch (Exception exception)
+            {
+                _warningSink?.Invoke($"Could not reload material '{record.ProjectPath}': {exception.Message}");
+            }
+        }
     }
 
     private static AssetRevision CaptureRevision(AssetRecord record)
@@ -373,6 +520,27 @@ public sealed class AssetManager : IDisposable
         target.Roughness = source.Roughness;
         target.MainTexture = GetModelTexture(modelGuid, source.BaseColorTexture);
         target.NormalTexture = GetModelTexture(modelGuid, source.NormalTexture);
+        target.DecodeColorTexturesSrgb = true;
+        target.BlendMode = source.SurfaceType switch
+        {
+            MaterialSurfaceType.Cutout => BlendMode3D.Cutout,
+            MaterialSurfaceType.Transparent => BlendMode3D.AlphaBlend,
+            MaterialSurfaceType.Additive => BlendMode3D.Additive,
+            _ => BlendMode3D.Opaque
+        };
+        target.AlphaCutoff = source.AlphaCutoff;
+        target.CullMode = source.DoubleSided ? CullMode3D.None : CullMode3D.Back;
+        target.Shading = source.Unlit ? MaterialShadingMode.Unlit : MaterialShadingMode.Lit;
+        target.PackedPbrTexture = GetModelTexture(modelGuid, source.MetallicRoughnessTexture);
+        target.MetallicTexture = GetModelTexture(modelGuid, source.MetallicTexture);
+        target.RoughnessTexture = GetModelTexture(modelGuid, source.RoughnessTexture);
+        target.PbrMapMode = source.MetallicRoughnessTexture == null ? MaterialPbrMapMode.Separate : MaterialPbrMapMode.Packed;
+        target.PackedAoChannel = MaterialMapChannel.None;
+        target.AmbientOcclusionTexture = GetModelTexture(modelGuid, source.AmbientOcclusionTexture);
+        target.AmbientOcclusionStrength = source.AmbientOcclusionStrength;
+        target.EmissionColor = source.EmissionColor;
+        target.EmissionEnabled = source.EmissionColor.LengthSquared() > 0f || source.EmissionTexture != null;
+        target.EmissionTexture = GetModelTexture(modelGuid, source.EmissionTexture);
     }
 
     private Texture2D? GetModelTexture(Guid modelGuid, ImportedTexture? source)

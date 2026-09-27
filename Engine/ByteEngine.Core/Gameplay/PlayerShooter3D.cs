@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Diagnostics;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Physics;
@@ -112,12 +113,47 @@ public sealed class PlayerShooter3D : Component
                         player.Transform.WorldMatrix)
                     : player.Transform.WorldPosition;
 
+            bool cameraTargetFound = GameplayQuery3D.Raycast(
+                scene,
+                debugRayOrigin,
+                debugRayDirection,
+                out RaycastHit3D cameraTarget,
+                1000f,
+                player,
+                null,
+                source: null,
+                bypassCollisionMatrix: true,
+                includeTriggers: false);
+
+            bool muzzlePredictionFound = GameplayQuery3D.Raycast(
+                scene,
+                muzzle,
+                aimDirection,
+                out RaycastHit3D muzzlePrediction,
+                1000f,
+                player,
+                null,
+                source: null,
+                bypassCollisionMatrix: true,
+                includeTriggers: false);
+
+            string playerMatrixAllowsTarget =
+                cameraTargetFound
+                    ? scene.Classification.CollisionMatrix.ShouldInteract(
+                        player.Layer,
+                        cameraTarget.GameObject.Layer).ToString()
+                    : "n/a";
+
             RuntimeDiagnostics.RecordWeaponRaycast(
-                $"PLAYER AIM player=\"{player.Name}\" aimAtPointer={AimAtPointer} automatic={Automatic} " +
-                $"playerPos={DebugV3(player.Transform.WorldPosition)} playerFwd={DebugV3(player.Transform.Forward)} " +
+                $"PLAYER AIM player=\"{player.Name}\" id={player.Id:N} aimAtPointer={AimAtPointer} automatic={Automatic} launcher={(launcher != null)} " +
+                $"inputCaptured={Input.IsGameInputCaptured} pointerOver={Input.IsPointerOverGameView} pointerFocused={Input.IsGameViewFocused} " +
+                $"screen=({debugScreenPoint.X:0.000},{debugScreenPoint.Y:0.000}) view=({Input.GameViewSize.X:0},{Input.GameViewSize.Y:0}) " +
+                $"playerPos={DebugV3(player.Transform.WorldPosition)} playerFwd={DebugV3(player.Transform.Forward)} playerLayer={LayerName(scene, player.Layer)} " +
                 $"cameraPos={DebugV3(camera.Transform.WorldPosition)} cameraFwd={DebugV3(camera.Transform.Forward)} " +
-                $"screen=({debugScreenPoint.X:0.000},{debugScreenPoint.Y:0.000}) cameraRayOrigin={DebugV3(debugRayOrigin)} cameraRayDir={DebugV3(debugRayDirection)} " +
-                $"muzzle={DebugV3(muzzle)} resolvedAimDir={DebugV3(aimDirection)}");
+                $"cameraRayOrigin={DebugV3(debugRayOrigin)} cameraRayDir={DebugV3(debugRayDirection)} " +
+                $"cameraTarget={DescribeHit(scene, cameraTargetFound, cameraTarget)} playerMatrixAllowsTarget={playerMatrixAllowsTarget} " +
+                $"muzzleOffset={DebugV3(launcher?.MuzzleOffset ?? Vector3.Zero)} muzzle={DebugV3(muzzle)} resolvedAimDir={DebugV3(aimDirection)} " +
+                $"muzzlePrediction={DescribeHit(scene, muzzlePredictionFound, muzzlePrediction)}");
 
             launcher?.Fire(
                 aimDirection);
@@ -159,6 +195,9 @@ public sealed class PlayerShooter3D : Component
         {
             Vector3 target;
 
+            // Pointer targeting is a screen-space visibility query. It must not
+            // inherit the player's collision matrix or an enemy can be skipped
+            // and the ground behind it becomes the selected target instead.
             if (GameplayQuery3D.Raycast(
                     scene,
                     rayOrigin,
@@ -167,7 +206,9 @@ public sealed class PlayerShooter3D : Component
                     1000f,
                     player,
                     null,
-                    player))
+                    source: null,
+                    bypassCollisionMatrix: true,
+                    includeTriggers: false))
             {
                 target =
                     pointerHit.Point;
@@ -191,18 +232,18 @@ public sealed class PlayerShooter3D : Component
                     1000f;
             }
 
-            target.Y =
-                muzzle.Y;
-
-            Vector3 flatDirection =
+            // Keep the complete 3D hit point for firing. FaceAimDirection
+            // flattens its own copy for body yaw, so projectile/ray accuracy no
+            // longer has to be sacrificed to keep a top-down character upright.
+            Vector3 directionToTarget =
                 target -
                 muzzle;
 
-            if (flatDirection.LengthSquared() >
+            if (directionToTarget.LengthSquared() >
                 .000001f)
             {
                 return Vector3.Normalize(
-                    flatDirection);
+                    directionToTarget);
             }
         }
 
@@ -286,6 +327,56 @@ public sealed class PlayerShooter3D : Component
                .000001f
             ? Vector3.Normalize(direction)
             : Vector3.Normalize(forward);
+    }
+
+    private static string DescribeHit(
+        RuntimeScene scene,
+        bool found,
+        RaycastHit3D hit)
+    {
+        if (!found)
+            return "MISS";
+
+        GameObject? healthOwner =
+            FindHealthOwner(hit.GameObject);
+
+        return
+            $"HIT(object=\"{hit.GameObject.Name}\",id={hit.GameObject.Id:N},layer={LayerName(scene, hit.GameObject.Layer)}," +
+            $"collider={hit.Collider.GetType().Name},point={DebugV3(hit.Point)},normal={DebugV3(hit.Normal)},distance={hit.Distance:0.000}," +
+            $"ground={IsGround(hit.GameObject)},healthOwner=\"{healthOwner?.Name ?? "<none>"}\")";
+    }
+
+    private static string LayerName(
+        RuntimeScene scene,
+        int layer) =>
+        $"{layer}:{scene.Classification.FindLayer(layer)?.Name ?? "<missing>"}";
+
+    private static bool IsGround(
+        GameObject gameObject)
+    {
+        for (GameObject? current = gameObject;
+             current != null;
+             current = current.Parent)
+        {
+            if (current.GetComponent<GroundSurface>() != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static GameObject? FindHealthOwner(
+        GameObject gameObject)
+    {
+        for (GameObject? current = gameObject;
+             current != null;
+             current = current.Parent)
+        {
+            if (current.GetComponent<HealthComponent>() != null)
+                return current;
+        }
+
+        return null;
     }
 
     private static string DebugV3(

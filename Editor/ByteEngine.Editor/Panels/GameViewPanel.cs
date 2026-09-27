@@ -11,6 +11,7 @@ internal sealed class GameViewPanel : IDisposable
 {
     private readonly SceneFramebuffer _framebuffer = new();
     private bool _focusRequested;
+    private bool _pointerAimInputCaptured;
 
     public bool IsOpen { get; set; } = true;
 
@@ -52,6 +53,8 @@ internal sealed class GameViewPanel : IDisposable
                 releaseInput();
             }
 
+            _pointerAimInputCaptured = false;
+
             Input.SetGameViewPointer(
                 Input.GameViewPointerNormalized,
                 Input.GameViewSize,
@@ -85,7 +88,9 @@ internal sealed class GameViewPanel : IDisposable
         {
             ImGui.TextDisabled(
                 Input.IsGameInputCaptured
-                    ? "Mouse captured — Esc to release"
+                    ? _pointerAimInputCaptured
+                        ? "Pointer aiming active — Esc to release"
+                        : "Mouse captured — Esc to release"
                     : "Click Game View to capture mouse");
         }
 
@@ -153,23 +158,61 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y >= imageMin.Y &&
             mouse.Y <= imageMax.Y;
 
-        bool pointerAim = state.DisplayedScene.ActiveCamera?.GameObject.Parent?
-            .GetComponent<PlayerShooter3D>()?.AimAtPointer == true;
-        if (pointerAim && Input.IsGameInputCaptured && !pointerInside)
-            releaseInput();
-
-        if (state.Mode == EditorMode.Play &&
-            !Input.IsGameInputCaptured &&
-            pointerInside &&
-            ImGui.IsMouseClicked(
-                ImGuiMouseButton.Left))
+        bool pointerAim = Input.KeepGameViewPointerFree;
+        for (var cameraObject = state.DisplayedScene.ActiveCamera?.GameObject;
+             !pointerAim && cameraObject != null;
+             cameraObject = cameraObject.Parent)
         {
-            captureInput(!pointerAim);
+            pointerAim = cameraObject.GetComponent<PlayerShooter3D>()?.AimAtPointer == true;
         }
-        else if (state.Mode != EditorMode.Play &&
-                 Input.IsGameInputCaptured)
+
+        if (!Input.IsGameInputCaptured)
+            _pointerAimInputCaptured = false;
+
+        if (state.Mode == EditorMode.Play && pointerAim)
+        {
+            // Gameplay still has to be active for PlayerShooter3D to rotate and
+            // fire. Capture without grabbing keeps that gate enabled while the
+            // visible pointer remains free for exact cursor-to-world aiming.
+            bool convertGrabbedCapture =
+                Input.IsGameInputCaptured && !_pointerAimInputCaptured;
+            if (convertGrabbedCapture)
+                releaseInput();
+
+            if (!Input.IsGameInputCaptured &&
+                pointerInside &&
+                (convertGrabbedCapture ||
+                 ImGui.IsMouseClicked(ImGuiMouseButton.Left)))
+            {
+                captureInput(false);
+                _pointerAimInputCaptured = true;
+            }
+            else if (Input.IsGameInputCaptured &&
+                     _pointerAimInputCaptured &&
+                     !pointerInside)
+            {
+                releaseInput();
+                _pointerAimInputCaptured = false;
+            }
+        }
+        else if (state.Mode == EditorMode.Play)
+        {
+            if (_pointerAimInputCaptured && Input.IsGameInputCaptured)
+                releaseInput();
+
+            _pointerAimInputCaptured = false;
+
+            if (!Input.IsGameInputCaptured &&
+                pointerInside &&
+                ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                captureInput(true);
+            }
+        }
+        else if (Input.IsGameInputCaptured)
         {
             releaseInput();
+            _pointerAimInputCaptured = false;
         }
 
         Vector2 normalizedPointer =
@@ -216,7 +259,8 @@ internal sealed class GameViewPanel : IDisposable
         }
 
         if (state.Mode == EditorMode.Play &&
-            Input.IsGameInputCaptured)
+            Input.IsGameInputCaptured &&
+            !_pointerAimInputCaptured)
         {
             const float radius =
                 8.0f;

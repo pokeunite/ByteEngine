@@ -106,10 +106,25 @@ public static class Input
     public static bool IsGameViewHovered => IsPointerOverGameView;
     public static bool IsGameViewFocused { get; private set; }
     public static bool IsGameInputCaptured { get; private set; }
+    public static bool KeepGameViewPointerFree =>
+        Environment.TickCount64 < _keepGameViewPointerFreeUntil;
     public static Vector2 MouseDelta { get; private set; }
     public static RawInputSnapshot Snapshot => RawSnapshot;
     private static Vector2 _lastGameViewDisplayPosition;
     private static bool _hadFocusedGameViewPointer;
+    private static long _keepGameViewPointerFreeUntil;
+
+    /// <summary>
+    /// Prevents the editor Game View from grabbing/locking the mouse for a short
+    /// window when gameplay explicitly uses the visible pointer for aiming.
+    /// Event Sheet Top Down Cursor rays call this before the Game View processes
+    /// the same click, so the cursor remains free and its normalized position
+    /// continues to match the point the player is actually aiming at.
+    /// </summary>
+    public static void NotifyGameViewPointerAim()
+    {
+        _keepGameViewPointerFreeUntil = Environment.TickCount64 + 750;
+    }
 
     internal static void Update(KeyboardState keyboardState, MouseState mouseState,
         IReadOnlyList<JoystickState>? joystickStates = null)

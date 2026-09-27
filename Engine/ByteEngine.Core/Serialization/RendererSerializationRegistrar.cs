@@ -626,6 +626,14 @@ public static class RendererSerializationRegistrar
                         .SubAssetKey;
             }
 
+            if (!renderer.MaterialAssetReference.IsEmpty)
+            {
+                properties["materialAssetGuid"] =
+                    renderer.MaterialAssetReference.Guid.ToString();
+                properties["materialAssetPath"] =
+                    renderer.MaterialAssetReference.CachedProjectPath;
+            }
+
             return
                 new ComponentData
                 {
@@ -810,6 +818,11 @@ public static class RendererSerializationRegistrar
                     Material =
                         serializedMaterial
                 };
+
+            Guid.TryParse(data.Properties["materialAssetGuid"]?.GetValue<string>(),
+                out Guid materialAssetGuid);
+            renderer.MaterialAssetReference = new AssetReference(materialAssetGuid,
+                data.Properties["materialAssetPath"]?.GetValue<string>());
 
             string? meshKey =
                 data.Properties["meshKey"]?

@@ -10,5 +10,6 @@ public enum AssetType
     EventModule,
     Blueprint,
     AnimationEvents,
-    AnimationProfile
+    AnimationProfile,
+    Material
 }

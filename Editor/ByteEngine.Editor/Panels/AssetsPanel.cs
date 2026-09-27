@@ -308,6 +308,7 @@ internal sealed class AssetsPanel : IDisposable
                 _animationProfileName = "New Animation Profile";
                 _showCreateAnimationProfile = true;
             }
+            if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
 
             bool canCreateFromSelection = state.Mode == EditorMode.Edit && state.SelectedObject != null &&
                 IsInsideDirectory(_currentDirectory, GetAssetsRoot());
@@ -468,6 +469,12 @@ internal sealed class AssetsPanel : IDisposable
 
                 _showCreateFolder =
                     true;
+            }
+
+            if (ImGui.MenuItem("Create Material Here"))
+            {
+                SelectDirectory(directory);
+                CreateMaterial(log, null, null);
             }
 
             ImGui.Separator();
@@ -814,6 +821,11 @@ internal sealed class AssetsPanel : IDisposable
                 SelectDirectory(directory);
                 _newFolderName = "New Folder";
                 _showCreateFolder = true;
+            }
+            if (ImGui.MenuItem("Create Material Here"))
+            {
+                SelectDirectory(directory);
+                CreateMaterial(log, null, null);
             }
 
             ImGui.Separator();
@@ -1497,6 +1509,12 @@ internal sealed class AssetsPanel : IDisposable
                         true;
                 }
 
+                if (ImGui.MenuItem("Create Material Here"))
+                {
+                    SelectDirectory(directory);
+                    CreateMaterial(log, null, null);
+                }
+
                 ImGui.Separator();
 
                 if (ImGui.MenuItem(
@@ -1918,6 +1936,16 @@ state.SelectedObject =
         AssetRecord asset,
         EditorLog log)
     {
+        if (asset.Type == AssetType.Material)
+        {
+            try { _documentWindows.OpenMaterial(asset, _project, log); }
+            catch (Exception exception)
+            {
+                log.Error($"Could not open Material '{asset.ProjectPath}': {exception.Message}");
+            }
+            return;
+        }
+
         if (asset.Type ==
             AssetType.AnimationProfile)
         {
@@ -2011,10 +2039,54 @@ state.SelectedObject =
                 asset,
                 log);
         }
+        if (ImGui.BeginMenu("Create"))
+        {
+            if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
+            ImGui.EndMenu();
+        }
+        if (asset?.Type == AssetType.Material)
+        {
+            ImGui.Separator();
+            if (ImGui.MenuItem("Create Material Instance"))
+                CreateMaterial(log, asset, null);
+        }
+        if (asset?.Type == AssetType.Texture2D)
+        {
+            ImGui.Separator();
+            if (ImGui.MenuItem("Create Material From Textures"))
+            {
+                string[] paths = _assetSelection.Count > 1 && _assetSelection.Contains(file)
+                    ? _assetSelection.Paths.ToArray() : new[] { file };
+                AssetRecord[] textures = paths
+                    .Select(path => _project.AssetDatabase.TryGetAsset(ToProjectPath(path),
+                        out AssetRecord? selected) ? selected : null)
+                    .OfType<AssetRecord>().Where(item => item.Type == AssetType.Texture2D).ToArray();
+                CreateMaterial(log, null, textures);
+            }
+        }
+
 
         if (asset?.Type == AssetType.Model3D)
         {
             ImGui.Separator();
+            if (ImGui.BeginMenu("Extract Material"))
+            {
+                try
+                {
+                    ModelAsset imported = _project.Assets.LoadModel(
+                        new AssetReference(asset.Guid, asset.ProjectPath));
+                    foreach (ImportedMaterial material in imported.Materials)
+                        if (ImGui.MenuItem($"{material.Name}##{material.Key}"))
+                            ExtractModelMaterials(asset, new[] { material.Key }, log);
+                }
+                catch (Exception exception)
+                {
+                    ImGui.TextDisabled($"Import unavailable: {exception.Message}");
+                }
+                ImGui.EndMenu();
+            }
+            if (ImGui.MenuItem("Extract All Materials"))
+                ExtractModelMaterials(asset, null, log);
             bool canCreatePlayer = state.Mode == EditorMode.Edit &&
                 IsInsideDirectory(_currentDirectory, GetAssetsRoot());
             ImGui.BeginDisabled(!canCreatePlayer);
@@ -2419,6 +2491,9 @@ state.SelectedObject =
                 _showCreateAnimationProfile =
                     true;
             }
+
+            if (ImGui.MenuItem("Material"))
+                CreateMaterial(log, null, null);
 
             ImGui.EndMenu();
         }
@@ -2872,6 +2947,75 @@ state.SelectedObject =
         }
     }
 
+    private void CreateMaterial(EditorLog log, AssetRecord? parent,
+        IReadOnlyList<AssetRecord>? textures)
+    {
+        try
+        {
+            string directory = GetAssetCreationDirectory();
+            string baseName;
+            MaterialAsset material;
+            if (parent != null)
+            {
+                baseName = "MI_" + Path.GetFileNameWithoutExtension(parent.ProjectPath);
+                material = new MaterialAsset
+                {
+                    Kind = MaterialAssetKind.Instance,
+                    Name = baseName,
+                    ParentMaterial = new AssetReference(parent.Guid, parent.ProjectPath)
+                };
+            }
+            else if (textures is { Count: > 0 })
+            {
+                string first = Path.GetFileNameWithoutExtension(textures[0].ProjectPath);
+                string stem = System.Text.RegularExpressions.Regex.Replace(first,
+                    @"(?i)([_ -]?(albedo|base[_ -]?color|diffuse|color|normalgl|normaldx|normal|roughness|rough|metallic|metalness|metal|ao|ambientocclusion|occlusion|emissive|emission|orm|arm))$",
+                    string.Empty).Trim('_', '-', ' ');
+                baseName = "M_" + (stem.Length > 0 ? stem : "Material");
+                material = MaterialTextureAutoDetection.Create(baseName, textures);
+            }
+            else
+            {
+                baseName = "M_NewMaterial";
+                material = new MaterialAsset { Name = baseName };
+            }
+            string path = GetUniqueAssetPath(directory, MakeSafeFileName(baseName),
+                MaterialAssetSerializer.FileExtension);
+            material.Name = Path.GetFileNameWithoutExtension(path);
+            MaterialAssetSerializer.Save(path, material);
+            SelectDirectory(directory);
+            RefreshAfterFileOperation();
+            if (_project.AssetDatabase.TryGetAsset(ToProjectPath(path),
+                out AssetRecord? created) && created?.Type == AssetType.Material)
+                _documentWindows.OpenMaterial(created, _project, log);
+            log.Info($"Created Material '{Path.GetFileName(path)}'.");
+        }
+        catch (Exception exception)
+        {
+            log.Error($"Could not create Material: {exception.Message}");
+        }
+    }
+
+    private void ExtractModelMaterials(AssetRecord model,
+        IEnumerable<string>? keys, EditorLog log)
+    {
+        try
+        {
+            IReadOnlyList<AssetRecord> created =
+                ImportedMaterialExtraction.Extract(model, _project, keys);
+            RefreshAfterFileOperation();
+            if (created.Count > 0)
+            {
+                SelectDirectory(Path.GetDirectoryName(created[0].FullPath)!);
+                _documentWindows.OpenMaterial(created[0], _project, log);
+            }
+            log.Info($"Extracted {created.Count} material(s) from '{model.ProjectPath}'.");
+        }
+        catch (Exception exception)
+        {
+            log.Error($"Could not extract model materials: {exception.Message}");
+        }
+    }
     // ========================================================
     // ANIMATION PROFILE CREATION
     // ========================================================

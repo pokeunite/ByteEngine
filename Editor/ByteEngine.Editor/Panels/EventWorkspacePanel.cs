@@ -4864,8 +4864,14 @@ internal sealed class EventWorkspacePanel
             "input.vectorLengthGreater" =>
                 "Checks whether the selected vector Input Action exceeds the chosen magnitude.",
 
+            "physics.castRayToCursor" =>
+                "Shoots from the selected object or muzzle to the collider directly under the mouse cursor.",
+
+            "physics.castRayInDirection" =>
+                "Shoots from the selected object or muzzle in the chosen local or world direction.",
+
             "physics.castRay" =>
-                "Casts a 3D physics ray and stores the result for later raycast actions and conditions.",
+                "Casts a configurable 3D physics ray and stores the result for later raycast actions and conditions.",
 
             "physics.rayHitsAnything" =>
                 "Casts a 3D physics ray and returns TRUE when it hits a collider.",
@@ -6110,6 +6116,8 @@ internal sealed class EventWorkspacePanel
                 "animation.playAction" =>
                     610.0f,
 
+                "physics.castRayToCursor" or
+                "physics.castRayInDirection" or
                 "physics.castRay" or
                 "physics.rayHitsAnything" =>
                     620.0f,
@@ -6827,11 +6835,14 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["value"] = EventValue.Number(-.5);
                 break;
 
+            case "physics.castRayToCursor":
+            case "physics.castRayInDirection":
             case "physics.castRay":
             case "physics.rayHitsAnything":
                 instruction.Arguments["source"] = EventValue.String("Self");
                 instruction.Arguments["muzzlePath"] = EventValue.String(string.Empty);
-                instruction.Arguments["aimMode"] = EventValue.String("TopDownCursor");
+                instruction.Arguments["aimMode"] = EventValue.String(
+                    id == "physics.castRayToCursor" ? "TopDownCursor" : "MuzzleDirection");
                 instruction.Arguments["topDownAimStyle"] = EventValue.String("Exact3D");
                 instruction.Arguments["directionMode"] = EventValue.String("Forward");
                 instruction.Arguments["originOffset"] = EventValue.Vector3(Vector3.Zero);
@@ -6858,10 +6869,35 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["drawDebug"] = EventValue.Boolean(false);
                 instruction.Arguments["debugDuration"] = EventValue.Number(.25);
                 break;
-            case "physics.lastRayHitObject":
+            case "material.setMaterial":
+            case "material.setBaseColor":
+            case "material.setMetallic":
+            case "material.setRoughness":
+            case "material.setEmissionColor":
+            case "material.setEmissionIntensity":
+            case "material.setTexture":
+            case "material.resetOverrides":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                instruction.Arguments["slot"] = EventValue.Number(0);
+                if (id == "material.setMaterial")
+                    instruction.Arguments["material"] = EventValue.String(string.Empty);
+                if (id == "material.setTexture")
+                {
+                    instruction.Arguments["textureSlot"] = EventValue.String("BaseColor");
+                    instruction.Arguments["texture"] = EventValue.String(string.Empty);
+                }
+                if (id is "material.setBaseColor" or "material.setEmissionColor")
+                    instruction.Arguments["color"] = EventValue.Vector3(Vector3.One);
+                if (id == "material.setBaseColor")
+                    instruction.Arguments["alpha"] = EventValue.Number(1);
+                if (id is "material.setMetallic" or "material.setRoughness" or
+                    "material.setEmissionIntensity")
+                    instruction.Arguments["value"] = EventValue.Number(1);
+                break;
             case "combat.fireWeapon":
             case "combat.canFire":
             case "health.isDead":
+            case "physics.lastRayHitObject":
             case "projectile.fire":
                 instruction.Arguments["target"] = EventValue.String("Self");
                 break;
@@ -7325,6 +7361,8 @@ internal sealed class EventWorkspacePanel
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
                 break;
 
+            case "physics.castRayToCursor":
+            case "physics.castRayInDirection":
             case "physics.castRay":
             case "physics.rayHitsAnything":
                 DrawRaycastArguments(
@@ -7342,6 +7380,16 @@ internal sealed class EventWorkspacePanel
                 DrawValueArgument(instruction, "prefix", "Self Variable Prefix", VariableType.String,
                     EventValue.String("Ray"), state, false);
                 ImGui.TextDisabled("Writes Hit, ObjectId, Point, Normal, and Distance variables.");
+                break;
+            case "material.setMaterial":
+            case "material.setBaseColor":
+            case "material.setMetallic":
+            case "material.setRoughness":
+            case "material.setEmissionColor":
+            case "material.setEmissionIntensity":
+            case "material.setTexture":
+            case "material.resetOverrides":
+                DrawMaterialActionArguments(instruction, state);
                 break;
             case "combat.canFire":
             case "combat.fireWeapon":
@@ -7991,15 +8039,36 @@ internal sealed class EventWorkspacePanel
         DrawObjectTargetArgument(
             instruction,
             "source",
-            "Weapon Owner",
+            "Ray Origin Object",
             state);
 
         DrawRayMuzzlePointArgument(
             instruction,
             state);
 
-        string aimMode = DrawRayAimModeArgument(instruction);
-        if (aimMode == "TopDownCursor") DrawTopDownAimStyleArgument(instruction);
+        bool cursorAction = instruction.Id.Equals(
+            "physics.castRayToCursor",
+            StringComparison.OrdinalIgnoreCase);
+        bool directionAction = instruction.Id.Equals(
+            "physics.castRayInDirection",
+            StringComparison.OrdinalIgnoreCase);
+
+        string aimMode;
+        if (cursorAction)
+        {
+            aimMode = "TopDownCursor";
+            ImGui.TextWrapped("Shoots from the origin object or muzzle to the collider directly under the mouse cursor.");
+        }
+        else if (directionAction)
+        {
+            aimMode = "MuzzleDirection";
+            ImGui.TextWrapped("Shoots from the origin object or muzzle in the selected direction.");
+        }
+        else
+        {
+            aimMode = DrawRayAimModeArgument(instruction);
+            if (aimMode == "TopDownCursor") DrawTopDownAimStyleArgument(instruction);
+        }
         string directionMode = aimMode == "MuzzleDirection"
             ? DrawRayDirectionModeArgument(instruction) : string.Empty;
 
@@ -8057,9 +8126,17 @@ internal sealed class EventWorkspacePanel
             ImGui.TreePop();
         }
 
-        ImGui.TextDisabled("Camera target -> muzzle hit");
+        ImGui.TextDisabled(cursorAction
+            ? "Origin object / muzzle -> collider under cursor"
+            : directionAction
+                ? "Origin object / muzzle -> selected direction"
+                : "Camera target -> muzzle hit");
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Camera selects the aim point. The muzzle ray determines the real hit. Cyan = camera; red = hit; green = miss.");
+            ImGui.SetTooltip(cursorAction
+                ? "The visible cursor selects a collider. The ray starts at the chosen object or muzzle and ends at that exact hit point."
+                : directionAction
+                    ? "The ray starts at the chosen object or muzzle and follows the selected local or world direction."
+                    : "Camera selects the aim point. The muzzle ray determines the real hit. Cyan = camera; red = hit; green = miss.");
     }
 
     private void DrawCompactRayValueArgument(VisualInstruction instruction, string argumentName,
@@ -10181,6 +10258,104 @@ internal sealed class EventWorkspacePanel
     // BLUEPRINT ASSET
     // ========================================================
 
+    private void DrawMaterialActionArguments(VisualInstruction instruction, EditorState? state)
+    {
+        DrawObjectTargetArgument(instruction, "target", "Object", state);
+        DrawValueArgument(instruction, "slot", "Material Slot (0-based)", VariableType.Number,
+            EventValue.Number(0), state, false);
+        switch (instruction.Id)
+        {
+            case "material.setMaterial":
+                DrawMaterialAssetArgument(instruction, "material", "Material Asset / Instance",
+                    AssetType.Material);
+                break;
+            case "material.setBaseColor":
+                DrawValueArgument(instruction, "color", "RGB Color", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.One), state, false);
+                DrawValueArgument(instruction, "alpha", "Alpha", VariableType.Number,
+                    EventValue.Number(1), state, false);
+                break;
+            case "material.setEmissionColor":
+                DrawValueArgument(instruction, "color", "Emission RGB", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.One), state, false);
+                break;
+            case "material.setMetallic":
+            case "material.setRoughness":
+            case "material.setEmissionIntensity":
+                DrawValueArgument(instruction, "value", "Value", VariableType.Number,
+                    EventValue.Number(1), state, false);
+                break;
+            case "material.setTexture":
+                string[] names = Enum.GetNames<ByteEngine.Core.Graphics.ThreeD.MaterialTextureSlot>();
+                string selected = instruction.Arguments.TryGetValue("textureSlot", out EventValue? slotValue)
+                    ? slotValue.Constant.String : "BaseColor";
+                int index = Array.FindIndex(names, name => name.Equals(selected,
+                    StringComparison.OrdinalIgnoreCase));
+                if (index < 0) index = 0;
+                if (ImGui.Combo("Texture Slot", ref index, names, names.Length))
+                {
+                    RecordHistory("Change Material Texture Slot");
+                    instruction.Arguments["textureSlot"] = EventValue.String(names[index]);
+                    _dirty = true;
+                }
+                DrawMaterialAssetArgument(instruction, "texture", "Texture Asset",
+                    AssetType.Texture2D);
+                break;
+            case "material.resetOverrides":
+                ImGui.TextDisabled("Clears this renderer's runtime material changes.");
+                break;
+        }
+    }
+
+    private void DrawMaterialAssetArgument(VisualInstruction instruction,
+        string key, string label, AssetType type)
+    {
+        if (_project == null) return;
+        string token = instruction.Arguments.TryGetValue(key, out EventValue? value) &&
+            value.Kind == EventValueKind.Constant ? value.Constant.String : string.Empty;
+        AssetRecord? selected = null;
+        if (Guid.TryParse(token, out Guid guid))
+            _project.AssetDatabase.TryGetAsset(guid, out selected);
+        else if (token.Length > 0)
+            _project.AssetDatabase.TryGetAsset(token, out selected);
+        ImGui.TextDisabled(label);
+        string preview = selected?.Type == type ? selected.ProjectPath :
+            token.Length == 0 ? "None" : "Missing asset";
+        if (ImGui.BeginCombo($"##{key}{instruction.InstanceId}", preview))
+        {
+            if (ImGui.Selectable("None", token.Length == 0))
+            {
+                RecordHistory("Change Material Asset");
+                instruction.Arguments[key] = EventValue.String(string.Empty);
+                _dirty = true;
+            }
+            foreach (AssetRecord item in _project.AssetDatabase.Assets
+                .Where(item => item.Type == type)
+                .OrderBy(item => item.ProjectPath, StringComparer.OrdinalIgnoreCase))
+            {
+                if (ImGui.Selectable(item.ProjectPath, item.Guid == selected?.Guid))
+                {
+                    RecordHistory("Change Material Asset");
+                    instruction.Arguments[key] = EventValue.String(item.Guid.ToString());
+                    _dirty = true;
+                }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.BeginDragDropTarget())
+        {
+            Guid? dropped = AssetDragDrop.Accept();
+            if (dropped.HasValue &&
+                _project.AssetDatabase.TryGetAsset(dropped.Value, out AssetRecord? item) &&
+                item?.Type == type)
+            {
+                RecordHistory("Change Material Asset");
+                instruction.Arguments[key] = EventValue.String(item.Guid.ToString());
+                _dirty = true;
+            }
+            ImGui.EndDragDropTarget();
+        }
+    }
     private void DrawBlueprintAssetArgument(
         VisualInstruction instruction,
         string argumentName,

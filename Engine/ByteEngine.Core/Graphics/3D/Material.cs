@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Assets;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
 
@@ -16,6 +17,25 @@ public sealed class Material
     public Texture2D? MainTexture { get; set; }
 
     public Texture2D? NormalTexture { get; set; }
+    public float NormalStrength { get; set; } = 1f;
+    public bool DirectXNormalMap { get; set; }
+    public Texture2D? MetallicTexture { get; set; }
+    public Texture2D? RoughnessTexture { get; set; }
+    public Texture2D? AmbientOcclusionTexture { get; set; }
+    public float AmbientOcclusionStrength { get; set; } = 1f;
+    public Texture2D? PackedPbrTexture { get; set; }
+    public MaterialPbrMapMode PbrMapMode { get; set; }
+    public MaterialMapChannel PackedAoChannel { get; set; } = MaterialMapChannel.Red;
+    public MaterialMapChannel PackedRoughnessChannel { get; set; } = MaterialMapChannel.Green;
+    public MaterialMapChannel PackedMetallicChannel { get; set; } = MaterialMapChannel.Blue;
+    public bool EmissionEnabled { get; set; }
+    public Vector3 EmissionColor { get; set; } = Vector3.One;
+    public float EmissionIntensity { get; set; } = 1f;
+    public Texture2D? EmissionTexture { get; set; }
+    public Vector2 UvTiling { get; set; } = Vector2.One;
+    public Vector2 UvOffset { get; set; }
+    public MaterialShadingMode Shading { get; set; } = MaterialShadingMode.Lit;
+    public bool DecodeColorTexturesSrgb { get; set; }
 
     public float Metallic { get; set; }
 
@@ -69,6 +89,42 @@ public sealed class Material
     /// <summary>
     /// Copies the material settings while retaining references to the same
     /// immutable/shared texture resources.
+    /// <summary>Refreshes an existing renderer-local material without new GPU resources.</summary>
+    public void CopyFrom(Material source)
+    {
+        BaseColor = source.BaseColor;
+        MainTexture = source.MainTexture;
+        NormalTexture = source.NormalTexture;
+        NormalStrength = source.NormalStrength;
+        DirectXNormalMap = source.DirectXNormalMap;
+        MetallicTexture = source.MetallicTexture;
+        RoughnessTexture = source.RoughnessTexture;
+        AmbientOcclusionTexture = source.AmbientOcclusionTexture;
+        AmbientOcclusionStrength = source.AmbientOcclusionStrength;
+        PackedPbrTexture = source.PackedPbrTexture;
+        PbrMapMode = source.PbrMapMode;
+        PackedAoChannel = source.PackedAoChannel;
+        PackedRoughnessChannel = source.PackedRoughnessChannel;
+        PackedMetallicChannel = source.PackedMetallicChannel;
+        EmissionEnabled = source.EmissionEnabled;
+        EmissionColor = source.EmissionColor;
+        EmissionIntensity = source.EmissionIntensity;
+        EmissionTexture = source.EmissionTexture;
+        UvTiling = source.UvTiling;
+        UvOffset = source.UvOffset;
+        Shading = source.Shading;
+        DecodeColorTexturesSrgb = source.DecodeColorTexturesSrgb;
+        Metallic = source.Metallic;
+        Roughness = source.Roughness;
+        BlendMode = source.BlendMode;
+        AlphaCutoff = source.AlphaCutoff;
+        DepthTest = source.DepthTest;
+        DepthWriteMode = source.DepthWriteMode;
+        CullMode = source.CullMode;
+        FrontFace = source.FrontFace;
+        PolygonMode = source.PolygonMode;
+    }
+
     /// </summary>
     public Material Clone()
     {
@@ -83,6 +139,25 @@ public sealed class Material
 
                 NormalTexture =
                     NormalTexture,
+                NormalStrength = NormalStrength,
+                DirectXNormalMap = DirectXNormalMap,
+                MetallicTexture = MetallicTexture,
+                RoughnessTexture = RoughnessTexture,
+                AmbientOcclusionTexture = AmbientOcclusionTexture,
+                AmbientOcclusionStrength = AmbientOcclusionStrength,
+                PackedPbrTexture = PackedPbrTexture,
+                PbrMapMode = PbrMapMode,
+                PackedAoChannel = PackedAoChannel,
+                PackedRoughnessChannel = PackedRoughnessChannel,
+                PackedMetallicChannel = PackedMetallicChannel,
+                EmissionEnabled = EmissionEnabled,
+                EmissionColor = EmissionColor,
+                EmissionIntensity = EmissionIntensity,
+                EmissionTexture = EmissionTexture,
+                UvTiling = UvTiling,
+                UvOffset = UvOffset,
+                Shading = Shading,
+                DecodeColorTexturesSrgb = DecodeColorTexturesSrgb,
 
                 Metallic =
                     Metallic,

@@ -47,9 +47,25 @@ public sealed partial class VisualLogicRegistry
         });
         registry.RegisterAction(new VisualActionDefinition
         {
+            Id = "physics.castRayToCursor",
+            Category = "Physics / Raycasts",
+            DisplayName = "Cast Ray To Cursor",
+            Execute = (instruction, context) =>
+                CastEventRayInternal(instruction, context, "TopDownCursor")
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "physics.castRayInDirection",
+            Category = "Physics / Raycasts",
+            DisplayName = "Cast Ray In Direction",
+            Execute = (instruction, context) =>
+                CastEventRayInternal(instruction, context, "MuzzleDirection")
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
             Id = "physics.castRay",
             Category = "Physics / Raycasts",
-            DisplayName = "Cast Ray",
+            DisplayName = "Cast Ray (Advanced)",
             Execute = (instruction, context) => CastEventRay(instruction, context)
         });
         registry.RegisterAction(new VisualActionDefinition
@@ -107,7 +123,18 @@ public sealed partial class VisualLogicRegistry
         });
     }
 
-    private static bool CastEventRay(VisualInstruction instruction, EventExecutionContext context)
+    private static bool CastEventRay(
+        VisualInstruction instruction,
+        EventExecutionContext context) =>
+        CastEventRayInternal(
+            instruction,
+            context,
+            forcedAimMode: null);
+
+    private static bool CastEventRayInternal(
+        VisualInstruction instruction,
+        EventExecutionContext context,
+        string? forcedAimMode)
     {
         context.RaycastPerformed = true;
         context.LastRaycastHit = null;
@@ -138,6 +165,13 @@ public sealed partial class VisualLogicRegistry
                 string.Empty)
             .Trim();
 
+        string muzzlePath =
+            EventValueResolver.GetString(
+                instruction,
+                "muzzlePath",
+                context,
+                string.Empty)
+            .Trim();
 
         float distance = (float)EventValueResolver.GetNumber(instruction, "distance", context, 100f);
         bool drawDebug = EventValueResolver.GetBoolean(instruction, "drawDebug", context, false);
@@ -166,13 +200,45 @@ public sealed partial class VisualLogicRegistry
             break;
         }
 
-        string aimMode = EventValueResolver.GetString(
+        string aimMode = forcedAimMode ?? EventValueResolver.GetString(
             instruction, "aimMode", context, "MuzzleDirection").Trim();
         bool cameraAim = aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase) ||
             aimMode.Equals("ThirdPersonCrosshair", StringComparison.OrdinalIgnoreCase) ||
             aimMode.Equals("FirstPersonCrosshair", StringComparison.OrdinalIgnoreCase);
+
+        bool topDownCursorAim =
+            aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase);
+        if (topDownCursorAim)
+            Input.NotifyGameViewPointerAim();
+
+        Collider3D? implicitOriginCollider = null;
+        string originMode =
+            !string.IsNullOrWhiteSpace(muzzlePath)
+                ? "ExplicitMuzzlePath"
+                : localOrigin.LengthSquared() >= .000001f
+                    ? "ExplicitOriginOffset"
+                    : "RayOwnerTransform";
+
+        // Character roots in ByteEngine use a feet/pivot origin. When Top Down /
+        // camera aiming has no explicit muzzle point, firing from that pivot can
+        // immediately report the floor at distance zero. Character colliders are
+        // often placed on a child object, so search the complete ignored owner
+        // hierarchy and transform the collider's center with its own transform.
+        // Explicit muzzle paths and explicit local offsets remain authoritative.
+        if (cameraAim &&
+            string.IsNullOrWhiteSpace(muzzlePath) &&
+            localOrigin.LengthSquared() < .000001f &&
+            FindAimOriginCollider(ignoredOwner) is { } ownerCollider)
+        {
+            implicitOriginCollider = ownerCollider;
+            originMode = "OwnerColliderCenter";
+            origin = Vector3.Transform(
+                ownerCollider.Center,
+                ownerCollider.Transform.WorldMatrix);
+        }
+
         Camera3D? camera = context.Scene.ActiveCamera;
-        Vector2 screenPoint = aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase)
+        Vector2 screenPoint = topDownCursorAim
             ? Input.GameViewPointerNormalized : new Vector2(.5f);
         Vector3 cameraRayOrigin = Vector3.Zero;
         Vector3 cameraRayDirection = Vector3.Zero;
@@ -185,18 +251,23 @@ public sealed partial class VisualLogicRegistry
         {
             float aspect = Input.GameViewSize.X / Math.Max(Input.GameViewSize.Y, 1f);
             (cameraRayOrigin, cameraRayDirection) = camera.ScreenPointToRay(screenPoint, aspect);
+            float cameraSearchDistance = MathF.Min(float.MaxValue,
+                distance + Vector3.Distance(cameraRayOrigin, origin));
             cameraTargetHit = GameplayQuery3D.Raycast(context.Scene, cameraRayOrigin,
-                cameraRayDirection, out cameraHit, distance, ignoredOwner, mask, source,
+                cameraRayDirection, out cameraHit, cameraSearchDistance, ignoredOwner, mask,
+                source: null, bypassCollisionMatrix: true,
                 includeTriggers: includeTriggers);
-            aimPoint = cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * distance;
-            string aimStyle = EventValueResolver.GetString(instruction, "topDownAimStyle", context, "Exact3D");
-            if (aimMode.Equals("TopDownCursor", StringComparison.OrdinalIgnoreCase) &&
+            aimPoint = cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * cameraSearchDistance;
+            string aimStyle = forcedAimMode != null && topDownCursorAim
+                ? "Exact3D"
+                : EventValueResolver.GetString(instruction, "topDownAimStyle", context, "Exact3D");
+            if (topDownCursorAim &&
                 aimStyle.Equals("Planar", StringComparison.OrdinalIgnoreCase))
                 aimPoint.Y = origin.Y;
             worldDirection = aimPoint - origin;
             if (drawDebug)
                 DrawDebugRay(context.Scene, cameraRayOrigin,
-                    cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * distance,
+                    cameraTargetHit ? cameraHit.Point : cameraRayOrigin + cameraRayDirection * cameraSearchDistance,
                     cameraTargetHit, debugDuration,
                     $"Camera_{source.Id:N}_{instruction.InstanceId:N}", new Vector4(.08f, .75f, 1f, 1f));
         }
@@ -207,8 +278,14 @@ public sealed partial class VisualLogicRegistry
             !float.IsFinite(worldDirection.Z) || worldDirection.LengthSquared() < .000001f)
             return false;
 
+        // Cast Ray already exposes its own Collision Layer and trigger controls.
+        // Do not silently filter the final weapon ray through the owner's project
+        // collision matrix as well; otherwise the camera can select the collider
+        // under the pointer and the muzzle ray can incorrectly skip that same
+        // collider. The owner hierarchy is still ignored explicitly.
         bool found = GameplayQuery3D.Raycast(context.Scene, origin, worldDirection,
-            out RaycastHit3D hit, distance, ignoredOwner, mask, source,
+            out RaycastHit3D hit, distance, ignoredOwner, mask,
+            source: null, bypassCollisionMatrix: true,
             includeTriggers: includeTriggers);
         if (found) context.LastRaycastHit = hit;
 
@@ -219,17 +296,25 @@ public sealed partial class VisualLogicRegistry
         {
             Camera3D? debugCamera = camera;
 
-            string hitText =
-                found
-                    ? $"HIT object=\"{hit.GameObject.Name}\" point={DebugV3(hit.Point)} normal={DebugV3(hit.Normal)} hitDistance={hit.Distance:0.000}"
-                    : "MISS";
+            string cameraHitText =
+                DescribeRayHit(
+                    context.Scene,
+                    cameraTargetHit,
+                    cameraHit);
 
-            string muzzlePath =
-                EventValueResolver.GetString(
-                    instruction,
-                    "muzzlePath",
-                    context,
-                    string.Empty);
+            string finalHitText =
+                DescribeRayHit(
+                    context.Scene,
+                    found,
+                    hit);
+
+            string originOverlaps =
+                DescribeOriginOverlaps(
+                    context.Scene,
+                    origin,
+                    ignoredOwner,
+                    mask,
+                    includeTriggers);
 
             string resolvedDirectionMode =
                 string.IsNullOrWhiteSpace(
@@ -240,21 +325,21 @@ public sealed partial class VisualLogicRegistry
                     : directionMode;
 
             RuntimeDiagnostics.RecordWeaponRaycast(
-                $"EVENT RAY self=\"{context.Self.Name}\" source=\"{source.Name}\" parent=\"{source.Parent?.Name ?? "<none>"}\" " +
+                $"EVENT RAY action={instruction.Id} self=\"{context.Self.Name}\" source=\"{source.Name}\" sourceId={source.Id:N} parent=\"{source.Parent?.Name ?? "<none>"}\" " +
+                $"sourceLayer={LayerName(context.Scene, source.Layer)} ignoredOwner=\"{ignoredOwner.Name}\" ignoredOwnerId={ignoredOwner.Id:N} " +
                 $"muzzle=\"{muzzle.Name}\" muzzleParent=\"{muzzle.Parent?.Name ?? "<none>"}\" muzzlePath=\"{muzzlePath}\" " +
+                $"originMode={originMode} originCollider={(implicitOriginCollider != null ? implicitOriginCollider.GameObject.Name + ":" + implicitOriginCollider.GetType().Name : "<none>")} " +
                 $"sourcePos={DebugV3(source.Transform.WorldPosition)} sourceFwd={DebugV3(source.Transform.Forward)} " +
                 $"muzzlePos={DebugV3(muzzle.Transform.WorldPosition)} muzzleEuler={DebugV3(muzzle.Transform.EulerAngles)} " +
                 $"muzzleFwd={DebugV3(muzzle.Transform.Forward)} muzzleRight={DebugV3(muzzle.Transform.Right)} muzzleUp={DebugV3(muzzle.Transform.Up)} " +
-                $"localOrigin={DebugV3(localOrigin)} origin={DebugV3(origin)} localDir={DebugV3(localDirection)} " +
-                $"aimMode={aimMode} screen=({screenPoint.X:0.000},{screenPoint.Y:0.000}) " +
-                $"cameraRayOrigin={DebugV3(cameraRayOrigin)} cameraRayDir={DebugV3(cameraRayDirection)} " +
-                $"cameraTarget={(cameraTargetHit ? cameraHit.GameObject.Name : "<none>")} " +
-                $"cameraHitPoint={(cameraTargetHit ? DebugV3(cameraHit.Point) : "<none>")} aimPoint={DebugV3(aimPoint)} " +
+                $"localOrigin={DebugV3(localOrigin)} origin={DebugV3(origin)} originOverlaps={originOverlaps} localDir={DebugV3(localDirection)} " +
+                $"aimMode={aimMode} pointerOver={Input.IsPointerOverGameView} pointerFocused={Input.IsGameViewFocused} inputCaptured={Input.IsGameInputCaptured} " +
+                $"screen=({screenPoint.X:0.000},{screenPoint.Y:0.000}) view=({Input.GameViewSize.X:0},{Input.GameViewSize.Y:0}) " +
+                $"cameraRayOrigin={DebugV3(cameraRayOrigin)} cameraRayDir={DebugV3(cameraRayDirection)} cameraTarget={cameraHitText} aimPoint={DebugV3(aimPoint)} " +
                 $"directionMode={resolvedDirectionMode} worldSpace={legacyWorldSpace} worldDir={DebugV3(normalizedWorldDirection)} " +
-                $"maxDistance={distance:0.000} layer={layer} triggers={includeTriggers} " +
-                $"ignoredOwner=\"{ignoredOwner.Name}\" ownerFwd={DebugV3(ignoredOwner.Transform.Forward)} " +
-                $"cameraPos={(debugCamera != null ? DebugV3(debugCamera.Transform.WorldPosition) : "<none>")} " +
-                $"cameraFwd={(debugCamera != null ? DebugV3(debugCamera.Transform.Forward) : "<none>")} result={hitText}");
+                $"maxDistance={distance:0.000} requestedLayer={layer} maskBits=0x{mask.Bits:X8} triggers={includeTriggers} " +
+                $"ownerFwd={DebugV3(ignoredOwner.Transform.Forward)} cameraPos={(debugCamera != null ? DebugV3(debugCamera.Transform.WorldPosition) : "<none>")} " +
+                $"cameraFwd={(debugCamera != null ? DebugV3(debugCamera.Transform.Forward) : "<none>")} finalResult={finalHitText}");
         }
 
         if (drawDebug)
@@ -268,6 +353,98 @@ public sealed partial class VisualLogicRegistry
         }
 
         return found;
+    }
+
+    private static string DescribeRayHit(
+        ByteEngine.Core.Scene.Scene scene,
+        bool found,
+        RaycastHit3D hit)
+    {
+        if (!found)
+            return "MISS";
+
+        GameObject? healthOwner = FindHealthOwner(hit.GameObject);
+        return
+            $"HIT(object=\"{hit.GameObject.Name}\",id={hit.GameObject.Id:N},layer={LayerName(scene, hit.GameObject.Layer)}," +
+            $"collider={hit.Collider.GetType().Name},point={DebugV3(hit.Point)},normal={DebugV3(hit.Normal)},distance={hit.Distance:0.000}," +
+            $"ground={IsGround(hit.GameObject)},healthOwner=\"{healthOwner?.Name ?? "<none>"}\")";
+    }
+
+    private static string DescribeOriginOverlaps(
+        ByteEngine.Core.Scene.Scene scene,
+        Vector3 origin,
+        GameObject ignoredOwner,
+        LayerMask mask,
+        bool includeTriggers)
+    {
+        string[] overlaps = GameplayQuery3D.OverlapSphere(
+                scene,
+                origin,
+                .01f,
+                ignoredOwner,
+                mask,
+                source: null,
+                bypassCollisionMatrix: true,
+                includeTriggers: includeTriggers)
+            .Take(8)
+            .Select(item =>
+                $"{item.GameObject.Name}:{item.Collider.GetType().Name}:{LayerName(scene, item.GameObject.Layer)}:ground={IsGround(item.GameObject)}")
+            .ToArray();
+
+        return overlaps.Length == 0
+            ? "<none>"
+            : "[" + string.Join(",", overlaps) + "]";
+    }
+
+    private static string LayerName(
+        ByteEngine.Core.Scene.Scene scene,
+        int layer) =>
+        $"{layer}:{scene.Classification.FindLayer(layer)?.Name ?? "<missing>"}";
+
+    private static bool IsGround(GameObject gameObject)
+    {
+        for (GameObject? current = gameObject;
+             current != null;
+             current = current.Parent)
+        {
+            if (current.GetComponent<GroundSurface>() != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static GameObject? FindHealthOwner(GameObject gameObject)
+    {
+        for (GameObject? current = gameObject;
+             current != null;
+             current = current.Parent)
+        {
+            if (current.GetComponent<HealthComponent>() != null)
+                return current;
+        }
+
+        return null;
+    }
+
+    private static Collider3D? FindAimOriginCollider(GameObject root)
+    {
+        Collider3D? collider =
+            root.Components
+                .OfType<Collider3D>()
+                .FirstOrDefault(item => item.Enabled && !item.IsTrigger);
+
+        if (collider != null)
+            return collider;
+
+        foreach (GameObject child in root.Children)
+        {
+            collider = FindAimOriginCollider(child);
+            if (collider != null)
+                return collider;
+        }
+
+        return null;
     }
 
     private static GameObject ResolveRayMuzzlePoint(

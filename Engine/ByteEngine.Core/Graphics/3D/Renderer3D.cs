@@ -563,14 +563,14 @@ public sealed class Renderer3D : IDisposable
                 material.BaseColor);
 
             _shader.SetFloat(
-                "uMetallic",
+                "uMetallicFactor",
                 Math.Clamp(
                     material.Metallic,
                     0.0f,
                     1.0f));
 
             _shader.SetFloat(
-                "uRoughness",
+                "uRoughnessFactor",
                 Math.Clamp(
                     material.Roughness,
                     0.04f,
@@ -664,6 +664,8 @@ public sealed class Renderer3D : IDisposable
                     0);
             }
 
+            UploadStandardMaterialMaps(material);
+
             mesh.Bind();
 
             GL.DrawElements(
@@ -682,6 +684,45 @@ public sealed class Renderer3D : IDisposable
 
             RestoreBaselineState();
         }
+    }
+
+    private void UploadStandardMaterialMaps(Material material)
+    {
+        _shader!.SetVector2("uUvTiling", material.UvTiling);
+        _shader.SetVector2("uUvOffset", material.UvOffset);
+        _shader.SetFloat("uNormalStrength", material.NormalStrength);
+        _shader.SetFloat("uNormalYSign", material.DirectXNormalMap ? -1f : 1f);
+        _shader.SetFloat("uAoStrength", material.AmbientOcclusionStrength);
+        _shader.SetInt("uUnlit", material.Shading == ByteEngine.Core.Assets.MaterialShadingMode.Unlit ? 1 : 0);
+        _shader.SetInt("uDecodeColorSrgb", material.DecodeColorTexturesSrgb ? 1 : 0);
+        _shader.SetInt("uEmissionEnabled", material.EmissionEnabled ? 1 : 0);
+        _shader.SetVector3("uEmissionColor", material.EmissionColor);
+        _shader.SetFloat("uEmissionIntensity", material.EmissionIntensity);
+        _shader.SetInt("uPackedAoChannel", (int)material.PackedAoChannel);
+        _shader.SetInt("uPackedRoughnessChannel", (int)material.PackedRoughnessChannel);
+        _shader.SetInt("uPackedMetallicChannel", (int)material.PackedMetallicChannel);
+
+        bool packed = material.PbrMapMode == ByteEngine.Core.Assets.MaterialPbrMapMode.Packed &&
+            material.PackedPbrTexture != null;
+        BindMaterialMap(packed ? material.PackedPbrTexture : null, 11,
+            "uPackedPbrTexture", "uUsePackedPbrTexture");
+        BindMaterialMap(packed ? null : material.MetallicTexture, 8,
+            "uMetallicTexture", "uUseMetallicTexture");
+        BindMaterialMap(packed ? null : material.RoughnessTexture, 9,
+            "uRoughnessTexture", "uUseRoughnessTexture");
+        BindMaterialMap(material.AmbientOcclusionTexture, 10,
+            "uAoTexture", "uUseAoTexture");
+        BindMaterialMap(material.EmissionEnabled ? material.EmissionTexture : null, 12,
+            "uEmissionTexture", "uUseEmissionTexture");
+    }
+
+    private void BindMaterialMap(Texture2D? texture, int slot,
+        string samplerUniform, string enabledUniform)
+    {
+        _shader!.SetInt(enabledUniform, texture == null ? 0 : 1);
+        if (texture == null) return;
+        texture.Bind(slot);
+        _shader.SetInt(samplerUniform, slot);
     }
 
     public void Draw(

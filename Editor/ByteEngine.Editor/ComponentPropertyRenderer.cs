@@ -36,6 +36,7 @@ internal static class ComponentPropertyRenderer
 {
     private static readonly Dictionary<Type, IReadOnlyList<ComponentPropertyDescriptor>> Cache =
         new();
+    private static string? _materialSaveError;
 
     public static IReadOnlyList<ComponentPropertyDescriptor> Descriptors(
         Type type,
@@ -620,35 +621,59 @@ internal static class ComponentPropertyRenderer
                 end);
         }
 
-        if (component is MeshRenderer mesh)
+        if (component is MeshRenderer mesh && project != null)
         {
-            Vector4 color =
-                mesh.Material.BaseColor;
-
-            bool edited =
-                ImGui.ColorEdit4(
-                    "Base Color",
-                    ref color);
-
-            if (ImGui.IsItemActivated() ||
-                edited)
+            AssetReference selected = mesh.MaterialAssetReference;
+            if (DrawMaterialSelector("Material", ref selected, project))
             {
-                begin();
+                begin(); mesh.MaterialAssetReference = selected; changed(); end();
             }
-
-            if (edited)
+            if (selected.IsEmpty)
             {
-                mesh.Material.BaseColor =
-                    color;
-
-                changed();
+                DrawLocalMaterial(mesh.Material, begin, changed, end);
+                if (ImGui.Button("Save As Material Asset"))
+                {
+                    try
+                    {
+                        AssetReference saved = LocalMaterialAssetFactory.Save(
+                            project, mesh.GameObject.Name, mesh.Material);
+                        begin(); mesh.MaterialAssetReference = saved; changed(); end();
+                        _materialSaveError = null;
+                    }
+                    catch (Exception exception) { _materialSaveError = exception.Message; }
+                }
+                if (_materialSaveError != null)
+                    ImGui.TextWrapped($"Material save failed: {_materialSaveError}");
             }
+        }
 
-            if (ImGui.IsItemDeactivatedAfterEdit() ||
-                edited &&
-                !ImGui.IsItemActive())
+        if (component is SkeletalMeshRenderer skeletal && project != null)
+        {
+            try
             {
-                end();
+                ModelAsset model = project.Assets.LoadModel(skeletal.Model);
+                int slot = 0;
+                foreach (var sourceMesh in model.Meshes)
+                {
+                    int vertexCount = sourceMesh.Vertices.Length / 8;
+                    if (vertexCount == 0 || sourceMesh.JointWeights.Length != vertexCount ||
+                        sourceMesh.JointIndices.Length != vertexCount) continue;
+                    AssetReference selected = slot < skeletal.MaterialAssetSlots.Count
+                        ? skeletal.MaterialAssetSlots[slot] : AssetReference.Empty;
+                    if (DrawMaterialSelector($"Materials / {slot}: {sourceMesh.Name}", ref selected, project))
+                    {
+                        begin();
+                        while (skeletal.MaterialAssetSlots.Count <= slot)
+                            skeletal.MaterialAssetSlots.Add(AssetReference.Empty);
+                        skeletal.MaterialAssetSlots[slot] = selected;
+                        changed(); end();
+                    }
+                    slot++;
+                }
+            }
+            catch (Exception exception)
+            {
+                ImGui.TextDisabled($"Material slots unavailable: {exception.Message}");
             }
         }
 
@@ -671,6 +696,51 @@ internal static class ComponentPropertyRenderer
         }
 
         ImGui.PopID();
+    }
+
+    private static bool DrawMaterialSelector(string label, ref AssetReference reference,
+        EditorProjectContext project)
+    {
+        bool changed = false;
+        AssetRecord? current = reference.IsEmpty ? null : project.AssetDatabase.Resolve(reference);
+        if (ImGui.BeginCombo(label, current?.ProjectPath ?? "Local / Imported Material"))
+        {
+            if (ImGui.Selectable("Local / Imported Material", reference.IsEmpty))
+            { reference = AssetReference.Empty; changed = true; }
+            foreach (AssetRecord item in project.AssetDatabase.Assets
+                .Where(item => item.Type == AssetType.Material)
+                .OrderBy(item => item.ProjectPath, StringComparer.OrdinalIgnoreCase))
+            {
+                if (ImGui.Selectable(item.ProjectPath, item.Guid == current?.Guid))
+                { reference = new AssetReference(item.Guid, item.ProjectPath); changed = true; }
+            }
+            ImGui.EndCombo();
+        }
+        if (ImGui.BeginDragDropTarget())
+        {
+            Guid? dropped = AssetDragDrop.Accept();
+            if (dropped.HasValue &&
+                project.AssetDatabase.TryGetAsset(dropped.Value, out AssetRecord? item) &&
+                item?.Type == AssetType.Material)
+            { reference = new AssetReference(item.Guid, item.ProjectPath); changed = true; }
+            ImGui.EndDragDropTarget();
+        }
+        return changed;
+    }
+
+    private static void DrawLocalMaterial(Material material, Action begin,
+        Action changed, Action end)
+    {
+        ImGui.TextDisabled("Local Material (stored with this object)");
+        Vector4 color = material.BaseColor;
+        if (ImGui.ColorEdit4("Base Color", ref color))
+        { begin(); material.BaseColor = color; changed(); end(); }
+        float metallic = material.Metallic;
+        if (ImGui.SliderFloat("Metallic", ref metallic, 0f, 1f))
+        { begin(); material.Metallic = metallic; changed(); end(); }
+        float roughness = material.Roughness;
+        if (ImGui.SliderFloat("Roughness", ref roughness, .04f, 1f))
+        { begin(); material.Roughness = roughness; changed(); end(); }
     }
 
     private static bool DrawAssetReferenceSelector(

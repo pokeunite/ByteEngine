@@ -1,3 +1,4 @@
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Scene;
 
@@ -10,6 +11,23 @@ public sealed class MeshRenderer : Component
     public ModelMeshReference? MeshReference { get; set; }
 
     public ModelMaterialReference? MaterialReference { get; set; }
+
+    private AssetReference _materialAssetReference = AssetReference.Empty;
+    private Material? _resolvedAssetMaterial;
+    private bool _materialAssetLoadFailed;
+    private Material? _overrideMaterial;
+    public MaterialOverrideState MaterialOverrides { get; } = new();
+
+    public AssetReference MaterialAssetReference
+    {
+        get => _materialAssetReference;
+        set
+        {
+            _materialAssetReference = value ?? AssetReference.Empty;
+            _resolvedAssetMaterial = null;
+            _materialAssetLoadFailed = false;
+        }
+    }
 
     public PrimitiveMeshType Primitive { get; set; } =
         PrimitiveMeshType.Cube;
@@ -176,24 +194,54 @@ public sealed class MeshRenderer : Component
                     Primitive);
         }
 
+        Material effectiveMaterial = ResolveEffectiveMaterial();
         context.RenderWorld.Submit(
             mesh,
-            Material,
+            effectiveMaterial,
             Transform.WorldMatrix,
-            ResolveRenderQueue(),
+            ResolveRenderQueue(effectiveMaterial),
             FrustumCulling,
             CastShadows,
             ReceiveShadows);
     }
 
-    private RenderQueue3D ResolveRenderQueue()
+    private Material ResolveEffectiveMaterial()
+    {
+        Material source = ResolveBaseMaterial();
+        if (MaterialOverrides.IsEmpty) return source;
+        _overrideMaterial ??= source.Clone();
+        AnimationRuntimeAssets.TryGet(out AssetManager? assets);
+        MaterialOverrides.Apply(source, _overrideMaterial, assets);
+        return _overrideMaterial;
+    }
+
+    private Material ResolveBaseMaterial()
+    {
+        if (_materialAssetReference.IsEmpty) return Material;
+        if (_resolvedAssetMaterial != null) return _resolvedAssetMaterial;
+        if (_materialAssetLoadFailed ||
+            !AnimationRuntimeAssets.TryGet(out AssetManager? assets) || assets == null)
+            return Material;
+        try
+        {
+            _resolvedAssetMaterial = assets.LoadMaterial(_materialAssetReference);
+            return _resolvedAssetMaterial;
+        }
+        catch
+        {
+            _materialAssetLoadFailed = true;
+            return Material;
+        }
+    }
+
+    private RenderQueue3D ResolveRenderQueue(Material effectiveMaterial)
     {
         if (!AutomaticRenderQueue)
         {
             return RenderQueue;
         }
 
-        return Material.BlendMode switch
+        return effectiveMaterial.BlendMode switch
         {
             BlendMode3D.AlphaBlend =>
                 RenderQueue3D.Transparent,

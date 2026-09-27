@@ -169,21 +169,37 @@ public sealed class FbxModelImporter
                 }
             }
 
-            ImportedTexture? baseColorTexture =
-                material.HasTextureDiffuse
-                    ? ReadExternalTexture(
-                        source,
-                        material.TextureDiffuse,
-                        $"material:{index}:diffuse")
-                    : null;
-
-            ImportedTexture? normalTexture =
-                material.HasTextureNormal
-                    ? ReadExternalTexture(
-                        source,
-                        material.TextureNormal,
-                        $"material:{index}:normal")
-                    : null;
+            if (material.HasOpacity)
+                baseColor.W *= Math.Clamp(material.Opacity, 0f, 1f);
+            NumericsVector4 emissive = material.HasColorEmissive
+                ? material.ColorEmissive : NumericsVector4.Zero;
+            ImportedTexture? baseColorTexture = material.PBR.HasTextureBaseColor
+                ? ReadExternalTexture(source, scene, material.PBR.TextureBaseColor,
+                    $"material:{index}:baseColor")
+                : material.HasTextureDiffuse
+                    ? ReadExternalTexture(source, scene, material.TextureDiffuse,
+                        $"material:{index}:diffuse") : null;
+            ImportedTexture? normalTexture = material.HasTextureNormal
+                ? ReadExternalTexture(source, scene, material.TextureNormal,
+                    $"material:{index}:normal")
+                : material.PBR.HasTextureNormalCamera
+                    ? ReadExternalTexture(source, scene, material.PBR.TextureNormalCamera,
+                        $"material:{index}:normalCamera") : null;
+            ImportedTexture? metallicTexture = material.PBR.HasTextureMetalness
+                ? ReadExternalTexture(source, scene, material.PBR.TextureMetalness,
+                    $"material:{index}:metallic") : null;
+            ImportedTexture? roughnessTexture = material.PBR.HasTextureRoughness
+                ? ReadExternalTexture(source, scene, material.PBR.TextureRoughness,
+                    $"material:{index}:roughness") : null;
+            ImportedTexture? occlusionTexture = material.HasTextureAmbientOcclusion
+                ? ReadExternalTexture(source, scene, material.TextureAmbientOcclusion,
+                    $"material:{index}:occlusion") : null;
+            ImportedTexture? emissionTexture = material.PBR.HasTextureEmissionColor
+                ? ReadExternalTexture(source, scene, material.PBR.TextureEmissionColor,
+                    $"material:{index}:emission")
+                : material.HasTextureEmissive
+                    ? ReadExternalTexture(source, scene, material.TextureEmissive,
+                        $"material:{index}:emissive") : null;
 
             result.Add(
                 new ImportedMaterial
@@ -196,10 +212,19 @@ public sealed class FbxModelImporter
                             index),
                     Name = name,
                     BaseColor = baseColor,
-                    Metallic = 0.0f,
+                    SurfaceType = (material.HasOpacity && material.Opacity < .999f) ||
+                        material.HasTextureOpacity
+                        ? MaterialSurfaceType.Transparent : MaterialSurfaceType.Opaque,
+                    DoubleSided = material.HasTwoSided && material.IsTwoSided,
+                    EmissionColor = new NumericsVector3(emissive.X, emissive.Y, emissive.Z),
+                    Metallic = metallicTexture == null ? 0f : 1f,
                     Roughness = 1.0f,
                     BaseColorTexture = baseColorTexture,
-                    NormalTexture = normalTexture
+                    NormalTexture = normalTexture,
+                    MetallicTexture = metallicTexture,
+                    RoughnessTexture = roughnessTexture,
+                    AmbientOcclusionTexture = occlusionTexture,
+                    EmissionTexture = emissionTexture
                 });
         }
 
@@ -223,16 +248,36 @@ public sealed class FbxModelImporter
 
     private static ImportedTexture? ReadExternalTexture(
         AssetRecord source,
+        Assimp.Scene scene,
         TextureSlot slot,
         string keySuffix)
     {
         string rawPath = slot.FilePath ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(rawPath)) return null;
 
-        if (string.IsNullOrWhiteSpace(rawPath) ||
-            rawPath.StartsWith("*", StringComparison.Ordinal))
+        // Assimp resolves both "*0" references and embedded original filenames.
+        // Encoded PNG/JPEG/TGA/BMP bytes can be passed to the existing texture
+        // decoder and later extracted; raw texels require an encoder and are
+        // intentionally left unassigned rather than interpreted incorrectly.
+        EmbeddedTexture? embedded = scene.GetEmbeddedTexture(rawPath);
+        if (embedded != null)
         {
-            return null;
+            string format = embedded.CompressedFormatHint.Trim().ToLowerInvariant();
+            if (!embedded.HasCompressedData ||
+                format is not ("png" or "jpg" or "jpeg" or "tga" or "bmp"))
+                return null;
+            return new ImportedTexture
+            {
+                Key = $"{source.Guid:N}:{keySuffix}",
+                Name = Path.GetFileNameWithoutExtension(embedded.Filename) is { Length: > 0 } name
+                    ? name : keySuffix.Replace(':', '_'),
+                SourcePath = Path.HasExtension(embedded.Filename)
+                    ? embedded.Filename
+                    : rawPath + "." + format,
+                EncodedData = embedded.CompressedData
+            };
         }
+        if (rawPath.StartsWith("*", StringComparison.Ordinal)) return null;
 
         string normalized =
             rawPath

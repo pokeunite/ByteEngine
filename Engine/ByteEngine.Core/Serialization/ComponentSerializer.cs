@@ -1871,6 +1871,14 @@ public sealed class ComponentSerializer
                                 .ToArray()
                         ),
 
+                    ["materialAssetSlots"] = new JsonArray(
+                        renderer.MaterialAssetSlots.Select(reference =>
+                            (JsonNode?)new JsonObject
+                            {
+                                ["guid"] = reference.Guid.ToString(),
+                                ["path"] = reference.CachedProjectPath
+                            }).ToArray()),
+
                     ["visible"] =
                         renderer.Visible
                 }
@@ -1904,6 +1912,17 @@ public sealed class ComponentSerializer
                         .ToList()
                     : new List<string>();
 
+            List<AssetReference> materialAssetSlots = new();
+            if (data.Properties["materialAssetSlots"] is JsonArray slotArray)
+            {
+                foreach (JsonNode? slot in slotArray)
+                {
+                    Guid.TryParse(slot?["guid"]?.GetValue<string>(), out Guid slotGuid);
+                    materialAssetSlots.Add(new AssetReference(
+                        slotGuid, slot?["path"]?.GetValue<string>()));
+                }
+            }
+
             return new SkeletalMeshRenderer
             {
                 Model =
@@ -1919,6 +1938,9 @@ public sealed class ComponentSerializer
 
                 MaterialKeys =
                     materials,
+
+                MaterialAssetSlots =
+                    materialAssetSlots,
 
                 Visible =
                     data.Properties["visible"]?

@@ -114,8 +114,8 @@ internal sealed class Shader3D : IDisposable
         out vec4 FragColor;
 
         uniform vec4 uBaseColor;
-        uniform float uMetallic;
-        uniform float uRoughness;
+        uniform float uMetallicFactor;
+        uniform float uRoughnessFactor;
         uniform float uAlphaCutoff;
         uniform float uAmbientIntensity;
         uniform vec3 uCameraPosition;
@@ -140,6 +140,29 @@ internal sealed class Shader3D : IDisposable
         uniform sampler2D uNormalTexture;
         uniform int uUseTexture;
         uniform int uUseNormalTexture;
+        uniform sampler2D uMetallicTexture;
+        uniform sampler2D uRoughnessTexture;
+        uniform sampler2D uAoTexture;
+        uniform sampler2D uPackedPbrTexture;
+        uniform sampler2D uEmissionTexture;
+        uniform int uUseMetallicTexture;
+        uniform int uUseRoughnessTexture;
+        uniform int uUseAoTexture;
+        uniform int uUsePackedPbrTexture;
+        uniform int uUseEmissionTexture;
+        uniform int uPackedAoChannel;
+        uniform int uPackedRoughnessChannel;
+        uniform int uPackedMetallicChannel;
+        uniform float uAoStrength;
+        uniform float uNormalStrength;
+        uniform float uNormalYSign;
+        uniform int uUnlit;
+        uniform int uDecodeColorSrgb;
+        uniform int uEmissionEnabled;
+        uniform vec3 uEmissionColor;
+        uniform float uEmissionIntensity;
+        uniform vec2 uUvTiling;
+        uniform vec2 uUvOffset;
 
         uniform int uDirectionalLightCount;
         uniform vec3 uDirectionalLightDirections[MAX_DIRECTIONAL_LIGHTS];
@@ -177,6 +200,27 @@ internal sealed class Shader3D : IDisposable
 
         const float PI=3.14159265359;
 
+        vec2 materialUv()
+        {
+            return vUV*uUvTiling+uUvOffset;
+        }
+
+        float mapChannel(vec4 sampleValue,int channel)
+        {
+            if(channel==1) return sampleValue.r;
+            if(channel==2) return sampleValue.g;
+            if(channel==3) return sampleValue.b;
+            if(channel==4) return sampleValue.a;
+            return 1.0;
+        }
+
+        vec3 decodeColor(vec3 value)
+        {
+            return uDecodeColorSrgb==1
+                ? pow(max(value,vec3(0.0)),vec3(2.2))
+                : value;
+        }
+
         vec3 getNormal()
         {
             vec3 n=normalize(vNormal);
@@ -185,7 +229,10 @@ internal sealed class Shader3D : IDisposable
                 return n;
 
             vec3 tangentNormal=
-                texture(uNormalTexture,vUV).xyz*2.0-1.0;
+                texture(uNormalTexture,materialUv()).xyz*2.0-1.0;
+            tangentNormal.y*=uNormalYSign;
+            tangentNormal.xy*=uNormalStrength;
+            tangentNormal=normalize(tangentNormal);
 
             vec3 q1=dFdx(vWorldPosition);
             vec3 q2=dFdy(vWorldPosition);
@@ -582,19 +629,53 @@ internal sealed class Shader3D : IDisposable
 
         void main()
         {
-            vec4 base=
-                uBaseColor*
-                (
-                    uUseTexture==1
-                        ? texture(uTexture,vUV)
-                        : vec4(1.0)
-                );
+            vec4 baseTexture=uUseTexture==1
+                ? texture(uTexture,materialUv())
+                : vec4(1.0);
+            vec4 base=vec4(
+                uBaseColor.rgb*decodeColor(baseTexture.rgb),
+                uBaseColor.a*baseTexture.a);
 
             if(
                 uAlphaCutoff>0.0 &&
                 base.a<uAlphaCutoff)
             {
                 discard;
+            }
+
+            vec2 uv=materialUv();
+            vec4 packed=vec4(1.0);
+            if(uUsePackedPbrTexture==1)
+                packed=texture(uPackedPbrTexture,uv);
+            float uMetallic=clamp(uMetallicFactor*
+                (uUsePackedPbrTexture==1
+                    ? mapChannel(packed,uPackedMetallicChannel)
+                    : uUseMetallicTexture==1 ? texture(uMetallicTexture,uv).r : 1.0),
+                0.0,1.0);
+            float uRoughness=clamp(uRoughnessFactor*
+                (uUsePackedPbrTexture==1
+                    ? mapChannel(packed,uPackedRoughnessChannel)
+                    : uUseRoughnessTexture==1 ? texture(uRoughnessTexture,uv).r : 1.0),
+                0.04,1.0);
+            float ao=clamp(
+                uUsePackedPbrTexture==1 && uPackedAoChannel!=0
+                    ? mapChannel(packed,uPackedAoChannel)
+                    : uUseAoTexture==1 ? texture(uAoTexture,uv).r : 1.0,
+                0.0,1.0);
+            ao=mix(1.0,ao,clamp(uAoStrength,0.0,1.0));
+            vec3 emission=vec3(0.0);
+            if(uEmissionEnabled==1)
+            {
+                vec3 emissionMap=uUseEmissionTexture==1
+                    ? decodeColor(texture(uEmissionTexture,uv).rgb)
+                    : vec3(1.0);
+                emission=uEmissionColor*emissionMap*
+                    max(uEmissionIntensity,0.0);
+            }
+            if(uUnlit==1)
+            {
+                FragColor=vec4(max(base.rgb+emission,vec3(0.0)),base.a);
+                return;
             }
 
             vec3 n=getNormal();
@@ -834,8 +915,9 @@ internal sealed class Shader3D : IDisposable
             }
 
             vec3 linearColor=
-                ambient+
-                direct;
+                ambient*ao+
+                direct+
+                emission;
 
             if(uFogEnabled==1)
             {

@@ -6,7 +6,8 @@ internal enum EditorDocumentType
     Animation,
     Blueprint,
     EventSheet,
-    AnimationProfile
+    AnimationProfile,
+    Material
 }
 
 internal readonly record struct EditorDocumentId(EditorDocumentType Type, string Key)

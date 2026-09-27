@@ -56,6 +56,7 @@ public static class RuntimeDiagnostics
     private static readonly object WeaponRaycastTraceLock = new();
     private static readonly Queue<string> WeaponRaycastTrace = new();
     private const int MaxWeaponRaycastTraceLines = 1000;
+    private static long _weaponRaycastSequence;
     public static bool DebugWeaponRaycast { get; set; }
 
     public static void ClearBlueprintVisibilityTrace()
@@ -360,8 +361,12 @@ public static class RuntimeDiagnostics
         if (!DebugWeaponRaycast)
             return;
 
+        long sequence =
+            Interlocked.Increment(
+                ref _weaponRaycastSequence);
+
         string line =
-            $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+            $"[{DateTime.Now:HH:mm:ss.fff}] [WR#{sequence:000000}] {message}";
 
         lock (WeaponRaycastTraceLock)
         {
@@ -373,6 +378,17 @@ public static class RuntimeDiagnostics
                 WeaponRaycastTrace.Dequeue();
             }
         }
+
+        // The dedicated Debug tab keeps the full rolling trace, but weapon
+        // diagnosis must also be visible in the normal Console while playing.
+        // The editor supplies OutputSink; standalone games fall back to stdout.
+        string consoleLine =
+            $"[Weapons / Raycasts] {line}";
+
+        if (OutputSink != null)
+            OutputSink(consoleLine);
+        else
+            Console.WriteLine(consoleLine);
     }
 
     public static string CreateDump(RuntimeScene scene)

@@ -190,12 +190,29 @@ public sealed class GltfModelImporter : ModelImporter
         MaterialChannel? baseChannel = material.FindChannel("BaseColor");
         MaterialChannel? metalChannel = material.FindChannel("MetallicRoughness");
         MaterialChannel? normalChannel = material.FindChannel("Normal");
+        MaterialChannel? occlusionChannel = material.FindChannel("Occlusion");
+        MaterialChannel? emissiveChannel = material.FindChannel("Emissive");
 
         return
             new ImportedMaterial
             {
                 Key = MaterialKey(material),
                 Name = NameOr(material.Name, "Material", material.LogicalIndex),
+                SurfaceType = material.Alpha switch
+                {
+                    AlphaMode.MASK => MaterialSurfaceType.Cutout,
+                    AlphaMode.BLEND => MaterialSurfaceType.Transparent,
+                    _ => MaterialSurfaceType.Opaque
+                },
+                AlphaCutoff = material.AlphaCutoff,
+                DoubleSided = material.DoubleSided,
+                Unlit = material.Unlit,
+                AmbientOcclusionStrength = occlusionChannel.HasValue
+                    ? OptionalFactor(occlusionChannel.Value, "Strength", 1f)
+                    : 1f,
+                EmissionColor = emissiveChannel?.Color is Vector4 emissive
+                    ? new Vector3(emissive.X, emissive.Y, emissive.Z)
+                    : Vector3.Zero,
                 BaseColor = baseChannel?.Color ?? Vector4.One,
                 Metallic =
                     metalChannel.HasValue
@@ -208,8 +225,22 @@ public sealed class GltfModelImporter : ModelImporter
                 BaseColorTexture =
                     ReadTexture(baseChannel?.Texture, "baseColor"),
                 NormalTexture =
-                    ReadTexture(normalChannel?.Texture, "normal")
+                    ReadTexture(normalChannel?.Texture, "normal"),
+                MetallicRoughnessTexture =
+                    ReadTexture(metalChannel?.Texture, "metallicRoughness"),
+                AmbientOcclusionTexture =
+                    ReadTexture(occlusionChannel?.Texture, "occlusion"),
+                EmissionTexture =
+                    ReadTexture(emissiveChannel?.Texture, "emissive")
             };
+    }
+
+    private static float OptionalFactor(MaterialChannel channel,
+        string suffix, float fallback)
+    {
+        var parameter = channel.Parameters.FirstOrDefault(item =>
+            item.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        return parameter?.Value is float value ? value : fallback;
     }
 
     private static ImportedTexture? ReadTexture(

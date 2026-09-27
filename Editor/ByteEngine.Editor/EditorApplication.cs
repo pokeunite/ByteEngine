@@ -2087,6 +2087,67 @@ public sealed class EditorApplication
         {
             return;
         }
+        if (asset.Type == AssetType.Material)
+        {
+            if (parent == null)
+            {
+                _log.Warning("Drop a Material on a specific object, not empty Hierarchy space.");
+                return;
+            }
+            var staticRenderers = new List<MeshRenderer>();
+            var skeletalRenderers = new List<SkeletalMeshRenderer>();
+            Collect(parent);
+            if (staticRenderers.Count + skeletalRenderers.Count != 1)
+            {
+                _log.Warning("This object has multiple material targets. Choose a specific material slot in the Inspector.");
+                return;
+            }
+            SkeletalMeshRenderer? skeletal = skeletalRenderers.FirstOrDefault();
+            if (skeletal != null)
+            {
+                try
+                {
+                    ModelAsset model = _projectContext.Assets.LoadModel(skeletal.Model);
+                    int slots = model.Meshes.Count(mesh =>
+                        mesh.Vertices.Length > 0 &&
+                        mesh.JointWeights.Length == mesh.Vertices.Length / 8 &&
+                        mesh.JointIndices.Length == mesh.Vertices.Length / 8);
+                    if (slots != 1)
+                    {
+                        _log.Warning("This skeletal model has multiple material slots. Choose a slot in the Inspector.");
+                        return;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    _log.Warning($"Could not inspect material slots: {exception.Message}");
+                    return;
+                }
+            }
+            AssetReference material = new(asset.Guid, asset.ProjectPath);
+            Action assign = () =>
+            {
+                if (staticRenderers.Count == 1)
+                    staticRenderers[0].MaterialAssetReference = material;
+                else
+                {
+                    if (skeletal!.MaterialAssetSlots.Count == 0)
+                        skeletal.MaterialAssetSlots.Add(material);
+                    else skeletal.MaterialAssetSlots[0] = material;
+                }
+            };
+            if (_state.Undo != null)
+                _state.Undo.Execute(_state, "Assign Material", assign);
+            else assign();
+            return;
+
+            void Collect(GameObject item)
+            {
+                if (item.GetComponent<MeshRenderer>() is { } mesh) staticRenderers.Add(mesh);
+                if (item.GetComponent<SkeletalMeshRenderer>() is { } skinned) skeletalRenderers.Add(skinned);
+                foreach (GameObject child in item.Children) Collect(child);
+            }
+        }
 
         if (asset.Type != AssetType.Model3D)
         {

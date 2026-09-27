@@ -25,6 +25,10 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 public sealed partial class SkeletalMeshRenderer : Component
 {
     private readonly List<RuntimeSkinnedMesh> _runtimeMeshes = new();
+    private readonly Dictionary<int, (AssetReference Reference, Material? Material)>
+        _resolvedMaterialSlots = new();
+    private readonly Dictionary<int, MaterialOverrideState> _materialOverrides = new();
+    private readonly Dictionary<int, Material> _overrideMaterials = new();
 
     private ModelAsset? _model;
     private SkeletonAsset? _skeleton;
@@ -85,6 +89,22 @@ public sealed partial class SkeletalMeshRenderer : Component
     /// use the imported material assigned to the source mesh.
     /// </summary>
     public List<string> MaterialKeys { get; set; } = new();
+
+    /// <summary>Optional .bmat assets by skinned mesh index; empty keeps imported material.</summary>
+    public List<AssetReference> MaterialAssetSlots { get; set; } = new();
+    public MaterialOverrideState GetMaterialOverrides(int slot)
+    {
+        if (slot < 0) throw new ArgumentOutOfRangeException(nameof(slot));
+        if (!_materialOverrides.TryGetValue(slot, out MaterialOverrideState? overrides))
+            _materialOverrides[slot] = overrides = new MaterialOverrideState();
+        return overrides;
+    }
+
+    public void ResetMaterialOverrides(int slot)
+    {
+        _materialOverrides.Remove(slot);
+        _overrideMaterials.Remove(slot);
+    }
 
     public bool Visible { get; set; } = true;
 
@@ -448,8 +468,33 @@ public sealed partial class SkeletalMeshRenderer : Component
         Matrix4x4 liveWorldMatrix =
             Transform.WorldMatrix;
 
-        foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
+        AnimationRuntimeAssets.TryGet(out AssetManager? materialAssets);
+        for (int slotIndex = 0; slotIndex < _runtimeMeshes.Count; slotIndex++)
         {
+            RuntimeSkinnedMesh runtime = _runtimeMeshes[slotIndex];
+            Material effectiveMaterial = runtime.Material;
+            if (materialAssets != null && slotIndex < MaterialAssetSlots.Count &&
+                MaterialAssetSlots[slotIndex] is { IsEmpty: false } reference)
+            {
+                if (!_resolvedMaterialSlots.TryGetValue(slotIndex, out var cached) ||
+                    cached.Reference != reference)
+                {
+                    Material? resolved;
+                    try { resolved = materialAssets.LoadMaterial(reference); }
+                    catch { resolved = null; }
+                    cached = (reference, resolved);
+                    _resolvedMaterialSlots[slotIndex] = cached;
+                }
+                effectiveMaterial = cached.Material ?? runtime.Material;
+            }
+            if (_materialOverrides.TryGetValue(slotIndex, out MaterialOverrideState? overrides) &&
+                !overrides.IsEmpty)
+            {
+                if (!_overrideMaterials.TryGetValue(slotIndex, out Material? local))
+                    _overrideMaterials[slotIndex] = local = effectiveMaterial.Clone();
+                overrides.Apply(effectiveMaterial, local, materialAssets);
+                effectiveMaterial = local;
+            }
             /*
              * Animation caches only mesh/model-space placement. The scene
              * transform is intentionally read here, at render time, so player
@@ -457,10 +502,10 @@ public sealed partial class SkeletalMeshRenderer : Component
              */
             context.RenderWorld.Submit(
                 runtime.Mesh,
-                runtime.Material,
+                effectiveMaterial,
                 runtime.MeshToModelMatrix *
                 liveWorldMatrix,
-                ResolveRenderQueue(runtime.Material),
+                ResolveRenderQueue(effectiveMaterial),
                 true,
                 true,
                 true);
