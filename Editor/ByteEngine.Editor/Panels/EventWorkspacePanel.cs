@@ -6942,6 +6942,13 @@ internal sealed class EventWorkspacePanel
             case "ui.focus":
             case "ui.buttonFocused":
             case "ui.buttonEnabled":
+            case "ui.setLanguage":
+            case "ui.languageIs":
+            case "ui.setTextKey":
+            case "ui.setLabelKey":
+            case "ui.playAnimation":
+            case "ui.stopAnimation":
+            case "ui.animationPlaying":
                 instruction.Arguments["target"] = EventValue.String("Self");
                 if (id is "ui.setText" or "ui.setButtonLabel")
                     instruction.Arguments["text"] = EventValue.String(string.Empty);
@@ -6952,9 +6959,16 @@ internal sealed class EventWorkspacePanel
                 if (id is "ui.setBarFromHealth" or "ui.setTextFromHealth")
                     instruction.Arguments["source"] = EventValue.String("Self");
                 if (id == "ui.setTextFromHealth")
+                {
                     instruction.Arguments["prefix"] = EventValue.String("HP ");
+                    instruction.Arguments["prefixKey"] = EventValue.String(string.Empty);
+                }
                 if (id == "ui.setButtonEnabled")
                     instruction.Arguments["enabled"] = EventValue.Boolean(true);
+                if (id is "ui.setLanguage" or "ui.languageIs")
+                    instruction.Arguments["language"] = EventValue.String("en");
+                if (id is "ui.setTextKey" or "ui.setLabelKey")
+                    instruction.Arguments["key"] = EventValue.String("menu.play");
                 break;
             case "material.setMaterial":
             case "material.setBaseColor":
@@ -7493,6 +7507,13 @@ internal sealed class EventWorkspacePanel
             case "ui.focus":
             case "ui.buttonFocused":
             case "ui.buttonEnabled":
+            case "ui.setLanguage":
+            case "ui.languageIs":
+            case "ui.setTextKey":
+            case "ui.setLabelKey":
+            case "ui.playAnimation":
+            case "ui.stopAnimation":
+            case "ui.animationPlaying":
                 DrawUiArguments(instruction, state);
                 break;
             case "material.setMaterial":
@@ -10734,6 +10755,8 @@ internal sealed class EventWorkspacePanel
                 DrawObjectTargetArgument(instruction, "source", "Health Object", state);
                 DrawValueArgument(instruction, "prefix", "Prefix", VariableType.String,
                     EventValue.String("HP "), state, false);
+                DrawValueArgument(instruction, "prefixKey", "Prefix Localization Key", VariableType.String,
+                    EventValue.String(string.Empty), state, false);
                 break;
             case "ui.setBarValue":
             case "ui.setBarMaximum":
@@ -10751,6 +10774,16 @@ internal sealed class EventWorkspacePanel
             case "ui.setButtonEnabled":
                 DrawValueArgument(instruction, "enabled", "Enabled", VariableType.Boolean,
                     EventValue.Boolean(true), state, false);
+                break;
+            case "ui.setLanguage":
+            case "ui.languageIs":
+                DrawValueArgument(instruction, "language", "Language Code", VariableType.String,
+                    EventValue.String("en"), state, false);
+                break;
+            case "ui.setTextKey":
+            case "ui.setLabelKey":
+                DrawValueArgument(instruction, "key", "Localization Key", VariableType.String,
+                    EventValue.String("menu.play"), state, false);
                 break;
         }
     }

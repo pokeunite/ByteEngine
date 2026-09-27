@@ -30,6 +30,9 @@ public sealed class ComponentSerializer
                 ["referenceWidth"] = canvas.ReferenceResolution.X,
                 ["referenceHeight"] = canvas.ReferenceResolution.Y,
                 ["userScale"] = canvas.UserScale,
+                ["language"] = canvas.Language,
+                ["fallbackLanguage"] = canvas.FallbackLanguage,
+                ["translationsJson"] = canvas.TranslationsJson,
                 ["safeArea"] = new JsonArray(canvas.SafeAreaInsets.X, canvas.SafeAreaInsets.Y,
                     canvas.SafeAreaInsets.Z, canvas.SafeAreaInsets.W)
             }};
@@ -46,6 +49,9 @@ public sealed class ComponentSerializer
                     data.Properties["referenceWidth"]?.GetValue<float>() ?? 1280f,
                     data.Properties["referenceHeight"]?.GetValue<float>() ?? 720f),
                 UserScale = data.Properties["userScale"]?.GetValue<float>() ?? 1f,
+                Language = data.Properties["language"]?.GetValue<string>() ?? "en",
+                FallbackLanguage = data.Properties["fallbackLanguage"]?.GetValue<string>() ?? "en",
+                TranslationsJson = data.Properties["translationsJson"]?.GetValue<string>() ?? "{}",
                 SafeAreaInsets = data.Properties["safeArea"] is JsonArray safe && safe.Count >= 4
                     ? new Vector4(safe[0]?.GetValue<float>() ?? 0f,
                         safe[1]?.GetValue<float>() ?? 0f,
@@ -84,6 +90,7 @@ public sealed class ComponentSerializer
                 ["font"] = new JsonObject { ["guid"] = widget.FontReference.Guid.ToString(),
                     ["path"] = widget.FontReference.CachedProjectPath },
                 ["label"] = widget.Label,
+                ["labelKey"] = widget.LabelKey,
                 ["fontSize"] = widget.FontSize,
                 ["value"] = widget.Value,
                 ["maximum"] = widget.Maximum,
@@ -124,6 +131,7 @@ public sealed class ComponentSerializer
                 ImageReference = ReadAsset(properties["image"], context),
                 FontReference = ReadAsset(properties["font"], context),
                 Label = properties["label"]?.GetValue<string>() ?? "Button",
+                LabelKey = properties["labelKey"]?.GetValue<string>() ?? string.Empty,
                 FontSize = properties["fontSize"]?.GetValue<int>() ?? 22,
                 Value = properties["value"]?.GetValue<float>() ?? 100f,
                 Maximum = properties["maximum"]?.GetValue<float>() ?? 100f,
@@ -163,6 +171,7 @@ public sealed class ComponentSerializer
                 Properties = new JsonObject
                 {
                     ["text"] = text.Text,
+                    ["localizationKey"] = text.LocalizationKey,
                     ["font"] = new JsonObject
                     {
                         ["guid"] = text.FontReference.Guid.ToString(),
@@ -206,6 +215,7 @@ public sealed class ComponentSerializer
             return new UiText
             {
                 Text = data.Properties["text"]?.GetValue<string>() ?? "New Text",
+                LocalizationKey = data.Properties["localizationKey"]?.GetValue<string>() ?? string.Empty,
                 FontReference = new AssetReference(fontGuid, path),
                 FontSize = data.Properties["size"]?.GetValue<int>() ?? 32,
                 Color = color is { Count: >= 4 }
@@ -233,6 +243,41 @@ public sealed class ComponentSerializer
                 WrapWidth = data.Properties["wrapWidth"]?.GetValue<float>() ?? 0f,
                 Visible = data.Properties["visible"]?.GetValue<bool>() ?? true,
                 OrderInLayer = data.Properties["orderInLayer"]?.GetValue<int>() ?? 0
+            };
+        }
+    }
+
+    private sealed class UiAnimatorCodec : IComponentCodec
+    {
+        public string TypeName => "UiAnimator";
+        public Type ComponentType => typeof(UiAnimator);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            UiAnimator animation = (UiAnimator)component;
+            return new ComponentData { Type = TypeName, Properties = new JsonObject
+            {
+                ["preset"] = animation.Preset.ToString(),
+                ["duration"] = animation.Duration,
+                ["delay"] = animation.Delay,
+                ["distance"] = animation.Distance,
+                ["autoPlay"] = animation.AutoPlay,
+                ["loop"] = animation.Loop,
+                ["hideOnComplete"] = animation.HideOnComplete
+            }};
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Enum.TryParse(data.Properties["preset"]?.GetValue<string>(), true,
+                out UiAnimationPreset preset);
+            return new UiAnimator
+            {
+                Preset = preset,
+                Duration = data.Properties["duration"]?.GetValue<float>() ?? .3f,
+                Delay = data.Properties["delay"]?.GetValue<float>() ?? 0f,
+                Distance = data.Properties["distance"]?.GetValue<float>() ?? 80f,
+                AutoPlay = data.Properties["autoPlay"]?.GetValue<bool>() ?? false,
+                Loop = data.Properties["loop"]?.GetValue<bool>() ?? false,
+                HideOnComplete = data.Properties["hideOnComplete"]?.GetValue<bool>() ?? false
             };
         }
     }
@@ -272,6 +317,7 @@ public sealed class ComponentSerializer
         Register(new UiCanvasCodec());
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());
+        Register(new UiAnimatorCodec());
 
         Register(
             new Camera3DCodec()

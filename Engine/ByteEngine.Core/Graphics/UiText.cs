@@ -18,6 +18,7 @@ public enum UiAnchor
 public sealed class UiText : Component
 {
     public string Text { get; set; } = "New Text";
+    public string LocalizationKey { get; set; } = string.Empty;
     public AssetReference FontReference { get; set; } = AssetReference.Empty;
     private int _fontSize = 32;
     public int FontSize { get => _fontSize; set => _fontSize = Math.Clamp(value, 8, 96); }
@@ -41,6 +42,10 @@ public sealed class UiText : Component
         var canvasRect = UiLayout.ResolveParent(GameObject,
             new Vector2(context.TargetWidth, context.TargetHeight));
         float scale = canvasRect.Scale;
+        UiAnimator? animator = GameObject.GetComponent<UiAnimator>() is { Enabled: true } active
+            ? active : null;
+        float opacity = UiLayout.ResolveOpacity(GameObject);
+        string displayed = UiLocalization.Translate(GameObject, LocalizationKey, Text);
         Vector2 basePoint = Anchor switch
         {
             UiAnchor.TopCenter => canvasRect.Origin + new Vector2(canvasRect.Size.X * .5f, 0f),
@@ -53,20 +58,22 @@ public sealed class UiText : Component
         };
         Vector3 local = Transform.LocalPosition;
         string? fontPath = FontRuntime.ResolvePath(FontReference);
-        int size = Math.Max(8, (int)MathF.Round(FontSize * scale));
+        int size = Math.Max(8, (int)MathF.Round(FontSize * scale * (animator?.Scale ?? 1f)));
         Vector2 point = basePoint + (Offset + new Vector2(local.X, local.Y)) * scale;
+        point += (animator?.Offset ?? Vector2.Zero) * scale;
         if (OutlineColor.W > 0f && OutlineWidth > 0)
         {
             float width = Math.Clamp(OutlineWidth, 1, 4) * scale;
             foreach (Vector2 direction in new[] { -Vector2.UnitX, Vector2.UnitX,
                          -Vector2.UnitY, Vector2.UnitY })
-                context.QueueUiText(Text, fontPath, size, point + direction * width,
-                    OutlineColor, WrapWidth * scale, Anchor);
+                context.QueueUiText(displayed, fontPath, size, point + direction * width,
+                    OutlineColor with { W = OutlineColor.W * opacity }, WrapWidth * scale, Anchor);
         }
         if (ShadowColor.W > 0f)
-            context.QueueUiText(Text, fontPath, size, point + ShadowOffset * scale,
-                ShadowColor, WrapWidth * scale, Anchor);
-        context.QueueUiText(Text, fontPath, size, point, Color, WrapWidth * scale, Anchor);
+            context.QueueUiText(displayed, fontPath, size, point + ShadowOffset * scale,
+                ShadowColor with { W = ShadowColor.W * opacity }, WrapWidth * scale, Anchor);
+        context.QueueUiText(displayed, fontPath, size, point,
+            Color with { W = Color.W * opacity }, WrapWidth * scale, Anchor);
     }
 
     private bool HasCanvasAncestor()

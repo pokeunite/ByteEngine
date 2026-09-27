@@ -25,6 +25,20 @@ public static class UiLayout
 
     public static bool IsVisible(GameObject gameObject)
     {
+        return IsVisibleInternal(gameObject) && ResolveOpacity(gameObject) > .01f;
+    }
+
+    public static float ResolveOpacity(GameObject gameObject)
+    {
+        float opacity = 1f;
+        for (GameObject? current = gameObject; current != null; current = current.Parent)
+            if (current.GetComponent<UiAnimator>() is { Enabled: true } animator)
+                opacity *= animator.Opacity;
+        return Math.Clamp(opacity, 0f, 1f);
+    }
+
+    private static bool IsVisibleInternal(GameObject gameObject)
+    {
         bool hasCanvas = false;
         for (GameObject? current = gameObject; current != null; current = current.Parent)
         {
@@ -120,6 +134,16 @@ public static class UiLayout
                 float inset = Math.Max(0f, offset.Y * root.Scale);
                 position.Y = parentOrigin.Y + inset;
                 scaledSize.Y = Math.Max(0f, parentSize.Y - inset * 2f);
+            }
+        }
+        if (gameObject.GetComponent<UiAnimator>() is { Enabled: true } animator)
+        {
+            position += animator.Offset * root.Scale;
+            if (animator.Scale != 1f)
+            {
+                Vector2 resized = scaledSize * Math.Max(.01f, animator.Scale);
+                position += (scaledSize - resized) * .5f;
+                scaledSize = resized;
             }
         }
         return (position, scaledSize, root.Scale);

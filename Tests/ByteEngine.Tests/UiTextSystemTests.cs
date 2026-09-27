@@ -37,6 +37,7 @@ internal static class UiTextSystemTests
         AssetRecord vectorFont = fonts.Single(asset => asset.ProjectPath.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
         using var assets = new AssetManager(database);
         var serializer = new SceneSerializer(new ComponentSerializer(root, database, assets));
+        TestLocalizationAndAnimation(serializer);
 
         var scene = new Scene("Text Test");
         GameObject canvas = scene.CreateGameObject("Canvas");
@@ -135,6 +136,108 @@ internal static class UiTextSystemTests
             text.WrapWidth == 300f &&
             text.OrderInLayer == 5,
             "Canvas hierarchy and Text settings survive scene serialization.");
+    }
+
+    private static void TestLocalizationAndAnimation(SceneSerializer serializer)
+    {
+        var scene = new Scene("Localized UI");
+        GameObject canvasObject = scene.CreateGameObject("Canvas");
+        UiCanvas canvas = canvasObject.AddComponent(new UiCanvas
+        {
+            Language = "fr",
+            FallbackLanguage = "en",
+            TranslationsJson = @"{""en"":{""menu.play"":""Play"",""menu.quit"":""Quit""},""fr"":{""menu.play"":""Jouer""}}"
+        });
+        GameObject labelObject = scene.CreateGameObject("Play Label");
+        labelObject.SetParent(canvasObject);
+        UiText label = labelObject.AddComponent(new UiText
+        {
+            Text = "Fallback", LocalizationKey = "menu.play"
+        });
+        GameObject buttonObject = scene.CreateGameObject("Play Button");
+        buttonObject.SetParent(canvasObject);
+        UiWidget button = buttonObject.AddComponent(new UiWidget
+        {
+            Kind = UiWidgetKind.Button, Label = "Fallback", LabelKey = "menu.quit"
+        });
+        Assert(UiLocalization.Translate(labelObject, label.LocalizationKey, label.Text) == "Jouer",
+            "Current Canvas language translates Text.");
+        Assert(UiLocalization.Translate(buttonObject, button.LabelKey, button.Label) == "Quit",
+            "Missing translation falls back to the fallback language.");
+        Assert(UiLocalization.Translate(labelObject, "missing", "Authored") == "Authored",
+            "Unknown keys retain the authored text.");
+        canvas.TranslationsJson = "{ invalid";
+        Assert(UiLocalization.Translate(labelObject, label.LocalizationKey, label.Text) == "Fallback",
+            "Invalid translation drafts fail safely.");
+        canvas.TranslationsJson = @"{""en"":{""menu.play"":""Play""},""fr"":{""menu.play"":""Jouer""}}";
+
+        UiAnimator animation = labelObject.AddComponent(new UiAnimator
+        {
+            Preset = UiAnimationPreset.SlideInLeft, Duration = 1f, Distance = 100f
+        });
+        Vector2 authoredOffset = label.Offset;
+        animation.Play();
+        Assert(animation.IsPlaying && animation.Offset.X == -100f,
+            "Slide animation begins outside its authored position.");
+        animation.Advance(.5f);
+        Assert(animation.Offset.X < 0f && animation.Offset.X > -100f,
+            "Slide animation interpolates toward the authored position.");
+        animation.Advance(.5f);
+        Assert(!animation.IsPlaying && animation.Offset == Vector2.Zero &&
+            label.Offset == authoredOffset,
+            "Slide completes without altering serialized layout.");
+
+        animation.Preset = UiAnimationPreset.FadeOut;
+        animation.HideOnComplete = true;
+        animation.Play();
+        animation.Advance(.5f);
+        Assert(UiLayout.ResolveOpacity(labelObject) is > 0f and < 1f,
+            "Fade opacity participates in UI layout visibility.");
+        animation.Advance(.5f);
+        Assert(!label.Visible && UiLayout.ResolveOpacity(labelObject) == 0f,
+            "Fade Out may hide its target after completion.");
+        animation.Play();
+        Assert(label.Visible && animation.Opacity == 1f,
+            "Replaying a hidden Fade Out safely reveals its target.");
+        animation.Stop();
+        animation.Preset = UiAnimationPreset.SlideInLeft;
+        Scene copy = serializer.CloneForRuntime(scene);
+        UiCanvas? copiedCanvas = copy.FindGameObject("Canvas")?.GetComponent<UiCanvas>();
+        UiText? copiedLabel = copy.FindGameObject("Play Label")?.GetComponent<UiText>();
+        UiWidget? copiedButton = copy.FindGameObject("Play Button")?.GetComponent<UiWidget>();
+        UiAnimator? copiedAnimation = copy.FindGameObject("Play Label")?.GetComponent<UiAnimator>();
+        Assert(copiedCanvas?.Language == "fr" &&
+            copiedCanvas.TranslationsJson.Contains("Jouer") &&
+            copiedLabel?.LocalizationKey == "menu.play" &&
+            copiedButton?.LabelKey == "menu.quit" &&
+            copiedAnimation is { Preset: UiAnimationPreset.SlideInLeft, Distance: 100f },
+            "Translations, localization keys and animation settings survive scene serialization.");
+
+        var context = new EventExecutionContext
+        {
+            Globals = new VariableStore(), Scene = scene, Self = canvasObject
+        };
+        VisualLogicRegistry registry = VisualLogicRegistry.CreateDefault();
+        bool hasLanguage = registry.TryGetAction("ui.setLanguage", out VisualActionDefinition? setLanguage);
+        bool hasAnimation = registry.TryGetAction("ui.playAnimation", out VisualActionDefinition? playAnimation);
+        Assert(hasLanguage && hasAnimation,
+            "Localization and UI animation Event Sheet actions are registered.");
+        setLanguage!.Execute(new VisualInstruction
+        {
+            Id = "ui.setLanguage",
+            Arguments = new() { ["target"] = EventValue.String("Self"),
+                ["language"] = EventValue.String("en") }
+        }, context);
+        Assert(canvas.Language == "en" &&
+            UiLocalization.Translate(labelObject, label.LocalizationKey, label.Text) == "Play",
+            "Event Sheet changes Canvas language immediately.");
+        animation.Stop();
+        playAnimation!.Execute(new VisualInstruction
+        {
+            Id = "ui.playAnimation",
+            Arguments = new() { ["target"] = EventValue.String("Play Label") }
+        }, context);
+        Assert(animation.IsPlaying, "Event Sheet starts UI animation.");
     }
 
     private static void TestBundledFontRasterization()

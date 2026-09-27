@@ -9,6 +9,9 @@ public sealed class UiCanvas : Component
     public UiScaleMode ScaleMode { get; set; } = UiScaleMode.ScaleWithScreen;
     public Vector2 ReferenceResolution { get; set; } = new(1280f, 720f);
     public Vector4 SafeAreaInsets { get; set; } = Vector4.Zero;
+    public string Language { get; set; } = "en";
+    public string FallbackLanguage { get; set; } = "en";
+    public string TranslationsJson { get; set; } = @"{""en"":{""menu.play"":""Play""},""fr"":{""menu.play"":""Jouer""}}";
     private float _userScale = 1f;
     public float UserScale
     {

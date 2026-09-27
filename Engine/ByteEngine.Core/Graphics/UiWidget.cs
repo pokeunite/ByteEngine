@@ -22,6 +22,7 @@ public sealed class UiWidget : Component
     public Vector4 FillColor { get; set; } = new(.25f, .7f, .35f, 1f);
     public AssetReference ImageReference { get; set; } = AssetReference.Empty;
     public string Label { get; set; } = "Button";
+    public string LabelKey { get; set; } = string.Empty;
     public int FontSize { get; set; } = 22;
     public AssetReference FontReference { get; set; } = AssetReference.Empty;
     public float Value { get; set; } = 100f;
@@ -65,11 +66,13 @@ public sealed class UiWidget : Component
         var rect = UiLayout.Resolve(GameObject, Anchor, Offset, Size,
             new Vector2(context.TargetWidth, context.TargetHeight));
         if (rect.Size.X <= 0f || rect.Size.Y <= 0f) return;
+        float opacity = UiLayout.ResolveOpacity(GameObject);
         Vector4 background = Color;
         if (Kind == UiWidgetKind.Button)
             background = !Interactable ? DisabledColor :
                 IsHovered && Input.IsMouseButtonDownForUi(MouseButton.Left) ? PressedColor :
                 IsHovered || IsFocused ? HoverColor : Color;
+        background.W *= opacity;
         if (Kind != UiWidgetKind.Image || ImageReference.IsEmpty)
             context.QueueUiQuad(rect.Position, rect.Size, background);
         if (Kind == UiWidgetKind.ProgressBar)
@@ -77,19 +80,19 @@ public sealed class UiWidget : Component
             float fraction = Maximum > 0f ? Math.Clamp(Value / Maximum, 0f, 1f) : 0f;
             if (fraction > 0f)
                 context.QueueUiQuad(rect.Position, new Vector2(rect.Size.X * fraction,
-                    rect.Size.Y), FillColor);
+                    rect.Size.Y), FillColor with { W = FillColor.W * opacity });
         }
         else if (Kind == UiWidgetKind.Image && !ImageReference.IsEmpty &&
             AnimationRuntimeAssets.TryGet(out AssetManager? assets) && assets != null)
         {
             context.QueueUiImage(assets.LoadTexture(ImageReference), rect.Position,
-                rect.Size, Color);
+                rect.Size, Color with { W = Color.W * opacity });
         }
         else if (Kind == UiWidgetKind.Button)
         {
-            context.QueueUiText(Label, FontRuntime.ResolvePath(FontReference),
+            context.QueueUiText(UiLocalization.Translate(GameObject, LabelKey, Label), FontRuntime.ResolvePath(FontReference),
                 Math.Max(8, (int)(FontSize * rect.Scale)),
-                rect.Position + rect.Size * .5f, Vector4.One, rect.Size.X, UiAnchor.Center);
+                rect.Position + rect.Size * .5f, new Vector4(1f, 1f, 1f, opacity), rect.Size.X, UiAnchor.Center);
         }
     }
 }

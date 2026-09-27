@@ -61,6 +61,9 @@ internal static class ComponentPropertyRenderer
                         property.GetMethod?.IsPublic == true &&
                         Supported(property.PropertyType) &&
                         property.Name is not ("UpdateOrder" or "RenderOrder") &&
+                        (type != typeof(UiAnimator) || property.Name is not
+                            (nameof(UiAnimator.IsPlaying) or nameof(UiAnimator.Opacity) or
+                             nameof(UiAnimator.Scale) or nameof(UiAnimator.Offset))) &&
                         type != typeof(BlueprintInstance))
                 .Select(
                     property =>
@@ -143,6 +146,7 @@ internal static class ComponentPropertyRenderer
                 nameof(UiWidget.Maximum) => widget.Kind == UiWidgetKind.ProgressBar,
             nameof(UiWidget.HoverColor) or nameof(UiWidget.PressedColor) or
                 nameof(UiWidget.DisabledColor) or nameof(UiWidget.Label) or
+                nameof(UiWidget.LabelKey) or
                 nameof(UiWidget.FontSize) or nameof(UiWidget.FontReference) or
                 nameof(UiWidget.Interactable) => widget.Kind == UiWidgetKind.Button,
             _ => true
@@ -301,11 +305,12 @@ internal static class ComponentPropertyRenderer
                     : ImGui.DragFloat4(label, ref vector4, 0.01f);
                 after = vector4;
             }
-            else if (component is UiText && descriptor.Property.Name == nameof(UiText.Text))
+            else if ((component is UiText && descriptor.Property.Name == nameof(UiText.Text)) ||
+                     (component is UiCanvas && descriptor.Property.Name == nameof(UiCanvas.TranslationsJson)))
             {
                 string content = before?.ToString() ?? string.Empty;
                 ImGui.TextUnformatted(descriptor.Metadata.DisplayName);
-                edited = ImGui.InputTextMultiline("##TextContent", ref content, 8192,
+                edited = ImGui.InputTextMultiline("##TextContent", ref content, 65536,
                     new Vector2(-1, 96));
                 after = content;
             }

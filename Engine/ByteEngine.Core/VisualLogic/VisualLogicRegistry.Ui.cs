@@ -25,7 +25,10 @@ public sealed partial class VisualLogicRegistry
         Action("ui.setText", "Set Text", (i, c) =>
         {
             if (ResolveUiTarget(i, c)?.GetComponent<UiText>() is { } text)
+            {
+                text.LocalizationKey = string.Empty;
                 text.Text = EventValueResolver.GetString(i, "text", c);
+            }
         });
         Action("ui.setTextFromHealth", "Set Text From Health", (i, c) =>
         {
@@ -33,12 +36,21 @@ public sealed partial class VisualLogicRegistry
             HealthComponent? health = ResolveObjectArgument(i, "source", c, false)?
                 .GetComponent<HealthComponent>();
             if (text != null && health != null)
-                text.Text = $"{EventValueResolver.GetString(i, "prefix", c)}{health.CurrentHealth:0}/{health.MaxHealth:0}";
+            {
+                text.LocalizationKey = string.Empty;
+                string prefix = UiLocalization.Translate(text.GameObject,
+                    EventValueResolver.GetString(i, "prefixKey", c),
+                    EventValueResolver.GetString(i, "prefix", c));
+                text.Text = $"{prefix}{health.CurrentHealth:0}/{health.MaxHealth:0}";
+            }
         });
         Action("ui.setButtonLabel", "Set Button Label", (i, c) =>
         {
             if (ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is { Kind: UiWidgetKind.Button } button)
+            {
+                button.LabelKey = string.Empty;
                 button.Label = EventValueResolver.GetString(i, "text", c);
+            }
         });
         Action("ui.setImage", "Set Image", (i, c) =>
         {
@@ -82,6 +94,35 @@ public sealed partial class VisualLogicRegistry
         {
             if (ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is { Kind: UiWidgetKind.Button } button)
                 button.Interactable = EventValueResolver.GetBoolean(i, "enabled", c, true);
+        });
+        Action("ui.setLanguage", "Set UI Language", (i, c) =>
+        {
+            GameObject? target = ResolveUiTarget(i, c);
+            if (target != null && UiLayout.TryGetCanvas(target, out UiCanvas? canvas) && canvas != null)
+                canvas.Language = EventValueResolver.GetString(i, "language", c, "en").Trim();
+        });
+        Action("ui.setTextKey", "Set Text Localization Key", (i, c) =>
+        {
+            if (ResolveUiTarget(i, c)?.GetComponent<UiText>() is { } text)
+                text.LocalizationKey = EventValueResolver.GetString(i, "key", c);
+        });
+        Action("ui.setLabelKey", "Set Button Localization Key", (i, c) =>
+        {
+            if (ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is { Kind: UiWidgetKind.Button } button)
+                button.LabelKey = EventValueResolver.GetString(i, "key", c);
+        });
+        Action("ui.playAnimation", "Play UI Animation", (i, c) =>
+            ResolveUiTarget(i, c)?.GetComponent<UiAnimator>()?.Play());
+        Action("ui.stopAnimation", "Stop UI Animation", (i, c) =>
+            ResolveUiTarget(i, c)?.GetComponent<UiAnimator>()?.Stop());
+        Condition("ui.animationPlaying", "UI Animation Is Playing", (i, c) =>
+            ResolveUiTarget(i, c)?.GetComponent<UiAnimator>()?.IsPlaying == true);
+        Condition("ui.languageIs", "UI Language Is", (i, c) =>
+        {
+            GameObject? target = ResolveUiTarget(i, c);
+            return target != null && UiLayout.TryGetCanvas(target, out UiCanvas? canvas) &&
+                string.Equals(canvas?.Language, EventValueResolver.GetString(i, "language", c),
+                    StringComparison.OrdinalIgnoreCase);
         });
         Condition("ui.buttonClicked", "On Button Clicked", (i, c) =>
             ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is
