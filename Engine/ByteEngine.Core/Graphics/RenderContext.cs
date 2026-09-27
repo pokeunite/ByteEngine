@@ -43,6 +43,25 @@ public sealed class RenderContext
     public RenderWorld RenderWorld { get; } =
         new();
 
+    private readonly List<Action<Renderer2D>> _uiCommands = new();
+
+    internal void QueueUiText(string value, string? fontPath, int size, Vector2 position, Vector4 color, float wrapWidth, UiAnchor anchor) =>
+        _uiCommands.Add(renderer => renderer.DrawText(value, fontPath, size, position, color, wrapWidth, anchor));
+
+    internal void QueueUiQuad(Vector2 position, Vector2 size, Vector4 color) =>
+        _uiCommands.Add(renderer => renderer.DrawQuad(position + size * .5f, size, color));
+
+    internal void QueueUiImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color) =>
+        _uiCommands.Add(renderer => renderer.DrawSprite(texture, position + size * .5f, size, 0f, color));
+
+    internal void FlushUi()
+    {
+        if (_uiCommands.Count == 0) return;
+        Renderer2D.ResetCamera();
+        foreach (Action<Renderer2D> command in _uiCommands) command(Renderer2D);
+        _uiCommands.Clear();
+    }
+
     public bool Has3DCamera =>
         Camera3D !=
         null ||

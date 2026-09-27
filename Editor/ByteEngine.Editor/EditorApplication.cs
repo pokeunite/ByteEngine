@@ -21,6 +21,7 @@ namespace ByteEngine.Editor;
 public sealed class EditorApplication
     : ByteEngineApplication
 {
+    protected override bool UseWholeWindowForUiInput => false;
     private readonly string? _startupProjectFile;
 
     private readonly EditorLog _log =
@@ -633,6 +634,16 @@ public sealed class EditorApplication
             ImGui.BeginMenu("2D", canEdit))
         {
             if (ImGui.MenuItem("Sprite")) CreateObjectWithComponent("Sprite", () => new SpriteRenderer());
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu("UI", canEdit))
+        {
+            if (ImGui.MenuItem("Text")) CreateUiText();
+            if (ImGui.MenuItem("Image")) CreateUiWidget("Image", UiWidgetKind.Image);
+            if (ImGui.MenuItem("Panel")) CreateUiWidget("Panel", UiWidgetKind.Panel);
+            if (ImGui.MenuItem("Progress Bar")) CreateUiWidget("Progress Bar", UiWidgetKind.ProgressBar);
+            if (ImGui.MenuItem("Button")) CreateUiWidget("Button", UiWidgetKind.Button);
             ImGui.EndMenu();
         }
 
@@ -1401,6 +1412,8 @@ public sealed class EditorApplication
                         warning
                     )
                 );
+
+            BundledFontInstaller.Install(context);
 
             Scene scene = ProjectTemplateFactory.Create(request.Template);
 
@@ -2240,6 +2253,43 @@ public sealed class EditorApplication
         {
             GameObject gameObject = EditorSceneCommands.CreateGameObject(_state, name, _log);
             gameObject.AddComponent(componentFactory());
+        });
+    }
+
+    private void CreateUiWidget(string name, UiWidgetKind kind)
+    {
+        if (_state == null || _state.Mode != EditorMode.Edit) return;
+        _state.Undo?.Execute(_state, $"Create UI {name}", () =>
+        {
+            GameObject? canvas = _state.EditorScene.GameObjects
+                .FirstOrDefault(item => item.GetComponent<UiCanvas>() != null);
+            if (canvas == null)
+            {
+                canvas = EditorSceneCommands.CreateGameObject(_state, "Canvas", _log);
+                canvas.AddComponent(new UiCanvas());
+            }
+            GameObject widget = EditorSceneCommands.CreateGameObject(_state, name, _log);
+            widget.SetParent(canvas);
+            widget.AddComponent(new UiWidget { Kind = kind,
+                Color = kind == UiWidgetKind.Image ? Vector4.One : new Vector4(.12f, .15f, .2f, .9f) });
+        });
+    }
+
+    private void CreateUiText()
+    {
+        if (_state == null || _state.Mode != EditorMode.Edit) return;
+        _state.Undo?.Execute(_state, "Create UI Text", () =>
+        {
+            GameObject? canvas = _state.EditorScene.GameObjects
+                .FirstOrDefault(item => item.GetComponent<UiCanvas>() != null);
+            if (canvas == null)
+            {
+                canvas = EditorSceneCommands.CreateGameObject(_state, "Canvas", _log);
+                canvas.AddComponent(new UiCanvas());
+            }
+            GameObject text = EditorSceneCommands.CreateGameObject(_state, "Text", _log);
+            text.SetParent(canvas);
+            text.AddComponent(new UiText());
         });
     }
 

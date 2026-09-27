@@ -309,6 +309,9 @@ internal sealed class AssetsPanel : IDisposable
                 _showCreateAnimationProfile = true;
             }
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
+            ImGui.Separator();
+            if (ImGui.MenuItem("Import Font Files...")) ImportFontFiles(log);
+            if (ImGui.MenuItem("Add Free CC0 Fonts")) InstallBundledFonts(log);
 
             bool canCreateFromSelection = state.Mode == EditorMode.Edit && state.SelectedObject != null &&
                 IsInsideDirectory(_currentDirectory, GetAssetsRoot());
@@ -2504,6 +2507,33 @@ state.SelectedObject =
     // ========================================================
     // BLUEPRINT CREATION
     // ========================================================
+
+    private void InstallBundledFonts(EditorLog log)
+    {
+        try
+        {
+            int added = BundledFontInstaller.Install(_project);
+            SelectDirectory(Path.Combine(GetAssetsRoot(), "Fonts", "ByteEngine"));
+            RefreshAfterFileOperation();
+            log.Info(added == 0 ? "Free CC0 fonts are already installed in this project." :
+                $"Installed {added} free CC0 fonts into this project's Assets/Fonts/ByteEngine folder.");
+        }
+        catch (Exception error)
+        {
+            log.Error($"Could not install bundled fonts: {error.Message}");
+        }
+    }
+
+    private void ImportFontFiles(EditorLog log)
+    {
+        string[] paths = EditorDialogs.ChooseFontFiles();
+        if (paths.Length == 0) return;
+        IReadOnlyList<AssetRecord> imported = FontFileImport.Import(_project, log, paths, GetAssetCreationDirectory());
+        if (imported.Count == 0) return;
+        SelectDirectory(Path.GetDirectoryName(imported[0].FullPath)!);
+        RefreshAfterFileOperation();
+        log.Info($"Imported {imported.Count(asset => asset.Type == AssetType.Font)} custom font(s).");
+    }
 
     private void DrawCreateBlueprintDialog(
         EditorLog log)

@@ -37,6 +37,7 @@ internal static class ComponentPropertyRenderer
     private static readonly Dictionary<Type, IReadOnlyList<ComponentPropertyDescriptor>> Cache =
         new();
     private static string? _materialSaveError;
+    private static string? _fontActionMessage;
 
     public static IReadOnlyList<ComponentPropertyDescriptor> Descriptors(
         Type type,
@@ -134,6 +135,19 @@ internal static class ComponentPropertyRenderer
         return true;
     }
 
+    private static bool ShowUiWidgetProperty(UiWidget widget, string name) =>
+        name switch
+        {
+            nameof(UiWidget.ImageReference) => widget.Kind == UiWidgetKind.Image,
+            nameof(UiWidget.FillColor) or nameof(UiWidget.Value) or
+                nameof(UiWidget.Maximum) => widget.Kind == UiWidgetKind.ProgressBar,
+            nameof(UiWidget.HoverColor) or nameof(UiWidget.PressedColor) or
+                nameof(UiWidget.DisabledColor) or nameof(UiWidget.Label) or
+                nameof(UiWidget.FontSize) or nameof(UiWidget.FontReference) or
+                nameof(UiWidget.Interactable) => widget.Kind == UiWidgetKind.Button,
+            _ => true
+        };
+
     public static void Draw(
         Component component,
         PropertyEditorContext context,
@@ -160,6 +174,10 @@ internal static class ComponentPropertyRenderer
                      component.GetType(),
                      context))
         {
+            if (component is UiWidget uiWidget &&
+                !ShowUiWidgetProperty(uiWidget, descriptor.Property.Name))
+                continue;
+
             if (profileOwnsLocomotion &&
                 IsAnimationProfileOwnedControllerProperty(
                     descriptor.Property.Name))
@@ -277,14 +295,19 @@ internal static class ComponentPropertyRenderer
             }
             else if (before is Vector4 vector4)
             {
-                edited =
-                    ImGui.DragFloat4(
-                        label,
-                        ref vector4,
-                        0.01f);
-
-                after =
-                    vector4;
+                edited = (component is UiText && descriptor.Property.Name is nameof(UiText.Color) or nameof(UiText.ShadowColor) or nameof(UiText.OutlineColor)) ||
+                    (component is UiWidget && descriptor.Property.Name is nameof(UiWidget.Color) or nameof(UiWidget.FillColor) or nameof(UiWidget.HoverColor) or nameof(UiWidget.PressedColor) or nameof(UiWidget.DisabledColor))
+                    ? ImGui.ColorEdit4(label, ref vector4)
+                    : ImGui.DragFloat4(label, ref vector4, 0.01f);
+                after = vector4;
+            }
+            else if (component is UiText && descriptor.Property.Name == nameof(UiText.Text))
+            {
+                string content = before?.ToString() ?? string.Empty;
+                ImGui.TextUnformatted(descriptor.Metadata.DisplayName);
+                edited = ImGui.InputTextMultiline("##TextContent", ref content, 8192,
+                    new Vector2(-1, 96));
+                after = content;
             }
             else if (descriptor.Property.PropertyType.IsEnum)
             {
@@ -572,6 +595,9 @@ internal static class ComponentPropertyRenderer
                     descriptor.Metadata.Tooltip);
             }
         }
+        if (component is UiText uiText && project != null)
+            DrawFontActions(uiText, project, context, begin, changed, end);
+
 
         if (component is PlayerController3D playerInput &&
             project != null)
@@ -696,6 +722,69 @@ internal static class ComponentPropertyRenderer
         }
 
         ImGui.PopID();
+    }
+
+    private static void DrawFontActions(
+        UiText text, EditorProjectContext project, PropertyEditorContext context,
+        Action begin, Action changed, Action end)
+    {
+        ImGui.SeparatorText("Font Library");
+        if (ImGui.Button("Add Free CC0 Fonts"))
+        {
+            try
+            {
+                int added = BundledFontInstaller.Install(project);
+                _fontActionMessage = added == 0
+                    ? "Free CC0 fonts are already in this project. Choose one in Font."
+                    : $"Added {added} free CC0 fonts. Choose one in Font.";
+            }
+            catch (Exception error)
+            {
+                _fontActionMessage = $"Could not add fonts: {error.Message}";
+            }
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Import Font Files..."))
+        {
+            string[] paths = EditorDialogs.ChooseFontFiles();
+            if (paths.Length != 0)
+            {
+                try
+                {
+                    string destination = Path.Combine(
+                        project.ResolveProjectPath(project.Project.AssetDirectory),
+                        "Fonts", "Custom");
+                    var log = new EditorLog();
+                    AssetRecord[] imported = FontFileImport.Import(
+                        project, log, paths, destination)
+                        .Where(asset => asset.Type == AssetType.Font).ToArray();
+                    if (imported.Length != 0)
+                    {
+                        if (context != PropertyEditorContext.Runtime)
+                        {
+                            begin();
+                            text.FontReference = new AssetReference(
+                                imported[0].Guid, imported[0].ProjectPath);
+                            changed();
+                            end();
+                        }
+                        _fontActionMessage = $"Imported {imported.Length} font(s) into Assets/Fonts/Custom.";
+                    }
+                    else
+                    {
+                        _fontActionMessage = log.Entries.LastOrDefault()?.Message ??
+                            "No compatible font was imported.";
+                    }
+                }
+                catch (Exception error)
+                {
+                    _fontActionMessage = $"Could not import font: {error.Message}";
+                }
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(_fontActionMessage))
+            ImGui.TextWrapped(_fontActionMessage);
     }
 
     private static bool DrawMaterialSelector(string label, ref AssetReference reference,
@@ -920,6 +1009,11 @@ internal static class ComponentPropertyRenderer
         {
             return AssetType.AnimationProfile;
         }
+
+        if ((component is UiText || component is UiWidget) && propertyName == nameof(UiText.FontReference))
+            return AssetType.Font;
+        if (component is UiWidget && propertyName == nameof(UiWidget.ImageReference))
+            return AssetType.Texture2D;
 
         if (component is SpriteRenderer &&
             propertyName ==

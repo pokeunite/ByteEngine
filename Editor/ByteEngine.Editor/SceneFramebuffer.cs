@@ -177,6 +177,14 @@ internal sealed class SceneFramebuffer
             exposure:
                 environment.Exposure);
 
+        if (context.Has3DCamera)
+        {
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _displayFramebuffer);
+            GL.Viewport(0, 0, _width, _height);
+            renderer.Resize(_width, _height);
+            context.FlushUi();
+        }
+
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
             0
@@ -305,6 +313,14 @@ internal sealed class SceneFramebuffer
                 camera3D != null,
             exposure:
                 environment.Exposure);
+
+        if (context.Has3DCamera)
+        {
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _displayFramebuffer);
+            GL.Viewport(0, 0, _width, _height);
+            renderer.Resize(_width, _height);
+            context.FlushUi();
+        }
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,

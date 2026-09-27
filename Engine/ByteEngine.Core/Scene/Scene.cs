@@ -354,6 +354,7 @@ public sealed class Scene
         {
             GameObject[] frameObjects =
                 _gameObjects.ToArray();
+            UiNavigation.Update(this);
 
             foreach (GameObject gameObject in frameObjects)
             {
@@ -407,6 +408,7 @@ public sealed class Scene
             gameObject.RenderInternal(context);
 
         context.Flush3D();
+        if (!context.Has3DCamera) context.FlushUi();
     }
 
     internal void RenderEditorInternal(RenderContext context, EditorSkeletalPreviewCache? skeletalPreview = null)
@@ -422,6 +424,7 @@ public sealed class Scene
 
             skeletalPreview?.Render(context);
             context.Flush3D();
+            if (!context.Has3DCamera) context.FlushUi();
         }
         finally
         {

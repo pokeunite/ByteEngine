@@ -11,5 +11,6 @@ public enum AssetType
     Blueprint,
     AnimationEvents,
     AnimationProfile,
-    Material
+    Material,
+    Font
 }

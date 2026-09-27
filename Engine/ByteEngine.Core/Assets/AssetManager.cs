@@ -31,6 +31,8 @@ public sealed class AssetManager : IDisposable
     public AssetManager(AssetDatabase database, Action<string>? warningSink = null)
     {
         _database = database;
+        Renderer2D.FontProjectRoot = database.ProjectRoot;
+        FontRuntime.Configure(database);
         _warningSink = warningSink;
         _database.DatabaseChanged += ReloadChangedResources;
     }

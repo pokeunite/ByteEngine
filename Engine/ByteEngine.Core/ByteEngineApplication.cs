@@ -13,6 +13,7 @@ namespace ByteEngine.Core;
 
 public class ByteEngineApplication : GameWindow
 {
+    protected virtual bool UseWholeWindowForUiInput => true;
     public Renderer2D Renderer { get; }
     public Renderer3D Renderer3D { get; }
 
@@ -154,6 +155,20 @@ public class ByteEngineApplication : GameWindow
             JoystickStates
         );
 
+        if (UseWholeWindowForUiInput)
+        {
+            var position = MouseState.Position;
+            bool inside = position.X >= 0 && position.Y >= 0 &&
+                position.X < WindowWidth && position.Y < WindowHeight;
+            Input.SetGameViewPointer(
+                new System.Numerics.Vector2(position.X / Math.Max(1, WindowWidth),
+                    position.Y / Math.Max(1, WindowHeight)),
+                new System.Numerics.Vector2(WindowWidth, WindowHeight), inside);
+        }
+
+        if (Scenes.ActiveScene is { } inputScene)
+            UiNavigation.Update(inputScene);
+
         InputActions.Update(
             Input.Snapshot,
             GameplayInputActionsEnabled
@@ -271,6 +286,7 @@ public class ByteEngineApplication : GameWindow
                         exposure,
                         WindowWidth,
                         WindowHeight);
+                    context.FlushUi();
                 }
                 else
                 {

@@ -77,6 +77,14 @@ public sealed class Texture2D
         );
     }
 
+    internal static Texture2D FromPixels(int width, int height, byte[] pixels, TextureFilter filter = TextureFilter.Linear)
+    {
+        ArgumentNullException.ThrowIfNull(pixels);
+        if (width <= 0 || height <= 0 || pixels.Length != checked(width * height * 4))
+            throw new ArgumentException("Expected width * height * 4 RGBA bytes.", nameof(pixels));
+        return new Texture2D(width, height, pixels, filter);
+    }
+
     internal static Texture2D CreateMissingTexture()
     {
         const int size = 8;

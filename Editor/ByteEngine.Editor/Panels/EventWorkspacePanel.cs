@@ -2743,6 +2743,7 @@ internal sealed class EventWorkspacePanel
 
             var groups =
                 _registry.Conditions
+                    .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
                     .OrderBy(
                         definition =>
                             definition.Category)
@@ -2832,6 +2833,7 @@ internal sealed class EventWorkspacePanel
 
         var actionGroups =
             _registry.Actions
+                .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
                 .OrderBy(
                     definition =>
                         definition.Category)
@@ -2963,6 +2965,26 @@ internal sealed class EventWorkspacePanel
 
             ImGui.EndMenu();
         }
+    }
+
+    private static bool IsLegacyRaycastCreationDefinition(
+        string id)
+    {
+        // Keep these IDs loadable for existing Event Sheets, but do not offer
+        // them for new nodes now that Line Trace covers object, direction,
+        // cursor and raw world-position workflows in one universal primitive.
+        return id.Equals(
+                   "physics.castRayToCursor",
+                   StringComparison.OrdinalIgnoreCase) ||
+               id.Equals(
+                   "physics.castRayInDirection",
+                   StringComparison.OrdinalIgnoreCase) ||
+               id.Equals(
+                   "physics.castRay",
+                   StringComparison.OrdinalIgnoreCase) ||
+               id.Equals(
+                   "physics.rayHitsAnything",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private VisualInstruction AddInstructionAt(
@@ -4864,6 +4886,12 @@ internal sealed class EventWorkspacePanel
             "input.vectorLengthGreater" =>
                 "Checks whether the selected vector Input Action exceeds the chosen magnitude.",
 
+            "physics.lineTrace" =>
+                "Universal 3D trace. Choose a Start object or world position, then trace to an object, direction, mouse cursor, or world position.",
+
+            "physics.lineTraceHitsAnything" =>
+                "Runs the same universal Start-to-End trace and returns TRUE when the segment hits a collider.",
+
             "physics.castRayToCursor" =>
                 "Shoots from the selected object or muzzle to the collider directly under the mouse cursor.",
 
@@ -6116,6 +6144,10 @@ internal sealed class EventWorkspacePanel
                 "animation.playAction" =>
                     610.0f,
 
+                "physics.lineTrace" or
+                "physics.lineTraceHitsAnything" =>
+                    620.0f,
+
                 "physics.castRayToCursor" or
                 "physics.castRayInDirection" or
                 "physics.castRay" or
@@ -6578,6 +6610,7 @@ internal sealed class EventWorkspacePanel
 
         var groups =
             _registry.Conditions
+                .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
                 .OrderBy(
                     definition =>
                         definition.Category)
@@ -6676,6 +6709,7 @@ internal sealed class EventWorkspacePanel
 
         var actionGroups =
             _registry.Actions
+                .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
                 .OrderBy(
                     definition =>
                         definition.Category)
@@ -6835,6 +6869,27 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["value"] = EventValue.Number(-.5);
                 break;
 
+            case "physics.lineTrace":
+            case "physics.lineTraceHitsAnything":
+                // New traces default to a useful object + direction workflow.
+                // start/end are kept too so Event Sheets created by the first
+                // universal-trace pass remain loadable without migration.
+                instruction.Arguments["startMode"] = EventValue.String("Object");
+                instruction.Arguments["startObject"] = EventValue.String("Self");
+                instruction.Arguments["start"] = EventValue.Vector3(Vector3.Zero);
+                instruction.Arguments["endMode"] = EventValue.String("Direction");
+                instruction.Arguments["endObject"] = EventValue.String("Self");
+                instruction.Arguments["end"] = EventValue.Vector3(new Vector3(0f, 0f, -10f));
+                instruction.Arguments["traceDirectionMode"] = EventValue.String("Forward");
+                instruction.Arguments["traceDirection"] = EventValue.Vector3(new Vector3(0f, 0f, -1f));
+                instruction.Arguments["distance"] = EventValue.Number(100);
+                instruction.Arguments["layer"] = EventValue.Number(-1);
+                instruction.Arguments["ignoreSelf"] = EventValue.Boolean(true);
+                instruction.Arguments["includeTriggers"] = EventValue.Boolean(false);
+                instruction.Arguments["drawDebug"] = EventValue.Boolean(false);
+                instruction.Arguments["debugDuration"] = EventValue.Number(.25);
+                break;
+
             case "physics.castRayToCursor":
             case "physics.castRayInDirection":
             case "physics.castRay":
@@ -6868,6 +6923,38 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["includeTriggers"] = EventValue.Boolean(false);
                 instruction.Arguments["drawDebug"] = EventValue.Boolean(false);
                 instruction.Arguments["debugDuration"] = EventValue.Number(.25);
+                break;
+            case "ui.setText":
+            case "ui.setTextFromHealth":
+            case "ui.setButtonLabel":
+            case "ui.setBarValue":
+            case "ui.setBarMaximum":
+            case "ui.setBarFromHealth":
+            case "ui.show":
+            case "ui.hide":
+            case "ui.setButtonEnabled":
+            case "ui.buttonClicked":
+            case "ui.buttonHovered":
+            case "ui.isVisible":
+            case "ui.barBelow":
+            case "ui.barAbove":
+            case "ui.setImage":
+            case "ui.focus":
+            case "ui.buttonFocused":
+            case "ui.buttonEnabled":
+                instruction.Arguments["target"] = EventValue.String("Self");
+                if (id is "ui.setText" or "ui.setButtonLabel")
+                    instruction.Arguments["text"] = EventValue.String(string.Empty);
+                if (id is "ui.setBarValue" or "ui.setBarMaximum" or "ui.barBelow" or "ui.barAbove")
+                    instruction.Arguments["value"] = EventValue.Number(100);
+                if (id == "ui.setImage")
+                    instruction.Arguments["image"] = EventValue.String(string.Empty);
+                if (id is "ui.setBarFromHealth" or "ui.setTextFromHealth")
+                    instruction.Arguments["source"] = EventValue.String("Self");
+                if (id == "ui.setTextFromHealth")
+                    instruction.Arguments["prefix"] = EventValue.String("HP ");
+                if (id == "ui.setButtonEnabled")
+                    instruction.Arguments["enabled"] = EventValue.Boolean(true);
                 break;
             case "material.setMaterial":
             case "material.setBaseColor":
@@ -7361,6 +7448,13 @@ internal sealed class EventWorkspacePanel
                     EventValue.Number(instruction.Id == "input.axisLess" ? -.5 : .5), state, false);
                 break;
 
+            case "physics.lineTrace":
+            case "physics.lineTraceHitsAnything":
+                DrawLineTraceArguments(
+                    instruction,
+                    state);
+                break;
+
             case "physics.castRayToCursor":
             case "physics.castRayInDirection":
             case "physics.castRay":
@@ -7380,6 +7474,26 @@ internal sealed class EventWorkspacePanel
                 DrawValueArgument(instruction, "prefix", "Self Variable Prefix", VariableType.String,
                     EventValue.String("Ray"), state, false);
                 ImGui.TextDisabled("Writes Hit, ObjectId, Point, Normal, and Distance variables.");
+                break;
+            case "ui.setText":
+            case "ui.setTextFromHealth":
+            case "ui.setButtonLabel":
+            case "ui.setBarValue":
+            case "ui.setBarMaximum":
+            case "ui.setBarFromHealth":
+            case "ui.show":
+            case "ui.hide":
+            case "ui.setButtonEnabled":
+            case "ui.buttonClicked":
+            case "ui.buttonHovered":
+            case "ui.isVisible":
+            case "ui.barBelow":
+            case "ui.barAbove":
+            case "ui.setImage":
+            case "ui.focus":
+            case "ui.buttonFocused":
+            case "ui.buttonEnabled":
+                DrawUiArguments(instruction, state);
                 break;
             case "material.setMaterial":
             case "material.setBaseColor":
@@ -8031,6 +8145,354 @@ internal sealed class EventWorkspacePanel
     // ========================================================
     // RAYCAST AUTHORING
     // ========================================================
+
+    private void DrawLineTraceArguments(
+        VisualInstruction instruction,
+        EditorState? state)
+    {
+        string startMode =
+            DrawLineTraceModeArgument(
+                instruction,
+                "startMode",
+                "Start From",
+                "WorldPosition",
+                new[]
+                {
+                    ("Object", "Object"),
+                    ("WorldPosition", "World Position")
+                });
+
+        if (startMode.Equals(
+                "Object",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            DrawObjectTargetArgument(
+                instruction,
+                "startObject",
+                "Start Object",
+                state);
+
+            ImGui.TextDisabled(
+                "Uses the object's first collider centre; falls back to its transform position. Select a muzzle Empty for an exact origin.");
+        }
+        else
+        {
+            DrawValueArgument(
+                instruction,
+                "start",
+                "Start World Position",
+                VariableType.Vector3,
+                EventValue.Vector3(Vector3.Zero),
+                state,
+                false);
+        }
+
+        ImGui.Spacing();
+
+        string endMode =
+            DrawLineTraceModeArgument(
+                instruction,
+                "endMode",
+                "End At",
+                "WorldPosition",
+                new[]
+                {
+                    ("Object", "Object"),
+                    ("Direction", "Direction + Distance"),
+                    ("Cursor", "Mouse Cursor"),
+                    ("WorldPosition", "World Position")
+                });
+
+        if (endMode.Equals(
+                "Object",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            DrawObjectTargetArgument(
+                instruction,
+                "endObject",
+                "Target Object",
+                state);
+
+            ImGui.TextDisabled(
+                "Aims at the target collider centre; falls back to its transform position.");
+        }
+        else if (endMode.Equals(
+                     "Direction",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            string directionMode =
+                DrawLineTraceDirectionArgument(
+                    instruction);
+
+            if (directionMode.Equals(
+                    "CustomLocal",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                DrawValueArgument(
+                    instruction,
+                    "traceDirection",
+                    "Custom Local Direction",
+                    VariableType.Vector3,
+                    EventValue.Vector3(new Vector3(0f, 0f, -1f)),
+                    state,
+                    false);
+            }
+            else if (directionMode.Equals(
+                         "CustomWorld",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                DrawValueArgument(
+                    instruction,
+                    "traceDirection",
+                    "Custom World Direction",
+                    VariableType.Vector3,
+                    EventValue.Vector3(new Vector3(0f, 0f, -1f)),
+                    state,
+                    false);
+            }
+
+            DrawCompactRayValueArgument(
+                instruction,
+                "distance",
+                "Trace Distance",
+                VariableType.Number,
+                EventValue.Number(100),
+                state);
+        }
+        else if (endMode.Equals(
+                     "Cursor",
+                     StringComparison.OrdinalIgnoreCase))
+        {
+            DrawCompactRayValueArgument(
+                instruction,
+                "distance",
+                "Maximum Distance",
+                VariableType.Number,
+                EventValue.Number(100),
+                state);
+
+            ImGui.TextDisabled(
+                "The cursor chooses the aim point; Maximum Distance clamps the actual Start -> End trace.");
+        }
+        else
+        {
+            DrawValueArgument(
+                instruction,
+                "end",
+                "End World Position",
+                VariableType.Vector3,
+                EventValue.Vector3(new Vector3(0f, 0f, -10f)),
+                state,
+                false);
+        }
+
+        DrawRayCollisionLayerArgument(
+            instruction,
+            state);
+
+        DrawCompactRayValueArgument(
+            instruction,
+            "ignoreSelf",
+            "Ignore Start Hierarchy",
+            VariableType.Boolean,
+            EventValue.Boolean(true),
+            state);
+
+        DrawCompactRayValueArgument(
+            instruction,
+            "includeTriggers",
+            "Include Triggers",
+            VariableType.Boolean,
+            EventValue.Boolean(false),
+            state);
+
+        DrawCompactRayValueArgument(
+            instruction,
+            "drawDebug",
+            "Draw Debug Trace",
+            VariableType.Boolean,
+            EventValue.Boolean(false),
+            state);
+
+        if (ImGui.TreeNode(
+                $"Advanced Trace Settings##{instruction.InstanceId}"))
+        {
+            DrawValueArgument(
+                instruction,
+                "debugDuration",
+                "Debug Duration (seconds)",
+                VariableType.Number,
+                EventValue.Number(.25),
+                state,
+                false);
+
+            ImGui.TreePop();
+        }
+
+        string summary =
+            endMode switch
+            {
+                "Object" => "Start -> target object",
+                "Direction" => "Start -> direction x distance",
+                "Cursor" => "Start -> collider under cursor (distance limited)",
+                _ => "Start -> world position"
+            };
+
+        ImGui.TextDisabled(summary);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(
+                "ByteEngine resolves these simple inputs to one finite Start -> End segment, then performs one physics line trace. " +
+                "The physics primitive stays universal; object, direction and cursor modes are only convenient ways to resolve End.");
+        }
+    }
+
+    private string DrawLineTraceModeArgument(
+        VisualInstruction instruction,
+        string argumentName,
+        string label,
+        string legacyFallback,
+        IReadOnlyList<(string Mode, string Label)> options)
+    {
+        string current =
+            instruction.Arguments.TryGetValue(
+                    argumentName,
+                    out EventValue? value) &&
+                value != null &&
+                value.Kind == EventValueKind.Constant &&
+                value.Constant.Type == VariableType.String &&
+                !string.IsNullOrWhiteSpace(value.Constant.String)
+                    ? value.Constant.String
+                    : legacyFallback;
+
+        string preview =
+            options.FirstOrDefault(
+                option =>
+                    option.Mode.Equals(
+                        current,
+                        StringComparison.OrdinalIgnoreCase)).Label
+            ?? current;
+
+        ImGui.PushID(
+            $"LineTraceMode:{argumentName}");
+
+        ImGui.TextDisabled(label);
+        ImGui.SetNextItemWidth(-1.0f);
+
+        if (ImGui.BeginCombo(
+                "##Mode",
+                preview))
+        {
+            foreach ((string mode, string optionLabel) in options)
+            {
+                bool selected =
+                    mode.Equals(
+                        current,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        optionLabel,
+                        selected))
+                {
+                    RecordHistory(
+                        $"Change Line Trace {label}");
+
+                    instruction.Arguments[argumentName] =
+                        EventValue.String(mode);
+
+                    current =
+                        mode;
+
+                    _dirty =
+                        true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.PopID();
+
+        return current;
+    }
+
+    private string DrawLineTraceDirectionArgument(
+        VisualInstruction instruction)
+    {
+        string current =
+            instruction.Arguments.TryGetValue(
+                    "traceDirectionMode",
+                    out EventValue? value) &&
+                value != null &&
+                value.Kind == EventValueKind.Constant &&
+                value.Constant.Type == VariableType.String &&
+                !string.IsNullOrWhiteSpace(value.Constant.String)
+                    ? value.Constant.String
+                    : "Forward";
+
+        (string Mode, string Label)[] options =
+        {
+            ("Forward", "Forward"),
+            ("Back", "Back"),
+            ("Right", "Right"),
+            ("Left", "Left"),
+            ("Up", "Up"),
+            ("Down", "Down"),
+            ("CustomLocal", "Custom Local Direction"),
+            ("CustomWorld", "Custom World Direction")
+        };
+
+        string preview =
+            options.FirstOrDefault(
+                option =>
+                    option.Mode.Equals(
+                        current,
+                        StringComparison.OrdinalIgnoreCase)).Label
+            ?? current;
+
+        ImGui.PushID("LineTraceDirection");
+        ImGui.TextDisabled("Direction");
+        ImGui.SetNextItemWidth(-1.0f);
+
+        if (ImGui.BeginCombo(
+                "##Direction",
+                preview))
+        {
+            foreach ((string mode, string optionLabel) in options)
+            {
+                bool selected =
+                    mode.Equals(
+                        current,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (ImGui.Selectable(
+                        optionLabel,
+                        selected))
+                {
+                    RecordHistory("Change Line Trace Direction");
+                    instruction.Arguments["traceDirectionMode"] =
+                        EventValue.String(mode);
+                    current = mode;
+                    _dirty = true;
+                }
+
+                if (selected)
+                {
+                    ImGui.SetItemDefaultFocus();
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.PopID();
+        return current;
+    }
 
     private void DrawRaycastArguments(
         VisualInstruction instruction,
@@ -10257,6 +10719,41 @@ internal sealed class EventWorkspacePanel
     // ========================================================
     // BLUEPRINT ASSET
     // ========================================================
+
+    private void DrawUiArguments(VisualInstruction instruction, EditorState? state)
+    {
+        DrawObjectTargetArgument(instruction, "target", "UI Object", state);
+        switch (instruction.Id)
+        {
+            case "ui.setText":
+            case "ui.setButtonLabel":
+                DrawValueArgument(instruction, "text", "Text", VariableType.String,
+                    EventValue.String(string.Empty), state, false);
+                break;
+            case "ui.setTextFromHealth":
+                DrawObjectTargetArgument(instruction, "source", "Health Object", state);
+                DrawValueArgument(instruction, "prefix", "Prefix", VariableType.String,
+                    EventValue.String("HP "), state, false);
+                break;
+            case "ui.setBarValue":
+            case "ui.setBarMaximum":
+            case "ui.barBelow":
+            case "ui.barAbove":
+                DrawValueArgument(instruction, "value", "Value", VariableType.Number,
+                    EventValue.Number(100), state, false);
+                break;
+            case "ui.setImage":
+                DrawMaterialAssetArgument(instruction, "image", "Image Asset", AssetType.Texture2D);
+                break;
+            case "ui.setBarFromHealth":
+                DrawObjectTargetArgument(instruction, "source", "Health Object", state);
+                break;
+            case "ui.setButtonEnabled":
+                DrawValueArgument(instruction, "enabled", "Enabled", VariableType.Boolean,
+                    EventValue.Boolean(true), state, false);
+                break;
+        }
+    }
 
     private void DrawMaterialActionArguments(VisualInstruction instruction, EditorState? state)
     {

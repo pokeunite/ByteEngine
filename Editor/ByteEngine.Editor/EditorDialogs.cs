@@ -63,6 +63,18 @@ internal static class EditorDialogs
             : null;
     }
 
+    public static string[] ChooseFontFiles()
+    {
+        using OpenFileDialog dialog = new()
+        {
+            Title = "Import Font Files",
+            Filter = "Font Files (*.ttf;*.otf;*.fnt)|*.ttf;*.otf;*.fnt|All Files (*.*)|*.*",
+            Multiselect = true,
+            CheckFileExists = true
+        };
+        return dialog.ShowDialog() == DialogResult.OK ? dialog.FileNames : Array.Empty<string>();
+    }
+
     public static string? ChooseScene(
         string initialDirectory)
     {

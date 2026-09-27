@@ -87,6 +87,8 @@ public static class Input
     private static readonly HashSet<Key> PreviousKeysDown = new();
     private static readonly HashSet<MouseButton> MouseButtonsDown = new();
     private static readonly HashSet<MouseButton> PreviousMouseButtonsDown = new();
+    private static bool _uiBlocksPrimaryMouse;
+    private static bool _uiCapturedPrimaryMouse;
     private static readonly RawInputSnapshot RawSnapshot = new();
     private static readonly (int Index, GamepadControl Control)[] StandardGamepadButtons =
     {
@@ -129,6 +131,10 @@ public static class Input
     internal static void Update(KeyboardState keyboardState, MouseState mouseState,
         IReadOnlyList<JoystickState>? joystickStates = null)
     {
+        _uiBlocksPrimaryMouse = false;
+        if (!MouseButtonsDown.Contains(MouseButton.Left) &&
+            !PreviousMouseButtonsDown.Contains(MouseButton.Left))
+            _uiCapturedPrimaryMouse = false;
         PreviousKeysDown.Clear();
         foreach (Key key in KeysDown) PreviousKeysDown.Add(key);
 
@@ -203,11 +209,28 @@ public static class Input
     public static bool IsKeyPressed(Key key) => KeysDown.Contains(key) && !PreviousKeysDown.Contains(key);
     public static bool IsKeyReleased(Key key) => !KeysDown.Contains(key) && PreviousKeysDown.Contains(key);
 
-    public static bool IsMouseButtonDown(MouseButton button) => MouseButtonsDown.Contains(button);
+    public static bool IsMouseButtonDown(MouseButton button) =>
+        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) && MouseButtonsDown.Contains(button);
     public static bool IsMouseButtonPressed(MouseButton button) =>
-        MouseButtonsDown.Contains(button) && !PreviousMouseButtonsDown.Contains(button);
+        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
+        IsMouseButtonPressedForUi(button);
     public static bool IsMouseButtonReleased(MouseButton button) =>
+        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
         !MouseButtonsDown.Contains(button) && PreviousMouseButtonsDown.Contains(button);
+    public static bool IsMouseButtonPressedForUi(MouseButton button) =>
+        MouseButtonsDown.Contains(button) && !PreviousMouseButtonsDown.Contains(button);
+    public static bool IsMouseButtonDownForUi(MouseButton button) =>
+        MouseButtonsDown.Contains(button);
+    internal static void SetUiPointerBlocked(bool blocked)
+    {
+        if (blocked && MouseButtonsDown.Contains(MouseButton.Left))
+            _uiCapturedPrimaryMouse = true;
+        _uiBlocksPrimaryMouse = blocked || _uiCapturedPrimaryMouse;
+        if (!_uiBlocksPrimaryMouse) return;
+        RawSnapshot.MouseButtonsDown.Remove(MouseButton.Left);
+        RawSnapshot.MouseDelta = Vector2.Zero;
+        MouseDelta = Vector2.Zero;
+    }
 
     internal static void PopulateGamepad(GamepadSnapshot target, IReadOnlyList<JoystickState>? states)
     {

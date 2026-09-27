@@ -17,6 +17,226 @@ namespace ByteEngine.Core.Serialization;
 
 public sealed class ComponentSerializer
 {
+    private sealed class UiCanvasCodec : IComponentCodec
+    {
+        public string TypeName => "UiCanvas";
+        public Type ComponentType => typeof(UiCanvas);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            UiCanvas canvas = (UiCanvas)component;
+            return new ComponentData { Type = TypeName, Properties = new JsonObject
+            {
+                ["scaleMode"] = canvas.ScaleMode.ToString(),
+                ["referenceWidth"] = canvas.ReferenceResolution.X,
+                ["referenceHeight"] = canvas.ReferenceResolution.Y,
+                ["userScale"] = canvas.UserScale,
+                ["safeArea"] = new JsonArray(canvas.SafeAreaInsets.X, canvas.SafeAreaInsets.Y,
+                    canvas.SafeAreaInsets.Z, canvas.SafeAreaInsets.W)
+            }};
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Enum.TryParse(data.Properties["scaleMode"]?.GetValue<string>(), true,
+                out UiScaleMode scaleMode);
+            return new UiCanvas
+            {
+                ScaleMode = data.Properties["scaleMode"] == null
+                    ? UiScaleMode.ScaleWithScreen : scaleMode,
+                ReferenceResolution = new Vector2(
+                    data.Properties["referenceWidth"]?.GetValue<float>() ?? 1280f,
+                    data.Properties["referenceHeight"]?.GetValue<float>() ?? 720f),
+                UserScale = data.Properties["userScale"]?.GetValue<float>() ?? 1f,
+                SafeAreaInsets = data.Properties["safeArea"] is JsonArray safe && safe.Count >= 4
+                    ? new Vector4(safe[0]?.GetValue<float>() ?? 0f,
+                        safe[1]?.GetValue<float>() ?? 0f,
+                        safe[2]?.GetValue<float>() ?? 0f,
+                        safe[3]?.GetValue<float>() ?? 0f) : Vector4.Zero
+            };
+        }
+    }
+
+    private sealed class UiWidgetCodec : IComponentCodec
+    {
+        public string TypeName => "UiWidget";
+        public Type ComponentType => typeof(UiWidget);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            UiWidget widget = (UiWidget)component;
+            return new ComponentData { Type = TypeName, Properties = new JsonObject
+            {
+                ["kind"] = widget.Kind.ToString(),
+                ["anchor"] = widget.Anchor.ToString(),
+                ["offset"] = new JsonArray(widget.Offset.X, widget.Offset.Y),
+                ["size"] = new JsonArray(widget.Size.X, widget.Size.Y),
+                ["stretchHorizontal"] = widget.StretchHorizontal,
+                ["stretchVertical"] = widget.StretchVertical,
+                ["color"] = new JsonArray(widget.Color.X, widget.Color.Y, widget.Color.Z, widget.Color.W),
+                ["hoverColor"] = new JsonArray(widget.HoverColor.X, widget.HoverColor.Y,
+                    widget.HoverColor.Z, widget.HoverColor.W),
+                ["pressedColor"] = new JsonArray(widget.PressedColor.X, widget.PressedColor.Y,
+                    widget.PressedColor.Z, widget.PressedColor.W),
+                ["disabledColor"] = new JsonArray(widget.DisabledColor.X, widget.DisabledColor.Y,
+                    widget.DisabledColor.Z, widget.DisabledColor.W),
+                ["fillColor"] = new JsonArray(widget.FillColor.X, widget.FillColor.Y,
+                    widget.FillColor.Z, widget.FillColor.W),
+                ["image"] = new JsonObject { ["guid"] = widget.ImageReference.Guid.ToString(),
+                    ["path"] = widget.ImageReference.CachedProjectPath },
+                ["font"] = new JsonObject { ["guid"] = widget.FontReference.Guid.ToString(),
+                    ["path"] = widget.FontReference.CachedProjectPath },
+                ["label"] = widget.Label,
+                ["fontSize"] = widget.FontSize,
+                ["value"] = widget.Value,
+                ["maximum"] = widget.Maximum,
+                ["visible"] = widget.Visible,
+                ["interactable"] = widget.Interactable,
+                ["orderInLayer"] = widget.OrderInLayer
+            }};
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            JsonObject properties = data.Properties;
+            Enum.TryParse(properties["kind"]?.GetValue<string>(), true, out UiWidgetKind kind);
+            Enum.TryParse(properties["anchor"]?.GetValue<string>(), true, out UiAnchor anchor);
+            JsonArray? offset = properties["offset"] as JsonArray;
+            JsonArray? size = properties["size"] as JsonArray;
+            JsonArray? color = properties["color"] as JsonArray;
+            JsonArray? hover = properties["hoverColor"] as JsonArray;
+            JsonArray? pressed = properties["pressedColor"] as JsonArray;
+            JsonArray? disabled = properties["disabledColor"] as JsonArray;
+            JsonArray? fill = properties["fillColor"] as JsonArray;
+            return new UiWidget
+            {
+                Kind = kind,
+                Anchor = anchor,
+                Offset = offset is { Count: >= 2 }
+                    ? new Vector2(offset[0]?.GetValue<float>() ?? 24f,
+                        offset[1]?.GetValue<float>() ?? 24f) : new Vector2(24f, 24f),
+                Size = size is { Count: >= 2 }
+                    ? new Vector2(size[0]?.GetValue<float>() ?? 240f,
+                        size[1]?.GetValue<float>() ?? 48f) : new Vector2(240f, 48f),
+                StretchHorizontal = properties["stretchHorizontal"]?.GetValue<bool>() ?? false,
+                StretchVertical = properties["stretchVertical"]?.GetValue<bool>() ?? false,
+                Color = ReadColor(color, new Vector4(.12f, .15f, .2f, .9f)),
+                HoverColor = ReadColor(hover, new Vector4(.2f, .3f, .45f, 1f)),
+                PressedColor = ReadColor(pressed, new Vector4(.12f, .4f, .7f, 1f)),
+                DisabledColor = ReadColor(disabled, new Vector4(.16f, .16f, .16f, .6f)),
+                FillColor = ReadColor(fill, new Vector4(.25f, .7f, .35f, 1f)),
+                ImageReference = ReadAsset(properties["image"], context),
+                FontReference = ReadAsset(properties["font"], context),
+                Label = properties["label"]?.GetValue<string>() ?? "Button",
+                FontSize = properties["fontSize"]?.GetValue<int>() ?? 22,
+                Value = properties["value"]?.GetValue<float>() ?? 100f,
+                Maximum = properties["maximum"]?.GetValue<float>() ?? 100f,
+                Visible = properties["visible"]?.GetValue<bool>() ?? true,
+                Interactable = properties["interactable"]?.GetValue<bool>() ?? true,
+                OrderInLayer = properties["orderInLayer"]?.GetValue<int>() ?? 0
+            };
+        }
+        private static Vector4 ReadColor(JsonArray? data, Vector4 fallback) =>
+            data is { Count: >= 4 }
+                ? new Vector4(data[0]?.GetValue<float>() ?? fallback.X,
+                    data[1]?.GetValue<float>() ?? fallback.Y,
+                    data[2]?.GetValue<float>() ?? fallback.Z,
+                    data[3]?.GetValue<float>() ?? fallback.W)
+                : fallback;
+        private static AssetReference ReadAsset(JsonNode? data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(data?["guid"]?.GetValue<string>(), out Guid guid);
+            string? path = data?["path"]?.GetValue<string>();
+            if (guid == Guid.Empty && !string.IsNullOrWhiteSpace(path))
+                return context.AssetDatabase.ResolveReference(path);
+            return new AssetReference(guid, path);
+        }
+    }
+
+    private sealed class UiTextCodec : IComponentCodec
+    {
+        public string TypeName => "UiText";
+        public Type ComponentType => typeof(UiText);
+
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            UiText text = (UiText)component;
+            return new ComponentData
+            {
+                Type = TypeName,
+                Properties = new JsonObject
+                {
+                    ["text"] = text.Text,
+                    ["font"] = new JsonObject
+                    {
+                        ["guid"] = text.FontReference.Guid.ToString(),
+                        ["path"] = text.FontReference.CachedProjectPath
+                    },
+                    ["size"] = text.FontSize,
+                    ["color"] = new JsonArray(text.Color.X, text.Color.Y, text.Color.Z, text.Color.W),
+                    ["shadowColor"] = new JsonArray(text.ShadowColor.X, text.ShadowColor.Y,
+                        text.ShadowColor.Z, text.ShadowColor.W),
+                    ["shadowOffset"] = new JsonArray(text.ShadowOffset.X, text.ShadowOffset.Y),
+                    ["outlineColor"] = new JsonArray(text.OutlineColor.X, text.OutlineColor.Y,
+                        text.OutlineColor.Z, text.OutlineColor.W),
+                    ["outlineWidth"] = text.OutlineWidth,
+                    ["anchor"] = text.Anchor.ToString(),
+                    ["offset"] = new JsonArray(text.Offset.X, text.Offset.Y),
+                    ["wrapWidth"] = text.WrapWidth,
+                    ["visible"] = text.Visible,
+                    ["orderInLayer"] = text.OrderInLayer
+                }
+            };
+        }
+
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            JsonNode? font = data.Properties["font"];
+            Guid.TryParse(font?["guid"]?.GetValue<string>(), out Guid fontGuid);
+            string? path = font?["path"]?.GetValue<string>();
+            if (fontGuid == Guid.Empty && !string.IsNullOrWhiteSpace(path))
+            {
+                AssetReference resolved = context.AssetDatabase.ResolveReference(path);
+                fontGuid = resolved.Guid;
+                path = resolved.CachedProjectPath ?? path;
+            }
+
+            Enum.TryParse(data.Properties["anchor"]?.GetValue<string>(), true, out UiAnchor anchor);
+            JsonArray? color = data.Properties["color"] as JsonArray;
+            JsonArray? shadow = data.Properties["shadowColor"] as JsonArray;
+            JsonArray? shadowOffset = data.Properties["shadowOffset"] as JsonArray;
+            JsonArray? outline = data.Properties["outlineColor"] as JsonArray;
+            JsonArray? offset = data.Properties["offset"] as JsonArray;
+            return new UiText
+            {
+                Text = data.Properties["text"]?.GetValue<string>() ?? "New Text",
+                FontReference = new AssetReference(fontGuid, path),
+                FontSize = data.Properties["size"]?.GetValue<int>() ?? 32,
+                Color = color is { Count: >= 4 }
+                    ? new Vector4(color[0]?.GetValue<float>() ?? 1f, color[1]?.GetValue<float>() ?? 1f,
+                        color[2]?.GetValue<float>() ?? 1f, color[3]?.GetValue<float>() ?? 1f)
+                    : Vector4.One,
+                ShadowColor = shadow is { Count: >= 4 }
+                    ? new Vector4(shadow[0]?.GetValue<float>() ?? 0f,
+                        shadow[1]?.GetValue<float>() ?? 0f,
+                        shadow[2]?.GetValue<float>() ?? 0f,
+                        shadow[3]?.GetValue<float>() ?? 0f) : Vector4.Zero,
+                ShadowOffset = shadowOffset is { Count: >= 2 }
+                    ? new Vector2(shadowOffset[0]?.GetValue<float>() ?? 2f,
+                        shadowOffset[1]?.GetValue<float>() ?? 2f) : new Vector2(2f, 2f),
+                OutlineColor = outline is { Count: >= 4 }
+                    ? new Vector4(outline[0]?.GetValue<float>() ?? 0f,
+                        outline[1]?.GetValue<float>() ?? 0f,
+                        outline[2]?.GetValue<float>() ?? 0f,
+                        outline[3]?.GetValue<float>() ?? 0f) : Vector4.Zero,
+                OutlineWidth = data.Properties["outlineWidth"]?.GetValue<int>() ?? 0,
+                Anchor = anchor,
+                Offset = offset is { Count: >= 2 }
+                    ? new Vector2(offset[0]?.GetValue<float>() ?? 24f, offset[1]?.GetValue<float>() ?? 24f)
+                    : new Vector2(24f, 24f),
+                WrapWidth = data.Properties["wrapWidth"]?.GetValue<float>() ?? 0f,
+                Visible = data.Properties["visible"]?.GetValue<bool>() ?? true,
+                OrderInLayer = data.Properties["orderInLayer"]?.GetValue<int>() ?? 0
+            };
+        }
+    }
+
     private readonly Dictionary<Type, IComponentCodec> _byRuntimeType =
         new();
 
@@ -48,6 +268,10 @@ public sealed class ComponentSerializer
         Register(
             new SpriteRendererCodec()
         );
+
+        Register(new UiCanvasCodec());
+        Register(new UiTextCodec());
+        Register(new UiWidgetCodec());
 
         Register(
             new Camera3DCodec()

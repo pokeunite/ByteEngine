@@ -100,6 +100,7 @@ public sealed partial class VisualLogicRegistry
         RegisterGameplay(registry);
         RegisterPhysicsAndCombat(registry);
         RegisterMaterials(registry);
+        RegisterUi(registry);
         RegisterAudio(registry);
         RegisterAnimation(registry);
         RegisterAttachment(registry);

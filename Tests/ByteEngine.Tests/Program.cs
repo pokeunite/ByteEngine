@@ -33,6 +33,13 @@ try
         return;
     }
 
+    if (args.Contains("--ui-text"))
+    {
+        UiTextSystemTests.Run(root);
+        Console.WriteLine("UI text asset and scene serialization regressions passed.");
+        return;
+    }
+
     if (args.Contains("--material-foundation"))
     {
         MaterialFoundationTests.Run(root);
