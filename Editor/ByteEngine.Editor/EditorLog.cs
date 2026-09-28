@@ -56,6 +56,7 @@ internal sealed class EditorLog
         EditorLogLevel level,
         string message)
     {
+        ByteEngine.Core.Diagnostics.CrashDebugLog.Write($"Editor [{level}]: {message}");
         _entries.Add(
             new EditorLogEntry(
                 DateTime.Now,

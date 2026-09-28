@@ -7,6 +7,7 @@ internal static class Program
     private static void Main(
         string[] args)
     {
+        using var diagnostics = CrashReportSession.Start();
         CrashDebugLog.InstallGlobalHandlers();
 
         try
@@ -41,6 +42,7 @@ internal static class Program
 
             CrashDebugLog.Write(
                 "Program.Main: editor.Run() returned normally.");
+            diagnostics?.Complete();
         }
         catch (Exception exception)
         {
@@ -48,7 +50,8 @@ internal static class Program
                 "TOP-LEVEL EDITOR EXCEPTION",
                 exception);
 
-            throw;
+            diagnostics?.ReportCrash();
+            Environment.ExitCode = 1;
         }
     }
 }

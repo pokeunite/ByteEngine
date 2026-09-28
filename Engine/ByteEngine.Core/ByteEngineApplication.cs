@@ -84,6 +84,8 @@ public class ByteEngineApplication : GameWindow
     protected override void OnLoad()
     {
         base.OnLoad();
+        ByteEngine.Core.Diagnostics.CrashDebugLog.Write(
+            $"Graphics context ready: vendor={GL.GetString(StringName.Vendor)}; renderer={GL.GetString(StringName.Renderer)}; OpenGL={GL.GetString(StringName.Version)}");
 
         GL.ClearColor(
             0.055f,

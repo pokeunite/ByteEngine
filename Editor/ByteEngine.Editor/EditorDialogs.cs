@@ -63,6 +63,29 @@ internal static class EditorDialogs
             : null;
     }
 
+    public static string[] ChooseGlbFiles()
+    {
+        using OpenFileDialog dialog = new()
+        {
+            Title = "Import glTF Binary Models",
+            Filter = "glTF Binary Models (*.glb)|*.glb",
+            Multiselect = true,
+            CheckFileExists = true
+        };
+        return dialog.ShowDialog() == DialogResult.OK ? dialog.FileNames : Array.Empty<string>();
+    }
+
+    public static string? ChooseGltfPackageFolder()
+    {
+        using FolderBrowserDialog dialog = new()
+        {
+            Description = "Import a glTF package folder (all files): include the .gltf, .bin buffers and textures",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+        return dialog.ShowDialog() == DialogResult.OK ? dialog.SelectedPath : null;
+    }
+
     public static string[] ChooseFontFiles()
     {
         using OpenFileDialog dialog = new()

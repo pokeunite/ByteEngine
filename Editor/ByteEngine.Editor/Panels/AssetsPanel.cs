@@ -310,6 +310,7 @@ internal sealed class AssetsPanel : IDisposable
             }
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
             ImGui.Separator();
+            DrawModelImportMenu(log);
             if (ImGui.MenuItem("Import Font Files...")) ImportFontFiles(log);
             if (ImGui.MenuItem("Add Free CC0 Fonts")) InstallBundledFonts(log);
 
@@ -2436,6 +2437,8 @@ state.SelectedObject =
             return;
         }
 
+        DrawModelImportMenu(log);
+
         if (ImGui.BeginMenu(
                 "Create"))
         {
@@ -2522,6 +2525,37 @@ state.SelectedObject =
         {
             log.Error($"Could not install bundled fonts: {error.Message}");
         }
+    }
+
+    private void DrawModelImportMenu(EditorLog log)
+    {
+        if (!ImGui.BeginMenu("Import glTF")) return;
+        if (ImGui.MenuItem("GLB Model Files..."))
+            ImportGltfModels(log, EditorDialogs.ChooseGlbFiles());
+        if (ImGui.MenuItem("glTF Package Folder..."))
+        {
+            string? folder = EditorDialogs.ChooseGltfPackageFolder();
+            if (folder != null)
+            {
+                if (!Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
+                    .Any(path => Path.GetExtension(path).Equals(".gltf", StringComparison.OrdinalIgnoreCase)))
+                    log.Warning("The selected folder contains no .gltf model. Select its exported package folder.");
+                else
+                    ImportGltfModels(log, new[] { folder });
+            }
+        }
+        ImGui.EndMenu();
+    }
+
+    private void ImportGltfModels(EditorLog log, IEnumerable<string> paths)
+    {
+        IReadOnlyList<AssetRecord> imported = new ExternalAssetImporter(_project, log)
+            .Import(paths, GetAssetCreationDirectory());
+        AssetRecord? model = imported.FirstOrDefault(asset => asset.Type == AssetType.Model3D);
+        if (model == null) return;
+        SelectDirectory(Path.GetDirectoryName(model.FullPath)!);
+        RefreshAfterFileOperation();
+        log.Info($"Imported {imported.Count(asset => asset.Type == AssetType.Model3D)} glTF model(s).");
     }
 
     private void ImportFontFiles(EditorLog log)

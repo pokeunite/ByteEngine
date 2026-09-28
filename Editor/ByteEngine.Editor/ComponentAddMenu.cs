@@ -55,11 +55,17 @@ internal static class ComponentAddMenu
     private static void DrawItem(GameObject target, Type type, Action<Component, string> add)
     {
         ComponentMetadata metadata = ComponentMetadataRegistry.Get(type);
-        GameObject componentTarget = type == typeof(VisualModelOverride) && target.Parent == null
-            ? target.Children.First(child =>
+        GameObject componentTarget = target;
+        // Imported models can live on the root itself, not just a Blueprint child.
+        // Drawing the menu must also be safe when a matching child is absent.
+        if (type == typeof(VisualModelOverride) && target.Parent == null &&
+            target.GetComponent<ModelHierarchyInstance>() == null &&
+            !target.Name.Equals("Model", StringComparison.OrdinalIgnoreCase))
+        {
+            componentTarget = target.Children.FirstOrDefault(child =>
                 child.GetComponent<ModelHierarchyInstance>() != null ||
-                child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase))
-            : target;
+                child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase)) ?? target;
+        }
         bool exists = componentTarget.Components.Any(component => component.GetType() == type);
 
         if (ImGui.MenuItem(metadata.DisplayName, string.Empty, false, !exists) &&

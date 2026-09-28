@@ -1008,6 +1008,10 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is MeshRenderer &&
+            propertyName == nameof(MeshRenderer.MaterialAssetReference))
+            return AssetType.Material;
+
         if (component is AnimationController &&
             propertyName ==
                 nameof(AnimationController.AnimationProfile))

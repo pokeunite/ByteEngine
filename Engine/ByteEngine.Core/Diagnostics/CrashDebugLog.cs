@@ -12,6 +12,14 @@ public static class CrashDebugLog
     private static readonly object Sync = new();
     private static bool _handlersInstalled;
     private static string? _logPath;
+    private static string? _startupLogPath;
+
+    public static void ConfigureStartupLog(string path)
+    {
+        lock (Sync) { _startupLogPath = path; _logPath = path; }
+        WriteHeader();
+        Write("Startup diagnostic recording enabled.");
+    }
 
     public static string? LogPath
     {
@@ -112,6 +120,8 @@ public static class CrashDebugLog
             lock (Sync)
             {
                 File.AppendAllText(path, line, Encoding.UTF8);
+                if (_startupLogPath != null && _startupLogPath != path)
+                    File.AppendAllText(_startupLogPath, line, Encoding.UTF8);
             }
         }
         catch

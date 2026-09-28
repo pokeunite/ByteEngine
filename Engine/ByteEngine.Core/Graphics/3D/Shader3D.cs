@@ -871,22 +871,22 @@ internal sealed class Shader3D : IDisposable
                 discard;
             }
 
-            vec4 packed=vec4(1.0);
+            vec4 packedPbrSample=vec4(1.0);
             if(uUsePackedPbrTexture==1)
-                packed=sampleMaterialTexture(uPackedPbrTexture);
+                packedPbrSample=sampleMaterialTexture(uPackedPbrTexture);
             float uMetallic=clamp(uMetallicFactor*
                 (uUsePackedPbrTexture==1
-                    ? mapChannel(packed,uPackedMetallicChannel)
+                    ? mapChannel(packedPbrSample,uPackedMetallicChannel)
                     : uUseMetallicTexture==1 ? sampleMaterialTexture(uMetallicTexture).r : 1.0),
                 0.0,1.0);
             float uRoughness=clamp(uRoughnessFactor*
                 (uUsePackedPbrTexture==1
-                    ? mapChannel(packed,uPackedRoughnessChannel)
+                    ? mapChannel(packedPbrSample,uPackedRoughnessChannel)
                     : uUseRoughnessTexture==1 ? sampleMaterialTexture(uRoughnessTexture).r : 1.0),
                 0.04,1.0);
             float ao=clamp(
                 uUsePackedPbrTexture==1 && uPackedAoChannel!=0
-                    ? mapChannel(packed,uPackedAoChannel)
+                    ? mapChannel(packedPbrSample,uPackedAoChannel)
                     : uUseAoTexture==1 ? sampleMaterialTexture(uAoTexture).r : 1.0,
                 0.0,1.0);
             ao=mix(1.0,ao,clamp(uAoStrength,0.0,1.0));
