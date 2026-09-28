@@ -8,6 +8,8 @@ public sealed class Renderer3D : IDisposable
     private readonly Dictionary<PrimitiveMeshType, Mesh> _primitives =
         new();
 
+    private readonly MaterialTextureSampling _materialSampling = new();
+
     private Shader3D? _shader;
 
     private SkyShader3D? _skyShader;
@@ -251,8 +253,7 @@ public sealed class Renderer3D : IDisposable
 
                 if (alphaCutout)
                 {
-                    submission.Material.MainTexture!.Bind(
-                        0);
+                    _materialSampling.Bind(submission.Material.MainTexture!, 0);
 
                     _shadowShader.SetInt(
                         "uTexture",
@@ -446,7 +447,7 @@ public sealed class Renderer3D : IDisposable
 
                         if (alphaCutout)
                         {
-                            submission.Material.MainTexture!.Bind(0);
+                            _materialSampling.Bind(submission.Material.MainTexture!, 0);
 
                             _pointShadowShader.SetInt(
                                 "uTexture",
@@ -625,8 +626,7 @@ public sealed class Renderer3D : IDisposable
             if (material.MainTexture !=
                 null)
             {
-                material.MainTexture.Bind(
-                    0);
+                _materialSampling.Bind(material.MainTexture, 0);
 
                 _shader.SetInt(
                     "uTexture",
@@ -646,8 +646,7 @@ public sealed class Renderer3D : IDisposable
             if (material.NormalTexture !=
                 null)
             {
-                material.NormalTexture.Bind(
-                    1);
+                _materialSampling.Bind(material.NormalTexture, 1);
 
                 _shader.SetInt(
                     "uNormalTexture",
@@ -721,7 +720,7 @@ public sealed class Renderer3D : IDisposable
     {
         _shader!.SetInt(enabledUniform, texture == null ? 0 : 1);
         if (texture == null) return;
-        texture.Bind(slot);
+        _materialSampling.Bind(texture, slot);
         _shader.SetInt(samplerUniform, slot);
     }
 
@@ -1500,6 +1499,7 @@ public sealed class Renderer3D : IDisposable
 
     private static void RestoreBaselineState()
     {
+        MaterialTextureSampling.Unbind();
         GL.PolygonMode(
             TriangleFace.FrontAndBack,
             OpenTK.Graphics.OpenGL4.PolygonMode.Fill);
@@ -1522,6 +1522,7 @@ public sealed class Renderer3D : IDisposable
 
     public void Dispose()
     {
+        _materialSampling.Dispose();
         foreach (Mesh mesh
                  in _primitives.Values)
         {

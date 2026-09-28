@@ -200,9 +200,132 @@ internal sealed class Shader3D : IDisposable
 
         const float PI=3.14159265359;
 
+        /*
+         * ByteEngine v1 material compatibility:
+         *
+         * Positive UV tiling keeps the original mesh-UV path.
+         * Negative X+Y tiling is the persisted World Aligned marker. The
+         * absolute X value is the world-units-per-texture-repeat scale.
+         *
+         * This keeps existing .bmat files backward compatible without a file
+         * format bump. The Material editor owns this encoding so users never
+         * have to enter negative values themselves.
+         */
+        bool useWorldAligned()
+        {
+            return
+                uUvTiling.x<0.0 &&
+                uUvTiling.y<0.0;
+        }
+
+        float worldTextureScale()
+        {
+            return
+                max(
+                    abs(uUvTiling.x),
+                    0.001);
+        }
+
         vec2 materialUv()
         {
-            return vUV*uUvTiling+uUvOffset;
+            return
+                vUV*uUvTiling+
+                uUvOffset;
+        }
+
+        vec3 triplanarWeights(
+            vec3 normal)
+        {
+            vec3 weights=
+                pow(
+                    abs(
+                        normalize(
+                            normal)),
+                    vec3(4.0));
+
+            float total=
+                max(
+                    weights.x+
+                    weights.y+
+                    weights.z,
+                    0.00001);
+
+            return
+                weights/
+                total;
+        }
+
+        void worldProjectionUvs(
+            vec3 normal,
+            out vec2 uvX,
+            out vec2 uvY,
+            out vec2 uvZ)
+        {
+            vec3 world=
+                vWorldPosition/
+                worldTextureScale();
+
+            uvX=
+                world.zy;
+
+            uvY=
+                world.xz;
+
+            uvZ=
+                world.xy;
+
+            /*
+             * Keep projections on opposite faces consistently oriented rather
+             * than mirrored. This follows the same practical triplanar idea as
+             * Unreal's WorldAlignedTexture / WorldAlignedNormal functions.
+             */
+            if(normal.x<0.0)
+                uvX.x=-uvX.x;
+
+            if(normal.y<0.0)
+                uvY.x=-uvY.x;
+
+            if(normal.z>=0.0)
+                uvZ.x=-uvZ.x;
+
+            uvX+=uUvOffset;
+            uvY+=uUvOffset;
+            uvZ+=uUvOffset;
+        }
+
+        vec4 sampleMaterialTexture(
+            sampler2D source)
+        {
+            if(!useWorldAligned())
+            {
+                return
+                    texture(
+                        source,
+                        materialUv());
+            }
+
+            vec3 normal=
+                normalize(
+                    vNormal);
+
+            vec3 weights=
+                triplanarWeights(
+                    normal);
+
+            vec2 uvX;
+            vec2 uvY;
+            vec2 uvZ;
+
+            worldProjectionUvs(
+                normal,
+                uvX,
+                uvY,
+                uvZ);
+
+            return
+                texture(source,uvX)*weights.x+
+                texture(source,uvY)*weights.y+
+                texture(source,uvZ)*weights.z;
         }
 
         float mapChannel(vec4 sampleValue,int channel)
@@ -221,12 +344,117 @@ internal sealed class Shader3D : IDisposable
                 : value;
         }
 
+        vec3 blendTriplanarNormal(
+            vec3 mappedNormal,
+            vec3 surfaceNormal)
+        {
+            vec3 result;
+
+            result.xy=
+                mappedNormal.xy+
+                surfaceNormal.xy;
+
+            result.z=
+                mappedNormal.z*
+                surfaceNormal.z;
+
+            return result;
+        }
+
+        vec3 getWorldAlignedNormal(
+            vec3 n)
+        {
+            vec3 weights=
+                triplanarWeights(
+                    n);
+
+            vec2 uvX;
+            vec2 uvY;
+            vec2 uvZ;
+
+            worldProjectionUvs(
+                n,
+                uvX,
+                uvY,
+                uvZ);
+
+            vec3 tangentNormalX=
+                texture(
+                    uNormalTexture,
+                    uvX).xyz*
+                2.0-
+                1.0;
+
+            vec3 tangentNormalY=
+                texture(
+                    uNormalTexture,
+                    uvY).xyz*
+                2.0-
+                1.0;
+
+            vec3 tangentNormalZ=
+                texture(
+                    uNormalTexture,
+                    uvZ).xyz*
+                2.0-
+                1.0;
+
+            tangentNormalX.y*=uNormalYSign;
+            tangentNormalY.y*=uNormalYSign;
+            tangentNormalZ.y*=uNormalYSign;
+
+            tangentNormalX.xy*=uNormalStrength;
+            tangentNormalY.xy*=uNormalStrength;
+            tangentNormalZ.xy*=uNormalStrength;
+
+            /*
+             * Match the UV face flips above so tangent-space normals do not
+             * become mirrored on negative projections.
+             */
+            if(n.x<0.0)
+                tangentNormalX.x=-tangentNormalX.x;
+
+            if(n.y<0.0)
+                tangentNormalY.x=-tangentNormalY.x;
+
+            if(n.z>=0.0)
+                tangentNormalZ.x=-tangentNormalZ.x;
+
+            vec3 worldNormalX=
+                blendTriplanarNormal(
+                    tangentNormalX,
+                    n.zyx).zyx;
+
+            vec3 worldNormalY=
+                blendTriplanarNormal(
+                    tangentNormalY,
+                    n.xzy).xzy;
+
+            vec3 worldNormalZ=
+                blendTriplanarNormal(
+                    tangentNormalZ,
+                    n);
+
+            return
+                normalize(
+                    worldNormalX*weights.x+
+                    worldNormalY*weights.y+
+                    worldNormalZ*weights.z);
+        }
+
         vec3 getNormal()
         {
             vec3 n=normalize(vNormal);
 
             if(uUseNormalTexture==0)
                 return n;
+
+            if(useWorldAligned())
+            {
+                return
+                    getWorldAlignedNormal(
+                        n);
+            }
 
             vec3 tangentNormal=
                 texture(uNormalTexture,materialUv()).xyz*2.0-1.0;
@@ -630,7 +858,7 @@ internal sealed class Shader3D : IDisposable
         void main()
         {
             vec4 baseTexture=uUseTexture==1
-                ? texture(uTexture,materialUv())
+                ? sampleMaterialTexture(uTexture)
                 : vec4(1.0);
             vec4 base=vec4(
                 uBaseColor.rgb*decodeColor(baseTexture.rgb),
@@ -643,31 +871,30 @@ internal sealed class Shader3D : IDisposable
                 discard;
             }
 
-            vec2 uv=materialUv();
             vec4 packed=vec4(1.0);
             if(uUsePackedPbrTexture==1)
-                packed=texture(uPackedPbrTexture,uv);
+                packed=sampleMaterialTexture(uPackedPbrTexture);
             float uMetallic=clamp(uMetallicFactor*
                 (uUsePackedPbrTexture==1
                     ? mapChannel(packed,uPackedMetallicChannel)
-                    : uUseMetallicTexture==1 ? texture(uMetallicTexture,uv).r : 1.0),
+                    : uUseMetallicTexture==1 ? sampleMaterialTexture(uMetallicTexture).r : 1.0),
                 0.0,1.0);
             float uRoughness=clamp(uRoughnessFactor*
                 (uUsePackedPbrTexture==1
                     ? mapChannel(packed,uPackedRoughnessChannel)
-                    : uUseRoughnessTexture==1 ? texture(uRoughnessTexture,uv).r : 1.0),
+                    : uUseRoughnessTexture==1 ? sampleMaterialTexture(uRoughnessTexture).r : 1.0),
                 0.04,1.0);
             float ao=clamp(
                 uUsePackedPbrTexture==1 && uPackedAoChannel!=0
                     ? mapChannel(packed,uPackedAoChannel)
-                    : uUseAoTexture==1 ? texture(uAoTexture,uv).r : 1.0,
+                    : uUseAoTexture==1 ? sampleMaterialTexture(uAoTexture).r : 1.0,
                 0.0,1.0);
             ao=mix(1.0,ao,clamp(uAoStrength,0.0,1.0));
             vec3 emission=vec3(0.0);
             if(uEmissionEnabled==1)
             {
                 vec3 emissionMap=uUseEmissionTexture==1
-                    ? decodeColor(texture(uEmissionTexture,uv).rgb)
+                    ? decodeColor(sampleMaterialTexture(uEmissionTexture).rgb)
                     : vec3(1.0);
                 emission=uEmissionColor*emissionMap*
                     max(uEmissionIntensity,0.0);

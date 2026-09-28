@@ -185,7 +185,7 @@ internal sealed class MaterialWorkspacePanel : IDisposable
         }
         if (ImGui.CollapsingHeader("UV"))
         {
-            EditVector2("Tiling", nameof(p.UvTiling), p.UvTiling, value => p.UvTiling = value);
+            EditUvMapping(p);
             EditVector2("Offset", nameof(p.UvOffset), p.UvOffset, value => p.UvOffset = value);
         }
         if (ImGui.CollapsingHeader("Advanced"))
@@ -200,6 +200,168 @@ internal sealed class MaterialWorkspacePanel : IDisposable
             EditEnum("Polygon Mode", nameof(p.PolygonMode), p.PolygonMode,
                 value => p.PolygonMode = value);
         }
+    }
+
+    /// <summary>
+    /// Keeps the v1 .bmat schema backward compatible while exposing a simple
+    /// Unreal-style world-aligned mapping mode.
+    ///
+    /// Mesh UV:
+    ///     UvTiling contains normal positive tiling values.
+    ///
+    /// World Aligned:
+    ///     both UvTiling components are negative and abs(X) is interpreted by
+    ///     Shader3D as world units per texture repeat.
+    ///
+    /// The editor owns this compact encoding so users never need to type
+    /// negative UV values themselves.
+    /// </summary>
+    private void EditUvMapping(MaterialParameters p)
+    {
+        Vector2 stored =
+            p.UvTiling;
+
+        bool enabled =
+            Allow(
+                nameof(p.UvTiling),
+                stored);
+
+        ImGui.BeginDisabled(
+            !enabled);
+
+        bool worldAligned =
+            stored.X < 0f &&
+            stored.Y < 0f;
+
+        int mode =
+            worldAligned
+                ? 1
+                : 0;
+
+        string[] modes =
+        {
+            "Mesh UV",
+            "World Aligned"
+        };
+
+        if (ImGui.Combo(
+                "Mapping",
+                ref mode,
+                modes,
+                modes.Length))
+        {
+            if (mode == 1)
+            {
+                float worldScale =
+                    Math.Max(
+                        .01f,
+                        MathF.Abs(
+                            stored.X));
+
+                stored =
+                    new Vector2(
+                        -worldScale,
+                        -worldScale);
+            }
+            else
+            {
+                stored =
+                    new Vector2(
+                        Math.Max(
+                            .01f,
+                            MathF.Abs(
+                                stored.X)),
+                        Math.Max(
+                            .01f,
+                            MathF.Abs(
+                                stored.Y)));
+            }
+
+            Commit(
+                nameof(p.UvTiling),
+                stored,
+                value => p.UvTiling = value);
+
+            worldAligned =
+                mode == 1;
+        }
+
+        if (worldAligned)
+        {
+            float worldScale =
+                Math.Max(
+                    .01f,
+                    MathF.Abs(
+                        stored.X));
+
+            if (ImGui.DragFloat(
+                    "World Scale (units/tile)",
+                    ref worldScale,
+                    .05f))
+            {
+                worldScale =
+                    Math.Clamp(
+                        worldScale,
+                        .01f,
+                        1000f);
+
+                stored =
+                    new Vector2(
+                        -worldScale,
+                        -worldScale);
+
+                Commit(
+                    nameof(p.UvTiling),
+                    stored,
+                    value => p.UvTiling = value);
+            }
+
+            ImGui.TextDisabled(
+                "World-space triplanar mapping. Scale = world units per texture repeat.");
+
+            ImGui.TextDisabled(
+                "Best for ground, walls, rocks and Megascans. Moving meshes may texture-swim.");
+        }
+        else
+        {
+            Vector2 tiling =
+                new(
+                    Math.Max(
+                        .01f,
+                        MathF.Abs(
+                            stored.X)),
+                    Math.Max(
+                        .01f,
+                        MathF.Abs(
+                            stored.Y)));
+
+            if (ImGui.DragFloat2(
+                    "Tiling",
+                    ref tiling,
+                    .01f))
+            {
+                tiling =
+                    new Vector2(
+                        Math.Clamp(
+                            tiling.X,
+                            .01f,
+                            1000f),
+                        Math.Clamp(
+                            tiling.Y,
+                            .01f,
+                            1000f));
+
+                stored =
+                    tiling;
+
+                Commit(
+                    nameof(p.UvTiling),
+                    stored,
+                    value => p.UvTiling = value);
+            }
+        }
+
+        ImGui.EndDisabled();
     }
 
     private MaterialParameters ResolveDraft()

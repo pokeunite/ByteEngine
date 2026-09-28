@@ -11,19 +11,33 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public sealed class Material
 {
+
     public Vector4 BaseColor { get; set; } =
         Vector4.One;
 
+    /// <summary>
+    /// Material textures deliberately use a 3D/PBR sampling profile instead of
+    /// the texture asset's 2D sprite sampling profile. This keeps pixel-art/UI
+    /// defaults independent while giving 3D materials repeat wrapping,
+    /// trilinear filtering and mipmaps.
+    /// </summary>
     public Texture2D? MainTexture { get; set; }
 
     public Texture2D? NormalTexture { get; set; }
+
     public float NormalStrength { get; set; } = 1f;
     public bool DirectXNormalMap { get; set; }
+
     public Texture2D? MetallicTexture { get; set; }
+
     public Texture2D? RoughnessTexture { get; set; }
+
     public Texture2D? AmbientOcclusionTexture { get; set; }
+
     public float AmbientOcclusionStrength { get; set; } = 1f;
+
     public Texture2D? PackedPbrTexture { get; set; }
+
     public MaterialPbrMapMode PbrMapMode { get; set; }
     public MaterialMapChannel PackedAoChannel { get; set; } = MaterialMapChannel.Red;
     public MaterialMapChannel PackedRoughnessChannel { get; set; } = MaterialMapChannel.Green;
@@ -31,7 +45,9 @@ public sealed class Material
     public bool EmissionEnabled { get; set; }
     public Vector3 EmissionColor { get; set; } = Vector3.One;
     public float EmissionIntensity { get; set; } = 1f;
+
     public Texture2D? EmissionTexture { get; set; }
+
     public Vector2 UvTiling { get; set; } = Vector2.One;
     public Vector2 UvOffset { get; set; }
     public MaterialShadingMode Shading { get; set; } = MaterialShadingMode.Lit;
@@ -87,9 +103,9 @@ public sealed class Material
     }
 
     /// <summary>
-    /// Copies the material settings while retaining references to the same
-    /// immutable/shared texture resources.
-    /// <summary>Refreshes an existing renderer-local material without new GPU resources.</summary>
+    /// Refreshes an existing renderer-local material while retaining references
+    /// to the same shared texture resources.
+    /// </summary>
     public void CopyFrom(Material source)
     {
         BaseColor = source.BaseColor;
@@ -125,7 +141,6 @@ public sealed class Material
         PolygonMode = source.PolygonMode;
     }
 
-    /// </summary>
     public Material Clone()
     {
         return
