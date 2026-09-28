@@ -287,7 +287,8 @@ public class ByteEngineApplication : GameWindow
                     _runtimePostProcessTarget.Present(
                         exposure,
                         WindowWidth,
-                        WindowHeight);
+                        WindowHeight,
+                        context.CaptureRenderEnvironment3D().SmoothEdges);
                     context.FlushUi();
                 }
                 else

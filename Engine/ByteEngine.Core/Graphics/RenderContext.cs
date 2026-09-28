@@ -221,7 +221,7 @@ public sealed class RenderContext
                 environment.FogStartDistance,
                 environment.FogEndDistance,
                 environment.FogDensity,
-                environment.FogMaxOpacity);
+                environment.FogMaxOpacity) { SmoothEdges = environment.SmoothEdges };
     }
 
     public RenderLighting3D CaptureRenderLighting3D(

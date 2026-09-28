@@ -44,7 +44,8 @@ internal sealed class RuntimePostProcessTarget3D
     public void Present(
         float exposure,
         int windowWidth,
-        int windowHeight)
+        int windowHeight,
+        bool smoothEdges = true)
     {
         _postProcess.Render(
             _colorTexture,
@@ -58,7 +59,8 @@ internal sealed class RuntimePostProcessTarget3D
             applyToneMapping:
                 true,
             exposure:
-                exposure);
+                exposure,
+            smoothEdges: smoothEdges);
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,

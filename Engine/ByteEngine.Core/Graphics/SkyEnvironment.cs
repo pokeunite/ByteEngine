@@ -110,6 +110,8 @@ public sealed class SkyEnvironment : Component
     /// been composed into the HDR framebuffer and before tone mapping.
     /// 1.0 preserves the previous ByteEngine appearance.
     /// </summary>
+    public bool SmoothEdges { get; set; } = true;
+
     public float Exposure
     {
         get =>

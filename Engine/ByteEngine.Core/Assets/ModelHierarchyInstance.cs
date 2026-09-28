@@ -20,6 +20,22 @@ public sealed class ModelHierarchyInstance : Component
 
     public AssetReference Model { get; set; } = AssetReference.Empty;
 
+    public AssetReference MaterialOverride { get; set; } = AssetReference.Empty;
+
+    internal static Material? ResolveMaterialOverride(GameObject owner)
+    {
+        for (GameObject? item = owner; item != null; item = item.Parent)
+        {
+            if (item.GetComponent<ModelHierarchyInstance>() is not { } instance) continue;
+            if (instance.MaterialOverride.IsEmpty) return null;
+            if (!ByteEngine.Core.Animation.AnimationRuntimeAssets.TryGet(out AssetManager? assets) || assets == null)
+                return null;
+            try { return assets.LoadMaterial(instance.MaterialOverride); }
+            catch { return null; }
+        }
+        return null;
+    }
+
     public float AppliedImportScale { get; set; } = 1.0f;
     public bool AutoGrounded { get; set; }
 

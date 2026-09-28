@@ -78,6 +78,7 @@ public static class SkyEnvironmentExposureSerialization
                             ["exposure"] =
                                 environment.Exposure,
 
+                            ["smoothEdges"] = environment.SmoothEdges,
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -193,6 +194,7 @@ public static class SkyEnvironmentExposureSerialization
                             "exposure",
                             1.0f),
 
+                    SmoothEdges = data.Properties["smoothEdges"]?.GetValue<bool>() ?? true,
                     ZenithColor =
                         ReadVector3(
                             data.Properties["zenithColor"],

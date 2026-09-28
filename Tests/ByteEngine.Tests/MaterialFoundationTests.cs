@@ -118,6 +118,38 @@ internal static class MaterialFoundationTests
             inferred.Standard.PackedPbrTexture.Guid == textureRecords[2].Guid,
             "Create Material From Textures keeps GUID-backed map assignments");
 
+        var componentSerializer = new ComponentSerializer(root, database, assets);
+        var modelScene = new Scene("Material Override");
+        modelScene.CreateGameObject("Character").AddComponent(new ModelHierarchyInstance
+            { MaterialOverride = parentReference });
+        Scene modelCopy = new SceneSerializer(componentSerializer).CloneForRuntime(modelScene);
+        Assert(modelCopy.FindGameObject("Character")!.GetComponent<ModelHierarchyInstance>()!
+            .MaterialOverride == parentReference, "Model material override persists across scene/Blueprint cloning");
+        var proxy = new GameObject("Preview");
+        var sourceModel = new ModelHierarchyInstance { MaterialOverride = parentReference };
+        var sync = typeof(Scene).Assembly.GetType("ByteEngine.Core.Scene.EditorSkeletalPreviewCache")!
+            .GetMethod("SynchronizeMaterialOverride", System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Static)!;
+        sync.Invoke(null, new object[] { sourceModel, proxy });
+        Assert(proxy.GetComponent<ModelHierarchyInstance>()!.MaterialOverride == parentReference,
+            "Editor skeletal proxy receives model material override");
+        sourceModel.MaterialOverride = instanceReference;
+        sync.Invoke(null, new object[] { sourceModel, proxy });
+        Assert(proxy.GetComponent<ModelHierarchyInstance>()!.MaterialOverride == instanceReference,
+            "Editor skeletal proxy follows changed material");
+        sourceModel.MaterialOverride = AssetReference.Empty;
+        sync.Invoke(null, new object[] { sourceModel, proxy });
+        Assert(proxy.GetComponent<ModelHierarchyInstance>()!.MaterialOverride.IsEmpty,
+            "Clearing model override clears editor skeletal proxy override");
+        var picker = typeof(ByteEngine.Editor.ComponentPropertyRenderer).GetMethod("GetExpectedAssetType",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        Assert((AssetType?)picker.Invoke(null, new object[] { new ModelHierarchyInstance(), "MaterialOverride" })
+            == AssetType.Material, "Model material picker accepts only materials");
+        Assert((AssetType?)picker.Invoke(null, new object[] { new ModelHierarchyInstance(), "Model" })
+            == AssetType.Model3D, "Model picker accepts only models");
+        Assert((AssetType?)picker.Invoke(null, new object[] { new ByteEngine.Core.Blueprints.BlueprintInstance(), "Blueprint" })
+            == AssetType.Blueprint, "Blueprint picker accepts only Blueprints");
+
         var shared = new ByteEngine.Core.Graphics.ThreeD.Material
         { BaseColor = Vector4.One, Roughness = .8f };
         var objectA = shared.Clone();

@@ -29,6 +29,8 @@ public readonly record struct RenderEnvironment3D(
     float FogDensity,
     float FogMaxOpacity)
 {
+    public bool SmoothEdges { get; init; } = true;
+
     public static RenderEnvironment3D Default =>
         new(
             false,

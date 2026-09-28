@@ -33,6 +33,18 @@ try
         return;
     }
 
+    if (args.Contains("--foliage-graphics"))
+    {
+        FoliageGraphicsTests.Run(root);
+        return;
+    }
+    if (args.Contains("--graphics-edge-smoke"))
+    {
+        using var smoke = new GraphicsEdgeSmokeTest();
+        smoke.Run();
+        return;
+    }
+
     if (args.Contains("--ui-text"))
     {
         UiTextSystemTests.Run(root);

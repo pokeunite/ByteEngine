@@ -16,6 +16,7 @@ public static class RendererSerializationRegistrar
         ArgumentNullException.ThrowIfNull(
             serializer);
 
+        serializer.Register(new FoliagePatchCodec());
         serializer.Register(
             new MeshRendererV09Codec());
 
@@ -80,6 +81,7 @@ public static class RendererSerializationRegistrar
                             ["environmentLightingEnabled"] =
                                 environment.EnvironmentLightingEnabled,
 
+                            ["smoothEdges"] = environment.SmoothEdges,
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -189,6 +191,7 @@ public static class RendererSerializationRegistrar
                             .GetValue<bool>() ??
                         true,
 
+                    SmoothEdges = data.Properties["smoothEdges"]?.GetValue<bool>() ?? true,
                     ZenithColor =
                         ReadVector3(
                             data.Properties["zenithColor"],

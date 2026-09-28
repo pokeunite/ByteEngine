@@ -314,6 +314,7 @@ public sealed class ComponentSerializer
             new SpriteRendererCodec()
         );
 
+        Register(new FoliagePatchCodec());
         Register(new UiCanvasCodec());
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());
@@ -2246,6 +2247,8 @@ public sealed class ComponentSerializer
                     ["modelPath"] =
                         instance.Model.CachedProjectPath,
 
+                    ["materialOverrideGuid"] = instance.MaterialOverride.Guid.ToString(),
+                    ["materialOverridePath"] = instance.MaterialOverride.CachedProjectPath,
                     ["appliedImportScale"] = instance.AppliedImportScale,
                     ["autoGrounded"] = instance.AutoGrounded
                 });
@@ -2268,6 +2271,9 @@ public sealed class ComponentSerializer
                         data.Properties["modelPath"]?
                             .GetValue<string>()),
 
+                MaterialOverride = new AssetReference(
+                    Guid.TryParse(data.Properties["materialOverrideGuid"]?.GetValue<string>(), out Guid materialId)
+                        ? materialId : Guid.Empty, data.Properties["materialOverridePath"]?.GetValue<string>()),
                 AppliedImportScale = Float(data, "appliedImportScale", 1.0f),
                 AutoGrounded = data.Properties["autoGrounded"]?.GetValue<bool>() ?? false
             };

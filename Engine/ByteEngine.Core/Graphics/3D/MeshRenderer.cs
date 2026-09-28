@@ -207,7 +207,7 @@ public sealed class MeshRenderer : Component
 
     private Material ResolveEffectiveMaterial()
     {
-        Material source = ResolveBaseMaterial();
+        Material source = ModelHierarchyInstance.ResolveMaterialOverride(GameObject) ?? ResolveBaseMaterial();
         if (MaterialOverrides.IsEmpty) return source;
         _overrideMaterial ??= source.Clone();
         AnimationRuntimeAssets.TryGet(out AssetManager? assets);

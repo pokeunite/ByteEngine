@@ -24,6 +24,7 @@ internal sealed class SceneViewPanel : IDisposable
     private readonly Gizmo3DController _gizmo3D =
         new();
 
+    private readonly FoliagePaintTool _foliagePaint = new();
     private bool _is3D =
         true;
 
@@ -68,6 +69,11 @@ internal sealed class SceneViewPanel : IDisposable
             Vector3 minimum = new(float.PositiveInfinity);
             Vector3 maximum = new(float.NegativeInfinity);
             bool foundPose = false;
+            if (selected.GetComponent<FoliagePatch>() is { } foliage)
+            {
+                state.Camera3D.Frame(foliage.GetWorldBounds());
+                return;
+            }
             foreach (GameObject item in state.DisplayedScene.GameObjects)
             {
                 if (item.GetComponent<ModelHierarchyInstance>() == null ||
@@ -339,7 +345,7 @@ internal sealed class SceneViewPanel : IDisposable
                 viewportSize
             );
 
-            _gizmo3D.UpdateAndDraw(
+            if (!_foliagePaint.Update(state, hovered, minimum, viewportSize)) _gizmo3D.UpdateAndDraw(
                 state,
                 state.Camera3D,
                 hovered,
@@ -501,6 +507,7 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (!_is3D) _gizmo.DrawToolbar(state);
         else _gizmo3D.DrawToolbar();
+        _foliagePaint.DrawToolbar(state);
 
         EditorUi.ToolbarSeparator();
         if (EditorUi.ToolbarButton("Frame", "Frame Selected (F)")) FrameSelected(state);

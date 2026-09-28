@@ -697,6 +697,9 @@ public sealed class EditorApplication
             ImGui.EndMenu();
         }
 
+        if (ImGui.MenuItem("Foliage Patch", string.Empty, false, canEdit))
+            CreateObjectWithComponent("Foliage Patch", () => new FoliagePatch());
+
         if (ImGui.MenuItem(
                 "Sky Environment",
                 string.Empty,

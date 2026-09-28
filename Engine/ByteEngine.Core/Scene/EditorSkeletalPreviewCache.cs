@@ -74,6 +74,7 @@ internal sealed class EditorSkeletalPreviewCache : IDisposable
             {
                 Remove(item.Id);
                 GameObject proxy = new("_EditorSkeletalPreview");
+                proxy.AddComponent(new ModelHierarchyInstance { Model = instance.Model, MaterialOverride = instance.MaterialOverride });
                 var renderer = proxy.AddComponent(new SkeletalMeshRenderer
                 {
                     Model = instance.Model,
@@ -118,6 +119,7 @@ internal sealed class EditorSkeletalPreviewCache : IDisposable
                 _previews[item.Id] = preview;
             }
 
+            SynchronizeMaterialOverride(instance, preview.Proxy);
             preview.Renderer.SetHiddenMeshKeys(instance.HiddenMeshKeys);
             preview.Proxy.Transform.WorldPosition = item.Transform.WorldPosition;
             preview.Proxy.Transform.WorldRotation = item.Transform.WorldRotation;
@@ -127,6 +129,14 @@ internal sealed class EditorSkeletalPreviewCache : IDisposable
 
         foreach (Guid stale in _previews.Keys.Where(id => !activeIds.Contains(id)).ToArray())
             Remove(stale);
+    }
+
+    internal static void SynchronizeMaterialOverride(ModelHierarchyInstance source, GameObject proxy)
+    {
+        var model = proxy.GetComponent<ModelHierarchyInstance>();
+        if (model == null) model = proxy.AddComponent(new ModelHierarchyInstance());
+        model.Model = source.Model;
+        model.MaterialOverride = source.MaterialOverride;
     }
 
     internal bool TryGetWorldBounds(GameObject source, out BoundingBox3D bounds)

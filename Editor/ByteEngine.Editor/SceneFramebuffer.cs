@@ -175,7 +175,8 @@ internal sealed class SceneFramebuffer
             applyToneMapping:
                 is3D,
             exposure:
-                environment.Exposure);
+                environment.Exposure,
+            smoothEdges: environment.SmoothEdges);
 
         if (context.Has3DCamera)
         {
@@ -312,7 +313,8 @@ internal sealed class SceneFramebuffer
             applyToneMapping:
                 camera3D != null,
             exposure:
-                environment.Exposure);
+                environment.Exposure,
+            smoothEdges: environment.SmoothEdges);
 
         if (context.Has3DCamera)
         {

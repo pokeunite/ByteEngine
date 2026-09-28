@@ -469,6 +469,7 @@ public sealed partial class SkeletalMeshRenderer : Component
             Transform.WorldMatrix;
 
         AnimationRuntimeAssets.TryGet(out AssetManager? materialAssets);
+        Material? modelOverride = ModelHierarchyInstance.ResolveMaterialOverride(GameObject);
         for (int slotIndex = 0; slotIndex < _runtimeMeshes.Count; slotIndex++)
         {
             RuntimeSkinnedMesh runtime = _runtimeMeshes[slotIndex];
@@ -487,6 +488,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                 }
                 effectiveMaterial = cached.Material ?? runtime.Material;
             }
+            effectiveMaterial = modelOverride ?? effectiveMaterial;
             if (_materialOverrides.TryGetValue(slotIndex, out MaterialOverrideState? overrides) &&
                 !overrides.IsEmpty)
             {

@@ -652,6 +652,15 @@ internal static class ComponentPropertyRenderer
                 end);
         }
 
+        if (component is FoliagePatch foliage)
+        {
+            ImGui.TextWrapped("To paint: turn on Paint Foliage in the Scene View toolbar, then click or drag on the ground. Shift-drag erases; Ctrl+Z undoes a stroke.");
+            ImGui.TextWrapped(foliage.UsePaintedLayout
+                ? "Displaying saved painted plants. The brush is enabled separately in Scene View."
+                : "Displaying automatic scatter. Painting switches to your painted layout.");
+            if (ImGui.Button(foliage.UsePaintedLayout ? "Refresh Painted Plants" : "Rebuild Scatter / Snap To Ground")) foliage.Rebuild();
+        }
+
         if (component is MeshRenderer mesh && project != null)
         {
             AssetReference selected = mesh.MaterialAssetReference;
@@ -916,7 +925,7 @@ internal static class ComponentPropertyRenderer
                 project.AssetDatabase.Assets
                     .Where(
                         asset =>
-                            expectedType == null ||
+                            expectedType != null &&
                             asset.Type == expectedType.Value)
                     .OrderBy(
                         asset =>
@@ -971,7 +980,7 @@ internal static class ComponentPropertyRenderer
                 project.AssetDatabase.TryGetAsset(                    id.Value,
                     out AssetRecord? dropped) &&
                 dropped != null &&
-                (!expectedType.HasValue ||
+                (expectedType.HasValue &&
                  dropped.Type == expectedType.Value))
             {
                 reference =
@@ -1008,6 +1017,14 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is ByteEngine.Core.Blueprints.BlueprintInstance) return AssetType.Blueprint;
+        if (component is ModelHierarchyInstance && propertyName == nameof(ModelHierarchyInstance.MaterialOverride))
+            return AssetType.Material;
+        if (component is FoliagePatch)
+        {
+            if (propertyName == nameof(FoliagePatch.Model)) return AssetType.Model3D;
+            if (propertyName == nameof(FoliagePatch.MaterialAsset)) return AssetType.Material;
+        }
         if (component is MeshRenderer &&
             propertyName == nameof(MeshRenderer.MaterialAssetReference))
             return AssetType.Material;

@@ -25,7 +25,8 @@ public sealed class PostProcess3D
         int width,
         int height,
         bool applyToneMapping,
-        float exposure)
+        float exposure,
+        bool smoothEdges = true)
     {
         if (sourceTexture ==
             0)
@@ -74,6 +75,7 @@ public sealed class PostProcess3D
             "uSceneTexture",
             0);
 
+        _shader.SetInt("uSmoothEdges", applyToneMapping && smoothEdges ? 1 : 0);
         _shader.SetInt(
             "uApplyToneMapping",
             applyToneMapping
@@ -200,6 +202,7 @@ public sealed class PostProcess3D
         uniform sampler2D uSceneTexture;
         uniform int uApplyToneMapping;
         uniform float uExposure;
+        uniform int uSmoothEdges;
 
         vec3 acesFilm(
             vec3 value)
@@ -240,6 +243,41 @@ public sealed class PostProcess3D
                     ),
                     vec3(0.0),
                     vec3(1.0));
+        }
+
+
+        vec3 displaySample(vec2 uv)
+        {
+            vec3 hdr = max(texture(uSceneTexture, uv).rgb, vec3(0.0)) * max(uExposure, 0.0);
+            return pow(acesFilm(hdr), vec3(1.0 / 2.2));
+        }
+
+        // Edge-directed spatial smoothing in display space, before final dithering.
+        vec3 smoothEdges(vec2 uv)
+        {
+            vec2 pixel = 1.0 / vec2(textureSize(uSceneTexture, 0));
+            vec3 center = displaySample(uv);
+            vec3 nw = displaySample(uv + vec2(-1.0, -1.0) * pixel);
+            vec3 ne = displaySample(uv + vec2( 1.0, -1.0) * pixel);
+            vec3 sw = displaySample(uv + vec2(-1.0,  1.0) * pixel);
+            vec3 se = displaySample(uv + vec2( 1.0,  1.0) * pixel);
+            vec3 luma = vec3(0.299, 0.587, 0.114);
+            float middle = dot(center, luma);
+            float a = dot(nw, luma), b = dot(ne, luma);
+            float c = dot(sw, luma), d = dot(se, luma);
+            float low = min(middle, min(min(a,b), min(c,d)));
+            float high = max(middle, max(max(a,b), max(c,d)));
+            if (high - low < max(0.0312, high * 0.125)) return center;
+            vec2 direction = vec2(-((a+b)-(c+d)), (a+c)-(b+d));
+            float reduction = max((a+b+c+d) * 0.03125, 0.0078125);
+            direction = clamp(direction / (min(abs(direction.x), abs(direction.y)) + reduction),
+                vec2(-8.0), vec2(8.0)) * pixel;
+            vec3 narrow = 0.5 * (displaySample(uv - direction / 6.0) +
+                displaySample(uv + direction / 6.0));
+            vec3 wide = narrow * 0.5 + 0.25 * (displaySample(uv - direction * 0.5) +
+                displaySample(uv + direction * 0.5));
+            float wideLuma = dot(wide, luma);
+            return wideLuma < low || wideLuma > high ? narrow : wide;
         }
 
         float screenDither(
@@ -291,6 +329,7 @@ public sealed class PostProcess3D
                         1.0/
                         2.2));
 
+            if (uSmoothEdges == 1) displayColor = smoothEdges(vUV);
             /*
              * This is now the only display dither in the 3D pipeline, directly
              * before writing into the final RGBA8 presentation texture.
