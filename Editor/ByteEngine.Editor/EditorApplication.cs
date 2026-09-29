@@ -483,6 +483,12 @@ public sealed class EditorApplication
             else if (_state?.Mode != EditorMode.Edit) _log.Warning("Stop Play mode before exporting a game.");
             else _gameExport.Open(_projectContext!);
         }
+        if (ImGui.MenuItem("Export Web Game (itch.io)...", string.Empty, false, hasProject))
+        {
+            if (HasUnsavedChanges) _log.Warning("Save all scene and asset changes before exporting a game.");
+            else if (_state?.Mode != EditorMode.Edit) _log.Warning("Stop Play mode before exporting a game.");
+            else _gameExport.Open(_projectContext!, web: true);
+        }
 
         ImGui.Separator();
         if (ImGui.MenuItem("Exit"))

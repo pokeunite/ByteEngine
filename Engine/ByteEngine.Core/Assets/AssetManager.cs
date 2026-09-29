@@ -83,10 +83,9 @@ public sealed class AssetManager : IDisposable
         asset.Metadata.ModelImporter.Normalize();
 
         ImportedModel imported =
-            ModelImporter.ForPath(asset.FullPath)
-                .Import(
-                    asset,
-                    asset.Metadata.ModelImporter);
+            OperatingSystem.IsBrowser()
+                ? CookedModelStore.Load(ProjectRoot, asset.Guid)
+                : ModelImporter.ForPath(asset.FullPath).Import(asset, asset.Metadata.ModelImporter);
 
         var model =
             new ModelAsset(

@@ -165,6 +165,34 @@ public static class Input
         PopulateGamepad(RawSnapshot.Gamepad, joystickStates);
     }
 
+    /// <summary>Inject a host snapshot without GLFW. The snapshot is copied, never retained.</summary>
+    internal static void UpdatePortable(RawInputSnapshot snapshot, bool captured)
+    {
+        if (IsGameInputCaptured != captured) SetGameInputCaptured(captured);
+        _uiBlocksPrimaryMouse = false;
+        if (!MouseButtonsDown.Contains(MouseButton.Left) &&
+            !PreviousMouseButtonsDown.Contains(MouseButton.Left)) _uiCapturedPrimaryMouse = false;
+        PreviousKeysDown.Clear();
+        PreviousKeysDown.UnionWith(KeysDown);
+        KeysDown.Clear();
+        KeysDown.UnionWith(snapshot.KeysDown);
+        PreviousMouseButtonsDown.Clear();
+        PreviousMouseButtonsDown.UnionWith(MouseButtonsDown);
+        MouseButtonsDown.Clear();
+        MouseButtonsDown.UnionWith(snapshot.MouseButtonsDown);
+        MouseDelta = captured ? snapshot.MouseDelta : Vector2.Zero;
+        RawSnapshot.Clear();
+        RawSnapshot.KeysDown.UnionWith(KeysDown);
+        RawSnapshot.MouseButtonsDown.UnionWith(MouseButtonsDown);
+        RawSnapshot.MouseDelta = MouseDelta;
+        RawSnapshot.MouseWheel = snapshot.MouseWheel;
+        RawSnapshot.Gamepad.LeftStick = snapshot.Gamepad.LeftStick;
+        RawSnapshot.Gamepad.RightStick = snapshot.Gamepad.RightStick;
+        RawSnapshot.Gamepad.LeftTrigger = snapshot.Gamepad.LeftTrigger;
+        RawSnapshot.Gamepad.RightTrigger = snapshot.Gamepad.RightTrigger;
+        RawSnapshot.Gamepad.ButtonsDown.UnionWith(snapshot.Gamepad.ButtonsDown);
+    }
+
     internal static void SetGameInputCaptured(bool captured)
     {
         IsGameInputCaptured = captured;

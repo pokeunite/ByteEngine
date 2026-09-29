@@ -218,7 +218,8 @@ public sealed class GameObject
     {
         if (_started) return;
         _started = true;
-        foreach (Component component in _components) component.StartInternal();
+        // Components may create renderers during OnStart. Added components start immediately.
+        foreach (Component component in _components.ToArray()) component.StartInternal();
     }
 
     internal void UpdateInternal()

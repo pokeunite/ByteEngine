@@ -133,12 +133,12 @@ public static class GamePackageExporter
         return full;
     }
 
-    private static bool IsInside(string root, string path) =>
+    internal static bool IsInside(string root, string path) =>
         string.Equals(Path.GetFullPath(root), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase) ||
         Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) +
             Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-    private static string SafeName(string name)
+    internal static string SafeName(string name)
     {
         string result = new(name.Select(c => char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_' ? c : '_').ToArray());
         result = result.Trim('_');
@@ -150,7 +150,7 @@ public static class GamePackageExporter
         return result;
     }
 
-    private static IEnumerable<string> WalkFiles(string directory)
+    internal static IEnumerable<string> WalkFiles(string directory)
     {
         if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
             throw new IOException($"Linked directories are not supported in game exports: {directory}");
@@ -167,7 +167,7 @@ public static class GamePackageExporter
         }
     }
 
-    private static void CopyTree(string source, string destination, bool content)
+    internal static void CopyTree(string source, string destination, bool content)
     {
         System.IO.Directory.CreateDirectory(destination);
         foreach (string file in WalkFiles(source))

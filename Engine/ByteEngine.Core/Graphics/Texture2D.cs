@@ -12,6 +12,11 @@ public enum TextureFilter
 public sealed class Texture2D
     : IDisposable
 {
+    private readonly bool _cpuOnly = OperatingSystem.IsBrowser();
+    private byte[]? _pixels;
+    public ReadOnlyMemory<byte> PixelData => _pixels ?? ReadOnlyMemory<byte>.Empty;
+    public TextureFilter Filter { get; private set; }
+    public bool CpuOnly => _cpuOnly;
     private int _handle;
 
     private bool _disposed;
@@ -32,7 +37,7 @@ public sealed class Texture2D
     /// Increments whenever the GPU content backing this texture changes.
     /// Environment IBL uses this to rebuild processed lighting only when needed.
     /// </summary>
-    internal int ContentVersion { get; private set; }
+    public int ContentVersion { get; private set; }
 
     public Texture2D(
         string filePath,
@@ -407,6 +412,8 @@ public sealed class Texture2D
         byte[] pixels,
         TextureFilter filter)
     {
+        Filter = filter;
+        if (_cpuOnly) { _pixels = pixels.ToArray(); return; }
         _handle =
             GL.GenTexture();
 
@@ -439,6 +446,12 @@ public sealed class Texture2D
         float[] pixels,
         TextureFilter filter)
     {
+        Filter = filter;
+        if (_cpuOnly)
+        {
+            _pixels = pixels.Select(p => (byte)Math.Clamp((float.IsFinite(p) ? p : 0) * 255f, 0, 255)).ToArray();
+            return;
+        }
         _handle =
             GL.GenTexture();
 
@@ -541,8 +554,9 @@ public sealed class Texture2D
             return;
         }
 
-        GL.DeleteTexture(
+        if (_handle != 0) GL.DeleteTexture(
             _handle);
+        _pixels = null;
 
         _handle =
             0;

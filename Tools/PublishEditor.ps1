@@ -147,3 +147,5 @@ Write-Host "The complete Dist\ByteEngine folder must stay beside the executable.
 # Bundle the standalone player so game export works without a developer SDK.
 & (Join-Path $toolsDirectory "PublishPlayer.ps1") -Configuration $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Standalone Windows player packaging failed." }
+& (Join-Path $toolsDirectory "PublishBrowser.ps1") -Configuration $Configuration
+if ($LASTEXITCODE -ne 0) { throw "Browser player packaging failed." }

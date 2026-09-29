@@ -5,6 +5,8 @@ namespace ByteEngine.Core.Graphics;
 
 public sealed class RenderContext
 {
+    /// <summary>Optional portable backend. Null keeps the existing desktop path.</summary>
+    public IRenderFrameSink? FrameSink { get; }
     public Renderer2D Renderer2D { get; }
 
     public Renderer3D Renderer3D { get; }
@@ -45,14 +47,23 @@ public sealed class RenderContext
 
     private readonly List<Action<Renderer2D>> _uiCommands = new();
 
-    internal void QueueUiText(string value, string? fontPath, int size, Vector2 position, Vector4 color, float wrapWidth, UiAnchor anchor) =>
-        _uiCommands.Add(renderer => renderer.DrawText(value, fontPath, size, position, color, wrapWidth, anchor));
+    internal void QueueUiText(string value, string? fontPath, int size, Vector2 position, Vector4 color, float wrapWidth, UiAnchor anchor)
+    {
+        if (FrameSink != null) FrameSink.DrawText(value, fontPath, size, position, color, wrapWidth, anchor);
+        else _uiCommands.Add(renderer => renderer.DrawText(value, fontPath, size, position, color, wrapWidth, anchor));
+    }
 
-    internal void QueueUiQuad(Vector2 position, Vector2 size, Vector4 color) =>
-        _uiCommands.Add(renderer => renderer.DrawQuad(position + size * .5f, size, color));
+    internal void QueueUiQuad(Vector2 position, Vector2 size, Vector4 color)
+    {
+        if (FrameSink != null) FrameSink.DrawQuad(position, size, color);
+        else _uiCommands.Add(renderer => renderer.DrawQuad(position + size * .5f, size, color));
+    }
 
-    internal void QueueUiImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color) =>
-        _uiCommands.Add(renderer => renderer.DrawSprite(texture, position + size * .5f, size, 0f, color));
+    internal void QueueUiImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color)
+    {
+        if (FrameSink != null) FrameSink.DrawImage(texture, position, size, color);
+        else _uiCommands.Add(renderer => renderer.DrawSprite(texture, position + size * .5f, size, 0f, color));
+    }
 
     internal void FlushUi()
     {
@@ -87,8 +98,10 @@ public sealed class RenderContext
         Matrix4x4? viewMatrix3D = null,
         Matrix4x4? projectionMatrix3D = null,
         bool prepareEnvironmentLighting3D = true,
-        bool renderShadows3D = true)
+        bool renderShadows3D = true,
+        IRenderFrameSink? frameSink = null)
     {
+        FrameSink = frameSink;
         Renderer2D =
             renderer2D;
 

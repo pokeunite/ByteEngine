@@ -68,6 +68,11 @@ public sealed class AudioListener3D
 
     private void UpdateListener()
     {
+        if (PortableAudio.Backend is { } portable)
+        {
+            if (IsPrimaryListener()) portable.Listener(Transform.WorldPosition, Transform.Forward, Transform.Up, Volume);
+            return;
+        }
         if (!IsPrimaryListener() ||
             !AudioEngine.EnsureInitialized())
         {

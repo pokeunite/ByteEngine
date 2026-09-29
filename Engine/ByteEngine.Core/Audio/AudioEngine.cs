@@ -36,6 +36,7 @@ public static class AudioEngine
 
     public static bool EnsureInitialized()
     {
+        if (OperatingSystem.IsBrowser()) return PortableAudio.Backend != null;
         lock (Sync)
         {
             if (_available)

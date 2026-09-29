@@ -8,6 +8,11 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public sealed class Mesh : IDisposable
 {
+    /// <summary>CPU geometry for non-OpenGL backends. XYZ/normal/UV, eight floats per vertex.</summary>
+    public ReadOnlyMemory<float> VertexData => _vertices;
+    public ReadOnlyMemory<uint> IndexData => _indices;
+    public int GeometryVersion { get; private set; }
+
     private float[] _vertices;
     private uint[] _indices;
 
@@ -132,6 +137,7 @@ public sealed class Mesh : IDisposable
                     _vertices);
         }
 
+        GeometryVersion++;
         _vertexDataDirty =
             true;
     }
@@ -163,6 +169,7 @@ public sealed class Mesh : IDisposable
         _indices =
             indices;
 
+        GeometryVersion++;
         _vertexDataDirty =
             false;
 

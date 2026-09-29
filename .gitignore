@@ -9,3 +9,5 @@ layout.ini
 /Dist/
 /ByteEngine.Editor.exe
 /.artifacts/player-publish/
+/.artifacts/browser-prototype/
+/.artifacts/browser-tests/

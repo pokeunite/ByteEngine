@@ -18,6 +18,7 @@ namespace ByteEngine.Core.Audio;
 public sealed class AudioSource3D
     : Component
 {
+    private readonly Guid _portableId = Guid.NewGuid();
     private AudioClip? _clip;
 
     private int _source;
@@ -124,6 +125,7 @@ public sealed class AudioSource3D
     }
 
     public bool IsPlaying =>
+        PortableAudio.Backend is { } portable ? portable.IsPlaying(_portableId) :
         _source !=
             0 &&
         AudioEngine.IsAvailable &&
@@ -148,14 +150,14 @@ public sealed class AudioSource3D
     /// True when ByteEngine has a live OpenAL device/context.
     /// </summary>
     public bool BackendAvailable =>
-        AudioEngine.IsAvailable;
+        PortableAudio.Backend != null || AudioEngine.IsAvailable;
 
     /// <summary>
     /// Human-readable backend state surfaced directly in the Inspector so a
     /// missing Windows OpenAL runtime cannot fail silently.
     /// </summary>
     public string BackendStatus =>
-        AudioEngine.IsAvailable
+        PortableAudio.Backend != null ? "Ready — WebAudio" : AudioEngine.IsAvailable
             ? $"Ready — {AudioEngine.DeviceName}"
             : string.IsNullOrWhiteSpace(
                 AudioEngine.LastError)
@@ -165,6 +167,14 @@ public sealed class AudioSource3D
     public void SetClip(
         AudioClip? clip)
     {
+        if (PortableAudio.Backend is { } portable)
+        {
+            if (ReferenceEquals(_clip, clip)) return;
+            portable.Stop(_portableId);
+            _clip?.Dispose();
+            _clip = clip;
+            return;
+        }
         if (ReferenceEquals(
                 _clip,
                 clip))
@@ -206,6 +216,11 @@ public sealed class AudioSource3D
 
     public void Play()
     {
+        if (PortableAudio.Backend is { } portable)
+        {
+            if (_clip != null) portable.Play(_portableId, _clip, this);
+            return;
+        }
         if (_clip ==
             null)
         {
@@ -231,6 +246,7 @@ public sealed class AudioSource3D
 
     public void Pause()
     {
+        if (PortableAudio.Backend is { } portable) { portable.Pause(_portableId); return; }
         if (_source ==
                 0 ||
             !AudioEngine.IsAvailable)
@@ -244,6 +260,7 @@ public sealed class AudioSource3D
 
     public void Stop()
     {
+        if (PortableAudio.Backend is { } portable) { portable.Stop(_portableId); return; }
         if (_source ==
                 0 ||
             !AudioEngine.IsAvailable)
@@ -273,6 +290,7 @@ public sealed class AudioSource3D
 
     protected override void OnUpdate()
     {
+        if (PortableAudio.Backend is { } portable) { portable.Update(_portableId, this); return; }
         if (_source ==
                 0 ||
             !AudioEngine.IsAvailable)
@@ -305,6 +323,7 @@ public sealed class AudioSource3D
 
     private bool EnsureSource()
     {
+        if (PortableAudio.Backend != null) return _clip != null;
         if (_source !=
             0)
         {
@@ -496,6 +515,7 @@ public sealed class AudioSource3D
 
     private void DestroySource()
     {
+        if (PortableAudio.Backend is { } portable) { portable.Stop(_portableId); return; }
         if (_source ==
             0)
         {

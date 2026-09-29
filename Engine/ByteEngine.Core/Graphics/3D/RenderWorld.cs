@@ -122,6 +122,13 @@ public sealed class RenderWorld
         ArgumentNullException.ThrowIfNull(
             context);
 
+        if (context.FrameSink != null)
+        {
+            try { context.FrameSink.Draw3D(_view, _lighting, _environment, _submissions); }
+            finally { _submissions.Clear(); }
+            return;
+        }
+
         int submitted =
             _submissions.Count;
 
