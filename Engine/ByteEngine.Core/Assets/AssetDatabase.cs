@@ -17,6 +17,7 @@ public sealed class AssetDatabase : IDisposable
     private DateTime _lastFileEventUtc;
     private bool _scanPending;
     private bool _disposed;
+    private readonly bool _readOnly;
 
     public string ProjectRoot => _projectRoot;
     public IReadOnlyCollection<AssetRecord> Assets => _byGuid.Values;
@@ -26,8 +27,10 @@ public sealed class AssetDatabase : IDisposable
         string projectRoot,
         IEnumerable<string> contentDirectories,
         Action<string>? warningSink = null,
-        Action<string>? errorSink = null)
+        Action<string>? errorSink = null,
+        bool readOnly = false)
     {
+        _readOnly = readOnly;
         _projectRoot = Path.GetFullPath(projectRoot);
         _contentRoots = contentDirectories
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -39,11 +42,12 @@ public sealed class AssetDatabase : IDisposable
 
         foreach (string root in _contentRoots)
         {
-            Directory.CreateDirectory(root);
+            if (!_readOnly) Directory.CreateDirectory(root);
+            else if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
         }
 
         Scan();
-        StartWatchers();
+        if (!_readOnly) StartWatchers();
     }
 
     public void Update()
@@ -92,6 +96,7 @@ public sealed class AssetDatabase : IDisposable
             }
             catch (Exception exception)
             {
+                if (_readOnly) throw;
                 _errorSink?.Invoke($"Could not scan asset directory '{root}': {exception.Message}");
                 continue;
             }
@@ -110,6 +115,7 @@ public sealed class AssetDatabase : IDisposable
 
                     if (newByGuid.TryGetValue(metadata.Guid, out AssetRecord? collision))
                     {
+                        if (_readOnly) throw new InvalidDataException($"Duplicate packaged asset GUID: {metadata.Guid}");
                         Guid duplicate = metadata.Guid;
                         if (_byGuid.TryGetValue(duplicate, out AssetRecord? previous) &&
                             string.Equals(previous.ProjectPath, projectPath, StringComparison.OrdinalIgnoreCase))
@@ -150,6 +156,7 @@ public sealed class AssetDatabase : IDisposable
                 }
                 catch (Exception exception)
                 {
+                    if (_readOnly) throw;
                     _errorSink?.Invoke($"Could not import asset '{file}': {exception.Message}");
                 }
             }
@@ -239,6 +246,13 @@ public sealed class AssetDatabase : IDisposable
     private AssetMetadata ReadOrCreateMetadata(string assetPath, AssetType detectedType)
     {
         string metaPath = assetPath + ".meta";
+        if (_readOnly)
+        {
+            AssetMetadata? packaged = JsonSerializer.Deserialize<AssetMetadata>(File.ReadAllText(metaPath), MetaJson);
+            if (packaged == null || packaged.Guid == Guid.Empty || packaged.Type != detectedType)
+                throw new InvalidDataException($"Invalid packaged asset metadata: {metaPath}");
+            return packaged;
+        }
         AssetMetadata? metadata = null;
 
         if (File.Exists(metaPath))

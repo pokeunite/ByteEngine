@@ -54,7 +54,7 @@ internal static class AnimationSignalAuthoringResolver
         }
 
         AnimationController? controller =
-            target.GetComponent<AnimationController>();
+            AnimationController.FindForObject(target);
 
         if (controller == null)
         {

@@ -75,6 +75,11 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     private readonly List<MeshRenderer> _hiddenOwnerMeshRenderers = new();
     private readonly List<SkeletalMeshRenderer> _hiddenOwnerSkeletalRenderers = new();
     private bool _ownerRenderersHidden;
+    private bool _fpsAnchorInitialized;
+    private Vector3 _fpsAnchor;
+    public bool FirstPerson { get; set; }
+    public bool HideFirstPersonBody { get; set; }
+    public Vector3 FirstPersonCameraOffset { get; set; }
 
     public Guid CameraObjectId { get; set; }
     public bool UseControlRotation { get; set; } = true;
@@ -258,7 +263,38 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         _desiredBoomPitch = Math.Clamp(player?.ControlPitch ?? Pitch, MinPitch, MaxPitch);
 
         Vector3 desiredPivot = root.Transform.WorldPosition + Vector3.UnitY * PivotHeight;
+        if (!FirstPerson) _fpsAnchorInitialized = false;
         float deltaTime = immediate ? 0f : Math.Max((float)Time.DeltaTime, 0f);
+        if (FirstPerson)
+        {
+            if (!_fpsAnchorInitialized)
+            {
+                _fpsAnchor = Matrix4x4.Invert(root.Transform.WorldMatrix, out var inverse)
+                    ? Vector3.Transform(_cameraObject.Transform.WorldPosition, inverse) : Vector3.Zero;
+                if (_fpsAnchor.LengthSquared() < .000001f) _fpsAnchor = new Vector3(0,PivotHeight,0);
+                _fpsAnchorInitialized = true;
+            }
+            desiredPivot = Vector3.Transform(_fpsAnchor, root.Transform.WorldMatrix);
+            // Yaw-space offset: pitch rotates the view without orbiting its origin.
+            desiredPivot += CalculateCameraRight(_desiredBoomYaw) * FirstPersonCameraOffset.X +
+                Vector3.UnitY * FirstPersonCameraOffset.Y +
+                CalculateViewForward(_desiredBoomYaw, 0) * -FirstPersonCameraOffset.Z;
+            camera.NearClip = Math.Min(camera.NearClip, .01f);
+            _smoothedPivot = desiredPivot;
+            _smoothedBoomYaw = _desiredBoomYaw;
+            _smoothedBoomPitch = _desiredBoomPitch;
+            _desiredSocketPosition = _actualSocketPosition = desiredPivot;
+            _actualLength = 0;
+            _collisionHit = false; _collisionObject = null;
+            _rigInitialized = true;
+            _cameraObject.Transform.WorldPosition = desiredPivot;
+            _cameraObject.Transform.WorldRotation = LookRotation(
+                CalculateViewForward(_desiredBoomYaw, _desiredBoomPitch));
+            if (HideFirstPersonBody) UpdateNearOwnerVisibility(root);
+            else RestoreOwnerRenderers();
+            return;
+        }
+
         if (!_rigInitialized || immediate)
         {
             _smoothedBoomYaw = _desiredBoomYaw;

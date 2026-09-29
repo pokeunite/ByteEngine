@@ -8,3 +8,4 @@ imgui.ini
 layout.ini
 /Dist/
 /ByteEngine.Editor.exe
+/.artifacts/player-publish/

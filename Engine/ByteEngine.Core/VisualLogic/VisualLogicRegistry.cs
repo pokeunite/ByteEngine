@@ -790,7 +790,7 @@ public sealed partial class VisualLogicRegistry
         }
 
         AnimationController? controller =
-            target.GetComponent<AnimationController>();
+            AnimationController.FindForObject(target);
 
         if (controller == null &&
             warnIfMissing)

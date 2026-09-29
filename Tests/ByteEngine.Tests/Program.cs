@@ -33,6 +33,22 @@ try
         return;
     }
 
+    if (args.Contains("--windows-export"))
+    {
+        string? runtime = args.Length > 1 ? args[1] : null;
+        var exported = WindowsGameExportTests.Run(root, runtime);
+        if (runtime != null)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(exported.Executable) { UseShellExecute = false };
+            start.ArgumentList.Add("--validate");
+            using var player = System.Diagnostics.Process.Start(start)!;
+            if (!player.WaitForExit(30000)) { player.Kill(); throw new Exception("Package validation timed out."); }
+            if (player.ExitCode != 0) throw new Exception("Self-contained exported player validation failed.");
+            Console.WriteLine("Self-contained Windows executable validation passed.");
+        }
+        return;
+    }
+
     if (args.Contains("--foliage-graphics"))
     {
         FoliageGraphicsTests.Run(root);

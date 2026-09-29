@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <ByteEngineOpenALSoftPath>$(NuGetPackageRoot)silk.net.openal.soft.native\1.23.1\runtimes\win-x64\native\soft_oal.dll</ByteEngineOpenALSoftPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
+    <Content Include="..\..\Editor\ByteEngine.Editor\Resources\Fonts\**\*" Link="Resources\Fonts\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CopyPlayerOpenAL" AfterTargets="Build">
+    <Copy SourceFiles="$(ByteEngineOpenALSoftPath)" DestinationFiles="$(TargetDir)openal32.dll" />
+  </Target>
+  <Target Name="PublishPlayerOpenAL" AfterTargets="Publish">
+    <Copy SourceFiles="$(ByteEngineOpenALSoftPath)" DestinationFiles="$(PublishDir)openal32.dll" />
+  </Target>
+</Project>

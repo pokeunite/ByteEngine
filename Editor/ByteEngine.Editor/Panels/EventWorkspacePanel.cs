@@ -9449,7 +9449,7 @@ internal sealed class EventWorkspacePanel
         }
 
         AnimationController? controller =
-            target.GetComponent<AnimationController>();
+            AnimationController.FindForObject(target);
 
         if (controller == null)
         {
@@ -9850,7 +9850,7 @@ internal sealed class EventWorkspacePanel
                 ? ResolveAnimationTargetForEditor(instruction, state)
                 : null;
         AnimationController? controller =
-            target?.GetComponent<AnimationController>();
+            AnimationController.FindForObject(target);
 
         if (_project == null ||
             controller == null ||
@@ -9989,7 +9989,7 @@ internal sealed class EventWorkspacePanel
     private void DrawAnimationActionArgument(VisualInstruction instruction, EditorState? state, string label = "Action")
     {
         GameObject? target = state != null ? ResolveAnimationTargetForEditor(instruction, state) : null;
-        AnimationController? controller = target?.GetComponent<AnimationController>();
+        AnimationController? controller = AnimationController.FindForObject(target);
         if (_project == null || controller == null || controller.AnimationProfile.IsEmpty)
         {
             DrawValueArgument(instruction, "action", label + " (manual)", VariableType.String,
@@ -10148,8 +10148,7 @@ internal sealed class EventWorkspacePanel
                 : null;
 
         AnimationController? controller =
-            target?
-                .GetComponent<AnimationController>();
+            AnimationController.FindForObject(target);
 
         IReadOnlyList<string> clipNames =
             controller != null &&

@@ -116,7 +116,7 @@ internal static class BlueprintAuthoringService
         AssetManager? assets = null,
         PlayerViewPreset preset = PlayerViewPreset.ThirdPerson)
     {
-        CameraBoom3D boom = SetupThirdPersonCharacter(player, assets);
+        CameraBoom3D boom = SetupThirdPersonCharacter(player, preset == PlayerViewPreset.FirstPerson ? null : assets);
         EnsureSingleRootComponent(player, () => new HealthComponent
         {
             MaxHealth = 100f,
@@ -132,7 +132,9 @@ internal static class BlueprintAuthoringService
         EnsureSingleRootComponent(player, () => new PlayerShooter3D());
 
         GameObject model = EnsureModelRoot(player);
-        if (assets != null && model.GetComponent<ModelHierarchyInstance>() != null)
+        if (preset == PlayerViewPreset.FirstPerson && assets != null && EditorProjectContext.Active is { } activeProject)
+            AnimationClipDiscovery.AutoAssign(player.GetComponent<AnimationController>()!, activeProject);
+        if (preset != PlayerViewPreset.FirstPerson && assets != null && model.GetComponent<ModelHierarchyInstance>() != null)
         {
             FitCharacterModelHeight(model, assets, 1.8f);
             GroundModelAtFeet(model, assets);
@@ -140,6 +142,28 @@ internal static class BlueprintAuthoringService
         }
 
         ApplyPlayerViewPreset(player, preset);
+        GameObject? viewCamera = player.Scene?.FindGameObject(boom.CameraObjectId);
+        if (preset == PlayerViewPreset.FirstPerson && viewCamera != null)
+        {
+            viewCamera.GetComponent<Camera3D>()!.NearClip = .01f;
+            if (!ReferenceEquals(model.Parent, viewCamera))
+            {
+                viewCamera.Transform.LocalPosition = new Vector3(0,1.65f,0);
+                viewCamera.Transform.LocalRotation = Quaternion.Identity;
+                if (CharacterModelPoseBounds.TryGetWorldBounds(model,out var bounds))
+                {
+                    Vector3 size = bounds.Maximum-bounds.Minimum;
+                    Vector3 center = (bounds.Minimum+bounds.Maximum)*.5f;
+                    float distance = Math.Max(.35f, Math.Max(size.X,size.Y)*.85f + size.Z*.5f);
+                    Vector3 targetCenter = viewCamera.Transform.WorldPosition +
+                        viewCamera.Transform.Forward*distance - Vector3.UnitY*size.Y*.2f;
+                    model.Transform.WorldPosition += targetCenter-center;
+                }
+                model.SetParent(viewCamera,true);
+            }
+        }
+        else if (viewCamera != null && model.IsDescendantOf(viewCamera))
+            model.SetParent(player,true);
         return boom;
     }
 
@@ -151,6 +175,7 @@ internal static class BlueprintAuthoringService
         controller.UseLocalOrientation = false;
         controller.AcceptLookInput = preset is PlayerViewPreset.ThirdPerson or PlayerViewPreset.FirstPerson;
         boom.CameraLagEnabled = false;
+        boom.FirstPerson = preset == PlayerViewPreset.FirstPerson;
         boom.RotationLagEnabled = false;
         boom.EnableCameraCollision = true;
         shooter.AimAtPointer = preset is PlayerViewPreset.TopDownTwinStick or PlayerViewPreset.Isometric;
@@ -159,9 +184,13 @@ internal static class BlueprintAuthoringService
             case PlayerViewPreset.FirstPerson:
                 controller.CharacterRotation = CharacterRotationMode.FaceCamera;
                 boom.UseControlRotation = true;
-                boom.MinPitch = -40f;
-                boom.MaxPitch = 65f;
-                boom.ArmLength = .15f;
+                boom.MinPitch = -89f;
+                boom.MaxPitch = 89f;
+                controller.ControlPitch = 0;
+                boom.Pitch = 0;
+                boom.EnableCameraCollision = false;
+                boom.ArmLength = 0;
+
                 boom.PivotHeight = 1.65f;
                 boom.ShoulderOffset = 0f;
                 break;
@@ -389,7 +418,7 @@ internal static class BlueprintAuthoringService
         }
 
         model ??= EnsureModelRoot(player);
-        if (!ReferenceEquals(model.Parent, player))
+        if (!ReferenceEquals(model.Parent, player) && !(model.Parent?.GetComponent<Camera3D>() != null && player.GetComponent<CameraBoom3D>()?.FirstPerson == true))
             model.SetParent(player, true);
         model.Name = "Model";
 
@@ -465,6 +494,9 @@ internal static class BlueprintAuthoringService
         GameObject? model = player.Children.FirstOrDefault(child =>
             child.Name.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
             child.GetComponent<ModelHierarchyInstance>() != null);
+        model ??= player.Children.Where(child => child.GetComponent<Camera3D>() != null)
+            .SelectMany(child => child.Children).FirstOrDefault(child =>
+                child.GetComponent<ModelHierarchyInstance>() != null || child.Name.Equals("Model",StringComparison.OrdinalIgnoreCase));
         if (model != null) return model;
         Scene scene = player.Scene ?? throw new InvalidOperationException("The Blueprint root must belong to a scene.");
         model = scene.CreateGameObject("Model");

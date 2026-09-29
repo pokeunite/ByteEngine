@@ -45,6 +45,16 @@ internal enum NamedActionRequestDecision
 /// </summary>
 public sealed partial class AnimationController : Component
 {
+    public static AnimationController? FindForObject(GameObject? target)
+    {
+        for (GameObject? item = target; item != null; item = item.Parent)
+            if (item.GetComponent<AnimationController>() is { } controller) return controller;
+        if (target != null)
+            foreach (GameObject child in SelfAndDescendants(target))
+                if (child.GetComponent<AnimationController>() is { } controller) return controller;
+        return null;
+    }
+
     private readonly List<SkeletalMeshRenderer> _renderers = new();
 
     private readonly HashSet<SkeletalMeshRenderer> _actionRenderers =

@@ -43,7 +43,7 @@ internal static class ComponentMetadataRegistry
         [typeof(CharacterController3D)] = new("Character Movement", "Character", "Controls grounded movement, jumping, slopes and air control.", "controller motor walking jump"),
         [typeof(PlayerController3D)] = new("Player Input", "Character", "Creates camera-relative movement intent and player control rotation.", "controls wasd mouse control yaw pitch", true, false, new[] { typeof(CharacterController3D) }),
         [typeof(AnimationController)] = new("Animation Controller", "Character", "Selects character animation states from movement.", "character animator"),
-        [typeof(CameraBoom3D)] = new("Third Person Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow"),
+        [typeof(CameraBoom3D)] = new("Player Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow"),
         [typeof(Camera3D)] = new("Camera", "Camera", "Renders a perspective 3D game view.", "perspective fov"),
         [typeof(Camera2D)] = new("2D Camera", "Camera", "Renders a two-dimensional game view.", "orthographic zoom"),
         [typeof(ThirdPersonCamera3D)] = new("Legacy Third Person Camera", "Camera", "Legacy standalone follow camera kept for older projects.", "tps orbit follow", false, true),
@@ -192,6 +192,9 @@ internal static class ComponentMetadataRegistry
         [(typeof(Rigidbody3D), nameof(Rigidbody3D.FreezePositionZ))] = new("Freeze Position Z", "Constraints", "Prevent physics from moving this body along world Z."),
 
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.ArmLength))] = new("Camera Distance", "Camera", "Distance from the character pivot.", "m"),
+        [(typeof(CameraBoom3D), nameof(CameraBoom3D.HideFirstPersonBody))] = new("Hide Body In First Person", "First Person", "Leave OFF for arms-only models. ON hides player meshes except those parented under Camera."),
+        [(typeof(CameraBoom3D), nameof(CameraBoom3D.FirstPersonCameraOffset))] = new("Additional FPS Offset", "First Person", "Optional extra offset: X right, Y up, Z backward. Normally position Camera directly in the Blueprint.", "m", Advanced: true),
+        [(typeof(CameraBoom3D), nameof(CameraBoom3D.FirstPerson))] = new("First Person Camera", "Camera", "Uses Camera position authored in Blueprint. Look rotates Camera and its child arms/weapons. Ignores TPS distance, shoulder offset, collision and lag."),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.PivotHeight))] = new("Camera Height", "Camera", "Height of the camera pivot.", "m"),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityX))] = new("Horizontal Sensitivity", "Rotation", "Horizontal mouse sensitivity."),
         [(typeof(CameraBoom3D), nameof(CameraBoom3D.MouseSensitivityY))] = new("Vertical Sensitivity", "Rotation", "Vertical mouse sensitivity."),

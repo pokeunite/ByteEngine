@@ -2089,6 +2089,8 @@ state.SelectedObject =
                 }
                 ImGui.EndMenu();
             }
+            if (ImGui.MenuItem("Create Animation Profile From Model"))
+                CreateAnimationProfileFromModel(asset,log);
             if (ImGui.MenuItem("Extract All Materials"))
                 ExtractModelMaterials(asset, null, log);
             bool canCreatePlayer = state.Mode == EditorMode.Edit &&
@@ -2819,6 +2821,30 @@ state.SelectedObject =
         {
             log.Error($"Could not create player from '{asset.ProjectPath}': {exception.Message}");
         }
+    }
+
+    private void CreateAnimationProfileFromModel(AssetRecord asset, EditorLog log)
+    {
+        try
+        {
+            var reference = new AssetReference(asset.Guid,asset.ProjectPath);
+            ModelAsset model = _project.Assets.LoadModel(reference);
+            if (model.Skeleton == null)
+            { log.Warning("This model has no skeleton. Import a rigged model to create its animation profile."); return; }
+            string name = Path.GetFileNameWithoutExtension(asset.ProjectPath) + " Animation";
+            string path = GetUniqueAssetPath(GetAssetCreationDirectory(),MakeSafeFileName(name),AnimationProfileSerializer.FileExtension);
+            var profile = AnimationProfileSerializer.CreateDefault(name);
+            profile.Rig.ReferenceModel = reference;
+            profile.Rig.Type = model.RigType;
+            profile.Locomotion.Idle = model.Animations.FirstOrDefault(a => a.Name.Contains("idle",StringComparison.OrdinalIgnoreCase))?.Name
+                ?? model.Animations.FirstOrDefault()?.Name ?? string.Empty;
+            AnimationProfileSerializer.Save(path,profile);
+            RefreshAfterFileOperation();
+            if (_project.AssetDatabase.TryGetAsset(ToProjectPath(path),out var created) && created != null)
+                _documentWindows.OpenProfile(created,_project,log);
+            log.Info("Animation profile created for this model's skeleton. Generic/FPS rigs do not require humanoid mapping.");
+        }
+        catch(Exception error) { log.Error("Could not create model animation profile: " + error.Message); }
     }
 
     private void CreateBlueprintFromSelectedObject(

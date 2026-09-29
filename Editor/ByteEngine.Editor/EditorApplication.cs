@@ -49,6 +49,7 @@ public sealed class EditorApplication
         new();
 
     private readonly ProjectSettingsPanel _projectSettings = new();
+    private readonly GameExportPanel _gameExport = new();
 
     private readonly ProjectBrowserPanel _projectBrowser = new();
 
@@ -166,6 +167,8 @@ public sealed class EditorApplication
         }
 
         DrawUnsavedChangesPopup();
+        if (_projectContext != null) _gameExport.Draw(_projectContext, HasUnsavedChanges,
+            _state?.Mode != EditorMode.Edit, _log);
         UpdateWindowTitle();
 
         _imgui.Render();
@@ -474,6 +477,14 @@ public sealed class EditorApplication
 
         ImGui.Separator();
 
+        if (ImGui.MenuItem("Export Windows Game...", string.Empty, false, hasProject))
+        {
+            if (HasUnsavedChanges) _log.Warning("Save all scene and asset changes before exporting a game.");
+            else if (_state?.Mode != EditorMode.Edit) _log.Warning("Stop Play mode before exporting a game.");
+            else _gameExport.Open(_projectContext!);
+        }
+
+        ImGui.Separator();
         if (ImGui.MenuItem("Exit"))
         {
             RequestAfterUnsavedCheck(

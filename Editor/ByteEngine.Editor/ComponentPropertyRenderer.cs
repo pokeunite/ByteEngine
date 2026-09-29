@@ -652,6 +652,19 @@ internal static class ComponentPropertyRenderer
                 end);
         }
 
+        if (component is ModelHierarchyInstance animatedModelInstance && project != null)
+        {
+            ImGui.TextWrapped("Animation Profiles support Generic skeletons and FPS arms; humanoid mapping is not required.");
+            if (context != PropertyEditorContext.Runtime &&
+                AnimationController.FindForObject(animatedModelInstance.GameObject) == null &&
+                ImGui.Button("Enable Model Animation"))
+            {
+                begin();
+                animatedModelInstance.GameObject.AddComponent(new AnimationController { DriveLocomotion = false });
+                changed(); end();
+            }
+        }
+
         if (component is FoliagePatch foliage)
         {
             ImGui.TextWrapped("To paint: turn on Paint Foliage in the Scene View toolbar, then click or drag on the ground. Shift-drag erases; Ctrl+Z undoes a stroke.");

@@ -298,16 +298,10 @@ public class ByteEngineApplication : GameWindow
                      * path. 2D content is already authored as display-space
                      * color and should not be ACES tone mapped.
                      */
-                    Scenes.RenderInternal(
-                        new RenderContext(
-                            Renderer,
-                            Renderer3D,
-                            activeScene,
-                            WindowWidth,
-                            WindowHeight,
-                            camera,
-                            camera3D)
-                    );
+                    var context2D = new RenderContext(Renderer, Renderer3D, activeScene,
+                        WindowWidth, WindowHeight, camera, camera3D);
+                    Scenes.RenderInternal(context2D);
+                    context2D.FlushUi();
                 }
             }
         }
