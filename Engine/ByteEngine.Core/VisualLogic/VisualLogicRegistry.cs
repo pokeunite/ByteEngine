@@ -99,6 +99,7 @@ public sealed partial class VisualLogicRegistry
         RegisterTransform(registry);
         RegisterVariables(registry);
         RegisterGameplay(registry);
+        RegisterWaves(registry);
         RegisterPhysicsAndCombat(registry);
         RegisterMaterials(registry);
         RegisterUi(registry);

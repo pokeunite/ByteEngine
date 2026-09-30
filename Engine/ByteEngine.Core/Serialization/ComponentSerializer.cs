@@ -382,6 +382,7 @@ public sealed class ComponentSerializer
         Register(new ThirdPersonCamera3DCodec());
         Register(new CameraBoom3DCodec());
         Register(new ArenaGameManagerCodec());
+        Register(new WaveSpawner3DCodec());
     }
 
     public void Register(
@@ -1427,6 +1428,54 @@ public sealed class ComponentSerializer
         {
             Guid.TryParse(Text(data, "playerId", string.Empty), out Guid playerId);
             return new ArenaGameManager { PlayerId = playerId, PlayerName = Text(data, "playerName", "Player") };
+        }
+    }
+
+    private sealed class WaveSpawner3DCodec : IComponentCodec
+    {
+        public string TypeName => nameof(WaveSpawner3D);
+        public Type ComponentType => typeof(WaveSpawner3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var wave = (WaveSpawner3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["enemyBlueprintGuid"] = wave.EnemyBlueprint.Guid.ToString(),
+                ["enemyBlueprintPath"] = wave.EnemyBlueprint.ProjectPath,
+                ["spawnPointTagId"] = wave.SpawnPointTagId.ToString(),
+                ["spawnMode"] = wave.SpawnMode.ToString(),
+                ["autoStart"] = wave.AutoStart,
+                ["spawnInterval"] = wave.SpawnInterval,
+                ["waveDelay"] = wave.WaveDelay,
+                ["maxWaves"] = wave.MaxWaves,
+                ["firstWaveCount"] = wave.FirstWaveCount,
+                ["enemiesPerWave"] = wave.EnemiesPerWave,
+                ["failureTargetId"] = wave.FailureTargetId.ToString(),
+                ["failureTargetName"] = wave.FailureTargetName,
+                ["stopOnTargetDeath"] = wave.StopOnTargetDeath
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            Guid.TryParse(Text(data, "enemyBlueprintGuid", ""), out var blueprintId);
+            Guid.TryParse(Text(data, "spawnPointTagId", ""), out var tagId);
+            Guid.TryParse(Text(data, "failureTargetId", ""), out var targetId);
+            Enum.TryParse<WaveSpawnMode>(Text(data, "spawnMode", "RoundRobin"), true, out var spawnMode);
+            return new WaveSpawner3D
+            {
+                EnemyBlueprint = new AssetReference(blueprintId, Text(data, "enemyBlueprintPath", "")),
+                SpawnPointTagId = tagId,
+                SpawnMode = spawnMode,
+                AutoStart = data.Properties["autoStart"]?.GetValue<bool>() ?? true,
+                SpawnInterval = Float(data, "spawnInterval", .8f),
+                WaveDelay = Float(data, "waveDelay", 3f),
+                MaxWaves = data.Properties["maxWaves"]?.GetValue<int>() ?? 5,
+                FirstWaveCount = data.Properties["firstWaveCount"]?.GetValue<int>() ?? 5,
+                EnemiesPerWave = data.Properties["enemiesPerWave"]?.GetValue<int>() ?? 3,
+                FailureTargetId = targetId,
+                FailureTargetName = Text(data, "failureTargetName", ""),
+                StopOnTargetDeath = data.Properties["stopOnTargetDeath"]?.GetValue<bool>() ?? true
+            };
         }
     }
 

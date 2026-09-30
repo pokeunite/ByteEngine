@@ -77,7 +77,8 @@ internal static class ComponentPropertyRenderer
                                     property.Name,
                                     "(?<=[a-z])(?=[A-Z])",
                                     " "),
-                                "Properties",
+                                type == typeof(WaveSpawner3D) && property.SetMethod?.IsPublic != true
+                                    ? "Runtime" : "Properties",
                                 property.Name)))
                 .ToArray();
 
@@ -173,6 +174,7 @@ internal static class ComponentPropertyRenderer
                 profileDrivenController,
                 project);
 
+        string? waveCategory = null;
         foreach (ComponentPropertyDescriptor descriptor
                  in Descriptors(
                      component.GetType(),
@@ -193,6 +195,13 @@ internal static class ComponentPropertyRenderer
                 !advanced)
             {
                 continue;
+            }
+
+            if (component is WaveSpawner3D &&
+                descriptor.Metadata.Category != waveCategory)
+            {
+                waveCategory = descriptor.Metadata.Category;
+                ImGui.SeparatorText(waveCategory);
             }
 
             object? before =
@@ -464,6 +473,23 @@ internal static class ComponentPropertyRenderer
 
                 after =
                     tag;
+            }
+            else if (component is WaveSpawner3D &&
+                     descriptor.Property.Name == nameof(WaveSpawner3D.FailureTargetId) &&
+                     descriptor.Property.PropertyType == typeof(Guid))
+            {
+                Guid selectedId = before is Guid id ? id : Guid.Empty;
+                string preview = component.GameObject.Scene?.FindGameObject(selectedId)?.Name ?? "None";
+                if (ImGui.BeginCombo(label, preview))
+                {
+                    if (ImGui.Selectable("None", selectedId == Guid.Empty))
+                    { after = Guid.Empty; edited = true; }
+                    if (component.GameObject.Scene is { } scene)
+                        foreach (GameObject candidate in scene.GameObjects)
+                            if (ImGui.Selectable(candidate.Name + "##" + candidate.Id, candidate.Id == selectedId))
+                            { after = candidate.Id; edited = true; }
+                    ImGui.EndCombo();
+                }
             }
             else if (component is AnimationController clipController &&
                      project != null &&
@@ -1030,6 +1056,8 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is WaveSpawner3D && propertyName == nameof(WaveSpawner3D.EnemyBlueprint))
+            return AssetType.Blueprint;
         if (component is ByteEngine.Core.Blueprints.BlueprintInstance) return AssetType.Blueprint;
         if (component is ModelHierarchyInstance && propertyName == nameof(ModelHierarchyInstance.MaterialOverride))
             return AssetType.Material;

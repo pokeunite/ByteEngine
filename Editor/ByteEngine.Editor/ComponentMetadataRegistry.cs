@@ -78,6 +78,7 @@ internal static class ComponentMetadataRegistry
         [typeof(ProjectileLauncher3D)] = new("Projectile Launcher", "Gameplay", "Creates reusable projectiles with a fire cooldown.", "weapon shoot fire"),
         [typeof(PlayerShooter3D)] = new("Player Shooter", "Gameplay", "Maps player fire input to a projectile launcher.", "weapon input"),
         [typeof(ArenaGameManager)] = new("Arena Game Manager", "Gameplay", "Tracks arena match state.", "game rules manager", false, true),
+        [typeof(WaveSpawner3D)] = new("Wave Spawner 3D", "Gameplay", "Spawns Blueprint enemies in timed waves and tracks their Health.", "wave horde enemy spawn"),
         [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Chases and attacks a nearby player without navigation.", "enemy chase attack"),
 
         [typeof(AudioSource3D)] = new(
@@ -98,6 +99,24 @@ internal static class ComponentMetadataRegistry
 
     private static readonly Dictionary<(Type, string), PropertyMetadata> Properties = new()
     {
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemyBlueprint))] = new("Enemy Blueprint", "Enemy", "Blueprint spawned for every wave enemy."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.SpawnPointTagId))] = new("Spawn Point Tag", "Spawning", "Only active objects with this tag can be spawn points."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.SpawnMode))] = new("Spawn Mode", "Spawning", "Round Robin cycles points; Random selects any active point."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.AutoStart))] = new("Auto Start", "Spawning", "Begin Wave 1 automatically in Play."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.SpawnInterval))] = new("Spawn Interval", "Spawning", "Seconds between enemy spawns, including before the first.", "s"),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.MaxWaves))] = new("Max Waves", "Waves", "Number of waves to complete."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.FirstWaveCount))] = new("First Wave Count", "Waves", "Enemy count in Wave 1."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesPerWave))] = new("Enemies Per Wave", "Waves", "Additional enemies each successive wave."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.WaveDelay))] = new("Wave Delay", "Waves", "Seconds between a cleared wave and the next.", "s"),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.FailureTargetId))] = new("Failure Target", "Failure", "Optional scene object whose Health death fails the run."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.FailureTargetName))] = new("Fallback Target Name", "Failure", "Legacy name fallback if the selected object cannot be resolved.", Advanced: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.StopOnTargetDeath))] = new("Stop On Target Death", "Failure", "Fail and stop spawning when the target dies."),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.State))] = new("State", "Runtime", "Current wave state.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.CurrentWave))] = new("Current Wave", "Runtime", "One-based current wave.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.WaveEnemyCount))] = new("Wave Enemy Count", "Runtime", "Scheduled enemies in the current wave.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesSpawned))] = new("Enemies Spawned", "Runtime", "Enemies spawned in the current wave.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesAlive))] = new("Enemies Alive", "Runtime", "Spawned enemies still alive.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesRemaining))] = new("Enemies Remaining", "Runtime", "Still scheduled plus currently alive.", ReadOnly: true),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.SmoothEdges))] = new("Smooth Edges", "Image Quality", "Lightweight spatial anti-aliasing for 3D. Slightly softens edges; no temporal ghosting."),
         [(typeof(FoliagePatch), nameof(FoliagePatch.BrushRadius))] = new("Paint Brush Radius", "Painting", "Size of the cursor brush, not the size of individual plants.", "m"),
         [(typeof(FoliagePatch), nameof(FoliagePatch.PaintDensity))] = new("Paint Density", "Painting", "Target planting density for new strokes. Increase to place plants closer together; existing plants are unchanged.", "plants/m²"),

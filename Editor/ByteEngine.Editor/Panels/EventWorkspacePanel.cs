@@ -8348,6 +8348,21 @@ internal sealed class EventWorkspacePanel
             case "combat.canFire":
             case "health.isDead":
             case "enemyAI.isIdle":
+            case "waves.isIdle":
+            case "waves.isRunning":
+            case "waves.isSpawning":
+            case "waves.isWaitingForClear":
+            case "waves.isIntermission":
+            case "waves.isCompleted":
+            case "waves.isFailed":
+            case "waves.waveStarted":
+            case "waves.waveCleared":
+            case "waves.completedThisFrame":
+            case "waves.failedThisFrame":
+            case "waves.noEnemiesRemain":
+            case "waves.start":
+            case "waves.stop":
+            case "waves.restart":
             case "enemyAI.isChasing":
             case "enemyAI.isAttacking":
             case "enemyAI.attackFired":
@@ -8896,6 +8911,21 @@ internal sealed class EventWorkspacePanel
             case "combat.fireWeapon":
             case "health.isDead":
             case "enemyAI.isIdle":
+            case "waves.isIdle":
+            case "waves.isRunning":
+            case "waves.isSpawning":
+            case "waves.isWaitingForClear":
+            case "waves.isIntermission":
+            case "waves.isCompleted":
+            case "waves.isFailed":
+            case "waves.waveStarted":
+            case "waves.waveCleared":
+            case "waves.completedThisFrame":
+            case "waves.failedThisFrame":
+            case "waves.noEnemiesRemain":
+            case "waves.start":
+            case "waves.stop":
+            case "waves.restart":
             case "enemyAI.isChasing":
             case "enemyAI.isAttacking":
             case "enemyAI.attackFired":

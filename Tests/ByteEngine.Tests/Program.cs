@@ -25,6 +25,12 @@ try
         return;
     }
 
+    if (args.Contains("--waves"))
+    {
+        WaveSpawnerTests.Run();
+        return;
+    }
+
     if (args.Contains("--event-timers"))
     {
         EventModuleTimerTests.Run();
