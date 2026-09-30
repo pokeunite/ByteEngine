@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 
 using ByteEngine.Core;
 using ByteEngine.Core.Animation;
@@ -49,6 +50,17 @@ internal sealed class EventWorkspacePanel
 
     private readonly HashSet<Guid> _selectedGraphNodes =
         new();
+
+    private readonly Dictionary<Vector2, Guid> _graphPortOwners = new();
+    private readonly List<Guid> _openGraphGroups = new();
+    private readonly Dictionary<Guid, (Vector2 Pan, float Zoom)> _graphTabViews = new();
+    private Guid _activeGraphGroupId;
+    private Guid _graphTabModuleId;
+    private Guid? _focusGraphTab;
+    private Guid _draggingGroupId;
+    private bool _resizingGroup;
+    private bool _groupPointerCaptured;
+    private bool _drawingGraphWires;
 
     private readonly EventRuleDefinition _looseNodeOwner = new() { Id = Guid.Empty };
 
@@ -466,6 +478,7 @@ internal sealed class EventWorkspacePanel
 
     private void DrawGraphWorkspace(EditorState? state)
     {
+        DrawGraphTabs();
         float availableWidth = ImGui.GetContentRegionAvail().X;
         float detailsWidth = MathF.Min(380.0f, MathF.Max(300.0f, availableWidth * 0.30f));
         bool showDetails = availableWidth >= 720.0f;
@@ -518,8 +531,19 @@ internal sealed class EventWorkspacePanel
 
         if (_module != null)
         {
+            foreach (EventGraphGroupDefinition group in _module.EditorGroups
+                .Where(group => group.Collapsed && IsGroupVisible(group)).ToArray())
+            {
+                ImGui.PushID(group.Id.ToString());
+                if (ImGui.Selectable("Graph: " + group.Title))
+                    OpenGroupGraph(group);
+                ImGui.PopID();
+            }
             foreach (EventRuleDefinition rule in _module.Rules)
             {
+                if (IsNodeHiddenByGroup(rule.Id) && !rule.Conditions.Concat(rule.Actions)
+                    .Any(item => !IsNodeHiddenByGroup(item.InstanceId)))
+                    continue;
                 string name = GetRuleDisplayName(rule);
                 bool eventMatches = MatchesOutlineSearch(name);
                 bool childMatches = rule.Conditions.Concat(rule.Actions)
@@ -527,14 +551,29 @@ internal sealed class EventWorkspacePanel
                 if (!eventMatches && !childMatches)
                     continue;
 
-                DrawOutlineEntry(rule.Id, name);
+                ImGui.PushID(rule.Id.ToString());
+                if (ImGui.SmallButton(rule.EditorOutlineCollapsed ? ">" : "v"))
+                {
+                    rule.EditorOutlineCollapsed = !rule.EditorOutlineCollapsed;
+                    _dirty = true;
+                }
+                ImGui.SameLine();
+                if (!IsNodeHiddenByGroup(rule.Id))
+                    DrawOutlineEntry(rule.Id, name);
+                else
+                    ImGui.TextDisabled(name);
+                ImGui.PopID();
+                if (rule.EditorOutlineCollapsed && string.IsNullOrWhiteSpace(_graphOutlineSearch))
+                    continue;
                 ImGui.Indent(12.0f);
                 foreach (VisualInstruction condition in rule.Conditions)
-                    if (MatchesOutlineSearch(GetOutlineInstructionName(condition)))
+                    if (!IsNodeHiddenByGroup(condition.InstanceId) &&
+                        MatchesOutlineSearch(GetOutlineInstructionName(condition)))
                         DrawOutlineEntry(condition.InstanceId,
                             "? " + GetOutlineInstructionName(condition));
                 foreach (VisualInstruction action in rule.Actions)
-                    if (MatchesOutlineSearch(GetOutlineInstructionName(action)))
+                    if (!IsNodeHiddenByGroup(action.InstanceId) &&
+                        MatchesOutlineSearch(GetOutlineInstructionName(action)))
                         DrawOutlineEntry(action.InstanceId,
                             "> " + GetOutlineInstructionName(action));
                 ImGui.Unindent(12.0f);
@@ -544,11 +583,11 @@ internal sealed class EventWorkspacePanel
             {
                 ImGui.SeparatorText("UNCONNECTED");
                 foreach (VisualInstruction item in _module.EditorLooseConditions)
-                    if (MatchesOutlineSearch(GetOutlineInstructionName(item)))
+                    if (!IsNodeHiddenByGroup(item.InstanceId) && MatchesOutlineSearch(GetOutlineInstructionName(item)))
                         DrawOutlineEntry(item.InstanceId,
                             "? " + GetOutlineInstructionName(item));
                 foreach (VisualInstruction item in _module.EditorLooseActions)
-                    if (MatchesOutlineSearch(GetOutlineInstructionName(item)))
+                    if (!IsNodeHiddenByGroup(item.InstanceId) && MatchesOutlineSearch(GetOutlineInstructionName(item)))
                         DrawOutlineEntry(item.InstanceId,
                             "> " + GetOutlineInstructionName(item));
             }
@@ -694,7 +733,6 @@ internal sealed class EventWorkspacePanel
         else
             EditorUi.ToolbarButton("Save", "Save Event Sheet");
         ImGui.EndDisabled();
-
         EditorUi.ToolbarSeparator();
         ImGui.BeginDisabled(!CanUndo);
         if (EditorUi.ToolbarButton("Undo", UndoName == null ? "Undo" : $"Undo {UndoName}")) Undo();
@@ -711,6 +749,11 @@ internal sealed class EventWorkspacePanel
         ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
         if (EditorUi.ToolbarButton("+ Comment", "Create a comment around the selection"))
             CreateGroupFromSelection();
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.BeginDisabled(_selectedGraphNodes.Count < 2);
+        if (EditorUi.ToolbarButton("Collapse Selection", "Fold selected nodes into an expandable graph box"))
+            CollapseSelectedGraphNodes();
         ImGui.EndDisabled();
 
         if (!layout.CollapseSecondary)
@@ -827,7 +870,7 @@ internal sealed class EventWorkspacePanel
                 WireDragKind.None ||
             _draggingGraphNodeId !=
                 Guid.Empty ||
-            _marqueeSelecting)
+            _marqueeSelecting || _draggingGroupId != Guid.Empty)
         {
             return false;
         }
@@ -1389,6 +1432,7 @@ internal sealed class EventWorkspacePanel
             _requestFrameNodeId = Guid.Empty;
         }
 
+        UpdateGroupPointerInteraction();
         UpdateGraphPointerInteraction();
         HandleGraphShortcuts();
 
@@ -1420,12 +1464,11 @@ internal sealed class EventWorkspacePanel
                 ImGui.PushID(
                     rule.Id.ToString());
 
-                bool deleteRule =
-                    DrawEventGraphNode(
-                        rule,
-                        ruleIndex);
+                bool deleteRule = false;
+                if (!IsNodeHiddenByGroup(rule.Id))
+                    deleteRule = DrawEventGraphNode(rule, ruleIndex);
 
-                if (!rule.EditorCollapsed)
+                if (!rule.EditorCollapsed || ActiveGraphGroup != null)
                 {
                     DrawConditionGraphNodes(
                         rule,
@@ -1818,6 +1861,8 @@ internal sealed class EventWorkspacePanel
         {
             VisualInstruction instruction =
                 rule.Conditions[index];
+            if (IsNodeHiddenByGroup(instruction.InstanceId))
+                continue;
 
             ImGui.PushID(
                 instruction.InstanceId.ToString());
@@ -1867,6 +1912,8 @@ internal sealed class EventWorkspacePanel
         {
             VisualInstruction instruction =
                 rule.Actions[index];
+            if (IsNodeHiddenByGroup(instruction.InstanceId))
+                continue;
 
             ImGui.PushID(
                 instruction.InstanceId.ToString());
@@ -2363,6 +2410,8 @@ internal sealed class EventWorkspacePanel
         for (int index = 0; index < nodes.Count; index++)
         {
             VisualInstruction instruction = nodes[index];
+            if (IsNodeHiddenByGroup(instruction.InstanceId))
+                continue;
             ImGui.PushID(instruction.InstanceId.ToString());
             bool remove = DrawInstructionGraphNode(
                 _looseNodeOwner, instruction, condition, index, state, true);
@@ -2381,16 +2430,39 @@ internal sealed class EventWorkspacePanel
 
     private void DrawGraphWires()
     {
+        _drawingGraphWires = true;
+        _graphPortOwners.Clear();
+        if (_module != null)
+        {
+            foreach (EventRuleDefinition rule in _module.Rules)
+            {
+                _graphPortOwners[GetEventConditionInput(rule)] = rule.Id;
+                _graphPortOwners[GetEventExecutionOutput(rule)] = rule.Id;
+            }
+            foreach (VisualInstruction instruction in _module.Rules
+                .SelectMany(rule => rule.Conditions.Concat(rule.Actions))
+                .Concat(_module.EditorLooseConditions).Concat(_module.EditorLooseActions))
+            {
+                _graphPortOwners[GetInstructionInput(instruction)] = instruction.InstanceId;
+                _graphPortOwners[GetInstructionOutput(instruction)] = instruction.InstanceId;
+                if (IsBranchAction(instruction))
+                {
+                    _graphPortOwners[GetBranchTrueOutput(instruction)] = instruction.InstanceId;
+                    _graphPortOwners[GetBranchFalseOutput(instruction)] = instruction.InstanceId;
+                }
+            }
+        }
         if (_module ==
             null)
         {
+            _drawingGraphWires = false;
             return;
         }
 
         foreach (EventRuleDefinition rule
                  in _module.Rules)
         {
-            if (rule.EditorCollapsed)
+            if (rule.EditorCollapsed && ActiveGraphGroup == null)
             {
                 continue;
             }
@@ -2419,7 +2491,7 @@ internal sealed class EventWorkspacePanel
                         continue;
                     }
 
-                    _graphCanvas.DrawWire(
+                    DrawCollapsibleWire(
                         GetInstructionOutput(
                             source),
                         GetInstructionInput(
@@ -2437,7 +2509,7 @@ internal sealed class EventWorkspacePanel
                      in GetConnectedConditions(
                          rule))
             {
-                _graphCanvas.DrawWire(
+                DrawCollapsibleWire(
                     GetInstructionOutput(
                         condition),
                     eventConditionInput,
@@ -2462,7 +2534,7 @@ internal sealed class EventWorkspacePanel
                         GetInstructionInput(
                             action);
 
-                    _graphCanvas.DrawWire(
+                    DrawCollapsibleWire(
                         previousOutput,
                         actionInput,
                         ExecutionWireColor,
@@ -2486,7 +2558,7 @@ internal sealed class EventWorkspacePanel
                 if (firstAction !=
                     null)
                 {
-                    _graphCanvas.DrawWire(
+                    DrawCollapsibleWire(
                         GetEventExecutionOutput(
                             rule),
                         GetInstructionInput(
@@ -2512,7 +2584,7 @@ internal sealed class EventWorkspacePanel
                         if (trueAction !=
                             null)
                         {
-                            _graphCanvas.DrawWire(
+                            DrawCollapsibleWire(
                                 GetBranchTrueOutput(
                                     action),
                                 GetInstructionInput(
@@ -2532,7 +2604,7 @@ internal sealed class EventWorkspacePanel
                         if (falseAction !=
                             null)
                         {
-                            _graphCanvas.DrawWire(
+                            DrawCollapsibleWire(
                                 GetBranchFalseOutput(
                                     action),
                                 GetInstructionInput(
@@ -2561,7 +2633,7 @@ internal sealed class EventWorkspacePanel
                     continue;
                 }
 
-                _graphCanvas.DrawWire(
+                DrawCollapsibleWire(
                     GetInstructionOutput(
                         action),
                     GetInstructionInput(
@@ -2577,7 +2649,7 @@ internal sealed class EventWorkspacePanel
                 VisualInstruction? source = _module.EditorLooseConditions
                     .FirstOrDefault(item => item.InstanceId == inputId);
                 if (source != null)
-                    _graphCanvas.DrawWire(GetInstructionOutput(source),
+                    DrawCollapsibleWire(GetInstructionOutput(source),
                         GetInstructionInput(gate), ConditionWireColor, 3.0f);
             }
 
@@ -2588,7 +2660,7 @@ internal sealed class EventWorkspacePanel
                 VisualInstruction? target = _module.EditorLooseActions
                     .FirstOrDefault(item => item.InstanceId == targetId);
                 if (target != null)
-                    _graphCanvas.DrawWire(output, GetInstructionInput(target), color, 3.5f);
+                    DrawCollapsibleWire(output, GetInstructionInput(target), color, 3.5f);
             }
 
             if (IsBranchAction(action))
@@ -2602,6 +2674,49 @@ internal sealed class EventWorkspacePanel
                 DrawDraftActionWire(action.NextActionId,
                     GetInstructionOutput(action), ExecutionWireColor);
         }
+        _drawingGraphWires = false;
+    }
+
+    private void DrawCollapsibleWire(Vector2 source, Vector2 target, Vector4 color, float thickness)
+    {
+        EventGraphGroupDefinition? active = ActiveGraphGroup;
+        if (active != null)
+        {
+            bool sourceInside = _graphPortOwners.TryGetValue(source, out Guid sourceId) &&
+                active.MemberIds.Contains(sourceId);
+            bool targetInside = _graphPortOwners.TryGetValue(target, out Guid targetId) &&
+                active.MemberIds.Contains(targetId);
+            if (!sourceInside && !targetInside)
+                return;
+            if (TryGetExpandedGroupBounds(active, out Vector2 min, out Vector2 max))
+            {
+                if (!sourceInside)
+                    source = new Vector2(min.X - 80, min.Y + 60);
+                if (!targetInside)
+                    target = new Vector2(max.X + 100, min.Y + 60);
+            }
+        }
+        EventGraphGroupDefinition? sourceGroup = FindCollapsedGroupAtPort(source);
+        EventGraphGroupDefinition? targetGroup = FindCollapsedGroupAtPort(target);
+        if (sourceGroup != null && sourceGroup == targetGroup)
+            return;
+
+        if (sourceGroup != null &&
+            TryGetGroupBounds(sourceGroup, out Vector2 sourceMin, out Vector2 sourceMax))
+            source = new Vector2(sourceMax.X, (sourceMin.Y + sourceMax.Y) * 0.5f);
+        if (targetGroup != null &&
+            TryGetGroupBounds(targetGroup, out Vector2 targetMin, out Vector2 targetMax))
+            target = new Vector2(targetMin.X, (targetMin.Y + targetMax.Y) * 0.5f);
+
+        _graphCanvas.DrawWire(source, target, color, thickness);
+    }
+
+    private EventGraphGroupDefinition? FindCollapsedGroupAtPort(Vector2 point)
+    {
+        if (_module == null || !_graphPortOwners.TryGetValue(point, out Guid owner))
+            return null;
+        return _module.EditorGroups.FirstOrDefault(group => group.Collapsed &&
+            IsGroupVisible(group) && group.MemberIds.Contains(owner));
     }
 
     private void DisconnectLooseReferences(Guid deletedId)
@@ -3029,6 +3144,10 @@ internal sealed class EventWorkspacePanel
         {
             CreateGroupFromSelection();
         }
+        ImGui.BeginDisabled(_selectedGraphNodes.Count < 2);
+        if (ImGui.MenuItem("Collapse Selection"))
+            CollapseSelectedGraphNodes();
+        ImGui.EndDisabled();
 
         ImGui.Separator();
         if (ImGui.MenuItem(
@@ -3638,6 +3757,7 @@ internal sealed class EventWorkspacePanel
 
         _module.Rules.Add(
             rule);
+        AddNodeToActiveGroup(rule.Id);
 
         _selectedGraphNodes.Clear();
 
@@ -3686,6 +3806,12 @@ internal sealed class EventWorkspacePanel
 
     private void UpdateGraphPointerInteraction()
     {
+        if (_groupPointerCaptured)
+        {
+            _anyGraphNodeHovered = true;
+            _hoveredGraphNodeId = Guid.Empty;
+            return;
+        }
         Vector2 mouseGraphPosition =
             _graphCanvas.MouseGraphPosition;
 
@@ -3919,7 +4045,7 @@ internal sealed class EventWorkspacePanel
                 return true;
             }
 
-            if (rule.EditorCollapsed)
+            if (rule.EditorCollapsed && ActiveGraphGroup == null)
             {
                 continue;
             }
@@ -4471,7 +4597,7 @@ internal sealed class EventWorkspacePanel
                     rule.Id;
             }
 
-            if (rule.EditorCollapsed)
+            if (rule.EditorCollapsed && ActiveGraphGroup == null)
             {
                 continue;
             }
@@ -4513,6 +4639,8 @@ internal sealed class EventWorkspacePanel
         Vector2 graphPoint,
         Guid nodeId)
     {
+        if (IsNodeHiddenByGroup(nodeId))
+            return false;
         if (!TryGetNodeBounds(
                 nodeId,
                 out Vector2 minimum,
@@ -4772,7 +4900,7 @@ internal sealed class EventWorkspacePanel
                 selectionMinimum,
                 selectionMaximum);
 
-            if (rule.EditorCollapsed)
+            if (rule.EditorCollapsed && ActiveGraphGroup == null)
             {
                 continue;
             }
@@ -4799,6 +4927,8 @@ internal sealed class EventWorkspacePanel
         Vector2 selectionMinimum,
         Vector2 selectionMaximum)
     {
+        if (IsNodeHiddenByGroup(nodeId))
+            return;
         if (!TryGetNodeBounds(
                 nodeId,
                 out Vector2 nodeMinimum,
@@ -5019,6 +5149,7 @@ internal sealed class EventWorkspacePanel
             {
                 Title =
                     "Comment",
+                ParentGroupId = ActiveGraphGroup?.Id,
 
                 MemberIds =
                     members
@@ -5026,6 +5157,125 @@ internal sealed class EventWorkspacePanel
 
         _dirty =
             true;
+    }
+
+    private void CollapseSelectedGraphNodes()
+    {
+        if (_module == null)
+            return;
+
+        List<Guid> members = _selectedGraphNodes.Where(NodeExists)
+            .Where(id => !IsNodeHiddenByGroup(id)).Distinct().ToList();
+        if (members.Count < 2)
+            return;
+
+        RecordHistory("Collapse Graph Selection");
+        _module.EditorGroups.Add(new EventGraphGroupDefinition
+        {
+            Title = "Group",
+            Collapsed = true,
+            ParentGroupId = ActiveGraphGroup?.Id,
+            MemberIds = members
+        });
+        _selectedGraphNodes.Clear();
+        _dirty = true;
+    }
+
+    private EventGraphGroupDefinition? ActiveGraphGroup =>
+        _module?.EditorGroups.FirstOrDefault(group => group.Id == _activeGraphGroupId);
+
+    private bool IsNodeHiddenByGroup(Guid id)
+    {
+        EventGraphGroupDefinition? active = ActiveGraphGroup;
+        if (active != null && !active.MemberIds.Contains(id))
+            return true;
+        return _module?.EditorGroups.Any(group => group.Collapsed &&
+            group.Id != _activeGraphGroupId && group.ParentGroupId == active?.Id &&
+            group.MemberIds.Contains(id)) == true;
+    }
+
+    private bool IsGroupVisible(EventGraphGroupDefinition group) =>
+        group.ParentGroupId == ActiveGraphGroup?.Id && group.Id != _activeGraphGroupId;
+
+    private void AddNodeToActiveGroup(Guid id)
+    {
+        EventGraphGroupDefinition? group = ActiveGraphGroup;
+        var visited = new HashSet<Guid>();
+        while (group != null && visited.Add(group.Id))
+        {
+            if (!group.MemberIds.Contains(id))
+                group.MemberIds.Add(id);
+            Guid? parent = group.ParentGroupId;
+            group = _module?.EditorGroups.FirstOrDefault(item => item.Id == parent);
+        }
+    }
+
+    private void ActivateGraphTab(Guid id)
+    {
+        if (_activeGraphGroupId == id)
+            return;
+        _graphTabViews[_activeGraphGroupId] = (_graphCanvas.Pan, _graphCanvas.Zoom);
+        _activeGraphGroupId = id;
+        _selectedGraphNodes.Clear();
+        _draggingGroupId = Guid.Empty;
+        _resizingGroup = false;
+        CancelWireDrag();
+        if (_graphTabViews.TryGetValue(id, out var view))
+            _graphCanvas.RestoreView(view.Pan, view.Zoom);
+        else
+            _requestFrameGraph = true;
+    }
+
+    private void OpenGroupGraph(EventGraphGroupDefinition group)
+    {
+        if (!_openGraphGroups.Contains(group.Id))
+            _openGraphGroups.Add(group.Id);
+        ActivateGraphTab(group.Id);
+        _focusGraphTab = group.Id;
+    }
+
+    private void DrawGraphTabs()
+    {
+        if (_module == null)
+            return;
+        if (_graphTabModuleId != _module.Id)
+        {
+            _graphTabModuleId = _module.Id;
+            _activeGraphGroupId = Guid.Empty;
+            _openGraphGroups.Clear();
+            _graphTabViews.Clear();
+            _focusGraphTab = null;
+        }
+        _openGraphGroups.RemoveAll(id => !_module.EditorGroups.Any(group => group.Id == id));
+        if (_activeGraphGroupId != Guid.Empty && ActiveGraphGroup == null)
+            ActivateGraphTab(Guid.Empty);
+        if (!ImGui.BeginTabBar("##EventGraphTabs", ImGuiTabBarFlags.Reorderable))
+            return;
+        if (ImGui.BeginTabItem("Event Graph"))
+        {
+            ActivateGraphTab(Guid.Empty);
+            ImGui.EndTabItem();
+        }
+        for (int index = 0; index < _openGraphGroups.Count; index++)
+        {
+            Guid id = _openGraphGroups[index];
+            EventGraphGroupDefinition group = _module.EditorGroups.First(item => item.Id == id);
+            bool open = true;
+            if (ImGui.BeginTabItem($"{group.Title}##{id}", ref open,
+                    _focusGraphTab == id ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+            {
+                ActivateGraphTab(id);
+                ImGui.EndTabItem();
+            }
+            if (!open)
+            {
+                _openGraphGroups.RemoveAt(index--);
+                if (_activeGraphGroupId == id)
+                    ActivateGraphTab(Guid.Empty);
+            }
+        }
+        ImGui.EndTabBar();
+        _focusGraphTab = null;
     }
 
     private bool NodeExists(
@@ -5095,9 +5345,18 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (ActiveGraphGroup is { } active &&
+            TryGetExpandedGroupBounds(active, out Vector2 entry, out Vector2 exit))
+        {
+            DrawGraphBoundary("Inputs from parent graph", new Vector2(entry.X - 300, entry.Y + 25));
+            DrawGraphBoundary("Outputs to parent graph", new Vector2(exit.X + 100, entry.Y + 25));
+        }
+
         foreach (EventGraphGroupDefinition group
                  in _module.EditorGroups)
         {
+            if (!IsGroupVisible(group))
+                continue;
             if (!TryGetGroupBounds(
                     group,
                     out Vector2 minimum,
@@ -5111,7 +5370,31 @@ internal sealed class EventWorkspacePanel
                 maximum,
                 EditorTheme.PanelRaised with { W = 0.30f },
                 EditorTheme.Border with { W = 0.75f });
+            ImDrawListPtr draw = ImGui.GetWindowDrawList();
+            Vector2 corner = _graphCanvas.ToScreen(maximum);
+            if (group.Collapsed)
+            {
+                float middle = (minimum.Y + maximum.Y) * 0.5f;
+                draw.AddCircleFilled(_graphCanvas.ToScreen(new Vector2(minimum.X, middle)), 5,
+                    ImGui.GetColorU32(ConditionWireColor));
+                draw.AddCircleFilled(_graphCanvas.ToScreen(new Vector2(maximum.X, middle)), 5,
+                    ImGui.GetColorU32(ExecutionWireColor));
+            }
+            draw.AddText(_graphCanvas.ToScreen(minimum + new Vector2(12, 3)),
+                ImGui.GetColorU32(EditorTheme.TextMuted), group.Collapsed ? "GRAPH - drag" : "COMMENT - drag");
+            if (!group.Collapsed)
+                draw.AddTriangleFilled(corner - new Vector2(16, 2),
+                    corner - new Vector2(2, 16), corner - new Vector2(2),
+                    ImGui.GetColorU32(EditorTheme.TextMuted));
         }
+    }
+
+    private void DrawGraphBoundary(string label, Vector2 position)
+    {
+        _graphCanvas.DrawGroupBox(position, position + new Vector2(220, 70),
+            EditorTheme.PanelRaised, EditorTheme.Border);
+        ImGui.GetWindowDrawList().AddText(_graphCanvas.ToScreen(position + new Vector2(10, 10)),
+            ImGui.GetColorU32(EditorTheme.TextMuted), label);
     }
 
     private void DrawGraphGroupHeaders()
@@ -5128,6 +5411,8 @@ internal sealed class EventWorkspacePanel
         {
             EventGraphGroupDefinition group =
                 _module.EditorGroups[index];
+            if (!IsGroupVisible(group))
+                continue;
 
             if (!TryGetGroupBounds(
                     group,
@@ -5142,7 +5427,7 @@ internal sealed class EventWorkspacePanel
                     minimum +
                     new Vector2(
                         12.0f,
-                        8.0f));
+                        30.0f));
 
             Vector2 headerSize =
                 new(
@@ -5151,7 +5436,7 @@ internal sealed class EventWorkspacePanel
                         _graphCanvas.Zoom,
                         120.0f),
                     Math.Max(
-                        36.0f *
+                        (group.Collapsed ? 64.0f : 36.0f) *
                         _graphCanvas.Zoom,
                         26.0f));
 
@@ -5191,10 +5476,23 @@ internal sealed class EventWorkspacePanel
                         ? "Comment"
                         : group.Title;
 
+                if (ImGui.SmallButton(group.Collapsed ? "Open##OpenGroup" : "-##CollapseGroup"))
+                {
+                    if (group.Collapsed)
+                        OpenGroupGraph(group);
+                    else
+                    {
+                        RecordHistory("Collapse Graph Group");
+                        group.Collapsed = true;
+                        _selectedGraphNodes.Clear();
+                        _dirty = true;
+                    }
+                }
+                ImGui.SameLine();
                 ImGui.SetNextItemWidth(
                     Math.Max(
                         headerSize.X -
-                        52.0f,
+                        112.0f,
                         60.0f));
 
                 if (ImGui.InputText(
@@ -5217,6 +5515,8 @@ internal sealed class EventWorkspacePanel
                     remove =
                         true;
                 }
+                if (group.Collapsed)
+                    ImGui.TextDisabled($"{group.MemberIds.Count} nodes - open graph");
             }
 
             ImGui.EndChild();
@@ -5227,6 +5527,9 @@ internal sealed class EventWorkspacePanel
             {
                 RecordHistory(
                     "Delete Comment Box");
+                foreach (EventGraphGroupDefinition child in _module.EditorGroups)
+                    if (child.ParentGroupId == group.Id)
+                        child.ParentGroupId = group.ParentGroupId;
 
                 _module.EditorGroups.RemoveAt(
                     index);
@@ -5240,6 +5543,110 @@ internal sealed class EventWorkspacePanel
     }
 
     private bool TryGetGroupBounds(
+        EventGraphGroupDefinition group,
+        out Vector2 minimum,
+        out Vector2 maximum)
+    {
+        if (!group.EditorBoundsInitialized)
+        {
+            if (!TryGetExpandedGroupBounds(group, out minimum, out maximum))
+                return false;
+            group.EditorX = minimum.X;
+            group.EditorY = minimum.Y;
+            group.EditorWidth = Math.Max(310, maximum.X - minimum.X);
+            group.EditorHeight = Math.Max(140, maximum.Y - minimum.Y);
+            group.EditorBoundsInitialized = true;
+        }
+        minimum = new Vector2(group.EditorX, group.EditorY);
+        maximum = minimum + (group.Collapsed ? new Vector2(310, 125) :
+            new Vector2(Math.Max(310, group.EditorWidth), Math.Max(140, group.EditorHeight)));
+        return true;
+    }
+
+    private void UpdateGroupPointerInteraction()
+    {
+        _groupPointerCaptured = false;
+        if (_module == null ||
+            (!_graphCanvas.IsMouseInsideCanvas && _draggingGroupId == Guid.Empty) ||
+            ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId))
+            return;
+        Vector2 mouse = ImGui.GetIO().MousePos;
+        foreach (EventGraphGroupDefinition group in _module.EditorGroups.AsEnumerable().Reverse())
+        {
+            if (!IsGroupVisible(group) ||
+                !TryGetGroupBounds(group, out Vector2 minimum, out Vector2 maximum))
+                continue;
+            Vector2 min = _graphCanvas.ToScreen(minimum);
+            Vector2 max = _graphCanvas.ToScreen(maximum);
+            if (group.Collapsed && mouse.X >= min.X && mouse.X <= max.X &&
+                mouse.Y >= min.Y && mouse.Y <= max.Y &&
+                ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+            {
+                OpenGroupGraph(group);
+                _groupPointerCaptured = true;
+                return;
+            }
+            bool drag = mouse.X >= min.X && mouse.X <= max.X &&
+                mouse.Y >= min.Y && mouse.Y <= min.Y + Math.Max(22 * _graphCanvas.Zoom, 12);
+            bool resize = !group.Collapsed && mouse.X >= max.X - 18 &&
+                mouse.X <= max.X + 4 && mouse.Y >= max.Y - 18 && mouse.Y <= max.Y + 4;
+            if (drag || resize || _draggingGroupId == group.Id)
+            {
+                _groupPointerCaptured = true;
+                ImGui.SetMouseCursor(resize || _resizingGroup && _draggingGroupId == group.Id
+                    ? ImGuiMouseCursor.ResizeNWSE : ImGuiMouseCursor.ResizeAll);
+                if (_draggingGroupId == Guid.Empty && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                {
+                    RecordHistory(resize ? "Resize Comment Box" : "Move Graph Group");
+                    _draggingGroupId = group.Id;
+                    _resizingGroup = resize;
+                    _marqueeSelecting = false;
+                    if (drag && group.Collapsed && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                    {
+                        OpenGroupGraph(group);
+                        _draggingGroupId = Guid.Empty;
+                        return;
+                    }
+                }
+            }
+            if (_draggingGroupId != group.Id)
+                continue;
+            if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                _draggingGroupId = Guid.Empty;
+                _resizingGroup = false;
+                continue;
+            }
+            Vector2 delta = ImGui.GetIO().MouseDelta / _graphCanvas.Zoom;
+            if (delta == Vector2.Zero)
+                continue;
+            if (_resizingGroup)
+            {
+                group.EditorWidth = Math.Max(310, group.EditorWidth + delta.X);
+                group.EditorHeight = Math.Max(140, group.EditorHeight + delta.Y);
+            }
+            else
+            {
+                group.EditorX += delta.X;
+                group.EditorY += delta.Y;
+                var selection = _selectedGraphNodes.ToArray();
+                _selectedGraphNodes.Clear();
+                _selectedGraphNodes.UnionWith(group.MemberIds);
+                MoveSelectedGraphNodes(Guid.Empty, delta);
+                _selectedGraphNodes.Clear();
+                _selectedGraphNodes.UnionWith(selection);
+                foreach (EventGraphGroupDefinition child in _module.EditorGroups)
+                    if (child.ParentGroupId == group.Id)
+                    {
+                        child.EditorX += delta.X;
+                        child.EditorY += delta.Y;
+                    }
+            }
+            _dirty = true;
+        }
+    }
+
+    private bool TryGetExpandedGroupBounds(
         EventGraphGroupDefinition group,
         out Vector2 minimum,
         out Vector2 maximum)
@@ -6893,6 +7300,25 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (ActiveGraphGroup is { } active)
+        {
+            int index = 0;
+            foreach (Guid id in active.MemberIds.Where(id => !IsNodeHiddenByGroup(id)))
+            {
+                if (!TryGetNodeBounds(id, out Vector2 position, out _))
+                    continue;
+                var previousSelection = _selectedGraphNodes.ToArray();
+                _selectedGraphNodes.Clear();
+                _selectedGraphNodes.Add(id);
+                MoveSelectedGraphNodes(id,
+                    new Vector2(100 + index % 4 * 400, 100 + index / 4 * 250) - position);
+                _selectedGraphNodes.Clear();
+                _selectedGraphNodes.UnionWith(previousSelection);
+                index++;
+            }
+            return;
+        }
+
         float nextY =
             100.0f;
 
@@ -7156,6 +7582,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetEventConditionInput(
         EventRuleDefinition rule)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(rule.Id))
+            return new Vector2(-1000000);
         Vector2 size =
             GetEventGraphNodeSize();
 
@@ -7172,6 +7600,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetEventExecutionOutput(
         EventRuleDefinition rule)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(rule.Id))
+            return new Vector2(-1000000);
         Vector2 size =
             GetEventGraphNodeSize();
 
@@ -7197,6 +7627,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetBranchTrueOutput(
         VisualInstruction instruction)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(instruction.InstanceId))
+            return new Vector2(-1000000);
         Vector2 size =
             GetScaledInstructionNodeSize(
                 instruction);
@@ -7215,6 +7647,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetBranchFalseOutput(
         VisualInstruction instruction)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(instruction.InstanceId))
+            return new Vector2(-1000000);
         Vector2 size =
             GetScaledInstructionNodeSize(
                 instruction);
@@ -7233,6 +7667,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetInstructionInput(
         VisualInstruction instruction)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(instruction.InstanceId))
+            return new Vector2(-1000000);
         Vector2 size =
             GetScaledInstructionNodeSize(
                 instruction);
@@ -7250,6 +7686,8 @@ internal sealed class EventWorkspacePanel
     private Vector2 GetInstructionOutput(
         VisualInstruction instruction)
     {
+        if (!_drawingGraphWires && IsNodeHiddenByGroup(instruction.InstanceId))
+            return new Vector2(-1000000);
         Vector2 size =
             GetScaledInstructionNodeSize(
                 instruction);
@@ -7368,85 +7806,31 @@ internal sealed class EventWorkspacePanel
 
     private void FrameEntireGraph()
     {
-        if (_module ==
-                null ||
-            (_module.Rules.Count == 0 &&
-             _module.EditorLooseConditions.Count == 0 &&
-             _module.EditorLooseActions.Count == 0))
-        {
-            _graphCanvas.ResetView();
+        if (_module == null)
             return;
-        }
-
-        Vector2 minimum =
-            new(
-                float.MaxValue,
-                float.MaxValue);
-
-        Vector2 maximum =
-            new(
-                float.MinValue,
-                float.MinValue);
-
-        foreach (EventRuleDefinition rule
-                 in _module.Rules)
-        {
-            IncludeGraphRect(
-                ref minimum,
-                ref maximum,
-                new Vector2(
-                    rule.EditorX,
-                    rule.EditorY),
-                GetEventGraphNodeSize());
-
-            if (rule.EditorCollapsed)
-            {
-                continue;
-            }
-
-            foreach (VisualInstruction instruction
-                     in rule.Conditions.Concat(
-                         rule.Actions))
-            {
-                IncludeGraphRect(
-                    ref minimum,
-                    ref maximum,
-                    new Vector2(
-                        instruction.EditorX,
-                        instruction.EditorY),
-                    GetScaledInstructionNodeSize(
-                        instruction));
-            }
-        }
-
-        foreach (VisualInstruction instruction in _module.EditorLooseConditions
-                     .Concat(_module.EditorLooseActions))
-            IncludeGraphRect(ref minimum, ref maximum,
-                new Vector2(instruction.EditorX, instruction.EditorY),
-                GetScaledInstructionNodeSize(instruction));
-
-        foreach (EventGraphGroupDefinition group
-                 in _module.EditorGroups)
-        {
-            if (!TryGetGroupBounds(
-                    group,
-                    out Vector2 groupMinimum,
-                    out Vector2 groupMaximum))
-            {
-                continue;
-            }
-
-            IncludeGraphRect(
-                ref minimum,
-                ref maximum,
-                groupMinimum,
-                groupMaximum -
-                groupMinimum);
-        }
-
-        _graphCanvas.FrameBounds(
-            minimum,
-            maximum);
+        Vector2 minimum = new(float.MaxValue);
+        Vector2 maximum = new(float.MinValue);
+        IEnumerable<Guid> ids = _module.Rules.Select(rule => rule.Id)
+            .Concat(_module.Rules.SelectMany(rule => rule.Conditions.Concat(rule.Actions))
+                .Select(item => item.InstanceId))
+            .Concat(_module.EditorLooseConditions.Concat(_module.EditorLooseActions)
+                .Select(item => item.InstanceId));
+        foreach (Guid id in ids)
+            if (!IsNodeHiddenByGroup(id) &&
+                TryGetNodeBounds(id, out Vector2 min, out Vector2 max))
+                IncludeGraphRect(ref minimum, ref maximum, min, max - min);
+        foreach (EventGraphGroupDefinition group in _module.EditorGroups)
+            if (IsGroupVisible(group) &&
+                TryGetGroupBounds(group, out Vector2 min, out Vector2 max))
+                IncludeGraphRect(ref minimum, ref maximum, min, max - min);
+        if (ActiveGraphGroup is { } active &&
+            TryGetExpandedGroupBounds(active, out Vector2 entry, out Vector2 exit))
+            IncludeGraphRect(ref minimum, ref maximum, entry - new Vector2(260, 0),
+                exit - entry + new Vector2(520, 0));
+        if (minimum.X == float.MaxValue)
+            _graphCanvas.ResetView();
+        else
+            _graphCanvas.FrameBounds(minimum, maximum);
     }
 
     private static void IncludeGraphRect(
@@ -7773,7 +8157,7 @@ internal sealed class EventWorkspacePanel
     // INSTRUCTION DEFAULTS
     // ========================================================
 
-    private static VisualInstruction CreateInstruction(
+    private VisualInstruction CreateInstruction(
         string id)
     {
         var instruction =
@@ -7781,6 +8165,7 @@ internal sealed class EventWorkspacePanel
             {
                 Id = id
             };
+        AddNodeToActiveGroup(instruction.InstanceId);
 
         switch (id)
         {
@@ -9013,8 +9398,7 @@ internal sealed class EventWorkspacePanel
                     "value",
                     "Value",
                     VariableType.Number,
-                    EventValue.Number(
-                        0.0),
+                    EventValue.Number(0.0),
                     state,
                     false);
                 break;
@@ -9113,8 +9497,9 @@ internal sealed class EventWorkspacePanel
                     "value",
                     "Value",
                     selectedType,
-                    EventValue.Number(
-                        0.0),
+                    selectedType == VariableType.Boolean
+                        ? EventValue.Boolean(false)
+                        : EventValue.Number(0.0),
                     state,
                     false);
                 break;
@@ -11341,10 +11726,53 @@ internal sealed class EventWorkspacePanel
                     : state.EditorScene.FindGameObject(reference.ObjectName ?? string.Empty);
                 owner?.Variables.TryGet(reference.MemberName, out variable);
                 break;
+            case VariableScope.Component:
+                return TryGetComponentReferenceType(reference);
         }
 
         return variable?.Type;
     }
+
+    private static VariableType? TryGetComponentReferenceType(VariableReference reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference.ComponentType) ||
+            string.IsNullOrWhiteSpace(reference.MemberName))
+            return null;
+
+        Type? type = reference.ComponentType.Equals("Transform", StringComparison.OrdinalIgnoreCase)
+            ? typeof(Transform)
+            : ComponentReferenceTypes.Value.FirstOrDefault(candidate =>
+                candidate.Name.Equals(reference.ComponentType, StringComparison.OrdinalIgnoreCase) ||
+                candidate.FullName?.Equals(reference.ComponentType, StringComparison.OrdinalIgnoreCase) == true);
+        if (type == null)
+            return null;
+
+        string[] path = reference.MemberName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        foreach (string segment in path)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+            type = type.GetProperty(segment, flags)?.PropertyType ??
+                   type.GetField(segment, flags)?.FieldType;
+            if (type == null)
+                return null;
+        }
+
+        if (type == typeof(bool)) return VariableType.Boolean;
+        if (type == typeof(string)) return VariableType.String;
+        if (type == typeof(Vector2)) return VariableType.Vector2;
+        if (type == typeof(Vector3)) return VariableType.Vector3;
+        if (type.IsPrimitive || type == typeof(decimal)) return VariableType.Number;
+        return null;
+    }
+
+    private static readonly Lazy<Type[]> ComponentReferenceTypes = new(() =>
+    {
+        try { return typeof(Component).Assembly.GetTypes(); }
+        catch (ReflectionTypeLoadException error)
+        {
+            return error.Types.OfType<Type>().ToArray();
+        }
+    });
 
     private void DrawValueArgument(
         VisualInstruction instruction,
@@ -12505,6 +12933,16 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments[argumentName] =
                     EventValue.FromReference(
                         selected);
+                if (instruction.Id == "variable.set" &&
+                    argumentName == "target")
+                {
+                    VariableType? type = TryGetSelectedTargetVariableType(instruction, state);
+                    if (type.HasValue &&
+                        (!instruction.Arguments.TryGetValue("value", out EventValue? current) ||
+                         current.Kind != EventValueKind.Constant ||
+                         current.Constant.Type != type.Value))
+                        instruction.Arguments["value"] = CreateConstant(type.Value);
+                }
 
                 _dirty =
                     true;

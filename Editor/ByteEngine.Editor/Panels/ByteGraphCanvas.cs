@@ -30,6 +30,12 @@ internal sealed class ByteGraphCanvas
     public Vector2 Size =>
         _size;
 
+    public void RestoreView(Vector2 pan, float zoom)
+    {
+        Pan = pan;
+        SetZoom(zoom);
+    }
+
     public Vector2 Origin =>
         _origin;
 

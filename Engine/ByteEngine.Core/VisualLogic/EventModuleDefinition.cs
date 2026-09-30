@@ -95,6 +95,9 @@ public sealed class EventRuleDefinition
     public string DisplayName { get; set; } =
         "New Event";
 
+    // Editor-only outline presentation; does not affect event execution.
+    public bool EditorOutlineCollapsed { get; set; }
+
     public bool Enabled { get; set; } =
         true;
 
@@ -206,10 +209,19 @@ public sealed class EventGraphGroupDefinition
     public string Title { get; set; } =
         "Comment";
 
+    // Collapsed groups are a visual editor affordance, not callable functions.
+    public bool Collapsed { get; set; }
+    public Guid? ParentGroupId { get; set; }
+    public bool EditorBoundsInitialized { get; set; }
+    public float EditorX { get; set; }
+    public float EditorY { get; set; }
+    public float EditorWidth { get; set; } = 400.0f;
+    public float EditorHeight { get; set; } = 240.0f;
+
     /*
-     * A group tracks node ids rather than storing a fixed box.
-     * The editor recomputes the box from its member nodes, so the
-     * comment box follows nodes when they are moved.
+     * Stable member ids preserve execution links while the editor displays
+     * a holding node or a separate graph tab. Saved bounds allow comment
+     * boxes to be moved and resized independently of their member layout.
      */
     public List<Guid> MemberIds { get; set; } =
         new();
