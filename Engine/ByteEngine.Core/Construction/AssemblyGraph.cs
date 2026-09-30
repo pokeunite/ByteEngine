@@ -12,6 +12,9 @@ public sealed class AssemblyGraph<T>
 
     public IReadOnlyCollection<AssemblyPart<T>> Parts => _parts.Values;
     public IReadOnlyCollection<AssemblyLink> Links => _links.Values;
+    public bool IsSocketFree(Guid socketId) =>
+        _parts.Values.Any(part => part.Sockets.Any(socket => socket.Id == socketId)) &&
+        !_occupied.ContainsKey(socketId);
     public event Action<AssemblyLink>? Linked;
     public event Action<AssemblyLink>? Unlinked;
 
@@ -30,7 +33,8 @@ public sealed class AssemblyGraph<T>
     }
 
     public AssemblyLink Connect(Guid a, Guid aSocket, Guid b, Guid bSocket,
-        float breakForce = float.PositiveInfinity, float breakTorque = float.PositiveInfinity)
+        float breakForce = float.PositiveInfinity, float breakTorque = float.PositiveInfinity,
+        Guid? linkId = null)
     {
         if (a == b || !_parts.TryGetValue(a, out var first) || !_parts.TryGetValue(b, out var second))
             throw new InvalidOperationException("Connect two distinct existing parts.");
@@ -44,7 +48,11 @@ public sealed class AssemblyGraph<T>
             throw new InvalidOperationException("Socket channels differ.");
         if (breakForce <= 0 || breakTorque <= 0 || float.IsNaN(breakForce) || float.IsNaN(breakTorque))
             throw new ArgumentOutOfRangeException(nameof(breakForce));
-        var link = new AssemblyLink(Guid.NewGuid(), a, aSocket, b, bSocket, breakForce, breakTorque);
+        Guid id = linkId ?? Guid.NewGuid();
+        if (id == Guid.Empty || _links.ContainsKey(id))
+            throw new ArgumentException("Duplicate or empty link ID.", nameof(linkId));
+        var link = new AssemblyLink(id, a, aSocket, b, bSocket,
+            left.Channel, breakForce, breakTorque);
         _links.Add(link.Id, link);
         _occupied.Add(aSocket, link.Id);
         _occupied.Add(bSocket, link.Id);
@@ -107,4 +115,4 @@ public sealed class AssemblyGraph<T>
 public sealed record AssemblySocket(Guid Id, string Channel, Matrix4x4 LocalTransform);
 public sealed record AssemblyPart<T>(Guid Id, T Payload, IReadOnlyList<AssemblySocket> Sockets);
 public sealed record AssemblyLink(Guid Id, Guid PartA, Guid SocketA, Guid PartB,
-    Guid SocketB, float BreakForce, float BreakTorque);
+    Guid SocketB, string Channel, float BreakForce, float BreakTorque);

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.29" />
   </ItemGroup>
 
   <PropertyGroup>

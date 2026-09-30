@@ -13,6 +13,8 @@ public sealed class SwarmHorde
     private readonly int[] _generations;
     private readonly bool[] _active;
     private readonly int[] _free;
+    private readonly int[] _nextInCell;
+    private readonly Dictionary<(int X, int Y), int> _enemyCells = new();
     private int _next;
     private int _freeCount;
 
@@ -29,6 +31,7 @@ public sealed class SwarmHorde
         _generations = new int[capacity];
         _active = new bool[capacity];
         _free = new int[capacity];
+        _nextInCell = new int[capacity];
     }
 
     public SwarmHandle Spawn(Vector2 position, byte team)
@@ -57,6 +60,30 @@ public sealed class SwarmHorde
         return false;
     }
 
+    public bool TryGetSlot(int slot, out Vector2 position, out byte team)
+    {
+        if ((uint)slot < (uint)_next && _active[slot])
+        {
+            position = _positions[slot];
+            team = _teams[slot];
+            return true;
+        }
+        position = default;
+        team = 0;
+        return false;
+    }
+
+    public bool TryGetSlot(int slot, out SwarmHandle handle, out Vector2 position, out byte team)
+    {
+        if (TryGetSlot(slot, out position, out team))
+        {
+            handle = new SwarmHandle(slot, _generations[slot]);
+            return true;
+        }
+        handle = default;
+        return false;
+    }
+
     public bool Despawn(SwarmHandle handle)
     {
         if (!TryGet(handle, out _)) return false;
@@ -75,6 +102,53 @@ public sealed class SwarmHorde
             if (_active[i])
                 _positions[i] += (_teams[i] == 0 ? red : green).Sample(_positions[i]) * distance;
     }
+
+    /// <summary>Opposing units cancel at close range using a reusable spatial grid.</summary>
+    public int ResolveClashes(float radius, int maximumPairs)
+    {
+        if (!float.IsFinite(radius) || radius <= 0 || maximumPairs < 0)
+            throw new ArgumentOutOfRangeException(nameof(radius));
+        _enemyCells.Clear();
+        float inverseCell = 1f / radius;
+        for (int i = 0; i < _next; i++)
+        {
+            if (!_active[i] || _teams[i] != 1) continue;
+            var cell = Cell(_positions[i], inverseCell);
+            _nextInCell[i] = _enemyCells.GetValueOrDefault(cell, -1);
+            _enemyCells[cell] = i;
+        }
+        int pairs = 0;
+        float radiusSquared = radius * radius;
+        for (int i = 0; i < _next && pairs < maximumPairs; i++)
+        {
+            if (!_active[i] || _teams[i] != 0) continue;
+            var cell = Cell(_positions[i], inverseCell);
+            bool found = false;
+            for (int dy = -1; dy <= 1 && !found; dy++)
+                for (int dx = -1; dx <= 1 && !found; dx++)
+                {
+                    int candidate = _enemyCells.GetValueOrDefault((cell.X + dx, cell.Y + dy), -1);
+                    while (candidate >= 0)
+                    {
+                        int next = _nextInCell[candidate];
+                        if (_active[candidate] &&
+                            Vector2.DistanceSquared(_positions[i], _positions[candidate]) <= radiusSquared)
+                        {
+                            Release(i);
+                            Release(candidate);
+                            pairs++;
+                            found = true;
+                            break;
+                        }
+                        candidate = next;
+                    }
+                }
+        }
+        return pairs;
+    }
+
+    private static (int X, int Y) Cell(Vector2 point, float inverseCell) =>
+        ((int)MathF.Floor(point.X * inverseCell), (int)MathF.Floor(point.Y * inverseCell));
 
     /// <summary>Swept vehicle footprint catches units crossed between frames.</summary>
     public int Squish(Vector2 from, Vector2 to, float radius, float vehicleSpeed,
