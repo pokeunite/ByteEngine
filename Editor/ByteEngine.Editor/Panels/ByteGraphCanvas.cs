@@ -128,7 +128,8 @@ internal sealed class ByteGraphCanvas
         ImGuiIOPtr io =
             ImGui.GetIO();
 
-        if (IsMouseInsideCanvas &&
+        if (!ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId) &&
+            IsMouseInsideCanvas &&
             ImGui.IsMouseDragging(
                 ImGuiMouseButton.Middle))
         {
@@ -136,7 +137,8 @@ internal sealed class ByteGraphCanvas
                 io.MouseDelta;
         }
 
-        if (IsMouseInsideCanvas &&
+        if (!ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId) &&
+            IsMouseInsideCanvas &&
             io.MouseWheel !=
             0.0f)
         {

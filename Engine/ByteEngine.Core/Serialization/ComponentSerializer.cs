@@ -290,6 +290,9 @@ public sealed class ComponentSerializer
             StringComparer.OrdinalIgnoreCase
         );
 
+    /// <summary>Persistable component types, shared with semantic authoring tools.</summary>
+    public IReadOnlyCollection<Type> RegisteredComponentTypes => _byRuntimeType.Keys;
+
     private readonly ComponentSerializationContext _context;
 
     public ComponentSerializer(

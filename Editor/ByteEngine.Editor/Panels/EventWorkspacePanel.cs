@@ -2786,7 +2786,8 @@ internal sealed class EventWorkspacePanel
         Guid sourceInstructionId,
         Vector2 pin)
     {
-        if (_wireDragKind !=
+        if (ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId) ||
+            _wireDragKind !=
                 WireDragKind.None ||
             !_graphCanvas.IsPointHovered(
                 pin,
@@ -3806,6 +3807,19 @@ internal sealed class EventWorkspacePanel
 
     private void UpdateGraphPointerInteraction()
     {
+        // The reference picker is drawn later in the Details child window.
+        // Geometry-only graph hit tests must not consume its click first:
+        // clearing the selected node would stop drawing Details and close
+        // the picker before ImGui can handle the selection.
+        if (ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId))
+        {
+            _hoveredGraphNodeId = Guid.Empty;
+            _anyGraphNodeHovered = false;
+            _draggingGraphNodeId = Guid.Empty;
+            _graphNodeDragStarted = false;
+            _marqueeSelecting = false;
+            return;
+        }
         if (_groupPointerCaptured)
         {
             _anyGraphNodeHovered = true;
@@ -12206,7 +12220,9 @@ internal sealed class EventWorkspacePanel
                 self,
                 expectedType,
                 writableOnly,
-                out VariableReference? selected) &&
+                out VariableReference? selected,
+                stringConvertible: instruction.Id == "ui.setText" &&
+                                   argumentName == "text") &&
             selected != null)
         {
             instruction.Arguments[argumentName] =

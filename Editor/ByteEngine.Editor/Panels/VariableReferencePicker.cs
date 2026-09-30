@@ -28,6 +28,7 @@ internal sealed class VariableReferencePicker
 {
     private string _search =
         string.Empty;
+    private bool _stringConvertible;
 
     /// <summary>
     /// Draw an already-open ImGui popup containing the
@@ -41,10 +42,12 @@ internal sealed class VariableReferencePicker
         GameObject? selfContext,
         VariableType? expectedType,
         bool writableOnly,
-        out VariableReference? selected)
+        out VariableReference? selected,
+        bool stringConvertible = false)
     {
         selected =
             null;
+        _stringConvertible = stringConvertible;
 
         if (!ImGui.BeginPopup(
                 popupId))
@@ -1320,7 +1323,7 @@ internal sealed class VariableReferencePicker
         };
     }
 
-    private static bool TypeHasSelectableMembers(
+    private bool TypeHasSelectableMembers(
         Type type,
         VariableType? expectedType,
         bool writableOnly)
@@ -1481,13 +1484,16 @@ internal sealed class VariableReferencePicker
     // FILTERING
     // ========================================================
 
-    private static bool AcceptType(
+    private bool AcceptType(
         VariableType actual,
         VariableType? expected)
     {
         return !expected.HasValue ||
                actual ==
-               expected.Value;
+               expected.Value ||
+               (_stringConvertible &&
+                expected == VariableType.String &&
+                actual is VariableType.Number or VariableType.Boolean);
     }
 
     private bool MatchesSearch(
