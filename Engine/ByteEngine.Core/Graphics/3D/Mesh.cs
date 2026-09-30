@@ -104,7 +104,8 @@ public sealed class Mesh : IDisposable
     /// </summary>
     internal void UpdateVertices(
         float[] vertices,
-        bool updateBounds = true)
+        bool updateBounds = true,
+        BoundingBox3D? knownBounds = null)
     {
         ArgumentNullException.ThrowIfNull(
             vertices);
@@ -130,7 +131,11 @@ public sealed class Mesh : IDisposable
                 vertices.Length);
         }
 
-        if (updateBounds)
+        if (knownBounds is { } bounds)
+        {
+            LocalBounds = bounds;
+        }
+        else if (updateBounds)
         {
             LocalBounds =
                 BoundingBox3D.FromInterleavedVertices(

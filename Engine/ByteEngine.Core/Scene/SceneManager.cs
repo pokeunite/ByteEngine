@@ -10,6 +10,9 @@ public sealed class SceneManager
 
     public Scene? ActiveScene { get; private set; }
 
+    /// <summary>Host-owned fresh scene factory used by Event Sheet scene.restart.</summary>
+    public Func<Scene>? RestartSceneFactory { get; set; }
+
     public bool HasActiveScene =>
         ActiveScene != null;
 
@@ -112,6 +115,14 @@ public sealed class SceneManager
     internal void UpdateInternal()
     {
         ActiveScene?.UpdateInternal();
+
+        if (ActiveScene?.RestartRequested == true)
+        {
+            if (RestartSceneFactory is { } factory)
+                LoadScene(factory());
+            else
+                Console.WriteLine("Scene restart requested, but this host has no restart factory.");
+        }
 
         /*
          * TPS jitter diagnostics are sampled here, after Scene.UpdateInternal

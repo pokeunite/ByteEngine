@@ -53,12 +53,14 @@ internal static class WaveSpawnerTests
             HealthComponent firstHealth = enemies[0].GetComponent<HealthComponent>()!;
             firstHealth.Kill();
             firstHealth.Kill();
-            Check(wave.EnemiesAlive == 1, "death counted once with DestroyOnDeath");
+            Check(wave.EnemiesAlive == 1 && wave.TotalKilled == 1,
+                "death counted once with DestroyOnDeath");
             Tick(scene, .1);
             Check(wave.State == WaveSpawnerState.WaitingForClear, "not clear while alive");
             enemies[1].GetComponent<HealthComponent>()!.Kill();
             Tick(scene, .1);
-            Check(wave.State == WaveSpawnerState.Intermission && wave.WaveClearedThisFrame, "wave clear");
+            Check(wave.State == WaveSpawnerState.Intermission && wave.WaveClearedThisFrame &&
+                wave.TotalKilled == 2, "wave clear and cumulative kills");
             Tick(scene, .5);
             Check(wave.CurrentWave == 1, "intermission waits");
             Tick(scene, .5);
@@ -66,7 +68,7 @@ internal static class WaveSpawnerTests
             playerHealth.Kill();
             Check(wave.State == WaveSpawnerState.Failed && wave.FailedThisFrame, "failure target");
             wave.RestartWaves();
-            Check(wave.CurrentWave == 0 && wave.TotalSpawned == 0 &&
+            Check(wave.CurrentWave == 0 && wave.TotalSpawned == 0 && wave.TotalKilled == 0 &&
                 wave.State == WaveSpawnerState.Failed, "restart resets and detects already-dead failure target");
             wave.StopWaves();
             Check(wave.State == WaveSpawnerState.Failed, "stop preserves terminal failure");

@@ -117,6 +117,36 @@ public sealed partial class AuthoringSession
             return new { ok = true, path = Relative(full), rev = Rev(full) };
         }
         AssetRecord asset = Asset(Request.Required(args, "scene"), AssetType.Scene);
+        if (op == "inspect_object")
+        {
+            var scene = Scenes.Load(asset.FullPath);
+            string token = Request.Required(args, "object");
+            GameObject? target = Guid.TryParse(token, out Guid id)
+                ? scene.FindGameObject(id) : scene.FindGameObject(token);
+            if (target == null) throw new McpFault("NOT_FOUND", $"Object '{token}' was not found.");
+            return new { ok = true, rev = Rev(asset.FullPath), id = target.Id, target.Name,
+                parent = target.Parent?.Id, target.Active,
+                position = new { x = target.Transform.WorldPosition.X, y = target.Transform.WorldPosition.Y,
+                    z = target.Transform.WorldPosition.Z },
+                scale = new { x = target.Transform.WorldScale.X, y = target.Transform.WorldScale.Y,
+                    z = target.Transform.WorldScale.Z },
+                components = target.Components.Select(c => Components.Serialize(c)).Where(c => c != null).ToArray() };
+        }
+        if (op == "attach_module")
+        {
+            CheckRevision(asset.FullPath, args);
+            AssetRecord module = Asset(Request.Required(args, "module"), AssetType.EventModule);
+            var scene = Scenes.Load(asset.FullPath);
+            string token = Request.Required(args, "object");
+            GameObject? target = Guid.TryParse(token, out Guid id)
+                ? scene.FindGameObject(id) : scene.FindGameObject(token);
+            if (target == null) throw new McpFault("NOT_FOUND", $"Object '{token}' was not found.");
+            var events = target.GetComponent<EventModuleComponent>() ?? target.AddComponent(new EventModuleComponent());
+            events.AddModuleReference(new AssetReference(module.Guid, module.ProjectPath));
+            if (!Request.Bool(args, "dry_run")) { Scenes.Save(scene, asset.FullPath); MarkChanged(asset.FullPath); }
+            return new { ok = true, object_id = target.Id, module = module.ProjectPath,
+                rev = Rev(asset.FullPath), dry_run = Request.Bool(args, "dry_run") };
+        }
         if (op == "place_blueprint")
         {
             CheckRevision(asset.FullPath, args);
@@ -260,6 +290,15 @@ public sealed partial class AuthoringSession
         }
         AssetRecord asset = Asset(Request.Required(args, "module"), AssetType.EventModule);
         var module = Modules.Load(asset.FullPath);
+        if (op == "inspect_rule")
+        {
+            string token = Request.Required(args, "rule");
+            EventRuleDefinition? rule = Guid.TryParse(token, out Guid id)
+                ? module.Rules.FirstOrDefault(r => r.Id == id)
+                : module.Rules.FirstOrDefault(r => r.DisplayName.Equals(token, StringComparison.OrdinalIgnoreCase));
+            if (rule == null) throw new McpFault("NOT_FOUND", $"Rule '{token}' was not found.");
+            return new { ok = true, rev = Rev(asset.FullPath), rule };
+        }
         if (op == "inspect")
             return new { ok = true, name = module.Name, rev = Rev(asset.FullPath),
                 rules = module.Rules.Select(r => new { r.Id, r.DisplayName, r.Enabled,
@@ -300,11 +339,32 @@ public sealed partial class AuthoringSession
                     JsonValueKind.True => EventValue.Boolean(true),
                     JsonValueKind.False => EventValue.Boolean(false),
                     JsonValueKind.Number => EventValue.Number(pair.Value.GetDouble()),
-                    _ => throw new McpFault("INVALID_REQUEST", $"Argument '{pair.Key}' needs a string, number, or boolean.")
+                    JsonValueKind.Object => ReferenceValue(pair.Value),
+                    _ => throw new McpFault("INVALID_REQUEST", $"Argument '{pair.Key}' needs a constant or reference.")
                 };
             result.Add(instruction);
         }
         return result;
+    }
+
+    private static EventValue ReferenceValue(JsonElement value)
+    {
+        JsonElement data = Request.Get(value, "reference");
+        if (data.ValueKind != JsonValueKind.Object)
+            throw new McpFault("INVALID_REQUEST", "Reference arguments need a 'reference' object.");
+        if (!Enum.TryParse(Request.Required(data, "scope"), true, out ByteEngine.Core.Variables.VariableScope scope))
+            throw new McpFault("INVALID_REQUEST", "Unknown reference scope.");
+        string? objectId = Request.String(data, "object_id");
+        if (objectId != null && !Guid.TryParse(objectId, out _))
+            throw new McpFault("INVALID_REQUEST", "Reference object_id must be a GUID.");
+        return EventValue.FromReference(new ByteEngine.Core.Variables.VariableReference
+        {
+            Scope = scope,
+            ObjectId = objectId == null ? null : Guid.Parse(objectId),
+            ObjectName = Request.String(data, "object_name"),
+            ComponentType = Request.String(data, "component_type"),
+            MemberName = Request.Required(data, "member_name")
+        });
     }
 
     private object RuntimeTool(string op, JsonElement? args)

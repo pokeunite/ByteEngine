@@ -21,6 +21,13 @@ internal sealed class StandaloneGame : ByteEngineApplication
         foreach (var variable in _project.Project.GlobalVariables)
             Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
         var scene = _project.LoadStartupScene();
+        Scenes.RestartSceneFactory = () =>
+        {
+            Scenes.GlobalVariables.Clear();
+            foreach (var variable in _project.Project.GlobalVariables)
+                Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
+            return _project.LoadStartupScene();
+        };
         Scenes.LoadScene(scene);
         bool grab = scene.GameObjects.Any(item =>
             item.GetComponent<PlayerController3D>() is { AcceptLookInput: true });

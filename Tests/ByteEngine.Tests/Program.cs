@@ -19,6 +19,18 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Length >= 2 && args[0] == "--last-stand-project")
+    {
+        LastStandProjectDiagnostic.Run(args[1]);
+        return;
+    }
+
+    if (args.Contains("--last-stand-foundation"))
+    {
+        LastStandFoundationTests.Run();
+        return;
+    }
+
     if (args.Contains("--construction"))
     {
         ConstructionFoundationTests.Run();

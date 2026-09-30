@@ -1167,6 +1167,13 @@ public sealed partial class VisualLogicRegistry
             TargetComponent = nameof(ArenaGameManager),
             Execute = (instruction, context) => ResolveObjectTarget(instruction, context)?.GetComponent<ArenaGameManager>()?.Restart()
         });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "scene.restart",
+            Category = "Gameplay",
+            DisplayName = "Restart Current Scene",
+            Execute = (_, context) => context.Scene.RequestRestart()
+        });
     }
 
     private static void RegisterObjects(
@@ -1313,6 +1320,21 @@ public sealed partial class VisualLogicRegistry
                                 true);
                     }
             });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "object.setComponentEnabled",
+            Category = "Object",
+            DisplayName = "Set Component Enabled",
+            Execute = (instruction, context) =>
+            {
+                GameObject? target = ResolveObjectTarget(instruction, context);
+                string type = EventValueResolver.GetString(instruction, "component", context);
+                Component? component = target?.Components.FirstOrDefault(candidate =>
+                    candidate.GetType().Name.Equals(type, StringComparison.OrdinalIgnoreCase));
+                if (component != null)
+                    component.Enabled = EventValueResolver.GetBoolean(instruction, "enabled", context, true);
+            }
+        });
     }
 
     private static bool TryTagId(VisualInstruction instruction, EventExecutionContext context, out Guid tagId) =>

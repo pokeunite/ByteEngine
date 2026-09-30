@@ -24,6 +24,9 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public sealed partial class SkeletalMeshRenderer : Component
 {
+    internal static long DiagnosticPoseUpdates;
+    internal static long DiagnosticPoseTicks;
+    internal static long DiagnosticSkinTicks;
     private readonly List<RuntimeSkinnedMesh> _runtimeMeshes = new();
     private readonly Dictionary<int, (AssetReference Reference, Material? Material)>
         _resolvedMaterialSlots = new();
@@ -944,16 +947,17 @@ public sealed partial class SkeletalMeshRenderer : Component
                 }
             }
 
+            float[] deformedVertices = (float[])source.Vertices.Clone();
             _runtimeMeshes.Add(
                 new RuntimeSkinnedMesh(
                     source,
                     meshNodeIndex,
                     new Mesh(
-                        (float[])source.Vertices.Clone(),
+                        deformedVertices,
                         source.Indices,
                         dynamicVertices: true),
                     material,
-                    (float[])source.Vertices.Clone()));
+                    deformedVertices));
 
             skinnedIndex++;
         }
@@ -961,6 +965,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private void UpdatePoseAndMeshes()
     {
+        long diagnosticStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _poseDirty = false;
 
         if (_model == null ||
@@ -1035,7 +1040,9 @@ public sealed partial class SkeletalMeshRenderer : Component
                     inverseMesh;
             }
 
+            long skinStart = System.Diagnostics.Stopwatch.GetTimestamp();
             SkinMesh(runtime, skinMatrices);
+            DiagnosticSkinTicks += System.Diagnostics.Stopwatch.GetTimestamp() - skinStart;
 
             /*
              * Keep the animation result in model space. World placement is
@@ -1054,6 +1061,8 @@ public sealed partial class SkeletalMeshRenderer : Component
         // Followers consume the same completed pose as the skinned mesh.
         // This also covers a clip change or Seek outside Scene.UpdateInternal.
         SkeletalAttachmentService.UpdateForRenderer(this);
+        DiagnosticPoseUpdates++;
+        DiagnosticPoseTicks += System.Diagnostics.Stopwatch.GetTimestamp() - diagnosticStart;
     }
 
     private Matrix4x4[] BuildLocalPose()
@@ -1419,7 +1428,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private static void SkinMesh(
         RuntimeSkinnedMesh runtime,
-        IReadOnlyList<Matrix4x4> skinMatrices)
+        Matrix4x4[] skinMatrices)
     {
         ImportedMesh source =
             runtime.Source;
@@ -1430,6 +1439,10 @@ public sealed partial class SkeletalMeshRenderer : Component
         int vertexCount =
             vertices.Length /
             8;
+
+        Vector3 minimum = new(float.PositiveInfinity);
+        Vector3 maximum = new(float.NegativeInfinity);
+        bool hasFinitePosition = false;
 
         for (int vertexIndex =
                  0;
@@ -1453,11 +1466,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                     source.Vertices[offset + 4],
                     source.Vertices[offset + 5]);
 
-            Vector4 jointIndices =
-                source.JointIndices[vertexIndex];
-
-            Vector4 jointWeights =
-                source.JointWeights[vertexIndex];
+            SkinInfluences influences = runtime.Influences[vertexIndex];
 
             Vector3 position =
                 Vector3.Zero;
@@ -1468,45 +1477,30 @@ public sealed partial class SkeletalMeshRenderer : Component
             float totalWeight =
                 0.0f;
 
-            ApplyInfluence(
-                jointIndices.X,
-                jointWeights.X,
-                sourcePosition,
-                sourceNormal,
-                skinMatrices,
-                ref position,
-                ref normal,
-                ref totalWeight);
-
-            ApplyInfluence(
-                jointIndices.Y,
-                jointWeights.Y,
-                sourcePosition,
-                sourceNormal,
-                skinMatrices,
-                ref position,
-                ref normal,
-                ref totalWeight);
-
-            ApplyInfluence(
-                jointIndices.Z,
-                jointWeights.Z,
-                sourcePosition,
-                sourceNormal,
-                skinMatrices,
-                ref position,
-                ref normal,
-                ref totalWeight);
-
-            ApplyInfluence(
-                jointIndices.W,
-                jointWeights.W,
-                sourcePosition,
-                sourceNormal,
-                skinMatrices,
-                ref position,
-                ref normal,
-                ref totalWeight);
+            if (runtime.AllSingleBone &&
+                runtime.SingleBoneIndices[vertexIndex] is int singleBone &&
+                singleBone >= 0 && singleBone < skinMatrices.Length)
+            {
+                Matrix4x4 matrix = skinMatrices[singleBone];
+                position = Vector3.Transform(sourcePosition, matrix);
+                normal = Vector3.TransformNormal(sourceNormal, matrix);
+                totalWeight = 1.0f;
+            }
+            else
+            {
+                ApplyInfluence(influences.Bone0, influences.Weight0,
+                    sourcePosition, sourceNormal, skinMatrices,
+                    ref position, ref normal, ref totalWeight);
+                ApplyInfluence(influences.Bone1, influences.Weight1,
+                    sourcePosition, sourceNormal, skinMatrices,
+                    ref position, ref normal, ref totalWeight);
+                ApplyInfluence(influences.Bone2, influences.Weight2,
+                    sourcePosition, sourceNormal, skinMatrices,
+                    ref position, ref normal, ref totalWeight);
+                ApplyInfluence(influences.Bone3, influences.Weight3,
+                    sourcePosition, sourceNormal, skinMatrices,
+                    ref position, ref normal, ref totalWeight);
+            }
 
             if (totalWeight <=
                 0.000001f)
@@ -1545,6 +1539,15 @@ public sealed partial class SkeletalMeshRenderer : Component
             vertices[offset + 2] =
                 position.Z;
 
+            if (float.IsFinite(position.X) &&
+                float.IsFinite(position.Y) &&
+                float.IsFinite(position.Z))
+            {
+                minimum = Vector3.Min(minimum, position);
+                maximum = Vector3.Max(maximum, position);
+                hasFinitePosition = true;
+            }
+
             vertices[offset + 3] =
                 normal.X;
 
@@ -1562,15 +1565,19 @@ public sealed partial class SkeletalMeshRenderer : Component
 
         runtime.Mesh.UpdateVertices(
             vertices,
-            updateBounds: true);
+            updateBounds: false,
+            knownBounds: hasFinitePosition
+                ? new BoundingBox3D(minimum, maximum)
+                : BoundingBox3D.Empty);
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static void ApplyInfluence(
-        float jointIndexValue,
+        int boneIndex,
         float weightValue,
         Vector3 sourcePosition,
         Vector3 sourceNormal,
-        IReadOnlyList<Matrix4x4> skinMatrices,
+        Matrix4x4[] skinMatrices,
         ref Vector3 position,
         ref Vector3 normal,
         ref float totalWeight)
@@ -1586,32 +1593,28 @@ public sealed partial class SkeletalMeshRenderer : Component
             return;
         }
 
-        int boneIndex =
-            (int)MathF.Round(
-                jointIndexValue);
-
         if (boneIndex <
                 0 ||
             boneIndex >=
-                skinMatrices.Count)
+                skinMatrices.Length)
         {
             return;
         }
 
-        Matrix4x4 matrix =
-            skinMatrices[boneIndex];
+        ref readonly Matrix4x4 matrix = ref skinMatrices[boneIndex];
+        float x = sourcePosition.X;
+        float y = sourcePosition.Y;
+        float z = sourcePosition.Z;
+        position.X += (x * matrix.M11 + y * matrix.M21 + z * matrix.M31 + matrix.M41) * weight;
+        position.Y += (x * matrix.M12 + y * matrix.M22 + z * matrix.M32 + matrix.M42) * weight;
+        position.Z += (x * matrix.M13 + y * matrix.M23 + z * matrix.M33 + matrix.M43) * weight;
 
-        position +=
-            Vector3.Transform(
-                sourcePosition,
-                matrix) *
-            weight;
-
-        normal +=
-            Vector3.TransformNormal(
-                sourceNormal,
-                matrix) *
-            weight;
+        x = sourceNormal.X;
+        y = sourceNormal.Y;
+        z = sourceNormal.Z;
+        normal.X += (x * matrix.M11 + y * matrix.M21 + z * matrix.M31) * weight;
+        normal.Y += (x * matrix.M12 + y * matrix.M22 + z * matrix.M32) * weight;
+        normal.Z += (x * matrix.M13 + y * matrix.M23 + z * matrix.M33) * weight;
 
         totalWeight +=
             weight;
@@ -1701,6 +1704,9 @@ public sealed partial class SkeletalMeshRenderer : Component
         /// eliminates a full float[] allocation on every animation tick.
         /// </summary>
         public float[] DeformedVertices { get; }
+        public SkinInfluences[] Influences { get; }
+        public int[] SingleBoneIndices { get; }
+        public bool AllSingleBone { get; }
         public Matrix4x4[] SkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
 
         public Matrix4x4 MeshToModelMatrix { get; set; } =
@@ -1718,8 +1724,36 @@ public sealed partial class SkeletalMeshRenderer : Component
             Mesh = mesh;
             Material = material;
             DeformedVertices = deformedVertices;
+            Influences = new SkinInfluences[source.JointIndices.Length];
+            SingleBoneIndices = new int[Influences.Length];
+            bool allSingleBone = true;
+            for (int i = 0; i < Influences.Length; i++)
+            {
+                Vector4 indices = source.JointIndices[i];
+                Vector4 weights = source.JointWeights[i];
+                Influences[i] = new SkinInfluences(
+                    (int)MathF.Round(indices.X), weights.X,
+                    (int)MathF.Round(indices.Y), weights.Y,
+                    (int)MathF.Round(indices.Z), weights.Z,
+                    (int)MathF.Round(indices.W), weights.W);
+                int count = 0;
+                int singleBone = -1;
+                if (weights.X > .000001f) { count++; singleBone = Influences[i].Bone0; }
+                if (weights.Y > .000001f) { count++; singleBone = Influences[i].Bone1; }
+                if (weights.Z > .000001f) { count++; singleBone = Influences[i].Bone2; }
+                if (weights.W > .000001f) { count++; singleBone = Influences[i].Bone3; }
+                SingleBoneIndices[i] = singleBone;
+                allSingleBone &= count == 1;
+            }
+            AllSingleBone = allSingleBone;
         }
     }
+
+    private readonly record struct SkinInfluences(
+        int Bone0, float Weight0,
+        int Bone1, float Weight1,
+        int Bone2, float Weight2,
+        int Bone3, float Weight3);
 
     private readonly record struct RootMotionRange(
         Vector3 Start,

@@ -40,6 +40,13 @@ public static partial class BrowserGame
         {
             _project = new GameProjectRuntime("/game/Content/Game.byteproject", Console.Error.WriteLine);
             var scene = _project.LoadStartupScene();
+            Loop.Scenes.RestartSceneFactory = () =>
+            {
+                Loop.Scenes.GlobalVariables.Clear();
+                foreach (var variable in _project.Project.GlobalVariables)
+                    Loop.Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
+                return _project.LoadStartupScene();
+            };
             Loop.Scenes.LoadScene(scene);
         }
         else

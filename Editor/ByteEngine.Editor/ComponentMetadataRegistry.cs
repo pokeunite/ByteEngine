@@ -73,6 +73,7 @@ internal static class ComponentMetadataRegistry
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
 
         [typeof(HealthComponent)] = new("Health", "Gameplay", "Tracks damage, healing and death.", "hit points hp damage"),
+        [typeof(HealthPickup3D)] = new("Health Pickup", "Gameplay", "Heals a player on trigger contact and is consumed once.", "pickup heal medkit"),
         [typeof(LifetimeComponent)] = new("Lifetime", "Gameplay", "Destroys its object after a configured duration.", "timer destroy despawn"),
         [typeof(Projectile3D)] = new("Projectile", "Gameplay", "Moves a swept projectile and damages health.", "bullet damage"),
         [typeof(ProjectileLauncher3D)] = new("Projectile Launcher", "Gameplay", "Creates reusable projectiles with a fire cooldown.", "weapon shoot fire"),
@@ -117,6 +118,7 @@ internal static class ComponentMetadataRegistry
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesSpawned))] = new("Enemies Spawned", "Runtime", "Enemies spawned in the current wave.", ReadOnly: true),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesAlive))] = new("Enemies Alive", "Runtime", "Spawned enemies still alive.", ReadOnly: true),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesRemaining))] = new("Enemies Remaining", "Runtime", "Still scheduled plus currently alive.", ReadOnly: true),
+        [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.TotalKilled))] = new("Total Killed", "Runtime", "Enemies killed across all waves.", ReadOnly: true),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.SmoothEdges))] = new("Smooth Edges", "Image Quality", "Lightweight spatial anti-aliasing for 3D. Slightly softens edges; no temporal ghosting."),
         [(typeof(FoliagePatch), nameof(FoliagePatch.BrushRadius))] = new("Paint Brush Radius", "Painting", "Size of the cursor brush, not the size of individual plants.", "m"),
         [(typeof(FoliagePatch), nameof(FoliagePatch.PaintDensity))] = new("Paint Density", "Painting", "Target planting density for new strokes. Increase to place plants closer together; existing plants are unchanged.", "plants/m²"),

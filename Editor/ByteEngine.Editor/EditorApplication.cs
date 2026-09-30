@@ -1982,6 +1982,17 @@ public sealed class EditorApplication
                 )
                 : null;
 
+        Scenes.RestartSceneFactory = () =>
+        {
+            Scenes.GlobalVariables.Clear();
+            foreach (var definition in _state.Project.GlobalVariables)
+                Scenes.GlobalVariables.Set(definition.Name, definition.Value.Clone());
+            Scene fresh = _projectContext.Scenes.CloneForRuntime(_state.EditorScene);
+            _state.RuntimeScene = fresh;
+            _state.SelectedObject = null;
+            return fresh;
+        };
+
         Scenes.LoadScene(
             runtimeScene
         );
@@ -2035,6 +2046,8 @@ public sealed class EditorApplication
         }
 
         ReleaseGameInput();
+
+        Scenes.RestartSceneFactory = null;
 
         Guid? selectedId =
             _state.SelectedObject?.Id;

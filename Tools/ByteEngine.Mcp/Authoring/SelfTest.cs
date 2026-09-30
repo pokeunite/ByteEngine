@@ -62,6 +62,25 @@ internal static class SelfTest
                 actions = new[] { new { id = "time.startTimer" } } });
             if (Call("logic", "inspect", new { module = logicPath }).GetProperty("rules").GetArrayLength() != 1)
                 throw new InvalidOperationException("Event rule persistence failed.");
+            var referenceRule = Call("logic", "add_rule", new { module = logicPath,
+                expected_rev = Call("logic", "inspect", new { module = logicPath }).GetProperty("rev").GetString(),
+                name = "Wave label", conditions = new[] { new { id = "system.always" } },
+                actions = new object[] { new { id = "ui.setText", args = new {
+                    target = "Self", text = new { reference = new { scope = "Scene", member_name = "Wave" } }
+                } } } });
+            var inspectedRule = Call("logic", "inspect_rule", new { module = logicPath, rule = "Wave label" });
+            if (inspectedRule.GetProperty("rule").GetProperty("actions")[0].GetProperty("arguments")
+                .GetProperty("text").GetProperty("kind").GetInt32() != 1)
+                throw new InvalidOperationException("MCP reference argument was not preserved.");
+            var sceneBeforeAttach = Call("scene", "inspect", new { scene = path });
+            string scenePlayerId = sceneBeforeAttach.GetProperty("objects").EnumerateArray()
+                .First(o => o.GetProperty("name").GetString() == "Player").GetProperty("id").GetString()!;
+            Call("scene", "attach_module", new { scene = path, object_id = scenePlayerId,
+                @object = scenePlayerId, module = logicPath, expected_rev = sceneBeforeAttach.GetProperty("rev").GetString() });
+            if (!Call("scene", "inspect_object", new { scene = path, @object = scenePlayerId })
+                .GetProperty("components").EnumerateArray()
+                .Any(c => c.GetProperty("type").GetString() == "EventModuleComponent"))
+                throw new InvalidOperationException("Scene Event Module attachment failed.");
             Call("blueprint", "attach_module", new { blueprint = player.GetProperty("path").GetString(),
                 expected_rev = Call("blueprint", "inspect", new { blueprint = player.GetProperty("path").GetString() })
                     .GetProperty("rev").GetString(), module = logicPath });

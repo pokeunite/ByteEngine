@@ -376,6 +376,7 @@ public sealed class ComponentSerializer
         );
 
         Register(new HealthComponentCodec());
+        Register(new HealthPickup3DCodec());
         Register(new LifetimeComponentCodec());
         Register(new Projectile3DCodec());
         Register(new ProjectileLauncher3DCodec());
@@ -1503,6 +1504,26 @@ public sealed class ComponentSerializer
             CurrentHealth = Float(data, "currentHealth", 100f),
             Invulnerable = data.Properties["invulnerable"]?.GetValue<bool>() ?? false,
             DestroyOnDeath = data.Properties["destroyOnDeath"]?.GetValue<bool>() ?? false
+        };
+    }
+
+    private sealed class HealthPickup3DCodec : IComponentCodec
+    {
+        public string TypeName => nameof(HealthPickup3D);
+        public Type ComponentType => typeof(HealthPickup3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var pickup = (HealthPickup3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["amount"] = pickup.Amount,
+                ["requirePlayerController"] = pickup.RequirePlayerController
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new HealthPickup3D
+        {
+            Amount = Float(data, "amount", 25f),
+            RequirePlayerController = data.Properties["requirePlayerController"]?.GetValue<bool>() ?? true
         };
     }
 

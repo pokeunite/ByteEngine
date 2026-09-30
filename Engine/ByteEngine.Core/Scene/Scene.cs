@@ -19,6 +19,11 @@ public sealed class Scene
     private bool _loaded;
     private bool _isUpdating;
 
+    internal bool RestartRequested { get; private set; }
+
+    /// <summary>Ask the host to load a fresh copy after this update finishes.</summary>
+    public void RequestRestart() => RestartRequested = true;
+
     public Guid Id { get; private set; }
     public string Name { get; set; }
 
@@ -434,6 +439,7 @@ public sealed class Scene
 
     internal void UnloadInternal()
     {
+        RestartRequested = false;
         if (!_loaded) return;
 
         Console.WriteLine($"Unloading scene: {Name}");

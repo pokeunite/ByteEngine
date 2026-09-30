@@ -40,6 +40,8 @@ public sealed class WaveSpawner3D : Component
     public int CurrentWaveEnemyCount => WaveEnemyCount;
     public int EnemiesRemaining => Math.Max(0, WaveEnemyCount - _spawned) + _alive.Count;
     public int TotalSpawned { get; private set; }
+    /// <summary>Enemies whose Health emitted Died; excludes despawns.</summary>
+    public int TotalKilled { get; private set; }
     public bool IsRunning => State is WaveSpawnerState.Spawning or WaveSpawnerState.WaitingForClear or WaveSpawnerState.Intermission;
     public bool IsComplete => State == WaveSpawnerState.Completed;
     public bool IsFailed => State == WaveSpawnerState.Failed;
@@ -128,7 +130,7 @@ public sealed class WaveSpawner3D : Component
         UnbindTarget();
         State = WaveSpawnerState.Idle;
         _pausedState = WaveSpawnerState.Idle;
-        CurrentWave = WaveEnemyCount = TotalSpawned = _spawned = _pointIndex = 0;
+        CurrentWave = WaveEnemyCount = TotalSpawned = TotalKilled = _spawned = _pointIndex = 0;
         _warnedSpawnFailure = false;
         ClearPulses();
         StartWaves();
@@ -178,7 +180,12 @@ public sealed class WaveSpawner3D : Component
     private void EnemyDied(HealthComponent health)
     {
         foreach (var entry in _alive)
-            if (ReferenceEquals(entry.Value.Health, health)) { RemoveEnemy(entry.Key); break; }
+            if (ReferenceEquals(entry.Value.Health, health))
+            {
+                TotalKilled++;
+                RemoveEnemy(entry.Key);
+                break;
+            }
     }
     private void RemoveEnemy(Guid id)
     {
@@ -237,7 +244,7 @@ public sealed class WaveSpawner3D : Component
         _owned.Clear();
         State = WaveSpawnerState.Idle;
         _pausedState = WaveSpawnerState.Idle;
-        CurrentWave = WaveEnemyCount = TotalSpawned = _spawned = _pointIndex = 0;
+        CurrentWave = WaveEnemyCount = TotalSpawned = TotalKilled = _spawned = _pointIndex = 0;
         ClearPulses();
     }
     private void ClearPulses() => WaveStartedThisFrame = WaveClearedThisFrame = AllWavesCompletedThisFrame = FailedThisFrame = false;
