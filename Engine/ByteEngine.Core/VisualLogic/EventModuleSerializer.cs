@@ -92,6 +92,18 @@ public sealed class EventModuleSerializer
         module.Rules ??=
             new List<EventRuleDefinition>();
 
+        module.EditorLooseConditions ??= new List<VisualInstruction>();
+        module.EditorLooseActions ??= new List<VisualInstruction>();
+        foreach (VisualInstruction instruction in module.EditorLooseConditions
+                     .Concat(module.EditorLooseActions))
+        {
+            if (instruction.InstanceId == Guid.Empty)
+                instruction.InstanceId = Guid.NewGuid();
+            instruction.Arguments ??= new Dictionary<string, EventValue>(
+                StringComparer.OrdinalIgnoreCase);
+            instruction.ConditionInputIds ??= new List<Guid>();
+        }
+
         module.EditorGroups ??=
             new List<EventGraphGroupDefinition>();
 

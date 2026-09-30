@@ -6,6 +6,8 @@ using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization;
+using ByteEngine.Core.Variables;
+using ByteEngine.Core.VisualLogic;
 
 namespace ByteEngine.Tests;
 
@@ -126,18 +128,19 @@ internal static class Phase1GameplayTests
         Assert(launcher.CanFire && launcher.Fire() != null, "ProjectileLauncher fires after cooldown");
     }
 
+    public static void RunEnemyAi() => TestEnemyAi();
+
     private static void TestEnemyAi()
     {
         var scene = new Scene("Enemy AI");
         GameObject player = scene.CreateGameObject("Player");
-        player.Transform.WorldPosition = new Vector3(0, 0, -1);
         HealthComponent playerHealth = player.AddComponent(new HealthComponent());
         GameObject enemy = scene.CreateGameObject("Enemy");
         enemy.AddComponent(new HealthComponent());
-        enemy.AddComponent(new SimpleEnemyAI3D
+        SimpleEnemyAI3D ai = enemy.AddComponent(new SimpleEnemyAI3D
         {
             TargetId = player.Id,
-            MoveSpeed = 0f,
+            MoveSpeed = 2f,
             DetectionRange = 10f,
             AttackRange = 2f,
             StopDistance = 1f,
@@ -145,17 +148,99 @@ internal static class Phase1GameplayTests
             AttackCooldown = .5f
         });
         scene.LoadInternal();
+
+        var registry = VisualLogicRegistry.CreateDefault();
+        string[] ids = ["enemyAI.isIdle", "enemyAI.isChasing",
+            "enemyAI.isAttacking", "enemyAI.attackFired"];
+        void CheckConditions(bool idle, bool chase, bool attack, bool fired)
+        {
+            bool[] expected = [idle, chase, attack, fired];
+            for (int i = 0; i < ids.Length; i++)
+            {
+                Assert(registry.TryGetCondition(ids[i], out var condition) && condition != null &&
+                    condition.Category == "AI" && condition.TargetComponent == nameof(SimpleEnemyAI3D),
+                    "Enemy AI condition registered: " + ids[i]);
+                var context = new EventExecutionContext { Scene = scene, Self = enemy, Globals = new VariableStore() };
+                Assert(condition!.Evaluate(new VisualInstruction { Id = ids[i] }, context) == expected[i],
+                    "Enemy AI condition follows state: " + ids[i]);
+            }
+        }
+
+        ai.TargetId = Guid.NewGuid();
         Tick(scene, .01);
-        Assert(Near(playerHealth.CurrentHealth, 90f), "SimpleEnemyAI attacks in range");
+        Assert(ai.State == SimpleEnemyAIState.Idle && !ai.IsMoving && !ai.IsAttacking &&
+            !ai.AttackFiredThisFrame, "SimpleEnemyAI without target is idle");
+        CheckConditions(true, false, false, false);
+
+        ai.TargetId = player.Id;
+        player.Transform.WorldPosition = new Vector3(0, 0, -30);
+        Tick(scene, .01);
+        Assert(ai.State == SimpleEnemyAIState.Idle && !ai.IsMoving, "SimpleEnemyAI outside detection is idle");
+
+        player.Transform.WorldPosition = new Vector3(0, 0, -6);
+        Vector3 beforeMove = enemy.Transform.WorldPosition;
+        Tick(scene, .1);
+        Assert(ai.State == SimpleEnemyAIState.Chase && ai.IsMoving && !ai.IsAttacking &&
+            enemy.Transform.WorldPosition != beforeMove, "SimpleEnemyAI chases and moves");
+        CheckConditions(false, true, false, false);
+
+        ai.MoveSpeed = 0f;
+        Tick(scene, .01);
+        Assert(ai.State == SimpleEnemyAIState.Chase && !ai.IsMoving,
+            "SimpleEnemyAI chase state does not claim movement at zero speed");
+
+        player.Transform.WorldPosition = enemy.Transform.WorldPosition - Vector3.UnitZ;
+        Tick(scene, .01);
+        Assert(ai.State == SimpleEnemyAIState.Attack && ai.IsAttacking && !ai.IsMoving &&
+            ai.AttackFiredThisFrame && Near(playerHealth.CurrentHealth, 90f),
+            "SimpleEnemyAI attacks and signals only when damage applies");
+        CheckConditions(false, false, true, true);
+
+        var selectedContext = new EventExecutionContext { Scene = scene, Self = player, Globals = new VariableStore() };
+        var selected = new VisualInstruction { Id = "enemyAI.attackFired" };
+        selected.Arguments["target"] = EventValue.String("id:" + enemy.Id);
+        Assert(registry.TryGetCondition(selected.Id, out var selectedCondition) &&
+            selectedCondition!.Evaluate(selected, selectedContext),
+            "Enemy AI condition resolves the selected object, not only Self");
+        Assert(!selectedCondition!.Evaluate(new VisualInstruction { Id = selected.Id }, selectedContext),
+            "Enemy AI condition is false on an object without SimpleEnemyAI3D");
+
         Tick(scene, .25);
-        Assert(Near(playerHealth.CurrentHealth, 90f), "SimpleEnemyAI respects attack cooldown");
+        Assert(ai.State == SimpleEnemyAIState.Attack && !ai.AttackFiredThisFrame &&
+            Near(playerHealth.CurrentHealth, 90f), "SimpleEnemyAI cooldown suppresses repeated attack signal");
+        CheckConditions(false, false, true, false);
         Tick(scene, .26);
-        Assert(Near(playerHealth.CurrentHealth, 80f), "SimpleEnemyAI attacks after cooldown");
+        Assert(ai.AttackFiredThisFrame && Near(playerHealth.CurrentHealth, 80f),
+            "SimpleEnemyAI attacks again after cooldown");
+
+        playerHealth.Invulnerable = true;
+        ai.ResetCombatState();
+        Tick(scene, .01);
+        Assert(!ai.AttackFiredThisFrame && Near(playerHealth.CurrentHealth, 80f),
+            "Invulnerable target does not emit an attack-fired signal");
+        playerHealth.Invulnerable = false;
+        ai.Damage = 0f;
+        ai.ResetCombatState();
+        Tick(scene, .01);
+        Assert(!ai.AttackFiredThisFrame && Near(playerHealth.CurrentHealth, 80f),
+            "Zero damage does not emit an attack-fired signal");
+        ai.Damage = 10f;
+
+        GameObject ghost = scene.CreateGameObject("No Health");
+        ghost.Transform.WorldPosition = enemy.Transform.WorldPosition - Vector3.UnitZ;
+        ai.TargetId = ghost.Id;
+        ai.ResetCombatState();
+        Tick(scene, .01);
+        Assert(ai.State == SimpleEnemyAIState.Attack && !ai.AttackFiredThisFrame,
+            "Target without HealthComponent cannot fire attack signal");
+        ai.TargetId = player.Id;
         enemy.GetComponent<HealthComponent>()!.Kill();
         Tick(scene, 1.0);
-        Assert(Near(playerHealth.CurrentHealth, 80f), "Dead SimpleEnemyAI stops attacking");
+        Assert(ai.State == SimpleEnemyAIState.Idle && !ai.IsAttacking &&
+            !ai.AttackFiredThisFrame && Near(playerHealth.CurrentHealth, 80f),
+            "Dead SimpleEnemyAI stops attacking and returns to idle");
+        scene.UnloadInternal();
     }
-
     private static void TestSerialization(string root, AssetDatabase database, AssetManager assets)
     {
         var serializer = new SceneSerializer(new ComponentSerializer(root, database, assets));

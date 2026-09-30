@@ -14,6 +14,7 @@ public enum AnimationSignalKind
 
 public sealed class EventExecutionContext
 {
+    internal EventModuleRuntime? TimerRuntime { get; init; }
     public required VariableStore Globals { get; init; }
 
     // Shared by ordered rules in one Event Module update; never retained across frames.

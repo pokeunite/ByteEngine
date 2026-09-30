@@ -19,6 +19,19 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Contains("--event-timers"))
+    {
+        EventModuleTimerTests.Run();
+        return;
+    }
+
+    if (args.Contains("--simple-enemy-ai"))
+    {
+        Phase1GameplayTests.RunEnemyAi();
+        Console.WriteLine("SimpleEnemyAI3D state and Event Sheet conditions passed.");
+        return;
+    }
+
     if (args.Length >= 6 && args[0] == "--socket-pose")
     {
         using var diagnostic = new SocketPoseDiagnostic(args[1], args[2], args[3], args[4], args[5]);
@@ -213,6 +226,8 @@ try
     }
 
     string blueprintPath = Path.Combine(root, "Assets", "Player.byteblueprint"); var blueprint = new BlueprintDefinition { Name = "Player", Type = BlueprintType.Character, Root = new GameObjectData { Id = Guid.NewGuid(), Name = "Player" }, Variables = { new VariableData { Name = "Health", Value = VariableValue.FromNumber(100) } }, EventModules = { Guid.NewGuid() } }; var blueprintSerializer = new BlueprintSerializer(); blueprintSerializer.Save(blueprint, blueprintPath); BlueprintDefinition loadedBlueprint = blueprintSerializer.Load(blueprintPath); Assert(loadedBlueprint.Type == BlueprintType.Character && loadedBlueprint.Variables[0].Value.Number == 100, "Blueprint variables serialization"); Assert(loadedBlueprint.EventModules.Count == 1, "Blueprint logic module relationship");
+    EventModuleTimerTests.Run();
+    EventSheetAuthoringTests.Run();
     V07RegressionTests.Run(root, database, assets);
     Phase1GameplayTests.Run(root, database, assets);
     Phase2GameplayTests.Run(root, database, assets);

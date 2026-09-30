@@ -477,7 +477,8 @@ internal sealed class InspectorPanel
             ImGui.PushID(title + pair.Key);
             string name = pair.Key;
             ImGui.SetNextItemWidth(105f);
-            if (ImGui.InputText("##name", ref name, 64, ImGuiInputTextFlags.EnterReturnsTrue) &&
+            ImGui.InputText("##name", ref name, 64);
+            if (ImGui.IsItemDeactivatedAfterEdit() &&
                 !string.IsNullOrWhiteSpace(name) &&
                 !store.Contains(name))
             {
@@ -515,7 +516,8 @@ internal sealed class InspectorPanel
             ImGui.PushID("global" + data.Name);
             string name = data.Name;
             ImGui.SetNextItemWidth(105f);
-            if (ImGui.InputText("##name", ref name, 64, ImGuiInputTextFlags.EnterReturnsTrue) &&
+            ImGui.InputText("##name", ref name, 64);
+            if (ImGui.IsItemDeactivatedAfterEdit() &&
                 !string.IsNullOrWhiteSpace(name) &&
                 variables.All(value =>
                     ReferenceEquals(value, data) ||

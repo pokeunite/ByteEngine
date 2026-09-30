@@ -5,10 +5,22 @@ using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
 namespace ByteEngine.Core.Gameplay;
 
+public enum SimpleEnemyAIState
+{
+    Idle,
+    Chase,
+    Attack
+}
+
 public sealed class SimpleEnemyAI3D : Component
 {
     private float _moveSpeed = 3f, _detectionRange = 20f, _attackRange = 1.5f;
     private float _damage = 10f, _attackCooldown = 1f, _stopDistance = 1f, _cooldownRemaining;
+
+    public SimpleEnemyAIState State { get; private set; } = SimpleEnemyAIState.Idle;
+    public bool IsMoving { get; private set; }
+    public bool IsAttacking => State == SimpleEnemyAIState.Attack;
+    public bool AttackFiredThisFrame { get; private set; }
 
     public Guid TargetId { get; set; }
     public Guid TargetTagId { get; set; }
@@ -24,6 +36,9 @@ public sealed class SimpleEnemyAI3D : Component
 
     protected override void OnUpdate()
     {
+        State = SimpleEnemyAIState.Idle;
+        IsMoving = false;
+        AttackFiredThisFrame = false;
         _cooldownRemaining = Math.Max(0f, _cooldownRemaining - (float)Time.DeltaTime);
         GameObject? enemy = AttachedGameObject;
         RuntimeScene? scene = enemy?.Scene;
@@ -44,15 +59,26 @@ public sealed class SimpleEnemyAI3D : Component
             if (distance > StopDistance)
             {
                 float movement = Math.Min(MoveSpeed * (float)Time.DeltaTime, distance - StopDistance);
+                IsMoving = movement > 0f;
                 enemy.Transform.WorldPosition += direction * Math.Max(0f, movement);
                 distance -= Math.Max(0f, movement);
             }
         }
-        if (distance <= AttackRange && targetHealth != null && _cooldownRemaining <= 0f)
+        State = distance <= AttackRange ? SimpleEnemyAIState.Attack : SimpleEnemyAIState.Chase;
+        if (State == SimpleEnemyAIState.Attack && targetHealth != null && _cooldownRemaining <= 0f)
         {
+            float healthBefore = targetHealth.CurrentHealth;
             targetHealth.Damage(Damage);
+            AttackFiredThisFrame = targetHealth.CurrentHealth < healthBefore;
             _cooldownRemaining = AttackCooldown;
         }
+    }
+
+    protected override void OnStop()
+    {
+        State = SimpleEnemyAIState.Idle;
+        IsMoving = false;
+        AttackFiredThisFrame = false;
     }
 
     private GameObject? ResolveTarget(RuntimeScene scene, GameObject enemy)

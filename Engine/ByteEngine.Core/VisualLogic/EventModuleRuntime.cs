@@ -14,6 +14,16 @@ public sealed class EventModuleRuntime
     private readonly HashSet<Guid> _triggerOnceLatched =
         new();
 
+    private readonly Dictionary<string, TimerState> _timers =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private sealed class TimerState
+    {
+        public double Remaining;
+        public bool Running;
+        public bool FinishedThisUpdate;
+    }
+
     private readonly HashSet<string> _reportedWarnings =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -52,6 +62,7 @@ public sealed class EventModuleRuntime
         _animationSubscriptions.Clear();
         _observedAnimationControllers.Clear();
         _triggerOnceLatched.Clear();
+        _timers.Clear();
         _reportedWarnings.Clear();
         _activeModule = null;
         _activeGlobals = null;
@@ -84,9 +95,11 @@ public sealed class EventModuleRuntime
         _activeSelf = self;
         _activeWarningSink = warningSink;
         _observedAnimationControllers.Clear();
+        AdvanceTimers(Time.DeltaTime);
         var context =
             new EventExecutionContext
             {
+                TimerRuntime = this,
                 Globals =
                     globals,
 
@@ -114,6 +127,48 @@ public sealed class EventModuleRuntime
 
         ReconcileAnimationSubscriptions();    }
 
+    internal bool StartTimer(string name, double duration)
+    {
+        name = name?.Trim() ?? string.Empty;
+        if (name.Length == 0 || !double.IsFinite(duration)) return false;
+        // A re-arm during a finish rule must not hide the pulse from later rules this update.
+        bool finished = _timers.TryGetValue(name, out TimerState? previous) && previous.FinishedThisUpdate;
+        _timers[name] = new TimerState
+        {
+            Remaining = Math.Max(0, duration),
+            Running = true,
+            FinishedThisUpdate = finished
+        };
+        return true;
+    }
+
+    internal void StopTimer(string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name)) _timers.Remove(name.Trim());
+    }
+
+    internal bool IsTimerRunning(string name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        _timers.TryGetValue(name.Trim(), out TimerState? timer) && timer.Running;
+
+    internal bool IsTimerFinished(string name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        _timers.TryGetValue(name.Trim(), out TimerState? timer) && timer.FinishedThisUpdate;
+
+    private void AdvanceTimers(double deltaTime)
+    {
+        double elapsed = double.IsFinite(deltaTime) ? Math.Max(0, deltaTime) : 0;
+        foreach (TimerState timer in _timers.Values)
+        {
+            timer.FinishedThisUpdate = false;
+            if (!timer.Running) continue;
+            timer.Remaining = Math.Max(0, timer.Remaining - elapsed);
+            if (timer.Remaining > 1e-9) continue;
+            timer.Remaining = 0;
+            timer.Running = false;
+            timer.FinishedThisUpdate = true;
+        }
+    }
     private void ReconcileAnimationSubscriptions()
     {
         foreach (AnimationController controller in _animationSubscriptions.Keys
@@ -161,6 +216,7 @@ public sealed class EventModuleRuntime
 
         var context = new EventExecutionContext
         {
+            TimerRuntime = this,
             Globals = _activeGlobals,
             Scene = _activeScene,
             Self = _activeSelf,

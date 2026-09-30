@@ -27,6 +27,13 @@ public sealed class EventModuleDefinition
     public List<EventRuleDefinition> Rules { get; set; } =
         new();
 
+    /// <summary>
+    /// Editor-only draft nodes. Runtime intentionally reads Rules only.
+    /// These may be placed on the canvas before being assigned to an event.
+    /// </summary>
+    public List<VisualInstruction> EditorLooseConditions { get; set; } = new();
+    public List<VisualInstruction> EditorLooseActions { get; set; } = new();
+
     /*
      * ByteGraph editor metadata.
      *

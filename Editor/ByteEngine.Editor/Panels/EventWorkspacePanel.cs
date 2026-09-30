@@ -50,6 +50,8 @@ internal sealed class EventWorkspacePanel
     private readonly HashSet<Guid> _selectedGraphNodes =
         new();
 
+    private readonly EventRuleDefinition _looseNodeOwner = new() { Id = Guid.Empty };
+
     private readonly Dictionary<Guid, float> _measuredInstructionNodeLogicalHeights =
         new();
 
@@ -60,6 +62,7 @@ internal sealed class EventWorkspacePanel
     {
         None,
         Condition,
+        ConditionInput,
         Action,
         ActionTrue,
         ActionFalse
@@ -114,6 +117,9 @@ internal sealed class EventWorkspacePanel
 
     private bool _requestFrameGraph =
         true;
+
+    private Guid _requestFrameNodeId = Guid.Empty;
+    private string _graphOutlineSearch = string.Empty;
 
     private readonly EventNamePopupState _eventNamePopup = new();
     private readonly ByteGraphViewSettingsState _viewSettings = new();
@@ -416,8 +422,7 @@ internal sealed class EventWorkspacePanel
         DrawDocumentToolbar(log);
         DrawModuleSettings();
         DrawTraceLegend();
-        DrawGraphCanvas(
-            state);
+        DrawGraphWorkspace(state);
 
         DrawEventNamePopup();
 
@@ -458,6 +463,224 @@ internal sealed class EventWorkspacePanel
     // ========================================================
     // TOOLBAR
     // ========================================================
+
+    private void DrawGraphWorkspace(EditorState? state)
+    {
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        float detailsWidth = MathF.Min(380.0f, MathF.Max(300.0f, availableWidth * 0.30f));
+        bool showDetails = availableWidth >= 720.0f;
+        bool showOutline = availableWidth >= 1050.0f;
+        float outlineWidth = showOutline ? 210.0f : 0.0f;
+
+        if (showOutline)
+        {
+            DrawGraphOutline(outlineWidth);
+            ImGui.SameLine();
+        }
+
+        if (showDetails)
+        {
+            ImGui.BeginChild("##EventGraphArea",
+                new Vector2(MathF.Max(320.0f, availableWidth - detailsWidth - outlineWidth -
+                    (showOutline ? 16.0f : 8.0f)), 0.0f),
+                ImGuiChildFlags.None,
+                ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        }
+        else
+        {
+            ImGui.BeginChild("##EventGraphArea",
+                new Vector2(0.0f, MathF.Max(220.0f, ImGui.GetContentRegionAvail().Y * 0.60f)),
+                ImGuiChildFlags.None,
+                ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        }
+
+        DrawGraphCanvas(state);
+        ImGui.EndChild();
+
+        if (showDetails)
+        {
+            ImGui.SameLine();
+            DrawSelectionDetails(state, detailsWidth);
+        }
+        else
+        {
+            DrawSelectionDetails(state, availableWidth);
+        }
+    }
+
+    private void DrawGraphOutline(float width)
+    {
+        ImGui.BeginChild("##EventGraphOutline", new Vector2(width, 0.0f),
+            ImGuiChildFlags.Borders);
+        ImGui.SeparatorText("EVENTS");
+        ImGui.SetNextItemWidth(-1.0f);
+        ImGui.InputTextWithHint("##OutlineSearch", "Find node...", ref _graphOutlineSearch, 96);
+
+        if (_module != null)
+        {
+            foreach (EventRuleDefinition rule in _module.Rules)
+            {
+                string name = GetRuleDisplayName(rule);
+                bool eventMatches = MatchesOutlineSearch(name);
+                bool childMatches = rule.Conditions.Concat(rule.Actions)
+                    .Any(item => MatchesOutlineSearch(GetOutlineInstructionName(item)));
+                if (!eventMatches && !childMatches)
+                    continue;
+
+                DrawOutlineEntry(rule.Id, name);
+                ImGui.Indent(12.0f);
+                foreach (VisualInstruction condition in rule.Conditions)
+                    if (MatchesOutlineSearch(GetOutlineInstructionName(condition)))
+                        DrawOutlineEntry(condition.InstanceId,
+                            "? " + GetOutlineInstructionName(condition));
+                foreach (VisualInstruction action in rule.Actions)
+                    if (MatchesOutlineSearch(GetOutlineInstructionName(action)))
+                        DrawOutlineEntry(action.InstanceId,
+                            "> " + GetOutlineInstructionName(action));
+                ImGui.Unindent(12.0f);
+            }
+
+            if (_module.EditorLooseConditions.Count + _module.EditorLooseActions.Count > 0)
+            {
+                ImGui.SeparatorText("UNCONNECTED");
+                foreach (VisualInstruction item in _module.EditorLooseConditions)
+                    if (MatchesOutlineSearch(GetOutlineInstructionName(item)))
+                        DrawOutlineEntry(item.InstanceId,
+                            "? " + GetOutlineInstructionName(item));
+                foreach (VisualInstruction item in _module.EditorLooseActions)
+                    if (MatchesOutlineSearch(GetOutlineInstructionName(item)))
+                        DrawOutlineEntry(item.InstanceId,
+                            "> " + GetOutlineInstructionName(item));
+            }
+        }
+        ImGui.EndChild();
+    }
+
+    private string GetOutlineInstructionName(VisualInstruction instruction)
+    {
+        bool condition = _registry.TryGetCondition(instruction.Id, out _);
+        GetInstructionPresentation(instruction, condition, out string name, out _);
+        return name;
+    }
+
+    private bool MatchesOutlineSearch(string text) =>
+        string.IsNullOrWhiteSpace(_graphOutlineSearch) ||
+        text.Contains(_graphOutlineSearch.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private void DrawOutlineEntry(Guid nodeId, string label)
+    {
+        ImGui.PushID(nodeId.ToString());
+        if (ImGui.Selectable(label, _selectedGraphNodes.Contains(nodeId)))
+        {
+            EventRuleDefinition? owner = _module?.Rules.FirstOrDefault(rule =>
+                rule.EditorCollapsed &&
+                (rule.Conditions.Any(item => item.InstanceId == nodeId) ||
+                 rule.Actions.Any(item => item.InstanceId == nodeId)));
+            if (owner != null)
+            {
+                RecordHistory("Expand Event");
+                owner.EditorCollapsed = false;
+                _dirty = true;
+            }
+            _selectedGraphNodes.Clear();
+            _selectedGraphNodes.Add(nodeId);
+            _requestFrameNodeId = nodeId;
+        }
+        ImGui.PopID();
+    }
+
+    private void DrawSelectionDetails(EditorState? state, float width)
+    {
+        ImGui.BeginChild("##EventSelectionDetails",
+            new Vector2(width, 0.0f),
+            ImGuiChildFlags.Borders);
+        ImGui.SeparatorText("DETAILS");
+
+        if (_module == null || _selectedGraphNodes.Count != 1)
+        {
+            EditorUi.EmptyState("Select a node", "Click a condition or action to edit its values.");
+            ImGui.EndChild();
+            return;
+        }
+
+        Guid selectedId = _selectedGraphNodes.First();
+        foreach (EventRuleDefinition rule in _module.Rules)
+        {
+            if (rule.Id == selectedId)
+            {
+                ImGui.TextWrapped(GetRuleDisplayName(rule));
+                ImGui.TextDisabled($"{rule.Conditions.Count} conditions | {rule.Actions.Count} actions");
+                ImGui.EndChild();
+                return;
+            }
+
+            VisualInstruction? instruction = rule.Conditions
+                .Concat(rule.Actions)
+                .FirstOrDefault(item => item.InstanceId == selectedId);
+            if (instruction == null)
+                continue;
+
+            bool condition = rule.Conditions.Contains(instruction);
+            GetInstructionPresentation(instruction, condition, out string name, out string category);
+            ImGui.TextWrapped(name);
+            ImGui.TextDisabled($"{(condition ? "Condition" : "Action")} / {category}");
+            ImGui.Spacing();
+            ImGui.TextWrapped(GetInstructionDescription(instruction, condition));
+            ImGui.Separator();
+            ImGui.PushID(instruction.InstanceId.ToString());
+            DrawInstructionArguments(instruction, state);
+            ImGui.PopID();
+            ImGui.EndChild();
+            return;
+        }
+
+        VisualInstruction? looseCondition = _module.EditorLooseConditions
+            .FirstOrDefault(item => item.InstanceId == selectedId);
+        VisualInstruction? looseAction = _module.EditorLooseActions
+            .FirstOrDefault(item => item.InstanceId == selectedId);
+        VisualInstruction? loose = looseCondition ?? looseAction;
+        if (loose != null)
+        {
+            bool condition = looseCondition != null;
+            GetInstructionPresentation(loose, condition, out string name, out string category);
+            ImGui.TextWrapped(name);
+            ImGui.TextDisabled($"Unconnected {(condition ? "Condition" : "Action")} / {category}");
+            ImGui.TextWrapped("This draft is saved but will not execute until added to an event.");
+            if (_module.Rules.Count > 0 && ImGui.BeginCombo(
+                    "Add to Event", "Choose event..."))
+            {
+                foreach ((EventRuleDefinition rule, string label) in GetRuleMenuEntries())
+                {
+                    if (!ImGui.Selectable(label))
+                        continue;
+
+                    RecordHistory("Connect Draft Node To Event");
+                    if (condition)
+                    {
+                        AttachLooseConditionToRule(rule, loose);
+                        ConnectCondition(rule, loose.InstanceId);
+                    }
+                    else
+                    {
+                        AttachLooseActionToRule(rule, loose);
+                        AppendDraftActionChain(rule, loose);
+                    }
+                    _dirty = true;
+                    break;
+                }
+                ImGui.EndCombo();
+            }
+            ImGui.Separator();
+            ImGui.PushID(loose.InstanceId.ToString());
+            DrawInstructionArguments(loose, state);
+            ImGui.PopID();
+            ImGui.EndChild();
+            return;
+        }
+
+        ImGui.TextDisabled("The selected node is no longer available.");
+        ImGui.EndChild();
+    }
 
     private void DrawDocumentToolbar(
         EditorLog log)
@@ -891,9 +1114,7 @@ internal sealed class EventWorkspacePanel
             GetNodeLayoutScale();
 
         Vector2 logicalSize =
-            GetInstructionNodeBaseSize(
-                instruction) *
-            layoutScale;
+            new Vector2(320.0f, 145.0f) * layoutScale;
 
         if (_measuredInstructionNodeLogicalHeights.TryGetValue(
                 instruction.InstanceId,
@@ -1159,6 +1380,14 @@ internal sealed class EventWorkspacePanel
             _requestFrameGraph =
                 false;
         }
+        if (_requestFrameNodeId != Guid.Empty)
+        {
+            if (TryGetNodeBounds(_requestFrameNodeId, out Vector2 minimum,
+                    out Vector2 maximum))
+                _graphCanvas.FrameBounds(minimum - new Vector2(80.0f),
+                    maximum + new Vector2(80.0f));
+            _requestFrameNodeId = Guid.Empty;
+        }
 
         UpdateGraphPointerInteraction();
         HandleGraphShortcuts();
@@ -1167,7 +1396,9 @@ internal sealed class EventWorkspacePanel
         DrawGraphWires();
         DrawWireDragPreview();
 
-        if (_module.Rules.Count == 0)
+        if (_module.Rules.Count == 0 &&
+            _module.EditorLooseConditions.Count == 0 &&
+            _module.EditorLooseActions.Count == 0)
         {
             ImGui.SetCursorScreenPos(_graphCanvas.ToScreen(new Vector2(80.0f, 80.0f)));
             ImGui.BeginChild("##EmptyGraphHint", new Vector2(360.0f, 112.0f),
@@ -1236,6 +1467,8 @@ internal sealed class EventWorkspacePanel
                 }
             }
         }
+
+        DrawLooseGraphNodes(state);
 
         DrawGraphGroupHeaders();
 
@@ -1679,7 +1912,8 @@ internal sealed class EventWorkspacePanel
         VisualInstruction instruction,
         bool condition,
         int index,
-        EditorState? state)
+        EditorState? state,
+        bool loose = false)
     {
         GetInstructionPresentation(
             instruction,
@@ -1794,8 +2028,8 @@ internal sealed class EventWorkspacePanel
                         0.25f,
                         1.0f),
                 condition
-                    ? $"CONDITION {index + 1:00}"
-                    : "ACTION");
+                    ? loose ? "UNCONNECTED CONDITION" : $"CONDITION {index + 1:00}"
+                    : loose ? "UNCONNECTED ACTION" : "ACTION");
 
             if (liveState !=
                 VisualLogicTraceState.None)
@@ -1817,11 +2051,6 @@ internal sealed class EventWorkspacePanel
                 remove =
                     true;
             }
-
-            string description =
-                GetInstructionDescription(
-                    instruction,
-                    condition);
 
             ImGui.PushStyleColor(
                 ImGuiCol.Button,
@@ -1864,28 +2093,10 @@ internal sealed class EventWorkspacePanel
                         : $"Action category: {category}");
             }
 
-            ImGui.PushTextWrapPos(
-                ImGui.GetCursorPosX() +
-                Math.Max(
-                    ImGui.GetContentRegionAvail().X,
-                    80.0f));
-
-            ImGui.TextDisabled(
-                description);
-
-            ImGui.PopTextWrapPos();
-
+            string summary = GetInstructionCompactSummary(instruction);
+            ImGui.TextDisabled(summary);
             if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip(
-                    description);
-            }
-
-            ImGui.Separator();
-
-            DrawInstructionArguments(
-                instruction,
-                state);
+                ImGui.SetTooltip("Select this node to edit its values in Details.");
             float measuredLogicalHeight =
                 (ImGui.GetCursorPosY() +
                  ImGui.GetStyle().WindowPadding.Y) /
@@ -1936,6 +2147,36 @@ internal sealed class EventWorkspacePanel
             IsBranchAction(
                 instruction);
 
+        if (loose)
+        {
+            if (!condition || logicGate)
+            {
+                _graphCanvas.DrawPin(input, pinColor, 6.0f);
+                if (logicGate)
+                    TryStartWireDrag(rule, WireDragKind.ConditionInput,
+                        instruction.InstanceId, input);
+            }
+            if (branchAction)
+            {
+                Vector2 truePin = GetBranchTrueOutput(instruction);
+                Vector2 falsePin = GetBranchFalseOutput(instruction);
+                _graphCanvas.DrawPin(truePin, TrueExecutionWireColor, 6.5f);
+                _graphCanvas.DrawPin(falsePin, FalseExecutionWireColor, 6.5f);
+                TryStartWireDrag(rule, WireDragKind.ActionTrue,
+                    instruction.InstanceId, truePin);
+                TryStartWireDrag(rule, WireDragKind.ActionFalse,
+                    instruction.InstanceId, falsePin);
+            }
+            else
+            {
+                _graphCanvas.DrawPin(output, pinColor, 6.0f);
+                TryStartWireDrag(rule,
+                    condition ? WireDragKind.Condition : WireDragKind.Action,
+                    instruction.InstanceId, output);
+            }
+            return remove;
+        }
+
         if (!condition ||
             logicGate)
         {
@@ -1943,6 +2184,9 @@ internal sealed class EventWorkspacePanel
                 input,
                 pinColor,
                 6.0f);
+            if (logicGate)
+                TryStartWireDrag(rule, WireDragKind.ConditionInput,
+                    instruction.InstanceId, input);
         }
 
         if (branchAction)
@@ -2102,6 +2346,37 @@ internal sealed class EventWorkspacePanel
             output);
 
         return remove;
+    }
+
+    private void DrawLooseGraphNodes(EditorState? state)
+    {
+        if (_module == null)
+            return;
+
+        DrawLooseGraphNodeList(_module.EditorLooseConditions, true, state);
+        DrawLooseGraphNodeList(_module.EditorLooseActions, false, state);
+    }
+
+    private void DrawLooseGraphNodeList(
+        List<VisualInstruction> nodes, bool condition, EditorState? state)
+    {
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            VisualInstruction instruction = nodes[index];
+            ImGui.PushID(instruction.InstanceId.ToString());
+            bool remove = DrawInstructionGraphNode(
+                _looseNodeOwner, instruction, condition, index, state, true);
+            ImGui.PopID();
+            if (!remove)
+                continue;
+
+            RecordHistory(condition ? "Delete Draft Condition" : "Delete Draft Action");
+            RemoveNodeFromGroups(instruction.InstanceId);
+            DisconnectLooseReferences(instruction.InstanceId);
+            _selectedGraphNodes.Remove(instruction.InstanceId);
+            nodes.RemoveAt(index--);
+            _dirty = true;
+        }
     }
 
     private void DrawGraphWires()
@@ -2295,6 +2570,52 @@ internal sealed class EventWorkspacePanel
                     3.5f);
             }
         }
+
+        foreach (VisualInstruction gate in _module.EditorLooseConditions.Where(IsLogicGate))
+            foreach (Guid inputId in gate.ConditionInputIds)
+            {
+                VisualInstruction? source = _module.EditorLooseConditions
+                    .FirstOrDefault(item => item.InstanceId == inputId);
+                if (source != null)
+                    _graphCanvas.DrawWire(GetInstructionOutput(source),
+                        GetInstructionInput(gate), ConditionWireColor, 3.0f);
+            }
+
+        foreach (VisualInstruction action in _module.EditorLooseActions)
+        {
+            void DrawDraftActionWire(Guid? targetId, Vector2 output, Vector4 color)
+            {
+                VisualInstruction? target = _module.EditorLooseActions
+                    .FirstOrDefault(item => item.InstanceId == targetId);
+                if (target != null)
+                    _graphCanvas.DrawWire(output, GetInstructionInput(target), color, 3.5f);
+            }
+
+            if (IsBranchAction(action))
+            {
+                DrawDraftActionWire(action.TrueActionId,
+                    GetBranchTrueOutput(action), TrueExecutionWireColor);
+                DrawDraftActionWire(action.FalseActionId,
+                    GetBranchFalseOutput(action), FalseExecutionWireColor);
+            }
+            else
+                DrawDraftActionWire(action.NextActionId,
+                    GetInstructionOutput(action), ExecutionWireColor);
+        }
+    }
+
+    private void DisconnectLooseReferences(Guid deletedId)
+    {
+        if (_module == null)
+            return;
+        foreach (VisualInstruction gate in _module.EditorLooseConditions)
+            gate.ConditionInputIds.RemoveAll(id => id == deletedId);
+        foreach (VisualInstruction action in _module.EditorLooseActions)
+        {
+            if (action.NextActionId == deletedId) action.NextActionId = null;
+            if (action.TrueActionId == deletedId) action.TrueActionId = null;
+            if (action.FalseActionId == deletedId) action.FalseActionId = null;
+        }
     }
 
     private void DrawWireDragPreview()
@@ -2311,7 +2632,7 @@ internal sealed class EventWorkspacePanel
         Vector4 color =
             _wireDragKind switch
             {
-                WireDragKind.Condition =>
+                WireDragKind.Condition or WireDragKind.ConditionInput =>
                     ConditionWireColor,
 
                 WireDragKind.ActionTrue =>
@@ -2324,10 +2645,9 @@ internal sealed class EventWorkspacePanel
                     ExecutionWireColor
             };
 
-        if (_wireDragKind ==
-                WireDragKind.Condition &&
-            _wireDragSourceInstructionId ==
-                Guid.Empty)
+        if (_wireDragKind == WireDragKind.ConditionInput ||
+            (_wireDragKind == WireDragKind.Condition &&
+             _wireDragSourceInstructionId == Guid.Empty))
         {
             _graphCanvas.DrawWire(
                 mouse,
@@ -2406,8 +2726,8 @@ internal sealed class EventWorkspacePanel
          * Drop directly onto a compatible pin to connect immediately.
          * Releasing in empty space keeps the existing create-from-wire flow.
          */
-        if (_wireDragKind ==
-                WireDragKind.Condition &&
+        if ((_wireDragKind == WireDragKind.Condition ||
+             _wireDragKind == WireDragKind.ConditionInput) &&
             TryConnectConditionWireAtMouse())
         {
             CancelWireDrag();
@@ -2467,6 +2787,23 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (_pendingWireCreateKind == WireDragKind.ConditionInput)
+        {
+            EventRuleDefinition? owner = FindRule(_pendingWireRuleId);
+            VisualInstruction? gate = owner == null
+                ? _module?.EditorLooseConditions.FirstOrDefault(item =>
+                    item.InstanceId == _pendingWireSourceInstructionId)
+                : FindCondition(owner, _pendingWireSourceInstructionId);
+            if (gate != null && IsLogicGate(gate))
+            {
+                ImGui.TextDisabled("CREATE CONDITION FOR LOGIC INPUT");
+                ImGui.Separator();
+                DrawConditionCreateForGate(owner, gate, _pendingWireCreatePosition);
+            }
+            ImGui.EndPopup();
+            return;
+        }
+
         EventRuleDefinition? rule =
             FindRule(
                 _pendingWireRuleId);
@@ -2474,8 +2811,25 @@ internal sealed class EventWorkspacePanel
         if (rule ==
             null)
         {
-            ImGui.TextDisabled(
-                "The source event no longer exists.");
+            if (_module != null &&
+                _pendingWireCreateKind == WireDragKind.Condition &&
+                _module.EditorLooseConditions.Any(item =>
+                    item.InstanceId == _pendingWireSourceInstructionId))
+            {
+                ImGui.TextDisabled("CREATE LOGIC GATE FROM DRAFT CONDITION");
+                DrawLooseDefinitionCreateMenu(true, _pendingWireCreatePosition,
+                    _pendingWireSourceInstructionId, _pendingWireCreateKind);
+            }
+            else if (_module != null &&
+                     _module.EditorLooseActions.Any(item =>
+                         item.InstanceId == _pendingWireSourceInstructionId))
+            {
+                ImGui.TextDisabled("CREATE ACTION FROM DRAFT WIRE");
+                DrawLooseDefinitionCreateMenu(false, _pendingWireCreatePosition,
+                    _pendingWireSourceInstructionId, _pendingWireCreateKind);
+            }
+            else
+                ImGui.TextDisabled("The source node no longer exists.");
 
             ImGui.EndPopup();
             return;
@@ -2535,6 +2889,41 @@ internal sealed class EventWorkspacePanel
         ImGui.EndPopup();
     }
 
+    private void DrawConditionCreateForGate(
+        EventRuleDefinition? owner, VisualInstruction gate, Vector2 position)
+    {
+        foreach (IGrouping<string, VisualConditionDefinition> group in _registry.Conditions
+                     .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
+                     .OrderBy(definition => definition.Category)
+                     .ThenBy(definition => definition.DisplayName)
+                     .GroupBy(definition => definition.Category))
+        {
+            if (!ImGui.BeginMenu(group.Key))
+                continue;
+            foreach (VisualConditionDefinition definition in group)
+            {
+                if (!ImGui.MenuItem(definition.DisplayName))
+                    continue;
+                if (owner == null)
+                {
+                    CreateLooseInstruction(definition.Id, true, position);
+                    Guid sourceId = _selectedGraphNodes.First();
+                    if (!gate.ConditionInputIds.Contains(sourceId))
+                        gate.ConditionInputIds.Add(sourceId);
+                }
+                else
+                {
+                    RecordHistory("Add Logic Input");
+                    VisualInstruction created = AddInstructionAt(owner,
+                        definition.Id, true, position, Guid.Empty);
+                    ConnectConditionToGate(owner, gate, created.InstanceId);
+                }
+                _dirty = true;
+            }
+            ImGui.EndMenu();
+        }
+    }
+
     private void HandleGraphBackgroundContext()
     {
         /*
@@ -2560,6 +2949,18 @@ internal sealed class EventWorkspacePanel
         {
             RequestAddEvent(
                 _graphContextPosition);
+        }
+
+        if (ImGui.BeginMenu("Add Condition (Unconnected)"))
+        {
+            DrawLooseDefinitionCreateMenu(true, _graphContextPosition);
+            ImGui.EndMenu();
+        }
+
+        if (ImGui.BeginMenu("Add Action (Unconnected)"))
+        {
+            DrawLooseDefinitionCreateMenu(false, _graphContextPosition);
+            ImGui.EndMenu();
         }
 
         if (_module.Rules.Count >
@@ -2671,6 +3072,85 @@ internal sealed class EventWorkspacePanel
         }
 
         ImGui.EndPopup();
+    }
+
+    private void DrawLooseDefinitionCreateMenu(bool condition, Vector2 position,
+        Guid sourceId = default, WireDragKind sourceKind = WireDragKind.None)
+    {
+        if (_module == null)
+            return;
+
+        if (condition)
+        {
+            foreach (IGrouping<string, VisualConditionDefinition> group in _registry.Conditions
+                         .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
+                         .Where(definition => sourceId == Guid.Empty ||
+                             definition.Id is "logic.and" or "logic.or")
+                         .OrderBy(definition => definition.Category)
+                         .ThenBy(definition => definition.DisplayName)
+                         .GroupBy(definition => definition.Category))
+            {
+                if (!ImGui.BeginMenu(group.Key))
+                    continue;
+                foreach (VisualConditionDefinition definition in group)
+                    if (ImGui.MenuItem(definition.DisplayName))
+                    {
+                        VisualInstruction created =
+                            CreateLooseInstruction(definition.Id, true, position);
+                        if (sourceId != Guid.Empty)
+                            created.ConditionInputIds.Add(sourceId);
+                    }
+                ImGui.EndMenu();
+            }
+        }
+        else
+        {
+            foreach (IGrouping<string, VisualActionDefinition> group in _registry.Actions
+                         .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
+                         .OrderBy(definition => definition.Category)
+                         .ThenBy(definition => definition.DisplayName)
+                         .GroupBy(definition => definition.Category))
+            {
+                if (!ImGui.BeginMenu(group.Key))
+                    continue;
+                foreach (VisualActionDefinition definition in group)
+                    if (ImGui.MenuItem(definition.DisplayName))
+                    {
+                        VisualInstruction created =
+                            CreateLooseInstruction(definition.Id, false, position);
+                        VisualInstruction? source = _module.EditorLooseActions
+                            .FirstOrDefault(item => item.InstanceId == sourceId);
+                        if (source != null)
+                        {
+                            if (sourceKind == WireDragKind.ActionTrue)
+                                source.TrueActionId = created.InstanceId;
+                            else if (sourceKind == WireDragKind.ActionFalse)
+                                source.FalseActionId = created.InstanceId;
+                            else
+                                source.NextActionId = created.InstanceId;
+                        }
+                    }
+                ImGui.EndMenu();
+            }
+        }
+    }
+
+    private VisualInstruction CreateLooseInstruction(string definitionId, bool condition, Vector2 position)
+    {
+        if (_module == null)
+            throw new InvalidOperationException("An Event Sheet must be open.");
+
+        RecordHistory(condition ? "Add Draft Condition" : "Add Draft Action");
+        VisualInstruction instruction = CreateInstruction(definitionId);
+        instruction.EditorX = position.X;
+        instruction.EditorY = position.Y;
+        instruction.EditorLayoutInitialized = true;
+        (condition ? _module.EditorLooseConditions : _module.EditorLooseActions)
+            .Add(instruction);
+        _selectedGraphNodes.Clear();
+        _selectedGraphNodes.Add(instruction.InstanceId);
+        _dirty = true;
+        return instruction;
     }
 
     private void DrawDefinitionCreateMenu(
@@ -3503,11 +3983,28 @@ internal sealed class EventWorkspacePanel
             }
         }
 
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions))
+        {
+            bool condition = _module.EditorLooseConditions.Contains(instruction);
+            if ((!IsBranchAction(instruction) &&
+                 _graphCanvas.IsPointHovered(GetInstructionOutput(instruction), 16.0f)) ||
+                ((!condition || IsLogicGate(instruction)) &&
+                 _graphCanvas.IsPointHovered(GetInstructionInput(instruction), 16.0f)) ||
+                (IsBranchAction(instruction) &&
+                 (_graphCanvas.IsPointHovered(GetBranchTrueOutput(instruction), 16.0f) ||
+                  _graphCanvas.IsPointHovered(GetBranchFalseOutput(instruction), 16.0f))))
+                return true;
+        }
+
         return false;
     }
 
     private bool TryConnectConditionWireAtMouse()
     {
+        if (_wireDragKind == WireDragKind.ConditionInput)
+            return TryConnectGateInputWireAtMouse();
+
         EventRuleDefinition? rule =
             FindRule(
                 _wireDragRuleId);
@@ -3515,7 +4012,7 @@ internal sealed class EventWorkspacePanel
         if (rule ==
             null)
         {
-            return false;
+            return TryConnectLooseConditionOutputAtMouse();
         }
 
         /*
@@ -3595,6 +4092,19 @@ internal sealed class EventWorkspacePanel
                 return true;
             }
 
+            if (_module != null)
+                foreach (VisualInstruction gate in _module.EditorLooseConditions.Where(IsLogicGate))
+                {
+                    if (!_graphCanvas.IsPointHovered(GetInstructionInput(gate), 18.0f))
+                        continue;
+                    RecordHistory("Connect Logic Wire");
+                    AttachLooseConditionToRule(rule, gate);
+                    ConnectConditionToGate(rule, gate, source.InstanceId);
+                    ConnectCondition(rule, gate.InstanceId);
+                    _dirty = true;
+                    return true;
+                }
+
             return false;
         }
 
@@ -3626,6 +4136,157 @@ internal sealed class EventWorkspacePanel
             return true;
         }
 
+        if (_module != null)
+            foreach (VisualInstruction condition in _module.EditorLooseConditions.ToArray())
+            {
+                if (!_graphCanvas.IsPointHovered(GetInstructionOutput(condition), 18.0f))
+                    continue;
+                RecordHistory("Connect Draft Condition");
+                AttachLooseConditionToRule(rule, condition);
+                ConnectCondition(rule, condition.InstanceId);
+                _dirty = true;
+                return true;
+            }
+
+        return false;
+    }
+
+    private void AttachLooseConditionToRule(
+        EventRuleDefinition rule, VisualInstruction condition)
+        => AttachLooseConditionToRule(rule, condition, new HashSet<Guid>());
+
+    private void AttachLooseConditionToRule(
+        EventRuleDefinition rule, VisualInstruction condition, HashSet<Guid> visited)
+    {
+        if (_module == null ||
+            !visited.Add(condition.InstanceId) ||
+            !_module.EditorLooseConditions.Remove(condition))
+            return;
+
+        rule.Conditions.Add(condition);
+        foreach (Guid inputId in condition.ConditionInputIds.ToArray())
+        {
+            VisualInstruction? looseInput = _module.EditorLooseConditions
+                .FirstOrDefault(item => item.InstanceId == inputId);
+            if (looseInput != null)
+                AttachLooseConditionToRule(rule, looseInput, visited);
+        }
+    }
+
+    private bool TryConnectLooseConditionOutputAtMouse()
+    {
+        if (_module == null)
+            return false;
+        VisualInstruction? source = _module.EditorLooseConditions
+            .FirstOrDefault(item => item.InstanceId == _wireDragSourceInstructionId);
+        if (source == null)
+            return false;
+
+        foreach (EventRuleDefinition rule in _module.Rules)
+        {
+            if (_graphCanvas.IsPointHovered(GetEventConditionInput(rule), 18.0f))
+            {
+                RecordHistory("Connect Draft Condition");
+                AttachLooseConditionToRule(rule, source);
+                ConnectCondition(rule, source.InstanceId);
+                _dirty = true;
+                return true;
+            }
+            foreach (VisualInstruction gate in rule.Conditions.Where(IsLogicGate))
+            {
+                if (!_graphCanvas.IsPointHovered(GetInstructionInput(gate), 18.0f))
+                    continue;
+                RecordHistory("Connect Draft Logic Input");
+                AttachLooseConditionToRule(rule, source);
+                if (!WouldCreateConditionCycle(rule, source.InstanceId, gate.InstanceId))
+                    ConnectConditionToGate(rule, gate, source.InstanceId);
+                _dirty = true;
+                return true;
+            }
+        }
+
+        foreach (VisualInstruction gate in _module.EditorLooseConditions.Where(IsLogicGate))
+        {
+            if (gate.InstanceId == source.InstanceId ||
+                !_graphCanvas.IsPointHovered(GetInstructionInput(gate), 18.0f))
+                continue;
+            if (WouldCreateDraftConditionCycle(source.InstanceId, gate.InstanceId))
+                return true;
+            RecordHistory("Connect Draft Logic Input");
+            if (!gate.ConditionInputIds.Contains(source.InstanceId))
+                gate.ConditionInputIds.Add(source.InstanceId);
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+
+    private bool TryConnectGateInputWireAtMouse()
+    {
+        if (_module == null)
+            return false;
+        EventRuleDefinition? rule = FindRule(_wireDragRuleId);
+        VisualInstruction? gate = rule == null
+            ? _module.EditorLooseConditions.FirstOrDefault(item =>
+                item.InstanceId == _wireDragSourceInstructionId)
+            : FindCondition(rule, _wireDragSourceInstructionId);
+        if (gate == null || !IsLogicGate(gate))
+            return false;
+
+        IEnumerable<VisualInstruction> sources = rule == null
+            ? _module.EditorLooseConditions
+            : rule.Conditions.Concat(_module.EditorLooseConditions);
+        foreach (VisualInstruction source in sources.ToArray())
+        {
+            if (source.InstanceId == gate.InstanceId ||
+                !_graphCanvas.IsPointHovered(GetInstructionOutput(source), 18.0f))
+                continue;
+
+            if (rule == null)
+            {
+                if (!_module.EditorLooseConditions.Contains(source))
+                    continue;
+                if (WouldCreateDraftConditionCycle(source.InstanceId, gate.InstanceId))
+                    return true;
+                RecordHistory("Connect Draft Logic Input");
+                if (!gate.ConditionInputIds.Contains(source.InstanceId))
+                    gate.ConditionInputIds.Add(source.InstanceId);
+            }
+            else
+            {
+                if (WouldCreateConditionCycle(rule, source.InstanceId, gate.InstanceId))
+                    return true;
+                RecordHistory("Connect Logic Input");
+                if (_module.EditorLooseConditions.Contains(source))
+                    AttachLooseConditionToRule(rule, source);
+                ConnectConditionToGate(rule, gate, source.InstanceId);
+            }
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+
+    private bool WouldCreateDraftConditionCycle(Guid sourceId, Guid gateId)
+    {
+        if (_module == null)
+            return false;
+        var pending = new Stack<Guid>();
+        var visited = new HashSet<Guid>();
+        pending.Push(sourceId);
+        while (pending.Count > 0)
+        {
+            Guid currentId = pending.Pop();
+            if (currentId == gateId)
+                return true;
+            if (!visited.Add(currentId))
+                continue;
+            VisualInstruction? current = _module.EditorLooseConditions
+                .FirstOrDefault(item => item.InstanceId == currentId);
+            if (current != null)
+                foreach (Guid inputId in current.ConditionInputIds)
+                    pending.Push(inputId);
+        }
         return false;
     }
 
@@ -3839,6 +4500,11 @@ internal sealed class EventWorkspacePanel
                 }
             }
         }
+
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions))
+            if (PointInsideNode(graphPoint, instruction.InstanceId))
+                result = instruction.InstanceId;
 
         return result;
     }
@@ -4121,6 +4787,11 @@ internal sealed class EventWorkspacePanel
                     selectionMaximum);
             }
         }
+
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions))
+            TrySelectNodeFromRectangle(
+                instruction.InstanceId, selectionMinimum, selectionMaximum);
     }
 
     private void TrySelectNodeFromRectangle(
@@ -4291,6 +4962,16 @@ internal sealed class EventWorkspacePanel
             }
         }
 
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions)
+                     .Where(item => selected.Contains(item.InstanceId)))
+        {
+            RemoveNodeFromGroups(instruction.InstanceId);
+            DisconnectLooseReferences(instruction.InstanceId);
+        }
+        _module.EditorLooseConditions.RemoveAll(item => selected.Contains(item.InstanceId));
+        _module.EditorLooseActions.RemoveAll(item => selected.Contains(item.InstanceId));
+
         _selectedGraphNodes.Clear();
 
         _draggingGraphNodeId =
@@ -4378,7 +5059,8 @@ internal sealed class EventWorkspacePanel
             }
         }
 
-        return false;
+        return _module.EditorLooseConditions.Any(item => item.InstanceId == id) ||
+               _module.EditorLooseActions.Any(item => item.InstanceId == id);
     }
 
     private void RemoveNodeFromGroups(
@@ -4687,6 +5369,16 @@ internal sealed class EventWorkspacePanel
             }
         }
 
+        VisualInstruction? loose = _module.EditorLooseConditions
+            .Concat(_module.EditorLooseActions)
+            .FirstOrDefault(item => item.InstanceId == id);
+        if (loose != null)
+        {
+            minimum = new Vector2(loose.EditorX, loose.EditorY);
+            maximum = minimum + GetScaledInstructionNodeSize(loose);
+            return true;
+        }
+
         return false;
     }
 
@@ -4838,6 +5530,38 @@ internal sealed class EventWorkspacePanel
         }
     }
 
+    private static string GetInstructionCompactSummary(VisualInstruction instruction)
+    {
+        if (instruction.Arguments.Count == 0)
+            return "Select to configure";
+
+        IEnumerable<KeyValuePair<string, EventValue>> useful = instruction.Arguments
+            .Where(pair => pair.Value != null)
+            .OrderBy(pair => pair.Key.Equals("target", StringComparison.OrdinalIgnoreCase) ? 0
+                : pair.Key.Equals("value", StringComparison.OrdinalIgnoreCase) ? 1 : 2)
+            .Take(2);
+        string summary = string.Join("  |  ", useful.Select(pair =>
+            $"{pair.Key}: {FormatCompactValue(pair.Value)}"));
+        return summary.Length <= 56 ? summary : summary[..53] + "...";
+    }
+
+    private static string FormatCompactValue(EventValue value)
+    {
+        if (value.Kind == EventValueKind.Reference)
+            return value.Reference == null ? "Choose..." : FormatReference(value.Reference);
+
+        VariableValue constant = value.Constant;
+        return constant.Type switch
+        {
+            VariableType.Boolean => constant.Boolean ? "true" : "false",
+            VariableType.String => constant.String,
+            VariableType.Number => constant.Number.ToString("0.###"),
+            VariableType.Vector2 => constant.Vector2.ToString(),
+            VariableType.Vector3 => constant.Vector3.ToString(),
+            _ => "..."
+        };
+    }
+
     private static string GetInstructionDescription(
         VisualInstruction instruction,
         bool condition)
@@ -4849,6 +5573,15 @@ internal sealed class EventWorkspacePanel
 
             "system.triggerOnce" =>
                 "Returns TRUE only on the first frame the condition becomes valid.",
+
+            "time.timerFinished" =>
+                "TRUE only during the update when the named timer reaches zero.",
+            "time.timerRunning" =>
+                "TRUE while the named timer is counting down.",
+            "time.startTimer" =>
+                "Starts or restarts a named timer using game time, in seconds.",
+            "time.stopTimer" =>
+                "Stops the named timer and clears its finish pulse.",
 
             "input.mouseHeld" =>
                 "TRUE while the selected mouse button is being held down.",
@@ -4934,6 +5667,14 @@ internal sealed class EventWorkspacePanel
             "object.isOnLayer" =>
                 "Checks whether the target object is assigned to the selected layer.",
 
+            "enemyAI.isIdle" =>
+                "TRUE when the selected enemy has no target in detection range.",
+            "enemyAI.isChasing" =>
+                "TRUE while the selected enemy is pursuing a target outside attack range.",
+            "enemyAI.isAttacking" =>
+                "TRUE while the selected enemy has a target in attack range.",
+            "enemyAI.attackFired" =>
+                "TRUE only on the update in which the selected enemy actually damages its target.",
             "audio.isPlaying" =>
                 "Checks whether the target AudioSource3D is currently playing.",
 
@@ -5398,8 +6139,21 @@ internal sealed class EventWorkspacePanel
         if (rule ==
             null)
         {
-            return false;
+            return TryConnectLooseActionOutputAtMouse();
         }
+
+        if (_module != null)
+            foreach (VisualInstruction draft in _module.EditorLooseActions.ToArray())
+            {
+                if (!_graphCanvas.IsPointHovered(GetInstructionInput(draft), 16.0f))
+                    continue;
+                RecordHistory("Connect Draft Action");
+                AttachLooseActionToRule(rule, draft);
+                InsertDraftActionChainAfterSource(rule, _wireDragSourceInstructionId,
+                    draft, _wireDragKind);
+                _dirty = true;
+                return true;
+            }
 
         VisualInstruction? target =
             null;
@@ -5454,6 +6208,178 @@ internal sealed class EventWorkspacePanel
             true;
 
         return true;
+    }
+
+    private void AttachLooseActionToRule(
+        EventRuleDefinition rule, VisualInstruction action)
+        => AttachLooseActionToRule(rule, action, new HashSet<Guid>());
+
+    private void AttachLooseActionToRule(
+        EventRuleDefinition rule, VisualInstruction action, HashSet<Guid> visited)
+    {
+        if (_module == null ||
+            !visited.Add(action.InstanceId) ||
+            !_module.EditorLooseActions.Remove(action))
+            return;
+
+        rule.Actions.Add(action);
+        foreach (Guid? successorId in new[]
+                 { action.NextActionId, action.TrueActionId, action.FalseActionId })
+        {
+            VisualInstruction? successor = _module.EditorLooseActions
+                .FirstOrDefault(item => item.InstanceId == successorId);
+            if (successor != null)
+                AttachLooseActionToRule(rule, successor, visited);
+        }
+    }
+
+    private bool TryConnectLooseActionOutputAtMouse()
+    {
+        if (_module == null)
+            return false;
+        VisualInstruction? source = _module.EditorLooseActions
+            .FirstOrDefault(item => item.InstanceId == _wireDragSourceInstructionId);
+        if (source == null)
+            return false;
+
+        foreach (EventRuleDefinition rule in _module.Rules)
+        {
+            if (_graphCanvas.IsPointHovered(GetEventExecutionOutput(rule), 18.0f))
+            {
+                RecordHistory("Connect Draft Action");
+                AttachLooseActionToRule(rule, source);
+                InsertDraftActionChainAfterSource(rule, Guid.Empty, source, _wireDragKind);
+                _dirty = true;
+                return true;
+            }
+
+            foreach (VisualInstruction target in rule.Actions)
+            {
+                if (!_graphCanvas.IsPointHovered(GetInstructionInput(target), 16.0f))
+                    continue;
+                RecordHistory("Connect Draft Action");
+                AttachLooseActionToRule(rule, source);
+                InsertActionBeforeTarget(rule, source, target, _wireDragKind);
+                _dirty = true;
+                return true;
+            }
+        }
+
+        foreach (VisualInstruction target in _module.EditorLooseActions)
+        {
+            if (target.InstanceId == source.InstanceId ||
+                !_graphCanvas.IsPointHovered(GetInstructionInput(target), 16.0f))
+                continue;
+            if (WouldCreateDraftActionCycle(source.InstanceId, target.InstanceId))
+                return true;
+            RecordHistory("Connect Draft Actions");
+            if (_wireDragKind == WireDragKind.ActionTrue)
+                source.TrueActionId = target.InstanceId;
+            else if (_wireDragKind == WireDragKind.ActionFalse)
+                source.FalseActionId = target.InstanceId;
+            else
+                source.NextActionId = target.InstanceId;
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+
+    private bool WouldCreateDraftActionCycle(Guid sourceId, Guid targetId)
+    {
+        if (_module == null)
+            return false;
+        var pending = new Stack<Guid>();
+        var visited = new HashSet<Guid>();
+        pending.Push(targetId);
+        while (pending.Count > 0)
+        {
+            Guid currentId = pending.Pop();
+            if (currentId == sourceId)
+                return true;
+            if (!visited.Add(currentId))
+                continue;
+            VisualInstruction? action = _module.EditorLooseActions
+                .FirstOrDefault(item => item.InstanceId == currentId);
+            if (action == null)
+                continue;
+            foreach (Guid? next in new[]
+                     { action.NextActionId, action.TrueActionId, action.FalseActionId })
+                if (next.HasValue)
+                    pending.Push(next.Value);
+        }
+        return false;
+    }
+
+    private static void InsertActionBeforeTarget(
+        EventRuleDefinition rule, VisualInstruction source,
+        VisualInstruction target, WireDragKind kind)
+    {
+        if (rule.FirstActionId == target.InstanceId)
+            rule.FirstActionId = source.InstanceId;
+        foreach (VisualInstruction candidate in rule.Actions)
+        {
+            if (candidate.InstanceId == source.InstanceId)
+                continue;
+            if (candidate.NextActionId == target.InstanceId)
+                candidate.NextActionId = source.InstanceId;
+            if (candidate.TrueActionId == target.InstanceId)
+                candidate.TrueActionId = source.InstanceId;
+            if (candidate.FalseActionId == target.InstanceId)
+                candidate.FalseActionId = source.InstanceId;
+        }
+        VisualInstruction tail = FindDraftChainTail(rule, source);
+        if (kind == WireDragKind.ActionTrue)
+            source.TrueActionId = target.InstanceId;
+        else if (kind == WireDragKind.ActionFalse)
+            source.FalseActionId = target.InstanceId;
+        else
+            tail.NextActionId = target.InstanceId;
+        rule.HasExplicitExecutionFlow = true;
+    }
+
+    private static VisualInstruction FindDraftChainTail(
+        EventRuleDefinition rule, VisualInstruction first)
+    {
+        VisualInstruction current = first;
+        var visited = new HashSet<Guid> { first.InstanceId };
+        while (current.NextActionId.HasValue)
+        {
+            VisualInstruction? next = FindAction(rule, current.NextActionId.Value);
+            if (next == null || !visited.Add(next.InstanceId))
+                break;
+            current = next;
+        }
+        return current;
+    }
+
+    private static void AppendDraftActionChain(
+        EventRuleDefinition rule, VisualInstruction first)
+    {
+        rule.HasExplicitExecutionFlow = true;
+        if (!rule.FirstActionId.HasValue)
+        {
+            rule.FirstActionId = first.InstanceId;
+            return;
+        }
+        VisualInstruction? existingFirst = FindAction(rule, rule.FirstActionId.Value);
+        if (existingFirst != null)
+            FindDraftChainTail(rule, existingFirst).NextActionId = first.InstanceId;
+    }
+
+    private static void InsertDraftActionChainAfterSource(
+        EventRuleDefinition rule, Guid sourceId,
+        VisualInstruction first, WireDragKind kind)
+    {
+        VisualInstruction tail = FindDraftChainTail(rule, first);
+        Guid? originalDraftNext = first.NextActionId;
+        ConnectNewActionAfterSource(rule, sourceId, first, kind);
+        if (originalDraftNext.HasValue && tail.InstanceId != first.InstanceId)
+        {
+            Guid? previousSuccessor = first.NextActionId;
+            first.NextActionId = originalDraftNext;
+            tail.NextActionId = previousSuccessor;
+        }
     }
 
     private static bool WouldCreateExecutionCycle(
@@ -6111,8 +7037,20 @@ internal sealed class EventWorkspacePanel
                 "animation.pause" or
                 "animation.resume" or
                 "animation.stop" or
-                "animation.isPlaying" =>
+                "animation.isPlaying" or
+                "enemyAI.isIdle" or
+                "enemyAI.isChasing" or
+                "enemyAI.isAttacking" or
+                "enemyAI.attackFired" =>
                     190.0f,
+
+                "time.timerFinished" or
+                "time.timerRunning" or
+                "time.stopTimer" =>
+                    190.0f,
+
+                "time.startTimer" =>
+                    300.0f,
 
                 "audio.playClip" =>
                     300.0f,
@@ -6417,14 +7355,24 @@ internal sealed class EventWorkspacePanel
                     delta.Y;
             }
         }
+
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions))
+        {
+            if (!_selectedGraphNodes.Contains(instruction.InstanceId))
+                continue;
+            instruction.EditorX += delta.X;
+            instruction.EditorY += delta.Y;
+        }
     }
 
     private void FrameEntireGraph()
     {
         if (_module ==
                 null ||
-            _module.Rules.Count ==
-                0)
+            (_module.Rules.Count == 0 &&
+             _module.EditorLooseConditions.Count == 0 &&
+             _module.EditorLooseActions.Count == 0))
         {
             _graphCanvas.ResetView();
             return;
@@ -6470,6 +7418,12 @@ internal sealed class EventWorkspacePanel
                         instruction));
             }
         }
+
+        foreach (VisualInstruction instruction in _module.EditorLooseConditions
+                     .Concat(_module.EditorLooseActions))
+            IncludeGraphRect(ref minimum, ref maximum,
+                new Vector2(instruction.EditorX, instruction.EditorY),
+                GetScaledInstructionNodeSize(instruction));
 
         foreach (EventGraphGroupDefinition group
                  in _module.EditorGroups)
@@ -6830,6 +7784,16 @@ internal sealed class EventWorkspacePanel
 
         switch (id)
         {
+            case "time.startTimer":
+                instruction.Arguments["name"] = EventValue.String("Timer");
+                instruction.Arguments["duration"] = EventValue.Number(1.0);
+                break;
+            case "time.stopTimer":
+            case "time.timerFinished":
+            case "time.timerRunning":
+                instruction.Arguments["name"] = EventValue.String("Timer");
+                break;
+
             case "input.mouseHeld":
             case "input.mousePressed":
             case "input.mouseReleased":
@@ -6998,6 +7962,10 @@ internal sealed class EventWorkspacePanel
             case "combat.fireWeapon":
             case "combat.canFire":
             case "health.isDead":
+            case "enemyAI.isIdle":
+            case "enemyAI.isChasing":
+            case "enemyAI.isAttacking":
+            case "enemyAI.attackFired":
             case "physics.lastRayHitObject":
             case "projectile.fire":
                 instruction.Arguments["target"] = EventValue.String("Self");
@@ -7412,6 +8380,19 @@ internal sealed class EventWorkspacePanel
                     "FALSE output");
                 break;
 
+            case "time.startTimer":
+                DrawValueArgument(instruction, "name", "Timer Name", VariableType.String,
+                    EventValue.String("Timer"), state, false);
+                DrawValueArgument(instruction, "duration", "Duration (seconds)", VariableType.Number,
+                    EventValue.Number(1.0), state, false);
+                break;
+            case "time.stopTimer":
+            case "time.timerFinished":
+            case "time.timerRunning":
+                DrawValueArgument(instruction, "name", "Timer Name", VariableType.String,
+                    EventValue.String("Timer"), state, false);
+                break;
+
             case "input.mouseHeld":
             case "input.mousePressed":
             case "input.mouseReleased":
@@ -7529,6 +8510,10 @@ internal sealed class EventWorkspacePanel
             case "combat.canFire":
             case "combat.fireWeapon":
             case "health.isDead":
+            case "enemyAI.isIdle":
+            case "enemyAI.isChasing":
+            case "enemyAI.isAttacking":
+            case "enemyAI.attackFired":
             case "projectile.fire":
                 DrawObjectTargetArgument(instruction, "target", "Object", state);
                 break;
@@ -8121,11 +9106,13 @@ internal sealed class EventWorkspacePanel
                     null,
                     state);
 
+                VariableType? selectedType =
+                    TryGetSelectedTargetVariableType(instruction, state);
                 DrawValueArgument(
                     instruction,
                     "value",
                     "Value",
-                    null,
+                    selectedType,
                     EventValue.Number(
                         0.0),
                     state,
@@ -10323,6 +11310,42 @@ internal sealed class EventWorkspacePanel
     // GENERIC VALUE EDITOR
     // ========================================================
 
+    private VariableType? TryGetSelectedTargetVariableType(
+        VisualInstruction instruction,
+        EditorState? state)
+    {
+        if (state == null ||
+            !instruction.Arguments.TryGetValue("target", out EventValue? target) ||
+            target.Kind != EventValueKind.Reference ||
+            target.Reference == null)
+            return null;
+
+        VariableReference reference = target.Reference;
+        VariableValue? variable = null;
+        switch (reference.Scope)
+        {
+            case VariableScope.Global:
+                variable = state.Project.GlobalVariables
+                    .FirstOrDefault(item => item.Name.Equals(
+                        reference.MemberName, StringComparison.OrdinalIgnoreCase))?.Value;
+                break;
+            case VariableScope.Scene:
+                state.EditorScene.Variables.TryGet(reference.MemberName, out variable);
+                break;
+            case VariableScope.Self:
+                ResolveSelfContext(state)?.Variables.TryGet(reference.MemberName, out variable);
+                break;
+            case VariableScope.Object:
+                GameObject? owner = reference.ObjectId.HasValue
+                    ? state.EditorScene.FindGameObject(reference.ObjectId.Value)
+                    : state.EditorScene.FindGameObject(reference.ObjectName ?? string.Empty);
+                owner?.Variables.TryGet(reference.MemberName, out variable);
+                break;
+        }
+
+        return variable?.Type;
+    }
+
     private void DrawValueArgument(
         VisualInstruction instruction,
         string argumentName,
@@ -10456,6 +11479,7 @@ internal sealed class EventWorkspacePanel
 
             instruction.Arguments[argumentName] =
                 value;
+            _dirty = true;
         }
 
         if (!expectedType.HasValue)

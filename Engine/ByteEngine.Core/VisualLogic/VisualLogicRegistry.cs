@@ -92,6 +92,7 @@ public sealed partial class VisualLogicRegistry
             new VisualLogicRegistry();
 
         RegisterSystem(registry);
+        RegisterTime(registry);
         RegisterInput(registry);
         RegisterObjects(registry);
         RegisterCharacter(registry);
@@ -133,6 +134,42 @@ public sealed partial class VisualLogicRegistry
             });
     }
 
+    private static void RegisterTime(VisualLogicRegistry registry)
+    {
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "time.timerFinished",
+            Category = "Time",
+            DisplayName = "Timer Finished",
+            Evaluate = (instruction, context) => context.TimerRuntime?.IsTimerFinished(
+                EventValueResolver.GetString(instruction, "name", context)) == true
+        });
+        registry.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = "time.timerRunning",
+            Category = "Time",
+            DisplayName = "Timer Is Running",
+            Evaluate = (instruction, context) => context.TimerRuntime?.IsTimerRunning(
+                EventValueResolver.GetString(instruction, "name", context)) == true
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "time.startTimer",
+            Category = "Time",
+            DisplayName = "Start / Reset Timer",
+            Execute = (instruction, context) => context.TimerRuntime?.StartTimer(
+                EventValueResolver.GetString(instruction, "name", context),
+                EventValueResolver.GetNumber(instruction, "duration", context, 1.0))
+        });
+        registry.RegisterAction(new VisualActionDefinition
+        {
+            Id = "time.stopTimer",
+            Category = "Time",
+            DisplayName = "Stop Timer",
+            Execute = (instruction, context) => context.TimerRuntime?.StopTimer(
+                EventValueResolver.GetString(instruction, "name", context))
+        });
+    }
     private static void RegisterInput(
         VisualLogicRegistry registry)
     {
@@ -1043,6 +1080,25 @@ public sealed partial class VisualLogicRegistry
 
     private static void RegisterGameplay(VisualLogicRegistry registry)
     {
+        foreach (var (id, label, predicate) in new (string Id, string Label, Func<SimpleEnemyAI3D, bool> Predicate)[]
+        {
+            ("enemyAI.isIdle", "Enemy AI Is Idle", ai => ai.State == SimpleEnemyAIState.Idle),
+            ("enemyAI.isChasing", "Enemy AI Is Chasing", ai => ai.State == SimpleEnemyAIState.Chase),
+            ("enemyAI.isAttacking", "Enemy AI Is Attacking", ai => ai.IsAttacking),
+            ("enemyAI.attackFired", "Enemy AI Attack Fired", ai => ai.AttackFiredThisFrame)
+        })
+        {
+            registry.RegisterCondition(new VisualConditionDefinition
+            {
+                Id = id,
+                Category = "AI",
+                DisplayName = label,
+                TargetComponent = nameof(SimpleEnemyAI3D),
+                Evaluate = (instruction, context) =>
+                    ResolveObjectTarget(instruction, context, false)?.GetComponent<SimpleEnemyAI3D>() is { } ai &&
+                    predicate(ai)
+            });
+        }
         registry.RegisterCondition(new VisualConditionDefinition
         {
             Id = "health.isDead",
