@@ -27,6 +27,17 @@ public sealed class ImpactParticles3D : Component
     private Mesh? _mesh;
     private int _next;
 
+    public Vector4 Color {get=>_material.BaseColor;set=>_material.BaseColor=value;}
+    public void EmitStream(Vector3 position,Vector3 direction,int count,float speed=10)
+    {
+        count=Math.Clamp(count,0,Capacity);direction=Vector3.Normalize(direction);
+        for(int i=0;i<count;i++)
+        {
+            int slot=_next++%Capacity;if(_remaining[slot]<=0)ActiveCount++;
+            _positions[slot]=position;_velocities[slot]=direction*speed+new Vector3((float)_random.NextDouble()-.5f,(float)_random.NextDouble()-.5f,(float)_random.NextDouble()-.5f)*2;
+            _initialLife[slot]=_remaining[slot]=.3f+(float)_random.NextDouble()*.25f;
+        }
+    }
     public int ActiveCount { get; private set; }
 
     public void Emit(Vector3 position, int count, float intensity = 1)

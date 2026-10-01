@@ -34,8 +34,14 @@ try
 
     if (args.Length >= 2 && args[0] == "--goblin-vehicle")
     {
-        using var diagnostic = new GoblinVehicleDiagnostic(args[1], args.Contains("--prepare"));
+        using var diagnostic = new GoblinVehicleDiagnostic(args[1], args.Contains("--prepare"), args.Contains("--refined"),args.Contains("--free"));
         diagnostic.Run();
+        return;
+    }
+
+    if (args.Length >= 2 && args[0] == "--validate-refined-goblin-parts")
+    {
+        RefinedGoblinPartsDiagnostic.Run(args[1]);
         return;
     }
 
@@ -54,6 +60,14 @@ try
     if (args.Contains("--last-stand-foundation"))
     {
         LastStandFoundationTests.Run();
+        return;
+    }
+
+    if (args.Length>=2 && args[0]=="--contraption") { ContraptionTests.Run(args[1]); return; }
+    if (args.Length>=2 && args[0]=="--free-vehicle") { FreeVehicleAssemblyTests.Run(args[1]); return; }
+    if (args.Contains("--vehicle-drift"))
+    {
+        VehicleDriftTests.Run();
         return;
     }
 

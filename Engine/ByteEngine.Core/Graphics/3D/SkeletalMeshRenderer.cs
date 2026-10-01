@@ -34,6 +34,9 @@ public sealed partial class SkeletalMeshRenderer : Component
     private readonly Dictionary<int, Material> _overrideMaterials = new();
 
     private ModelAsset? _model;
+    private readonly Dictionary<string,Matrix4x4> _physicalBoneDeformations=new();
+    public void SetPhysicalBoneDeformation(string bone,Matrix4x4 deformation){_physicalBoneDeformations[bone]=deformation;_poseDirty=true;}
+    public void ClearPhysicalBoneDeformations(){_physicalBoneDeformations.Clear();_poseDirty=true;}
     private SkeletonAsset? _skeleton;
 
     private ImportedNode[] _nodes = Array.Empty<ImportedNode>();
@@ -1008,6 +1011,12 @@ public sealed partial class SkeletalMeshRenderer : Component
         if (!_lightRagdollActive && _hitReaction > 0.001f)
             ApplyHitReactionPose(locals);
         Matrix4x4[] globals = ComputeGlobals(locals);
+        if(_skeleton!=null)foreach(var entry in _physicalBoneDeformations)
+        {
+            int bi=_skeleton.Bones.FindIndex(b=>b.Name==entry.Key);
+            if(bi<0||bi>=_boneNodeIndices.Length)continue;int ni=_boneNodeIndices[bi];if(ni<0)continue;
+            if(Matrix4x4.Invert(_skeleton.Bones[bi].BindPose,out var bind))globals[ni]=bind*entry.Value;
+        }
 
         Matrix4x4 rootMotionCorrection = _lightRagdollActive
             ? _lightRagdollCorrection
@@ -1036,7 +1045,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                     ? inverse
                     : Matrix4x4.Identity;
 
-            Matrix4x4[] skinMatrices = runtime.SkinMatrices.Length == _skeleton.Bones.Count
+            Matrix4x4[] skinMatrices = runtime.SkinMatrices.Length == _skeleton!.Bones.Count
                 ? runtime.SkinMatrices
                 : runtime.SkinMatrices = new Matrix4x4[_skeleton.Bones.Count];
 

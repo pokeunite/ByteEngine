@@ -4,6 +4,7 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot "Player\ByteEngine.Player\ByteEngine.Player.csproj"
 $output = Join-Path $repositoryRoot (".artifacts\player-publish\" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $output -Force | Out-Null
+try {
 dotnet publish $project -c $Configuration -r win-x64 --self-contained true -o $output -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Windows player publish failed." }
 foreach ($required in @("ByteEngine.Player.exe", "ByteEngine.Core.dll", "coreclr.dll", "hostfxr.dll", "hostpolicy.dll", "openal32.dll", "glfw3.dll", "assimp.dll")) {
@@ -25,3 +26,16 @@ foreach ($target in $targets) {
     }
 }
 Write-Host "Standalone Windows player bundled with editor distribution and Debug editor."
+
+}
+finally {
+    $publishRoot = [IO.Path]::GetFullPath((Join-Path $repositoryRoot ".artifacts\player-publish"))
+    $resolvedOutput = [IO.Path]::GetFullPath($output)
+    if (-not [string]::Equals([IO.Path]::GetDirectoryName($resolvedOutput), $publishRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetFileName($resolvedOutput) -notmatch '^[0-9a-f]{32}$') {
+        throw "Unsafe temporary publish directory: $resolvedOutput"
+    }
+    if (Test-Path -LiteralPath $resolvedOutput) {
+        Remove-Item -LiteralPath $resolvedOutput -Recurse -Force
+    }
+}

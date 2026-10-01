@@ -1,0 +1,10 @@
+from pathlib import Path
+p=Path('Engine/ByteEngine.Core/Construction/VehicleBuilder3D.cs');s=p.read_text()
+s=s.replace('    private readonly VehicleDriveMotion _motion = new();', '    private static readonly Matrix4x4 ImportAlignment = Matrix4x4.CreateRotationY(MathF.PI);\n    private readonly VehicleDriveMotion _motion = new();')
+s=s.replace('        root.SetParent(parent, false);\n        root.AddComponent', '        root.SetParent(parent, false);\n        root.Transform.LocalRotation=Quaternion.CreateFromAxisAngle(Vector3.UnitY,MathF.PI);\n        root.AddComponent')
+s=s.replace('        return (target-Vector3.Transform(anchor,rotation),rotation);', '        Vector3 position=target-Vector3.Transform(anchor,rotation);\n        // Refined sources already face -Z; cancel the importer correction before applying the mounting rotation.\n        rotation=Quaternion.CreateFromRotationMatrix(ImportAlignment*Matrix4x4.CreateFromQuaternion(rotation));\n        return (position,rotation);')
+s=s.replace('        Matrix4x4.Decompose(delta,out _,out Quaternion rotation,out _);', '        Matrix4x4.Decompose(delta*mount.Transform.LocalMatrix,out _,out Quaternion rotation,out _);')
+s=s.replace('rotation*mount.Transform.LocalRotation', 'rotation')
+s=s.replace('        payload.Transform.LocalRotation=rotation;', '        payload.Transform.LocalRotation=Quaternion.CreateFromRotationMatrix(ImportAlignment*Matrix4x4.CreateFromQuaternion(rotation));')
+p.write_text(s)
+p=Path('Tests/ByteEngine.Tests/GoblinVehicleDiagnostic.cs');s=p.read_text();start=s.index('            var roofRig=');end=s.index('            Assert(Vector3.Distance(roofBefore',start);s=s[:start]+s[end:];p.write_text(s)

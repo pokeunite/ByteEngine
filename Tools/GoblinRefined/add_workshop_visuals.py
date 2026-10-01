@@ -1,0 +1,11 @@
+from pathlib import Path
+p=Path('Engine/ByteEngine.Core/Construction/VehicleBuilder3D.cs');s=p.read_text().replace('        _part=index;\n        if (VehicleBuildLayout.PartFiles[index]=="scrap_frame_long") { SetChassis("scrap_frame_long"); return; }','        if (VehicleBuildLayout.PartFiles[index]=="scrap_frame_long") { SetChassis("scrap_frame_long"); return; }\n        _part=index;')
+s=s.replace('                !_buttons.Any(b =>', '                !PointerOnHud() && !_buttons.Any(b =>')
+s=s.replace('        CreateSkidPool();', '        CreateSkidPool();\n        CreateWorkshopAtmosphere();')
+s=s.replace('new(.23f,.26f,.23f,1)', 'new(.31f,.38f,.34f,1)').replace('for (int i=-6; i<=6; i++)','for (int i=-4; i<=4; i++)').replace('new(i*5,-.022f,0), new(.035f,.012f,60), new(.37f,.4f,.34f,1)','new(i,-.022f,0), new(.012f,.006f,8), new(.35f,.40f,.36f,1)').replace('new(0,-.022f,i*5), new(60,.012f,.035f), new(.37f,.4f,.34f,1)','new(0,-.022f,i), new(8,.006f,.012f), new(.35f,.40f,.36f,1)').replace('new(5,.02f,5), new(.35f,.37f,.26f,1)','new(7,.02f,7), new(.36f,.41f,.36f,1)').replace('new(.55f,.41f,.2f,1)','new(.22f,.28f,.25f,1)').replace('new(.44f,.31f,.2f,1)','new(.31f,.26f,.18f,1)')
+s=s.replace('        for(int i=0;i<6;i++) Box(', '        for(int i=0;i<6;i++) Box(')
+p.write_text(s)
+p=Path('Engine/ByteEngine.Core/Construction/VehicleBuilder3D.GaragePresentation.cs');s=p.read_text().replace('    private UiText? _partDetails;', '    private UiText? _partDetails;\n    private readonly List<GameObject> _axleBridges=new();')
+s=s.replace('        _zoom=Layout.LongChassis', '        UpdateAxleBridges();\n        _zoom=Layout.LongChassis')
+s=s.replace('        _canvas=Own(', '        _canvas=Own(')
+p.write_text(s)
