@@ -68,7 +68,7 @@ internal sealed class GameExportPanel
                 UseDescriptionForTitle = true, SelectedPath = _output };
             if (dialog.ShowDialog() == DialogResult.OK) _output = dialog.SelectedPath;
         }
-        ImGui.TextWrapped(_web ? "Browser graphics are reduced: no desktop shadows, IBL or post-processing parity. Sprites and the legacy Arena HUD are not supported. All saved content is packaged; models are prepared during export. Test on a private itch.io page first." : "Microsoft Visual C++ x64 runtime and a compatible graphics driver are required. An official prerequisite link is included. A new dated build folder is created here. Existing builds are never overwritten. All saved project assets and scenes are included.");
+        ImGui.TextWrapped(_web ? "Browser graphics are reduced: no desktop shadows, IBL or post-processing parity. Sprites and the legacy Arena HUD are not supported. Saved content is compressed into Game.bytepak; models are prepared during export. Test on a private itch.io page first." : "Microsoft Visual C++ x64 runtime and a compatible graphics driver are required. An official prerequisite link is included. A new dated build folder is created here. Existing builds are never overwritten. Saved assets and scenes are compressed into Game.bytepak.");
         ImGui.EndDisabled();
         if (dirty) ImGui.TextWrapped("Save the scene and all open asset documents before exporting.");
         if (playing) ImGui.TextWrapped("Stop Play mode before exporting.");

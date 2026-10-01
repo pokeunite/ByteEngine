@@ -37,6 +37,7 @@ public static class WebGamePackageExporter
         Directory.CreateDirectory(destination);
         string marker = Path.Combine(destination, "BUILD-INCOMPLETE.txt");
         File.WriteAllText(marker, "Incomplete web export. Do not distribute.");
+        string content = Path.Combine(destination, "site", "Content");
         try
         {
             string site = Path.Combine(destination, "site");
@@ -44,7 +45,6 @@ public static class WebGamePackageExporter
             // Ship uncompressed runtime files: works on ordinary static hosts without custom encoding headers.
             foreach (string file in GamePackageExporter.WalkFiles(site).Where(f => f.EndsWith(".br") || f.EndsWith(".gz")))
                 File.Delete(file);
-            string content = Path.Combine(site, "Content");
             foreach (string directory in roots)
                 GamePackageExporter.CopyTree(GamePackageExporter.ResolveInside(root, directory),
                     GamePackageExporter.ResolveInside(content, directory), true);
@@ -62,8 +62,18 @@ public static class WebGamePackageExporter
                 CookedModelStore.Save(content, ModelImporter.ForPath(model.FullPath).Import(model, model.Metadata.ModelImporter));
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
-            var paths = GamePackageExporter.WalkFiles(content).Concat(
-                GamePackageExporter.WalkFiles(Path.Combine(site, "Resources"))).ToArray();
+            int contentCount = GamePackageExporter.WalkFiles(content).Count();
+            string packageRoot = Path.Combine(destination, "PackageStaging");
+            Directory.CreateDirectory(packageRoot);
+            Directory.Move(content, Path.Combine(packageRoot, "Content"));
+            string resources = Path.Combine(site, "Resources");
+            if (Directory.Exists(resources)) Directory.Move(resources, Path.Combine(packageRoot, "Resources"));
+            string package = Path.Combine(site, ByteAssetPackage.FileName);
+            progress?.Report("Compressing browser assets...");
+            ByteAssetPackage.Create(packageRoot, package);
+            Directory.Delete(packageRoot, true);
+            GamePackageExporter.CopyAssetNotice(root, site);
+            var paths = new[] { package };
             if (paths.GroupBy(p => Path.GetRelativePath(site, p).Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .Any(g => g.Count() > 1)) throw new InvalidDataException("Content has case-colliding file names.");
             var entries = paths.Select(file => new {
@@ -72,7 +82,7 @@ public static class WebGamePackageExporter
                 sha256 = Hash(file)
             }).ToArray();
             File.WriteAllText(Path.Combine(site, "web-game.json"), JsonSerializer.Serialize(new {
-                formatVersion = 1, name = project.Name, files = entries
+                formatVersion = 2, name = project.Name, files = entries
             }));
             var siteFiles = GamePackageExporter.WalkFiles(site).ToArray();
             if (siteFiles.Length > 1000 || siteFiles.Sum(f => new FileInfo(f).Length) > 500L * 1024 * 1024 ||
@@ -87,9 +97,15 @@ public static class WebGamePackageExporter
                 "Browser renderer uses reduced graphics: no desktop shadow/IBL/postprocessing parity.\n" +
                 "Test privately before release. To test locally, serve the site directory over HTTP, not file://.\n");
             File.Delete(marker);
-            return new GamePackageResult(destination, zip, entries.Length, entries.Sum(e => e.size));
+            return new GamePackageResult(destination, zip, contentCount, entries.Sum(e => e.size));
         }
         catch (Exception error) { File.WriteAllText(Path.Combine(destination, "build-error.txt"), error.ToString()); throw; }
+        finally
+        {
+            if (Directory.Exists(content)) Directory.Delete(content, true);
+            string staging = Path.Combine(destination, "PackageStaging");
+            if (Directory.Exists(staging)) Directory.Delete(staging, true);
+        }
     }
 
     private static string Hash(string file)

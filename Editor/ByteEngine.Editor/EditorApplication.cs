@@ -1424,6 +1424,17 @@ public sealed class EditorApplication
             if (Directory.Exists(projectDirectory) && Directory.EnumerateFileSystemEntries(projectDirectory).Any())
                 throw new IOException($"The project folder already exists and is not empty: {projectDirectory}");
 
+            if (request.Template == ProjectTemplate.LastStand)
+            {
+                string starterFile = LastStandStarterFactory.Install(projectDirectory, request.Name);
+                EditorProjectContext starter = EditorProjectContext.Open(starterFile, warning => _log.Warning(warning));
+                string startup = starter.ResolveProjectPath(starter.Project.StartupScene);
+                Scene starterScene = starter.Scenes.Load(startup);
+                SwitchProject(starter, starterScene, startup);
+                _log.Info($"Created Last Stand starter '{request.Name}'. Read ASSET-NOTICE.txt before reusing third-party assets.");
+                return;
+            }
+
             string projectFile = Path.Combine(request.ParentDirectory, request.Name + ".byteproject");
             EditorProjectContext context =
                 EditorProjectContext.Create(

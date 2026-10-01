@@ -76,7 +76,9 @@ public sealed class Projectile3D : Component
                 $"destroyOnHit={DestroyOnHit}");
 
             projectile.Transform.WorldPosition = hit.Point;
-            hit.GameObject.GetComponent<HealthComponent>()?.Damage(Damage);
+            healthOwner?.GetComponent<SkeletalRagdoll3D>()?.ApplyImpact(direction,
+                Math.Clamp(Damage / 25f, .1f, 3f));
+            healthOwner?.GetComponent<HealthComponent>()?.Damage(Damage);
             if (DestroyOnHit) scene.DestroyGameObject(projectile);
             else { Velocity = Vector3.Zero; _stopped = true; }
             return;

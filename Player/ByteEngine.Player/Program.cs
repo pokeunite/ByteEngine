@@ -42,8 +42,8 @@ internal static class Program
                 }
             }
             if (validate) GamePackageExporter.ValidatePackage(AppContext.BaseDirectory);
-            string projectFile = Path.Combine(AppContext.BaseDirectory, "Content", "Game.byteproject");
-            using var project = new GameProjectRuntime(projectFile, CrashDebugLog.Write);
+            using var content = new GameContentSession(AppContext.BaseDirectory);
+            using var project = new GameProjectRuntime(content.ProjectFile, CrashDebugLog.Write);
             if (validate)
             {
                 CrashDebugLog.Write($"Package validation passed: {project.Project.Name}; assets={project.Database.Assets.Count}");

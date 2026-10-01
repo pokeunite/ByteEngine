@@ -118,7 +118,16 @@ public sealed partial class VisualLogicRegistry
             {
                 if (context.LastRaycastHit is not { } hit) return;
                 float amount = (float)EventValueResolver.GetNumber(instruction, "amount", context, 20);
-                hit.GameObject.GetComponent<HealthComponent>()?.Damage(amount);
+                GameObject? healthOwner = hit.GameObject;
+                while (healthOwner != null && healthOwner.GetComponent<HealthComponent>() == null)
+                    healthOwner = healthOwner.Parent;
+                if (healthOwner == null) return;
+                Vector3 direction = context.LastRaycastDirection;
+                if (direction.LengthSquared() < .000001f)
+                    direction = hit.Point - context.Self.Transform.WorldPosition;
+                healthOwner.GetComponent<SkeletalRagdoll3D>()?.ApplyImpact(direction,
+                    Math.Clamp(amount / 25f, .1f, 3f));
+                healthOwner.GetComponent<HealthComponent>()?.Damage(amount);
             }
         });
     }
@@ -138,6 +147,7 @@ public sealed partial class VisualLogicRegistry
     {
         context.RaycastPerformed = true;
         context.LastRaycastHit = null;
+        context.LastRaycastDirection = Vector3.Zero;
         GameObject? source = ResolveObjectArgument(instruction, "source", context);
         if (source == null) return false;
 
@@ -291,6 +301,7 @@ public sealed partial class VisualLogicRegistry
 
         Vector3 normalizedWorldDirection =
             Vector3.Normalize(worldDirection);
+        context.LastRaycastDirection = normalizedWorldDirection;
 
         if (RuntimeDiagnostics.DebugWeaponRaycast)
         {

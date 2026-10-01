@@ -2,7 +2,7 @@
 
 ByteEngine v0.7 is a lightweight, 3D-first C# game engine and editor built on .NET 9, OpenTK, and ImGui.NET. It combines a persistent model pipeline, reusable Byte Blueprints, executable ByteGraph visual logic, character-controller foundations, and the existing 2D toolset.
 
-Startup opens the Project Browser. Create Project offers a blank Clean Project or a ready-to-run 3D Starter, with a selectable destination directory. You can also open an existing `.byteproject`, or pass one on the command line.
+Startup opens the Project Browser. Create Project offers Clean Project, 3D Starter, ByteArena, and Last Stand, with a selectable destination directory. Last Stand is a compact offline zombie-survival starter with an educational asset notice and no music. You can also open an existing `.byteproject`, or pass one on the command line. See [starter and game-package details](Documentation/StarterProjectsAndGamePackages.md).
 
 ## Model asset workflow
 

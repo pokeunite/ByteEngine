@@ -25,6 +25,16 @@ internal static class C10FAudioPlayClipTests
                 clip != null,
                 "test WAV decodes without an audio backend");
 
+            string musicPath = Path.Combine(root, "music-32bit.wav");
+            WriteWave32(musicPath);
+            Assert(
+                AudioClip.TryLoadWave(musicPath, out AudioClip? music) &&
+                music != null &&
+                music.Channels == 2 &&
+                music.BitsPerSample == 16 &&
+                Math.Abs(music.DurationSeconds - .001f) < .0001f,
+                "32-bit stereo PCM music converts to portable 16-bit playback");
+
             RegistryAndResolution(clip!);
             PlaybackBoundary(clip!);
         }
@@ -274,6 +284,30 @@ internal static class C10FAudioPlayClipTests
         writer.Write(sampleRate * 2);
         writer.Write((short)2);
         writer.Write((short)16);
+        writer.Write("data"u8);
+        writer.Write(pcm.Length);
+        writer.Write(pcm);
+    }
+
+    private static void WriteWave32(string path)
+    {
+        const int sampleRate = 8000;
+        byte[] pcm = new byte[sampleRate / 1000 * 2 * sizeof(int)];
+
+        using FileStream stream = File.Create(path);
+        using BinaryWriter writer = new(stream);
+
+        writer.Write("RIFF"u8);
+        writer.Write(36 + pcm.Length);
+        writer.Write("WAVE"u8);
+        writer.Write("fmt "u8);
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write((short)2);
+        writer.Write(sampleRate);
+        writer.Write(sampleRate * 2 * sizeof(int));
+        writer.Write((short)(2 * sizeof(int)));
+        writer.Write((short)32);
         writer.Write("data"u8);
         writer.Write(pcm.Length);
         writer.Write(pcm);

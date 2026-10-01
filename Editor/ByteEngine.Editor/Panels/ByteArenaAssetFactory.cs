@@ -26,6 +26,7 @@ internal static class ByteArenaAssetFactory
         projectile.AddComponent(new MeshRenderer
         {
             Primitive = PrimitiveMeshType.Sphere,
+            UsePrimitive = true,
             Material = new Material { BaseColor = new Vector4(1f, .72f, .08f, 1f) }
         });
         projectile.AddComponent(new Projectile3D { Damage = 25f, Radius = .08f });

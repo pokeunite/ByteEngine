@@ -1,0 +1,11 @@
+{
+  "name": "byteengine-goblin-parts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node generate.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Buffers.Binary;
 using System.Text;
 
 using ByteEngine.Core.Diagnostics;
@@ -555,10 +556,11 @@ public sealed class AudioClip
 
         if (bitsPerSample is not
             8 and not
-            16)
+            16 and not
+            32)
         {
             throw new NotSupportedException(
-                $"WAV bit depth {bitsPerSample} is unsupported. Use 8-bit or 16-bit PCM.");
+                $"WAV bit depth {bitsPerSample} is unsupported. Use 8-, 16-, or 32-bit PCM.");
         }
 
         if (sampleRate <=
@@ -573,6 +575,26 @@ public sealed class AudioClip
         {
             throw new InvalidDataException(
                 "WAV has no data chunk.");
+        }
+
+        // OpenAL's portable core formats top out at signed 16-bit PCM.
+        // Preserve the duration and channel layout while converting 32-bit
+        // integer WAVs (commonly exported by music tools) during managed load.
+        if (bitsPerSample == 32)
+        {
+            if (data.Length % 4 != 0)
+                throw new InvalidDataException("32-bit PCM data is not sample-aligned.");
+            byte[] pcm16 = new byte[data.Length / 2];
+            for (int sourceOffset = 0, targetOffset = 0;
+                 sourceOffset < data.Length;
+                 sourceOffset += 4, targetOffset += 2)
+            {
+                int sample = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(sourceOffset, 4));
+                BinaryPrimitives.WriteInt16LittleEndian(pcm16.AsSpan(targetOffset, 2),
+                    (short)(sample >> 16));
+            }
+            data = pcm16;
+            bitsPerSample = 16;
         }
 
         ALFormat format =

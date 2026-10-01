@@ -57,10 +57,14 @@ internal static class WindowsGameExportTests
         var result = GamePackageExporter.Export(projectFile, runtime, output, project.StartupScene);
         if (!File.Exists(result.Executable) || File.Exists(Path.Combine(result.Directory, "ByteEngine.Editor.dll")) ||
             File.Exists(Path.Combine(result.Directory, "BUILD-INCOMPLETE.txt")) ||
-            !File.Exists(Path.Combine(result.Directory, "Content", ".byteengine", "ModelSockets", "test.sockets.json")))
+            !File.Exists(Path.Combine(result.Directory, ByteAssetPackage.FileName)) ||
+            Directory.Exists(Path.Combine(result.Directory, "Content")))
             throw new Exception("Standalone package must contain player and runtime socket metadata, not editor.");
         GamePackageExporter.ValidatePackage(result.Directory);
-        string content = Path.Combine(result.Directory, "Content");
+        using var contentSession = new GameContentSession(result.Directory);
+        string content = Path.GetDirectoryName(contentSession.ProjectFile)!;
+        if (!File.Exists(Path.Combine(content, ".byteengine", "ModelSockets", "test.sockets.json")))
+            throw new Exception("Runtime socket metadata must survive content packaging.");
         var before = Directory.GetFiles(content, "*", SearchOption.AllDirectories)
             .ToDictionary(file => file, File.GetLastWriteTimeUtc);
         using (var game = new GameProjectRuntime(Path.Combine(content, "Game.byteproject")))
@@ -82,10 +86,16 @@ internal static class WindowsGameExportTests
         ExpectFailure(() => GamePackageExporter.Export(projectFile, runtime,
             Path.Combine(projectRoot, "Assets", "Builds"), project.StartupScene));
         ExpectFailure(() => GamePackageExporter.Export(projectFile, runtime, output, "Scenes/Missing.bytescene"));
-        File.WriteAllText(Path.Combine(content, "Assets", "data.txt"), "corrupt");
+        string packageFile = Path.Combine(result.Directory, ByteAssetPackage.FileName);
+        byte[] originalPackage = File.ReadAllBytes(packageFile);
+        byte[] corruptPackage = originalPackage.ToArray();
+        corruptPackage[^1] ^= 0xff;
+        File.WriteAllBytes(packageFile, corruptPackage);
         ExpectFailure(() => GamePackageExporter.ValidatePackage(result.Directory));
         // Restore only this test-created package so the real-runtime --validate smoke can use it.
-        File.Copy(dataFile, Path.Combine(content, "Assets", "data.txt"), true);
+        File.WriteAllBytes(packageFile, originalPackage);
+        contentSession.Dispose();
+        if (Directory.Exists(content)) throw new Exception("Private runtime content must be removed after shutdown.");
         string missingMeta = dataFile + ".meta";
         File.Move(missingMeta, missingMeta + ".test");
         ExpectFailure(() => { using var db = new AssetDatabase(projectRoot, new[] { "Assets", "Scenes" }, readOnly: true); });

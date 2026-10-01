@@ -237,17 +237,9 @@ public sealed class Scene
         ArgumentNullException.ThrowIfNull(
             gameObject);
 
-        CrashDebugLog.Write(
-            $"Scene.DestroyGameObject: request scene='{Name}' object='{gameObject.Name}' id={gameObject.Id} " +
-            $"components=[{string.Join(", ", gameObject.Components.Select(component => component.GetType().FullName))}] " +
-            $"isUpdating={_isUpdating}.");
-
         if (!_gameObjects.Contains(
                 gameObject))
         {
-            CrashDebugLog.Write(
-                "Scene.DestroyGameObject: object is not in this scene; returning false.");
-
             return false;
         }
 
@@ -259,23 +251,9 @@ public sealed class Scene
             gameObject.Active =
                 false;
 
-            CrashDebugLog.Write(
-                "Scene.DestroyGameObject: queued because scene is updating.");
-
             return true;
         }
-
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObject: entering immediate destruction.");
-
-        bool result =
-            DestroyGameObjectImmediate(
-                gameObject);
-
-        CrashDebugLog.Write(
-            $"Scene.DestroyGameObject: immediate destruction returned {result}.");
-
-        return result;
+        return DestroyGameObjectImmediate(gameObject);
     }
 
     public GameObject? FindGameObject(string name) =>
@@ -345,8 +323,9 @@ public sealed class Scene
 
         Console.WriteLine($"Loading scene: {Name}");
 
-        foreach (GameObject gameObject in _gameObjects)
-            gameObject.StartInternal();
+        // OnStart may spawn objects; AddGameObject starts new objects immediately.
+        foreach (GameObject gameObject in _gameObjects.ToArray())
+            if (gameObject.Scene == this) gameObject.StartInternal();
     }
 
     internal void UpdateInternal()
@@ -456,52 +435,24 @@ public sealed class Scene
     private bool DestroyGameObjectImmediate(
         GameObject gameObject)
     {
-        CrashDebugLog.Write(
-            $"Scene.DestroyGameObjectImmediate: BEGIN object='{gameObject.Name}' id={gameObject.Id}.");
-
         if (!_gameObjects.Contains(gameObject))
         {
-            CrashDebugLog.Write(
-                "Scene.DestroyGameObjectImmediate: object already absent.");
-
             return false;
         }
 
         foreach (GameObject child in gameObject.Children.ToArray())
         {
-            CrashDebugLog.Write(
-                $"Scene.DestroyGameObjectImmediate: destroying child '{child.Name}' id={child.Id}.");
-
             DestroyGameObjectImmediate(child);
         }
 
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObjectImmediate: removing pending-destroy id.");
-
         _pendingDestroy.Remove(gameObject.Id);
-
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObjectImmediate: removing object from scene list.");
 
         _gameObjects.Remove(gameObject);
 
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObjectImmediate: unregistering classification.");
-
         UnregisterClassification(gameObject);
 
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObjectImmediate: detaching object from scene.");
-
         gameObject.DetachFromScene();
-
-        CrashDebugLog.Write(
-            "Scene.DestroyGameObjectImmediate: calling GameObject.DestroyInternal.");
-
         gameObject.DestroyInternal();
-
-        CrashDebugLog.Write(
-            $"Scene.DestroyGameObjectImmediate: COMPLETE object='{gameObject.Name}' id={gameObject.Id}.");
 
         return true;
     }
@@ -546,3 +497,4 @@ public sealed class Scene
             .Select(item => item.gameObject);
     }
 }
+

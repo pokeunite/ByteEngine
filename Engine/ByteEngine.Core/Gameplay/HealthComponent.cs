@@ -9,6 +9,7 @@ public sealed class HealthComponent : Component
     private bool _deathTriggered;
 
     public event Action<HealthComponent>? Died;
+    public event Action<HealthComponent, float>? Damaged;
 
     public float MaxHealth
     {
@@ -34,7 +35,9 @@ public sealed class HealthComponent : Component
     public void Damage(float amount)
     {
         if (Invulnerable || IsDead || !float.IsFinite(amount) || amount <= 0f) return;
+        float before = CurrentHealth;
         CurrentHealth -= amount;
+        Damaged?.Invoke(this, before - CurrentHealth);
         TriggerDeath();
     }
 

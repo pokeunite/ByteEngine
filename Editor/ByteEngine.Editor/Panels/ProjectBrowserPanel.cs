@@ -7,7 +7,8 @@ internal enum ProjectTemplate
 {
     Clean,
     Starter3D,
-    ByteArena
+    ByteArena,
+    LastStand
 }
 
 internal sealed record NewProjectRequest(string Name, string ParentDirectory, ProjectTemplate Template);
@@ -70,7 +71,7 @@ internal sealed class ProjectBrowserPanel
             _openCreatePopup = false;
         }
 
-        ImGui.SetNextWindowSize(new Vector2(620f, 430f), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSize(new Vector2(680f, 550f), ImGuiCond.Appearing);
         if (!ImGui.BeginPopupModal("Create New ByteEngine Project", ImGuiWindowFlags.NoResize)) return;
 
         ImGui.Text("Project name");
@@ -106,6 +107,14 @@ internal sealed class ProjectBrowserPanel
         if (ImGui.RadioButton("ByteArena", ref template, (int)ProjectTemplate.ByteArena))
             _template = ProjectTemplate.ByteArena;
         ImGui.TextDisabled("    Playable arena shooter with player, camera, enemies and game manager.");
+        if (ImGui.RadioButton("Last Stand", ref template, (int)ProjectTemplate.LastStand))
+            _template = ProjectTemplate.LastStand;
+        ImGui.TextDisabled("    Playable zombie survival: shotgun, waves, HUD, pickups and ragdolls.");
+        if (_template == ProjectTemplate.LastStand)
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped("Educational starter. Third-party assets belong to their original creators. Check each original license before reusing or distributing assets. Music is excluded. See ASSET-NOTICE.txt in the new project.");
+        }
 
         bool valid = IsValidName(safeName) && Directory.Exists(_parentDirectory);
         if (!valid)

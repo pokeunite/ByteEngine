@@ -56,11 +56,11 @@ public static class GamePackageExporter
         System.IO.Directory.CreateDirectory(destination);
         string marker = Path.Combine(destination, "BUILD-INCOMPLETE.txt");
         File.WriteAllText(marker, "This build is not complete. Do not distribute it. See build-error.txt if present.");
+        string content = Path.Combine(destination, "Content");
         try
         {
             progress?.Report("Copying standalone Windows runtime...");
             CopyTree(runtimeDirectory, destination, false);
-            string content = Path.Combine(destination, "Content");
             System.IO.Directory.CreateDirectory(content);
             foreach (string directory in roots)
             {
@@ -81,11 +81,17 @@ public static class GamePackageExporter
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
             progress?.Report("Verifying packaged assets...");
             using (var validation = new AssetDatabase(content, roots, readOnly: true)) { }
-            var entries = WalkFiles(content).Select(file => new PackageFile(
-                Path.GetRelativePath(destination, file).Replace('\\', '/'),
-                new FileInfo(file).Length, HashFile(file))).ToArray();
+            string[] contentFiles = WalkFiles(content).ToArray();
+            long contentBytes = contentFiles.Sum(file => new FileInfo(file).Length);
+            progress?.Report("Compressing game assets into Game.bytepak...");
+            string package = Path.Combine(destination, ByteAssetPackage.FileName);
+            ByteAssetPackage.Create(content, package);
+            var entries = new[] { new PackageFile(ByteAssetPackage.FileName,
+                new FileInfo(package).Length, HashFile(package)) };
+            System.IO.Directory.Delete(content, true);
+            CopyAssetNotice(root, destination);
             File.WriteAllText(Path.Combine(destination, "game-package.json"),
-                JsonSerializer.Serialize(new { formatVersion = 1, target = "win-x64",
+                JsonSerializer.Serialize(new { formatVersion = 2, target = "win-x64",
                     engineVersion = ByteEngineInfo.Version, project.Name, startupScene = project.StartupScene,
                     files = entries }, new JsonSerializerOptions { WriteIndented = true }));
             string executable = Path.Combine(destination, safeName + ".exe");
@@ -96,17 +102,28 @@ public static class GamePackageExporter
                 "Native libraries require the Microsoft Visual C++ x64 v14 Redistributable. Use the included official install link if the game reports a missing native dependency.\r\n" +
                 "Escape releases the mouse; click to recapture. Use the window close button to quit.\r\n" +
                 "Game logs: %LOCALAPPDATA%\\ByteEngine\\Games\\Logs\r\n" +
-                "This build contains all saved project assets/scenes. Editor windows and tools are not included.\r\n");
+                "Game assets/scenes are stored in Game.bytepak. Keep that file beside the executable.\r\n");
             File.WriteAllText(Path.Combine(destination, "Install Visual C++ Runtime.url"),
                 "[InternetShortcut]\r\nURL=https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\r\n");
             File.Delete(marker);
-            return new GamePackageResult(destination, executable, entries.Length, entries.Sum(entry => entry.Length));
+            return new GamePackageResult(destination, executable, contentFiles.Length, contentBytes);
         }
         catch (Exception error)
         {
             File.WriteAllText(Path.Combine(destination, "build-error.txt"), error.ToString());
             throw new IOException($"Export failed. The incomplete build was retained at '{destination}'. {error.Message}", error);
         }
+        finally
+        {
+            // Only this export's staging directory, never source project content.
+            if (System.IO.Directory.Exists(content)) System.IO.Directory.Delete(content, true);
+        }
+    }
+
+    internal static void CopyAssetNotice(string projectRoot, string destination)
+    {
+        string notice = Path.Combine(projectRoot, "ASSET-NOTICE.txt");
+        if (File.Exists(notice)) File.Copy(notice, Path.Combine(destination, "ASSET-NOTICE.txt"), true);
     }
 
     public static void ValidatePackage(string directory)

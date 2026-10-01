@@ -69,6 +69,7 @@ public sealed partial class VisualLogicRegistry
     {
         context.RaycastPerformed = true;
         context.LastRaycastHit = null;
+        context.LastRaycastDirection = Vector3.Zero;
 
         string startMode =
             EventValueResolver.GetString(
@@ -415,6 +416,7 @@ public sealed partial class VisualLogicRegistry
                 source: null,
                 bypassCollisionMatrix: true,
                 includeTriggers: includeTriggers);
+        context.LastRaycastDirection = Vector3.Normalize(delta);
 
         if (found)
         {

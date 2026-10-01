@@ -390,6 +390,31 @@ public sealed partial class SkeletalMeshRenderer : Component
             ResolveRuntimeResources();
         }
 
+        if (_lightRagdollActive)
+        {
+            AdvanceLightRagdoll((float)ByteEngine.Core.Time.DeltaTime);
+            _poseDirty = true;
+            UpdatePoseAndMeshes();
+            return;
+        }
+
+        if (_recoveryDuration > 0f)
+        {
+            _recoveryElapsed += Math.Max((float)ByteEngine.Core.Time.DeltaTime, 0f);
+            _poseDirty = true;
+            if (_recoveryElapsed >= _recoveryDuration)
+            {
+                _recoveryDuration = 0f;
+                _recoveryPose = Array.Empty<Matrix4x4>();
+            }
+        }
+
+        if (_hitReaction > 0.001f)
+        {
+            _hitReaction *= MathF.Exp(-12f * Math.Max((float)ByteEngine.Core.Time.DeltaTime, 0f));
+            _poseDirty = true;
+        }
+
         if (_currentAnimation == null)
         {
             if (_poseDirty)
@@ -976,12 +1001,19 @@ public sealed partial class SkeletalMeshRenderer : Component
             return;
         }
 
-        Matrix4x4[] locals = BuildLocalPose();
+        Matrix4x4[] locals = _lightRagdollActive
+            ? BuildLightRagdollPose()
+            : BuildLocalPose();
+        if (!_lightRagdollActive) ApplyRecoveryPose(locals);
+        if (!_lightRagdollActive && _hitReaction > 0.001f)
+            ApplyHitReactionPose(locals);
         Matrix4x4[] globals = ComputeGlobals(locals);
 
-        Matrix4x4 rootMotionCorrection = HasAdvancedPose
-            ? _currentRootMotionCorrection
-            : BuildModelSpaceRootMotionCorrection();
+        Matrix4x4 rootMotionCorrection = _lightRagdollActive
+            ? _lightRagdollCorrection
+            : HasAdvancedPose
+                ? _currentRootMotionCorrection
+                : BuildModelSpaceRootMotionCorrection();
 
         _currentPoseGlobals = globals;
         _currentRootMotionCorrection = rootMotionCorrection;
@@ -1682,6 +1714,11 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private void DisposeRuntimeMeshes()
     {
+        _lightRagdollActive = false;
+        _recoveryDuration = 0f;
+        _recoveryPose = Array.Empty<Matrix4x4>();
+        _lightRagdollRestPose = Array.Empty<Matrix4x4>();
+        _lightRagdollBones = Array.Empty<LightRagdollBone>();
         foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
         {
             runtime.Mesh.Dispose();

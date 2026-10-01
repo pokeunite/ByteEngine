@@ -73,6 +73,7 @@
           "enabled": true,
           "properties": {
             "primitive": "Cube",
+            "usePrimitive": true,
             "visible": true,
             "baseColor": [
               0.25,
@@ -136,6 +137,7 @@
           "enabled": true,
           "properties": {
             "primitive": "Plane",
+            "usePrimitive": true,
             "visible": true,
             "baseColor": [
               0.32,

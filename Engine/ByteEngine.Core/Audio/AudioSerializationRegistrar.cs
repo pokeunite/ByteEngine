@@ -213,13 +213,11 @@ public static class AudioSerializationRegistrar
         ArgumentNullException.ThrowIfNull(
             database);
 
-        source.ClipReference =
-            reference;
-
         if (reference.IsEmpty)
         {
             source.SetClip(
                 null);
+            source.ClipReference = reference;
 
             return true;
         }
@@ -231,9 +229,6 @@ public static class AudioSerializationRegistrar
         if (asset ==
             null)
         {
-            source.SetClip(
-                null);
-
             warningSink?.Invoke(
                 $"Audio clip '{reference}' could not be resolved.");
 
@@ -246,9 +241,6 @@ public static class AudioSerializationRegistrar
                 ".wav",
                 StringComparison.OrdinalIgnoreCase))
         {
-            source.SetClip(
-                null);
-
             warningSink?.Invoke(
                 $"Audio v0.11-A supports PCM WAV only: {asset.ProjectPath}");
 
@@ -260,14 +252,12 @@ public static class AudioSerializationRegistrar
                 out AudioClip? clip,
                 warningSink))
         {
-            source.SetClip(
-                null);
-
             return false;
         }
 
         source.SetClip(
             clip);
+        source.ClipReference = reference;
 
         return true;
     }

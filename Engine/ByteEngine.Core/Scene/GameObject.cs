@@ -338,30 +338,15 @@ public sealed class GameObject
 
     internal void DestroyInternal()
     {
-        CrashDebugLog.Write(
-            $"GameObject.DestroyInternal: BEGIN object='{Name}' id={Id} componentCount={_components.Count}.");
-
         for (int i = _components.Count - 1; i >= 0; i--)
         {
             Component component =
                 _components[i];
-
-            CrashDebugLog.Write(
-                $"GameObject.DestroyInternal: destroying component index={i} type='{component.GetType().FullName}'.");
-
             component.DestroyInternal();
-
-            CrashDebugLog.Write(
-                $"GameObject.DestroyInternal: destroyed component index={i} type='{component.GetType().FullName}'.");
         }
-
-        CrashDebugLog.Write(
-            "GameObject.DestroyInternal: clearing component collection.");
 
         _components.Clear();
         _started = false;
 
-        CrashDebugLog.Write(
-            $"GameObject.DestroyInternal: COMPLETE object='{Name}' id={Id}.");
     }
 }

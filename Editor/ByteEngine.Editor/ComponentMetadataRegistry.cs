@@ -74,11 +74,13 @@ internal static class ComponentMetadataRegistry
 
         [typeof(HealthComponent)] = new("Health", "Gameplay", "Tracks damage, healing and death.", "hit points hp damage"),
         [typeof(HealthPickup3D)] = new("Health Pickup", "Gameplay", "Heals a player on trigger contact and is consumed once.", "pickup heal medkit"),
+        [typeof(SkeletalRagdoll3D)] = new("Skeletal Ragdoll", "Animation", "Adds hit flinch and a short physics-assisted skeletal collapse on death. Add beside Health and a skinned model; a Rigidbody provides whole-body collision.", "ragdoll death hit reaction corpse"),
         [typeof(LifetimeComponent)] = new("Lifetime", "Gameplay", "Destroys its object after a configured duration.", "timer destroy despawn"),
         [typeof(Projectile3D)] = new("Projectile", "Gameplay", "Moves a swept projectile and damages health.", "bullet damage"),
         [typeof(ProjectileLauncher3D)] = new("Projectile Launcher", "Gameplay", "Creates reusable projectiles with a fire cooldown.", "weapon shoot fire"),
         [typeof(PlayerShooter3D)] = new("Player Shooter", "Gameplay", "Maps player fire input to a projectile launcher.", "weapon input"),
         [typeof(ArenaGameManager)] = new("Arena Game Manager", "Gameplay", "Tracks arena match state.", "game rules manager", false, true),
+        [typeof(ByteEngine.Core.Construction.VehicleBuilder3D)] = new("Vehicle Builder 3D", "Gameplay", "Socket garage, saved builds, and arcade test driving using imported scrap parts.", "vehicle garage build car"),
         [typeof(WaveSpawner3D)] = new("Wave Spawner 3D", "Gameplay", "Spawns Blueprint enemies in timed waves and tracks their Health.", "wave horde enemy spawn"),
         [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Chases and attacks a nearby player without navigation.", "enemy chase attack"),
 
@@ -304,3 +306,4 @@ internal static class ComponentMetadataRegistry
                 : character.ToString()));
     }
 }
+

@@ -1,4 +1,5 @@
 using ByteEngine.Core.Animation;
+using System.Numerics;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Variables;
@@ -19,6 +20,7 @@ public sealed class EventExecutionContext
 
     // Shared by ordered rules in one Event Module update; never retained across frames.
     public RaycastHit3D? LastRaycastHit { get; set; }
+    public Vector3 LastRaycastDirection { get; set; }
     public bool RaycastPerformed { get; set; }
 
     public required ByteEngine.Core.Scene.Scene Scene { get; init; }

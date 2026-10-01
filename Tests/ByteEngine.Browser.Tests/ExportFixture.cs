@@ -69,17 +69,24 @@ internal static class ExportFixture
         using var archive = ZipFile.OpenRead(result.Executable);
         if (archive.GetEntry("index.html")==null || archive.GetEntry("web-game.json")==null)
             throw new Exception("HTML ZIP must have root entry page and manifest.");
-        var cooked = CookedModelStore.Load(Path.Combine(site,"Content"),modelId);
+        if (Directory.Exists(Path.Combine(site, "Content")) || Directory.Exists(Path.Combine(site, "Resources")) ||
+            archive.GetEntry("Game.bytepak") == null)
+            throw new Exception("Web export must ship packaged content rather than loose assets.");
+        string extracted = Path.Combine(parent, "Mounted Web Package");
+        var packedPaths = ByteAssetPackage.Extract(Path.Combine(site, ByteAssetPackage.FileName), extracted);
+        var cooked = CookedModelStore.Load(Path.Combine(extracted,"Content"),modelId);
         if (cooked.Skeleton==null || cooked.Animations.Count!=1 || cooked.Meshes.Count!=1)
             throw new Exception("Cooked skeleton/animation/mesh lost.");
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(site,"web-game.json")));
-        if (!manifest.RootElement.GetProperty("files").EnumerateArray().Any(e=>e.GetProperty("path").GetString()!.EndsWith(".ttf")))
+        if (manifest.RootElement.GetProperty("formatVersion").GetInt32() != 2 ||
+            !packedPaths.Any(path => path.EndsWith(".ttf")) || !packedPaths.Any(path => path.EndsWith(".wav")))
             throw new Exception("Default font missing.");
         if(before.Any(p=>File.GetLastWriteTimeUtc(p.Key)!=p.Value))throw new Exception("Export changed source content.");
         bool rejected=false;
         try { WebGamePackageExporter.Export(projectFile,runtime,Path.Combine(root,"Assets","Build"),project.StartupScene); }
         catch(InvalidOperationException) { rejected=true; }
         if(!rejected)throw new Exception("Unsafe output not rejected.");
+        Directory.Delete(extracted, true);
         Console.WriteLine("Web export ZIP, source protection, cooked animation/skeleton, fonts and safe paths passed.");
         Console.WriteLine("WEB_TEST_SITE="+site);
         return result;

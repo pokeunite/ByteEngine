@@ -30,6 +30,7 @@ internal static class ProjectTemplateFactory
         cube.AddComponent(new MeshRenderer
         {
             Primitive = PrimitiveMeshType.Cube,
+            UsePrimitive = true,
             Material = new Material { BaseColor = new Vector4(.25f, .58f, 1f, 1f) }
         });
 
@@ -39,6 +40,7 @@ internal static class ProjectTemplateFactory
         ground.AddComponent(new MeshRenderer
         {
             Primitive = PrimitiveMeshType.Plane,
+            UsePrimitive = true,
             Material = new Material { BaseColor = new Vector4(.32f, .38f, .32f, 1f) }
         });
         ground.AddComponent(new BoxCollider3D { Size = new Vector3(1f, .05f, 1f) });
@@ -60,6 +62,7 @@ internal static class ProjectTemplateFactory
         ground.AddComponent(new MeshRenderer
         {
             Primitive = PrimitiveMeshType.Plane,
+            UsePrimitive = true,
             Material = new Material { BaseColor = new Vector4(.18f, .24f, .2f, 1f) }
         });
         ground.AddComponent(new BoxCollider3D
@@ -74,6 +77,7 @@ internal static class ProjectTemplateFactory
         player.AddComponent(new MeshRenderer
         {
             Primitive = PrimitiveMeshType.Cube,
+            UsePrimitive = true,
             Material = new Material
             {
                 BaseColor = new Vector4(.15f, .55f, 1f, 1f)
@@ -144,6 +148,7 @@ internal static class ProjectTemplateFactory
             enemy.AddComponent(new MeshRenderer
             {
                 Primitive = PrimitiveMeshType.Cube,
+                UsePrimitive = true,
                 Material = new Material
                 {
                     BaseColor = new Vector4(.9f, .18f, .12f, 1f)

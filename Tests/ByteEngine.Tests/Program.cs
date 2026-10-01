@@ -19,6 +19,32 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Length >= 3 && args[0] == "--prepare-last-stand-starter")
+    {
+        LastStandStarterTests.Prepare(args[1], args[2]);
+        return;
+    }
+
+    if (args.Contains("--audio-play-clip"))
+    {
+        C10FAudioPlayClipTests.Run();
+        Console.WriteLine("Audio playback and PCM WAV regression checks passed.");
+        return;
+    }
+
+    if (args.Length >= 2 && args[0] == "--goblin-vehicle")
+    {
+        using var diagnostic = new GoblinVehicleDiagnostic(args[1], args.Contains("--prepare"));
+        diagnostic.Run();
+        return;
+    }
+
+    if (args.Length >= 2 && args[0] == "--validate-goblin-parts")
+    {
+        GoblinPartsDiagnostic.Run(args[1]);
+        return;
+    }
+
     if (args.Length >= 2 && args[0] == "--last-stand-project")
     {
         LastStandProjectDiagnostic.Run(args[1]);
@@ -72,6 +98,7 @@ try
 
     if (args.Contains("--windows-export"))
     {
+        ByteAssetPackageTests.Run(root);
         string? runtime = args.Length > 1 ? args[1] : null;
         var exported = WindowsGameExportTests.Run(root, runtime);
         if (runtime != null)
@@ -286,3 +313,4 @@ static void WriteTriangleGltf(string path)
     """.Replace("__DATA__", data);
     File.WriteAllText(path, json);
 }
+

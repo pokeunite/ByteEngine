@@ -377,6 +377,7 @@ public sealed class ComponentSerializer
 
         Register(new HealthComponentCodec());
         Register(new HealthPickup3DCodec());
+        Register(new SkeletalRagdoll3DCodec());
         Register(new LifetimeComponentCodec());
         Register(new Projectile3DCodec());
         Register(new ProjectileLauncher3DCodec());
@@ -387,6 +388,7 @@ public sealed class ComponentSerializer
         Register(new CameraBoom3DCodec());
         Register(new ArenaGameManagerCodec());
         Register(new WaveSpawner3DCodec());
+        Register(new ByteEngine.Core.Construction.VehicleBuilder3DCodec());
     }
 
     public void Register(
@@ -1527,6 +1529,40 @@ public sealed class ComponentSerializer
         };
     }
 
+    private sealed class SkeletalRagdoll3DCodec : IComponentCodec
+    {
+        public string TypeName => nameof(SkeletalRagdoll3D);
+        public Type ComponentType => typeof(SkeletalRagdoll3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var ragdoll = (SkeletalRagdoll3D)component;
+            return Data(TypeName, new JsonObject
+            {
+                ["corpseLifetime"] = ragdoll.CorpseLifetime,
+                ["maxActiveCorpses"] = ragdoll.MaxActiveCorpses,
+                ["impulseStrength"] = ragdoll.ImpulseStrength,
+                ["hitReactionStrength"] = ragdoll.HitReactionStrength,
+                ["knockdownDamageThreshold"] = ragdoll.KnockdownDamageThreshold,
+                ["knockdownDuration"] = ragdoll.KnockdownDuration,
+                ["recoveryDuration"] = ragdoll.RecoveryDuration,
+                ["launchSpeed"] = ragdoll.LaunchSpeed,
+                ["chainImpactSpeed"] = ragdoll.ChainImpactSpeed
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new SkeletalRagdoll3D
+        {
+            CorpseLifetime = Float(data, "corpseLifetime", 2.5f),
+            MaxActiveCorpses = data.Properties["maxActiveCorpses"]?.GetValue<int>() ?? 4,
+            ImpulseStrength = Float(data, "impulseStrength", 1.5f),
+            HitReactionStrength = Float(data, "hitReactionStrength", 1f),
+            KnockdownDamageThreshold = Float(data, "knockdownDamageThreshold", 8f),
+            KnockdownDuration = Float(data, "knockdownDuration", 1.4f),
+            RecoveryDuration = Float(data, "recoveryDuration", .55f),
+            LaunchSpeed = Float(data, "launchSpeed", 6f),
+            ChainImpactSpeed = Float(data, "chainImpactSpeed", 2f)
+        };
+    }
+
     private sealed class LifetimeComponentCodec : IComponentCodec
     {
         public string TypeName => "LifetimeComponent";
@@ -2624,3 +2660,4 @@ public sealed class ComponentSerializer
         );
     }
 }
+
