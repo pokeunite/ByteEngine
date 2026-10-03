@@ -1,6 +1,8 @@
+using ByteEngine.Core;
+using ByteEngine.Core.Construction;
 using System.Numerics;
 
-namespace ByteEngine.Core.Construction;
+namespace GoblinScrapper.Construction;
 
 /// <summary>Planar arcade motion. Heading and momentum are separate, so low grip produces a real slide.</summary>
 public sealed class VehicleDriveMotion

@@ -5,12 +5,15 @@ using ModelContextProtocol.Server;
 
 namespace ByteEngine.Mcp.Mcp;
 
-/// <summary>Eight compact domain tools; semantic operation details live in AuthoringSession.</summary>
+/// <summary>Nine compact domain tools; semantic operation details live in AuthoringSession.</summary>
 [McpServerToolType]
 public sealed class ByteTools(AuthoringSession session)
 {
     private string Call(string domain, string op, JsonElement? args) =>
         session.Dispatch(domain, op, args);
+
+    [McpServerTool(Name = "be_plugin"), Description("List, import, enable, disable, or remove project plugins. Reopen the project after changes.")]
+    public string Plugin(string op, JsonElement? args = null) => Call("plugin", op, args);
 
     [McpServerTool(Name = "be_project"), Description("Open, inspect, configure, or validate the active ByteEngine project.")]
     public string Project(string op, JsonElement? args = null) => Call("project", op, args);
@@ -30,7 +33,7 @@ public sealed class ByteTools(AuthoringSession session)
     [McpServerTool(Name = "be_logic"), Description("List, inspect, create, or author Event Module rules.")]
     public string Logic(string op, JsonElement? args = null) => Call("logic", op, args);
 
-    [McpServerTool(Name = "be_runtime"), Description("Validate a ByteEngine project or run a controlled build.")]
+    [McpServerTool(Name = "be_runtime"), Description("Validate a ByteEngine project and its startup scene.")]
     public string Runtime(string op, JsonElement? args = null) => Call("runtime", op, args);
 
     [McpServerTool(Name = "be_changes"), Description("Inspect MCP session mutations and revision receipts.")]

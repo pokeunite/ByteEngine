@@ -1,0 +1,9 @@
+{
+  "id": "bytebard.spacescraper",
+  "name": "Space Scraper",
+  "version": "0.1.0",
+  "assembly": "SpaceScraper.Plugin.dll",
+  "entryPoint": "SpaceScraper.Plugin.SpaceScraperPlugin",
+  "editor": true,
+  "runtime": true
+}

@@ -3,6 +3,7 @@ using ByteEngine.Core.Animation;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Diagnostics;
+using ByteEngine.Core.Plugins;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -24,6 +25,11 @@ internal sealed class EditorProjectContext
     private readonly Guid _animationAssetRegistration;
 
     private readonly Guid _audioAssetRegistration;
+
+    private readonly ByteEnginePluginSession _plugins;
+    private readonly List<string> _pluginMessages = new();
+    public IReadOnlyList<string> PluginMessages => _pluginMessages;
+    public bool IsPluginLoaded(string id) => _plugins.LoadedPlugins.Any(p => p.Manifest.Id == id);
 
     public ProjectData Project { get; }
 
@@ -69,6 +75,19 @@ internal sealed class EditorProjectContext
         CrashDebugLog.Write(
             $"EditorProjectContext: opening project '{ProjectFilePath}'.");
 
+        /*
+         * Plugins are project-local and additive. They register before scene
+         * serializers are constructed so plugin component codecs are available
+         * from the first scene/Blueprint load.
+         */
+        _plugins =
+            ByteEnginePluginManager.LoadProjectPlugins(
+                ProjectRoot,
+                ByteEnginePluginLoadMode.Editor,
+                message => { _pluginMessages.Add(message); warningSink(message); });
+
+        PluginEditorBridge.SyncPluginComponents();
+
         AssetDatabase = new AssetDatabase(
             ProjectRoot,
             new[]
@@ -100,6 +119,10 @@ internal sealed class EditorProjectContext
                 Assets,
                 warningSink
             );
+
+        ByteEnginePluginRegistry.ApplyComponentCodecs(
+            components,
+            warningSink);
 
         Scenes =
             new SceneSerializer(
@@ -142,7 +165,7 @@ internal sealed class EditorProjectContext
                         warningSink));
 
         CrashDebugLog.Write(
-            "EditorProjectContext: project initialization complete.");
+            $"EditorProjectContext: project initialization complete; plugins={_plugins.LoadedPlugins.Count}.");
     }
 
     public static EditorProjectContext Open(
@@ -315,6 +338,9 @@ internal sealed class EditorProjectContext
 
         Assets.Dispose();
         AssetDatabase.Dispose();
+
+        _plugins.Dispose();
+        PluginEditorBridge.SyncPluginComponents();
 
         CrashDebugLog.Write(
             "EditorProjectContext.Dispose: complete.");

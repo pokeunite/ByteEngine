@@ -1,0 +1,2372 @@
+{
+  "id": "6d746d79-1690-434b-973c-1b353e924719",
+  "version": 2,
+  "name": "Goblin - Editable Controls",
+  "targetBlueprintGuid": null,
+  "targetBlueprintPath": null,
+  "requiredComponents": [
+    "VehicleBuilder3D"
+  ],
+  "rules": [
+    {
+      "id": "b0011023-095d-446e-b985-fe1f5390f88f",
+      "displayName": "Use the editable keyboard controls",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "270fde2e-8eb5-44eb-9894-e6c0476cf0fe",
+          "id": "system.triggerOnce",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "d588fe39-64e2-4728-9b37-29624a4d86f0",
+          "id": "bytebard.goblinscrapper.setBuiltInControls",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Use the editable keyboard controls",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "45329142-a176-412a-ad2f-21ddb9ef77df",
+      "displayName": "Reset frame commands and held weapons",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "78e19a0b-f2ba-43c9-ac7d-a68b89e227b0",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "919e267a-6aca-4848-b306-ef20f4180e86",
+          "id": "bytebard.goblinscrapper.resetInput",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "f078c14b-cf07-4693-b63f-a7e77ab83741",
+          "id": "bytebard.goblinscrapper.poweredWeapons",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Reset frame commands and held weapons",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "b4869085-8358-4a90-af93-31cab65f1538",
+      "displayName": "B - toggle Build / Simulation",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "107c2cd4-a7ec-451b-a55a-e9cb6cae58ff",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "B",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f292c18e-5559-4e88-aad5-993102538f5c",
+          "id": "bytebard.goblinscrapper.toggleMode",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "B - toggle Build / Simulation",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "ce507256-6a94-4728-bf8c-b43ed86a43cd",
+      "displayName": "Space - start simulation",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "2ec89554-176f-419d-a79d-fa33eb94a24a",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "28c55310-9500-4fae-a144-44ec19cb7005",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Space",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "2b43a5f5-c385-4eb0-8107-cd89beb8076d",
+          "id": "bytebard.goblinscrapper.beginDrive",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Space - start simulation",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "ef6ec051-127a-46b7-8613-9c1d74b0c459",
+      "displayName": "W - addThrottle",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "f7f83a6e-1122-452b-bd6d-63fc46fa2d8c",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "b7c2fd4e-1c2f-4928-b3c8-284b8d6e5b94",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "W",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "0df8f9e6-5863-4fde-b07f-29b5e19d2ff4",
+          "id": "bytebard.goblinscrapper.addThrottle",
+          "arguments": {
+            "value": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 1,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "W - addThrottle",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "6e4fec4b-89e8-48a8-96b8-2458954eb37a",
+      "displayName": "S - addThrottle",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "a1a9a8a1-21a1-42b2-9c79-9e9e39a097aa",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "f00b22bf-cc9c-4c8f-833d-accdb3747995",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "S",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "71713801-0755-4434-bfc1-482eac6206f8",
+          "id": "bytebard.goblinscrapper.addThrottle",
+          "arguments": {
+            "value": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": -1,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "S - addThrottle",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "028346aa-ab8a-476a-9e6d-1bbaebff4f3b",
+      "displayName": "D - addSteering",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "dda10b0f-4faf-4c73-ac55-e2ec5dff3254",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "447edd30-7bb5-48a9-ac6d-159d479ec756",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "D",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "0b4d05d4-2b56-40ad-9564-47f7d744df4f",
+          "id": "bytebard.goblinscrapper.addSteering",
+          "arguments": {
+            "value": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 1,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "D - addSteering",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "6c93d14b-46ab-4dca-ab89-911a8173443f",
+      "displayName": "A - addSteering",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "621315c2-07c4-47ec-8148-4ff21307a372",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "df0e93f1-fa17-483f-92f4-b71fdab6bae5",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "A",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "ad2abe1b-64bd-4efa-a339-6c886fe9cb53",
+          "id": "bytebard.goblinscrapper.addSteering",
+          "arguments": {
+            "value": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": -1,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "A - addSteering",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "126cc2eb-aa46-4c50-b8f3-6cb040b97c76",
+      "displayName": "Space - brake",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "671ff7c0-2e5f-40d7-8a2e-9ae5c43aaa7d",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "5d3d44e6-af3c-4881-9260-05739f97a1ed",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Space",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "b0540540-c7d7-4621-838f-2cd594e32351",
+          "id": "bytebard.goblinscrapper.setBrake",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Space - brake",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "590ee570-7798-4e14-9285-fa8a60b68f84",
+      "displayName": "LeftShift - drift",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "29b0aff1-8340-4857-a312-5c1ca3a43ecc",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "e89ea408-78b9-4153-9b0c-b8f903288ee7",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "LeftShift",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f89fd730-f72d-4f34-bb08-d7b8b4dcaa21",
+          "id": "bytebard.goblinscrapper.setDrift",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "LeftShift - drift",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "57b1e864-75ca-4bb9-b2b5-b4c9557ad732",
+      "displayName": "RightShift - drift",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "6132338e-d6b6-4f29-a645-6a6e1ec83c65",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "300adb20-70ac-4283-9d97-2a58acc25ec1",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "RightShift",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "768b203b-a326-4564-94bc-e3cd49b02bf6",
+          "id": "bytebard.goblinscrapper.setDrift",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "RightShift - drift",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "c7b59b2c-d918-4fa0-8ae1-cc1d9e424089",
+      "displayName": "F - fire a shot",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "26976544-e2a6-4872-81e8-5ed263d7e5cc",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "4f40b89e-9f95-4f2e-8288-fa03f405bbc5",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "F",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "9fe25624-a10f-4535-af97-e7ce526a9f29",
+          "id": "bytebard.goblinscrapper.fire",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "F - fire a shot",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "8938af08-e20c-4bf5-a3c6-4d9b70c88c00",
+      "displayName": "Hold F - powered weapons",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "72758711-0750-442a-bc7b-74f7634708a0",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "9b920997-48d5-4322-ad7e-30441d6d65d6",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "F",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "182d8ab6-ddbb-42c7-b3ea-efc835878003",
+          "id": "bytebard.goblinscrapper.poweredWeapons",
+          "arguments": {
+            "enabled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Hold F - powered weapons",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "d23fb116-c85a-4916-a174-82e2402ea39b",
+      "displayName": "G - mechanisms",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "4aa7d570-8b66-4b06-a6d4-116dca2f88d8",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "4c46cffb-de73-4410-a463-48602468218c",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "G",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "55f0c6e5-38b1-41e5-9d68-b86bee6733e0",
+          "id": "bytebard.goblinscrapper.mechanisms",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "G - mechanisms",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "d5d061ab-6705-4f51-beea-3cb7916c1343",
+      "displayName": "Enter - place preview",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "e17f7756-4d90-4b02-ac59-c051f3eac390",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "386d8a56-e8a3-4bec-be25-5c8dde0bf989",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Enter",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "5309205e-a6a6-4ea7-b709-c127dbab84ca",
+          "id": "bytebard.goblinscrapper.placePreview",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Enter - place preview",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "cba04d6d-4d8e-4551-a3c5-a09d070204ec",
+      "displayName": "R - rotate preview 90 degrees",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "38b4ec32-f7dc-4f05-8bc0-6cef49c13fe0",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "3b14e151-808b-4a25-9ecb-58b835b7ec23",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "R",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "82baf3a5-2498-45c5-bfd2-674eb6cbe874",
+          "id": "bytebard.goblinscrapper.rotatePreview",
+          "arguments": {
+            "degrees": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 90,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "R - rotate preview 90 degrees",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "7125a14f-4c5f-4df9-8e75-3b4c34df5569",
+      "displayName": "F - flip preview",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "62bf01c0-1420-4beb-82e4-6f5ad28f066a",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "70f465e1-8a25-4061-b818-b3f02c6ad8f8",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "F",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "942f22f5-9875-4eb2-8175-cf5b766d0fa4",
+          "id": "bytebard.goblinscrapper.rotatePreview",
+          "arguments": {
+            "degrees": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 180,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "F - flip preview",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "26c3fa55-9089-4218-916a-c5a6ea837a0a",
+      "displayName": "Tab - next own connector",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "60d74f07-b89a-4c73-a8e4-6292d6926581",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "1e10c965-2bf1-4fa9-b1db-a9ad9cf5852c",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Tab",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f8f10340-0f4e-44a7-9723-b4852dc26611",
+          "id": "bytebard.goblinscrapper.nextConnector",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Tab - next own connector",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "6c81df70-5505-4853-b0f0-b1fb73c475a6",
+      "displayName": "Delete - selected block",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "843071f7-65e3-4b3d-8c93-755e287f1eb9",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "8e89b22b-754b-4693-998e-9580c7799edd",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Delete",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "57354f0b-5c12-4b73-b9a6-83ecf1c3a60a",
+          "id": "bytebard.goblinscrapper.removeSelected",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Delete - selected block",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "f26e20b9-9f94-4684-a89d-29b2de972f69",
+      "displayName": "X - hovered block",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "7a8129ab-c3d3-44fd-bce9-b5ee057fe6aa",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "4fa4913b-a1e4-4f7a-8da2-ea49a120ec6b",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "X",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "87b2b2e9-b811-4965-9e22-06e2003a7fa0",
+          "id": "bytebard.goblinscrapper.removeHovered",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "X - hovered block",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "e1b7d627-2356-4a47-8e25-862fe33c4f2e",
+      "displayName": "C - copy hovered part",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "28e04d5c-d272-4df4-8da3-dc2fde11abd6",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "8c369a91-96a1-4609-8766-7b44f3e6bd30",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "C",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "b5e5a1ff-7f57-41f2-9047-4bd5a437e89e",
+          "id": "bytebard.goblinscrapper.copyHovered",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "C - copy hovered part",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "7153e437-e3f6-4db3-a3bb-5beeba83a84e",
+      "displayName": "M - move hovered branch",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "7551b3f4-e4c0-4524-abf0-39508e6f9082",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "fd767bb5-4114-4b32-bedc-3678caf5e2fe",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "M",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "0d35339b-ed32-4dd3-aed7-b0d2dad2b9c3",
+          "id": "bytebard.goblinscrapper.moveHovered",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "M - move hovered branch",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "7a021fa0-6041-4a6d-a1d8-fa6d671aea13",
+      "displayName": "Escape - cancel operation",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "add783e3-9a96-4e33-9d2f-86e61a9abfcb",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "b13c38fe-efb9-4bea-85d8-602d23974adf",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Escape",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f30372c6-ebfa-445c-81dc-ee4eb7a7fab6",
+          "id": "bytebard.goblinscrapper.cancel",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Escape - cancel operation",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "dcbf3ca4-cf6f-42c5-a865-1169277e4068",
+      "displayName": "Ctrl\u002BZ - undo",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "9b4c7909-f41c-49fc-8aa7-b8247255020f",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "10b55860-2cef-4dfa-a66f-0649efe04d14",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Z",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "c732b666-6881-426f-b61c-87d74450b05e",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "LeftControl",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "b469ef68-545a-459e-bc48-70fc131fcc27",
+          "id": "bytebard.goblinscrapper.undo",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Ctrl\u002BZ - undo",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "eae4ac89-0b2c-4a4f-9963-349c50feedda",
+      "displayName": "Ctrl\u002BY - redo",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "4cfee3b4-4a00-49c5-afd7-bde9e4ea1b3f",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "0b3e0a1e-a4f0-4f63-9e54-da1922481c02",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Y",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "d2661ae8-c73b-407d-851f-94cf0ef7ed73",
+          "id": "input.keyHeld",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "LeftControl",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "84877917-9b91-4547-9ac8-e5bc53ad992d",
+          "id": "bytebard.goblinscrapper.redo",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Ctrl\u002BY - redo",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "67ae0347-50b7-444d-a42f-04443f57796f",
+      "displayName": "F5 - save authored machine",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "432955d5-81f8-4f85-914c-51f347f67c21",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "F5",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "587c6ed7-39de-4c3c-91f6-f1a9f2034970",
+          "id": "bytebard.goblinscrapper.save",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "F5 - save authored machine",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "844cf79f-f2b4-4ee6-9f61-b3463e021917",
+      "displayName": "F9 - load saved machine",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "cbb35fa6-37fa-4008-b987-cd935ac9bd6d",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "70af8f0d-537a-4ca7-9cef-f5c9d9ed1641",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "F9",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "1874ac42-cc3a-49ed-b48b-03b038aca3f0",
+          "id": "bytebard.goblinscrapper.load",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "F9 - load saved machine",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "c2a31a5a-456e-419d-b280-e6b23a3c70c5",
+      "displayName": "R - reset physical position",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "8dc98148-c5f1-483f-a07d-2c6c6a028db1",
+          "id": "bytebard.goblinscrapper.driving",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "29fc163c-45a0-448e-b979-212845a53be9",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "R",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "c8b9e5e0-36df-480c-9cd4-00d033a17965",
+          "id": "bytebard.goblinscrapper.resetPosition",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "R - reset physical position",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    }
+  ],
+  "editorLooseConditions": [],
+  "editorLooseActions": [],
+  "editorNodeScale": 0.72,
+  "editorGroups": []
+}

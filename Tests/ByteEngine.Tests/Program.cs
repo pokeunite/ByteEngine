@@ -1,3 +1,4 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
@@ -19,6 +20,8 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length>=2&&args[0]=="--write-goblin-controls") { new ByteEngine.Core.VisualLogic.EventModuleSerializer().Save(GoblinScrapper.GoblinControlTemplate.Create(),args[1]); return; }
+    if (args.Length >= 2 && args[0] == "--plugins") { PluginSystemTests.Run(args[1]); return; }
     if (args.Length >= 3 && args[0] == "--prepare-last-stand-starter")
     {
         LastStandStarterTests.Prepare(args[1], args[2]);
@@ -63,6 +66,10 @@ try
         return;
     }
 
+    if (args.Length>=2 && args[0]=="--steering-direction") { SteeringDirectionTests.Run(args[1]); return; }
+    if (args.Length>=2 && args[0]=="--recorded-build") { RecordedBuildTests.Run(args[1]); return; }
+    if (args.Length>=2 && args[0]=="--construction-debug") { ConstructionDiagnosticTests.Run(args[1]); return; }
+    if (args.Length>=2 && args[0]=="--wheel-handling") { WheelHandlingTests.Run(GoblinScrapper.Construction.VehiclePartCatalog.Load(Path.Combine(args[1],"Assets","GarageUI","parts-catalog.json"))); return; }
     if (args.Length>=2 && args[0]=="--contraption") { ContraptionTests.Run(args[1]); return; }
     if (args.Length>=2 && args[0]=="--free-vehicle") { FreeVehicleAssemblyTests.Run(args[1]); return; }
     if (args.Contains("--vehicle-drift"))

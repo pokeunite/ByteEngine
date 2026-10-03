@@ -1,6 +1,9 @@
+using ByteEngine.Core.Diagnostics;
+using ByteEngine.Core;
+using ByteEngine.Core.Construction;
 using System.Numerics;
 using System.Text.Json;
-namespace ByteEngine.Core.Construction;
+namespace GoblinScrapper.Construction;
 
 public sealed record FreePartSocket(string Name, Vector3 Position, Vector3 Normal, string Bone="Root");
 public sealed record AssemblyBox(Vector3 Min,Vector3 Max)
@@ -15,16 +18,28 @@ public sealed record AssemblyBox(Vector3 Min,Vector3 Max)
 }
 public sealed record AssemblyPartDefinition(string File,string Description,AssemblyBox Bounds,FreePartSocket[] Sockets,AssemblyBox[] Clearance)
 {
- public string Label {get;init;}=""; public string Group {get;init;}=""; public string Kind {get;init;}=""; public string ModelFile {get;init;}=""; public int ReferenceId {get;init;}=-1; public float Mass {get;init;}=10; public AssemblyBox? RootBounds {get;init;} public AssemblyBox? MovingBounds {get;init;} public Vector3 Pivot {get;init;} public Vector3 Axis {get;init;}=Vector3.UnitX;
+ public float LinearDrag {get;init;}public float AngularDrag {get;init;}
+ public Vector3[]? WheelHull {get;init;}
+ public string Label {get;init;}=""; public string Group {get;init;}=""; public string Kind {get;init;}=""; public string ModelFile {get;init;}=""; public int ReferenceId {get;init;}=-1; public float Mass {get;init;}=10; public AssemblyBox? RootBounds {get;init;} public AssemblyBox? MovingBounds {get;init;} public AssemblyBox? MovingCollision {get;init;} public Vector3 Pivot {get;init;} public Vector3 Axis {get;init;}=Vector3.UnitX;
 }
 public sealed class VehiclePartCatalog
 {
     public bool Standard {get;private set;}
+    public int Revision {get;private set;} = 2;
+    public VehiclePartCatalog? Legacy {get;private set;}
     public Dictionary<string,AssemblyPartDefinition> Parts {get;}=new(StringComparer.Ordinal);
     public AssemblyPartDefinition this[string file]=>Parts[file];
     public static VehiclePartCatalog Load(string path)
     {
         using var doc=JsonDocument.Parse(File.ReadAllText(path));var catalog=new VehiclePartCatalog();catalog.Standard=doc.RootElement.TryGetProperty("kit",out var kit)&&kit.GetString()!.Contains("standard",StringComparison.OrdinalIgnoreCase);
+        catalog.Revision=doc.RootElement.TryGetProperty("geometry_revision",out var revision)?revision.GetInt32():2;
+        if(doc.RootElement.TryGetProperty("legacy_catalog",out var legacy))
+        {
+            string legacyName=legacy.GetString()??"";
+            if(legacyName!=Path.GetFileName(legacyName))throw new JsonException("Legacy catalogue must be in the same folder.");
+            string legacyPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!,legacyName);
+            if(File.Exists(legacyPath))catalog.Legacy=Load(legacyPath);
+        }
         Vector3 Vec(JsonElement a)=>new(a[0].GetSingle(),a[1].GetSingle(),a[2].GetSingle());
         foreach(var p in doc.RootElement.GetProperty("parts").EnumerateArray())
         {
@@ -45,13 +60,44 @@ public sealed class VehiclePartCatalog
             if(catalog.Standard)clearance=new[]{Box("root_bounds_game"),Box("moving_bounds_game")}.Where(b=>b!=null).Cast<AssemblyBox>().ToArray();
             string Text(string key)=>p.TryGetProperty(key,out var value)?value.GetString()??"":"";
             if(file=="goblin_starting_block") {file=VehicleAssembly.MasterBlock;sockets=sockets.Select(x=>x with {Name=x.Normal.X>.9f?"Right":x.Normal.X<-.9f?"Left":x.Normal.Y>.9f?"Top":x.Normal.Y<-.9f?"Bottom":x.Normal.Z>.9f?"Rear":"Front"}).ToArray();}
-            catalog.Parts.Add(file,new(file,Text("description"),bounds,sockets,clearance) {Label=Text("label"),Group=Text("group"),Kind=Text("kind"),ModelFile=Path.GetFileNameWithoutExtension(Text("file")),ReferenceId=p.TryGetProperty("reference_id",out var rid)?rid.GetInt32():-1,Mass=p.TryGetProperty("mass",out var mass)?mass.GetSingle():10,RootBounds=Box("root_bounds_game"),MovingBounds=Box("moving_bounds_game"),Pivot=p.TryGetProperty("pivot_game",out var pivot)?Vec(pivot):Vector3.Zero,Axis=p.TryGetProperty("axis_game",out var axis)?Vec(axis):Vector3.UnitX});
+            catalog.Parts.Add(file,new(file,Text("description"),bounds,sockets,clearance) {Label=Text("label"),Group=Text("group"),Kind=Text("kind"),ModelFile=Path.GetFileNameWithoutExtension(Text("file")),ReferenceId=p.TryGetProperty("reference_id",out var rid)?rid.GetInt32():-1,Mass=p.TryGetProperty("mass",out var mass)?mass.GetSingle():10,RootBounds=Box("root_bounds_game"),MovingBounds=Box("moving_bounds_game"),MovingCollision=Box("moving_collider_game"),Pivot=p.TryGetProperty("pivot_game",out var pivot)?Vec(pivot):Vector3.Zero,Axis=p.TryGetProperty("axis_game",out var axis)?Vec(axis):Vector3.UnitX});
         }
         var masterBounds=new AssemblyBox(new(-.25f),new(.25f));
         if(!catalog.Parts.ContainsKey(VehicleAssembly.MasterBlock))catalog.Parts.Add("goblin_master_block",new("goblin_master_block","The protected heart of your machine",masterBounds,[
             new("Front",new(0,0,-.25f),-Vector3.UnitZ),new("Rear",new(0,0,.25f),Vector3.UnitZ),
             new("Left",new(-.25f,0,0),-Vector3.UnitX),new("Right",new(.25f,0,0),Vector3.UnitX),
             new("Top",new(0,.25f,0),Vector3.UnitY),new("Bottom",new(0,-.25f,0),-Vector3.UnitY)],[masterBounds]));
+        Stream? ReferenceStream(string name)
+        {
+            if(!catalog.Standard||catalog.Revision<3)return null;
+            string local=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!,name);
+            return File.Exists(local)?File.OpenRead(local):typeof(VehiclePartCatalog).Assembly.GetManifestResourceStream("GoblinScrapper."+name);
+        }
+        using var bodyReference=ReferenceStream("block-body-reference.json");
+        if(bodyReference!=null)
+        {
+            using var bodyDoc=JsonDocument.Parse(bodyReference);
+            foreach(var entry in catalog.Parts.ToArray())
+                if(bodyDoc.RootElement.GetProperty("blocks").TryGetProperty(entry.Value.ReferenceId.ToString(),out var body))
+                {
+                    float mass=body.GetProperty("mass_game").GetSingle(),linear=body.GetProperty("linear_drag").GetSingle(),angular=body.GetProperty("angular_drag").GetSingle();
+                    if(!float.IsFinite(mass)||mass<=0||!float.IsFinite(linear)||linear<0||!float.IsFinite(angular)||angular<0)throw new JsonException("Invalid block body reference");
+                    catalog.Parts[entry.Key]=entry.Value with{Mass=mass,LinearDrag=linear,AngularDrag=angular};
+                }
+        }
+        using var wheelReference=ReferenceStream("wheel-physics-reference.json");
+        if(wheelReference!=null)
+        {
+            using var wheelDoc=JsonDocument.Parse(wheelReference);
+            foreach(var entry in catalog.Parts.ToArray())
+            {
+                if(!wheelDoc.RootElement.TryGetProperty(entry.Value.ReferenceId.ToString(),out var wheel))continue;
+                var points=wheel.GetProperty("points_game").EnumerateArray().Select(Vec).ToArray();
+                if(points.Length is <4 or >256||points.Any(v=>!float.IsFinite(v.X)||!float.IsFinite(v.Y)||!float.IsFinite(v.Z)))throw new JsonException("Invalid wheel collider reference");
+                var min=points.Aggregate(new Vector3(float.MaxValue),Vector3.Min);var max=points.Aggregate(new Vector3(float.MinValue),Vector3.Max);
+                catalog.Parts[entry.Key]=entry.Value with{WheelHull=points,MovingCollision=new AssemblyBox(min,max),LinearDrag=entry.Value.ReferenceId==46?0:.1f,AngularDrag=.05f};
+            }
+        }
         return catalog;
     }
 }
@@ -122,8 +168,10 @@ public sealed class VehicleAssembly
     }
     public int Add(string file,int parent,Vector3 position,Quaternion rotation,string parentBone="Root",string parentConnector="",string ownConnector="")
     {
-        if(PlacementIssue(file,parent,position,rotation,parentConnector)!=""||ConnectionIssue(file,parent,position,rotation,parentBone,parentConnector,ownConnector)!="")return -1;
-        int id=_nextId++;Parts.Add(id,new(id,file,parent,position,rotation,parentBone,parentConnector,ownConnector));return id;
+        string issue=PlacementIssue(file,parent,position,rotation,parentConnector);
+        if(issue=="")issue=ConnectionIssue(file,parent,position,rotation,parentBone,parentConnector,ownConnector);
+        if(issue!=""){if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("PLACE REJECT",$"file={file} parent={parent} target={parentConnector} source={ownConnector} position={position} rotation={rotation} reason={issue}");return -1;}
+        int id=_nextId++;Parts.Add(id,new(id,file,parent,position,rotation,parentBone,parentConnector,ownConnector));if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("PLACE",$"id={id} file={file} parent={parent} bone={parentBone} target={parentConnector} source={ownConnector} position={position} rotation={rotation}");return id;
     }
     public int[] Descendants(int id)
     {
@@ -163,19 +211,22 @@ public sealed class VehicleAssembly
         foreach(int child in branch)
         {var p=Parts[child];issue=PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id);if(issue!="")break;}
         if(issue!=""||preview)foreach(var pair in originals)Parts[pair.Key]=pair.Value;
+        if(!preview&&ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("MOVE",$"id={id} parent={parent} target={target} source={source} twist={twist} result={issue} branch={string.Join(",",branch)}");
         return issue;
     }
     public bool Remove(int id)
     {
-        if(id==0||!Parts.Remove(id))return false;
+        if(id==0||!Parts.Remove(id)){if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("DELETE REJECT",$"id={id}");return false;}
+        if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("DELETE",$"id={id} detached={string.Join(",",Parts.Values.Where(p=>p.Parent==id).Select(p=>p.Id))}");
         foreach(var child in Parts.Values.Where(p=>p.Parent==id).ToArray())Parts[child.Id]=child with {Parent=-1,ParentBone="Root",ParentConnector="",OwnConnector=""};
         return true;
     }
-    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(4,Parts.Values.OrderBy(p=>p.Id).ToArray()),Options);
+    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(5,Parts.Values.OrderBy(p=>p.Id).ToArray(),Catalog.Revision),Options);
     public static VehicleAssembly FromJson(VehiclePartCatalog catalog,string json)
     {
+        if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("RESTORE",$"catalogRevision={catalog.Revision} json={json}");
         var snapshot=JsonSerializer.Deserialize<AssemblySnapshot>(json,Options)??throw new JsonException("Empty build");
-        if(snapshot.Version!=4||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
+        if(snapshot.Version is not (4 or 5)||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
         var root=snapshot.Blocks.SingleOrDefault(p=>p.Id==0)??throw new JsonException("Missing master block");
         if(root.Parent!=-1||root.File!=MasterBlock||root.Position!=Vector3.Zero||root.Rotation!=Quaternion.Identity)throw new JsonException("Invalid master block");
         var a=new VehicleAssembly(catalog);
@@ -184,16 +235,44 @@ public sealed class VehicleAssembly
             if(p.Id<1||p.Id>1000000||a.Parts.ContainsKey(p.Id)||!catalog.Parts.ContainsKey(p.File)||!Finite(p.Position)||!float.IsFinite(p.Rotation.LengthSquared())||Math.Abs(p.Rotation.LengthSquared()-1)>.01f||p.Position.Length()>16)throw new JsonException("Invalid block");
             a.Parts.Add(p.Id,p);a._nextId=Math.Max(a._nextId,p.Id+1);
         }
+        foreach(var part in a.Parts.Values.Where(p=>p.Id!=0))
+            if(part.Parent>=0 && !a.Parts.ContainsKey(part.Parent))throw new JsonException("Missing parent block");
+        if(snapshot.CatalogVersion!=catalog.Revision && catalog.Legacy is {} previous)
+        {
+            var oldAssembly=new VehicleAssembly(previous);
+            foreach(var part in snapshot.Blocks.Where(p=>p.Id!=0))oldAssembly.Parts[part.Id]=part;
+            var complete=new HashSet<int>{0};var visiting=new HashSet<int>();
+            void Resnap(int id)
+            {
+                if(complete.Contains(id))return;
+                if(!visiting.Add(id))throw new JsonException("Cyclic saved assembly");
+                var part=a.Parts[id];
+                if(part.Parent>=0)
+                {
+                    Resnap(part.Parent);
+                    var original=oldAssembly.Snap(part.Parent,part.ParentConnector,part.File,part.OwnConnector);
+                    var relative=Quaternion.Normalize(part.Rotation*Quaternion.Inverse(original.Rotation));
+                    var oldParent=oldAssembly.Parts[part.Parent];
+                    var socket=previous[oldParent.File].Sockets.Single(s=>s.Name==part.ParentConnector);
+                    var normal=Vector3.Transform(socket.Normal,oldParent.Rotation);
+                    float angle=2*MathF.Atan2(Vector3.Dot(new(relative.X,relative.Y,relative.Z),normal),relative.W);
+                    int twist=(int)MathF.Round(angle*180/MathF.PI);
+                    var pose=a.Snap(part.Parent,part.ParentConnector,part.File,part.OwnConnector,twist);
+                    a.Parts[id]=part with {Position=pose.Position,Rotation=pose.Rotation,ParentBone=pose.Bone};
+                }
+                visiting.Remove(id);complete.Add(id);
+            }
+            foreach(int id in a.Parts.Keys.ToArray())Resnap(id);
+        }
         foreach(var p in a.Parts.Values.Where(p=>p.Id!=0))
         {
             if(p.Parent==-1){if(p.ParentConnector!=""||p.OwnConnector!="")throw new JsonException("Invalid detached block");continue;}
-            if(!a.Parts.ContainsKey(p.Parent)||a.Descendants(p.Id).Contains(p.Parent)||a.PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id)!=""||a.ConnectionIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentBone,p.ParentConnector,p.OwnConnector)!="")throw new JsonException("Invalid connection or clearance");
+            if(!a.Parts.ContainsKey(p.Parent)||a.Descendants(p.Id).Contains(p.Parent)||a.PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id)!=""||a.ConnectionIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentBone,p.ParentConnector,p.OwnConnector)!="")throw new JsonException($"Invalid connection or clearance for block {p.Id} ({p.File}): {a.PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id)} / {a.ConnectionIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentBone,p.ParentConnector,p.OwnConnector)}");
         }
         return a;
     }
     public static string DisplayName(string file) {int i=Array.IndexOf(VehicleBuildLayout.PartFiles,file);return i>=0?VehicleBuildLayout.PartNames[i]:file==MasterBlock?"Master block":System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(file.Replace("goblin_","").Replace("_"," "));}
     private static bool Finite(Vector3 p)=>float.IsFinite(p.X)&&float.IsFinite(p.Y)&&float.IsFinite(p.Z);
     private static readonly JsonSerializerOptions Options=new(){IncludeFields=true,WriteIndented=true};
-    public sealed record AssemblySnapshot(int Version,AssemblyPart[] Blocks);
+    public sealed record AssemblySnapshot(int Version,AssemblyPart[] Blocks,int CatalogVersion=2);
 }
-

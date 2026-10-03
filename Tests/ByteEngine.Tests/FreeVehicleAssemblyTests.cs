@@ -1,3 +1,4 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using System.Text.Json;
 using ByteEngine.Core.Construction;

@@ -27,6 +27,67 @@ internal static class SelfTest
                 return json;
             }
             Call("project", "open", new { path = file });
+            string? pluginPackage = Environment.GetEnvironmentVariable("BYTEENGINE_TEST_PLUGIN");
+            if (!string.IsNullOrWhiteSpace(pluginPackage))
+            {
+                Call("plugin", "import", new { path = pluginPackage });
+                Call("project", "open", new { path = file });
+                var cap = Call("catalog", "component", new { name = "SpaceBuilder3D" });
+                if (cap.GetProperty("codec").GetString() != "bytebard.spacescraper.SpaceBuilder3D") throw new Exception("Plugin codec missing.");
+                if (Call("catalog", "actions", new { search = "bytebard.spacescraper" }).GetProperty("items").GetArrayLength() == 0) throw new Exception("Plugin action missing.");
+                var testScene = Call("scene", "create", new { name = "PluginScene", expected_rev = "new" });
+                string testPath = testScene.GetProperty("path").GetString()!;
+                Call("scene", "apply", new { scene = testPath, expected_rev = testScene.GetProperty("rev").GetString(), edits = new object[] {
+                    new { op = "create_object", name = "Builder", @as = "$builder" },
+                    new { op = "set_component", target = "$builder", type = "SpaceBuilder3D", properties = new { buildRadius = 37f, maxParts = 321, startInBuildMode = false } }
+                } });
+                var inspection = Call("scene", "inspect", new { scene = testPath });
+                string builderId = inspection.GetProperty("objects").EnumerateArray().Single(o => o.GetProperty("name").GetString() == "Builder").GetProperty("id").GetString()!;
+                Call("scene", "apply", new { scene = testPath, expected_rev = inspection.GetProperty("rev").GetString(), edits = new object[] {
+                    new { op = "set_component", target = builderId, type = "bytebard.spacescraper.SpaceBuilder3D", properties = new { buildRadius = 37f } },
+                    new { op = "remove_component", target = builderId, type = "SpaceBuilder3D" },
+                    new { op = "set_component", target = builderId, type = "SpaceBuilder3D", properties = new { buildRadius = 37f, maxParts = 321, startInBuildMode = false } }
+                } });
+                Call("project", "open", new { path = file });
+                void CheckPluginData(bool missing)
+                {
+                    var loaded = session.Scenes.Load(Path.Combine(root, testPath));
+                    var obj = loaded.FindGameObject("Builder")!;
+                    var comp = obj.Components.Single();
+                    if ((comp is MissingComponent) != missing) throw new Exception("Plugin availability mismatch.");
+                    var saved = session.Components.Serialize(comp)!;
+                    if (saved.Type != "bytebard.spacescraper.SpaceBuilder3D" || saved.Properties["buildRadius"]!.GetValue<float>() != 37f || saved.Properties["maxParts"]!.GetValue<int>() != 321)
+                        throw new Exception("Plugin state lost during save/reload.");
+                    session.Scenes.Save(loaded, Path.Combine(root, testPath));
+                }
+                CheckPluginData(false);
+                Call("plugin", "disable", new { id = "bytebard.spacescraper" });
+                Call("project", "open", new { path = file }); CheckPluginData(true);
+                Call("plugin", "enable", new { id = "bytebard.spacescraper" });
+                Call("project", "open", new { path = file }); CheckPluginData(false);
+                Console.WriteLine("Plugin import -> placement -> save/reload -> disabled preservation -> restored: PASS");
+            }
+            string? goblinPackage=Environment.GetEnvironmentVariable("BYTEENGINE_TEST_GOBLIN_PLUGIN");
+            string? goblinCatalog=Environment.GetEnvironmentVariable("BYTEENGINE_TEST_GOBLIN_CATALOG");
+            if(goblinPackage!=null && goblinCatalog!=null)
+            {
+                Call("plugin","import",new{path=goblinPackage}); Call("project","open",new{path=file});
+                var assembly=ByteEngine.Core.Plugins.ByteEnginePluginRegistry.Components.First(p=>p.PluginId=="bytebard.goblinscrapper").ComponentType.Assembly;
+                dynamic catalog=assembly.GetType("GoblinScrapper.Construction.VehiclePartCatalog")!.GetMethod("Load")!.Invoke(null,[goblinCatalog])!;
+                dynamic machine=Activator.CreateInstance(assembly.GetType("GoblinScrapper.Construction.VehicleAssembly")!,catalog,"goblin_master_block")!;
+                int wheel=machine.AddAtSocket("goblin_wheel",0,"Right",(string)catalog.Parts["goblin_wheel"].Sockets[0].Name,0);
+                if(wheel<1)throw new Exception("Cold plugin wheel placement failed.");
+                using(dynamic physics=Activator.CreateInstance(assembly.GetType("GoblinScrapper.Construction.ContraptionPhysicsWorld")!,machine,new System.Numerics.Vector3(0,1,0),System.Numerics.Quaternion.Identity)!)
+                {
+                    for(int tick=0;tick<120;tick++)physics.Step(1f/60,1f,0f,false,false,false);
+                    var pose=((System.Numerics.Vector3 Position,System.Numerics.Quaternion Rotation))physics.Pose(0);
+                    if(!float.IsFinite(pose.Position.X))throw new Exception("Cold plugin physics was invalid.");
+                }
+                var bepu=AppDomain.CurrentDomain.GetAssemblies().Single(a=>a.GetName().Name=="BepuPhysics");
+                if(System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(bepu)!=System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(assembly))
+                    throw new Exception("Physics dependency escaped its private plugin context.");
+                Console.WriteLine("Goblin plugin cold-load physics with bundled Bepu and no host plugin reference: PASS");
+            }
             Call("catalog", "components", new { search = "Camera" });
             var created = Call("scene", "create", new { name = "Main", expected_rev = "new" });
             string path = created.GetProperty("path").GetString()!;
@@ -92,7 +153,9 @@ internal static class SelfTest
         }
         finally
         {
-            Directory.Delete(root, true);
+            try { Directory.Delete(root, true); }
+            catch (UnauthorizedAccessException) { Console.WriteLine("Plugin cache cleanup deferred until process exit (Windows assembly mapping)."); }
+            catch (IOException) { Console.WriteLine("Plugin cache cleanup deferred until process exit."); }
         }
         return Task.CompletedTask;
     }

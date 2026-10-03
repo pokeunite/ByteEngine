@@ -11,3 +11,12 @@ layout.ini
 /.artifacts/player-publish/
 /.artifacts/browser-prototype/
 /.artifacts/browser-tests/
+
+/.artifacts/
+/Backups/
+/artifacts/
+/Tools/Inspection/
+/output/goblin-scraper/
+/output/video-wheel/
+**/node_modules/
+**/__pycache__/

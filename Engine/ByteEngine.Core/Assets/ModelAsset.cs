@@ -291,7 +291,7 @@ public sealed class ModelAsset
     /// as native imported clips so existing pickers and Asset Browser expansion
     /// keep working without another animation asset type.
     /// </summary>
-    internal ImportedAnimation RegisterRuntimeAnimation(
+    public ImportedAnimation RegisterRuntimeAnimation(
         ImportedAnimation animation)
     {
         ArgumentNullException.ThrowIfNull(

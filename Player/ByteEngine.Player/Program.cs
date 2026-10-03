@@ -46,6 +46,9 @@ internal static class Program
             using var project = new GameProjectRuntime(content.ProjectFile, CrashDebugLog.Write);
             if (validate)
             {
+                var scene = project.LoadStartupScene();
+                int missing = scene.GameObjects.SelectMany(o => o.Components).OfType<ByteEngine.Core.Serialization.MissingComponent>().Count();
+                if (missing > 0) throw new InvalidDataException($"Startup scene contains {missing} unavailable components.");
                 CrashDebugLog.Write($"Package validation passed: {project.Project.Name}; assets={project.Database.Assets.Count}");
                 return 0;
             }

@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../Plugins/GoblinScrapper/GoblinScrapper.Plugin.csproj" />
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
     <ProjectReference Include="..\..\Editor\ByteEngine.Editor\ByteEngine.Editor.csproj" />
   </ItemGroup>

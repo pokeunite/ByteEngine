@@ -4,6 +4,12 @@ namespace ByteEngine.Editor;
 
 internal static class EditorDialogs
 {
+    public static string? ChooseDebugTraceSave()
+    {
+        using SaveFileDialog dialog=new(){Title="Save Console Debug Trace",Filter="Text trace (*.txt)|*.txt",DefaultExt="txt",AddExtension=true,FileName=$"ByteEngine-debug-{DateTime.Now:yyyyMMdd-HHmmss}.txt",InitialDirectory=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)};
+        return dialog.ShowDialog()==DialogResult.OK?dialog.FileName:null;
+    }
+
     public static string? ChooseProjectDirectory(string? initialDirectory = null)
     {
         using FolderBrowserDialog dialog = new()
@@ -55,6 +61,27 @@ internal static class EditorDialogs
                     "ByteEngine Project (*.byteproject)|*.byteproject",
                 CheckFileExists =
                     true
+            };
+
+        return dialog.ShowDialog() ==
+               DialogResult.OK
+            ? dialog.FileName
+            : null;
+    }
+
+    public static string? ChoosePluginPackage()
+    {
+        using OpenFileDialog dialog =
+            new()
+            {
+                Title =
+                    "Import ByteEngine Plugin",
+                Filter =
+                    "ByteEngine Plugin (*.byteplugin)|*.byteplugin",
+                CheckFileExists =
+                    true,
+                Multiselect =
+                    false
             };
 
         return dialog.ShowDialog() ==

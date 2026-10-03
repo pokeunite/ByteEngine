@@ -35,6 +35,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private ModelAsset? _model;
     private readonly Dictionary<string,Matrix4x4> _physicalBoneDeformations=new();
+    private Matrix4x4[] _physicalBindGlobals=Array.Empty<Matrix4x4>();
     public void SetPhysicalBoneDeformation(string bone,Matrix4x4 deformation){_physicalBoneDeformations[bone]=deformation;_poseDirty=true;}
     public void ClearPhysicalBoneDeformations(){_physicalBoneDeformations.Clear();_poseDirty=true;}
     private SkeletonAsset? _skeleton;
@@ -763,6 +764,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         }
 
         _nodes = _model.Nodes.ToArray();
+        _physicalBindGlobals=Array.Empty<Matrix4x4>();
         _parentIndices = new int[_nodes.Length];
         Array.Fill(_parentIndices, -1);
 
@@ -1010,12 +1012,16 @@ public sealed partial class SkeletalMeshRenderer : Component
         if (!_lightRagdollActive) ApplyRecoveryPose(locals);
         if (!_lightRagdollActive && _hitReaction > 0.001f)
             ApplyHitReactionPose(locals);
+        if(_physicalBoneDeformations.Count>0&&_physicalBindGlobals.Length==0)
+            _physicalBindGlobals=ComputeGlobals(_nodes.Select(n=>n.LocalTransform).ToArray()).ToArray();
         Matrix4x4[] globals = ComputeGlobals(locals);
         if(_skeleton!=null)foreach(var entry in _physicalBoneDeformations)
         {
             int bi=_skeleton.Bones.FindIndex(b=>b.Name==entry.Key);
             if(bi<0||bi>=_boneNodeIndices.Length)continue;int ni=_boneNodeIndices[bi];if(ni<0)continue;
-            if(Matrix4x4.Invert(_skeleton.Bones[bi].BindPose,out var bind))globals[ni]=bind*entry.Value;
+            // Inverse-bind matrices can include mesh-node transforms. Preserve the actual
+            // authored joint global, then apply a model-space physical deformation.
+            globals[ni]=_physicalBindGlobals[ni]*entry.Value;
         }
 
         Matrix4x4 rootMotionCorrection = _lightRagdollActive

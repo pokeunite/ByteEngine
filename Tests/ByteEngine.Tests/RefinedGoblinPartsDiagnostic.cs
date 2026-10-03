@@ -13,9 +13,9 @@ internal static class RefinedGoblinPartsDiagnostic
         foreach(var part in catalog.RootElement.GetProperty("parts").EnumerateArray())
         {
             string green=part.GetProperty("file").GetString()!;
-            string red=part.GetProperty("red_variant").GetString()!;
+            string? red=part.TryGetProperty("red_variant",out var variant)?variant.GetString():null;
             var expected=part.GetProperty("animations").EnumerateArray().Select(a=>a.GetProperty("name").GetString()!).ToArray();
-            foreach(string relative in new[]{green,red})
+            foreach(string relative in red==null?new[]{green}:new[]{green,red})
             {
                 string file=Path.Combine(directory,relative);
                 var asset=new AssetRecord(Guid.NewGuid(),AssetType.Model3D,"Assets/"+relative.Replace('\\','/'),file,file+".meta",new AssetMetadata{Type=AssetType.Model3D});
@@ -45,7 +45,7 @@ internal static class RefinedGoblinPartsDiagnostic
                 Console.WriteLine($"{relative}: {imported.Meshes.Count} primitives, {imported.Skeleton.Bones.Count} bones, {imported.Animations.Count} clips.");
             }
         }
-        string message=$"PASS: {variants} GLB faction variants imported by ByteEngine; {clips} animation clips; {vertices:N0} vertices; embedded PBR textures and normalized mechanical skin weights.";
+        string message=$"PASS: {variants} GLB models imported by ByteEngine; {clips} animation clips; {vertices:N0} vertices; embedded PBR textures and normalized mechanical skin weights.";
         Console.WriteLine(message);
         File.WriteAllText(Path.Combine(directory,"byteengine-validation.txt"),message+Environment.NewLine);
     }

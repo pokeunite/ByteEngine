@@ -134,7 +134,14 @@ public sealed class GameContentSession : IDisposable
     public void Dispose()
     {
         if (_temporaryRoot == null) return;
-        try { Directory.Delete(_temporaryRoot, true); }
+        // Non-collectible V1 plugin assemblies can remain mapped by Windows until exit.
+        // Remove every unlocked asset even when a private plugin-cache DLL is locked.
+        if (!Directory.Exists(_temporaryRoot)) return;
+        foreach (string file in Directory.EnumerateFiles(_temporaryRoot, "*", SearchOption.AllDirectories))
+            try { File.Delete(file); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        foreach (string directory in Directory.EnumerateDirectories(_temporaryRoot, "*", SearchOption.AllDirectories).OrderByDescending(p => p.Length))
+            try { Directory.Delete(directory); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        try { Directory.Delete(_temporaryRoot); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 }

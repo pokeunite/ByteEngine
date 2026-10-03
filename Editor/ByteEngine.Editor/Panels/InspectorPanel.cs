@@ -248,7 +248,9 @@ internal sealed class InspectorPanel
             ComponentMetadata metadata = ComponentMetadataRegistry.Get(component.GetType());
             if (!metadata.BeginnerVisible && !_showAdvanced) continue;
             if (_setExpansion.HasValue) ImGui.SetNextItemOpen(_setExpansion.Value, ImGuiCond.Always);
-            bool componentOpen = EditorUi.SectionHeader($"{metadata.DisplayName}##{component.GetHashCode()}", false);
+            string componentTitle = component is ByteEngine.Core.Serialization.MissingComponent unavailable
+                ? "Missing: " + unavailable.MissingType : metadata.DisplayName;
+            bool componentOpen = EditorUi.SectionHeader($"{componentTitle}##{component.GetHashCode()}", false);
 
             bool componentHeaderHovered = ImGui.IsItemHovered();
 
@@ -262,6 +264,8 @@ internal sealed class InspectorPanel
             {
                 continue;
             }
+            if (component is ByteEngine.Core.Serialization.MissingComponent)
+                ImGui.TextWrapped("Plugin unavailable. Original properties are preserved when saved. Enable the plugin and reopen to restore this component.");
             bool oldEnabled = component.Enabled;
             bool enabled = oldEnabled;
             bool enabledChanged = ImGui.Checkbox($"Enabled##{component.GetHashCode()}", ref enabled);

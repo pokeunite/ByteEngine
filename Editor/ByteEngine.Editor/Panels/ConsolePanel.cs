@@ -67,21 +67,10 @@ internal sealed class ConsolePanel
         ImGui.End();
     }
 
+    private static string _debugSaveStatus="";
+
     private static void DrawDebug()
     {
-        bool anyVisible =
-            EditorPreferences.ShowDebugFootIk ||
-            EditorPreferences.ShowDebugBlueprintVisibility ||
-            EditorPreferences.ShowDebugTpsJitter ||
-            EditorPreferences.ShowDebugWeaponRaycast;
-
-        if (!anyVisible)
-        {
-            ImGui.TextDisabled(
-                "No debug boxes are visible. Use Debug > Console Debug Boxes from the top menu.");
-            return;
-        }
-
         bool firstControl =
             true;
 
@@ -122,6 +111,10 @@ internal sealed class ConsolePanel
                 RuntimeDiagnostics.DebugWeaponRaycast = enabled;
         }
 
+        bool constructionEnabled = ConstructionDiagnostics.Enabled;
+        if (ImGui.Checkbox("Debug Building / Contraptions", ref constructionEnabled))
+            ConstructionDiagnostics.Enabled = constructionEnabled;
+
         var description =
             new List<string>();
 
@@ -137,6 +130,8 @@ internal sealed class ConsolePanel
         if (EditorPreferences.ShowDebugWeaponRaycast)
             description.Add("Weapons / Raycasts records Event Sheet ray origins/directions plus projectile and PlayerShooter aim/velocity data. Projectile shots also draw a short cyan launch-direction line while enabled.");
 
+        description.Add("Building / Contraptions records build snapshots, placement, connections, save/load and sampled wheel/hinge physics during Play.");
+
         description.Add("Untick a debug option to freeze its trace, then copy it.");
 
         ImGui.TextWrapped(
@@ -150,12 +145,23 @@ internal sealed class ConsolePanel
 
         ImGui.SameLine();
 
+        if (ImGui.SmallButton("Save Debug…"))
+        {
+            string? path=EditorDialogs.ChooseDebugTraceSave();
+            if(path!=null)
+            {
+                try {File.WriteAllText(path,trace,Encoding.UTF8);_debugSaveStatus="Saved: "+path;}
+                catch(Exception e) when(e is IOException or UnauthorizedAccessException){_debugSaveStatus="Could not save: "+e.Message;}
+            }
+        }
+        ImGui.SameLine();
         if (ImGui.SmallButton("Clear Debug"))
         {
             ClearVisibleDebugTrace();
             trace = string.Empty;
         }
 
+        if(_debugSaveStatus.Length>0)ImGui.TextWrapped(_debugSaveStatus);
         ImGui.Separator();
 
         ImGui.InputTextMultiline("##RuntimeDebugText", ref trace,
@@ -194,11 +200,13 @@ internal sealed class ConsolePanel
         if (EditorPreferences.ShowDebugWeaponRaycast)
             Append("Weapons / Raycasts", RuntimeDiagnostics.GetWeaponRaycastTrace());
 
+        Append("Building / Contraptions", ConstructionDiagnostics.GetTrace());
         return text.ToString();
     }
 
     private static void ClearVisibleDebugTrace()
     {
+        ConstructionDiagnostics.Clear();
         if (EditorPreferences.ShowDebugFootIk)
             RuntimeDiagnostics.ClearFootIkTrace();
 

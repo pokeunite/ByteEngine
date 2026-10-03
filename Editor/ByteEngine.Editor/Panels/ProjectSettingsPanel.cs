@@ -1,3 +1,4 @@
+using ByteEngine.Core.Plugins;
 using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.InputSystem;
@@ -21,6 +22,21 @@ internal sealed class ProjectSettingsPanel
     private InputActionType _newActionType;
     private string _newTagName = string.Empty;
     private string _classificationMessage = string.Empty;
+    private string _pluginMessage = string.Empty;
+    private bool _pluginMessageIsError;
+    private string? _pluginsRoot;
+    private EditorProjectContext? _pluginProject;
+    private IReadOnlyList<InstalledByteEnginePlugin>? _installedPlugins;
+    private string? _installedMessage;
+    private IReadOnlyList<InstalledByteEnginePlugin> InstalledPlugins(string root)
+    {
+        if (_installedPlugins == null || _pluginsRoot != root || _installedMessage != _pluginMessage || _pluginProject != EditorProjectContext.Active)
+        {
+            _installedPlugins = ByteEnginePluginPackageManager.ListInstalled(root);
+            _pluginsRoot = root; _installedMessage = _pluginMessage; _pluginProject = EditorProjectContext.Active;
+        }
+        return _installedPlugins;
+    }
 
     public bool IsOpen { get; set; }
 
@@ -45,12 +61,176 @@ internal sealed class ProjectSettingsPanel
                 DrawTagsAndLayers(project);
                 ImGui.EndTabItem();
             }
+            if (ImGui.BeginTabItem("Plugins"))
+            {
+                DrawPluginSettings(project);
+                ImGui.EndTabItem();
+            }
             ImGui.EndTabBar();
         }
         ImGui.End();
         DrawAddActionPopup(project);
         DrawDeleteActionPopup(project);
         DrawAddTagPopup(project);
+    }
+
+    private void DrawPluginSettings(EditorProjectContext project)
+    {
+        ImGui.TextUnformatted("PROJECT PLUGINS");
+        ImGui.TextDisabled("Plugins are trusted executable C# code. Install only plugins you trust.");
+        ImGui.Spacing();
+
+        if (ImGui.Button("Import Plugin..."))
+        {
+            string? package = EditorDialogs.ChoosePluginPackage();
+            if (package != null)
+            {
+                try
+                {
+                    PluginImportResult result =
+                        ByteEnginePluginPackageManager.Import(project.ProjectRoot, package);
+                    _pluginMessage = result.Message;
+                    _pluginMessageIsError = false;
+                }
+                catch (Exception error)
+                {
+                    _pluginMessage = error.Message;
+                    _pluginMessageIsError = true;
+                }
+            }
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Open Plugins Folder"))
+        {
+            try
+            {
+                ByteEnginePluginPackageManager.OpenPluginsFolder(project.ProjectRoot);
+            }
+            catch (Exception error)
+            {
+                _pluginMessage = error.Message;
+                _pluginMessageIsError = true;
+            }
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+
+        IReadOnlyList<InstalledByteEnginePlugin> installed =
+            InstalledPlugins(project.ProjectRoot);
+
+        if (installed.Count == 0)
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled("No plugins installed for this project.");
+        }
+        else
+        {
+            foreach (InstalledByteEnginePlugin plugin in installed)
+            {
+                ImGui.PushID(plugin.ManifestPath);
+
+                ImGui.Spacing();
+                ImGui.TextUnformatted(plugin.Name);
+                ImGui.SameLine();
+                ImGui.TextDisabled($"v{plugin.Version}");
+
+                ImGui.TextDisabled(plugin.Id);
+                ImGui.TextColored(
+                    plugin.Enabled
+                        ? new Vector4(.35f, .85f, .45f, 1f)
+                        : new Vector4(.75f, .75f, .75f, 1f),
+                    plugin.Error != null ? "Invalid package" : project.IsPluginLoaded(plugin.Id) ? (plugin.Enabled ? "Loaded" : "Loaded — disable pending reopen") : plugin.Enabled ? "Enabled — reopen to load, or check errors below" : "Disabled");
+                if (plugin.Error != null) ImGui.TextWrapped(plugin.Error);
+                if (plugin.Manifest is { } manifest)
+                {
+                    ImGui.TextDisabled($"Editor: {manifest.Editor} / Runtime: {manifest.Runtime}");
+                    if (manifest.MinimumEngineVersion != null || manifest.MaximumEngineVersion != null)
+                        ImGui.TextDisabled($"Engine: {manifest.MinimumEngineVersion ?? "any"} through {manifest.MaximumEngineVersion ?? "latest"}");
+                    foreach (var dependency in manifest.Dependencies)
+                        ImGui.TextWrapped($"Requires {dependency.Id} {dependency.MinimumVersion ?? "any version"}");
+                }
+
+                if (plugin.Enabled)
+                {
+                    if (ImGui.Button("Disable"))
+                    {
+                        try
+                        {
+                            _pluginMessage =
+                                ByteEnginePluginPackageManager.SetEnabled(plugin, false);
+                            _pluginMessageIsError = false;
+                        }
+                        catch (Exception error)
+                        {
+                            _pluginMessage = error.Message;
+                            _pluginMessageIsError = true;
+                        }
+                    }
+                }
+                else
+                {
+                    if (ImGui.Button("Enable"))
+                    {
+                        try
+                        {
+                            _pluginMessage =
+                                ByteEnginePluginPackageManager.SetEnabled(plugin, true);
+                            _pluginMessageIsError = false;
+                        }
+                        catch (Exception error)
+                        {
+                            _pluginMessage = error.Message;
+                            _pluginMessageIsError = true;
+                        }
+                    }
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Remove"))
+                {
+                    try
+                    {
+                        _pluginMessage =
+                            ByteEnginePluginPackageManager.Remove(plugin);
+                        _pluginMessageIsError = false;
+                    }
+                    catch (Exception error)
+                    {
+                        _pluginMessage = error.Message;
+                        _pluginMessageIsError = true;
+                    }
+                }
+
+                ImGui.Separator();
+                ImGui.PopID();
+            }
+        }
+
+        foreach (string diagnostic in project.PluginMessages) ImGui.TextWrapped(diagnostic);
+
+        if (!string.IsNullOrWhiteSpace(_pluginMessage))
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped(_pluginMessage);
+
+            if (_pluginMessage.Contains("Reopen", StringComparison.OrdinalIgnoreCase) ||
+                _pluginMessage.Contains("Restart", StringComparison.OrdinalIgnoreCase))
+            {
+                ImGui.TextColored(
+                    new Vector4(1f, .72f, .2f, 1f),
+                    "Plugin changes take effect after reopening the project / restarting ByteEngine.");
+            }
+            else if (_pluginMessageIsError)
+            {
+                ImGui.TextColored(
+                    new Vector4(1f, .35f, .3f, 1f),
+                    "Plugin operation failed.");
+            }
+        }
     }
 
     private void DrawTagsAndLayers(EditorProjectContext project)

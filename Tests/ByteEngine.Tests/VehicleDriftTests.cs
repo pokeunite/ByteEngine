@@ -1,3 +1,4 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core.Construction;
 namespace ByteEngine.Tests;

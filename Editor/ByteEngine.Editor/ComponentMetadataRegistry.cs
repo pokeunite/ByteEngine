@@ -32,6 +32,8 @@ internal sealed record PropertyMetadata(
 
 internal static class ComponentMetadataRegistry
 {
+    internal static void RegisterPlugin(Type type, ComponentMetadata metadata) => Components[type] = metadata;
+    internal static void RemovePlugin(Type type) => Components.Remove(type);
     public static readonly string[] CategoryOrder =
     {
         "Character", "Camera", "Rendering", "Physics", "Gameplay",
@@ -80,7 +82,6 @@ internal static class ComponentMetadataRegistry
         [typeof(ProjectileLauncher3D)] = new("Projectile Launcher", "Gameplay", "Creates reusable projectiles with a fire cooldown.", "weapon shoot fire"),
         [typeof(PlayerShooter3D)] = new("Player Shooter", "Gameplay", "Maps player fire input to a projectile launcher.", "weapon input"),
         [typeof(ArenaGameManager)] = new("Arena Game Manager", "Gameplay", "Tracks arena match state.", "game rules manager", false, true),
-        [typeof(ByteEngine.Core.Construction.VehicleBuilder3D)] = new("Vehicle Builder 3D", "Gameplay", "Socket garage, saved builds, and arcade test driving using imported scrap parts.", "vehicle garage build car"),
         [typeof(WaveSpawner3D)] = new("Wave Spawner 3D", "Gameplay", "Spawns Blueprint enemies in timed waves and tracks their Health.", "wave horde enemy spawn"),
         [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Chases and attacks a nearby player without navigation.", "enemy chase attack"),
 

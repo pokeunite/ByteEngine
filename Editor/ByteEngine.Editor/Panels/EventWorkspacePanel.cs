@@ -25,8 +25,18 @@ internal sealed class EventWorkspacePanel
     private readonly EventModuleSerializer _serializer =
         new();
 
-    private readonly VisualLogicRegistry _registry =
-        VisualLogicRegistry.CreateDefault();
+    private VisualLogicRegistry? _registryCache;
+    private int _registryRevision = -1;
+    private VisualLogicRegistry _registry
+    {
+        get
+        {
+            int revision = ByteEngine.Core.Plugins.ByteEnginePluginRegistry.Revision;
+            if (_registryCache == null || revision != _registryRevision)
+            { _registryCache = VisualLogicRegistry.CreateDefault(); _registryRevision = revision; }
+            return _registryCache;
+        }
+    }
 
     private readonly VariableReferencePicker _referencePicker =
         new();
@@ -8759,6 +8769,8 @@ internal sealed class EventWorkspacePanel
                 break;
         }
 
+        foreach (var argument in _registry.GetArguments(id))
+            instruction.Arguments.TryAdd(argument.Name, argument.CreateDefault());
         return instruction;
     }
 
@@ -8770,6 +8782,14 @@ internal sealed class EventWorkspacePanel
         VisualInstruction instruction,
         EditorState? state)
     {
+        var pluginArguments = _registry.GetArguments(instruction.Id);
+        if (pluginArguments.Count > 0)
+        {
+            foreach (var argument in pluginArguments)
+                DrawValueArgument(instruction, argument.Name, argument.DisplayName,
+                    argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            return;
+        }
         switch (instruction.Id)
         {
             case "flow.branch":

@@ -1,11 +1,12 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core.Construction;
 namespace ByteEngine.Tests;
 internal static class ContraptionTests
 {
- public static VehicleAssembly Build(VehiclePartCatalog c)
+ public static VehicleAssembly Build(VehiclePartCatalog c,int wheelReference=46)
  {
-  var a=new VehicleAssembly(c);string beam=c.Parts.Values.First(p=>p.ReferenceId==1).File;string wheel=c.Parts.Values.First(p=>p.ReferenceId==46).File;
+  var a=new VehicleAssembly(c);string beam=c.Parts.Values.First(p=>p.ReferenceId==1).File;string wheel=c.Parts.Values.First(p=>p.ReferenceId==wheelReference).File;
   foreach(var face in new[]{"Front","Rear"})
   {
    int id=a.AddAtSocket(beam,0,face,c[beam].Sockets[0].Name);Check(id>0,"Beam placement: "+face);
@@ -21,13 +22,24 @@ internal static class ContraptionTests
  public static void Run(string project)
  {
   var c=VehiclePartCatalog.Load(Path.Combine(project,"Assets","GarageUI","parts-catalog.json"));Check(c.Standard&&c.Parts.Count==66,"Wrong catalogue");
+  string embeddedPath=Path.Combine(Path.GetTempPath(),"Goblin-embedded-catalog-"+Guid.NewGuid().ToString("N")+".json");
+  try
+  {
+   File.Copy(Path.Combine(project,"Assets","GarageUI","parts-catalog.json"),embeddedPath);
+   var embedded=VehiclePartCatalog.Load(embeddedPath);
+   Check(embedded.Parts.Values.First(p=>p.ReferenceId==46).Mass==30&&embedded.Parts.Values.First(p=>p.ReferenceId==46).WheelHull?.Length==98,"Plugin is missing embedded physics references");
+  }
+  finally{File.Delete(embeddedPath);}
   int[] excluded=[7,45,49,57,58,65,66,67,68,69,70,74,75,87];Check(!c.Parts.Values.Any(p=>excluded.Contains(p.ReferenceId)),"Excluded blocks survived");
+  if(c.Revision>=3){SteeringJointTests.Run(c);GearMeshTests.Run(c);}
+  SteeringDirectionTests.Run(project);
+  WheelHandlingTests.Run(c);
   var a=Build(c);Check(a.CanDrive,"Engine or cab gate survived");VehicleAssembly.FromJson(c,a.ToJson());
   using(var physics=new ContraptionPhysicsWorld(a,new(0,a.RideHeight,0),Quaternion.Identity))
   {
    for(int i=0;i<120;i++)physics.Step(1f/60,0,0,false,false);var start=physics.Pose(0);
    for(int i=0;i<300;i++)physics.Step(1f/60,1,0,false,false);var end=physics.Pose(0);Console.WriteLine($"Powered machine displacement {end.Position-start.Position}; orientation {end.Rotation}");Check(Vector3.Distance(start.Position,end.Position)>1,"Wheel torque failed to propel machine");
-   for(int i=0;i<180;i++)physics.Step(1f/60,1,1,false,false);Check(Math.Abs(Quaternion.Dot(end.Rotation,physics.Pose(0).Rotation))<.995f,"Differential steering failed");
+   for(int i=0;i<180;i++)physics.Step(1f/60,1,1,false,false); // A/D only actuates steering components; verified by WheelHandlingTests.
   }
   var passive=Build(c);string freeWheel=c.Parts.Values.First(p=>p.ReferenceId==60).File;
   foreach(var p in passive.Parts.Values.Where(p=>c[p.File].ReferenceId==46).ToArray())passive.Parts[p.Id]=p with {File=freeWheel};
@@ -35,6 +47,16 @@ internal static class ContraptionTests
   {
    for(int i=0;i<120;i++)physics.Step(1f/60,0,0,false,false);var start=physics.Pose(0).Position;
    for(int i=0;i<180;i++)physics.Step(1f/60,1,0,false,false);Check(Vector3.Distance(start,physics.Pose(0).Position)<.5f,"Passive wheels supplied motor power");
+  }
+  var broken=Build(c);var bomb=c.Parts.Values.First(p=>p.ReferenceId==23);
+  // Elevated blast fixture tests detachment independently of bomb placement clearance.
+  broken.Parts[99]=new AssemblyPart(99,bomb.File,0,new Vector3(0,2,0),Quaternion.Identity);
+  using(var physics=new ContraptionPhysicsWorld(broken,new(0,3,0),Quaternion.Identity))
+  {
+   physics.Fire();
+   foreach(var wheelPart in broken.Parts.Values.Where(p=>c[p.File].ReferenceId==46))Check(!physics.HasPhysicalOutput(wheelPart.Id),"Broken wheel retained its bearing/motor attachment");
+   for(int i=0;i<60;i++)physics.Step(1f/60,1,0,false,false);
+   foreach(var wheelPart in broken.Parts.Values.Where(p=>c[p.File].ReferenceId==46))Check(float.IsFinite(physics.Pose(wheelPart.Id).Position.Y),"Detached wheel produced invalid pose");
   }
   var cannonMachine=new VehicleAssembly(c);var cannon=c.Parts.Values.First(p=>p.ReferenceId==11);Check(cannonMachine.AddAtSocket(cannon.File,0,"Front",cannon.Sockets[0].Name)>0,"Cannon placement failed");
   using(var physics=new ContraptionPhysicsWorld(cannonMachine,new(0,3,0),Quaternion.Identity))
@@ -65,7 +87,7 @@ internal static class ContraptionTests
   }
   Console.WriteLine("PASS: all 65 parts can attach and simulate; piston output physically extends; projectile and mechanism actions remain finite.");
   var simple=new VehicleAssembly(c);string beam=c.Parts.Values.First(p=>p.ReferenceId==15).File;Check(simple.AddAtSocket(beam,0,"Right",c[beam].Sockets[0].Name)>0,"Short beam failed");Check(simple.Remove(1)&&!simple.Remove(0),"Delete protection failed");
-  Console.WriteLine("PASS: selected catalogue; arbitrary beams and wheels; save/load; deletion; physical wheel propulsion and steering without engine/cab.");
+  Console.WriteLine("PASS: selected catalogue; arbitrary beams and wheels; save/load; deletion; physical wheel propulsion without engine/cab and steering through steering blocks.");
  }
  private static void Check(bool ok,string message){if(!ok)throw new InvalidOperationException(message);}
 }

@@ -3,6 +3,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Physics;
+using ByteEngine.Core.Plugins;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -20,6 +21,7 @@ public sealed class GameProjectRuntime : IDisposable
     private readonly Guid _animation;
     private readonly Guid _audio;
     private readonly Guid _spawner;
+    private readonly ByteEnginePluginSession _plugins;
     private bool _disposed;
 
     public GameProjectRuntime(string projectFile, Action<string>? warning = null)
@@ -31,13 +33,22 @@ public sealed class GameProjectRuntime : IDisposable
         GamePackageExporter.ResolveInside(Root, Project.StartupScene);
         if (!File.Exists(Path.Combine(Root, Project.StartupScene)))
             throw new FileNotFoundException($"Startup scene is missing: {Project.StartupScene}");
+
+        _plugins = ByteEnginePluginManager.LoadProjectPlugins(
+            Root,
+            ByteEnginePluginLoadMode.Runtime,
+            warning);
+
         Database = new AssetDatabase(Root, new[] { Project.AssetDirectory, Project.SceneDirectory },
             warning, warning, readOnly: true);
         Assets = new AssetManager(Database, warning);
         Project.InputMap ??= InputMap.CreateDefault();
         Project.InputMap.EnsureValid();
         InputActions.Configure(Project.InputMap);
+
         var components = new ComponentSerializer(Root, Database, Assets, warning);
+        ByteEnginePluginRegistry.ApplyComponentCodecs(components, warning);
+
         Serializer = new SceneSerializer(components, Project.Classification);
         SkyEnvironmentExposureSerialization.Register(components);
         PhysicsSerializationRegistrar.Register(components);
@@ -61,5 +72,6 @@ public sealed class GameProjectRuntime : IDisposable
         AudioRuntimeAssets.Clear(_audio);
         Assets.Dispose();
         Database.Dispose();
+        _plugins.Dispose();
     }
 }

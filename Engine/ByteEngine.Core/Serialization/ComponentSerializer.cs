@@ -388,7 +388,7 @@ public sealed class ComponentSerializer
         Register(new CameraBoom3DCodec());
         Register(new ArenaGameManagerCodec());
         Register(new WaveSpawner3DCodec());
-        Register(new ByteEngine.Core.Construction.VehicleBuilder3DCodec());
+
     }
 
     public void Register(
@@ -405,15 +405,27 @@ public sealed class ComponentSerializer
             codec;
     }
 
+    public string? GetCanonicalTypeName(string name) => _byTypeName.TryGetValue(name, out var codec) ? codec.TypeName : null;
+    public string? GetSerializedTypeName(Type type) => _byRuntimeType.TryGetValue(type, out var codec) ? codec.TypeName : null;
+
+    public void RegisterAlias(string alias, string canonical)
+    {
+        if (_byTypeName.ContainsKey(alias)) throw new InvalidOperationException($"Component alias '{alias}' is already registered.");
+        if (!_byTypeName.TryGetValue(canonical, out var codec)) throw new InvalidOperationException($"Unknown canonical codec '{canonical}'.");
+        _byTypeName.Add(alias, codec);
+    }
+
     public ComponentData? Serialize(
         Component component)
     {
+        if (component is MissingComponent missing) return missing.Capture();
+
         if (!_byRuntimeType.TryGetValue(
                 component.GetType(),
                 out IComponentCodec? codec))
         {
             _context.WarningSink?.Invoke(
-                $"Component type '{component.GetType().FullName}' is not registered and was skipped."
+                $"Component type '{component.GetType().FullName}' is not registered and was preserved as an inactive missing component."
             );
 
             return null;
@@ -439,10 +451,10 @@ public sealed class ComponentSerializer
                 out IComponentCodec? codec))
         {
             _context.WarningSink?.Invoke(
-                $"Unknown component type '{data.Type}' was skipped."
+                $"Missing component '{data.Type}' is inactive; its authored data is preserved."
             );
 
-            return null;
+            return new MissingComponent(data);
         }
 
         try
@@ -461,10 +473,10 @@ public sealed class ComponentSerializer
         catch (Exception exception)
         {
             _context.WarningSink?.Invoke(
-                $"Could not deserialize component '{data.Type}': {exception.Message}. The component was skipped."
+                $"Could not deserialize component '{data.Type}': {exception.Message}. The component was preserved as an inactive missing component."
             );
 
-            return null;
+            return new MissingComponent(data);
         }
     }
 

@@ -14,6 +14,10 @@ public static class WebGamePackageExporter
     {
         var project = new ProjectSerializer().Load(projectFile);
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
+        var runtimePlugins = ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ListInstalled(root)
+            .Where(p => p.Enabled && ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(p.ManifestPath)).Runtime).ToArray();
+        if (runtimePlugins.Length > 0)
+            throw new InvalidOperationException("Web export does not support managed runtime plugins: " + string.Join(", ", runtimePlugins.Select(p => p.Name)) + ". Use Windows export or disable these plugins.");
         project.StartupScene = startupScene.Replace('\\', '/');
         if (!File.Exists(GamePackageExporter.ResolveInside(root, project.StartupScene)))
             throw new FileNotFoundException("Choose a saved startup scene.");

@@ -34,6 +34,17 @@ public sealed partial class AuthoringSession
         throw new McpFault("UNSUPPORTED_CAPABILITY");
     }
 
+    private Type? FindComponentType(string name)
+    {
+        string? canonical = Components.GetCanonicalTypeName(name);
+        var matches = Components.RegisteredComponentTypes.Where(t =>
+            t.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.FullName, name, StringComparison.OrdinalIgnoreCase) ||
+            canonical != null && Components.GetSerializedTypeName(t) == canonical).ToArray();
+        if (matches.Length > 1) throw new McpFault("INVALID_COMPONENT", "Ambiguous component name; use its canonical codec name.");
+        return matches.SingleOrDefault();
+    }
+
     private object CatalogTool(string op, JsonElement? args)
     {
         string search = Request.String(args, "search") ?? "";
@@ -45,8 +56,7 @@ public sealed partial class AuthoringSession
         if (op == "component")
         {
             string name = Request.Required(args, "name");
-            Type type = Components.RegisteredComponentTypes.FirstOrDefault(t =>
-                t.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            Type type = FindComponentType(name)
                 ?? throw new McpFault("NOT_FOUND", $"Unknown component '{name}'.");
             var instance = Activator.CreateInstance(type) as Component
                 ?? throw new McpFault("UNSUPPORTED_CAPABILITY", "This component has no default authoring instance.");
@@ -60,13 +70,13 @@ public sealed partial class AuthoringSession
                 items = LogicRegistry.Conditions.Where(x => x.Id.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     x.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase))
                     .OrderBy(x => x.Category).ThenBy(x => x.Id).Take(limit)
-                    .Select(x => new { x.Id, x.DisplayName, x.Category, x.TargetComponent }).ToArray() };
+                    .Select(x => new { x.Id, x.DisplayName, x.Category, x.TargetComponent, arguments = x.Arguments.Select(a => new { a.Name, a.DisplayName, type = a.DefaultValue.Type.ToString(), default_value = a.DefaultValue.BoxedValue }).ToArray() }).ToArray() };
         if (op == "actions")
             return new { ok = true, total = LogicRegistry.Actions.Count,
                 items = LogicRegistry.Actions.Where(x => x.Id.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     x.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase))
                     .OrderBy(x => x.Category).ThenBy(x => x.Id).Take(limit)
-                    .Select(x => new { x.Id, x.DisplayName, x.Category, x.TargetComponent }).ToArray() };
+                    .Select(x => new { x.Id, x.DisplayName, x.Category, x.TargetComponent, arguments = x.Arguments.Select(a => new { a.Name, a.DisplayName, type = a.DefaultValue.Type.ToString(), default_value = a.DefaultValue.BoxedValue }).ToArray() }).ToArray() };
         if (op == "asset_types")
             return new { ok = true, items = Enum.GetNames<AssetType>() };
         throw new McpFault("UNSUPPORTED_CAPABILITY");
@@ -332,6 +342,7 @@ public sealed partial class AuthoringSession
             bool known = condition ? LogicRegistry.TryGetCondition(id, out _) : LogicRegistry.TryGetAction(id, out _);
             if (!known) throw new McpFault("INVALID_NODE", $"Unknown {(condition ? "condition" : "action")} '{id}'.");
             var instruction = new VisualInstruction { Id = id };
+            foreach (var argument in LogicRegistry.GetArguments(id)) instruction.Arguments[argument.Name] = argument.CreateDefault();
             foreach (var pair in Request.Properties(Request.Get(item, "args")))
                 instruction.Arguments[pair.Key] = pair.Value.ValueKind switch
                 {
@@ -430,17 +441,21 @@ public sealed partial class AuthoringSession
             {
                 var obj = Find();
                 string type = Request.Required(edit, "type");
-                if (!Components.RegisteredComponentTypes.Any(t => t.Name.Equals(type, StringComparison.OrdinalIgnoreCase)))
-                    throw new McpFault("INVALID_COMPONENT", $"Unknown component '{type}'.");
-                var component = obj.Components.FirstOrDefault(c => c.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
-                if (component == null) { component = new ComponentData { Type = type }; obj.Components.Add(component); }
+                Type? runtimeType = FindComponentType(type);
+                ComponentData? defaults = runtimeType == null ? null : Components.Serialize((Component)Activator.CreateInstance(runtimeType)!);
+                if (defaults == null) throw new McpFault("INVALID_COMPONENT", $"Unknown component '{type}'.");
+                string codecName = defaults.Type;
+                var component = obj.Components.FirstOrDefault(c => (Components.GetCanonicalTypeName(c.Type) ?? c.Type).Equals(codecName, StringComparison.OrdinalIgnoreCase));
+                if (component != null) component.Type = codecName;
+                if (component == null) { component = defaults; obj.Components.Add(component); }
                 foreach (var pair in Request.Properties(Request.Get(edit, "properties")))
                     component.Properties[pair.Key] = System.Text.Json.Nodes.JsonNode.Parse(pair.Value.GetRawText());
             }
             else if (op == "remove_component")
             {
                 var obj = Find(); string type = Request.Required(edit, "type");
-                obj.Components.RemoveAll(c => c.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
+                string canonical = Components.GetCanonicalTypeName(type) ?? (FindComponentType(type) is { } registered ? Components.GetSerializedTypeName(registered) : null) ?? type;
+                obj.Components.RemoveAll(c => (Components.GetCanonicalTypeName(c.Type) ?? c.Type).Equals(canonical, StringComparison.OrdinalIgnoreCase));
             }
             else if (op == "set_position" || op == "set_scale")
             {

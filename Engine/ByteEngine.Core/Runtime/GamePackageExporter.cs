@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Plugins;
 using ByteEngine.Core.Serialization;
 
 namespace ByteEngine.Core.Runtime;
@@ -74,6 +75,19 @@ public static class GamePackageExporter
                 if (System.IO.Directory.Exists(source))
                     CopyTree(source, ResolveInside(content, directory), true);
             }
+
+            foreach (var plugin in ByteEnginePluginPackageManager.ListInstalled(root).Where(p => p.Enabled))
+            {
+                var manifest = ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(plugin.ManifestPath));
+                if (!manifest.Runtime) continue;
+                progress?.Report("Packing plugin " + manifest.Name + "...");
+                string destinationPlugins = ResolveInside(content, "Plugins");
+                System.IO.Directory.CreateDirectory(destinationPlugins);
+                if (plugin.PackagePath != null)
+                    File.Copy(plugin.PackagePath, Path.Combine(destinationPlugins, Path.GetFileName(plugin.PackagePath)), true);
+                else CopyTree(plugin.Directory, Path.Combine(destinationPlugins, manifest.Id), true);
+            }
+
             // StartupScene need not be under the normal scene directory.
             string exportedScene = ResolveInside(content, project.StartupScene);
             if (!File.Exists(exportedScene))
@@ -102,7 +116,7 @@ public static class GamePackageExporter
                 "Native libraries require the Microsoft Visual C++ x64 v14 Redistributable. Use the included official install link if the game reports a missing native dependency.\r\n" +
                 "Escape releases the mouse; click to recapture. Use the window close button to quit.\r\n" +
                 "Game logs: %LOCALAPPDATA%\\ByteEngine\\Games\\Logs\r\n" +
-                "Game assets/scenes are stored in Game.bytepak. Keep that file beside the executable.\r\n");
+                "Game assets/scenes and project-local runtime plugins are stored in Game.bytepak. Keep that file beside the executable.\r\n");
             File.WriteAllText(Path.Combine(destination, "Install Visual C++ Runtime.url"),
                 "[InternetShortcut]\r\nURL=https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\r\n");
             File.Delete(marker);

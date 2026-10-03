@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tools/**</DefaultItemExcludes>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>GoblinScrapper.Plugin</AssemblyName>
+    <RootNamespace>GoblinScrapper.Plugin</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepuPhysics" Version="2.5.0-beta.29" />
+    <ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Tools/GoblinRefined/block-body-reference.json" LogicalName="GoblinScrapper.block-body-reference.json" />
+    <EmbeddedResource Include="Tools/GoblinRefined/wheel-physics-reference.json" LogicalName="GoblinScrapper.wheel-physics-reference.json" />
+  </ItemGroup>
+  <ItemGroup><BytePluginDependencyName Include="BepuPhysics.dll;BepuUtilities.dll" /></ItemGroup>
+  <PropertyGroup><BytePluginName>GoblinScrapper</BytePluginName></PropertyGroup>
+  <Import Project="../BytePlugin.targets" />
+</Project>

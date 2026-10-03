@@ -1,6 +1,6 @@
 # ByteEngine MCP authoring server (initial release)
 
-The server exposes eight small semantic tools through the official C# MCP SDK over stdio. It edits ByteEngine projects through Core serializers; it does not generate C# gameplay code or use editor mouse automation.
+The server exposes nine small semantic tools through the official C# MCP SDK over stdio. It edits ByteEngine projects through Core serializers; it does not generate C# gameplay code or use editor mouse automation.
 
 Run locally:
 
@@ -24,6 +24,7 @@ Every mutation requires `expected_rev` from an inspect/create result. For a new 
 
 | Tool | Operations |
 | --- | --- |
+| `be_plugin` | `list`, `import`, `enable`, `disable`, `remove` |
 | `be_project` | `open`, `info`, `set_startup_scene` |
 | `be_catalog` | `components`, `component`, `conditions`, `actions`, `asset_types` |
 | `be_asset` | `find`, `inspect`, `refresh` |
@@ -60,3 +61,9 @@ Run the non-destructive integration test against a temporary project:
 ```powershell
 dotnet run --project Tools/ByteEngine.Mcp/ByteEngine.Mcp.csproj -- --self-test
 ```
+
+## Native plugin authoring
+
+Import a `.byteplugin` with `be_plugin(op="import", args={"path":"C:/absolute/path/SpaceScraper.byteplugin"})`, then reopen the same project with `be_project/open`. Use `be_catalog/component` for the plugin component's canonical codec and camel-case properties. `be_scene/apply` with a `set_component` edit places it on an object and saves through that codec. Component edits/removals also resolve canonical IDs and old aliases. `be_catalog/actions` and `conditions` include plugin definitions and argument metadata. Package enable/disable/remove operations return `reopen_required:true`; they do not use scene revision tokens.
+
+The verified round-trip includes disabled-plugin saving and restoring the retained data after re-enabling. See `../../Docs/PLUGIN-AUTHORING.md`. Game export is intentionally absent from MCP.

@@ -1,3 +1,4 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using System.IO.Compression;
 using ByteEngine.Core;

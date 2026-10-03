@@ -1,7 +1,9 @@
+using ByteEngine.Core;
+using ByteEngine.Core.Construction;
 using System.Numerics;
 using System.Text.Json;
 
-namespace ByteEngine.Core.Construction;
+namespace GoblinScrapper.Construction;
 
 public sealed record VehicleMount(string Name, Vector3 Position, string[] Parts);
 

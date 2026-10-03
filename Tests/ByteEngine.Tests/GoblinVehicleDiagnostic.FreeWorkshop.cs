@@ -1,3 +1,4 @@
+using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.Construction;
@@ -57,19 +58,106 @@ internal sealed partial class GoblinVehicleDiagnostic
     private void RunStandardWorkshop(Scene scene,VehicleBuilder3D builder)
     {
         string output=Path.Combine(Environment.CurrentDirectory,"output","goblin-scraper","standard-contraptions");Directory.CreateDirectory(output);
-        Assert(builder.Assembly!.Parts.Count==1,"Wrong start");TickInput(scene,new(.98f,.5f),[]);
+        var registry=ByteEngine.Core.VisualLogic.VisualLogicRegistry.CreateDefault();
+        var eventContext=new ByteEngine.Core.VisualLogic.EventExecutionContext{Scene=scene,Self=builder.GameObject,Globals=new ByteEngine.Core.Variables.VariableStore()};
+        var componentSerializer=new ByteEngine.Core.Serialization.ComponentSerializer(_project!.ProjectRoot,_project.AssetDatabase,_project.Assets);
+        ByteEngine.Core.Plugins.ByteEnginePluginRegistry.ApplyComponentCodecs(componentSerializer);
+        var restoredControls=(VehicleBuilder3D)componentSerializer.Deserialize(componentSerializer.Serialize(builder)!)!;
+        Assert(!restoredControls.UseBuiltInControls&&restoredControls.UseBuiltInPointerControls&&restoredControls.AutomaticCamera&&restoredControls.ShowWorkshopHud,"Manual control switches were lost during serialization");
+        Console.WriteLine("PASS: manual control switches persist through component save/reload.");
+        var template=GoblinScrapper.GoblinControlTemplate.Create();
+        foreach(var instruction in template.Rules.SelectMany(r=>r.Conditions))Assert(registry.TryGetCondition(instruction.Id,out _),"Missing control condition: "+instruction.Id);
+        foreach(var instruction in template.Rules.SelectMany(r=>r.Actions))Assert(registry.TryGetAction(instruction.Id,out _),"Missing control action: "+instruction.Id);
+        Assert(builder.GameObject.GetComponent<ByteEngine.Core.VisualLogic.EventModuleComponent>()!=null,"Editable controls were not attached to the builder");
+        var place=new ByteEngine.Core.VisualLogic.VisualInstruction{Id="bytebard.goblinscrapper.attachPart",Arguments=new(){["file"]=ByteEngine.Core.VisualLogic.EventValue.String("goblin_double_wooden_block"),["parent"]=ByteEngine.Core.VisualLogic.EventValue.Number(0),["connector"]=ByteEngine.Core.VisualLogic.EventValue.String("Front")}};
+        Assert(registry.TryGetAction(place.Id,out var placeAction),"Missing connector action");placeAction!.Execute(place,eventContext);
+        Assert(builder.Assembly!.Parts.Count==2&&builder.LastPlacedPartId>0,"Connector event failed");
+        Assert(builder.UndoBuild()&&builder.Assembly.Parts.Count==1,"Connector event did not record undo");
+        Console.WriteLine("PASS: Goblin action/condition registration and connector event execution with undo.");
+        Assert(builder.Assembly!.Parts.Count==1,"Wrong start");TickInput(scene,new(.98f,.5f),[]);Assert(!builder.UseBuiltInControls,"Editable keyboard events did not take control");
         Screenshot(scene,Path.Combine(output,"starting-block.png"));
         var camera=scene.ActiveCamera!;var clip=Vector4.Transform(new Vector4(builder.Transform.WorldPosition+new Vector3(.25f,0,0),1),camera.GetViewMatrix()*camera.GetProjectionMatrix(1280f/720));
         Vector2 pointer=new((clip.X/clip.W+1)/2,(1-clip.Y/clip.W)/2);TickInput(scene,pointer,[]);TickInput(scene,pointer,[],true);TickInput(scene,pointer,[]);
         Assert(builder.Assembly.Parts.Count==2,"New beam mouse placement failed: "+builder.FreePlacementIssue);Assert(builder.UndoBuild()&&builder.Assembly.Parts.Count==1,"New placement undo failed");
         var catalog=VehiclePartCatalog.Load(Path.Combine(_project!.ProjectRoot,"Assets","GarageUI","parts-catalog.json"));
+        // An identity physical override must preserve the rendered bind-pose bounds.
+        foreach(var def in catalog.Parts.Values.Where(p=>p.ReferenceId is 2 or 40 or 46 or 60 or 28))
+        {
+            var probe=VehicleBuilder3D.CreateModelVisual(scene,_project.Assets,"Assets/ContraptionParts/"+def.ModelFile+".glb",builder.GameObject,"Bind pose probe");
+            var rig=probe.GetComponent<ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer>()!;
+            Assert(rig.TryGetCurrentModelBounds(out var before),"Missing bind pose bounds");
+            rig.SetPhysicalBoneDeformation("Moving",Matrix4x4.Identity);
+            Assert(rig.TryGetCurrentModelBounds(out var after),"Missing physical pose bounds");
+            Console.WriteLine($"Bind identity {def.ReferenceId}: before={before.Minimum}/{before.Maximum} after={after.Minimum}/{after.Maximum}");
+            Assert(Vector3.Distance(before.Minimum,after.Minimum)<.0001f&&Vector3.Distance(before.Maximum,after.Maximum)<.0001f,"Physical override moved the visible mesh away from its bind pose: "+def.Label);
+            scene.DestroyGameObject(probe);
+        }
         foreach(var def in catalog.Parts.Values)Assert(_project.Assets.LoadModel(new ByteEngine.Core.Assets.AssetReference("Assets/ContraptionParts/"+def.ModelFile+".glb")).Meshes.Count>0,"Model import failed: "+def.Label);
         builder.RestoreAssembly(ContraptionTests.Build(catalog).ToJson());TickInput(scene,new(.98f,.5f),[]);
         Screenshot(scene,Path.Combine(output,"workshop-720p.png"));Screenshot(scene,Path.Combine(output,"workshop-1080p.png"),1920,1080);Screenshot(scene,Path.Combine(output,"workshop-16x10.png"),1280,800);Screenshot(scene,Path.Combine(output,"workshop-ultrawide.png"),2560,1080);
-        Assert(builder.RemoveAssemblyPart(1)&&builder.UndoBuild(),"Erase undo failed");Assert(builder.BeginDriving(),"Simulation failed");for(int i=0;i<240;i++)builder.StepDrive(1,0,false,1f/60);Assert(builder.Velocity.Length()>1,"Native wheel physics failed");
+        Assert(builder.RemoveAssemblyPart(1)&&builder.UndoBuild(),"Erase undo failed");Assert(builder.BeginDriving(),"Simulation failed");
+        var masterVisual=scene.GameObjects.Single(o=>o.Name=="Master block");var machineStart=builder.Transform.WorldPosition;
+        for(int i=0;i<240;i++)
+        {
+            TickInput(scene,new(.98f,.5f),[Key.W]);
+            Assert(Vector3.Distance(masterVisual.Transform.WorldPosition,builder.Transform.WorldPosition)<.0001f,"Full game loop snapped the visible machine away from its physical position while the camera followed physics");
+        }
+        Assert(Vector3.Distance(machineStart,masterVisual.Transform.WorldPosition)>1&&builder.Velocity.Length()>1,"Held W did not move the visible machine");
         TickInput(scene,new(.98f,.5f),[]);Screenshot(scene,Path.Combine(output,"driving.png"));TickInput(scene,new(.98f,.5f),[Key.B]);TickInput(scene,new(.98f,.5f),[]);Assert(builder.Building,"Return failed");
         TickInput(scene,new(650f/1280,572f/720),[],true);TickInput(scene,new(.98f,.5f),[]);Screenshot(scene,Path.Combine(output,"flight-palette.png"));
-        Console.WriteLine("PASS: native selected model import, five-category UI, independent wheel physics, erase/undo, simulation reset, screenshots at four sizes.");
+        var oneWheel=new VehicleAssembly(catalog);var powered=catalog.Parts.Values.First(p=>p.ReferenceId==2);
+        Assert(oneWheel.AddAtSocket(powered.File,0,"Right",powered.Sockets[0].Name)>0,"Single powered wheel attachment failed");builder.RestoreAssembly(oneWheel.ToJson());Assert(builder.BeginDriving(),"Single wheel simulation failed");
+        masterVisual=scene.GameObjects.Single(o=>o.Name=="Master block");var wheelVisual=scene.GameObjects.Single(o=>o.Name.EndsWith(" #1"));var wheelStart=wheelVisual.Transform.WorldPosition;
+        machineStart=builder.Transform.WorldPosition;
+        for(int i=0;i<180;i++)
+        {
+            TickInput(scene,new(.98f,.5f),[Key.W]);
+            Assert(Vector3.Distance(masterVisual.Transform.WorldPosition,builder.Transform.WorldPosition)<.0001f,"Single-wheel visual diverged from physics");
+        }
+        var delta=masterVisual.Transform.WorldPosition-machineStart;Assert(new Vector2(delta.X,delta.Z).Length()>.1f,"Single powered wheel did not propel the visible block");
+        Assert(Vector3.Distance(wheelStart,wheelVisual.Transform.WorldPosition)>.1f,"Powered wheel visual stayed behind");
+        Console.WriteLine("Single-wheel visible horizontal travel: "+new Vector2(delta.X,delta.Z).Length());Screenshot(scene,Path.Combine(output,"single-wheel-fixed.png"));
+        TickInput(scene,new(.98f,.5f),[Key.B]);TickInput(scene,new(.98f,.5f),[]);Assert(builder.Building&&Vector3.Distance(masterVisual.Transform.WorldPosition,builder.Transform.WorldPosition)<.0001f,"Reset left the visible machine displaced");
+        if(catalog.Revision>=3)
+        {
+            builder.RestoreAssembly(SteeringJointTests.Build(catalog).ToJson());TickInput(scene,new(.98f,.5f),[]);
+            Screenshot(scene,Path.Combine(output,"steering-hinge-build.png"));
+            Assert(builder.BeginDriving(),"Steering hinge machine cannot enter simulation");
+            for(int tick=0;tick<120;tick++)TickInput(scene,new(.98f,.5f),[Key.W,Key.D]);
+            Screenshot(scene,Path.Combine(output,"steering-hinge-driving.png"));
+            TickInput(scene,new(.98f,.5f),[Key.B]);TickInput(scene,new(.98f,.5f),[]);
+            Assert(builder.Building,"Steering machine did not restore its build pose");
+        }
+        for(int recorded=0;recorded<2;recorded++)
+        {
+            builder.RestoreAssembly(File.ReadAllText($"Tests/ByteEngine.Tests/TestData/GoblinRecordedBuild{recorded}.json"));
+            TickInput(scene,new(.98f,.5f),[]);Screenshot(scene,Path.Combine(output,$"recorded-{recorded}-build-024.png"));
+            Assert(builder.BeginDriving(),"Recorded machine failed to enter simulation");
+            for(int tick=0;tick<120;tick++)TickInput(scene,new(.98f,.5f),[]);
+            machineStart=builder.Transform.WorldPosition;
+            for(int tick=0;tick<240;tick++)TickInput(scene,new(.98f,.5f),[Key.W]);
+            Assert(Vector3.Distance(machineStart,builder.Transform.WorldPosition)>2,"Recorded machine failed in full game loop");
+            Screenshot(scene,Path.Combine(output,$"recorded-{recorded}-drive-024.png"));
+            TickInput(scene,new(.98f,.5f),[Key.B]);TickInput(scene,new(.98f,.5f),[]);
+            Assert(builder.Building,"Recorded machine did not return to build mode");
+        }
+        builder.RestoreAssembly(File.ReadAllText("Tests/ByteEngine.Tests/TestData/GoblinSteeringUser025.json"));
+        TickInput(scene,new(.98f,.5f),[]);Screenshot(scene,Path.Combine(output,"user-steering-build-026.png"));
+        Assert(builder.BeginDriving(),"User steering fixture cannot enter simulation");
+        for(int tick=0;tick<120;tick++)TickInput(scene,new(.98f,.5f),[]);
+        for(int tick=0;tick<60;tick++)TickInput(scene,new(.98f,.5f),[Key.W]);
+        for(int tick=0;tick<180;tick++)TickInput(scene,new(.98f,.5f),[Key.W,Key.D]);
+        var commandedForward=Vector3.Transform(-Vector3.UnitZ,builder.Transform.WorldRotation);
+        Assert(commandedForward.X>.3f,"D visually steered right but the physical machine turned left");
+        Screenshot(scene,Path.Combine(output,"user-steering-right-026.png"));
+        var counterStart=builder.Transform.WorldRotation;
+        for(int tick=0;tick<240;tick++)TickInput(scene,new(.98f,.5f),[Key.W,Key.A]);
+        var counterForward=Vector3.Transform(Vector3.Transform(-Vector3.UnitZ,builder.Transform.WorldRotation),Quaternion.Inverse(counterStart));
+        Assert(counterForward.X<-.15f,"Full game loop counter-steering failed");
+        Screenshot(scene,Path.Combine(output,"user-steering-counter-026.png"));
+        TickInput(scene,new(.98f,.5f),[Key.B]);TickInput(scene,new(.98f,.5f),[]);
+        Assert(builder.Building,"User steering fixture did not return to Build");
+        Console.WriteLine("PASS: held W through the full game loop moves both visible master and wheels; single-wheel and beam-frame regressions; build-pose restore.");
     }
 
 }

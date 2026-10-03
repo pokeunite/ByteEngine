@@ -6,6 +6,7 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Audio;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Physics;
+using ByteEngine.Core.Plugins;
 using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
 using ByteEngine.Core.VisualLogic;
@@ -25,7 +26,9 @@ public sealed partial class AuthoringSession : IDisposable
     private readonly ProjectSerializer _projects = new();
     private readonly BlueprintSerializer _blueprints = new();
     private readonly EventModuleSerializer _modules = new();
-    private readonly VisualLogicRegistry _logic = VisualLogicRegistry.CreateDefault();
+    private ByteEnginePluginSession? _plugins;
+    private readonly List<string> _pluginMessages = new();
+    private VisualLogicRegistry _logic = VisualLogicRegistry.CreateDefault();
     private ProjectData? _project;
     private string? _projectFile;
     private string? _root;
@@ -54,6 +57,7 @@ public sealed partial class AuthoringSession : IDisposable
                 object result = domain.ToLowerInvariant() switch
                 {
                     "project" => ProjectTool(op, args),
+                    "plugin" => PluginTool(op, args),
                     "catalog" => CatalogTool(op, args),
                     "asset" => AssetTool(op, args),
                     "scene" => SceneTool(op, args),
@@ -84,6 +88,10 @@ public sealed partial class AuthoringSession : IDisposable
         if (!File.Exists(full)) throw new McpFault("NOT_FOUND", "Project file does not exist.");
         ProjectData project = _projects.Load(full);
         string root = Path.GetDirectoryName(full)!;
+        _plugins?.Dispose();
+        _pluginMessages.Clear();
+        _plugins = ByteEnginePluginManager.LoadProjectPlugins(root, ByteEnginePluginLoadMode.Editor, _pluginMessages.Add);
+        _logic = VisualLogicRegistry.CreateDefault();
         AssetDatabase database = new(root, [project.AssetDirectory, project.SceneDirectory]);
         AssetManager assets = new(database);
         ComponentSerializer components = new(root, database, assets);
@@ -92,6 +100,7 @@ public sealed partial class AuthoringSession : IDisposable
         PhysicsSerializationRegistrar.Register(components);
         AudioSerializationRegistrar.Register(components);
         AnimationSerializationRegistrar.Register(components);
+        ByteEnginePluginRegistry.ApplyComponentCodecs(components, _pluginMessages.Add);
         _assets?.Dispose();
         _database?.Dispose();
         _project = project;
@@ -153,6 +162,7 @@ public sealed partial class AuthoringSession : IDisposable
 
     public void Dispose()
     {
+        _plugins?.Dispose();
         _assets?.Dispose();
         _database?.Dispose();
     }

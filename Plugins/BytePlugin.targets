@@ -1,0 +1,71 @@
+<Project>
+  <PropertyGroup>
+    <BytePluginName Condition="'$(BytePluginName)' == ''">$(MSBuildProjectName)</BytePluginName>
+  </PropertyGroup>
+  <UsingTask
+    TaskName="CreateBytePluginPackage"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+
+    <ParameterGroup>
+      <SourceDirectory ParameterType="System.String" Required="true" />
+      <DestinationFile ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        string destinationDirectory = Path.GetDirectoryName(DestinationFile);
+
+        if (!string.IsNullOrWhiteSpace(destinationDirectory))
+            Directory.CreateDirectory(destinationDirectory);
+
+        if (File.Exists(DestinationFile))
+            File.Delete(DestinationFile);
+
+        ZipFile.CreateFromDirectory(
+            SourceDirectory,
+            DestinationFile,
+            CompressionLevel.Optimal,
+            includeBaseDirectory: false);
+
+
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="BuildBytePlugin" AfterTargets="Build">
+    <PropertyGroup>
+      <BytePluginStage>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\byteplugin'))</BytePluginStage>
+      <BytePluginFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\artifacts\plugins\$(BytePluginName).byteplugin'))</BytePluginFile>
+    </PropertyGroup>
+
+    <RemoveDir Directories="$(BytePluginStage)" />
+    <MakeDir Directories="$(BytePluginStage)" />
+
+    <ItemGroup><BytePluginDependency Include="@(BytePluginDependencyName->'$(TargetDir)%(Identity)')" /></ItemGroup>
+    <Copy
+      SourceFiles="$(TargetPath);@(BytePluginDependency)"
+      DestinationFolder="$(BytePluginStage)" />
+
+    <Copy
+      SourceFiles="$(MSBuildProjectDirectory)\plugin.json"
+      DestinationFolder="$(BytePluginStage)" />
+
+    <CreateBytePluginPackage
+      SourceDirectory="$(BytePluginStage)"
+      DestinationFile="$(BytePluginFile)" />
+
+    <Error
+      Condition="!Exists('$(BytePluginFile)')"
+      Text="$(BytePluginName).byteplugin was not created." />
+
+    <Message
+      Importance="high"
+      Text="BYTEPLUGIN CREATED: $(BytePluginFile)" />
+  </Target>
+
+
+</Project>
