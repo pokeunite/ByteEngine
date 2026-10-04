@@ -1,0 +1,206 @@
+{
+  "Version": 5,
+  "Blocks": [
+    {
+      "Id": 0,
+      "File": "goblin_master_block",
+      "Parent": -1,
+      "Position": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0
+      },
+      "Rotation": {
+        "IsIdentity": true,
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 1
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "",
+      "OwnConnector": ""
+    },
+    {
+      "Id": 1,
+      "File": "goblin_double_wooden_block",
+      "Parent": 0,
+      "Position": {
+        "X": 0,
+        "Y": 0,
+        "Z": -0.842243
+      },
+      "Rotation": {
+        "IsIdentity": true,
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 1
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "Front",
+      "OwnConnector": "SOCKET_Mount"
+    },
+    {
+      "Id": 2,
+      "File": "goblin_cog_medium_powered",
+      "Parent": 1,
+      "Position": {
+        "X": 0.62383205,
+        "Y": 0,
+        "Z": -0.542243
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": -0.7071068,
+        "Z": 0,
+        "W": 0.7071068
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_Branch_-0.6_(1, 0, 0)",
+      "OwnConnector": "SOCKET_Mount.037"
+    },
+    {
+      "Id": 3,
+      "File": "goblin_double_wooden_block",
+      "Parent": 0,
+      "Position": {
+        "X": 5.177553E-08,
+        "Y": 0,
+        "Z": 0.842243
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": 1,
+        "Z": 0,
+        "W": -4.371139E-08
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "Rear",
+      "OwnConnector": "SOCKET_Mount"
+    },
+    {
+      "Id": 4,
+      "File": "goblin_cog_medium_unpowered",
+      "Parent": 3,
+      "Position": {
+        "X": 0.623832,
+        "Y": 0,
+        "Z": 0.54224294
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": -0.7071067,
+        "Z": 0,
+        "W": 0.7071068
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_Branch_-0.6_(-1, 0, 0)",
+      "OwnConnector": "SOCKET_Mount.036"
+    },
+    {
+      "Id": 5,
+      "File": "goblin_double_wooden_block",
+      "Parent": 3,
+      "Position": {
+        "X": 1.5074713E-07,
+        "Y": 0,
+        "Z": 1.9743459
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": 1,
+        "Z": 0,
+        "W": -4.371139E-08
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_End_Front",
+      "OwnConnector": "SOCKET_Mount"
+    },
+    {
+      "Id": 6,
+      "File": "goblin_cog_medium_unpowered",
+      "Parent": 5,
+      "Position": {
+        "X": 0.6238321,
+        "Y": 0,
+        "Z": 1.674346
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": -0.7071067,
+        "Z": 0,
+        "W": 0.7071068
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_Branch_-0.6_(-1, 0, 0)",
+      "OwnConnector": "SOCKET_Mount.036"
+    },
+    {
+      "Id": 7,
+      "File": "goblin_double_wooden_block",
+      "Parent": 0,
+      "Position": {
+        "X": 0,
+        "Y": -0.8422431,
+        "Z": 0
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": -0.7071068,
+        "Y": 0,
+        "Z": 0,
+        "W": 0.7071068
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "Bottom",
+      "OwnConnector": "SOCKET_Mount"
+    },
+    {
+      "Id": 8,
+      "File": "goblin_single_wooden_block",
+      "Parent": 7,
+      "Position": {
+        "X": -0.59224296,
+        "Y": -1.1422431,
+        "Z": 5.9604645E-08
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": 0.7071068,
+        "Z": 0,
+        "W": 0.7071067
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_Branch_0.6_(-1, 0, 0)",
+      "OwnConnector": "SOCKET_Mount.013"
+    },
+    {
+      "Id": 9,
+      "File": "goblin_single_wooden_block",
+      "Parent": 7,
+      "Position": {
+        "X": 0.59224296,
+        "Y": -1.1422431,
+        "Z": 5.9604645E-08
+      },
+      "Rotation": {
+        "IsIdentity": false,
+        "X": 0,
+        "Y": -0.7071068,
+        "Z": 0,
+        "W": 0.7071067
+      },
+      "ParentBone": "Root",
+      "ParentConnector": "SOCKET_Branch_0.6_(1, 0, 0)",
+      "OwnConnector": "SOCKET_Mount.013"
+    }
+  ],
+  "CatalogVersion": 3
+}

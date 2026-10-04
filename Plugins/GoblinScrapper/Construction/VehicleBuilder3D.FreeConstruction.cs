@@ -145,11 +145,12 @@ public sealed partial class VehicleBuilder3D
 
     {
 
+        if(id < -1)return DeleteBrace(id);
         if(!Building||Assembly==null||id==0||!Assembly.Parts.ContainsKey(id))return false;
 
         RememberAssembly();if(_assemblyVisuals.Remove(id,out var obj))GameObject.Scene!.DestroyGameObject(obj);_assemblyRigs.Remove(id);
 
-        Assembly.Remove(id);RefreshSocketMarkers();_selectedBlock=0;_message="Part erased. Detached pieces stay in place. Ctrl+Z restores the connection.";return true;
+        _braceStart=null;if(_bracePreview!=null)_bracePreview.Active=false;Assembly.Remove(id);SyncBraceVisuals();RefreshSocketMarkers();_selectedBlock=0;_message="Part erased. Detached pieces stay in place. Ctrl+Z restores the connection.";return true;
 
     }
 
@@ -173,7 +174,7 @@ public sealed partial class VehicleBuilder3D
 
         }
 
-        CancelMove();_selectedBlock=0;ApplyAssemblyPose();RefreshSocketMarkers();RefreshFreeGhost();
+        CancelMove();_braceStart=null;_selectedBlock=0;ApplyAssemblyPose();RefreshSocketMarkers();RefreshFreeGhost();
 
     }
 
@@ -226,17 +227,19 @@ public sealed partial class VehicleBuilder3D
 
     }
 
+    private HashSet<(int Block,string Socket)> _occupiedSocketKeys=new();
     private void RefreshSocketMarkers()
 
     {
 
         foreach(var obj in _socketMarkers)GameObject.Scene!.DestroyGameObject(obj);_socketMarkers.Clear();_socketMarkerKeys.Clear();
 
+        _occupiedSocketKeys=Assembly!.OccupiedSockets();
         foreach(var part in Assembly!.Parts.Values)foreach(var socket in _catalog![part.File].Sockets)
 
         {
 
-            if(Assembly.IsSocketOccupied(part.Id,socket.Name))continue;
+            if(_occupiedSocketKeys.Contains((part.Id,socket.Name)))continue;
 
             var obj=GameObject.Scene!.CreateGameObject("Connector "+part.Id+" "+socket.Name);obj.SetParent(GameObject,false);
 
@@ -244,7 +247,7 @@ public sealed partial class VehicleBuilder3D
 
             obj.AddComponent(new MeshRenderer{UsePrimitive=true,Primitive=PrimitiveMeshType.Sphere,CastShadows=false,Material=new Material{BaseColor=new(.55f,.78f,.46f,.85f),BlendMode=BlendMode3D.AlphaBlend}});
 
-            obj.Active=Building;_socketMarkers.Add(obj);_socketMarkerKeys.Add((part.Id,socket.Name));
+            obj.Active=false;_socketMarkers.Add(obj);_socketMarkerKeys.Add((part.Id,socket.Name));
 
         }
 
@@ -272,7 +275,8 @@ public sealed partial class VehicleBuilder3D
 
         if(ControlKeyPressed(Key.Tab)){_ownSocket=(_ownSocket+1)%Math.Max(1,_catalog![SelectedPart].Sockets.Length);UpdateFreePreview();}
 
-        if(ControlKeyPressed(Key.R)){_twist=(_twist+(ControlKeyDown(Key.LeftAlt)?15:90))%360;UpdateFreePreview();}
+        if(ControlKeyPressed(Key.R))RotatePreview(ControlKeyDown(Key.LeftAlt)?15:90);
+        if(ControlKeyPressed(Key.T))CyclePreviewMountFace();
 
         if(ControlKeyPressed(Key.Escape)){CancelMove();SetEraseTool(false);}
 
@@ -303,11 +307,12 @@ public sealed partial class VehicleBuilder3D
 
                 if(Input.IsMouseButtonDown(MouseButton.Middle))_workshopPan+=(-_camera!.Transform.Right*delta.X+_camera.Transform.Up*delta.Y)*(_zoom*.0014f);
 
-                else {_orbit-=delta.X*.008f;_elevation=Math.Clamp(_elevation+delta.Y*.006f,.22f,1.1f);}
+                else OrbitBuildCamera(-delta.X*.008f,delta.Y*.006f);
 
             }
 
-            _zoom=Math.Clamp(_zoom-Input.Snapshot.MouseWheel*.6f,3,24);UpdateFreePreview();
+            _zoom=Math.Clamp(_zoom-Input.Snapshot.MouseWheel*.6f,3,24);
+            if(Input.Snapshot.MouseWheel!=0||Input.IsMouseButtonDown(MouseButton.Right)||Input.IsMouseButtonDown(MouseButton.Middle))UpdateFreePreview();
 
 
 
@@ -315,23 +320,27 @@ public sealed partial class VehicleBuilder3D
 
             if(Input.IsMouseButtonPressed(MouseButton.Left)&&!clickedUi)
 
-            {if(_eraseMode)RemoveAssemblyPart(_hoveredBlock);else PlaceFreePreview();}
+            {if(_eraseMode)RemoveAssemblyPart(_hoveredBlock);
+                else if(_copyPick){CopyHoveredPart();_copyPick=false;}
+                else if(_movePick){MoveHoveredBranch();_movePick=false;}
+                else PlaceFreePreview();}
 
         }
 
         if(ControlKeyPressed(Key.Enter)&&!clickedUi)PlaceFreePreview();
 
-        foreach(var obj in _socketMarkers)obj.Active=Building&&!_eraseMode;
+        for(int i=0;i<_socketMarkers.Count;i++)_socketMarkers[i].Active=Building&&!_eraseMode&&_socketMarkerKeys[i].Block==_hoveredBlock;
 
         _orbit+=((ControlKeyDown(Key.E)?1:0)-(ControlKeyDown(Key.Q)?1:0))*Math.Clamp((float)Time.DeltaTime,0,.05f)*1.5f;
 
     }
 
-    private void CancelMove() {_movingBlock=-1;foreach(var ghost in _moveGhosts.Values)GameObject.Scene!.DestroyGameObject(ghost);_moveGhosts.Clear();foreach(var visual in _assemblyVisuals.Values)visual.Active=true;}
+    private void CancelMove() {_movePick=_copyPick=false;_pendingMountTurns=0;_braceStart=null;if(_bracePreview!=null)_bracePreview.Active=false;_movingBlock=-1;foreach(var ghost in _moveGhosts.Values)GameObject.Scene!.DestroyGameObject(ghost);_moveGhosts.Clear();foreach(var visual in _assemblyVisuals.Values)visual.Active=true;}
 
     private void PlaceFreePreview()
 
     {
+        if(BraceSelected){PlaceBracePreview();return;}
 
         if(!_candidateVisible||_placementIssue!=""){_message=_placementIssue;return;}
 
@@ -401,13 +410,14 @@ public sealed partial class VehicleBuilder3D
 
         Matrix4x4.Invert(Transform.WorldMatrix,out var inverse);Vector3 origin=Vector3.Transform(ray.Origin,inverse),direction=Vector3.Normalize(Vector3.TransformNormal(ray.Direction,inverse));
 
+        var movingBranch=_movingBlock>=0?Assembly.Descendants(_movingBlock).ToHashSet():null;
         float nearest=float.MaxValue;Vector3 point=default,normal=Vector3.UnitY;_hoveredBlock=-1;_candidateConnector="";_candidateBone="Root";
 
         foreach(var p in Assembly.Parts.Values)
 
         {
 
-            if(_movingBlock>=0&&Assembly.Descendants(_movingBlock).Contains(p.Id))continue;
+            if(movingBranch?.Contains(p.Id)==true)continue;
 
             Quaternion inverseRotation=Quaternion.Inverse(p.Rotation);var localOrigin=Vector3.Transform(origin-p.Position,inverseRotation);var localDirection=Vector3.Transform(direction,inverseRotation);
 
@@ -419,21 +429,23 @@ public sealed partial class VehicleBuilder3D
 
         }
 
-        if(_eraseMode)
+        if(_eraseMode||_movePick||_copyPick)
 
         {
 
+            PickBraceForErase(origin,direction,ref nearest);
             _ghost.Active=false;_candidateVisible=false;
 
             if(_eraseHighlight==null)
 
             {_eraseHighlight=Own("Erase selection highlight");_eraseHighlight.SetParent(GameObject,false);_eraseHighlight.AddComponent(new MeshRenderer{UsePrimitive=true,CastShadows=false,Material=new Material{BaseColor=new(.9f,.18f,.08f,.20f),BlendMode=BlendMode3D.AlphaBlend}});}
 
-            _eraseHighlight.Active=_hoveredBlock>0;
+            _eraseHighlight.Active=_hoveredBlock>0||_hoveredBlock < -1;
 
             if(_hoveredBlock>0){var p=Assembly.Parts[_hoveredBlock];var b=_catalog![p.File].Bounds;_eraseHighlight.Transform.LocalPosition=p.Position+Vector3.Transform((b.Min+b.Max)*.5f,p.Rotation);_eraseHighlight.Transform.LocalRotation=p.Rotation;_eraseHighlight.Transform.LocalScale=b.Max-b.Min+new Vector3(.04f);_message="Click to erase "+VehicleAssembly.DisplayName(p.File)+" #"+p.Id+". Ctrl+Z restores it.";}
 
-            else _message=_hoveredBlock==0?"The master block is protected":"ERASE: point at a placed part, then click";
+            else if(_hoveredBlock < -1){var brace=Assembly.Braces[-_hoveredBlock-1];var a=Assembly.BracePoint(brace.A);var b=Assembly.BracePoint(brace.B);_eraseHighlight.Transform.LocalPosition=(a+b)*.5f;_eraseHighlight.Transform.LocalRotation=AlignNormals(Vector3.UnitZ,Vector3.Normalize(b-a));_eraseHighlight.Transform.LocalScale=new(.14f,.14f,Vector3.Distance(a,b));_message="Click to erase brace. Ctrl+Z restores it";}
+            else _message=_hoveredBlock < -1?"Click to erase brace. Ctrl+Z restores it":_hoveredBlock==0?"The master block is protected":"ERASE: point at a placed part, then click";
 
             _placementIssue=_message;return;
 
@@ -451,7 +463,7 @@ public sealed partial class VehicleBuilder3D
 
         {
 
-            if(Assembly.IsSocketOccupied(p.Id,socket.Name,_movingBlock)||(_movingBlock>=0&&Assembly.Descendants(_movingBlock).Contains(p.Id)))continue;
+            if((!BraceSelected&&(_movingBlock>=0?Assembly.IsSocketOccupied(p.Id,socket.Name,_movingBlock):_occupiedSocketKeys.Contains((p.Id,socket.Name))))||(movingBranch?.Contains(p.Id)==true))continue;
 
             Vector3 pos=p.Position+Vector3.Transform(socket.Position,p.Rotation),n=Vector3.Transform(socket.Normal,p.Rotation),delta=pos-origin;
 
@@ -463,7 +475,7 @@ public sealed partial class VehicleBuilder3D
 
             float score=miss/radius+(p.Id==hitBlock?0:.15f);
 
-            if(distance>0&&distance<nearest+.24f&&miss<radius&&score<best)
+            if(distance>0&&(distance<nearest+.24f||p.Id==hitBlock)&&miss<radius&&score<best)
 
             {best=score;targetBlock=p.Id;point=pos;normal=n;_candidateConnector=socket.Name;_candidateBone=socket.Bone;}
 
@@ -481,9 +493,10 @@ public sealed partial class VehicleBuilder3D
 
         }
 
-        if(!_candidateVisible){foreach(var ghost in _moveGhosts.Values)ghost.Active=false;_placementIssue=hitBlock>=0?"Point at a free connector on this part":"Point at a glowing connector";return;}
+        if(!_candidateVisible){if(_bracePreview!=null)_bracePreview.Active=false;foreach(var ghost in _moveGhosts.Values)ghost.Active=false;_placementIssue=hitBlock>=0?"Point at a free connector on this part":"Point at a glowing connector";return;}
 
         _hoveredBlock=targetBlock;
+        if(BraceSelected){UpdateBracePreview(point);return;}
 
         var definition=_catalog![SelectedPart];var own=definition.Sockets.ElementAtOrDefault(_ownSocket);
 
@@ -491,6 +504,11 @@ public sealed partial class VehicleBuilder3D
 
         _candidateRotation=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(normal,_twist*MathF.PI/180)*AlignNormals(ownNormal,-normal));
 
+        if(_pendingMountTurns>0){
+            if(definition.Kind=="beam"){var next=RotateBeamMount(definition.Sockets,_ownSocket,_candidateRotation,normal,90*_pendingMountTurns);_ownSocket=next.Socket;_twist=next.Twist;own=definition.Sockets[_ownSocket];ownPosition=own.Position;ownNormal=own.Normal;}
+            else _twist=(_twist+90*_pendingMountTurns)%360;
+            _pendingMountTurns=0;_candidateRotation=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(normal,_twist*MathF.PI/180)*AlignNormals(ownNormal,-normal));
+        }
         _candidatePosition=point-Vector3.Transform(ownPosition,_candidateRotation);
 
         _placementIssue=_movingBlock>=0?Assembly.MoveAtSocket(_movingBlock,_hoveredBlock,_candidateConnector,own!.Name,_twist,true):Assembly.PlacementIssue(SelectedPart,_hoveredBlock,_candidatePosition,_candidateRotation,_candidateConnector);
@@ -547,13 +565,22 @@ public sealed partial class VehicleBuilder3D
 
     }
 
+    private Vector3 _buildFocus=new(0,.5f,0);
+    private Dictionary<int,float> _cogPhases=new();
     private void ApplyAssemblyPose(float steering=0)
 
     {
+        SyncBraceVisuals();
 
         // During joint simulation, body poses own the visual transforms.
         if(Assembly==null||(!Building&&_contraption!=null))return;
 
+        if(Building){
+            var bounds=Assembly.Parts.Values.SelectMany(p=>_catalog![p.File].Clearance.Select(b=>b.Transform(p.Position,p.Rotation))).ToArray();
+            var min=new Vector3(bounds.Min(b=>b.Min.X),bounds.Min(b=>b.Min.Y),bounds.Min(b=>b.Min.Z));var max=new Vector3(bounds.Max(b=>b.Max.X),bounds.Max(b=>b.Max.Y),bounds.Max(b=>b.Max.Z));_buildFocus=(min+max)*.5f;
+            var position=Transform.WorldPosition;position.Y=Math.Max(1.25f,Assembly.RideHeight+.08f);Transform.WorldPosition=position;}
+        _cogPhases=CogGeometry.Phases(Assembly);
+        foreach(var pair in _cogPhases)if(_assemblyRigs.TryGetValue(pair.Key,out var gearRig)){var d=_catalog![Assembly.Parts[pair.Key].File];gearRig.SetPhysicalBoneDeformation("Moving",ImportAlignment*CogGeometry.PhaseTransform(d,pair.Value)*ImportAlignment);}
         var matrices=new Dictionary<int,Matrix4x4>();
 
         foreach(var p in PoseOrder())
@@ -600,6 +627,8 @@ public sealed partial class VehicleBuilder3D
 
     {
 
+        if(_braceStart!=null){_message="Finish the brace or press Escape";return false;}
+        if(_bracePreview!=null)_bracePreview.Active=false;
         if(_movingBlock>=0){_message="Finish moving the branch or press Escape";return false;}
 
         if(!Assembly!.CanDrive){_message=Assembly.DriveRequirement;return false;}
@@ -619,6 +648,7 @@ public sealed partial class VehicleBuilder3D
 
             foreach(var visual in _assemblyVisuals.Values)visual.SetParent(null,true);
 
+            DeployBattlefield();
             Building=false;foreach(var marker in _socketMarkers)marker.Active=false;
 
             if(_ghost!=null){GameObject.Scene!.DestroyGameObject(_ghost);_ghost=null;}
@@ -669,12 +699,13 @@ public sealed partial class VehicleBuilder3D
 
                     if(def.ReferenceId is 9 or 16)SampleCycle(rig,"Extend",Math.Clamp(deformation.Translation.Length()/.3f,0,1)*.5f);
 
-                    rig.SetPhysicalBoneDeformation("Moving",ImportAlignment*deformation*ImportAlignment);
+                    rig.SetPhysicalBoneDeformation("Moving",ImportAlignment*(_cogPhases.TryGetValue(p.Id,out var phase)?CogGeometry.PhaseTransform(def,phase)*deformation:deformation)*ImportAlignment);
 
                 }
 
             }
 
+            SyncBraceVisuals();
             if(_powered)foreach(var p in Assembly.Parts.Values)
 
             {
@@ -845,7 +876,7 @@ public sealed partial class VehicleBuilder3D
 
             string json=File.ReadAllText(SavePath);using var doc=JsonDocument.Parse(json);
 
-            if(doc.RootElement.GetProperty("Version").GetInt32() is not (4 or 5))throw new JsonException("Older chassis save preserved. Start a new machine from the master block.");
+            if(doc.RootElement.GetProperty("Version").GetInt32() is not (4 or 5 or 6))throw new JsonException("Older chassis save preserved. Start a new machine from the master block.");
 
             var validated=VehicleAssembly.FromJson(_catalog!,json);foreach(var p in validated.Parts.Values.Where(p=>p.Id!=0))Assets!.LoadModel(new AssetReference(PartsDirectory+"/"+p.File+".glb"));
 

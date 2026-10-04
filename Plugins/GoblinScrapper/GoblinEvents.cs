@@ -34,8 +34,10 @@ internal static class GoblinEvents
   Action("poweredWeapons","Set Powered Weapons",(b,i,e)=>b.SetPoweredWeapons(Bool(i,e,"enabled")),enabled);
   Action("mechanisms","Toggle Mechanisms",(b,i,e)=>b.ActivateMechanisms());
   Action("selectPart","Select Build Part",(b,i,e)=>{if(!b.SelectBuildPart(Text(i,e,"file")))e.WarningSink?.Invoke("Goblin: cannot select that part in the current build.");},Arg("file",VariableValue.FromString("goblin_double_wooden_block")));
+  Action("addBrace","Connect Brace Endpoints",(b,i,e)=>{if(b.AddAssemblyBrace((int)Num(i,e,"blockA"),Text(i,e,"socketA"),(int)Num(i,e,"blockB"),Text(i,e,"socketB"))<0)e.WarningSink?.Invoke("Goblin: brace endpoints are invalid.");},Arg("blockA",VariableValue.FromNumber(0)),Arg("socketA",VariableValue.FromString("Front")),Arg("blockB",VariableValue.FromNumber(1)),Arg("socketB",VariableValue.FromString("SOCKET_Surface_Root_Top")));
   Action("placePreview","Place Preview",(b,i,e)=>b.PlacePreview());
   Action("rotatePreview","Rotate Preview",(b,i,e)=>b.RotatePreview(Num(i,e,"degrees")),Arg("degrees",VariableValue.FromNumber(90)));
+  Action("cycleMountFace","Cycle Beam Mounting Face",(b,i,e)=>b.CyclePreviewMountFace());
   Action("nextConnector","Next Preview Connector",(b,i,e)=>b.NextPreviewConnector());
   Action("eraseTool","Set Erase Tool",(b,i,e)=>b.SetEraseTool(Bool(i,e,"enabled")),enabled);
   Action("removeSelected","Delete Selected Block",(b,i,e)=>b.DeleteSelectedBlock());
@@ -51,6 +53,12 @@ internal static class GoblinEvents
   Condition("canDrive","Can Start Simulation",(b,i,e)=>b.CanSimulate);Condition("placementReady","Preview Placement Is Valid",(b,i,e)=>b.PlacementReady);
   Condition("drifting","Is Drifting",(b,i,e)=>b.IsDrifting);
   Condition("speedAbove","Speed Is Above",(b,i,e)=>b.Speed>Num(i,e,"speed"),Arg("speed",VariableValue.FromNumber(1)));
+  Action("restartBattle","Restart Battlefield Encounter",(b,i,e)=>b.RestartBattle());
+  Action("battleEnemyCount","Set Next Battlefield Enemy Count",(b,i,e)=>{if(b.Building)b.BattlefieldEnemyCount=Math.Clamp((int)Num(i,e,"count"),1,24);},Arg("count",VariableValue.FromNumber(18)));
+  Condition("battleRunning","Battlefield Encounter Is Running",(b,i,e)=>b.BattleRunning);
+  Condition("battleWon","Red Camp Cleared",(b,i,e)=>b.BattleWon);
+  Condition("battleLost","Battlefield Encounter Lost",(b,i,e)=>b.BattleLost);
+  Condition("battleKills","Battle Kills Are at Least",(b,i,e)=>b.BattleKills>=Num(i,e,"count"),Arg("count",VariableValue.FromNumber(1)));
   Condition("hasPart","Has Block ID",(b,i,e)=>b.Assembly?.Parts.ContainsKey((int)Num(i,e,"id"))==true,Arg("id",VariableValue.FromNumber(1)));
   Condition("partCount","Block Count Is at Least",(b,i,e)=>b.Assembly?.Parts.Count>=Num(i,e,"count"),Arg("count",VariableValue.FromNumber(4)));
  }

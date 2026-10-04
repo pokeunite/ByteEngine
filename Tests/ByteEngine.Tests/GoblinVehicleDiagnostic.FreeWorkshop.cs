@@ -75,10 +75,34 @@ internal sealed partial class GoblinVehicleDiagnostic
         Assert(builder.UndoBuild()&&builder.Assembly.Parts.Count==1,"Connector event did not record undo");
         Console.WriteLine("PASS: Goblin action/condition registration and connector event execution with undo.");
         Assert(builder.Assembly!.Parts.Count==1,"Wrong start");TickInput(scene,new(.98f,.5f),[]);Assert(!builder.UseBuiltInControls,"Editable keyboard events did not take control");
+        var attachmentCatalog=VehiclePartCatalog.Load(Path.Combine(_project!.ProjectRoot,"Assets","GarageUI","parts-catalog.json"));
+        int suspension=builder.PlacePartAtConnector("goblin_suspension",0,"Top");
+        Assert(suspension>0,"Suspension input mount rejected");
+        builder.SelectBuildPart("goblin_single_wooden_block");
+        for(int i=0;i<20;i++)TickInput(scene,new(.98f,.5f),[]);
+        var suspensionPart=builder.Assembly.Parts[suspension];var outputSocket=attachmentCatalog["goblin_suspension"].Sockets.First(x=>x.Bone=="Moving");
+        var cap=builder.Transform.WorldPosition+suspensionPart.Position+Vector3.Transform(outputSocket.Position,suspensionPart.Rotation);
+        var capClip=Vector4.Transform(new Vector4(cap,1),scene.ActiveCamera!.GetViewMatrix()*scene.ActiveCamera.GetProjectionMatrix(1280f/720));
+        var capPointer=new Vector2((capClip.X/capClip.W+1)/2,(1-capClip.Y/capClip.W)/2);
+        TickInput(scene,capPointer,[]);
+        Assert(builder.HoveredBlockId==suspension&&builder.PlacementReady,"Suspension output cannot be picked: "+builder.FreePlacementIssue);
+        TickInput(scene,capPointer,[Key.Enter]);TickInput(scene,capPointer,[]);
+        Assert(builder.Assembly.Parts.Values.Any(x=>x.Parent==suspension&&x.ParentBone=="Moving"),"Beam was not attached to suspension Moving output");
+        Console.WriteLine("PASS: pointer picks suspension output and Enter attaches a beam to its moving section.");
+        Assert(builder.UndoBuild()&&builder.UndoBuild(),"Suspension placement undo failed");
+        builder.SelectBuildPart("goblin_double_wooden_block");
         Screenshot(scene,Path.Combine(output,"starting-block.png"));
+        builder.OrbitBuildCamera(0,-1.2f);
+        for(int i=0;i<45;i++)TickInput(scene,new(.98f,.5f),[]);
+        Assert(scene.ActiveCamera!.Transform.WorldPosition.Y<builder.Transform.WorldPosition.Y,"Build camera cannot inspect underneath");
+        Assert(scene.ActiveCamera.Transform.WorldPosition.Y>=.14f,"Build camera crossed below the floor");
+        Screenshot(scene,Path.Combine(output,"underside-build-view.png"));
+        builder.OrbitBuildCamera(0,1.2f);
+        for(int i=0;i<45;i++)TickInput(scene,new(.98f,.5f),[]);
+        Console.WriteLine("PASS: build camera orbits underneath without passing below the floor.");
         var camera=scene.ActiveCamera!;var clip=Vector4.Transform(new Vector4(builder.Transform.WorldPosition+new Vector3(.25f,0,0),1),camera.GetViewMatrix()*camera.GetProjectionMatrix(1280f/720));
-        Vector2 pointer=new((clip.X/clip.W+1)/2,(1-clip.Y/clip.W)/2);TickInput(scene,pointer,[]);TickInput(scene,pointer,[],true);TickInput(scene,pointer,[]);
-        Assert(builder.Assembly.Parts.Count==2,"New beam mouse placement failed: "+builder.FreePlacementIssue);Assert(builder.UndoBuild()&&builder.Assembly.Parts.Count==1,"New placement undo failed");
+        Vector2 pointer=new((clip.X/clip.W+1)/2,(1-clip.Y/clip.W)/2);TickInput(scene,pointer,[]);TickInput(scene,pointer,[Key.R]);TickInput(scene,pointer,[]);TickInput(scene,pointer,[],true);TickInput(scene,pointer,[]);
+        Assert(builder.Assembly.Parts.Count==2,"New beam mouse placement failed: "+builder.FreePlacementIssue);Assert(builder.Assembly.Parts.Values.Single(p=>p.Id!=0).OwnConnector.Contains("Branch_0_"),"R input did not turn the beam onto its centre side connector");Assert(builder.UndoBuild()&&builder.Assembly.Parts.Count==1,"New placement undo failed");
         var catalog=VehiclePartCatalog.Load(Path.Combine(_project!.ProjectRoot,"Assets","GarageUI","parts-catalog.json"));
         // An identity physical override must preserve the rendered bind-pose bounds.
         foreach(var def in catalog.Parts.Values.Where(p=>p.ReferenceId is 2 or 40 or 46 or 60 or 28))

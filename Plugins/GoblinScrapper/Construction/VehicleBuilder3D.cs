@@ -135,6 +135,7 @@ public sealed partial class VehicleBuilder3D : Component
         if(FreeBuilding) StartAssembly();
 
         if(FreeBuilding) CreateFreeHud(); else CreateHud();
+        StartBattlefield();
 
         _markers = (FreeBuilding ? Array.Empty<VehicleMount>() : Layout.ActiveMounts).Select((m, i) =>
 
@@ -161,6 +162,7 @@ public sealed partial class VehicleBuilder3D : Component
         if(AutomaticCamera)UpdateCamera(1);
 
         RefreshHud();
+
 
     }
 
@@ -434,7 +436,7 @@ public sealed partial class VehicleBuilder3D : Component
 
                 if(Input.IsMouseButtonDown(MouseButton.Middle))
 
-                { var delta=Input.GameViewMouseDelta; _orbit-=delta.X*.008f; _elevation=Math.Clamp(_elevation+delta.Y*.006f,.22f,1.1f); }
+                { var delta=Input.GameViewMouseDelta; _orbit-=delta.X*.008f; _elevation=Math.Clamp(_elevation+delta.Y*.006f,-1.35f,1.35f); }
 
                 _zoom=Math.Clamp(_zoom-Input.Snapshot.MouseWheel*.6f,4,15);
 
@@ -481,6 +483,7 @@ public sealed partial class VehicleBuilder3D : Component
         else if(!Building&&_contraption==null) ApplyAssemblyPose(_freeSteering);
 
         RefreshHud();
+        TickBattlefield(dt);
 
     }
 
@@ -806,7 +809,7 @@ public sealed partial class VehicleBuilder3D : Component
 
             foreach(var obj in _projectileVisuals.Values)if(obj.Scene!=null)obj.Scene.DestroyGameObject(obj);_projectileVisuals.Clear();
 
-        _contraption?.Dispose();_contraption=null;foreach(var rig in _assemblyRigs.Values)rig.ClearPhysicalBoneDeformations();
+        ClearBattlefield();_contraption?.Dispose();_contraption=null;foreach(var rig in _assemblyRigs.Values)rig.ClearPhysicalBoneDeformations();
 
             Building=true; Speed=0; _motion.Stop();
 
@@ -1174,13 +1177,15 @@ public sealed partial class VehicleBuilder3D : Component
 
         if (_camera==null) return;
 
-        Vector3 target=Transform.WorldPosition+Vector3.UnitY*.5f+(FreeBuilding && Building?_workshopPan:Vector3.Zero);
+        Vector3 target=Transform.WorldPosition+(FreeBuilding&&Building?Vector3.Transform(_buildFocus,Transform.WorldRotation)+_workshopPan:Vector3.UnitY*.5f);
 
         Vector3 offset=Building ? new(MathF.Sin(_orbit)*_zoom*MathF.Cos(_elevation),_zoom*MathF.Sin(_elevation),MathF.Cos(_orbit)*_zoom*MathF.Cos(_elevation)) :
 
             -Transform.Forward*6.8f+Vector3.UnitY*3.4f;
 
-        _camera.Transform.WorldPosition=Vector3.Lerp(_camera.Transform.WorldPosition,target+offset,blend);
+        var cameraPosition=target+offset;
+        if(Building)cameraPosition.Y=Math.Max(.15f,cameraPosition.Y);
+        _camera.Transform.WorldPosition=Vector3.Lerp(_camera.Transform.WorldPosition,cameraPosition,blend);
 
         Matrix4x4.Invert(Matrix4x4.CreateLookAt(_camera.Transform.WorldPosition,target,Vector3.UnitY),out var world);
 
@@ -1248,7 +1253,7 @@ public sealed partial class VehicleBuilder3D : Component
 
         foreach(var obj in _projectileVisuals.Values)if(obj.Scene!=null)obj.Scene.DestroyGameObject(obj);_projectileVisuals.Clear();
 
-        _contraption?.Dispose();_contraption=null;
+        ClearBattlefield();_contraption?.Dispose();_contraption=null;
 
         CancelMove();
 
@@ -1264,6 +1269,7 @@ public sealed partial class VehicleBuilder3D : Component
 
         foreach(var obj in _owned.ToArray()) if (obj.Scene!=null) obj.Scene.DestroyGameObject(obj);
 
+        _workshopFloorMesh?.Dispose();_workshopFloorMesh=null;
         _owned.Clear(); _mechanisms.Clear(); _palette.Clear(); _skids.Clear(); _motion.Reset(); Array.Clear(_skidLife); _visuals.Clear(); _buttons.Clear(); _buildUi.Clear(); _obstacles.Clear(); _markers=[];
 
         _ghost=null; _camera=null;_workshopPan=Vector3.Zero; _undo.Clear(); _redo.Clear(); _cardImages.Clear(); _cardLabels.Clear(); _categoryButtons.Clear(); _axleBridges.Clear(); _part=0; _category=0; _palettePage=0;

@@ -1,3 +1,4 @@
+using ByteEngine.Core.Scene;
 using ByteEngine.Core;
 using ByteEngine.Core.Construction;
 using System.Numerics;
@@ -12,7 +13,12 @@ public sealed partial class VehicleBuilder3D
 
 {
 
-    private static readonly Vector4 WorkshopInk=new(.075f,.078f,.073f,.98f),WorkshopGold=new(.78f,.58f,.18f,1),WorkshopMuted=new(.67f,.66f,.60f,1);
+    private string PreviewMountFaceLabel(){
+        if(_catalog==null)return "none";var sockets=_catalog[SelectedPart].Sockets;if(_ownSocket>=sockets.Length)return "none";
+        var n=sockets[_ownSocket].Normal;
+        return n.Y>.9f?"top":n.Y<-.9f?"bottom":n.X>.9f?"right side":n.X<-.9f?"left side":n.Z>.9f?"rear end":"front end";
+    }
+    private static readonly Vector4 WorkshopInk=new(.055f,.073f,.07f,.95f),WorkshopGold=new(.68f,.81f,.35f,1),WorkshopMuted=new(.60f,.68f,.64f,1);
 
     private readonly List<UiWidget> _freeCardBorders=new();
 
@@ -28,125 +34,83 @@ public sealed partial class VehicleBuilder3D
 
     {
 
-        var button=Button("",position,new(34,34),click,false);button.GameObject.Name=name;button.Color=Vector4.Zero;button.HoverColor=new(.24f,.23f,.18f,1);button.PressedColor=WorkshopGold;
+        var button=Button("",position,new(34,34),click,false);button.GameObject.Name=name;button.Color=WorkshopInk;button.HoverColor=new(.24f,.23f,.18f,1);button.PressedColor=WorkshopGold;
 
         Image(name+" glyph","icons/"+icon+".png",position+new Vector2(7),new(20),false,new(.82f,.81f,.75f,1));return button;
 
     }
 
-    private void CreateFreeHud()
-
+    private readonly Dictionary<UiWidget,(string Title,string Body)> _workshopTips=new();
+    private GameObject? _tooltipPanel;
+    private UiText? _tooltipTitle,_tooltipBody;
+    private bool _movePick,_copyPick;
+    private UiWidget WorkshopTool(string name,string icon,float x,Action click,string help,bool buildOnly=true)
     {
-
+        var button=Button("",new(x,5),new(38,38),click,buildOnly);button.GameObject.Name=name;button.Color=WorkshopInk;button.HoverColor=new(.19f,.23f,.22f,1);button.PressedColor=WorkshopGold;
+        Image(name+" glyph","workshop/"+icon+".png",new(x+9,14),new(20),buildOnly,new(.88f,.9f,.86f,1));_workshopTips[button]=(name,help);return button;
+    }
+    private void CreateFreeHud()
+    {
         _canvas=Own("Goblin Scraper workshop HUD");_canvas.AddComponent(new UiCanvas {ReferenceResolution=new(1280,720)});
-
-        Rule("Top steel bar",Vector2.Zero,new(1280,48),WorkshopInk);
-
-        Rule("Toolbar brass seam",new(0,47),new(1280,1),new(.35f,.29f,.15f,1));
-
-        Image("Workshop emblem","icons/wrench.png",new(18,12),new(23),false,WorkshopGold);
-
-        var title=Text("Workshop title","GOBLIN",new(52,8),27);title.FontReference=new("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf");
-
-        var title2=Text("Workshop title accent","SCRAPER",new(127,8),27);title2.FontReference=title.FontReference;title2.Color=WorkshopGold;
-
-        Text("Current mode","BUILD",new(513,13),18).FontReference=title.FontReference;
-
-        Image("Build mode glyph","icons/wrench.png",new(485,14),new(19),false,WorkshopGold);
-
-        Rule("Build mode underline",new(476,45),new(115,3),WorkshopGold);
-
-        _undoButton=ToolButton("Undo","rewind",new(797,7),()=>UndoBuild());
-
-        _redoButton=ToolButton("Redo","fastForward",new(834,7),()=>RedoBuild());
-
-        ToolButton("Save","save",new(880,7),SaveBuild);ToolButton("Load","open",new(917,7),LoadBuild);ToolButton("Recover","return",new(954,7),ResetPosition);
-
-        _driveButton=Button("TEST DRIVE   [B]",new(1083,8),new(178,32),ToggleDrive,false);_driveButton.Color=WorkshopGold;_driveButton.HoverColor=new(.92f,.70f,.28f,1);_driveButton.PressedColor=new(.66f,.46f,.12f,1);_driveButton.FontSize=19;
-
-        _freeDriveLabel=Text("Test drive label","TEST DRIVE  [B]",new(1110,13),19);_freeDriveLabel.FontReference=title.FontReference;_freeDriveLabel.Color=new(.075f,.07f,.045f,1);_driveButton.Label="";
-
-        Rule("Chassis inspector",new(18,70),new(171,204),WorkshopInk,true);
-
-        Text("Master block label","YOUR MACHINE",new(29,80),13,true).Color=WorkshopMuted;
-
-        Text("Root information","One master block.\nBuild your own frame.",new(29,103),14,true).WrapWidth=145;
-
-        _status=Text("Connected machine requirements","",new(29,144),14);_status.WrapWidth=145;
-
-        _machineCount=Text("Machine part count","",new(29,213),12,true);_machineCount.Color=WorkshopMuted;
-
-        _placeToolButton=Button("PLACE",new(29,240),new(70,23),()=>SetEraseTool(false),true);
-
-        _eraseToolButton=Button("ERASE",new(105,240),new(71,23),()=>SetEraseTool(true),true);
-
-        _placeToolButton.HoverColor=new(.48f,.37f,.17f,1);_eraseToolButton.HoverColor=new(.72f,.22f,.12f,1);
-
-        Rule("Parts dock",new(0,551),new(1280,169),WorkshopInk,true);
-
-        Rule("Dock brass seam",new(0,551),new(1280,1),new(.35f,.29f,.15f,1),true);
-
-        string[] icons=["menuGrid","gear","target","wrench","target"];
-
-        for(int c=0;c<CategoryNames.Length;c++)
-
-        {
-
-            int category=c;float x=18+c*146;
-
-            var tab=Button(CategoryNames[c],new(x+27,559),new(114,28),()=>{_category=category;_palettePage=0;SelectPart(Categories[category][0]);},true);tab.FontSize=17;tab.Color=Vector4.Zero;tab.HoverColor=new(.2f,.2f,.17f,1);_categoryButtons.Add(tab);
-
-            Image("Category glyph "+c,"icons/"+icons[c]+".png",new(x+3,565),new(17),true,WorkshopMuted);
-
+        Rule("Toolbar",Vector2.Zero,new(1280,48),WorkshopInk);
+        Rule("Toolbar edge",new(0,47),new(1280,1),new(.25f,.3f,.27f,1));
+        _driveButton=WorkshopTool("Run / build","play",8,ToggleDrive,"B � run the machine or return to building.",false);
+        _driveButton.Color=new(.28f,.4f,.2f,1);
+        _freeDriveLabel=Text("Simulation mode","BUILD",new(57,9),22);_freeDriveLabel.Color=WorkshopGold;
+        Text("Workshop title","GOBLIN SCRAPER",new(136,13),18).Color=new(.65f,.7f,.65f,1);
+        Rule("History divider",new(289,10),new(1,28),new(.25f,.3f,.27f,1));
+        _undoButton=WorkshopTool("Undo","undo-2",301,()=>UndoBuild(),"Ctrl+Z � undo the last build change.");
+        _redoButton=WorkshopTool("Redo","redo-2",343,()=>RedoBuild(),"Ctrl+Y � redo a build change.");
+        WorkshopTool("Save machine","save",394,SaveBuild,"F5 � save your current machine.");
+        WorkshopTool("Load machine","folder-open",436,LoadBuild,"F9 � load the saved machine.");
+        Rule("Tools divider",new(485,10),new(1,28),new(.25f,.3f,.27f,1));
+        _placeToolButton=WorkshopTool("Place blocks","box",496,()=>{_movePick=_copyPick=false;SetEraseTool(false);},"Choose a part below, then click a connector to place it.");
+        WorkshopTool("Move branch","move",538,()=>{SetEraseTool(false);_movePick=true;_copyPick=false;},"Click a placed block, then choose its new connector. Escape cancels.");
+        WorkshopTool("Rotate mount","rotate-cw",580,()=>{_pendingMountTurns++;_message="Rotate queued. Point at a connector.";},"R - turn 90 degrees. Click this tool, then point at a connector.");
+        WorkshopTool("Change mount face","arrow-left-right",622,CyclePreviewMountFace,"T � change attachment face. Tab � cycle every socket.");
+        WorkshopTool("Copy part","copy",664,()=>{SetEraseTool(false);_copyPick=true;_movePick=false;},"Click a block to select another copy of that part.");
+        _eraseToolButton=WorkshopTool("Erase blocks","trash-2",706,()=>{_movePick=_copyPick=false;SetEraseTool(true);},"Click a block or brace to erase it. X erases under the pointer. Ctrl+Z restores it.");
+        WorkshopTool("Recover machine","rotate-cw",766,ResetPosition,"Recover the machine to its starting position.",false);
+        _machineCount=Text("Machine count","",new(874,15),14);_machineCount.Color=WorkshopMuted;
+        _status=Text("Machine status","",new(1075,15),14);_status.Color=WorkshopMuted;
+        Rule("Part tray",new(0,620),new(1280,100),WorkshopInk,true);
+        Rule("Tray edge",new(0,620),new(1280,1),new(.25f,.3f,.27f,1),true);
+        string[] icons=["box","cog","swords","wrench","plane"];
+        for(int c=0;c<CategoryNames.Length;c++){
+            int category=c;float x=8+c*42;
+            var tab=Button("",new(x,639),new(38,55),()=>{_category=category;_palettePage=0;SelectPart(Categories[category][0]);},true);tab.Color=WorkshopInk;tab.HoverColor=new(.18f,.23f,.2f,1);_categoryButtons.Add(tab);
+            Image("Category "+c,"workshop/"+icons[c]+".png",new(x+8,655),new(22),true,WorkshopMuted);_workshopTips[tab]=(CategoryNames[c],"Browse "+CategoryNames[c].ToLowerInvariant()+" blocks.");
         }
-
-        Button("<",new(1193,559),new(28,28),()=>ChangePalette(-1),true).Color=Vector4.Zero;
-
-        Button(">",new(1231,559),new(28,28),()=>ChangePalette(1),true).Color=Vector4.Zero;
-
-        Rule("Dock divider",new(18,591),new(1244,1),new(.25f,.25f,.22f,1),true);
-
-        for(int i=0;i<6;i++)
-
-        {
-
-            int slot=i;float x=18+i*153;
-
-            var border=HudObject("Part selection border "+i,true).AddComponent(new UiWidget {Offset=new(x,599),Size=new(145,96),Color=WorkshopGold,OrderInLayer=3});_freeCardBorders.Add(border);
-
-            var card=Button("",new(x+2,601),new(141,92),()=>{int index=_palettePage*6+slot;if(index<Categories[_category].Length)SelectPart(Categories[_category][index]);},true);card.Color=WorkshopInk;card.HoverColor=new(.18f,.18f,.15f,1);card.PressedColor=new(.26f,.24f,.16f,1);_palette.Add(card);
-
-            _cardImages.Add(Image("Part cutout "+i,"cutouts/"+BuilderPartFiles[0]+".png",new(x+24,602),new(96,67),true));
-
-            _cardLabels.Add(Text("Part name "+i,"",new(x+10,673),14,true));
-
+        Rule("Categories divider",new(222,634),new(1,68),new(.25f,.3f,.27f,1),true);
+        for(int i=0;i<6;i++){
+            int slot=i;float x=238+i*106;
+            var border=HudObject("Part selection "+i,true).AddComponent(new UiWidget{Offset=new(x,632),Size=new(100,76),Color=Vector4.Zero,OrderInLayer=3});_freeCardBorders.Add(border);
+            var card=Button("",new(x+1,633),new(98,74),()=>{int index=_palettePage*6+slot;if(index<Categories[_category].Length)SelectPart(Categories[_category][index]);},true);card.Color=WorkshopInk;card.HoverColor=new(.2f,.25f,.21f,1);_palette.Add(card);
+            _cardImages.Add(Image("Part "+i,"cutouts/"+BuilderPartFiles[0]+".png",new(x+14,630),new(72,48),true));
+            _cardLabels.Add(Text("Part name "+i,"",new(x+5,682),11,true));_cardLabels[^1].WrapWidth=92;
         }
-
-        _selection=Text("Current part","",new(954,605),18,true);_selection.FontReference=title.FontReference;
-
-        _partPurpose=Text("Part role","",new(954,630),13,true);_partPurpose.WrapWidth=290;_partPurpose.Color=WorkshopMuted;
-
-        Rule("Context feedback strip",new(204,498),new(930,36),new(.075f,.078f,.073f,.92f),true);
-
-        _connectionFeedback=Text("Placement feedback","",new(228,506),14,true);_connectionFeedback.WrapWidth=900;
-
-        _previewAction=Image("Placement state icon","icons/checkmark.png",new(204,508),new(17),true,WorkshopGold);
-
-        _hint=Text("Interaction hints","",new(696,702),12);_hint.Color=WorkshopMuted;
-
-        Image("Mouse orbit prompt","prompts/mouse_middle.png",new(603,700),new(17),true);
-
-        Image("Mouse zoom prompt","prompts/mouse_scroll.png",new(630,700),new(17),true);
-
-        RefreshFreePalette();
-
+        Button("<",new(880,634),new(26,34),()=>ChangePalette(-1),true).Color=WorkshopInk;
+        Button(">",new(880,674),new(26,34),()=>ChangePalette(1),true).Color=WorkshopInk;
+        Rule("Details divider",new(918,634),new(1,68),new(.25f,.3f,.27f,1),true);
+        _selection=Text("Selected block","",new(936,632),19,true);_selection.Color=WorkshopGold;
+        _partPurpose=Text("Block function","",new(936,655),12,true);_partPurpose.WrapWidth=320;_partPurpose.Color=WorkshopMuted;
+        _connectionFeedback=Text("Placement instruction","",new(22,573),14,true);_connectionFeedback.WrapWidth=1100;
+        _previewAction=Image("Placement status","workshop/check.png",new(22,598),new(14),true,WorkshopGold);
+        _hint=Text("Build controls","",new(44,598),12);_hint.Color=WorkshopMuted;
+        _tooltipPanel=HudObject("Context tooltip",true);
+        _tooltipPanel.AddComponent(new UiWidget{Offset=new(936,482),Size=new(324,123),Color=WorkshopInk,OrderInLayer=20});
+        var titleObj=HudObject("Tooltip heading",true);titleObj.SetParent(_tooltipPanel,false);
+        _tooltipTitle=titleObj.AddComponent(new UiText{Offset=new(15,11),FontSize=18,Color=WorkshopGold,FontReference=new("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf"),OrderInLayer=22});
+        var bodyObj=HudObject("Tooltip explanation",true);bodyObj.SetParent(_tooltipPanel,false);
+        _tooltipBody=bodyObj.AddComponent(new UiText{Offset=new(15,37),FontSize=13,WrapWidth=288,Color=new(.85f,.88f,.84f,1),FontReference=new("Assets/GarageUI/fonts/Barlow-Regular.ttf"),OrderInLayer=22});
+        _tooltipPanel.Active=false;RefreshFreePalette();
     }
 
     private void RefreshFreePalette()
 
     {
 
-        for(int c=0;c<_categoryButtons.Count;c++)_categoryButtons[c].Color=c==_category?new(.24f,.21f,.13f,1):Vector4.Zero;
+        for(int c=0;c<_categoryButtons.Count;c++)_categoryButtons[c].Color=c==_category?new(.19f,.29f,.20f,1):WorkshopInk;
 
         for(int i=0;i<_palette.Count;i++)
 
@@ -156,9 +120,9 @@ public sealed partial class VehicleBuilder3D
 
             _palette[i].GameObject.Active=visible;_cardImages[i].GameObject.Active=visible;_cardLabels[i].GameObject.Active=visible;_freeCardBorders[i].GameObject.Active=visible;
 
-            if(!visible)continue;int part=Categories[_category][item];_freeCardBorders[i].Color=part==_part?WorkshopGold:new(.22f,.22f,.19f,.6f);
+            if(!visible)continue;int part=Categories[_category][item];_freeCardBorders[i].Color=part==_part?WorkshopGold:Vector4.Zero;
 
-            _cardImages[i].ImageReference=new("Assets/GarageUI/cutouts/"+BuilderPartFiles[part]+".png");_cardLabels[i].Text=BuilderPartNames[part];
+            _cardImages[i].ImageReference=new("Assets/GarageUI/cutouts/"+BuilderPartFiles[part]+".png");_cardLabels[i].Text=BuilderPartNames[part];_workshopTips[_palette[i]]=(BuilderPartNames[part],PartRole(BuilderPartFiles[part]));
 
         }
 
@@ -226,42 +190,27 @@ public sealed partial class VehicleBuilder3D
 
         97=>"G deploys/retracts the canopy.",
 
+        7=>"Click two connectors to brace them. Escape cancels.",
         _=>"Passive physical part. Its placement and orientation matter."
 
     };
 
     private void RefreshFreeHud()
-
     {
-
         if(_status==null||Assembly==null)return;
-
-        _placeToolButton!.Color=!_eraseMode?new(.37f,.29f,.12f,1):new(.14f,.15f,.14f,1);_eraseToolButton!.Color=_eraseMode?new(.65f,.17f,.10f,1):new(.25f,.15f,.12f,1);
-
+        _placeToolButton!.Color=!_eraseMode&&!_movePick&&!_copyPick?new(.19f,.29f,.20f,1):WorkshopInk;
+        _eraseToolButton!.Color=_eraseMode?new(.52f,.15f,.12f,1):WorkshopInk;
         _undoButton!.Interactable=_assemblyUndo.Count>0;_redoButton!.Interactable=_assemblyRedo.Count>0;
-
-        bool engine=Assembly.Parts.Values.Any(p=>p.File=="scrap_engine_block"&&Assembly.IsConnected(p.Id)),cab=Assembly.Parts.Values.Any(p=>p.File=="scrap_cab_shell"&&Assembly.IsConnected(p.Id));
-
-        _status.Text=_catalog?.Standard==true?(Building?"BUILD YOUR MACHINE\nNo engine or cab required":Speed.ToString("0.0")+" m/s"):Building?(Assembly.CanDrive?"READY TO DRIVE":"ASSEMBLY IN PROGRESS")+"\nEngine "+(engine?"connected":"missing")+"\nCab "+(cab?"connected":"missing"):(Velocity.Length()*3.6f).ToString("0")+" km/h"+(IsDrifting?"\nDRIFT":"");
-
-        _status.Offset=Building?new(29,144):new(24,70);_status.WrapWidth=Building?145:280;
-
-        _machineCount!.Text=Assembly.Parts.Count+(Assembly.Parts.Count==1?" part":" parts")+" / "+Assembly.TotalMass.ToString("0")+" kg";
-
+        _status.Text=Building?"WORKSHOP":"SPEED  "+Speed.ToString("0.0")+" m/s";
+        _machineCount!.Text=(Assembly.Parts.Count+Assembly.Braces.Count)+" BLOCKS   /   "+Assembly.TotalMass.ToString("0.0")+" kg";
         _selection!.Text=BuilderPartNames[_part];_partPurpose!.Text=PartRole(SelectedPart);
-
-        _connectionFeedback!.Text=_eraseMode?_message:_candidateVisible?(_placementIssue==""?"Click to connect   |   R rotate   |   Tab attachment   |   F flip":_placementIssue):_message+"   |   "+Assembly.DriveRequirement;
-
-        _connectionFeedback.Color=_candidateVisible&&_placementIssue!=""?new(.92f,.47f,.32f,1):new(.87f,.83f,.72f,1);
-
-        _previewAction!.ImageReference=new("Assets/GarageUI/icons/"+(_placementIssue==""?"checkmark":"information")+".png");
-
-        _hint!.Text=Building?"RMB orbit   MMB pan   Scroll zoom   M move   C copy   X erase   Ctrl+Z undo":"W/S drive   A/D steer   Shift drift   F weapons   G mechanisms";
-
-        _hint.Offset=Building?new(696,702):new(530,682);
-
-        _freeDriveLabel!.Text=Building?"TEST DRIVE  [B]":"BACK TO BUILD  [B]";_driveButton!.Label="";_driveButton.Interactable=!Building||Assembly.CanDrive;
-
+        _connectionFeedback!.Text=_movePick?"MOVE: click a block to pick up its branch":_copyPick?"COPY: click a placed block":_eraseMode?_message:BraceSelected?_message+(_placementIssue!=""?"  |  "+_placementIssue:""):_candidateVisible?(_placementIssue==""?"Click to connect   /   Mount: "+PreviewMountFaceLabel():_placementIssue):_message;
+        _connectionFeedback.Color=_candidateVisible&&_placementIssue!=""?new(.95f,.49f,.35f,1):new(.87f,.9f,.83f,1);
+        _previewAction!.ImageReference=new("Assets/GarageUI/workshop/"+(_placementIssue==""?"check":"info")+".png");
+        _hint!.Text=Building?"R turn   T face   Tab socket   RMB orbit   MMB pan   Scroll zoom   X erase   Ctrl+Z undo":"W/S drive   A/D steer   Shift drift   F weapons   G mechanisms";
+        _hint.Offset=Building?new(44,598):new(22,680);
+        _freeDriveLabel!.Text=Building?"BUILD":"RUNNING";_driveButton!.Interactable=!Building||Assembly.CanDrive;
+        _tooltipPanel!.Active=false;
+        if(Building)foreach(var tip in _workshopTips)if(tip.Key.GameObject.ActiveInHierarchy&&tip.Key.IsHovered){_tooltipTitle!.Text=tip.Value.Title;_tooltipBody!.Text=tip.Value.Body;_tooltipPanel.Active=true;break;}
     }
-
 }

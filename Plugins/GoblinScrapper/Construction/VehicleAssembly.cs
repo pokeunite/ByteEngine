@@ -29,6 +29,25 @@ public sealed class VehiclePartCatalog
     public VehiclePartCatalog? Legacy {get;private set;}
     public Dictionary<string,AssemblyPartDefinition> Parts {get;}=new(StringComparer.Ordinal);
     public AssemblyPartDefinition this[string file]=>Parts[file];
+    private static FreePartSocket[] AddSurfaceSockets(FreePartSocket[] existing,AssemblyBox root,AssemblyBox? moving) {
+        var result=existing.ToList();
+        foreach(var body in moving==null?new[]{(Box:root,Bone:"Root")}:new[]{(Box:root,Bone:"Root"),(Box:moving,Bone:"Moving")}) {
+            var center=(body.Box.Min+body.Box.Max)*.5f;
+            foreach(var face in new[]{("Right",Vector3.UnitX),("Left",-Vector3.UnitX),("Top",Vector3.UnitY),("Bottom",-Vector3.UnitY),("Rear",Vector3.UnitZ),("Front",-Vector3.UnitZ)}) {
+                var n=face.Item2;var point=center+Vector3.Multiply(n,(body.Box.Max-body.Box.Min)*.5f)+n*.002f;
+                var other=body.Bone=="Root"?moving:root;
+                if(body.Bone=="Root"&&other!=null){
+                    var extent=(other.Max-other.Min)*.5f;var toward=Vector3.Dot((other.Min+other.Max)*.5f-point,n)+Vector3.Dot(extent,Vector3.Abs(n));
+                    bool crosses=(Math.Abs(n.X)>.9f||other.Min.X<point.X+.25f&&other.Max.X>point.X-.25f)&&(Math.Abs(n.Y)>.9f||other.Min.Y<point.Y+.25f&&other.Max.Y>point.Y-.25f)&&(Math.Abs(n.Z)>.9f||other.Min.Z<point.Z+.25f&&other.Max.Z>point.Z-.25f);
+                    if(toward>.13f&&crosses)continue;
+                }
+                if(other!=null&&point.X>other.Min.X+.01f&&point.X<other.Max.X-.01f&&point.Y>other.Min.Y+.01f&&point.Y<other.Max.Y-.01f&&point.Z>other.Min.Z+.01f&&point.Z<other.Max.Z-.01f)continue;
+                if(result.Any(a=>a.Bone==body.Bone&&Vector3.Distance(a.Position,point)<.04f&&Vector3.Dot(a.Normal,n)>.99f))continue;
+                result.Add(new("SOCKET_Surface_"+body.Bone+"_"+face.Item1,point,n,body.Bone));
+            }
+        }
+        return result.ToArray();
+    }
     public static VehiclePartCatalog Load(string path)
     {
         using var doc=JsonDocument.Parse(File.ReadAllText(path));var catalog=new VehiclePartCatalog();catalog.Standard=doc.RootElement.TryGetProperty("kit",out var kit)&&kit.GetString()!.Contains("standard",StringComparison.OrdinalIgnoreCase);
@@ -60,6 +79,7 @@ public sealed class VehiclePartCatalog
             if(catalog.Standard)clearance=new[]{Box("root_bounds_game"),Box("moving_bounds_game")}.Where(b=>b!=null).Cast<AssemblyBox>().ToArray();
             string Text(string key)=>p.TryGetProperty(key,out var value)?value.GetString()??"":"";
             if(file=="goblin_starting_block") {file=VehicleAssembly.MasterBlock;sockets=sockets.Select(x=>x with {Name=x.Normal.X>.9f?"Right":x.Normal.X<-.9f?"Left":x.Normal.Y>.9f?"Top":x.Normal.Y<-.9f?"Bottom":x.Normal.Z>.9f?"Rear":"Front"}).ToArray();}
+            if(catalog.Standard&&file!=VehicleAssembly.MasterBlock&&Text("kind")!="brace")sockets=AddSurfaceSockets(sockets,Box("root_bounds_game")??bounds,Box("moving_bounds_game"));
             catalog.Parts.Add(file,new(file,Text("description"),bounds,sockets,clearance) {Label=Text("label"),Group=Text("group"),Kind=Text("kind"),ModelFile=Path.GetFileNameWithoutExtension(Text("file")),ReferenceId=p.TryGetProperty("reference_id",out var rid)?rid.GetInt32():-1,Mass=p.TryGetProperty("mass",out var mass)?mass.GetSingle():10,RootBounds=Box("root_bounds_game"),MovingBounds=Box("moving_bounds_game"),MovingCollision=Box("moving_collider_game"),Pivot=p.TryGetProperty("pivot_game",out var pivot)?Vec(pivot):Vector3.Zero,Axis=p.TryGetProperty("axis_game",out var axis)?Vec(axis):Vector3.UnitX});
         }
         var masterBounds=new AssemblyBox(new(-.25f),new(.25f));
@@ -103,7 +123,7 @@ public sealed class VehiclePartCatalog
 }
 public sealed record AssemblyPart(int Id,string File,int Parent,Vector3 Position,Quaternion Rotation,string ParentBone="Root",string ParentConnector="",string OwnConnector="");
 /// <summary>Unlimited reusable parts, spatial clearance and explicit mechanical ancestry, independent of vehicle hardpoints.</summary>
-public sealed class VehicleAssembly
+public sealed partial class VehicleAssembly
 {
     public VehiclePartCatalog Catalog {get;}
     public Dictionary<int,AssemblyPart> Parts {get;}=new();
@@ -130,7 +150,7 @@ public sealed class VehicleAssembly
         {if(Parts.TryGetValue(p.Parent,out var parent)&&parent.File=="scrap_steering_pivot"&&p.ParentBone=="Steer")return true;id=p.Parent;}
         return false;
     }
-    public float TotalMass=>Catalog.Standard?Parts.Values.Sum(p=>Catalog[p.File].Mass):Parts.Values.Where(p=>IsConnected(p.Id)).Sum(p=>p.File switch
+    public float TotalMass=>Catalog.Standard?Parts.Values.Sum(p=>Catalog[p.File].Mass)+Braces.Count*.5f:Parts.Values.Where(p=>IsConnected(p.Id)).Sum(p=>p.File switch
     {
         "goblin_master_block"=>8f,"scrap_frame_2x1"=>75f,"scrap_frame_long"=>120f,"scrap_wheel_large"=>28f,"scrap_wheel_small"=>12f,
         "scrap_engine_block"=>110f,"scrap_cab_shell"=>80f,"scrap_track_pod"=>150f,"scrap_beam_1m"=>8f,"scrap_beam_2m"=>16f,
@@ -160,6 +180,7 @@ public sealed class VehicleAssembly
             // Mechanical flange and hub joints deliberately share their connector volume.
             bool hub=(Catalog.Standard&&other.Parent==ignore&&(Catalog[other.File].Kind is "wheel" or "gear" or "caster" or "skate" or "flywheel"||other.ParentBone!="Root"))||(Catalog.Standard&&other.Id==parent&&(Catalog[file].Kind is "wheel" or "gear" or "caster" or "skate" or "flywheel"||Catalog[other.File].Sockets.Any(s=>s.Name==connector&&s.Bone!="Root")))||(other.Id==parent && (file.StartsWith("scrap_wheel_")||other.File=="scrap_steering_pivot"||other.File=="scrap_suspension_piston"))||(other.Parent==ignore&&(other.File.StartsWith("scrap_wheel_")||file=="scrap_steering_pivot"||file=="scrap_suspension_piston"));
             if(hub)continue;
+            if(Catalog.Standard&&CogGeometry.Meshes(Catalog[file],position,rotation,Catalog[other.File],other.Position,other.Rotation))continue;
             bool meeting=Catalog.Standard&&Catalog[file].Sockets.Any(a=>Catalog[other.File].Sockets.Any(b=>!IsSocketOccupied(other.Id,b.Name,ignore)&&Vector3.Distance(position+Vector3.Transform(a.Position,rotation),other.Position+Vector3.Transform(b.Position,other.Rotation))<.025f&&Vector3.Dot(Vector3.Transform(a.Normal,rotation),Vector3.Transform(b.Normal,other.Rotation))<-.995f));
             foreach(var a in Catalog[file].Clearance)foreach(var b in Catalog[other.File].Clearance)
                 if(a.Transform(position,rotation).Intersects(b.Transform(other.Position,other.Rotation),other.Id==parent||other.Parent==ignore||meeting?.13f:.045f))return "Not enough space: overlaps "+DisplayName(other.File);
@@ -218,15 +239,16 @@ public sealed class VehicleAssembly
     {
         if(id==0||!Parts.Remove(id)){if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("DELETE REJECT",$"id={id}");return false;}
         if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("DELETE",$"id={id} detached={string.Join(",",Parts.Values.Where(p=>p.Parent==id).Select(p=>p.Id))}");
+        foreach(var brace in Braces.Values.Where(b=>b.A.Block==id||b.B.Block==id).ToArray())Braces.Remove(brace.Id);
         foreach(var child in Parts.Values.Where(p=>p.Parent==id).ToArray())Parts[child.Id]=child with {Parent=-1,ParentBone="Root",ParentConnector="",OwnConnector=""};
         return true;
     }
-    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(5,Parts.Values.OrderBy(p=>p.Id).ToArray(),Catalog.Revision),Options);
+    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(6,Parts.Values.OrderBy(p=>p.Id).ToArray(),Catalog.Revision,Braces.Values.OrderBy(b=>b.Id).ToArray()),Options);
     public static VehicleAssembly FromJson(VehiclePartCatalog catalog,string json)
     {
         if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("RESTORE",$"catalogRevision={catalog.Revision} json={json}");
         var snapshot=JsonSerializer.Deserialize<AssemblySnapshot>(json,Options)??throw new JsonException("Empty build");
-        if(snapshot.Version is not (4 or 5)||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
+        if(snapshot.Version is not (4 or 5 or 6)||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
         var root=snapshot.Blocks.SingleOrDefault(p=>p.Id==0)??throw new JsonException("Missing master block");
         if(root.Parent!=-1||root.File!=MasterBlock||root.Position!=Vector3.Zero||root.Rotation!=Quaternion.Identity)throw new JsonException("Invalid master block");
         var a=new VehicleAssembly(catalog);
@@ -269,10 +291,14 @@ public sealed class VehicleAssembly
             if(p.Parent==-1){if(p.ParentConnector!=""||p.OwnConnector!="")throw new JsonException("Invalid detached block");continue;}
             if(!a.Parts.ContainsKey(p.Parent)||a.Descendants(p.Id).Contains(p.Parent)||a.PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id)!=""||a.ConnectionIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentBone,p.ParentConnector,p.OwnConnector)!="")throw new JsonException($"Invalid connection or clearance for block {p.Id} ({p.File}): {a.PlacementIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentConnector,p.Id)} / {a.ConnectionIssue(p.File,p.Parent,p.Position,p.Rotation,p.ParentBone,p.ParentConnector,p.OwnConnector)}");
         }
+        if(snapshot.Braces is {} braces)foreach(var brace in braces){
+            if(brace.Id<1||brace.Id>1000000||a.Parts.ContainsKey(brace.Id)||a.Braces.ContainsKey(brace.Id)||a.BraceIssue(brace.A,brace.B)!="")throw new JsonException("Invalid brace");
+            a.Braces.Add(brace.Id,brace);a._nextId=Math.Max(a._nextId,brace.Id+1);
+        }
         return a;
     }
     public static string DisplayName(string file) {int i=Array.IndexOf(VehicleBuildLayout.PartFiles,file);return i>=0?VehicleBuildLayout.PartNames[i]:file==MasterBlock?"Master block":System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(file.Replace("goblin_","").Replace("_"," "));}
     private static bool Finite(Vector3 p)=>float.IsFinite(p.X)&&float.IsFinite(p.Y)&&float.IsFinite(p.Z);
     private static readonly JsonSerializerOptions Options=new(){IncludeFields=true,WriteIndented=true};
-    public sealed record AssemblySnapshot(int Version,AssemblyPart[] Blocks,int CatalogVersion=2);
+    public sealed record AssemblySnapshot(int Version,AssemblyPart[] Blocks,int CatalogVersion=2,AssemblyBrace[]? Braces=null);
 }

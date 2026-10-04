@@ -16,9 +16,11 @@ internal sealed partial class GoblinVehicleDiagnostic : ByteEngineApplication
     private readonly bool _prepare;
     private readonly bool _refined;
     private readonly bool _free;
+    private readonly bool _workshop;
+    private readonly bool _battle;
     private EditorProjectContext? _project;
-    public GoblinVehicleDiagnostic(string projectFile, bool prepare, bool refined=false, bool free=false) : base(1280,720,"Goblin vehicle validation")
-    { _projectFile=projectFile; _prepare=prepare; _refined=refined; _free=free; IsVisible=false; }
+    public GoblinVehicleDiagnostic(string projectFile, bool prepare, bool refined=false, bool free=false,bool workshop=false,bool battle=false) : base(1280,720,"Goblin vehicle validation")
+    { _projectFile=projectFile; _prepare=prepare; _refined=refined; _free=free;_workshop=workshop;_battle=battle; IsVisible=false; }
     protected override bool ShouldUpdateScene => false;
     protected override bool ShouldRenderSceneToWindow => false;
     protected override void OnEngineStart()
@@ -59,6 +61,8 @@ internal sealed partial class GoblinVehicleDiagnostic : ByteEngineApplication
             scene=_project.Scenes.Load(scenePath);
         }
         var builder=scene.GameObjects.SelectMany(o=>o.Components).OfType<VehicleBuilder3D>().Single();
+        if(_battle){RunBattleTest(scene,builder);Close();return;}
+        if(_workshop){builder.BattlefieldEnabled=false;RunHudBraceWorkshop(scene,builder);Close();return;}
         if(_free) {RunFreeWorkshop(scene,builder);Close();return;}
         builder.FreeBuilding=false;
         Scenes.LoadScene(scene);
@@ -237,7 +241,9 @@ internal sealed partial class GoblinVehicleDiagnostic : ByteEngineApplication
         var builder=scene.GameObjects.SelectMany(o=>o.Components).OfType<VehicleBuilder3D>().Single();
         builder.AdaptHudViewport(new(width,height));
         using var fb=new SceneFramebuffer();
-        fb.Render(Renderer,Renderer3D,scene,EditorMode.Play,new EditorCamera(),new EditorCamera3D(),true,width,height,width,height,drawGrid3D:false);
+        var gameCamera=scene.ActiveCamera!;var forward=gameCamera.Transform.Forward;
+        var screenshotCamera=new EditorCamera3D{Position=gameCamera.Transform.WorldPosition,Yaw=MathF.Atan2(forward.Z,forward.X)*180/MathF.PI,Pitch=MathF.Asin(Math.Clamp(forward.Y,-1,1))*180/MathF.PI,FieldOfView=gameCamera.FieldOfView};
+        fb.Render(Renderer,Renderer3D,scene,EditorMode.Play,new EditorCamera(),screenshotCamera,true,width,height,width,height,drawGrid3D:false);
         GL.Finish();
         byte[] pixels=new byte[width*height*4];
         GL.BindTexture(TextureTarget.Texture2D,(int)fb.TextureId);

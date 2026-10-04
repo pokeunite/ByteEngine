@@ -23,6 +23,7 @@ public static class GoblinControlTemplate
   Rule("Enter - place preview",[Mode(true),Key("Enter")],Command("placePreview"));
   Rule("R - rotate preview 90 degrees",[Mode(true),Key("R")],Command("rotatePreview",("degrees",EventValue.Number(90))));
   Rule("F - flip preview",[Mode(true),Key("F")],Command("rotatePreview",("degrees",EventValue.Number(180))));
+  Rule("T - cycle beam mounting face",[Mode(true),Key("T")],Command("cycleMountFace"));
   Rule("Tab - next own connector",[Mode(true),Key("Tab")],Command("nextConnector"));
   Rule("Delete - selected block",[Mode(true),Key("Delete")],Command("removeSelected"));
   Rule("X - hovered block",[Mode(true),Key("X")],Command("removeHovered"));

@@ -154,7 +154,7 @@ for p in ALL:
   p.rig.animation_data.action=None
   for pb in p.rig.pose.bones:pb.scale=(1,1,1)
  # Elastic spring geometry follows both anchor bodies rather than breaking in two.
- if p.ref_id in {9,16}:
+ if p.ref_id in {9,16,18}:
   for obj in p.objects:
    if not obj.data.vertices:continue
    values=[v.co.y for v in obj.data.vertices];bottom=min(values);top=max(values)
@@ -162,7 +162,7 @@ for p in ALL:
    # Only the narrow coil/rod section gets blended skinning; rigid caps retain their weights.
    root_group=obj.vertex_groups.get('Root') or obj.vertex_groups.new(name='Root');moving_group=obj.vertex_groups.get('Moving') or obj.vertex_groups.new(name='Moving')
    for v in obj.data.vertices:
-    t=max(0,min(1,(v.co.y-bottom)/(top-bottom)));root_group.add([v.index],1-t,'REPLACE');moving_group.add([v.index],t,'REPLACE')
+    t=max(0,min(1,(v.co.y+.5651179)/.6131179)) if p.ref_id==18 else max(0,min(1,(v.co.y-bottom)/(top-bottom)));root_group.add([v.index],1-t,'REPLACE');moving_group.add([v.index],t,'REPLACE')
  export(p)
  row=dict(p.source_row);row['bounds_blender_z_up']=p.bounds
  row['sockets']=[dict(name=s['connector_name'],position=game(s['rest_position_blender']),normal=game(s['rest_normal_blender']),animation_bone=s.get('animation_bone','Root')) for s in p.sockets]
@@ -179,6 +179,9 @@ for p in ALL:
   vertices=groups['Moving'];radius=max((v-p.axis*v.dot(p.axis)).length for v in vertices)
   tyre=[v for v in vertices if (v-p.axis*v.dot(p.axis)).length>=radius*.65]
   row['moving_collider_game']=bgame(bounds(tyre))
+ if p.ref_id==18:
+  vertices=[v.co for obj in p.objects for v in obj.data.vertices if v.co.y>=.048]
+  row['moving_collider_game']=bgame(bounds(vertices));row['rig_revision']='elastic-shaft-anchor-v1'
  row['animations']=[dict(name=a['name'],channels=len(a['channels'])) for a in p.export_doc.get('animations',[])]
  row['geometry_provenance']='Reference-derived from installed Besiege block '+str(p.ref_id);manifest['parts'].append(row)
 (OUT/'parts-catalog.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')

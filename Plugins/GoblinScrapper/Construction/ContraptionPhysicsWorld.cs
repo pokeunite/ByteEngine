@@ -10,7 +10,7 @@ using BepuUtilities;
 using BepuUtilities.Memory;
 namespace GoblinScrapper.Construction;
 /// <summary>Independent rigid bodies joined at authored attachment points. Motors supply torque, never vehicle translation.</summary>
-public sealed class ContraptionPhysicsWorld : IDisposable
+public sealed partial class ContraptionPhysicsWorld : IDisposable
 {
  // Bounded driving torque lets tire contact resolve unequal wheel speeds in a turn.
  // A near-hard velocity lock consumes the grip budget and can reverse the chassis yaw.
@@ -81,7 +81,7 @@ public sealed class ContraptionPhysicsWorld : IDisposable
    var p=new Piece{Part=part,Def=d,RootCenter=(box.Min+box.Max)*.5f};
    bool directWheel=(d.ReferenceId is 2 or 40 or 46 or 60)&&part.Parent>=0;
    bool split=d.MovingBounds!=null&&d.ReferenceId is 2 or 5 or 9 or 12 or 13 or 14 or 16 or 17 or 18 or 19 or 22 or 27 or 28 or 38 or 39 or 40 or 42 or 44 or 46 or 48 or 50 or 51 or 60 or 77 or 79 or 86 or 88 or 95;
-   p.Root=BoxBody(pos+Vector3.Transform(p.RootCenter,q),q,box.Max-box.Min,Math.Max(.2f,d.Mass*(split?.25f:1)));p.Output=p.Root;
+   p.Root=BoxBody(pos+Vector3.Transform(p.RootCenter,q),q,box.Max-box.Min,Math.Max(.2f,d.Mass*(split?.25f:1)+assembly.Braces.Values.Count(b=>b.A.Block==part.Id||b.B.Block==part.Id)*.25f));p.Output=p.Root;
    if(split)
    {
     var m=d.MovingCollision??d.MovingBounds!;p.DirectWheelMount=directWheel;p.OutputCenter=(m.Min+m.Max)*.5f;var size=Vector3.Max(m.Max-m.Min,new Vector3(.04f));
@@ -162,11 +162,26 @@ public sealed class ContraptionPhysicsWorld : IDisposable
   for(int i=0;i<pieces.Length;i++)for(int j=i+1;j<pieces.Length;j++)
   {
    var a=pieces[i];var b=pieces[j];if(a.Part.Parent==b.Part.Id||b.Part.Parent==a.Part.Id)continue;
-   foreach(var sa in a.Def.Sockets)foreach(var sb in b.Def.Sockets)
+   foreach(var sa in a.Def.Sockets.Where(s=>!s.Name.StartsWith("SOCKET_Surface_")))foreach(var sb in b.Def.Sockets.Where(s=>!s.Name.StartsWith("SOCKET_Surface_")))
    {
     var pa=a.Part.Position+Vector3.Transform(sa.Position,a.Part.Rotation);var pb=b.Part.Position+Vector3.Transform(sb.Position,b.Part.Rotation);
     if(Vector3.Distance(pa,pb)>.025f||Vector3.Dot(Vector3.Transform(sa.Normal,a.Part.Rotation),Vector3.Transform(sb.Normal,b.Part.Rotation))>-.995f)continue;
     var ba=sa.Bone=="Root"?a.Root:a.Output;var bb=sb.Bone=="Root"?b.Root:b.Output;if(ba!=bb){WeldBodies(ba,bb);Ignore(ba,bb);}
+   }
+  }
+  foreach(var brace in assembly.Braces.Values)
+  {
+   BodyHandle Endpoint(BraceEndpoint e){var p=_pieces[e.Block];var socket=p.Def.Sockets.First(s=>s.Name==e.Socket);return socket.Bone=="Root"?p.Root:p.Output;}
+   var a=Endpoint(brace.A);var b=Endpoint(brace.B);if(a!=b){
+    var pa=_simulation.Bodies[a].Pose;var pb=_simulation.Bodies[b].Pose;
+    Vector3 Point(BraceEndpoint e)=>origin+Vector3.Transform(assembly.BracePoint(e),rotation);
+    var start=Point(brace.A);var end=Point(brace.B);
+    // A two-ended brace constrains its span, not the orientations of both connected
+    // bodies. Welding the bodies overconstrained sliders and rotating mechanisms.
+    _simulation.Solver.Add(a,b,new DistanceServo{
+     LocalOffsetA=Vector3.Transform(start-pa.Position,Quaternion.Inverse(pa.Orientation)),
+     LocalOffsetB=Vector3.Transform(end-pb.Position,Quaternion.Inverse(pb.Orientation)),
+     TargetDistance=Vector3.Distance(start,end),SpringSettings=new(30,1),ServoSettings=new(10,0,4000)});
    }
   }
   var gears=_pieces.Values.Where(p=>p.Def.ReferenceId is 38 or 39 or 51).ToArray();
@@ -174,8 +189,8 @@ public sealed class ContraptionPhysicsWorld : IDisposable
   {
    var a=gears[i];var b=gears[j];var pa=_simulation.Bodies[a.Output].Pose;var pb=_simulation.Bodies[b.Output].Pose;
    var axisA=Vector3.Transform(Vector3.UnitY,pa.Orientation);var axisB=Vector3.Transform(Vector3.UnitY,pb.Orientation);var delta=pb.Position-pa.Position;
-   float ra=MovingRadius(a.Def),rb=MovingRadius(b.Def);
-   if(Math.Abs(Vector3.Dot(axisA,axisB))<.98f||Math.Abs(Vector3.Dot(delta,axisA))>.12f||Math.Abs(delta.Length()-ra-rb)>.15f)continue;
+   float ra=CogGeometry.PitchRadius(a.Def),rb=CogGeometry.PitchRadius(b.Def);
+   if(!CogGeometry.Meshes(a.Def,a.Part.Position,a.Part.Rotation,b.Def,b.Part.Position,b.Part.Rotation))continue;
    _simulation.Solver.Add(a.Output,b.Output,new AngularAxisGearMotor{LocalAxisA=Vector3.Transform(axisA,Quaternion.Inverse(pa.Orientation)),VelocityScale=-ra/rb,Settings=new(200,.001f)});Ignore(a.Output,b.Output);
   }
 
@@ -187,6 +202,7 @@ public sealed class ContraptionPhysicsWorld : IDisposable
  private void Ignore(BodyHandle a,BodyHandle b){if(a!=b)_connectedPairs[PairKey(a,b)]=1;}
  private static Quaternion Align(Vector3 from,Vector3 to){float dot=Vector3.Dot(from,to);return dot>.999f?Quaternion.Identity:dot<-.999f?Quaternion.CreateFromAxisAngle(Vector3.UnitX,MathF.PI):Quaternion.Normalize(new Quaternion(Vector3.Cross(from,to),1+dot));}
  public (Vector3 Position,Quaternion Rotation) Pose(int id){var p=_pieces[id];var b=_simulation.Bodies[p.Root].Pose;if(p.WheelDetached){var q=Quaternion.Normalize(b.Orientation*Quaternion.Inverse(p.ShapeRotation));return(b.Position-Vector3.Transform(p.OutputCenter,q),q);}return p.WheelMountBound?(b.Position+Vector3.Transform(p.MountPositionLocal,b.Orientation),Quaternion.Normalize(b.Orientation*p.MountRotationLocal)):(b.Position-Vector3.Transform(p.RootCenter,b.Orientation),b.Orientation);}
+ public Vector3 BracePoint(BraceEndpoint e){var p=_pieces[e.Block];var s=p.Def.Sockets.First(s=>s.Name==e.Socket);var pose=Pose(e.Block);var local=s.Bone=="Root"?s.Position:Vector3.Transform(s.Position,OutputDeformation(e.Block));return pose.Position+Vector3.Transform(local,pose.Rotation);}
  public bool HasPhysicalOutput(int id)=>_pieces[id].Root!=_pieces[id].Output;
  private static float MovingRadius(AssemblyPartDefinition definition)
  {
@@ -319,7 +335,7 @@ public sealed class ContraptionPhysicsWorld : IDisposable
   if(_traceGeneration!=ConstructionDiagnostics.Generation)
   {
    _traceGeneration=ConstructionDiagnostics.Generation;
-   ConstructionDiagnostics.Record("PHYSICS SNAPSHOT",$"plugin=0.3.0 catalog={_assembly.Catalog.Revision} steering={(_usesSteeringJoints?"hinges":"fixed axles (A/D does not drive wheels)")} wheelDriveTorque=120 autoBrakeTorque=10000 (auto-brake enabled) solver=16iterations/8substeps build={_assembly.ToJson()}");
+   ConstructionDiagnostics.Record("PHYSICS SNAPSHOT",$"plugin=0.4.0 catalog={_assembly.Catalog.Revision} steering={(_usesSteeringJoints?"hinges":"fixed axles (A/D does not drive wheels)")} wheelDriveTorque=120 autoBrakeTorque=10000 (auto-brake enabled) solver=16iterations/8substeps build={_assembly.ToJson()}");
    foreach(var p in _pieces.Values)ConstructionDiagnostics.Record("BODY SETUP",$"id={p.Part.Id} file={p.Part.File} parent={p.Part.Parent}/{p.Part.ParentBone} target={p.Part.ParentConnector} source={p.Part.OwnConnector} authoredPosition={p.Part.Position} authoredRotation={p.Part.Rotation} mass={p.Def.Mass} axis={p.Def.Axis} pivot={p.Def.Pivot} rootBounds={p.Def.RootBounds} tireBounds={p.Def.MovingCollision} rootBody={p.Root.Value} outputBody={p.Output.Value} motor={p.Motor.HasValue}");
    _traceElapsed=.25f;
   }

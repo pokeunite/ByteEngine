@@ -30,7 +30,7 @@ internal sealed class VehicleBuilder3DCodec : IComponentCodec
 
         return new ComponentData { Type=TypeName, Properties=new JsonObject
 
-        { ["partsDirectory"]=builder.PartsDirectory, ["maximumSpeed"]=builder.MaximumSpeed, ["roadGrip"]=builder.RoadGrip, ["driftGrip"]=builder.DriftGrip, ["freeBuilding"]=builder.FreeBuilding, ["useBuiltInControls"]=builder.UseBuiltInControls, ["useBuiltInPointerControls"]=builder.UseBuiltInPointerControls, ["automaticCamera"]=builder.AutomaticCamera, ["showWorkshopHud"]=builder.ShowWorkshopHud } };
+        { ["battlefieldEnabled"]=builder.BattlefieldEnabled,["battlefieldEnemyCount"]=builder.BattlefieldEnemyCount,["partsDirectory"]=builder.PartsDirectory, ["maximumSpeed"]=builder.MaximumSpeed, ["roadGrip"]=builder.RoadGrip, ["driftGrip"]=builder.DriftGrip, ["freeBuilding"]=builder.FreeBuilding, ["useBuiltInControls"]=builder.UseBuiltInControls, ["useBuiltInPointerControls"]=builder.UseBuiltInPointerControls, ["automaticCamera"]=builder.AutomaticCamera, ["showWorkshopHud"]=builder.ShowWorkshopHud } };
 
     }
 
@@ -38,6 +38,8 @@ internal sealed class VehicleBuilder3DCodec : IComponentCodec
 
     {
 
+        BattlefieldEnabled=data.Properties["battlefieldEnabled"]?.GetValue<bool>()??false,
+        BattlefieldEnemyCount=data.Properties["battlefieldEnemyCount"]?.GetValue<int>()??18,
         UseBuiltInControls=data.Properties["useBuiltInControls"]?.GetValue<bool>() ?? true,
         UseBuiltInPointerControls=data.Properties["useBuiltInPointerControls"]?.GetValue<bool>() ?? true,
         AutomaticCamera=data.Properties["automaticCamera"]?.GetValue<bool>() ?? true,

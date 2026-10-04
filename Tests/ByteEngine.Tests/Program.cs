@@ -20,6 +20,10 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length>=2&&args[0]=="--gears") { GearMeshTests.Run(VehiclePartCatalog.Load(Path.Combine(args[1],"Assets","GarageUI","parts-catalog.json"))); return; }
+    if(args.Length>=2&&args[0]=="--attachment-audit") { AttachmentAuditTests.Run(args[1],args.Contains("--strict")); return; }
+    if(args.Length>=2&&args[0]=="--beam-rotation") { BeamRotationTests.Run(args[1]); return; }
+    if(args.Length>=2&&args[0]=="--piston") { PistonTests.Run(args[1]); return; }
     if(args.Length>=2&&args[0]=="--write-goblin-controls") { new ByteEngine.Core.VisualLogic.EventModuleSerializer().Save(GoblinScrapper.GoblinControlTemplate.Create(),args[1]); return; }
     if (args.Length >= 2 && args[0] == "--plugins") { PluginSystemTests.Run(args[1]); return; }
     if (args.Length >= 3 && args[0] == "--prepare-last-stand-starter")
@@ -35,6 +39,10 @@ try
         return;
     }
 
+    if(args.Length>=2&&args[0]=="--build-performance"){BuildPerformanceTests.Run(args[1]);return;}
+    if(args.Length>=2&&args[0]=="--braces"){BraceTests.Run(args[1]);return;}
+    if(args.Length>=2&&args[0]=="--goblin-battle"){using var diagnostic=new GoblinVehicleDiagnostic(args[1],false,false,true,false,true);diagnostic.Run();return;}
+    if(args.Length>=2&&args[0]=="--goblin-workshop"){using var diagnostic=new GoblinVehicleDiagnostic(args[1],false,false,true,true);diagnostic.Run();return;}
     if (args.Length >= 2 && args[0] == "--goblin-vehicle")
     {
         using var diagnostic = new GoblinVehicleDiagnostic(args[1], args.Contains("--prepare"), args.Contains("--refined"),args.Contains("--free"));

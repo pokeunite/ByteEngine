@@ -1,5 +1,5 @@
 {
-  "id": "6d746d79-1690-434b-973c-1b353e924719",
+  "id": "feabea00-1481-436c-8eb4-f9e3946593f3",
   "version": 2,
   "name": "Goblin - Editable Controls",
   "targetBlueprintGuid": null,
@@ -9,13 +9,13 @@
   ],
   "rules": [
     {
-      "id": "b0011023-095d-446e-b985-fe1f5390f88f",
+      "id": "c9825134-1f2a-46e7-9845-b51cad8353d4",
       "displayName": "Use the editable keyboard controls",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "270fde2e-8eb5-44eb-9894-e6c0476cf0fe",
+          "instanceId": "14cc3598-0adc-453b-95fd-a92dd99a4981",
           "id": "system.triggerOnce",
           "arguments": {},
           "conditionInputIds": [],
@@ -29,7 +29,7 @@
       ],
       "actions": [
         {
-          "instanceId": "d588fe39-64e2-4728-9b37-29624a4d86f0",
+          "instanceId": "f68d3a5c-38bd-4944-896e-e4c6faa7a0d3",
           "id": "bytebard.goblinscrapper.setBuiltInControls",
           "arguments": {
             "enabled": {
@@ -73,13 +73,13 @@
       "editorY": 0
     },
     {
-      "id": "45329142-a176-412a-ad2f-21ddb9ef77df",
+      "id": "ffb36332-7a01-4a54-9b91-afd10b91fa57",
       "displayName": "Reset frame commands and held weapons",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "78e19a0b-f2ba-43c9-ac7d-a68b89e227b0",
+          "instanceId": "c03acfb3-f618-4c4e-b9d4-88a707629102",
           "id": "system.always",
           "arguments": {},
           "conditionInputIds": [],
@@ -93,7 +93,7 @@
       ],
       "actions": [
         {
-          "instanceId": "919e267a-6aca-4848-b306-ef20f4180e86",
+          "instanceId": "bc14a7a0-e719-484e-946f-a7ffbbe40c09",
           "id": "bytebard.goblinscrapper.resetInput",
           "arguments": {},
           "conditionInputIds": [],
@@ -105,7 +105,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "f078c14b-cf07-4693-b63f-a7e77ab83741",
+          "instanceId": "97dce7f7-5878-4558-9da3-39d20df1fb29",
           "id": "bytebard.goblinscrapper.poweredWeapons",
           "arguments": {
             "enabled": {
@@ -149,13 +149,13 @@
       "editorY": 0
     },
     {
-      "id": "b4869085-8358-4a90-af93-31cab65f1538",
+      "id": "b30440f2-ca58-4ca0-8561-252e5c43df11",
       "displayName": "B - toggle Build / Simulation",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "107c2cd4-a7ec-451b-a55a-e9cb6cae58ff",
+          "instanceId": "456ef0fa-6120-41e2-9898-debce214f90f",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -189,7 +189,7 @@
       ],
       "actions": [
         {
-          "instanceId": "f292c18e-5559-4e88-aad5-993102538f5c",
+          "instanceId": "b6d91037-e00d-478c-9975-81ca360bcb75",
           "id": "bytebard.goblinscrapper.toggleMode",
           "arguments": {},
           "conditionInputIds": [],
@@ -213,13 +213,13 @@
       "editorY": 0
     },
     {
-      "id": "ce507256-6a94-4728-bf8c-b43ed86a43cd",
+      "id": "eb5665da-47cf-41f3-baf2-6656b50e9e57",
       "displayName": "Space - start simulation",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "2ec89554-176f-419d-a79d-fa33eb94a24a",
+          "instanceId": "aa62320e-b647-49a4-b1d6-9f3c83961420",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -231,7 +231,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "28c55310-9500-4fae-a144-44ec19cb7005",
+          "instanceId": "75a94288-8036-4bbf-9644-9d4dd0b24e88",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -265,7 +265,7 @@
       ],
       "actions": [
         {
-          "instanceId": "2b43a5f5-c385-4eb0-8107-cd89beb8076d",
+          "instanceId": "be6907ce-ad67-4864-92c8-b8154ce9f33e",
           "id": "bytebard.goblinscrapper.beginDrive",
           "arguments": {},
           "conditionInputIds": [],
@@ -289,13 +289,13 @@
       "editorY": 0
     },
     {
-      "id": "ef6ec051-127a-46b7-8613-9c1d74b0c459",
+      "id": "cfff5855-53db-4b37-a6b1-9633f4336eeb",
       "displayName": "W - addThrottle",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "f7f83a6e-1122-452b-bd6d-63fc46fa2d8c",
+          "instanceId": "75a3a77a-7338-4c53-b420-f4d1506d1b75",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -307,7 +307,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "b7c2fd4e-1c2f-4928-b3c8-284b8d6e5b94",
+          "instanceId": "53d9baaf-5b3f-41e0-a1d2-53a31b6f5019",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -341,7 +341,7 @@
       ],
       "actions": [
         {
-          "instanceId": "0df8f9e6-5863-4fde-b07f-29b5e19d2ff4",
+          "instanceId": "45ae77b1-dd9d-4ad0-8112-a26c261d990e",
           "id": "bytebard.goblinscrapper.addThrottle",
           "arguments": {
             "value": {
@@ -385,13 +385,13 @@
       "editorY": 0
     },
     {
-      "id": "6e4fec4b-89e8-48a8-96b8-2458954eb37a",
+      "id": "327b5e41-e646-492e-b4ab-9f93d8828ba3",
       "displayName": "S - addThrottle",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "a1a9a8a1-21a1-42b2-9c79-9e9e39a097aa",
+          "instanceId": "2b0af1a2-4e7c-4eee-aba0-0d443d9914f3",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -403,7 +403,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "f00b22bf-cc9c-4c8f-833d-accdb3747995",
+          "instanceId": "735245ce-3cbe-41d9-bd59-e2fcfac0f601",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -437,7 +437,7 @@
       ],
       "actions": [
         {
-          "instanceId": "71713801-0755-4434-bfc1-482eac6206f8",
+          "instanceId": "6d2d7cc6-1ac1-483d-b50f-3329c415b24a",
           "id": "bytebard.goblinscrapper.addThrottle",
           "arguments": {
             "value": {
@@ -481,13 +481,13 @@
       "editorY": 0
     },
     {
-      "id": "028346aa-ab8a-476a-9e6d-1bbaebff4f3b",
+      "id": "7b1e6e60-e2ba-48d6-8f02-e2f2e66d2e48",
       "displayName": "D - addSteering",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "dda10b0f-4faf-4c73-ac55-e2ec5dff3254",
+          "instanceId": "2f2ef98d-4c04-41d0-8d94-1484b3a7be37",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -499,7 +499,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "447edd30-7bb5-48a9-ac6d-159d479ec756",
+          "instanceId": "4bc592e9-508e-4e80-b5db-d97d41dad429",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -533,7 +533,7 @@
       ],
       "actions": [
         {
-          "instanceId": "0b4d05d4-2b56-40ad-9564-47f7d744df4f",
+          "instanceId": "56e4d970-9fa7-4d7b-be4c-ee237bed38f2",
           "id": "bytebard.goblinscrapper.addSteering",
           "arguments": {
             "value": {
@@ -577,13 +577,13 @@
       "editorY": 0
     },
     {
-      "id": "6c93d14b-46ab-4dca-ab89-911a8173443f",
+      "id": "6576909c-befa-435e-b487-ab9f4127ad00",
       "displayName": "A - addSteering",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "621315c2-07c4-47ec-8148-4ff21307a372",
+          "instanceId": "fa92c978-48c2-4feb-a828-2542f099bf49",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -595,7 +595,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "df0e93f1-fa17-483f-92f4-b71fdab6bae5",
+          "instanceId": "cc664d41-7545-45b3-b7c2-a47c6277d92e",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -629,7 +629,7 @@
       ],
       "actions": [
         {
-          "instanceId": "ad2abe1b-64bd-4efa-a339-6c886fe9cb53",
+          "instanceId": "a155ac6d-0fbc-4f0b-a8df-e9c5d955f897",
           "id": "bytebard.goblinscrapper.addSteering",
           "arguments": {
             "value": {
@@ -673,13 +673,13 @@
       "editorY": 0
     },
     {
-      "id": "126cc2eb-aa46-4c50-b8f3-6cb040b97c76",
+      "id": "8218a76e-48a4-4832-a4a4-c0041aa33232",
       "displayName": "Space - brake",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "671ff7c0-2e5f-40d7-8a2e-9ae5c43aaa7d",
+          "instanceId": "c022072b-ada5-439d-aa0b-a16f022dfeae",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -691,7 +691,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "5d3d44e6-af3c-4881-9260-05739f97a1ed",
+          "instanceId": "434958ce-77f2-4e34-8e25-7b2b51263b85",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -725,7 +725,7 @@
       ],
       "actions": [
         {
-          "instanceId": "b0540540-c7d7-4621-838f-2cd594e32351",
+          "instanceId": "bd9330fa-fda7-41cf-837a-448cc3baaa5b",
           "id": "bytebard.goblinscrapper.setBrake",
           "arguments": {
             "enabled": {
@@ -769,13 +769,13 @@
       "editorY": 0
     },
     {
-      "id": "590ee570-7798-4e14-9285-fa8a60b68f84",
+      "id": "75c42934-ba3a-4334-b526-0a45054eb44c",
       "displayName": "LeftShift - drift",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "29b0aff1-8340-4857-a312-5c1ca3a43ecc",
+          "instanceId": "05a8d65f-148e-43b5-9c7b-93c9f8494e9e",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -787,7 +787,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "e89ea408-78b9-4153-9b0c-b8f903288ee7",
+          "instanceId": "ccf758b5-2c5d-4be2-a19e-5631e447e562",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -821,7 +821,7 @@
       ],
       "actions": [
         {
-          "instanceId": "f89fd730-f72d-4f34-bb08-d7b8b4dcaa21",
+          "instanceId": "b0b7e974-0a32-46d4-8edc-e95f92419b2a",
           "id": "bytebard.goblinscrapper.setDrift",
           "arguments": {
             "enabled": {
@@ -865,13 +865,13 @@
       "editorY": 0
     },
     {
-      "id": "57b1e864-75ca-4bb9-b2b5-b4c9557ad732",
+      "id": "baabb4c3-96dc-497e-a2a9-c48b29fe27ed",
       "displayName": "RightShift - drift",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "6132338e-d6b6-4f29-a645-6a6e1ec83c65",
+          "instanceId": "f124788a-1d24-4df2-aede-4d1bbd6adc91",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -883,7 +883,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "300adb20-70ac-4283-9d97-2a58acc25ec1",
+          "instanceId": "5077640b-8bff-4eb2-b8b7-a57db362674d",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -917,7 +917,7 @@
       ],
       "actions": [
         {
-          "instanceId": "768b203b-a326-4564-94bc-e3cd49b02bf6",
+          "instanceId": "5fc2b82d-9cb0-40e6-9cba-ee91533eee05",
           "id": "bytebard.goblinscrapper.setDrift",
           "arguments": {
             "enabled": {
@@ -961,13 +961,13 @@
       "editorY": 0
     },
     {
-      "id": "c7b59b2c-d918-4fa0-8ae1-cc1d9e424089",
+      "id": "0d67258c-46bb-424b-b5f5-32e1c35cf0d3",
       "displayName": "F - fire a shot",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "26976544-e2a6-4872-81e8-5ed263d7e5cc",
+          "instanceId": "ee22033b-85e1-4683-bce0-8726a4173bb8",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -979,7 +979,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "4f40b89e-9f95-4f2e-8288-fa03f405bbc5",
+          "instanceId": "c5a698be-7d1c-4f27-8397-57550c770044",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1013,7 +1013,7 @@
       ],
       "actions": [
         {
-          "instanceId": "9fe25624-a10f-4535-af97-e7ce526a9f29",
+          "instanceId": "b26de240-fed5-4a44-8ca9-dd7342cefa01",
           "id": "bytebard.goblinscrapper.fire",
           "arguments": {},
           "conditionInputIds": [],
@@ -1037,13 +1037,13 @@
       "editorY": 0
     },
     {
-      "id": "8938af08-e20c-4bf5-a3c6-4d9b70c88c00",
+      "id": "53c90a59-fdf8-4c6b-9dd5-8db3aaebf26b",
       "displayName": "Hold F - powered weapons",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "72758711-0750-442a-bc7b-74f7634708a0",
+          "instanceId": "6d417c59-0a37-450a-91b6-383cc4b2c99e",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -1055,7 +1055,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "9b920997-48d5-4322-ad7e-30441d6d65d6",
+          "instanceId": "877b6d0d-86b1-446a-b6ff-c1f947aaabaa",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -1089,7 +1089,7 @@
       ],
       "actions": [
         {
-          "instanceId": "182d8ab6-ddbb-42c7-b3ea-efc835878003",
+          "instanceId": "b270bf70-d4f9-4b46-af52-c44f54098e9a",
           "id": "bytebard.goblinscrapper.poweredWeapons",
           "arguments": {
             "enabled": {
@@ -1133,13 +1133,13 @@
       "editorY": 0
     },
     {
-      "id": "d23fb116-c85a-4916-a174-82e2402ea39b",
+      "id": "e48c3a1d-67e0-492f-a0fd-8b57a12cdd57",
       "displayName": "G - mechanisms",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "4aa7d570-8b66-4b06-a6d4-116dca2f88d8",
+          "instanceId": "91dbb80b-a481-4dfe-b730-77c3f9f0a3ff",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -1151,7 +1151,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "4c46cffb-de73-4410-a463-48602468218c",
+          "instanceId": "e5eb7268-35e2-4507-b92d-8c08b3d0002b",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1185,7 +1185,7 @@
       ],
       "actions": [
         {
-          "instanceId": "55f0c6e5-38b1-41e5-9d68-b86bee6733e0",
+          "instanceId": "37f15ecc-926d-44f0-9c7f-063138d8eadb",
           "id": "bytebard.goblinscrapper.mechanisms",
           "arguments": {},
           "conditionInputIds": [],
@@ -1209,13 +1209,13 @@
       "editorY": 0
     },
     {
-      "id": "d5d061ab-6705-4f51-beea-3cb7916c1343",
+      "id": "00355b37-b82b-43c6-b25a-23d64ab2ee12",
       "displayName": "Enter - place preview",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "e17f7756-4d90-4b02-ac59-c051f3eac390",
+          "instanceId": "9ccbb3c6-703d-47cb-b783-ea83ef49ed55",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1227,7 +1227,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "386d8a56-e8a3-4bec-be25-5c8dde0bf989",
+          "instanceId": "64c4375d-bf11-414f-8e90-896649ec4af0",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1261,7 +1261,7 @@
       ],
       "actions": [
         {
-          "instanceId": "5309205e-a6a6-4ea7-b709-c127dbab84ca",
+          "instanceId": "e20f4b42-dae9-431e-ba82-40333a19eb85",
           "id": "bytebard.goblinscrapper.placePreview",
           "arguments": {},
           "conditionInputIds": [],
@@ -1285,13 +1285,13 @@
       "editorY": 0
     },
     {
-      "id": "cba04d6d-4d8e-4551-a3c5-a09d070204ec",
+      "id": "e15168bb-92a2-4cce-85d3-4e963e3e4d6e",
       "displayName": "R - rotate preview 90 degrees",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "38b4ec32-f7dc-4f05-8bc0-6cef49c13fe0",
+          "instanceId": "a7a6a2a1-a516-4643-ad5c-ac8a544aa571",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1303,7 +1303,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "3b14e151-808b-4a25-9ecb-58b835b7ec23",
+          "instanceId": "bab0a319-f922-4cf4-809e-f979d0726e51",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1337,7 +1337,7 @@
       ],
       "actions": [
         {
-          "instanceId": "82baf3a5-2498-45c5-bfd2-674eb6cbe874",
+          "instanceId": "e6f8c7e3-c6f9-436c-8780-d15511934301",
           "id": "bytebard.goblinscrapper.rotatePreview",
           "arguments": {
             "degrees": {
@@ -1381,13 +1381,13 @@
       "editorY": 0
     },
     {
-      "id": "7125a14f-4c5f-4df9-8e75-3b4c34df5569",
+      "id": "6c48d853-6cb9-49f2-a1d6-5c016ab5976e",
       "displayName": "F - flip preview",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "62bf01c0-1420-4beb-82e4-6f5ad28f066a",
+          "instanceId": "f9471fc8-f213-480a-8669-6b492a8bcc3a",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1399,7 +1399,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "70f465e1-8a25-4061-b818-b3f02c6ad8f8",
+          "instanceId": "cc66fa91-71ce-4d45-bd34-3c7b66355ce7",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1433,7 +1433,7 @@
       ],
       "actions": [
         {
-          "instanceId": "942f22f5-9875-4eb2-8175-cf5b766d0fa4",
+          "instanceId": "63e65531-c704-4d7c-bec2-f62d62893412",
           "id": "bytebard.goblinscrapper.rotatePreview",
           "arguments": {
             "degrees": {
@@ -1477,13 +1477,13 @@
       "editorY": 0
     },
     {
-      "id": "26c3fa55-9089-4218-916a-c5a6ea837a0a",
-      "displayName": "Tab - next own connector",
+      "id": "24b96418-8753-4080-aadc-9c34a3e303e2",
+      "displayName": "T - cycle beam mounting face",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "60d74f07-b89a-4c73-a8e4-6292d6926581",
+          "instanceId": "074fa61c-399e-42db-a16b-201dc01e9fe6",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1495,7 +1495,83 @@
           "editorY": 0
         },
         {
-          "instanceId": "1e10c965-2bf1-4fa9-b1db-a9ad9cf5852c",
+          "instanceId": "0c82f4a7-678e-44cd-ad74-53507b841761",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "T",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "5ddc7b1a-2313-4af2-ae6b-74e6ecafb854",
+          "id": "bytebard.goblinscrapper.cycleMountFace",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "T - cycle beam mounting face",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "2519c6f2-1f24-448b-aebf-492266ce3356",
+      "displayName": "Tab - next own connector",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "e410c6bd-5722-4d7e-9e40-e0c2cd2aa714",
+          "id": "bytebard.goblinscrapper.building",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "cb647750-06ae-4f0f-9181-2ce8bd39ec3a",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1529,7 +1605,7 @@
       ],
       "actions": [
         {
-          "instanceId": "f8f10340-0f4e-44a7-9723-b4852dc26611",
+          "instanceId": "a1df6dbe-550d-4442-b0c1-36323a2b759d",
           "id": "bytebard.goblinscrapper.nextConnector",
           "arguments": {},
           "conditionInputIds": [],
@@ -1553,13 +1629,13 @@
       "editorY": 0
     },
     {
-      "id": "6c81df70-5505-4853-b0f0-b1fb73c475a6",
+      "id": "deb21a8d-bb2f-4a96-a2ef-57b229ce65c3",
       "displayName": "Delete - selected block",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "843071f7-65e3-4b3d-8c93-755e287f1eb9",
+          "instanceId": "d9762e71-0c1a-4172-9773-a6eb80cac56a",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1571,7 +1647,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "8e89b22b-754b-4693-998e-9580c7799edd",
+          "instanceId": "ecbadf8b-6803-4931-9e94-e1db7dacd4a1",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1605,7 +1681,7 @@
       ],
       "actions": [
         {
-          "instanceId": "57354f0b-5c12-4b73-b9a6-83ecf1c3a60a",
+          "instanceId": "12eec407-3af6-404b-8fbc-2898c64591ba",
           "id": "bytebard.goblinscrapper.removeSelected",
           "arguments": {},
           "conditionInputIds": [],
@@ -1629,13 +1705,13 @@
       "editorY": 0
     },
     {
-      "id": "f26e20b9-9f94-4684-a89d-29b2de972f69",
+      "id": "80550266-51a8-40b4-9bbb-40dd0e845911",
       "displayName": "X - hovered block",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "7a8129ab-c3d3-44fd-bce9-b5ee057fe6aa",
+          "instanceId": "bf25124c-ffb2-4faa-963b-8afe7852263a",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1647,7 +1723,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "4fa4913b-a1e4-4f7a-8da2-ea49a120ec6b",
+          "instanceId": "a1d487c3-d236-437e-9384-35cf47c2eccd",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1681,7 +1757,7 @@
       ],
       "actions": [
         {
-          "instanceId": "87b2b2e9-b811-4965-9e22-06e2003a7fa0",
+          "instanceId": "089b15a0-bcd6-4203-aab6-9a8f23638a86",
           "id": "bytebard.goblinscrapper.removeHovered",
           "arguments": {},
           "conditionInputIds": [],
@@ -1705,13 +1781,13 @@
       "editorY": 0
     },
     {
-      "id": "e1b7d627-2356-4a47-8e25-862fe33c4f2e",
+      "id": "72415fd3-40df-4895-a8ee-ef5a1710c32e",
       "displayName": "C - copy hovered part",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "28e04d5c-d272-4df4-8da3-dc2fde11abd6",
+          "instanceId": "8cb153df-82b5-4faf-99c7-bfda60616863",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1723,7 +1799,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "8c369a91-96a1-4609-8766-7b44f3e6bd30",
+          "instanceId": "6a00cf4b-b71f-419b-be90-dda7cf43b2fa",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1757,7 +1833,7 @@
       ],
       "actions": [
         {
-          "instanceId": "b5e5a1ff-7f57-41f2-9047-4bd5a437e89e",
+          "instanceId": "285ae5f6-7d6f-42d2-b7e9-00b81bc307e0",
           "id": "bytebard.goblinscrapper.copyHovered",
           "arguments": {},
           "conditionInputIds": [],
@@ -1781,13 +1857,13 @@
       "editorY": 0
     },
     {
-      "id": "7153e437-e3f6-4db3-a3bb-5beeba83a84e",
+      "id": "3cccedf5-d6ca-4ef9-9d96-4222ddbeddd5",
       "displayName": "M - move hovered branch",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "7551b3f4-e4c0-4524-abf0-39508e6f9082",
+          "instanceId": "222a6c5f-812f-4539-a8f3-cd4361b7925f",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1799,7 +1875,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "fd767bb5-4114-4b32-bedc-3678caf5e2fe",
+          "instanceId": "a13dbe81-ef94-4617-aa3d-01841fa4e199",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1833,7 +1909,7 @@
       ],
       "actions": [
         {
-          "instanceId": "0d35339b-ed32-4dd3-aed7-b0d2dad2b9c3",
+          "instanceId": "6a190b55-26c4-4706-90b3-d944bb38b377",
           "id": "bytebard.goblinscrapper.moveHovered",
           "arguments": {},
           "conditionInputIds": [],
@@ -1857,13 +1933,13 @@
       "editorY": 0
     },
     {
-      "id": "7a021fa0-6041-4a6d-a1d8-fa6d671aea13",
+      "id": "3b81157c-b596-4baa-85c0-671e4b363f77",
       "displayName": "Escape - cancel operation",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "add783e3-9a96-4e33-9d2f-86e61a9abfcb",
+          "instanceId": "03f8ccc4-e54c-4edd-b10e-42ba35055e59",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1875,7 +1951,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "b13c38fe-efb9-4bea-85d8-602d23974adf",
+          "instanceId": "56e2130e-92f4-478c-bd35-cbf903460308",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1909,7 +1985,7 @@
       ],
       "actions": [
         {
-          "instanceId": "f30372c6-ebfa-445c-81dc-ee4eb7a7fab6",
+          "instanceId": "d6341bed-33e7-4e10-a001-af537d6df17a",
           "id": "bytebard.goblinscrapper.cancel",
           "arguments": {},
           "conditionInputIds": [],
@@ -1933,13 +2009,13 @@
       "editorY": 0
     },
     {
-      "id": "dcbf3ca4-cf6f-42c5-a865-1169277e4068",
+      "id": "f490fbb5-c33a-4ce5-abae-65f89a82037e",
       "displayName": "Ctrl\u002BZ - undo",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "9b4c7909-f41c-49fc-8aa7-b8247255020f",
+          "instanceId": "b632f3af-9762-437c-8c27-aec2a7965b81",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -1951,7 +2027,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "10b55860-2cef-4dfa-a66f-0649efe04d14",
+          "instanceId": "5ad242d8-9178-451d-89fe-ac35a018db67",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -1983,7 +2059,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "c732b666-6881-426f-b61c-87d74450b05e",
+          "instanceId": "b9cc177b-e9c4-47b8-86ed-18935dcb63dd",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -2017,7 +2093,7 @@
       ],
       "actions": [
         {
-          "instanceId": "b469ef68-545a-459e-bc48-70fc131fcc27",
+          "instanceId": "4a0e60fb-f31a-4d71-a78e-eae8c3ff9ee9",
           "id": "bytebard.goblinscrapper.undo",
           "arguments": {},
           "conditionInputIds": [],
@@ -2041,13 +2117,13 @@
       "editorY": 0
     },
     {
-      "id": "eae4ac89-0b2c-4a4f-9963-349c50feedda",
+      "id": "a01979f0-575e-4cf3-9cf8-616efdfc42c3",
       "displayName": "Ctrl\u002BY - redo",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "4cfee3b4-4a00-49c5-afd7-bde9e4ea1b3f",
+          "instanceId": "53764044-99a2-411c-926c-f337a0e79d3a",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -2059,7 +2135,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "0b3e0a1e-a4f0-4f63-9e54-da1922481c02",
+          "instanceId": "7343d4c4-3d12-4200-8ff4-022e1956ddd0",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -2091,7 +2167,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "d2661ae8-c73b-407d-851f-94cf0ef7ed73",
+          "instanceId": "291afd5d-91d6-4865-bfb8-9c6bb3094774",
           "id": "input.keyHeld",
           "arguments": {
             "key": {
@@ -2125,7 +2201,7 @@
       ],
       "actions": [
         {
-          "instanceId": "84877917-9b91-4547-9ac8-e5bc53ad992d",
+          "instanceId": "22abdc83-76aa-45c7-9dcb-f6cb9c76d4b9",
           "id": "bytebard.goblinscrapper.redo",
           "arguments": {},
           "conditionInputIds": [],
@@ -2149,13 +2225,13 @@
       "editorY": 0
     },
     {
-      "id": "67ae0347-50b7-444d-a42f-04443f57796f",
+      "id": "a86314b1-906d-4e8a-b534-6b03d92441a8",
       "displayName": "F5 - save authored machine",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "432955d5-81f8-4f85-914c-51f347f67c21",
+          "instanceId": "dbd78234-05da-46c1-a12a-abc5352ef9b7",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -2189,7 +2265,7 @@
       ],
       "actions": [
         {
-          "instanceId": "587c6ed7-39de-4c3c-91f6-f1a9f2034970",
+          "instanceId": "5b2baf71-dd02-4ece-975e-5925a38d88df",
           "id": "bytebard.goblinscrapper.save",
           "arguments": {},
           "conditionInputIds": [],
@@ -2213,13 +2289,13 @@
       "editorY": 0
     },
     {
-      "id": "844cf79f-f2b4-4ee6-9f61-b3463e021917",
+      "id": "f3c1f524-ac9d-4650-b5a6-ab8e9b97b009",
       "displayName": "F9 - load saved machine",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "cbb35fa6-37fa-4008-b987-cd935ac9bd6d",
+          "instanceId": "18acef32-a4c9-4ac3-af3f-77bc286918b3",
           "id": "bytebard.goblinscrapper.building",
           "arguments": {},
           "conditionInputIds": [],
@@ -2231,7 +2307,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "70af8f0d-537a-4ca7-9cef-f5c9d9ed1641",
+          "instanceId": "1ce9ce6c-cfee-437b-ac80-05c55a65afdb",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -2265,7 +2341,7 @@
       ],
       "actions": [
         {
-          "instanceId": "1874ac42-cc3a-49ed-b48b-03b038aca3f0",
+          "instanceId": "f823ee95-d9be-4981-86b4-6f679addb6da",
           "id": "bytebard.goblinscrapper.load",
           "arguments": {},
           "conditionInputIds": [],
@@ -2289,13 +2365,13 @@
       "editorY": 0
     },
     {
-      "id": "c2a31a5a-456e-419d-b280-e6b23a3c70c5",
+      "id": "4f4967ee-f243-4edb-839a-b9c769c7c6fe",
       "displayName": "R - reset physical position",
       "editorOutlineCollapsed": false,
       "enabled": true,
       "conditions": [
         {
-          "instanceId": "8dc98148-c5f1-483f-a07d-2c6c6a028db1",
+          "instanceId": "5e9235d1-2ef7-45d1-b33c-98c9bce3f168",
           "id": "bytebard.goblinscrapper.driving",
           "arguments": {},
           "conditionInputIds": [],
@@ -2307,7 +2383,7 @@
           "editorY": 0
         },
         {
-          "instanceId": "29fc163c-45a0-448e-b979-212845a53be9",
+          "instanceId": "69807c10-8fc0-47d2-805c-7023505a0e23",
           "id": "input.keyPressed",
           "arguments": {
             "key": {
@@ -2341,7 +2417,7 @@
       ],
       "actions": [
         {
-          "instanceId": "c8b9e5e0-36df-480c-9cd4-00d033a17965",
+          "instanceId": "94539f12-a855-48df-8662-a13f5a4ac115",
           "id": "bytebard.goblinscrapper.resetPosition",
           "arguments": {},
           "conditionInputIds": [],

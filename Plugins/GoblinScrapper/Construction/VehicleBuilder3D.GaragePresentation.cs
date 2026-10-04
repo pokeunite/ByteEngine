@@ -22,13 +22,21 @@ public sealed partial class VehicleBuilder3D
 
     private static readonly string[] LegacyCategoryNames=["STRUCTURE","DRIVE","WEAPONS","MECHANISMS"];
 
-    private string[] BuilderPartFiles => _catalog?.Standard==true?_catalog.Parts.Keys.Where(f=>f!=VehicleAssembly.MasterBlock).ToArray():VehicleBuildLayout.PartFiles;
+    private VehiclePartCatalog? _paletteCatalog;
+    private string[] _catalogFiles=[],_catalogLabels=[];
+    private int[][] _catalogCategories=[];
+    private static readonly string[] StandardCategoryNames=["STRUCTURE","DRIVE","WEAPONS","MECHANISMS","FLIGHT"];
+    private void CachePaletteCatalog(){
+        if(_catalog?.Standard!=true||ReferenceEquals(_catalog,_paletteCatalog))return;
+        _paletteCatalog=_catalog;_catalogFiles=_catalog.Parts.Keys.Where(f=>f!=VehicleAssembly.MasterBlock).ToArray();
+        _catalogLabels=_catalogFiles.Select(f=>_catalog[f].Label).ToArray();
+        _catalogCategories=StandardCategoryNames.Select(g=>_catalogFiles.Select((f,i)=>(f,i)).Where(p=>(_catalog[p.f].Group=="Mechanics"?"MECHANISMS":_catalog[p.f].Group).Equals(g,StringComparison.OrdinalIgnoreCase)).Select(p=>p.i).ToArray()).ToArray();
+    }
+    private string[] BuilderPartFiles {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogFiles:VehicleBuildLayout.PartFiles;}}
+    private string[] BuilderPartNames {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogLabels:VehicleBuildLayout.PartNames;}}
+    private string[] CategoryNames=>_catalog?.Standard==true?StandardCategoryNames:LegacyCategoryNames;
+    private int[][] Categories {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogCategories:LegacyCategories;}}
 
-    private string[] BuilderPartNames => _catalog?.Standard==true?BuilderPartFiles.Select(f=>_catalog[f].Label).ToArray():VehicleBuildLayout.PartNames;
-
-    private string[] CategoryNames => _catalog?.Standard==true?["STRUCTURE","DRIVE","WEAPONS","MECHANISMS","FLIGHT"]:LegacyCategoryNames;
-
-    private int[][] Categories => _catalog?.Standard==true?CategoryNames.Select(g=>BuilderPartFiles.Select((f,i)=>(f,i)).Where(p=>(_catalog[p.f].Group=="Mechanics"?"MECHANISMS":_catalog[p.f].Group).Equals(g,StringComparison.OrdinalIgnoreCase)).Select(p=>p.i).ToArray()).ToArray():LegacyCategories;
 
     private readonly List<UiWidget> _cardImages=new();
 
@@ -180,7 +188,7 @@ public sealed partial class VehicleBuilder3D
 
         Vector2 point=normalized*Input.GameViewSize/Math.Max(.1f,scale)-new Vector2(insets.X,insets.Y);
 
-        if(FreeBuilding)return point.Y<48 || point.Y>540 || (point.X<198 && point.Y<278);
+        if(FreeBuilding)return point.Y<48 || point.Y>620 || (_tooltipPanel?.Active==true&&point.X>936&&point.Y>482);
 
         return point.Y<70 || point.Y>520 || (point.X<266 && point.Y<350) || (point.X>996 && point.Y<320);
 

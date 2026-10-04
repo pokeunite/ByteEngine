@@ -30,7 +30,7 @@ public sealed partial class VehicleBuilder3D
 
         foreach(var light in GameObject.Scene.GameObjects.SelectMany(o=>o.Components).OfType<DirectionalLight>())
 
-        {light.Color=new(1,.94f,.82f);light.Transform.WorldRotation=AlignNormals(Vector3.UnitZ,Vector3.Normalize(new Vector3(-.4f,-1,-.6f)));light.Intensity=1.8f;light.AmbientIntensity=.45f;light.CastShadows=true;light.ShadowSoftness=2;light.ShadowResolution=2048;light.ShadowBias=.006f;light.ShadowDistance=35;}
+        {light.Color=new(1,.94f,.82f);light.Transform.WorldRotation=AlignNormals(Vector3.UnitZ,Vector3.Normalize(new Vector3(-.4f,-1,-.6f)));light.Intensity=1.8f;light.AmbientIntensity=.45f;light.CastShadows=true;light.ShadowSoftness=2;light.ShadowResolution=1024;light.ShadowBias=.006f;light.ShadowDistance=35;}
 
         if(FreeBuilding)
 
@@ -38,7 +38,14 @@ public sealed partial class VehicleBuilder3D
 
             var floorMaterial=new Material {BaseColor=new(.75f,.70f,.59f,1),MainTexture=Assets!.LoadTexture(new AssetReference("Assets/WorkshopMaterials/concrete-diffuse.jpg")),NormalTexture=Assets.LoadTexture(new AssetReference("Assets/WorkshopMaterials/concrete-normal.jpg")),PackedPbrTexture=Assets.LoadTexture(new AssetReference("Assets/WorkshopMaterials/concrete-arm.jpg")),PbrMapMode=MaterialPbrMapMode.Packed,DecodeColorTexturesSrgb=true,UvTiling=new(12),NormalStrength=.55f};
 
-            foreach(var obj in _owned.Where(o=>o.Name=="Test yard floor"))obj.GetComponent<MeshRenderer>()!.Material=floorMaterial;
+            // The raised pad already covers the middle of the yard. Do not shade that same
+            // concrete twice: retain matching UVs, with a hole under the existing pad.
+            var vertices=new List<float>();var indices=new List<uint>();float edge=3.5f/64;
+            void Strip(float x0,float z0,float x1,float z1){uint first=(uint)(vertices.Count/8);foreach(var p in new[]{new Vector2(x0,z0),new Vector2(x0,z1),new Vector2(x1,z1),new Vector2(x1,z0)})vertices.AddRange([p.X,.5f,p.Y,0,1,0,p.X+.5f,p.Y+.5f]);indices.AddRange([first,first+1,first+2,first,first+2,first+3]);}
+            Strip(-.5f,-.5f,-edge,.5f);Strip(edge,-.5f,.5f,.5f);Strip(-edge,-.5f,edge,-edge);Strip(-edge,edge,edge,.5f);
+            _workshopFloorMesh=new Mesh(vertices.ToArray(),indices.ToArray());
+            foreach(var obj in _owned.Where(o=>o.Name=="Test yard floor")){var renderer=obj.GetComponent<MeshRenderer>()!;renderer.Material=floorMaterial;renderer.UsePrimitive=false;renderer.Mesh=_workshopFloorMesh;}
+
 
             var padMaterial=new Material {BaseColor=new(.8f,.76f,.67f,1),MainTexture=floorMaterial.MainTexture,NormalTexture=floorMaterial.NormalTexture,PackedPbrTexture=floorMaterial.PackedPbrTexture,PbrMapMode=MaterialPbrMapMode.Packed,DecodeColorTexturesSrgb=true,UvTiling=new(1.5f),NormalStrength=.45f};
 
@@ -108,6 +115,7 @@ public sealed partial class VehicleBuilder3D
 
     }
 
+    private Mesh? _workshopFloorMesh;
     private void UpdateAxleBridges()
 
     {

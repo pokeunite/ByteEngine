@@ -27,7 +27,31 @@ public sealed partial class VehicleBuilder3D
  public void ToggleSimulation(){ToggleDrive();ResetEventInput();}
  public bool SelectBuildPart(string file){int index=Array.IndexOf(BuilderPartFiles,Path.GetFileNameWithoutExtension(file));if(!Building||index<0)return false;SelectPart(index);return true;}
  public void PlacePreview(){if(Building)PlaceFreePreview();}
- public void RotatePreview(float degrees){if(Building&&float.IsFinite(degrees)){_twist=(int)((_twist+degrees)%360+360)%360;UpdateFreePreview();}}
+ public void RotatePreview(float degrees){if(Building&&float.IsFinite(degrees)){
+  if(_candidateVisible&&_catalog!=null&&_catalog[SelectedPart].Kind=="beam") {
+   var sockets=_catalog[SelectedPart].Sockets;var normal=-Vector3.Transform(sockets[_ownSocket].Normal,_candidateRotation);
+   if(Math.Abs(degrees%90)<.001f){var next=RotateBeamMount(sockets,_ownSocket,_candidateRotation,normal,degrees);_ownSocket=next.Socket;_twist=next.Twist;}else _twist=(int)((_twist+degrees)%360+360)%360;
+  } else _twist=(int)((_twist+degrees)%360+360)%360;
+  UpdateFreePreview();
+ }}
+ internal static (int Socket,int Twist) RotateBeamMount(FreePartSocket[] sockets,int current,Quaternion rotation,Vector3 targetNormal,float degrees) {
+  var shaft=Vector3.Transform(Vector3.UnitZ,rotation);var axis=Math.Abs(Vector3.Dot(shaft,Vector3.UnitY))>.9f?Vector3.UnitX:Vector3.UnitY;
+  var desired=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(axis,degrees*MathF.PI/180)*rotation);
+  var wanted=Vector3.Transform(-targetNormal,Quaternion.Inverse(desired));
+  int selected=current;float best=float.MaxValue;
+  for(int i=0;i<sockets.Length;i++)if(Vector3.Dot(sockets[i].Normal,wanted)>.999f) {float score=sockets[i].Position.LengthSquared();if(score<best){best=score;selected=i;}}
+  if(best==float.MaxValue)return(current,0);
+  var aligned=AlignNormals(sockets[selected].Normal,-targetNormal);var basis=Math.Abs(sockets[selected].Normal.X)>.9f?Vector3.UnitY:Vector3.UnitX;
+  var from=Vector3.Transform(basis,aligned);var to=Vector3.Transform(basis,desired);
+  float angle=MathF.Atan2(Vector3.Dot(targetNormal,Vector3.Cross(from,to)),Vector3.Dot(from,to))*180/MathF.PI;
+  return(selected,((int)MathF.Round(angle)%360+360)%360);
+ }
+ public void CyclePreviewMountFace(){if(!Building||_catalog==null)return;var sockets=_catalog[SelectedPart].Sockets;
+  if(_catalog[SelectedPart].Kind!="beam"){NextPreviewConnector();return;}
+  var faces=sockets.Select((s,i)=>(s,i)).Where(x=>Math.Abs(x.s.Normal.Z)>.9f||Math.Abs(x.s.Position.Z)<.001f).Select(x=>x.i).ToArray();
+  if(faces.Length>0){int index=Array.IndexOf(faces,_ownSocket);_ownSocket=faces[(index+1)%faces.Length];_twist=0;UpdateFreePreview();}
+ }
+ public void OrbitBuildCamera(float yaw,float elevation){if(Building&&float.IsFinite(yaw)&&float.IsFinite(elevation)){_orbit+=yaw;_elevation=Math.Clamp(_elevation+elevation,-1.35f,1.35f);}}
  public void NextPreviewConnector(){if(Building&&_catalog!=null){_ownSocket=(_ownSocket+1)%Math.Max(1,_catalog[SelectedPart].Sockets.Length);UpdateFreePreview();}}
  public void DeleteSelectedBlock(){if(Building)RemoveAssemblyPart(_selectedBlock);}
  public void DeleteHoveredBlock(){if(Building)RemoveAssemblyPart(_hoveredBlock);}
