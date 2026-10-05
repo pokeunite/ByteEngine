@@ -318,6 +318,7 @@ public sealed class ComponentSerializer
         );
 
         Register(new FoliagePatchCodec());
+        Register(new VfxPlayerCodec());
         Register(new UiCanvasCodec());
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());

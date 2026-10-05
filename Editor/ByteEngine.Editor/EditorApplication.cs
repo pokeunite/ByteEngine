@@ -716,6 +716,8 @@ public sealed class EditorApplication
 
         if (ImGui.MenuItem("Foliage Patch", string.Empty, false, canEdit))
             CreateObjectWithComponent("Foliage Patch", () => new FoliagePatch());
+        if (ImGui.MenuItem("VFX Effect", string.Empty, false, canEdit))
+            CreateObjectWithComponent("VFX Effect", () => new ByteEngine.Core.Vfx.VfxPlayer());
 
         if (ImGui.MenuItem(
                 "Sky Environment",
@@ -2119,6 +2121,18 @@ public sealed class EditorApplication
     private void CreateModelFromAsset(AssetRecord asset, Vector3 worldPosition)
     {
         if (_state == null || _projectContext == null) return;
+        if (asset.Type == AssetType.VfxEffect)
+        {
+            void Create()
+            {
+                var obj = _state.EditorScene.CreateGameObject(Path.GetFileNameWithoutExtension(asset.ProjectPath));
+                obj.Transform.WorldPosition = worldPosition;
+                obj.AddComponent(new ByteEngine.Core.Vfx.VfxPlayer { Effect = new(asset.Guid, asset.ProjectPath) });
+                _state.SelectedObject = obj; _state.MarkDirty();
+            }
+            if (_state.Undo != null) _state.Undo.Execute(_state, "Place VFX", Create); else Create();
+            return;
+        }
         try
         {
             if (_state.Undo != null)
@@ -2142,6 +2156,12 @@ public sealed class EditorApplication
         if (_state == null || _projectContext == null ||
             !_projectContext.AssetDatabase.TryGetAsset(assetId, out AssetRecord? asset) || asset == null)
         {
+            return;
+        }
+        if (asset.Type == AssetType.VfxEffect)
+        {
+            CreateModelFromAsset(asset, parent?.Transform.WorldPosition ?? Vector3.Zero);
+            if (parent != null && _state.SelectedObject is {} vfxObject) vfxObject.SetParent(parent);
             return;
         }
         if (asset.Type == AssetType.Material)

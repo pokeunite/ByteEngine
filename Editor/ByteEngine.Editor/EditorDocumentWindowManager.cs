@@ -166,6 +166,21 @@ internal sealed class EditorDocumentWindowManager : IDisposable
         }
     }
 
+    public void OpenVfx(AssetRecord asset, EditorProjectContext project, EditorLog log)
+    {
+        EditorDocumentId id = new(EditorDocumentType.Vfx, asset.Guid.ToString("N"));
+        if (TryFocus(id)) return;
+        var panel = new VfxWorkspacePanel(_documents);
+        try
+        {
+            panel.Open(asset, project, log);
+            Add(id, $"{Path.GetFileNameWithoutExtension(asset.ProjectPath)} - VFX - ByteEngine",
+                "###VfxWorkspace", null,
+                (renderer, renderer3D, width, height) => panel.Draw(log, renderer, renderer3D, width, height), panel.Dispose);
+        }
+        catch { panel.Dispose(); throw; }
+    }
+
     public void OpenBlueprint(
         AssetRecord asset,
         EditorProjectContext project,

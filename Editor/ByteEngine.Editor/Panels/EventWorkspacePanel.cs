@@ -8783,6 +8783,23 @@ internal sealed class EventWorkspacePanel
         EditorState? state)
     {
         var pluginArguments = _registry.GetArguments(instruction.Id);
+        if (instruction.Id.StartsWith("vfx.", StringComparison.Ordinal))
+        {
+            if (instruction.Id == "vfx.spawn")
+            {
+                DrawMaterialAssetArgument(instruction, "effect", "VFX Effect", AssetType.VfxEffect);
+                DrawValueArgument(instruction, "position", "World Position", VariableType.Vector3,
+                    EventValue.Vector3(Vector3.Zero), state, false);
+                DrawValueArgument(instruction, "size", "Size Multiplier", VariableType.Number,
+                    EventValue.Number(1), state, false);
+                return;
+            }
+            DrawObjectTargetArgument(instruction, "target", "VFX Object", state);
+            foreach (var argument in pluginArguments)
+                DrawValueArgument(instruction, argument.Name, argument.DisplayName,
+                    argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            return;
+        }
         if (pluginArguments.Count > 0)
         {
             foreach (var argument in pluginArguments)

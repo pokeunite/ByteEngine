@@ -310,6 +310,7 @@ internal sealed class AssetsPanel : IDisposable
             }
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
             ImGui.Separator();
+            DrawVfxCreationMenu(log);
             DrawModelImportMenu(log);
             if (ImGui.MenuItem("Import Font Files...")) ImportFontFiles(log);
             if (ImGui.MenuItem("Add Free CC0 Fonts")) InstallBundledFonts(log);
@@ -1940,6 +1941,12 @@ state.SelectedObject =
         AssetRecord asset,
         EditorLog log)
     {
+        if (asset.Type == AssetType.VfxEffect)
+        {
+            try { _documentWindows.OpenVfx(asset, _project, log); }
+            catch (Exception e) { log.Error($"Could not open VFX: {e.Message}"); }
+            return;
+        }
         if (asset.Type == AssetType.Material)
         {
             try { _documentWindows.OpenMaterial(asset, _project, log); }
@@ -2046,6 +2053,7 @@ state.SelectedObject =
         if (ImGui.BeginMenu("Create"))
         {
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
+            DrawVfxCreationMenu(log);
             ImGui.EndMenu();
         }
         if (asset?.Type == AssetType.Material)
@@ -2502,6 +2510,7 @@ state.SelectedObject =
 
             if (ImGui.MenuItem("Material"))
                 CreateMaterial(log, null, null);
+            DrawVfxCreationMenu(log);
 
             ImGui.EndMenu();
         }
@@ -3084,6 +3093,30 @@ state.SelectedObject =
         {
             log.Error($"Could not create Material: {exception.Message}");
         }
+    }
+
+    private void DrawVfxCreationMenu(EditorLog log)
+    {
+        if (!ImGui.BeginMenu("VFX Effect")) return;
+        foreach (var preset in Enum.GetValues<ByteEngine.Core.Vfx.VfxPreset>())
+            if (ImGui.MenuItem(preset.ToString())) CreateVfx(log, preset);
+        ImGui.EndMenu();
+    }
+    private void CreateVfx(EditorLog log, ByteEngine.Core.Vfx.VfxPreset preset)
+    {
+        try
+        {
+            string directory = GetAssetCreationDirectory();
+            string path = GetUniqueAssetPath(directory, "VFX_" + preset, ".bvfx");
+            var effect = ByteEngine.Core.Vfx.VfxPresets.Create(preset);
+            effect.Name = Path.GetFileNameWithoutExtension(path);
+            ByteEngine.Core.Vfx.VfxEffectSerializer.Save(path, effect);
+            SelectDirectory(directory); RefreshAfterFileOperation();
+            if (_project.AssetDatabase.TryGetAsset(ToProjectPath(path), out AssetRecord? created) && created != null)
+                _documentWindows.OpenVfx(created, _project, log);
+            log.Info($"Created VFX '{Path.GetFileName(path)}'.");
+        }
+        catch (Exception e) { log.Error($"Could not create VFX: {e.Message}"); }
     }
 
     private void ExtractModelMaterials(AssetRecord model,

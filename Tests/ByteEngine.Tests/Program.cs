@@ -20,6 +20,8 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Contains("--vfx")) { VfxTests.Run(root); return; }
+    if(args.Contains("--vfx-render")) { VfxRenderTests.Run(root); return; }
     if(args.Length>=2&&args[0]=="--gears") { GearMeshTests.Run(VehiclePartCatalog.Load(Path.Combine(args[1],"Assets","GarageUI","parts-catalog.json"))); return; }
     if(args.Length>=2&&args[0]=="--attachment-audit") { AttachmentAuditTests.Run(args[1],args.Contains("--strict")); return; }
     if(args.Length>=2&&args[0]=="--beam-rotation") { BeamRotationTests.Run(args[1]); return; }

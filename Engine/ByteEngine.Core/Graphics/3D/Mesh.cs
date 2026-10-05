@@ -10,7 +10,7 @@ public sealed class Mesh : IDisposable
 {
     /// <summary>CPU geometry for non-OpenGL backends. XYZ/normal/UV, eight floats per vertex.</summary>
     public ReadOnlyMemory<float> VertexData => _vertices;
-    public ReadOnlyMemory<uint> IndexData => _indices;
+    public ReadOnlyMemory<uint> IndexData => _indices.AsMemory(0, IndexCount);
     public int GeometryVersion { get; private set; }
 
     private float[] _vertices;
@@ -36,7 +36,18 @@ public sealed class Mesh : IDisposable
     private int _bufferGeneration;
 
     public int IndexCount =>
-        _indices.Length;
+        _drawIndexCount ?? _indices.Length;
+
+    private int? _drawIndexCount;
+    /// <summary>Limit a bounded dynamic batch to its live triangles without reallocating its buffers.</summary>
+    public void SetDrawIndexCount(int count)
+    {
+        if (count < 0 || count > _indices.Length || count % 3 != 0)
+            throw new ArgumentOutOfRangeException(nameof(count));
+        if (_drawIndexCount == count) return;
+        _drawIndexCount = count;
+        GeometryVersion++;
+    }
 
     public int VertexCount =>
         _vertices.Length /
@@ -167,6 +178,8 @@ public sealed class Mesh : IDisposable
          * each context replaces its own VAO the next time it binds this mesh.
          */
         ReleaseSharedBuffers();
+
+        _drawIndexCount = null;
 
         _vertices =
             vertices;

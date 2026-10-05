@@ -16,7 +16,8 @@ internal enum EditorIconKind
     Model,
     Animation,
     Audio,
-    Texture
+    Texture,
+    Vfx
 }
 
 /// <summary>
@@ -37,6 +38,7 @@ internal static class EditorIcons
             AssetType.Blueprint => EditorIconKind.Blueprint,
             AssetType.AnimationEvents => EditorIconKind.Animation,
             AssetType.AnimationProfile => EditorIconKind.Animation,
+            AssetType.VfxEffect => EditorIconKind.Vfx,
             _ => EditorIconKind.File
         };
 
@@ -52,6 +54,7 @@ internal static class EditorIcons
             AssetType.Blueprint => "Blueprint",
             AssetType.AnimationEvents => "Animation",
             AssetType.AnimationProfile => "Animation Profile",
+            AssetType.VfxEffect => "VFX Effect",
             _ => "File"
         };
 
@@ -67,6 +70,7 @@ internal static class EditorIcons
             EditorIconKind.Animation => new Vector4(0.88f, 0.42f, 0.63f, 1.0f),
             EditorIconKind.Audio => new Vector4(0.35f, 0.78f, 0.78f, 1.0f),
             EditorIconKind.Texture => new Vector4(0.53f, 0.73f, 0.95f, 1.0f),
+            EditorIconKind.Vfx => new Vector4(0.4f, 0.9f, 0.75f, 1.0f),
             _ => new Vector4(0.58f, 0.62f, 0.69f, 1.0f)
         };
 
@@ -108,6 +112,15 @@ internal static class EditorIcons
 
         switch (kind)
         {
+            case EditorIconKind.Vfx:
+                drawList.AddCircleFilled(center, size * .12f, bright);
+                for (int ray = 0; ray < 8; ray++)
+                {
+                    float angle = ray * MathF.Tau / 8;
+                    Vector2 direction = new(MathF.Cos(angle), MathF.Sin(angle));
+                    drawList.AddLine(center + direction * size * .2f, center + direction * size * .38f, fill, Math.Max(1, size * .055f));
+                }
+                break;
             case EditorIconKind.Folder:
                 drawList.AddRectFilled(
                     minimum + new Vector2(size * 0.08f, size * 0.18f),

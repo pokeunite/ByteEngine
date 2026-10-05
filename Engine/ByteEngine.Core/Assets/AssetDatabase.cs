@@ -369,6 +369,7 @@ public sealed class AssetDatabase : IDisposable
         ".byteanimevents" => AssetType.AnimationEvents,
         ".byteanim" => AssetType.AnimationProfile,
         ".bmat" => AssetType.Material,
+        ".bvfx" => AssetType.VfxEffect,
         ".ttf" => AssetType.Font,
         ".otf" => AssetType.Font,
         ".fnt" => AssetType.Font,

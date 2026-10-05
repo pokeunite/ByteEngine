@@ -300,7 +300,7 @@ internal sealed class SceneViewPanel : IDisposable
                         )
                     );
                 }
-                else if (asset.Type ==
+                else if (asset.Type == AssetType.VfxEffect || asset.Type ==
                          AssetType.Model3D)
                 {
                     // A model drop is an explicit request for 3D authoring.

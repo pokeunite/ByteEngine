@@ -136,6 +136,20 @@ internal static class ComponentPropertyRenderer
             component,
             value);
 
+        if (component is ByteEngine.Core.Vfx.VfxPlayer vfx &&
+            descriptor.Property.Name is nameof(ByteEngine.Core.Vfx.VfxPlayer.Preset) or
+                nameof(ByteEngine.Core.Vfx.VfxPlayer.Effect))
+        {
+            // Explicitly choosing a preset switches away from an overriding asset.
+            // Do this in the editor setter, not the runtime property setter: scene
+            // deserialization must preserve assets regardless of property order.
+            if (descriptor.Property.Name == nameof(ByteEngine.Core.Vfx.VfxPlayer.Preset))
+                vfx.Effect = AssetReference.Empty;
+            vfx.Play();
+            if (context != PropertyEditorContext.Runtime)
+                vfx.Advance(.12f);
+        }
+
         return true;
     }
 
@@ -700,6 +714,18 @@ internal static class ComponentPropertyRenderer
             if (ImGui.Button(foliage.UsePaintedLayout ? "Refresh Painted Plants" : "Rebuild Scatter / Snap To Ground")) foliage.Rebuild();
         }
 
+        if (component is ByteEngine.Core.Vfx.VfxPlayer vfx)
+        {
+            if (context != PropertyEditorContext.Runtime && vfx.IsPlaying)
+                vfx.Advance((float)ByteEngine.Core.Time.DeltaTime);
+            ImGui.TextWrapped("Select a preset, or choose a .bvfx asset for layered effects. Event Sheet > VFX controls playback.");
+            if (ImGui.Button("Preview / Restart VFX")) vfx.Play();
+            ImGui.SameLine();
+            if (ImGui.Button("Stop / Clear")) vfx.Stop(true);
+            ImGui.TextWrapped(vfx.Status);
+            ImGui.TextUnformatted($"Particles: {vfx.ActiveParticles} / {vfx.ParticleCapacity}");
+        }
+
         if (component is MeshRenderer mesh && project != null)
         {
             AssetReference selected = mesh.MaterialAssetReference;
@@ -1056,6 +1082,8 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is ByteEngine.Core.Vfx.VfxPlayer && propertyName == nameof(ByteEngine.Core.Vfx.VfxPlayer.Effect))
+            return AssetType.VfxEffect;
         if (component is WaveSpawner3D && propertyName == nameof(WaveSpawner3D.EnemyBlueprint))
             return AssetType.Blueprint;
         if (component is ByteEngine.Core.Blueprints.BlueprintInstance) return AssetType.Blueprint;

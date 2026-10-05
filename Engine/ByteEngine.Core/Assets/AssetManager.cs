@@ -13,6 +13,24 @@ public sealed class AssetManager : IDisposable
     private readonly Dictionary<Guid, ModelAsset> _models = new();
     private readonly Dictionary<Guid, Material> _runtimeMaterials = new();
     private readonly Dictionary<Guid, MaterialAsset> _materialAssets = new();
+    private readonly Dictionary<Guid, ByteEngine.Core.Vfx.VfxEffect> _vfxEffects = new();
+    private readonly Dictionary<Guid, AssetRevision> _vfxRevisions = new();
+    public int VfxRevision { get; private set; }
+
+    public ByteEngine.Core.Vfx.VfxEffect LoadVfxEffect(AssetReference reference)
+    {
+        var asset = _database.Resolve(reference);
+        if (asset?.Type != AssetType.VfxEffect)
+            throw new FileNotFoundException($"VFX asset '{reference}' could not be resolved.");
+        if (!_vfxEffects.TryGetValue(asset.Guid, out var effect))
+        {
+            _vfxEffects[asset.Guid] = effect = ByteEngine.Core.Vfx.VfxEffectSerializer.Load(asset.FullPath);
+            _vfxRevisions[asset.Guid] = CaptureRevision(asset);
+        }
+        return effect;
+    }
+
+    public void ReloadVfxEffects() { _vfxEffects.Clear(); _vfxRevisions.Clear(); VfxRevision++; }
     private readonly Dictionary<Guid, AssetRevision> _materialRevisions = new();
     private readonly Dictionary<Guid, AnimationProfile> _animationProfiles = new();
     private readonly Dictionary<Guid, AssetRevision> _textureRevisions = new();
@@ -243,6 +261,13 @@ public sealed class AssetManager : IDisposable
 
     private void ReloadChangedResources()
     {
+        foreach (var guid in _vfxEffects.Keys.ToArray())
+        {
+            if (_database.TryGetAsset(guid, out var effectRecord) && effectRecord?.Type == AssetType.VfxEffect &&
+                _vfxRevisions.TryGetValue(guid, out var previousVfx) && previousVfx == CaptureRevision(effectRecord))
+                continue;
+            _vfxEffects.Remove(guid); _vfxRevisions.Remove(guid); VfxRevision++;
+        }
         /*
          * AssetDatabase.Scan() reports that the database changed even when the
          * contents of already-loaded assets did not. Reimporting every cached

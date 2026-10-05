@@ -114,6 +114,7 @@ public sealed partial class VisualLogicRegistry
         RegisterWaves(registry);
         RegisterPhysicsAndCombat(registry);
         RegisterMaterials(registry);
+        RegisterVfx(registry);
         RegisterUi(registry);
         RegisterAudio(registry);
         RegisterAnimation(registry);
