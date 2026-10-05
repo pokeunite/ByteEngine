@@ -8785,11 +8785,21 @@ internal sealed class EventWorkspacePanel
         var pluginArguments = _registry.GetArguments(instruction.Id);
         if (instruction.Id.StartsWith("vfx.", StringComparison.Ordinal))
         {
-            if (instruction.Id == "vfx.spawn")
+            if (instruction.Id is "vfx.spawn" or "vfx.impact" or "vfx.spawnOnObject" or "vfx.rayImpact")
             {
                 DrawMaterialAssetArgument(instruction, "effect", "VFX Effect", AssetType.VfxEffect);
-                DrawValueArgument(instruction, "position", "World Position", VariableType.Vector3,
-                    EventValue.Vector3(Vector3.Zero), state, false);
+                if(instruction.Id=="vfx.spawnOnObject")
+                {
+                    DrawObjectTargetArgument(instruction,"object","Source Object",state);
+                    DrawValueArgument(instruction,"socket","Socket Name (optional)",VariableType.String,EventValue.String(""),state,false);
+                    DrawValueArgument(instruction,"follow","Follow Object / Socket",VariableType.Boolean,EventValue.Boolean(false),state,false);
+                }
+                else if(instruction.Id!="vfx.rayImpact")
+                    DrawValueArgument(instruction, "position", "World Position", VariableType.Vector3,
+                        EventValue.Vector3(Vector3.Zero), state, false);
+                if(instruction.Id=="vfx.impact")
+                    DrawValueArgument(instruction,"normal","Hit Normal (world)",VariableType.Vector3,EventValue.Vector3(Vector3.UnitY),state,false);
+                if(instruction.Id=="vfx.rayImpact") ImGui.TextWrapped("Use after Cast Ray in the same event execution. Spawns at its hit point, facing the hit normal. A miss does nothing.");
                 DrawValueArgument(instruction, "size", "Size Multiplier", VariableType.Number,
                     EventValue.Number(1), state, false);
                 return;

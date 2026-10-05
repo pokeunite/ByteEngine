@@ -35,7 +35,7 @@ internal static class VfxTests
                 for(int i=0;i<layer.Count;i++)
                     Check(float.IsFinite(layer.Particles[i].Position.LengthSquared()),"finite particle position "+preset);
         }
-        BudgetAndTiming(); AtlasAndMesh(); Performance();
+        BudgetAndTiming(); CurvesAndMotion(); AtlasAndMesh(); Performance();
         using var db=new AssetDatabase(root,new[]{"Assets"});
         using var assets=new AssetManager(db);
         var record=db.Assets.First(a=>a.Type==AssetType.VfxEffect);
@@ -46,12 +46,14 @@ internal static class VfxTests
         assets.ReloadVfxEffects();
         Check(!ReferenceEquals(first,assets.LoadVfxEffect(reference)),"explicit hot reload invalidates cache");
         var codec=new ComponentSerializer(root,db,assets);
-        var component=new VfxPlayer { Effect=reference, Preset=VfxPreset.Fire, Size=2, Intensity=.5f, Seed=123, PlayOnStart=false, DestroyWhenFinished=true };
+        var component=new VfxPlayer { Effect=reference, Preset=VfxPreset.Fire, Size=2, Intensity=.5f, Seed=123, PlayOnStart=false, DestroyWhenFinished=true,DistanceQuality=false,QualityDistance=12 };
         var data=codec.Serialize(component)!;
         var restored=(VfxPlayer)codec.Deserialize(data)!;
         Check(restored.Effect==reference && restored.Size==2 && restored.Seed==123 && !restored.PlayOnStart && restored.DestroyWhenFinished,"component round trip");
+        Check(!restored.DistanceQuality && restored.QualityDistance==12,"distance quality round trip");
         Events();
         SpawnAndCleanup(assets,reference);
+        PoolBudgets(reference);
         InspectorPresetChanges(reference);
         Console.WriteLine($"VFX: {_checks} checks passed.");
     }
@@ -97,6 +99,9 @@ internal static class VfxTests
         int start=(16*width+16)*4, end=((height-16)*width+16)*4;
         Check(pixels[start]>240 && pixels[start+3]>200 && pixels[end+2]>240 && pixels[end+3]==0,"baked lifetime color and fade");
         Check(pixels[3]==0,"soft sprite edge transparent");
+        layer.OpacityOverLife=VfxCurve.Linear(0,0);
+        pixels=VfxAtlas.GeneratePixels(layer,null,out _,out _);
+        Check(pixels[start+3]==0,"opacity curve baked into atlas");
         using var mesh=new Mesh(new float[8*8],new uint[]{0,1,2,0,2,3,4,5,6,4,6,7},true);
         mesh.SetDrawIndexCount(6);
         Check(mesh.IndexCount==6 && mesh.IndexData.Length==6,"active triangles honored on desktop and portable path");
@@ -144,12 +149,18 @@ internal static class VfxTests
         registry.TryGetAction("vfx.clear",out var clear); clear!.Execute(new(),context);
         Check(!player.IsPlaying && finished!.Evaluate(new(),context),"clear stops and finished condition");
         Check(registry.TryGetAction("vfx.spawn",out _),"spawn-at-position action");
+        Check(registry.GetArguments("vfx.spawnOnObject").Count==5 && registry.GetArguments("vfx.impact").Count==4,"spawn event metadata exposes authoring inputs");
+        registry.TryGetAction("vfx.beamTarget",out var beam);
+        beam!.Execute(new VisualInstruction { Arguments=new() { ["position"]=EventValue.Vector3(new(3,4,5)) } },context);
+        Check(registry.TryGetAction("vfx.rayImpact",out var rayImpact),"named raycast impact action registered");
+        rayImpact!.Execute(new(),context); Check(scene.GameObjects.Count==1,"ray impact does nothing on a miss");
         scene.DestroyGameObject(owner);
     }
     private static void Performance()
     {
         var effect=VfxPresets.Create(VfxPreset.Fire); effect.ParticleBudget=4096;
         var layer=effect.Layers[0]; layer.MaxParticles=4096; layer.Rate=6000; layer.Lifetime=1;
+        layer.Turbulence=.4f; layer.Attraction=.1f; layer.SpeedOverLife=VfxCurve.Linear(1,.3f);
         var sim=new VfxSimulation(effect); sim.Play(Matrix4x4.Identity);
         for(int i=0;i<240;i++) sim.Advance(1f/60,Matrix4x4.Identity);
         var samples=new double[600];
@@ -183,8 +194,25 @@ internal static class VfxTests
             Check(scene.GameObjects.Count==65,"spawn has a 64-effect concurrency cap");
             Check(scene.GameObjects[1].Transform.WorldPosition==new Vector3(2,3,4),"spawn uses world position");
             for(int frame=0;frame<600;frame++)
-                foreach(var obj in scene.GameObjects.ToArray()) obj.GetComponent<VfxPlayer>()?.Advance(1f/60);
-            Check(scene.GameObjects.Count==1,"disposable effects clean up without leaking objects");
+                foreach(var obj in scene.GameObjects.ToArray()) if(obj.Active) obj.GetComponent<VfxPlayer>()?.Advance(1f/60);
+            Check(scene.GameObjects.Count<=17 && scene.GameObjects.All(o=>o==owner || !o.Active),"disposable effects drain into bounded idle cache");
+            int pooledCount=scene.GameObjects.Count;
+            var pooledIds=scene.GameObjects.Select(o=>o.Id).ToHashSet();
+            spawn!.Execute(instruction,context);
+            Check(scene.GameObjects.Count==pooledCount && scene.GameObjects.Any(o=>o!=owner && o.Active && pooledIds.Contains(o.Id)),"repeat spawn reuses existing object and buffers");
+            registry.TryGetAction("vfx.impact",out var impact);
+            instruction.Arguments["normal"]=EventValue.Vector3(Vector3.UnitX);
+            impact!.Execute(instruction,context);
+            Check(scene.GameObjects.Any(o=>o!=owner && o.Active && Vector3.Distance(o.Transform.Up,Vector3.UnitX)<.001f),"impact aligns emission up to hit normal");
+            registry.TryGetAction("vfx.spawnOnObject",out var onObject);
+            onObject!.Execute(new VisualInstruction { Arguments=new() {
+                ["effect"]=EventValue.String(reference.Guid.ToString()),["object"]=EventValue.String("Self"),["follow"]=EventValue.Boolean(true) } },context);
+            Check(owner.Children.Count==1,"spawn on object follows parent");
+            var box=owner.AddComponent(new ByteEngine.Core.Characters.BoxCollider3D());
+            context.LastRaycastHit=new ByteEngine.Core.Physics.RaycastHit3D(owner,box,new(7,8,9),Vector3.UnitZ,5);
+            registry.TryGetAction("vfx.rayImpact",out var ray);
+            ray!.Execute(instruction,context);
+            Check(scene.GameObjects.Any(o=>o.Active && o.Transform.WorldPosition==new Vector3(7,8,9) && Vector3.Distance(o.Transform.Up,Vector3.UnitZ)<.001f),"ray impact consumes actual hit position and normal");
             Check(assets.LoadVfxEffect(reference).Loop==VfxEffectSerializer.Load(assets.ResolveProjectPath(reference.ProjectPath)).Loop,"spawn does not mutate cached authoring definition");
         }
         finally
@@ -192,5 +220,53 @@ internal static class VfxTests
             foreach(var obj in scene.GameObjects.ToArray()) scene.DestroyGameObject(obj);
             AnimationRuntimeAssets.Clear(registration);
         }
+    }
+    private static void CurvesAndMotion()
+    {
+        var curve=new VfxCurve { Keys=new() { new(1,0),new(.5f,2),new(0,1) } }; curve.Validate();
+        Check(Math.Abs(curve.Evaluate(.25f)-1.5f)<.0001f && curve.Evaluate(2)==0,"sorted piecewise lifetime curve");
+        curve.Keys=new() { new(float.NaN,float.PositiveInfinity),new(0,2),new(1,10) }; curve.Validate();
+        Check(curve.Keys.Count==2 && curve.Evaluate(1)==4,"invalid curve values and duplicate times normalized");
+        var effect=new VfxEffect { Duration=.1f,Layers=new() { new VfxLayer {
+            Burst=1,Rate=0,Speed=1,SpeedVariation=0,Direction=Vector3.UnitX,Spread=0,Gravity=Vector3.Zero,Drag=0,Lifetime=2,LifetimeVariation=0,
+            SpeedOverLife=VfxCurve.Linear(0,0),Wind=new(1,0,0),Turbulence=.3f,Attraction=1,AttractionPoint=new(2,0,0) } } };
+        var sim=new VfxSimulation(effect); sim.Play(Matrix4x4.Identity);
+        for(int n=0;n<20;n++) sim.Advance(1f/60,Matrix4x4.Identity);
+        Check(sim.Layers[0].Particles[0].Position==Vector3.Zero,"zero speed curve freezes displacement while forces integrate");
+        Check(sim.Layers[0].Particles[0].Velocity.X>1,"wind and attraction accelerate particle");
+        string path=Path.Combine(Path.GetTempPath(),"vfx-curves-"+Guid.NewGuid()+".bvfx");
+        try { VfxEffectSerializer.Save(path,effect); var restored=VfxEffectSerializer.Load(path);
+            Check(restored.Layers[0].SpeedOverLife?.Evaluate(.5f)==0 && restored.Layers[0].Wind==new Vector3(1,0,0),"curves and forces round trip"); }
+        finally { File.Delete(path); }
+        effect.Layers[0].Delay=1; var delayed=new VfxSimulation(effect); delayed.Play(Matrix4x4.Identity);
+        delayed.Advance(.2f,Matrix4x4.Identity); Check(delayed.ActiveCount==0 && !delayed.IsEmitting,"delay beyond one-shot duration does not emit");
+        var trail=VfxPresets.Create(VfxPreset.Trail); trail.Layers[0].TrailBreakDistance=1;
+        var ribbon=new VfxSimulation(trail); ribbon.Play(Matrix4x4.Identity);
+        ribbon.Advance(1f/60,Matrix4x4.Identity); ribbon.Advance(1f/60,Matrix4x4.CreateTranslation(10,0,0));
+        var last=ribbon.Layers[0].Particles[ribbon.Layers[0].Count-1];
+        Check(last.Position==last.PreviousPosition,"teleports break ribbon instead of spanning scene");
+        foreach(var normal in new[]{Vector3.UnitY,-Vector3.UnitY,Vector3.UnitX,Vector3.UnitZ})
+            Check(Vector3.Distance(Vector3.Transform(Vector3.UnitY,VfxSpawnPool.AlignUp(normal)),normal)<.001f,"impact normal orientation "+normal);
+        var legacy=new VfxLayer(); legacy.Validate(); Check(legacy.SizeOverLife==null && legacy.Wind==Vector3.Zero,"legacy defaults retain original look");
+    }
+    private static void PoolBudgets(AssetReference reference)
+    {
+        var scene=new Scene("VFX global budget");
+        var large=new VfxEffect { Duration=.01f,ParticleBudget=8192,Layers=new() { new VfxLayer { MaxParticles=8192,Burst=1,Rate=0,Lifetime=.02f,LifetimeVariation=0 } } };
+        try
+        {
+            var pool=VfxSpawnPool.For(scene);
+            for(int n=0;n<8;n++) pool.Spawn(scene,reference,0,large,Vector3.Zero,Quaternion.Identity,1);
+            bool capped=false;
+            try { pool.Spawn(scene,reference,0,large,Vector3.Zero,Quaternion.Identity,1); }
+            catch(InvalidOperationException) { capped=true; }
+            Check(capped && scene.GameObjects.Count==8,"scene-wide reserved particle budget rejects excess effects before allocating");
+            foreach(var obj in scene.GameObjects.ToArray()) if(obj.Active) obj.GetComponent<VfxPlayer>()!.Advance(.1f);
+            Check(scene.GameObjects.Count<=2 && scene.GameObjects.Sum(o=>o.GetComponent<VfxPlayer>()!.ParticleCapacity)<=16384,"idle pool obeys reserved-particle memory ceiling");
+            var ids=scene.GameObjects.Select(o=>o.Id).ToHashSet();
+            var refreshed=pool.Spawn(scene,reference,1,large,Vector3.Zero,Quaternion.Identity,1);
+            Check(!ids.Contains(refreshed.GameObject.Id),"asset revision does not reuse stale definitions");
+        }
+        finally { foreach(var obj in scene.GameObjects.ToArray()) scene.DestroyGameObject(obj); }
     }
 }

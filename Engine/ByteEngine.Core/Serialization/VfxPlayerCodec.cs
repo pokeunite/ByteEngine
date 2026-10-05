@@ -16,7 +16,8 @@ internal sealed class VfxPlayerCodec : IComponentCodec
         return new() { Type=TypeName, Properties=new JsonObject {
             ["effectGuid"]=v.Effect.Guid.ToString(), ["effectPath"]=v.Effect.CachedProjectPath,
             ["preset"]=v.Preset.ToString(), ["playOnStart"]=v.PlayOnStart, ["seed"]=v.Seed,
-            ["size"]=v.Size, ["intensity"]=v.Intensity, ["speed"]=v.PlaybackSpeed, ["distance"]=v.ViewDistance, ["destroyWhenFinished"]=v.DestroyWhenFinished
+            ["size"]=v.Size, ["intensity"]=v.Intensity, ["speed"]=v.PlaybackSpeed, ["distance"]=v.ViewDistance, ["destroyWhenFinished"]=v.DestroyWhenFinished,
+            ["distanceQuality"]=v.DistanceQuality, ["qualityDistance"]=v.QualityDistance
         }};
     }
     public Component Deserialize(ComponentData data,ComponentSerializationContext context)
@@ -28,7 +29,8 @@ internal sealed class VfxPlayerCodec : IComponentCodec
             PlayOnStart=p["playOnStart"]?.GetValue<bool>()??true, Seed=p["seed"]?.GetValue<int>()??1,
             Size=p["size"]?.GetValue<float>()??1, Intensity=p["intensity"]?.GetValue<float>()??1,
             PlaybackSpeed=p["speed"]?.GetValue<float>()??1, ViewDistance=p["distance"]?.GetValue<float>()??150,
-            DestroyWhenFinished=p["destroyWhenFinished"]?.GetValue<bool>()??false
+            DestroyWhenFinished=p["destroyWhenFinished"]?.GetValue<bool>()??false,
+            DistanceQuality=p["distanceQuality"]?.GetValue<bool>()??true, QualityDistance=p["qualityDistance"]?.GetValue<float>()??40
         };
     }
 }

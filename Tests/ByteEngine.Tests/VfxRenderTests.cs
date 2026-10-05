@@ -38,6 +38,35 @@ internal static class VfxRenderTests
         byte[] pixel=new byte[4]; GL.ReadPixels(64,64,1,1,PixelFormat.Rgba,PixelType.UnsignedByte,pixel);
         if(pixel[0]<80 || pixel[1]>30) throw new Exception($"VFX sprite not rendered: {string.Join(',',pixel)}");
         if(GL.GetError()!=ErrorCode.NoError) throw new Exception("OpenGL error during VFX rendering.");
+        // Quality changes draw density, never lifetime simulation or connected ribbon segments.
+        effect.Layers[0].Burst=16; player.SetDefinition(effect); player.Play(); player.QualityDistance=1;
+        context.Begin3DFrame(); player.RenderEditorInternal(context);
+        if(player.RenderedParticles!=5 || player.ActiveParticles!=16) throw new Exception("Distance quality should draw one-third while retaining all simulated particles.");
+        context.Flush3D(); player.DistanceQuality=false;
+        context.Begin3DFrame(); player.RenderEditorInternal(context);
+        if(player.RenderedParticles!=16) throw new Exception("Disabling distance quality must restore full density.");
+        context.Flush3D();
+        effect.Layers[0].RenderMode=VfxRenderMode.Trail; player.SetDefinition(effect); player.Play(); player.DistanceQuality=true;
+        context.Begin3DFrame(); player.RenderEditorInternal(context);
+        if(player.RenderedParticles!=16) throw new Exception("Distance quality must preserve every trail segment.");
+        context.Flush3D();
+        player.SetDefinition(VfxPresets.Create(VfxPreset.Beam)); player.Play(); player.SetBeamTarget(new(2,1,0));
+        context.Begin3DFrame(); player.RenderEditorInternal(context);
+        var batches=(Array)typeof(VfxPlayer).GetField("_batches",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+        var batch=batches.GetValue(0)!;
+        var beamMesh=(Mesh)batch.GetType().GetField("Mesh")!.GetValue(batch)!;
+        if(beamMesh.LocalBounds.Maximum.X<1.99f || beamMesh.LocalBounds.Maximum.Y<.99f) throw new Exception("Beam geometry does not reach its world target.");
+        context.Flush3D(); player.ClearBeamTarget();
+        context.Begin3DFrame(); player.RenderEditorInternal(context);
+        if(beamMesh.LocalBounds.Minimum.Z> -4.99f) throw new Exception("Clearing beam target did not restore authored endpoint.");
+        context.Flush3D();
+        using(var first=VfxAtlas.Acquire(new VfxLayer(),null))
+        using(var same=VfxAtlas.Acquire(new VfxLayer(),null))
+        using(var different=VfxAtlas.Acquire(new VfxLayer { OpacityOverLife=VfxCurve.Linear(0,0) },null))
+        {
+            if(!ReferenceEquals(first.Texture,same.Texture) || ReferenceEquals(first.Texture,different.Texture)) throw new Exception("Atlas sharing must distinguish lifetime curves.");
+        }
+        if(GL.GetError()!=ErrorCode.NoError) throw new Exception("OpenGL error in quality, trail or beam tests.");
         // A desktop-loaded BMP exercises the one-time decode (PixelData is not retained on desktop).
         string path=Path.Combine(root,"Assets","vfx-sprite.bmp");
         byte[] bmp=new byte[70]; bmp[0]=66; bmp[1]=77;
@@ -53,6 +82,6 @@ internal static class VfxRenderTests
             if(pixels[n+1]<240 || pixels[n]>10) throw new Exception("Desktop custom VFX sprite decode failed.");
         }
         finally { texture.Dispose(); scene.DestroyGameObject(player.GameObject); }
-        Console.WriteLine("VFX offscreen GL: billboard pixels, batched draw, and custom desktop texture passed.");
+        Console.WriteLine("VFX offscreen GL: sprite pixels, batched draw, custom texture, distance quality, ribbon continuity, beam targeting and curve atlas sharing passed.");
     }
 }

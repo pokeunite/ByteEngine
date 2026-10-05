@@ -35,6 +35,7 @@ public sealed class VfxSimulation
     private readonly int _seed;
     private float _accumulator;
     private long _sequence;
+    private Matrix4x4 _previousEmitter;
     public VfxSimulation(VfxEffect definition, int seed=1)
     {
         // Own normalized settings: runtime never mutates the author's shared definition.
@@ -51,6 +52,7 @@ public sealed class VfxSimulation
     public void Play(Matrix4x4 emitter, bool restart=true, float intensity=1)
     {
         if(restart) Clear();
+        _previousEmitter=emitter;
         IsEmitting=true;
         foreach(var layer in Layers)
             if(layer.Settings.Delay<=0 && !layer.BurstEmitted) EmitInitial(layer,emitter,intensity);
@@ -75,7 +77,15 @@ public sealed class VfxSimulation
         _accumulator=Math.Min(_accumulator+dt,.2f);
         const float step=1f/60f;
         int steps=0;
-        while(_accumulator>=step && steps++<12) { Step(step,emitter,intensity); _accumulator-=step; }
+        float interval=_accumulator;
+        while(_accumulator>=step && steps++<12)
+        {
+            float fraction=Math.Clamp(steps*step/interval,0,1);
+            var interpolated=emitter;
+            interpolated.Translation=Vector3.Lerp(_previousEmitter.Translation,emitter.Translation,fraction);
+            Step(step,interpolated,intensity); _accumulator-=step;
+        }
+        if(steps>0) _previousEmitter=emitter;
     }
     private void Step(float dt, Matrix4x4 emitter,float intensity)
     {
@@ -89,13 +99,24 @@ public sealed class VfxSimulation
                 p.Age+=dt;
                 if(p.Age>=p.Lifetime)
                 { layer.Particles[i]=layer.Particles[--layer.Count]; ActiveCount--; continue; }
-                p.Velocity=(p.Velocity+s.Gravity*dt)/(1+s.Drag*dt);
-                p.Position+=p.Velocity*dt;
+                Vector3 force=s.Gravity+s.Wind;
+                if(s.Turbulence>0)
+                {
+                    var q=p.Position*s.NoiseFrequency; float t=Elapsed*s.NoiseFrequency;
+                    force+=new Vector3(MathF.Sin(q.Y+t)*MathF.Cos(q.Z-t),MathF.Sin(q.Z+t*1.13f)*MathF.Cos(q.X+t),MathF.Sin(q.X-t*.87f)*MathF.Cos(q.Y+t))*s.Turbulence;
+                }
+                if(s.Attraction!=0)
+                {
+                    var delta=s.AttractionPoint-p.Position;
+                    force+=delta/MathF.Sqrt(Math.Max(.01f,delta.LengthSquared()))*s.Attraction;
+                }
+                p.Velocity=(p.Velocity+force*dt)/(1+s.Drag*dt);
+                p.Position+=p.Velocity*(s.SpeedOverLife?.Evaluate(p.Age/p.Lifetime)??1)*dt;
                 if(s.GroundBounce && p.Position.Y<s.GroundHeight && p.Velocity.Y<0)
                 { p.Position.Y=s.GroundHeight; p.Velocity.Y=-p.Velocity.Y*s.Bounciness; p.Velocity.X*=.8f; p.Velocity.Z*=.8f; }
                 p.Rotation+=s.RotationSpeed*(MathF.PI/180)*dt;
             }
-            if(!IsEmitting || !s.Enabled || Elapsed<s.Delay) continue;
+            if(!IsEmitting || !s.Enabled || Elapsed<s.Delay || (!Effect.Loop && s.Delay>=Effect.Duration)) continue;
             if(!layer.BurstEmitted) EmitInitial(layer,emitter,intensity);
             if(s.RenderMode==VfxRenderMode.Beam)
             { if(layer.Count==0 && intensity>0) Emit(layer,emitter,1,intensity); continue; }
@@ -143,7 +164,7 @@ public sealed class VfxSimulation
             if(!s.LocalSpace) { position=Vector3.Transform(position,emitter); velocity=Vector3.TransformNormal(velocity,emitter); }
             layer.Particles[layer.Count++]=new VfxParticle
             {
-                Position=position, PreviousPosition=layer.HasLastSpawn ? layer.LastSpawn : position, Velocity=velocity,
+                Position=position, PreviousPosition=layer.HasLastSpawn && Vector3.DistanceSquared(position,layer.LastSpawn)<=s.TrailBreakDistance*s.TrailBreakDistance ? layer.LastSpawn : position, Velocity=velocity,
                 Lifetime=s.Lifetime*(1+(Rand()*2-1)*s.LifetimeVariation), SizeFactor=1+(Rand()*2-1)*s.SizeVariation,
                 Rotation=s.RenderMode==VfxRenderMode.Billboard ? Rand()*MathF.Tau : 0, Sequence=++_sequence
             };

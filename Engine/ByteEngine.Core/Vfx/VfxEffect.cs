@@ -5,7 +5,7 @@ using ByteEngine.Core.Assets;
 
 namespace ByteEngine.Core.Vfx;
 
-public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam }
+public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot }
 public enum VfxShape { Point, Sphere, Box, Cone, Ring }
 public enum VfxRenderMode { Billboard, Stretched, Trail, Beam }
 public enum VfxSprite { SoftDisc, Spark, Ring, Solid }
@@ -70,6 +70,16 @@ public sealed class VfxLayer
     public bool GroundBounce { get; set; }
     public float GroundHeight { get; set; }
     public float Bounciness { get; set; } = .3f;
+    public VfxCurve? SizeOverLife { get; set; }
+    public VfxCurve? OpacityOverLife { get; set; }
+    public VfxCurve? SpeedOverLife { get; set; }
+    public VfxCurve? ColorBlendOverLife { get; set; }
+    public Vector3 Wind { get; set; }
+    public float Turbulence { get; set; }
+    public float NoiseFrequency { get; set; } = 1;
+    public Vector3 AttractionPoint { get; set; }
+    public float Attraction { get; set; }
+    public float TrailBreakDistance { get; set; } = 3;
     public void Validate()
     {
         Name = string.IsNullOrWhiteSpace(Name) ? "Particles" : Name;
@@ -88,6 +98,11 @@ public sealed class VfxLayer
         Offset = VfxEffect.Finite(Offset, Vector3.Zero); Gravity = VfxEffect.Finite(Gravity, Vector3.Zero); BeamEnd = VfxEffect.Finite(BeamEnd, new(0,0,-5));
         StartColor = Color(StartColor); EndColor = Color(EndColor); Texture ??= AssetReference.Empty;
         FlipbookColumns = Math.Clamp(FlipbookColumns, 1, 8); FlipbookRows = Math.Clamp(FlipbookRows, 1, 8);
+        SizeOverLife?.Validate(); OpacityOverLife?.Validate(1); SpeedOverLife?.Validate(); ColorBlendOverLife?.Validate(1);
+        Wind=Vector3.Clamp(VfxEffect.Finite(Wind,Vector3.Zero),new(-1000),new(1000));
+        Turbulence=VfxEffect.Safe(Turbulence,0,0,100); NoiseFrequency=VfxEffect.Safe(NoiseFrequency,1,.01f,100);
+        AttractionPoint=VfxEffect.Finite(AttractionPoint,Vector3.Zero); Attraction=VfxEffect.Safe(Attraction,0,-100,100);
+        TrailBreakDistance=VfxEffect.Safe(TrailBreakDistance,3,.01f,1000);
     }
     private static Vector4 Color(Vector4 c) => new(VfxEffect.Safe(c.X,1,0,1), VfxEffect.Safe(c.Y,1,0,1), VfxEffect.Safe(c.Z,1,0,1), VfxEffect.Safe(c.W,1,0,1));
 }
@@ -133,6 +148,23 @@ public static class VfxPresets
             case VfxPreset.Dust: p.Additive=false; p.Rate=0; p.Burst=25; p.Gravity=new(0,-.5f,0); p.Speed=1; p.StartSize=.15f; p.EndSize=.6f; p.StartColor=new(.5f,.4f,.3f,.4f); p.EndColor=new(.5f,.4f,.3f,0); break;
             case VfxPreset.Trail: p.RenderMode=VfxRenderMode.Trail; p.Rate=90; p.Burst=0; p.Gravity=Vector3.Zero; p.Speed=0; p.Lifetime=.5f; p.StartSize=.15f; p.EndSize=0; p.StartColor=new(.2f,.8f,1,1); break;
             case VfxPreset.Beam: p.RenderMode=VfxRenderMode.Beam; p.MaxParticles=1; p.Burst=1; p.Rate=0; p.LocalSpace=true; p.Speed=0; p.Gravity=Vector3.Zero; p.StartSize=.08f; p.EndSize=.08f; p.StartColor=new(.2f,.8f,1,1); p.EndColor=p.StartColor; break;
+            case VfxPreset.Impact:
+                p.RenderMode=VfxRenderMode.Stretched; p.Sprite=VfxSprite.Spark; p.Burst=24; p.Rate=0; p.Speed=4; p.Lifetime=.35f; p.Spread=65;
+                p.StartSize=.05f; p.SpeedOverLife=VfxCurve.Linear(1,.2f);
+                var dust=Create(VfxPreset.Dust).Layers[0]; dust.Name="Impact dust"; dust.Burst=8; dust.Lifetime=.6f; effect.Layers.Add(dust); break;
+            case VfxPreset.Portal:
+                effect.Loop=true; p.Shape=VfxShape.Ring; p.Extents=new(1); p.Burst=0; p.Rate=80; p.Speed=.4f; p.Lifetime=1.5f; p.Gravity=Vector3.Zero;
+                p.StartColor=new(.5f,.1f,1,1); p.EndColor=new(.1f,.5f,1,0); p.Turbulence=.3f;
+                p.OpacityOverLife=new() { Keys=new() { new(0,0),new(.2f,1),new(1,0) } }; break;
+            case VfxPreset.Heal:
+                p.Shape=VfxShape.Ring; p.Extents=new(.4f); p.Burst=45; p.Rate=0; p.Speed=1; p.Spread=10; p.Gravity=new(0,.3f,0); p.Lifetime=1.5f;
+                p.StartColor=new(.2f,1,.3f,1); p.EndColor=new(.6f,1,.7f,0); p.SizeOverLife=VfxCurve.Linear(.3f,1); break;
+            case VfxPreset.Footstep:
+                p.Additive=false; p.Burst=8; p.Rate=0; p.Speed=.4f; p.Lifetime=.4f; p.StartSize=.07f; p.EndSize=.2f; p.Gravity=new(0,-.2f,0);
+                p.StartColor=new(.5f,.4f,.3f,.3f); p.EndColor=new(.5f,.4f,.3f,0); break;
+            case VfxPreset.EnergyShot:
+                p.Burst=25; p.Rate=0; p.Direction=-Vector3.UnitZ; p.Spread=5; p.Speed=12; p.Gravity=Vector3.Zero; p.Lifetime=.3f;
+                p.RenderMode=VfxRenderMode.Stretched; p.StartColor=new(.1f,.7f,1,1); p.EndColor=new(.3f,1,1,0); p.StartSize=.07f; p.Stretch=.04f; break;
         }
         effect.Validate(); return effect;
     }

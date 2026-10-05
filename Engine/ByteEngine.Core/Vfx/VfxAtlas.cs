@@ -7,7 +7,7 @@ namespace ByteEngine.Core.Vfx;
 internal static class VfxAtlas
 {
     internal const int Tile=32, Ages=32;
-    private readonly record struct Key(Texture2D? Source,int Revision,VfxSprite Sprite,Vector4 Start,Vector4 End,int Columns,int Rows);
+    private readonly record struct Key(Texture2D? Source,int Revision,VfxSprite Sprite,Vector4 Start,Vector4 End,int Columns,int Rows,string Curves);
     private sealed class Entry { public required Texture2D Texture; public int Users; }
     private static readonly Dictionary<Key,Entry> Cache=new();
     internal sealed class Lease : IDisposable
@@ -19,7 +19,8 @@ internal static class VfxAtlas
     }
     internal static Lease Acquire(VfxLayer layer,Texture2D? source)
     {
-        var key=new Key(source,source?.ContentVersion??0,layer.Sprite,layer.StartColor,layer.EndColor,layer.FlipbookColumns,layer.FlipbookRows);
+        string curves=System.Text.Json.JsonSerializer.Serialize(new[] { layer.OpacityOverLife,layer.ColorBlendOverLife },VfxEffectSerializer.Options);
+        var key=new Key(source,source?.ContentVersion??0,layer.Sprite,layer.StartColor,layer.EndColor,layer.FlipbookColumns,layer.FlipbookRows,curves);
         if(!Cache.TryGetValue(key,out var entry)) Cache[key]=entry=new Entry { Texture=Build(layer,source) };
         entry.Users++;
         return new Lease(entry.Texture,()=> { if(--entry.Users==0) { Cache.Remove(key); entry.Texture.Dispose(); } });
@@ -46,7 +47,9 @@ internal static class VfxAtlas
         }
         for(int age=0;age<Ages;age++)
         {
-            Vector4 color=Vector4.Lerp(layer.StartColor,layer.EndColor,(float)age/(Ages-1));
+            float lifetime=(float)age/(Ages-1);
+            Vector4 color=Vector4.Lerp(layer.StartColor,layer.EndColor,layer.ColorBlendOverLife?.Evaluate(lifetime)??lifetime);
+            color.W*=layer.OpacityOverLife?.Evaluate(lifetime)??1;
             for(int frame=0;frame<frames;frame++)
             for(int y=0;y<Tile;y++)
             for(int x=0;x<Tile;x++)

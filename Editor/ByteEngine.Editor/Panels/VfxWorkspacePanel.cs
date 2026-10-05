@@ -27,6 +27,8 @@ internal sealed class VfxWorkspacePanel : IDisposable
     private bool _dirty,_restart=true,_playing=true,_repeat=true,_closePrompt,_historyPending;
     private double _lastTime;
     private float _distance=6,_previewTime;
+    private bool _moveEmitter;
+    private float _motionRadius=1;
     private string? _error;
     public VfxWorkspacePanel(EditorDocumentManager documents) => _documents=documents;
     public void Open(AssetRecord asset,EditorProjectContext project,EditorLog log)
@@ -76,11 +78,19 @@ internal sealed class VfxWorkspacePanel : IDisposable
         { var copy=VfxEffectSerializer.Clone(_draft).Layers[_selected]; copy.Name+=" copy"; _draft.Layers.Add(copy); _selected=_draft.Layers.Count-1; Changed(); }
         if(ImGui.Button("Remove") && _draft.Layers.Count>0) { _draft.Layers.RemoveAt(_selected); _selected=Math.Max(0,_selected-1); Changed(); }
         ImGui.EndDisabled();
+        ImGui.BeginDisabled(_selected<=0 || _draft.Layers.Count<2);
+        if(ImGui.Button("Move up")) { (_draft.Layers[_selected-1],_draft.Layers[_selected])=(_draft.Layers[_selected],_draft.Layers[_selected-1]); _selected--; Changed(); }
+        ImGui.EndDisabled(); ImGui.SameLine();
+        ImGui.BeginDisabled(_selected>=_draft.Layers.Count-1 || _draft.Layers.Count<2);
+        if(ImGui.Button("Down")) { (_draft.Layers[_selected+1],_draft.Layers[_selected])=(_draft.Layers[_selected],_draft.Layers[_selected+1]); _selected++; Changed(); }
+        ImGui.EndDisabled();
         ImGui.Separator(); ImGui.TextWrapped("Layers combine into one effect. Select a layer to edit its look and motion.");
         ImGui.EndChild(); ImGui.SameLine();
         ImGui.BeginChild("##VfxPreview",new(Math.Max(220,available-left-right-16),0));
         ImGui.TextUnformatted("LIVE PREVIEW"); ImGui.SameLine();
         if(ImGui.Button("Frame")) { _distance=6; PositionCamera(); }
+        if(ImGui.Checkbox("Moving emitter",ref _moveEmitter)) _restart=true;
+        if(_moveEmitter) ImGui.SliderFloat("Motion radius",ref _motionRadius,.1f,5,"%.1f m");
         DrawPreview(renderer,renderer3D,windowWidth,windowHeight);
         ImGui.TextDisabled("Left drag: orbit  |  Wheel: zoom");
         ImGui.TextUnformatted($"Particles: {_player?.ActiveParticles??0} / {_player?.ParticleCapacity??0}   Dropped: {_player?.DroppedParticles??0}");
@@ -145,6 +155,21 @@ internal sealed class VfxWorkspacePanel : IDisposable
             Float("Rotation (degrees/s)",p.RotationSpeed,-3600,3600,v=>p.RotationSpeed=v);
             if(p.RenderMode==VfxRenderMode.Stretched) Float("Velocity stretch",p.Stretch,0,10,v=>p.Stretch=v);
             if(p.RenderMode==VfxRenderMode.Beam) Vector("Beam end (local)",p.BeamEnd,v=>p.BeamEnd=v);
+            if(p.RenderMode==VfxRenderMode.Trail) Float("Break trail after jump (m)",p.TrailBreakDistance,.01f,1000,v=>p.TrailBreakDistance=v);
+            Vector("Wind acceleration",p.Wind,v=>p.Wind=v);
+            Float("Turbulence strength",p.Turbulence,0,100,v=>p.Turbulence=v);
+            if(p.Turbulence>0) Float("Turbulence frequency",p.NoiseFrequency,.01f,100,v=>p.NoiseFrequency=v);
+            Float("Attraction / repulsion",p.Attraction,-100,100,v=>p.Attraction=v);
+            if(p.Attraction!=0) Vector("Attraction point",p.AttractionPoint,v=>p.AttractionPoint=v);
+            ImGui.TextWrapped("Wind is acceleration. Attraction point uses world coordinates, or local coordinates when Follow Object is enabled. Negative strength repels.");
+        }
+        if(ImGui.CollapsingHeader("Lifetime curves"))
+        {
+            ImGui.TextWrapped("Optional multipliers over particle age. Drag points; add points for finer control. Existing start/end settings still apply.");
+            Curve("Size multiplier",p.SizeOverLife,v=>p.SizeOverLife=v,4);
+            Curve("Opacity multiplier",p.OpacityOverLife,v=>p.OpacityOverLife=v,1);
+            Curve("Speed multiplier",p.SpeedOverLife,v=>p.SpeedOverLife=v,4);
+            Curve("Color blend",p.ColorBlendOverLife,v=>p.ColorBlendOverLife=v,1,true);
         }
         if(ImGui.CollapsingHeader("Ground bounce"))
         {
@@ -156,8 +181,74 @@ internal sealed class VfxWorkspacePanel : IDisposable
         if(ImGui.CollapsingHeader("Performance",ImGuiTreeNodeFlags.DefaultOpen))
         {
             Int("Layer particle cap",p.MaxParticles,1,8192,v=>p.MaxParticles=v);
+            int remaining=_draft.ParticleBudget;
+            for(int i=0;i<_selected;i++) remaining=Math.Max(0,remaining-_draft.Layers[i].MaxParticles);
+            int reserved=Math.Min(remaining,p.MaxParticles);
+            ImGui.TextUnformatted($"Reserved for this layer: {reserved} particles");
+            if(reserved<p.MaxParticles) ImGui.TextColored(new(1,.7f,.2f,1),"Earlier layers consume this layer's budget.");
+            if(!_draft.Loop && p.Delay>=_draft.Duration) ImGui.TextColored(new(1,.7f,.2f,1),"Layer delay is after the emission ends; this layer will not emit.");
             ImGui.TextWrapped("Total budget is shared in layer order. Later layers receive the remaining capacity. Transparent particles are depth-sorted per layer. Glow layers skip sorting.");
         }
+    }
+    private void Curve(string label,VfxCurve? curve,Action<VfxCurve?> set,float maximum,bool blend=false)
+    {
+        ImGui.PushID(label);
+        bool enabled=curve!=null;
+        if(ImGui.Checkbox(label,ref enabled)) { curve=enabled ? VfxCurve.Linear(blend?0:1,1) : null; set(curve); Changed(); }
+        if(curve==null) { ImGui.PopID(); return; }
+        if(ImGui.BeginCombo("Shape","Choose quick shape..."))
+        {
+            foreach(string shape in new[]{"Flat","Fade in","Fade out","Pulse","Grow","Shrink"})
+                if(ImGui.Selectable(shape))
+                {
+                    curve=shape switch {
+                        "Fade in"=>VfxCurve.Linear(0,1), "Fade out"=>VfxCurve.Linear(1,0),
+                        "Grow"=>VfxCurve.Linear(.25f,1), "Shrink"=>VfxCurve.Linear(1,.25f),
+                        "Pulse"=>new VfxCurve { Keys=new() { new(0,0),new(.3f,1),new(1,0) } },
+                        _=>VfxCurve.Linear(1,1) };
+                    set(curve); Changed();
+                }
+            ImGui.EndCombo();
+        }
+        Vector2 origin=ImGui.GetCursorScreenPos(), area=new(Math.Max(100,ImGui.GetContentRegionAvail().X),100);
+        var draw=ImGui.GetWindowDrawList();
+        draw.AddRectFilled(origin,origin+area,0xff191919,4);
+        for(int n=1;n<4;n++)
+        {
+            draw.AddLine(origin+new Vector2(area.X*n/4,0),origin+new Vector2(area.X*n/4,area.Y),0xff333333);
+            draw.AddLine(origin+new Vector2(0,area.Y*n/4),origin+new Vector2(area.X,area.Y*n/4),0xff333333);
+        }
+        Vector2 Point(VfxCurveKey key) => origin+new Vector2(8+(area.X-16)*key.Time,8+(area.Y-16)*(1-key.Value/maximum));
+        for(int n=1;n<curve.Keys.Count;n++) draw.AddLine(Point(curve.Keys[n-1]),Point(curve.Keys[n]),0xff60caff,2);
+        for(int n=0;n<curve.Keys.Count;n++)
+        {
+            var key=curve.Keys[n]; var point=Point(key);
+            ImGui.SetCursorScreenPos(point-new Vector2(6));
+            ImGui.InvisibleButton("Point"+n,new(12));
+            draw.AddCircleFilled(point,5,ImGui.IsItemActive()?0xffffffff:0xff60caff);
+            if(ImGui.IsItemHovered()) ImGui.SetTooltip($"Age {key.Time:0.00}   Value {key.Value:0.00}");
+            if(ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left,0))
+            {
+                var delta=ImGui.GetIO().MouseDelta;
+                float min=n==0?0:curve.Keys[n-1].Time+.001f, max=n==curve.Keys.Count-1?1:curve.Keys[n+1].Time-.001f;
+                curve.Keys[n]=new(Math.Clamp(key.Time+delta.X/(area.X-16),min,Math.Max(min,max)),Math.Clamp(key.Value-delta.Y/(area.Y-16)*maximum,0,maximum));
+                Changed();
+            }
+        }
+        ImGui.SetCursorScreenPos(origin+new Vector2(0,area.Y+4));
+        ImGui.TextDisabled($"Age: 0 → 1     Value: 0 → {maximum:0}");
+        ImGui.BeginDisabled(curve.Keys.Count>=8);
+        if(ImGui.Button("Add point"))
+        {
+            float widest=0,time=.5f; int index=1;
+            for(int n=1;n<curve.Keys.Count;n++) if(curve.Keys[n].Time-curve.Keys[n-1].Time>widest)
+            { widest=curve.Keys[n].Time-curve.Keys[n-1].Time; time=(curve.Keys[n].Time+curve.Keys[n-1].Time)*.5f; index=n; }
+            curve.Keys.Insert(Math.Min(index,curve.Keys.Count),new(time,curve.Evaluate(time))); Changed();
+        }
+        ImGui.EndDisabled(); ImGui.SameLine();
+        ImGui.BeginDisabled(curve.Keys.Count<=2);
+        if(ImGui.Button("Remove last interior point")) { curve.Keys.RemoveAt(curve.Keys.Count-2); Changed(); }
+        ImGui.EndDisabled(); ImGui.Separator(); ImGui.PopID();
     }
     private void Float(string label,float value,float min,float max,Action<float> set)
     { if(ImGui.DragFloat(label,ref value,.01f,min,max,"%.3f",ImGuiSliderFlags.AlwaysClamp)) { set(value); Changed(); } }
@@ -196,12 +287,15 @@ internal sealed class VfxWorkspacePanel : IDisposable
         {
             if(_restart && !ImGui.IsAnyItemActive())
             {
-                _player.SetDefinition(_draft); _player.Play(); _restart=false; _previewTime=0;
+                _previewTime=0;
+                _player.Transform.LocalPosition=_moveEmitter ? new Vector3(0,.2f,_motionRadius) : Vector3.Zero;
+                _player.SetDefinition(_draft); _player.Play(); _restart=false;
                 // Show something immediately for continuous emitters without changing the authored asset.
                 _player.Advance(.12f);
             }
             if(_playing)
             {
+                _player.Transform.LocalPosition=_moveEmitter ? new Vector3(MathF.Sin(_previewTime)*_motionRadius,.2f,MathF.Cos(_previewTime)*_motionRadius) : Vector3.Zero;
                 _player.Advance(dt); _previewTime+=dt;
                 if(!_player.IsPlaying && _repeat) { _player.Play(); _previewTime=0; }
             }

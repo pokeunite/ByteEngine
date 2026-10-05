@@ -21,6 +21,15 @@ public sealed class VfxPlayer : Component
     public float ViewDistance { get=>_distance; set=>_distance=VfxEffect.Safe(value,150,1,10000); }
     public bool Paused { get; set; }
     public bool DestroyWhenFinished { get; set; }
+    public bool DistanceQuality { get; set; } = true;
+    private float _qualityDistance=40;
+    public float QualityDistance { get=>_qualityDistance; set=>_qualityDistance=VfxEffect.Safe(value,40,1,10000); }
+    public int RenderedParticles { get; private set; }
+    internal Action<VfxPlayer>? ReturnToPool;
+    internal ByteEngine.Core.Scene.Scene? AttachedScene() => AttachedGameObject?.Scene;
+    private Vector3? _beamTarget;
+    public void SetBeamTarget(Vector3 worldPosition) => _beamTarget=VfxEffect.Finite(worldPosition,Transform.WorldPosition);
+    public void ClearBeamTarget() => _beamTarget=null;
     public bool IsPlaying => _simulation?.IsPlaying==true;
     public int ActiveParticles => _simulation?.ActiveCount ?? 0;
     public int ParticleCapacity => _simulation?.Capacity ?? 0;
@@ -56,7 +65,7 @@ public sealed class VfxPlayer : Component
     }
     public void SetDefinition(VfxEffect definition)
     {
-        Release(); _simulation=new(definition,Seed); _loaded=Effect; _loadedPreset=Preset; _loadedSeed=Seed;
+        Release(); _beamTarget=null; _simulation=new(definition,Seed); _loaded=Effect; _loadedPreset=Preset; _loadedSeed=Seed;
         _batches=new Batch[_simulation.Layers.Length];
         for(int i=0;i<_batches.Length;i++) _batches[i]=new(_simulation.Layers[i].Particles.Length);
         Status="Ready";
@@ -88,24 +97,30 @@ public sealed class VfxPlayer : Component
         if(Paused || !Ensure()) return;
         _simulation!.Advance(dt*PlaybackSpeed,Emitter,Intensity);
         if(DestroyWhenFinished && HasPlayed && !IsPlaying && AttachedGameObject?.Scene is {} scene)
-            scene.DestroyGameObject(GameObject);
+        {
+            if(ReturnToPool!=null) ReturnToPool(this);
+            else scene.DestroyGameObject(GameObject);
+        }
     }
     protected override void OnStart() { if(PlayOnStart) Play(); }
     protected override void OnUpdate() => Advance((float)Time.DeltaTime);
-    protected override void OnStop() => Stop(true);
+    protected override void OnStop() { Stop(true); if(ReturnToPool!=null) Release(); }
     protected override void OnDestroy() => Release();
     private void Release()
     { foreach(var batch in _batches) batch.Dispose(); _batches=Array.Empty<Batch>(); _simulation=null; }
 
     protected override void OnRender(RenderContext context)
     {
+        RenderedParticles=0;
         if(!context.Has3DCamera || _simulation==null || ActiveParticles==0) return;
         Matrix4x4.Invert(context.GetViewMatrix3D(),out var inverse);
         Vector3 camera=inverse.Translation, right=Vector3.Normalize(new Vector3(inverse.M11,inverse.M12,inverse.M13)), up=Vector3.Normalize(new Vector3(inverse.M21,inverse.M22,inverse.M23));
         Matrix4x4 emitter=Emitter;
         var worldScale=Vector3.Abs(Transform.WorldScale);
         float objectScale=Math.Max(worldScale.X,Math.Max(worldScale.Y,worldScale.Z));
-        if(Vector3.DistanceSquared(camera,Transform.WorldPosition)>ViewDistance*ViewDistance) return;
+        float distance=Vector3.Distance(camera,Transform.WorldPosition);
+        if(distance>ViewDistance) return;
+        int stride=DistanceQuality ? Math.Clamp((int)(distance/QualityDistance),1,4) : 1;
         for(int l=0;l<_batches.Length;l++)
         {
             var layer=_simulation.Layers[l]; var s=layer.Settings; var b=_batches[l];
@@ -123,19 +138,24 @@ public sealed class VfxPlayer : Component
                 b.Material.MainTexture=b.Atlas.Texture;
                 b.Material.BlendMode=s.Additive ? BlendMode3D.Additive : BlendMode3D.AlphaBlend;
             }
+            int drawCount=0;
             for(int i=0;i<layer.Count;i++)
             {
-                b.Order[i]=i;
+                // Stable thinning; never remove ribbon segments or beams.
+                if(s.RenderMode is not (VfxRenderMode.Trail or VfxRenderMode.Beam) && layer.Particles[i].Sequence%stride!=0) continue;
+                b.Order[drawCount]=i;
                 var position=layer.Particles[i].Position;
                 if(s.LocalSpace) position=Vector3.Transform(position,emitter);
-                b.Depths[i]=-Vector3.DistanceSquared(position,camera);
+                b.Depths[drawCount++]=-Vector3.DistanceSquared(position,camera);
             }
-            if(!s.Additive && s.RenderMode!=VfxRenderMode.Trail) Array.Sort(b.Depths,b.Order,0,layer.Count);
+            if(drawCount==0) continue;
+            if(!s.Additive && s.RenderMode!=VfxRenderMode.Trail) Array.Sort(b.Depths,b.Order,0,drawCount);
             Vector3 minimum=new(float.PositiveInfinity), maximum=new(float.NegativeInfinity);
-            for(int i=0;i<layer.Count;i++)
+            for(int i=0;i<drawCount;i++)
             {
                 var p=layer.Particles[b.Order[i]];
                 float age=Math.Clamp(p.Age/p.Lifetime,0,1), size=(s.StartSize+(s.EndSize-s.StartSize)*age)*p.SizeFactor*Size*objectScale;
+                size*=s.SizeOverLife?.Evaluate(age)??1;
                 Vector3 center=p.Position, previous=p.PreviousPosition, velocity=p.Velocity;
                 if(s.LocalSpace) { center=Vector3.Transform(center,emitter); previous=Vector3.Transform(previous,emitter); velocity=Vector3.TransformNormal(velocity,emitter); }
                 Vector3 a=right*size*.5f,c=up*size*.5f;
@@ -145,7 +165,7 @@ public sealed class VfxPlayer : Component
                 { c=Vector3.Normalize(velocity)*(size+velocity.Length()*s.Stretch)*.5f; a=Side(c,center-camera,right)*size*.5f; }
                 else if(s.RenderMode is VfxRenderMode.Trail or VfxRenderMode.Beam)
                 {
-                    Vector3 end=s.RenderMode==VfxRenderMode.Beam ? Vector3.Transform(s.BeamEnd,emitter) : previous;
+                    Vector3 end=s.RenderMode==VfxRenderMode.Beam ? _beamTarget??Vector3.Transform(s.BeamEnd,emitter) : previous;
                     c=(end-center)*.5f; center=(center+end)*.5f; a=Side(c,center-camera,right)*size*.5f;
                 }
                 Vector3 extent=Vector3.Abs(a)+Vector3.Abs(c);
@@ -158,9 +178,9 @@ public sealed class VfxPlayer : Component
                 Vertex(b.Vertices,i*32,center-a-c,u0,v0); Vertex(b.Vertices,i*32+8,center+a-c,u1,v0);
                 Vertex(b.Vertices,i*32+16,center+a+c,u1,v1); Vertex(b.Vertices,i*32+24,center-a+c,u0,v1);
             }
-            if(b.PreviousCount>layer.Count) Array.Clear(b.Vertices,layer.Count*32,(b.PreviousCount-layer.Count)*32);
-            b.PreviousCount=layer.Count; b.Mesh.UpdateVertices(b.Vertices,updateBounds:false,knownBounds:new BoundingBox3D(minimum,maximum));
-            b.Mesh.SetDrawIndexCount(layer.Count*6);
+            if(b.PreviousCount>drawCount) Array.Clear(b.Vertices,drawCount*32,(b.PreviousCount-drawCount)*32);
+            b.PreviousCount=drawCount; b.Mesh.UpdateVertices(b.Vertices,updateBounds:false,knownBounds:new BoundingBox3D(minimum,maximum));
+            b.Mesh.SetDrawIndexCount(drawCount*6); RenderedParticles+=drawCount;
             context.RenderWorld.Submit(b.Mesh,b.Material,Matrix4x4.Identity,frustumCulling:true,castShadows:false,receiveShadows:false);
         }
     }
