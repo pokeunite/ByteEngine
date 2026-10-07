@@ -1,0 +1,1127 @@
+{
+  "id": "4e4160d2-d484-4185-b868-82f6789cdc31",
+  "version": 2,
+  "name": "Goblin Workshop - Editable UI",
+  "targetBlueprintGuid": null,
+  "targetBlueprintPath": null,
+  "requiredComponents": [
+    "VehicleBuilder3D"
+  ],
+  "rules": [
+    {
+      "id": "e76c9ba7-930f-4eb2-8cf0-bb39d74cea73",
+      "displayName": "Run / build",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "19effd55-bf1f-4d3f-b787-3ab72467cc26",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Run / build",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "6d34d62e-5aff-4771-bcc2-991984a138f0",
+          "id": "bytebard.goblinscrapper.toggleMode",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Run / build",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "290049f2-28e7-4ea2-b464-640d9d11ef52",
+      "displayName": "Undo",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "9f54f8fd-b1a8-4ee4-87bd-b60aba000f2b",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Undo",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "89c95398-b7e7-4542-abda-4b602526ccf9",
+          "id": "bytebard.goblinscrapper.undo",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Undo",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "ded23b2d-1992-4ae1-9ae1-41afbf22027a",
+      "displayName": "Redo",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "417e7e4b-b9c2-486e-bf92-469849071e68",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Redo",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "6668bf37-20cd-4683-92a4-b71dbb9f001c",
+          "id": "bytebard.goblinscrapper.redo",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Redo",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "a7d5820e-3f6e-43fc-b927-7950f506aed9",
+      "displayName": "Save machine",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "01dd1bbc-1171-4991-9f0f-6824b8ab41b4",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Save machine",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "062a6597-68b1-438e-b658-6b62e835c5bb",
+          "id": "bytebard.goblinscrapper.save",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Save machine",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "23f5dcdc-e20f-4619-a448-2d9b0e8f519d",
+      "displayName": "Load machine",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "3f0d15e7-347f-4e3d-9e73-dea2f06e40e9",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Load machine",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "ccf63ecc-7825-4eb6-b63d-921dd2c212d5",
+          "id": "bytebard.goblinscrapper.load",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Load machine",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "2878b114-2bd2-4aad-96e4-2c05503ce430",
+      "displayName": "Place blocks",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "cdd9348a-b281-4646-8308-010a96bd2320",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Place blocks",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "ef9d7b9e-f613-4276-b565-586e96a8f4e8",
+          "id": "bytebard.goblinscrapper.placeTool",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Place blocks",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "96abfc57-ac90-44b0-8b19-3caeb8f318a4",
+      "displayName": "Move branch",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "cbe00c52-3167-4089-9bac-bd81f9c33527",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Move branch",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "13410985-ba0b-4ccb-b710-88617474ecea",
+          "id": "bytebard.goblinscrapper.moveTool",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Move branch",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "299c3806-37c7-4305-a5e6-091c322dbc17",
+      "displayName": "Rotate mount",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "6f49f0ca-2340-4978-addf-ea3b06930e5b",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Rotate mount",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "5064c0ae-2917-472c-aa5a-6131e3bdc0ab",
+          "id": "bytebard.goblinscrapper.rotatePreview",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "degrees": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 90,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Rotate mount",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "0702b32d-e163-4e8d-840e-1a5791530401",
+      "displayName": "Change mount face",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "84a4ee46-b7f6-4b54-b4c6-cdd232029c05",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Change mount face",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f907f727-eb8e-411d-9671-883d6fe8ce38",
+          "id": "bytebard.goblinscrapper.cycleMountFace",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Change mount face",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "d47b35bf-477b-4c9a-9a60-d7d034965548",
+      "displayName": "Copy part",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "c8c42c17-0be2-46d2-9f5b-c1068ca85076",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Copy part",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "3af66996-476c-4e34-8bd5-a59f4497e55a",
+          "id": "bytebard.goblinscrapper.copyTool",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Copy part",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "8a30dfda-c2d8-47cb-b867-aef9247d1338",
+      "displayName": "Erase blocks",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "8b2b599f-b8fa-4690-82c0-872ec602c449",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Erase blocks",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "6d6aede1-f21b-4f1a-a92f-61d220eadd9b",
+          "id": "bytebard.goblinscrapper.eraseToolMode",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Erase blocks",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "73025e74-f58a-4f96-b25c-e4d4f947f4ca",
+      "displayName": "Recover machine",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "265d9a66-39fb-46f4-91fd-3502fde9427f",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Recover machine",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "ec66d5c0-d70e-4b3c-b67f-643dd7c40f39",
+          "id": "bytebard.goblinscrapper.resetPosition",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Recover machine",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "66d7dfc2-f97d-48e5-80d1-4db083aec720",
+      "displayName": "Tune blocks",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "6b54e8e9-a91b-42b8-bdd7-a7f940750c1d",
+          "id": "ui.buttonClicked",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Tune blocks",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "a210a3b4-6da4-4af3-adc7-dc5cfcff0333",
+          "id": "bytebard.goblinscrapper.tuneTool",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Self",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Tune blocks",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    }
+  ],
+  "editorLooseConditions": [],
+  "editorLooseActions": [],
+  "editorNodeScale": 0.72,
+  "editorGroups": []
+}

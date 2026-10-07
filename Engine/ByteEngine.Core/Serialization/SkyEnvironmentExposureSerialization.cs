@@ -79,6 +79,7 @@ public static class SkyEnvironmentExposureSerialization
                                 environment.Exposure,
 
                             ["smoothEdges"] = environment.SmoothEdges,
+                            ["graphicsLook"] = GraphicsLookSerialization.Save(environment),
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -296,7 +297,7 @@ public static class SkyEnvironmentExposureSerialization
                         environmentMapReference));
             }
 
-            return environment;
+            return GraphicsLookSerialization.Load(environment,data.Properties["graphicsLook"]);
         }
 
         private static int ReadInt(

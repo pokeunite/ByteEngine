@@ -82,6 +82,7 @@ public static class RendererSerializationRegistrar
                                 environment.EnvironmentLightingEnabled,
 
                             ["smoothEdges"] = environment.SmoothEdges,
+                            ["graphicsLook"] = GraphicsLookSerialization.Save(environment),
                             ["zenithColor"] =
                                 Vector3Node(
                                     environment.ZenithColor),
@@ -293,7 +294,7 @@ public static class RendererSerializationRegistrar
                         environmentMapReference));
             }
 
-            return environment;
+            return GraphicsLookSerialization.Load(environment,data.Properties["graphicsLook"]);
         }
     }
 

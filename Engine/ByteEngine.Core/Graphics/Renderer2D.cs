@@ -229,6 +229,11 @@ public sealed class Renderer2D : IDisposable
         );
     }
 
+    internal void BeginUi()
+    {
+        ResetCamera();GL.Enable(EnableCap.Blend);GL.BlendFunc(BlendingFactor.SrcAlpha,BlendingFactor.OneMinusSrcAlpha);GL.Disable(EnableCap.DepthTest);GL.Disable(EnableCap.CullFace);
+    }
+
     public void DrawText(string value, string? fontPath, int fontSize, Vector2 anchorPoint,
         Vector4 color, float maxWidth = 0f, UiAnchor anchor = UiAnchor.TopLeft)
     {

@@ -317,6 +317,10 @@ public sealed class ComponentSerializer
             new SpriteRendererCodec()
         );
 
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.InteractiveSand3D>("bytebard.desertterrain.InteractiveSand3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.InteractiveSand3D>("InteractiveSand3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.SandLabProbe3D>("bytebard.desertterrain.SandLabProbe3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.SandLabProbe3D>("SandLabProbe3D"));
         Register(new FoliagePatchCodec());
         Register(new VfxPlayerCodec());
         Register(new UiCanvasCodec());
@@ -2673,4 +2677,3 @@ public sealed class ComponentSerializer
         );
     }
 }
-

@@ -86,6 +86,15 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uModel;
         uniform mat4 uView;
         uniform mat4 uProjection;
+        uniform mat4 uNormalMatrix;
+        uniform int uUseHeightField;
+        uniform sampler2D uHeightFieldTexture;
+        uniform vec4 uHeightFieldUvTransform;
+        uniform float uHeightFieldRange;
+        uniform float uHeightFieldBias;
+        uniform vec2 uHeightFieldWorldSize;
+        float surfaceHeight(vec2 uv){vec2 rg=textureLod(uHeightFieldTexture,uv,0.0).rg;return dot(rg,vec2(65280.0,255.0))/65535.0*uHeightFieldRange+uHeightFieldBias;}
+
 
         out vec3 vNormal;
         out vec3 vWorldPosition;
@@ -93,10 +102,18 @@ internal sealed class Shader3D : IDisposable
 
         void main()
         {
-            vNormal=mat3(transpose(inverse(uModel)))*aNormal;
-            vWorldPosition=(uModel*vec4(aPosition,1.0)).xyz;
+            vec3 position=aPosition;vec3 normal=aNormal;
+            if(uUseHeightField==1){
+                vec2 uv=aUV*uHeightFieldUvTransform.xy+uHeightFieldUvTransform.zw;
+                vec2 texel=1.0/vec2(textureSize(uHeightFieldTexture,0));
+                position.y+=surfaceHeight(uv);
+                vec2 gradient=vec2(surfaceHeight(uv+vec2(texel.x,0))-surfaceHeight(uv-vec2(texel.x,0)),surfaceHeight(uv+vec2(0,texel.y))-surfaceHeight(uv-vec2(0,texel.y)))/(2.0*texel*uHeightFieldWorldSize);
+                normal=normalize(vec3(-gradient.x,1.0,-gradient.y));
+            }
+            vNormal=mat3(uNormalMatrix)*normal;
+            vWorldPosition=(uModel*vec4(position,1.0)).xyz;
             vUV=aUV;
-            gl_Position=uProjection*uView*uModel*vec4(aPosition,1.0);
+            gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);
         }
         """;
 
@@ -155,6 +172,13 @@ internal sealed class Shader3D : IDisposable
         uniform int uPackedMetallicChannel;
         uniform float uAoStrength;
         uniform float uNormalStrength;
+        uniform int uUseHeightField;
+        uniform sampler2D uHeightFieldTexture;
+        uniform vec4 uHeightFieldUvTransform;
+        uniform int uSandSurface;
+        uniform int uUseSandImprint;
+        uniform sampler2D uSandImprintTexture;
+        uniform vec2 uSandImprintOrigin;
         uniform float uNormalYSign;
         uniform int uUnlit;
         uniform int uDecodeColorSrgb;
@@ -467,11 +491,15 @@ internal sealed class Shader3D : IDisposable
             vec2 st1=dFdx(vUV);
             vec2 st2=dFdy(vUV);
 
-            vec3 tangent=
-                normalize(q1*st2.t-q2*st1.t);
-
-            vec3 bitangent=
-                normalize(-q1*st2.s+q2*st1.s);
+            float determinant=st1.s*st2.t-st2.s*st1.t;
+            if(abs(determinant)<1e-8) return n;
+            vec3 tangent=(q1*st2.t-q2*st1.t)/determinant;
+            vec3 originalBitangent=(-q1*st2.s+q2*st1.s)/determinant;
+            tangent-=n*dot(n,tangent);
+            if(dot(tangent,tangent)<1e-10) return n;
+            tangent=normalize(tangent);
+            float handedness=dot(cross(n,tangent),originalBitangent)<0.0?-1.0:1.0;
+            vec3 bitangent=cross(n,tangent)*handedness;
 
             return
                 normalize(
@@ -906,6 +934,34 @@ internal sealed class Shader3D : IDisposable
             }
 
             vec3 n=getNormal();
+            if(uSandSurface==1){
+                vec4 sandImprint=vec4(0.5,0.5,0.0,0.0);
+                if(uUseSandImprint==1){
+                    vec2 imprintUv=(vWorldPosition.xz-uSandImprintOrigin+vec2(0.125))/8.25;
+                    sandImprint=texture(uSandImprintTexture,imprintUv);
+                }
+                if(uUseHeightField==1){
+                    vec4 field=texture(uHeightFieldTexture,vUV*uHeightFieldUvTransform.xy+uHeightFieldUvTransform.zw);
+                    sandImprint.a=field.a;
+                    base.rgb=mix(base.rgb,base.rgb*vec3(0.73,0.70,0.65),field.b*0.65);
+                }
+                // Pressure smooths ripples in the trough and displaced shoulders.
+                // World-space wind ripples. Derivative filtering avoids distant shimmer.
+                vec2 wind=normalize(vec2(0.86,0.51));
+                float phase=dot(vWorldPosition.xz,wind)*22.0+sin(vWorldPosition.z*0.73)*1.8+sin(vWorldPosition.x*0.31+vWorldPosition.z*0.17)*2.3;
+                float fade=1.0-smoothstep(0.45,2.4,fwidth(phase));
+                float slope=cos(phase)*0.12*fade*(1.0-sandImprint.a)*pow(abs(normalize(vNormal).y),4.0);
+                n=normalize(n-vec3(wind.x*slope,0.0,wind.y*slope));
+                float macro=sin(vWorldPosition.x*0.071+sin(vWorldPosition.z*0.043))*sin(vWorldPosition.z*0.059);
+                base.rgb*=1.0+macro*0.055;
+                uRoughness=max(uRoughness,0.82);
+                if(uUseSandImprint==1){
+                    vec2 imprintUv=(vWorldPosition.xz-uSandImprintOrigin+vec2(0.125))/8.25;
+                    vec4 imprint=sandImprint;
+                    n=normalize(n+vec3((imprint.r-0.5)*2.0,0.0,(imprint.g-0.5)*2.0));
+                    base.rgb*=1.0-sqrt(imprint.b)*0.34;
+                }
+            }
             vec3 v=normalize(uCameraPosition-vWorldPosition);
 
             vec3 direct=

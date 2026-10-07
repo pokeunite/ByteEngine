@@ -26,9 +26,9 @@ public sealed partial class VehicleBuilder3D
 
     private UiWidget? _previewAction,_placeToolButton,_eraseToolButton;
 
-    private UiWidget Image(string name,string path,Vector2 offset,Vector2 size,bool buildOnly=false,Vector4? tint=null)=>HudObject(name,buildOnly).AddComponent(new UiWidget {Kind=UiWidgetKind.Image,ImageReference=new AssetReference("Assets/GarageUI/"+path),Offset=offset,Size=size,Color=tint??Vector4.One,OrderInLayer=7});
+    private UiWidget Image(string name,string path,Vector2 offset,Vector2 size,bool buildOnly=false,Vector4? tint=null)=>HudObject(name,buildOnly).BindSceneComponent(new UiWidget {Kind=UiWidgetKind.Image,ImageReference=new AssetReference("Assets/GarageUI/"+path),Offset=offset,Size=size,Color=tint??Vector4.One,OrderInLayer=7});
 
-    private void Rule(string name,Vector2 position,Vector2 size,Vector4 color,bool buildOnly=false)=>HudObject(name,buildOnly).AddComponent(new UiWidget{Offset=position,Size=size,Color=color,OrderInLayer=3});
+    private void Rule(string name,Vector2 position,Vector2 size,Vector4 color,bool buildOnly=false)=>HudObject(name,buildOnly).BindSceneComponent(new UiWidget{Offset=position,Size=size,Color=color,OrderInLayer=3});
 
     private UiWidget ToolButton(string name,string icon,Vector2 position,Action click)
 
@@ -51,7 +51,7 @@ public sealed partial class VehicleBuilder3D
     }
     private void CreateFreeHud()
     {
-        _canvas=Own("Goblin Scraper workshop HUD");_canvas.AddComponent(new UiCanvas {ReferenceResolution=new(1280,720)});
+        _canvas=Own("Goblin Scraper workshop HUD");_canvas.BindSceneComponent(new UiCanvas {ReferenceResolution=new(1280,720)});
         Rule("Toolbar",Vector2.Zero,new(1280,48),WorkshopInk);
         Rule("Toolbar edge",new(0,47),new(1280,1),new(.25f,.3f,.27f,1));
         _driveButton=WorkshopTool("Run / build","play",8,ToggleDrive,"B � run the machine or return to building.",false);
@@ -64,13 +64,14 @@ public sealed partial class VehicleBuilder3D
         WorkshopTool("Save machine","save",394,SaveBuild,"F5 � save your current machine.");
         WorkshopTool("Load machine","folder-open",436,LoadBuild,"F9 � load the saved machine.");
         Rule("Tools divider",new(485,10),new(1,28),new(.25f,.3f,.27f,1));
-        _placeToolButton=WorkshopTool("Place blocks","box",496,()=>{_movePick=_copyPick=false;SetEraseTool(false);},"Choose a part below, then click a connector to place it.");
-        WorkshopTool("Move branch","move",538,()=>{SetEraseTool(false);_movePick=true;_copyPick=false;},"Click a placed block, then choose its new connector. Escape cancels.");
+        _placeToolButton=WorkshopTool("Place blocks","box",496,()=>{CloseTuning();_movePick=_copyPick=false;SetEraseTool(false);},"Choose a part below, then click a connector to place it.");
+        WorkshopTool("Move branch","move",538,()=>{CloseTuning();SetEraseTool(false);_movePick=true;_copyPick=false;},"Click a placed block, then choose its new connector. Escape cancels.");
         WorkshopTool("Rotate mount","rotate-cw",580,()=>{_pendingMountTurns++;_message="Rotate queued. Point at a connector.";},"R - turn 90 degrees. Click this tool, then point at a connector.");
         WorkshopTool("Change mount face","arrow-left-right",622,CyclePreviewMountFace,"T � change attachment face. Tab � cycle every socket.");
-        WorkshopTool("Copy part","copy",664,()=>{SetEraseTool(false);_copyPick=true;_movePick=false;},"Click a block to select another copy of that part.");
-        _eraseToolButton=WorkshopTool("Erase blocks","trash-2",706,()=>{_movePick=_copyPick=false;SetEraseTool(true);},"Click a block or brace to erase it. X erases under the pointer. Ctrl+Z restores it.");
+        WorkshopTool("Copy part","copy",664,()=>{CloseTuning();SetEraseTool(false);_copyPick=true;_movePick=false;},"Click a block to select another copy of that part.");
+        _eraseToolButton=WorkshopTool("Erase blocks","trash-2",706,()=>{CloseTuning();_movePick=_copyPick=false;SetEraseTool(true);},"Click a block or brace to erase it. X erases under the pointer. Ctrl+Z restores it.");
         WorkshopTool("Recover machine","rotate-cw",766,ResetPosition,"Recover the machine to its starting position.",false);
+        _tuneToolButton=WorkshopTool("Tune blocks","wrench",814,BeginTuning,"Click a placed block to adjust its values. Escape exits.");
         _machineCount=Text("Machine count","",new(874,15),14);_machineCount.Color=WorkshopMuted;
         _status=Text("Machine status","",new(1075,15),14);_status.Color=WorkshopMuted;
         Rule("Part tray",new(0,620),new(1280,100),WorkshopInk,true);
@@ -84,7 +85,7 @@ public sealed partial class VehicleBuilder3D
         Rule("Categories divider",new(222,634),new(1,68),new(.25f,.3f,.27f,1),true);
         for(int i=0;i<6;i++){
             int slot=i;float x=238+i*106;
-            var border=HudObject("Part selection "+i,true).AddComponent(new UiWidget{Offset=new(x,632),Size=new(100,76),Color=Vector4.Zero,OrderInLayer=3});_freeCardBorders.Add(border);
+            var border=HudObject("Part selection "+i,true).BindSceneComponent(new UiWidget{Offset=new(x,632),Size=new(100,76),Color=Vector4.Zero,OrderInLayer=3});_freeCardBorders.Add(border);
             var card=Button("",new(x+1,633),new(98,74),()=>{int index=_palettePage*6+slot;if(index<Categories[_category].Length)SelectPart(Categories[_category][index]);},true);card.Color=WorkshopInk;card.HoverColor=new(.2f,.25f,.21f,1);_palette.Add(card);
             _cardImages.Add(Image("Part "+i,"cutouts/"+BuilderPartFiles[0]+".png",new(x+14,630),new(72,48),true));
             _cardLabels.Add(Text("Part name "+i,"",new(x+5,682),11,true));_cardLabels[^1].WrapWidth=92;
@@ -98,12 +99,12 @@ public sealed partial class VehicleBuilder3D
         _previewAction=Image("Placement status","workshop/check.png",new(22,598),new(14),true,WorkshopGold);
         _hint=Text("Build controls","",new(44,598),12);_hint.Color=WorkshopMuted;
         _tooltipPanel=HudObject("Context tooltip",true);
-        _tooltipPanel.AddComponent(new UiWidget{Offset=new(936,482),Size=new(324,123),Color=WorkshopInk,OrderInLayer=20});
+        _tooltipPanel.BindSceneComponent(new UiWidget{Offset=new(936,482),Size=new(324,123),Color=WorkshopInk,OrderInLayer=20});
         var titleObj=HudObject("Tooltip heading",true);titleObj.SetParent(_tooltipPanel,false);
-        _tooltipTitle=titleObj.AddComponent(new UiText{Offset=new(15,11),FontSize=18,Color=WorkshopGold,FontReference=new("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf"),OrderInLayer=22});
+        _tooltipTitle=titleObj.BindSceneComponent(new UiText{Offset=new(15,11),FontSize=18,Color=WorkshopGold,FontReference=new("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf"),OrderInLayer=22});
         var bodyObj=HudObject("Tooltip explanation",true);bodyObj.SetParent(_tooltipPanel,false);
-        _tooltipBody=bodyObj.AddComponent(new UiText{Offset=new(15,37),FontSize=13,WrapWidth=288,Color=new(.85f,.88f,.84f,1),FontReference=new("Assets/GarageUI/fonts/Barlow-Regular.ttf"),OrderInLayer=22});
-        _tooltipPanel.Active=false;RefreshFreePalette();
+        _tooltipBody=bodyObj.BindSceneComponent(new UiText{Offset=new(15,37),FontSize=13,WrapWidth=288,Color=new(.85f,.88f,.84f,1),FontReference=new("Assets/GarageUI/fonts/Barlow-Regular.ttf"),OrderInLayer=22});
+        _tooltipPanel.Active=false;RefreshFreePalette();CreateTuningPanel();
     }
 
     private void RefreshFreePalette()
@@ -198,7 +199,8 @@ public sealed partial class VehicleBuilder3D
     private void RefreshFreeHud()
     {
         if(_status==null||Assembly==null)return;
-        _placeToolButton!.Color=!_eraseMode&&!_movePick&&!_copyPick?new(.19f,.29f,.20f,1):WorkshopInk;
+        _placeToolButton!.Color=!_tuneMode&&!_eraseMode&&!_movePick&&!_copyPick?new(.19f,.29f,.20f,1):WorkshopInk;
+        _tuneToolButton!.Color=_tuneMode?new(.19f,.29f,.20f,1):WorkshopInk;
         _eraseToolButton!.Color=_eraseMode?new(.52f,.15f,.12f,1):WorkshopInk;
         _undoButton!.Interactable=_assemblyUndo.Count>0;_redoButton!.Interactable=_assemblyRedo.Count>0;
         _status.Text=Building?"WORKSHOP":"SPEED  "+Speed.ToString("0.0")+" m/s";

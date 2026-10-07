@@ -14,6 +14,20 @@ internal sealed class Shader : IDisposable
     private readonly Dictionary<string, int> _uniformLocations =
         new();
 
+    // Program uniforms persist across draws. Avoid re-uploading unchanged lighting,
+    // fog, sampler indices and material values; model matrices still change normally.
+    private readonly Dictionary<string,int> _ints=new();
+    private readonly Dictionary<string,float> _floats=new();
+    private readonly Dictionary<string,Vector2> _vectors2=new();
+    private readonly Dictionary<string,Vector3> _vectors3=new();
+    private readonly Dictionary<string,Vector4> _vectors4=new();
+    private readonly Dictionary<string,Matrix4> _matrices=new();
+    private static bool Changed<T>(Dictionary<string,T> values,string name,T value) where T:IEquatable<T>
+    {
+        if(values.TryGetValue(name,out var previous)&&previous.Equals(value))return false;
+        values[name]=value;return true;
+    }
+
     public Shader(
         string vertexSource,
         string fragmentSource)
@@ -170,6 +184,7 @@ internal sealed class Shader : IDisposable
         string name,
         int value)
     {
+        if(!Changed(_ints,name,value))return;
         GL.Uniform1(
             GetUniformLocation(name),
             value
@@ -180,6 +195,7 @@ internal sealed class Shader : IDisposable
         string name,
         float value)
     {
+        if(!Changed(_floats,name,value))return;
         GL.Uniform1(
             GetUniformLocation(name),
             value
@@ -190,6 +206,7 @@ internal sealed class Shader : IDisposable
         string name,
         Vector2 value)
     {
+        if(!Changed(_vectors2,name,value))return;
         GL.Uniform2(
             GetUniformLocation(name),
             value.X,
@@ -201,6 +218,7 @@ internal sealed class Shader : IDisposable
         string name,
         Vector4 value)
     {
+        if(!Changed(_vectors4,name,value))return;
         GL.Uniform4(
             GetUniformLocation(name),
             value.X,
@@ -212,6 +230,7 @@ internal sealed class Shader : IDisposable
 
     public void SetVector3(string name, Vector3 value)
     {
+        if(!Changed(_vectors3,name,value))return;
         GL.Uniform3(GetUniformLocation(name), value.X, value.Y, value.Z);
     }
 
@@ -219,6 +238,7 @@ internal sealed class Shader : IDisposable
         string name,
         Matrix4 value)
     {
+        if(!Changed(_matrices,name,value))return;
         int location =
             GetUniformLocation(name);
 

@@ -12,6 +12,17 @@ public sealed class RenderWorld
         new();
 
     private RenderView3D? _view;
+    private readonly List<RenderSubmission> _visible = new();
+    private static readonly Comparison<RenderSubmission> SubmissionComparison = (a, b) =>
+    {
+        int queue = ((int)a.Queue).CompareTo((int)b.Queue);
+        if (queue != 0) return queue;
+        int distance = a.Queue == RenderQueue3D.Transparent
+            ? b.DistanceSquaredToCamera.CompareTo(a.DistanceSquaredToCamera)
+            : a.Queue == RenderQueue3D.Opaque
+                ? a.DistanceSquaredToCamera.CompareTo(b.DistanceSquaredToCamera) : 0;
+        return distance != 0 ? distance : a.SubmissionIndex.CompareTo(b.SubmissionIndex);
+    };
 
     private RenderLighting3D _lighting =
         RenderLighting3D.Default;
@@ -88,6 +99,13 @@ public sealed class RenderWorld
             mesh.LocalBounds.Transform(
                 modelMatrix);
 
+        if(material.HeightFieldTexture!=null){
+            var low=mesh.LocalBounds.Minimum;var high=mesh.LocalBounds.Maximum;
+            low.Y+=Math.Min(0,material.HeightFieldBias);high.Y+=Math.Max(0,material.HeightFieldBias+material.HeightFieldRange);
+            worldBounds=new BoundingBox3D(low,high).Transform(modelMatrix);
+            // Depth shaders have no displaced vertex path yet; avoid incorrect flat shadows.
+            castShadows=false;
+        }
         float distanceSquared =
             0.0f;
 
@@ -223,9 +241,8 @@ public sealed class RenderWorld
             return;
         }
 
-        List<RenderSubmission> visible =
-            new(
-                submitted);
+        List<RenderSubmission> visible = _visible;
+        visible.Clear();
 
         int culled =
             0;
@@ -272,51 +289,15 @@ public sealed class RenderWorld
                     _lighting)
                 : PointShadowPassResult.None;
 
-        IEnumerable<RenderSubmission> opaque =
-            visible
-                .Where(
-                    submission =>
-                        submission.Queue ==
-                        RenderQueue3D.Opaque)
-                .OrderBy(
-                    submission =>
-                        submission.DistanceSquaredToCamera)
-                .ThenBy(
-                    submission =>
-                        submission.SubmissionIndex);
-
-        IEnumerable<RenderSubmission> transparent =
-            visible
-                .Where(
-                    submission =>
-                        submission.Queue ==
-                        RenderQueue3D.Transparent)
-                .OrderByDescending(
-                    submission =>
-                        submission.DistanceSquaredToCamera)
-                .ThenBy(
-                    submission =>
-                        submission.SubmissionIndex);
-
-        IEnumerable<RenderSubmission> overlay =
-            visible
-                .Where(
-                    submission =>
-                        submission.Queue ==
-                        RenderQueue3D.Overlay)
-                .OrderBy(
-                    submission =>
-                        submission.SubmissionIndex);
+        visible.Sort(SubmissionComparison);
 
         int drawCalls =
             0;
 
+        context.Renderer3D.BeginMainBatch();
+        try {
         foreach (RenderSubmission submission
-                 in opaque
-                     .Concat(
-                         transparent)
-                     .Concat(
-                         overlay))
+                 in visible)
         {
             context.Renderer3D.Draw(
                 submission.Mesh,
@@ -338,6 +319,8 @@ public sealed class RenderWorld
 
             drawCalls++;
         }
+
+        } finally { context.Renderer3D.EndMainBatch(); }
 
         LastStats =
             CreateStats(

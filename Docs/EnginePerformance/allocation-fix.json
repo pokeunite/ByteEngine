@@ -1,0 +1,100 @@
+{
+  "capturedUtc": "2026-10-05T08:58:37.7236622Z",
+  "framework": ".NET 9.0.18",
+  "logicalProcessors": 8,
+  "scope": "CPU scene updates only; no rendering, GPU, or game-specific code",
+  "warmupFrames": 24,
+  "measuredFrames": 120,
+  "results": [
+    {
+      "Scenario": "idle-components",
+      "Count": 1000,
+      "SceneObjects": 1000,
+      "MeanMs": 0.4061466666666668,
+      "MedianMs": 0.4144,
+      "P95Ms": 0.4639,
+      "AllocatedBytesPerFrame": 96408,
+      "Gen0Collections": 4
+    },
+    {
+      "Scenario": "idle-components",
+      "Count": 10000,
+      "SceneObjects": 10000,
+      "MeanMs": 2.7862266666666664,
+      "MedianMs": 2.1453,
+      "P95Ms": 5.9388,
+      "AllocatedBytesPerFrame": 960408,
+      "Gen0Collections": 55
+    },
+    {
+      "Scenario": "hierarchy-transform-reads",
+      "Count": 1000,
+      "SceneObjects": 2001,
+      "MeanMs": 1.7752183333333327,
+      "MedianMs": 1.337,
+      "P95Ms": 4.1795,
+      "AllocatedBytesPerFrame": 112424,
+      "Gen0Collections": 4
+    },
+    {
+      "Scenario": "hierarchy-transform-reads",
+      "Count": 5000,
+      "SceneObjects": 10001,
+      "MeanMs": 2.5896633333333337,
+      "MedianMs": 2.4278,
+      "P95Ms": 3.5246,
+      "AllocatedBytesPerFrame": 560424,
+      "Gen0Collections": 32
+    },
+    {
+      "Scenario": "separated-static-colliders",
+      "Count": 100,
+      "SceneObjects": 100,
+      "MeanMs": 0.10968583333333334,
+      "MedianMs": 0.0928,
+      "P95Ms": 0.2228,
+      "AllocatedBytesPerFrame": 10008,
+      "Gen0Collections": 0
+    },
+    {
+      "Scenario": "separated-static-colliders",
+      "Count": 500,
+      "SceneObjects": 500,
+      "MeanMs": 0.9089533333333333,
+      "MedianMs": 0.8893,
+      "P95Ms": 1.0392,
+      "AllocatedBytesPerFrame": 48408,
+      "Gen0Collections": 1
+    },
+    {
+      "Scenario": "separated-static-colliders",
+      "Count": 1000,
+      "SceneObjects": 1000,
+      "MeanMs": 2.8153458333333328,
+      "MedianMs": 2.6427,
+      "P95Ms": 3.8782,
+      "AllocatedBytesPerFrame": 96408,
+      "Gen0Collections": 4
+    },
+    {
+      "Scenario": "ui-buttons-update-only",
+      "Count": 100,
+      "SceneObjects": 100,
+      "MeanMs": 0.024735000000000004,
+      "MedianMs": 0.0207,
+      "P95Ms": 0.0305,
+      "AllocatedBytesPerFrame": 10008,
+      "Gen0Collections": 1
+    },
+    {
+      "Scenario": "ui-buttons-update-only",
+      "Count": 500,
+      "SceneObjects": 500,
+      "MeanMs": 0.128345,
+      "MedianMs": 0.1188,
+      "P95Ms": 0.1977,
+      "AllocatedBytesPerFrame": 48408,
+      "Gen0Collections": 0
+    }
+  ]
+}

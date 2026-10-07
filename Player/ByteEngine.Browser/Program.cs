@@ -39,13 +39,16 @@ public static partial class BrowserGame
         if (!demo)
         {
             _project = new GameProjectRuntime("/game/Content/Game.byteproject", Console.Error.WriteLine);
+            string currentPath=_project.Project.StartupScene;
+            Loop.Scenes.SceneFactory=path=>{var fresh=_project.LoadScene(path);currentPath=path;return fresh;};
+            Loop.Scenes.QuitHandler=()=>Loop.Scenes.UnloadScene();
             var scene = _project.LoadStartupScene();
             Loop.Scenes.RestartSceneFactory = () =>
             {
                 Loop.Scenes.GlobalVariables.Clear();
                 foreach (var variable in _project.Project.GlobalVariables)
                     Loop.Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
-                return _project.LoadStartupScene();
+                return _project.LoadScene(currentPath);
             };
             Loop.Scenes.LoadScene(scene);
         }

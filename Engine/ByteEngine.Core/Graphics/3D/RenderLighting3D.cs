@@ -19,6 +19,7 @@ public sealed class RenderLighting3D
     private readonly RenderDirectionalLight3D[] _directionalLights;
 
     private readonly RenderPointLight3D[] _pointLights;
+    public int PointShadowLimit { get; set; } = MaxPointShadowLights;
 
     public IReadOnlyList<RenderDirectionalLight3D> DirectionalLights =>
         _directionalLights;
@@ -140,7 +141,7 @@ public sealed class RenderLighting3D
                     candidate =>
                         candidate.Index)
                 .Take(
-                    MaxPointShadowLights)
+                    Math.Clamp(PointShadowLimit,0,MaxPointShadowLights))
                 .Select(
                     candidate =>
                         candidate.Index)

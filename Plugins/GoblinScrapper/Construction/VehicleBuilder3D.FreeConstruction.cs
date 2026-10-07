@@ -114,7 +114,7 @@ public sealed partial class VehicleBuilder3D
 
         foreach(var bridge in _axleBridges)bridge.Active=false;
 
-        Transform.WorldPosition=new(0,1.25f,0);_message="Start with beams. Click a glowing connector to extend your machine.";
+        if(!UseAuthoredScene)Transform.WorldPosition=new(0,1.25f,0);_message="Start with beams. Click a glowing connector to extend your machine.";
 
     }
 
@@ -132,6 +132,7 @@ public sealed partial class VehicleBuilder3D
         Assets!.LoadModel(new AssetReference(PartsDirectory+"/"+file+".glb"));RememberAssembly();
 
         int id=Assembly.Add(file,parent,position,rotation,parentBone,parentConnector,ownConnector);
+        if(file==_copiedTuningFile&&_copiedTuning!=null)Assembly.Parts[id]=Assembly.Parts[id] with {Tuning=new(_copiedTuning)};
 
         var obj=CreateModelVisual(GameObject.Scene!,Assets!,PartsDirectory+"/"+file+".glb",GameObject,VehicleAssembly.DisplayName(file)+" #"+id);
 
@@ -278,7 +279,7 @@ public sealed partial class VehicleBuilder3D
         if(ControlKeyPressed(Key.R))RotatePreview(ControlKeyDown(Key.LeftAlt)?15:90);
         if(ControlKeyPressed(Key.T))CyclePreviewMountFace();
 
-        if(ControlKeyPressed(Key.Escape)){CancelMove();SetEraseTool(false);}
+        if(ControlKeyPressed(Key.Escape)){CloseTuning();CancelMove();SetEraseTool(false);}
 
         if(ControlKeyPressed(Key.M)&&_hoveredBlock>0)
 
@@ -290,7 +291,7 @@ public sealed partial class VehicleBuilder3D
 
             _message="Move branch: choose another connector. Escape cancels.";}
 
-        if(ControlKeyPressed(Key.C)&&_hoveredBlock>0){CancelMove();SelectPart(Array.IndexOf(BuilderPartFiles,Assembly!.Parts[_hoveredBlock].File));}
+        if(ControlKeyPressed(Key.C)&&_hoveredBlock>0){CancelMove();CopyHoveredPart();}
 
         if(ControlKeyPressed(Key.Delete))RemoveAssemblyPart(_selectedBlock);
 
@@ -320,14 +321,15 @@ public sealed partial class VehicleBuilder3D
 
             if(Input.IsMouseButtonPressed(MouseButton.Left)&&!clickedUi)
 
-            {if(_eraseMode)RemoveAssemblyPart(_hoveredBlock);
+            {if(_tuneMode)TuneBlock(_hoveredBlock);
+                else if(_eraseMode)RemoveAssemblyPart(_hoveredBlock);
                 else if(_copyPick){CopyHoveredPart();_copyPick=false;}
                 else if(_movePick){MoveHoveredBranch();_movePick=false;}
                 else PlaceFreePreview();}
 
         }
 
-        if(ControlKeyPressed(Key.Enter)&&!clickedUi)PlaceFreePreview();
+        if(ControlKeyPressed(Key.Enter)&&!clickedUi&&!_tuneMode)PlaceFreePreview();
 
         for(int i=0;i<_socketMarkers.Count;i++)_socketMarkers[i].Active=Building&&!_eraseMode&&_socketMarkerKeys[i].Block==_hoveredBlock;
 
@@ -429,11 +431,11 @@ public sealed partial class VehicleBuilder3D
 
         }
 
-        if(_eraseMode||_movePick||_copyPick)
+        if(_eraseMode||_movePick||_copyPick||_tuneMode)
 
         {
 
-            PickBraceForErase(origin,direction,ref nearest);
+            if(!_tuneMode)PickBraceForErase(origin,direction,ref nearest);
             _ghost.Active=false;_candidateVisible=false;
 
             if(_eraseHighlight==null)
@@ -447,6 +449,7 @@ public sealed partial class VehicleBuilder3D
             else if(_hoveredBlock < -1){var brace=Assembly.Braces[-_hoveredBlock-1];var a=Assembly.BracePoint(brace.A);var b=Assembly.BracePoint(brace.B);_eraseHighlight.Transform.LocalPosition=(a+b)*.5f;_eraseHighlight.Transform.LocalRotation=AlignNormals(Vector3.UnitZ,Vector3.Normalize(b-a));_eraseHighlight.Transform.LocalScale=new(.14f,.14f,Vector3.Distance(a,b));_message="Click to erase brace. Ctrl+Z restores it";}
             else _message=_hoveredBlock < -1?"Click to erase brace. Ctrl+Z restores it":_hoveredBlock==0?"The master block is protected":"ERASE: point at a placed part, then click";
 
+            if(_tuneMode)_message=_hoveredBlock>0?"Click to tune "+VehicleAssembly.DisplayName(Assembly.Parts[_hoveredBlock].File):"TUNE: click a placed block";
             _placementIssue=_message;return;
 
         }
@@ -578,7 +581,7 @@ public sealed partial class VehicleBuilder3D
         if(Building){
             var bounds=Assembly.Parts.Values.SelectMany(p=>_catalog![p.File].Clearance.Select(b=>b.Transform(p.Position,p.Rotation))).ToArray();
             var min=new Vector3(bounds.Min(b=>b.Min.X),bounds.Min(b=>b.Min.Y),bounds.Min(b=>b.Min.Z));var max=new Vector3(bounds.Max(b=>b.Max.X),bounds.Max(b=>b.Max.Y),bounds.Max(b=>b.Max.Z));_buildFocus=(min+max)*.5f;
-            var position=Transform.WorldPosition;position.Y=Math.Max(1.25f,Assembly.RideHeight+.08f);Transform.WorldPosition=position;}
+            var position=Transform.WorldPosition;position.Y=(UseAuthoredScene?_workshopStart.Y-1.25f:0)+Math.Max(1.25f,Assembly.RideHeight+.08f);Transform.WorldPosition=position;}
         _cogPhases=CogGeometry.Phases(Assembly);
         foreach(var pair in _cogPhases)if(_assemblyRigs.TryGetValue(pair.Key,out var gearRig)){var d=_catalog![Assembly.Parts[pair.Key].File];gearRig.SetPhysicalBoneDeformation("Moving",ImportAlignment*CogGeometry.PhaseTransform(d,pair.Value)*ImportAlignment);}
         var matrices=new Dictionary<int,Matrix4x4>();
@@ -640,10 +643,11 @@ public sealed partial class VehicleBuilder3D
 
         {
 
-            Transform.WorldPosition=new(Transform.WorldPosition.X,Assembly.RideHeight,Transform.WorldPosition.Z);
+            Transform.WorldPosition=new(Transform.WorldPosition.X,Assembly.RideHeight+(UseAuthoredScene?_workshopStart.Y-1.25f:0),Transform.WorldPosition.Z);
 
-            _contraption=new(Assembly,Transform.WorldPosition,Transform.WorldRotation);
+            _contraption=new(Assembly,Transform.WorldPosition,Transform.WorldRotation,!UseAuthoredScene);
 
+            AddAuthoredObstacles();
             foreach(var o in _obstacles)_contraption.AddObstacle(new(o.Center.X,o.Half.Y,o.Center.Y),new(o.Half.X*2,o.Half.Y*2,o.Half.Y*2));
 
             foreach(var visual in _assemblyVisuals.Values)visual.SetParent(null,true);
@@ -661,7 +665,7 @@ public sealed partial class VehicleBuilder3D
 
         if(_eraseHighlight!=null)_eraseHighlight.Active=false;
 
-        Building=false;foreach(var marker in _socketMarkers)marker.Active=false;_motion.Reset(_motion.Yaw);Speed=0;Transform.WorldPosition=new(Transform.WorldPosition.X,Assembly.RideHeight,Transform.WorldPosition.Z);
+        Building=false;foreach(var marker in _socketMarkers)marker.Active=false;_motion.Reset(_motion.Yaw);Speed=0;Transform.WorldPosition=new(Transform.WorldPosition.X,Assembly.RideHeight+(UseAuthoredScene?_workshopStart.Y-1.25f:0),Transform.WorldPosition.Z);
 
         foreach(var p in Assembly.Parts.Values)if(p.File=="scrap_engine_block"&&_assemblyRigs.TryGetValue(p.Id,out var rig))PlayClip(rig,"EngineIdle",true);
 
@@ -876,7 +880,7 @@ public sealed partial class VehicleBuilder3D
 
             string json=File.ReadAllText(SavePath);using var doc=JsonDocument.Parse(json);
 
-            if(doc.RootElement.GetProperty("Version").GetInt32() is not (4 or 5 or 6))throw new JsonException("Older chassis save preserved. Start a new machine from the master block.");
+            if(doc.RootElement.GetProperty("Version").GetInt32() is not (4 or 5 or 6 or 7))throw new JsonException("Older chassis save preserved. Start a new machine from the master block.");
 
             var validated=VehicleAssembly.FromJson(_catalog!,json);foreach(var p in validated.Parts.Values.Where(p=>p.Id!=0))Assets!.LoadModel(new AssetReference(PartsDirectory+"/"+p.File+".glb"));
 

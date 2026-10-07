@@ -42,8 +42,7 @@ public sealed class RenderContext
     /// </summary>
     public bool RenderShadows3D { get; }
 
-    public RenderWorld RenderWorld { get; } =
-        new();
+    public RenderWorld RenderWorld { get; }
 
     private readonly List<Action<Renderer2D>> _uiCommands = new();
 
@@ -68,7 +67,7 @@ public sealed class RenderContext
     internal void FlushUi()
     {
         if (_uiCommands.Count == 0) return;
-        Renderer2D.ResetCamera();
+        Renderer2D.BeginUi();
         foreach (Action<Renderer2D> command in _uiCommands) command(Renderer2D);
         _uiCommands.Clear();
     }
@@ -99,8 +98,10 @@ public sealed class RenderContext
         Matrix4x4? projectionMatrix3D = null,
         bool prepareEnvironmentLighting3D = true,
         bool renderShadows3D = true,
-        IRenderFrameSink? frameSink = null)
+        IRenderFrameSink? frameSink = null,
+        RenderWorld? renderWorld = null)
     {
+        RenderWorld = renderWorld ?? new();
         FrameSink = frameSink;
         Renderer2D =
             renderer2D;
@@ -234,7 +235,7 @@ public sealed class RenderContext
                 environment.FogStartDistance,
                 environment.FogEndDistance,
                 environment.FogDensity,
-                environment.FogMaxOpacity) { SmoothEdges = environment.SmoothEdges };
+                environment.FogMaxOpacity) { SmoothEdges = environment.SmoothEdges, Look=environment.CaptureLook() };
     }
 
     public RenderLighting3D CaptureRenderLighting3D(
@@ -250,33 +251,13 @@ public sealed class RenderContext
         RenderView3D? view,
         RenderEnvironment3D environment)
     {
-        DirectionalLight[] directional =
-            Scene.GameObjects
-                .Where(
-                    gameObject =>
-                        gameObject.ActiveInHierarchy)
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<DirectionalLight>())
-                .Where(
-                    light =>
-                        light.Enabled)
-                .ToArray();
-
-        PointLight[] point =
-            Scene.GameObjects
-                .Where(
-                    gameObject =>
-                        gameObject.ActiveInHierarchy)
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<PointLight>())
-                .Where(
-                    light =>
-                        light.Enabled)
-                .ToArray();
+        var directionalList=new List<DirectionalLight>();var pointList=new List<PointLight>();
+        var objects=Scene.GameObjects;
+        for(int i=0;i<objects.Count;i++){
+            var obj=objects[i];if(!obj.ActiveInHierarchy)continue;var components=obj.Components;
+            for(int j=0;j<components.Count;j++){var component=components[j];if(!component.Enabled)continue;if(component is DirectionalLight sun)directionalList.Add(sun);else if(component is PointLight lamp)pointList.Add(lamp);}
+        }
+        var directional=directionalList.ToArray();var point=pointList.ToArray();
 
         RenderDirectionalLight3D[] directionalSnapshots =
             directional
@@ -294,7 +275,7 @@ public sealed class RenderContext
                                 0.0f,
                                 light.AmbientIntensity),
                             light.CastShadows,
-                            light.ShadowResolution,
+                            Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),
                             light.ShadowDistance,
                             light.ShadowBias,
                             light.ShadowStrength,
@@ -325,8 +306,8 @@ public sealed class RenderContext
                             Math.Max(
                                 0.05f,
                                 light.Range),
-                            light.CastShadows,
-                            light.ShadowResolution,
+                            light.CastShadows && environment.Look.PointShadowLimit>0,
+                            Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),
                             light.ShadowBias,
                             light.ShadowStrength,
                             light.ShadowSoftness))
@@ -358,6 +339,7 @@ public sealed class RenderContext
 
         if (!environment.OverrideAmbient)
         {
+            lighting.PointShadowLimit=environment.Look.PointShadowLimit;
             return lighting;
         }
 
@@ -367,7 +349,7 @@ public sealed class RenderContext
                 lighting.PointLights,
                 environment.AmbientIntensity,
                 lighting.SubmittedDirectionalLights,
-                lighting.SubmittedPointLights);
+                lighting.SubmittedPointLights) { PointShadowLimit=environment.Look.PointShadowLimit };
     }
 
     internal void Begin3DFrame()

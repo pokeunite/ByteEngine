@@ -22,6 +22,7 @@ internal static class Program
         using var writer = new DiagnosticWriter();
         Console.SetOut(writer);
         Console.SetError(writer);
+        bool smokeTest=args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
         bool validate = args.Contains("--validate", StringComparer.OrdinalIgnoreCase);
         try
         {
@@ -44,22 +45,14 @@ internal static class Program
             if (validate) GamePackageExporter.ValidatePackage(AppContext.BaseDirectory);
             using var content = new GameContentSession(AppContext.BaseDirectory);
             using var project = new GameProjectRuntime(content.ProjectFile, CrashDebugLog.Write);
-            if (validate)
-            {
-                var scene = project.LoadStartupScene();
-                int missing = scene.GameObjects.SelectMany(o => o.Components).OfType<ByteEngine.Core.Serialization.MissingComponent>().Count();
-                if (missing > 0) throw new InvalidDataException($"Startup scene contains {missing} unavailable components.");
-                CrashDebugLog.Write($"Package validation passed: {project.Project.Name}; assets={project.Database.Assets.Count}");
-                return 0;
-            }
-            using var game = new StandaloneGame(project);
+            using var game = new StandaloneGame(project,smokeTest,validate);
             game.Run();
             return 0;
         }
         catch (Exception error)
         {
             CrashDebugLog.WriteException("GAME FAILURE", error);
-            if (!validate)
+            if (!validate && !smokeTest)
                 MessageBox.Show($"The game could not continue.\n\n{error.Message}\n\nDiagnostic log:\n{log}",
                     "Game Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;

@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/GoblinScrapper/GoblinScrapper.Plugin.csproj" />
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
     <ProjectReference Include="..\..\Editor\ByteEngine.Editor\ByteEngine.Editor.csproj" />
@@ -19,4 +20,4 @@
     <Compile Remove="C9HumanoidSourceNodeRetargetTests.cs" />
   </ItemGroup>
 
-</Project>
+<ItemGroup><ProjectReference Include="../../Plugins/DuneCompany/DuneCompany.Plugin.csproj" /></ItemGroup></Project>

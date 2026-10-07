@@ -10,6 +10,12 @@ public sealed class Renderer3D : IDisposable
 
     private readonly MaterialTextureSampling _materialSampling = new();
 
+    private readonly List<RenderSubmission> _directionalCasters = new();
+    private readonly List<RenderSubmission> _pointCasters = new();
+    private static readonly string[][] DirectionalUniforms = Enumerable.Range(0, RenderLighting3D.MaxDirectionalLights)
+        .Select(i => new[] { $"uDirectionalLightDirections[{i}]", $"uDirectionalLightColors[{i}]", $"uDirectionalLightIntensities[{i}]" }).ToArray();
+    private static readonly string[][] PointUniforms = Enumerable.Range(0, RenderLighting3D.MaxPointLights)
+        .Select(i => new[] { $"uPointLightPositions[{i}]", $"uPointLightColors[{i}]", $"uPointLightIntensities[{i}]", $"uPointLightRanges[{i}]" }).ToArray();
     private Shader3D? _shader;
 
     private SkyShader3D? _skyShader;
@@ -176,19 +182,17 @@ public sealed class Renderer3D : IDisposable
             lighting.DirectionalLights[
                 shadowLightIndex];
 
-        RenderSubmission[] casters =
-            submissions
-                .Where(
-                    submission =>
-                        submission.CastShadows &&
-                        submission.Queue !=
-                            RenderQueue3D.Overlay &&
-                        submission.Material.BlendMode is
-                            BlendMode3D.Opaque or
-                            BlendMode3D.Cutout)
-                .ToArray();
+        var casters = _directionalCasters;
+        casters.Clear();
+        for (int i = 0; i < submissions.Count; i++)
+        {
+            var submission = submissions[i];
+            if (submission.CastShadows && submission.Queue != RenderQueue3D.Overlay &&
+                submission.Material.BlendMode is BlendMode3D.Opaque or BlendMode3D.Cutout)
+                casters.Add(submission);
+        }
 
-        if (casters.Length ==
+        if (casters.Count ==
             0)
         {
             return
@@ -201,6 +205,8 @@ public sealed class Renderer3D : IDisposable
             BuildDirectionalShadowMatrix(
                 view,
                 light);
+
+        var shadowFrustum = new Frustum3D(lightViewProjection);
 
         int previousFramebuffer =
             _shadowMap!.Begin(
@@ -241,6 +247,9 @@ public sealed class Renderer3D : IDisposable
             foreach (RenderSubmission submission
                      in casters)
             {
+                // Casters outside the light volume cannot affect this shadow map.
+                if (!shadowFrustum.Intersects(submission.WorldBounds)) continue;
+
                 _shadowShader.SetMatrix(
                     "uModel",
                     submission.ModelMatrix);
@@ -360,22 +369,18 @@ public sealed class Renderer3D : IDisposable
             RenderPointLight3D light =
                 lighting.PointLights[lightIndex];
 
-            RenderSubmission[] casters =
-                submissions
-                    .Where(
-                        submission =>
-                            submission.CastShadows &&
-                            submission.Queue != RenderQueue3D.Overlay &&
-                            submission.Material.BlendMode is
-                                BlendMode3D.Opaque or
-                                BlendMode3D.Cutout &&
-                            IntersectsPointLightRange(
-                                submission.WorldBounds,
-                                light.Position,
-                                light.Range))
-                    .ToArray();
+            var casters = _pointCasters;
+            casters.Clear();
+            for (int i = 0; i < submissions.Count; i++)
+            {
+                var submission = submissions[i];
+                if (submission.CastShadows && submission.Queue != RenderQueue3D.Overlay &&
+                    submission.Material.BlendMode is BlendMode3D.Opaque or BlendMode3D.Cutout &&
+                    IntersectsPointLightRange(submission.WorldBounds, light.Position, light.Range))
+                    casters.Add(submission);
+            }
 
-            if (casters.Length == 0)
+            if (casters.Count == 0)
             {
                 continue;
             }
@@ -517,6 +522,17 @@ public sealed class Renderer3D : IDisposable
                 drawCalls);
     }
 
+    public bool EnableStateBatching{get;set;}=true;
+    bool _mainBatch;
+    (bool depth,bool write,BlendMode3D blend,CullMode3D cull,FrontFaceWinding3D front,PolygonMode3D polygon)? _batchState;
+    internal void BeginMainBatch(){_mainBatch=EnableStateBatching;_batchState=null;}
+    internal void EndMainBatch(){_mainBatch=false;_batchState=null;RestoreBaselineState();}
+    void ApplyMainState(Material material){
+        var state=(material.DepthTest,material.ResolveDepthWrite(),material.BlendMode,material.CullMode,material.FrontFace,material.PolygonMode);
+        if(_mainBatch&&_batchState==state)return;
+        ApplyRenderState(material);if(_mainBatch)_batchState=state;
+    }
+
     public void Draw(
         Mesh mesh,
         Material material,
@@ -540,8 +556,7 @@ public sealed class Renderer3D : IDisposable
 
         Initialize();
 
-        ApplyRenderState(
-            material);
+        ApplyMainState(material);
 
         try
         {
@@ -551,6 +566,8 @@ public sealed class Renderer3D : IDisposable
                 "uModel",
                 model);
 
+            Matrix4x4.Invert(model,out var inverseModel);
+            _shader.SetMatrix("uNormalMatrix",Matrix4x4.Transpose(inverseModel));
             _shader.SetMatrix(
                 "uView",
                 view);
@@ -681,15 +698,21 @@ public sealed class Renderer3D : IDisposable
             GL.ActiveTexture(
                 TextureUnit.Texture0);
 
-            RestoreBaselineState();
+            if(!_mainBatch)RestoreBaselineState();
         }
     }
 
     private void UploadStandardMaterialMaps(Material material)
     {
+        _shader!.SetInt("uUseHeightField",material.HeightFieldTexture!=null?1:0);
+        if(material.HeightFieldTexture!=null){material.HeightFieldTexture.Bind(14);GL.BindSampler(14,0);_shader.SetInt("uHeightFieldTexture",14);_shader.SetVector4("uHeightFieldUvTransform",material.HeightFieldUvTransform);_shader.SetFloat("uHeightFieldRange",material.HeightFieldRange);_shader.SetFloat("uHeightFieldBias",material.HeightFieldBias);_shader.SetVector2("uHeightFieldWorldSize",material.HeightFieldWorldSize);}
         _shader!.SetVector2("uUvTiling", material.UvTiling);
         _shader.SetVector2("uUvOffset", material.UvOffset);
         _shader.SetFloat("uNormalStrength", material.NormalStrength);
+        _shader.SetInt("uSandSurface", material.SandSurface ? 1 : 0);
+        _shader.SetInt("uUseSandImprint",material.SandImprintTexture!=null?1:0);
+        _shader.SetVector2("uSandImprintOrigin",material.SandImprintOrigin);
+        if(material.SandImprintTexture!=null){material.SandImprintTexture.Bind(13);GL.BindSampler(13,0);_shader.SetInt("uSandImprintTexture",13);}
         _shader.SetFloat("uNormalYSign", material.DirectXNormalMap ? -1f : 1f);
         _shader.SetFloat("uAoStrength", material.AmbientOcclusionStrength);
         _shader.SetInt("uUnlit", material.Shading == ByteEngine.Core.Assets.MaterialShadingMode.Unlit ? 1 : 0);
@@ -1156,15 +1179,15 @@ public sealed class Renderer3D : IDisposable
                 lighting.DirectionalLights[index];
 
             _shader.SetVector3(
-                $"uDirectionalLightDirections[{index}]",
+                DirectionalUniforms[index][0],
                 light.Direction);
 
             _shader.SetVector3(
-                $"uDirectionalLightColors[{index}]",
+                DirectionalUniforms[index][1],
                 light.Color);
 
             _shader.SetFloat(
-                $"uDirectionalLightIntensities[{index}]",
+                DirectionalUniforms[index][2],
                 Math.Max(
                     0.0f,
                     light.Intensity));
@@ -1180,21 +1203,21 @@ public sealed class Renderer3D : IDisposable
                 lighting.PointLights[index];
 
             _shader.SetVector3(
-                $"uPointLightPositions[{index}]",
+                PointUniforms[index][0],
                 light.Position);
 
             _shader.SetVector3(
-                $"uPointLightColors[{index}]",
+                PointUniforms[index][1],
                 light.Color);
 
             _shader.SetFloat(
-                $"uPointLightIntensities[{index}]",
+                PointUniforms[index][2],
                 Math.Max(
                     0.0f,
                     light.Intensity));
 
             _shader.SetFloat(
-                $"uPointLightRanges[{index}]",
+                PointUniforms[index][3],
                 Math.Max(
                     0.01f,
                     light.Range));

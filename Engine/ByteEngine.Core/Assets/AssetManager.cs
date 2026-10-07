@@ -39,6 +39,7 @@ public sealed class AssetManager : IDisposable
     private readonly Dictionary<(Guid Model, string Key), Mesh> _modelMeshes = new();
     private readonly Dictionary<(Guid Model, string Key), Material> _modelMaterials = new();
     private readonly Dictionary<(Guid Model, string Key), Texture2D> _modelTextures = new();
+    private readonly Dictionary<(Guid Model,string Key),byte[]> _modelTextureSources=new();
     private readonly HashSet<string> _reportedMissing = new(StringComparer.OrdinalIgnoreCase);
     private readonly TextureImporter _textureImporter = new();
     private readonly AnimationProfileImporter _animationProfileImporter = new();
@@ -575,12 +576,14 @@ public sealed class AssetManager : IDisposable
         var key = (modelGuid, source.Key);
         if (_modelTextures.TryGetValue(key, out Texture2D? cached))
         {
-            cached.ReloadEncoded(source.EncodedData);
+            if(!_modelTextureSources.TryGetValue(key,out var bytes)||!ReferenceEquals(bytes,source.EncodedData)){cached.ReloadEncoded(source.EncodedData);_modelTextureSources[key]=source.EncodedData;cached.EnableWorldSampling();}
             return cached;
         }
 
         Texture2D texture = Texture2D.FromEncodedBytes(source.EncodedData);
+        texture.EnableWorldSampling();
         _modelTextures[key] = texture;
+        _modelTextureSources[key]=source.EncodedData;
         return texture;
     }
 
@@ -602,6 +605,7 @@ public sealed class AssetManager : IDisposable
         _modelMeshes.Clear();
         foreach (Texture2D texture in _modelTextures.Values.Distinct()) texture.Dispose();
         _modelTextures.Clear();
+        _modelTextureSources.Clear();
         _modelMaterials.Clear();
         _models.Clear();
         _textureRevisions.Clear();

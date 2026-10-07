@@ -25,16 +25,20 @@ public sealed partial class VehicleBuilder3D
     private VehiclePartCatalog? _paletteCatalog;
     private string[] _catalogFiles=[],_catalogLabels=[];
     private int[][] _catalogCategories=[];
+    public bool JamLandPalette {get;set;}
+    private bool _paletteJam;
+    private static readonly HashSet<int> JamLandParts=[1,2,3,7,10,11,13,15,16,17,18,19,20,22,24,28,29,32,33,38,39,40,46,48,50,51,60,63,76,86];
+    private static readonly string[] LandCategoryNames=["STRUCTURE","DRIVE","WEAPONS","MECHANISMS"];
     private static readonly string[] StandardCategoryNames=["STRUCTURE","DRIVE","WEAPONS","MECHANISMS","FLIGHT"];
     private void CachePaletteCatalog(){
-        if(_catalog?.Standard!=true||ReferenceEquals(_catalog,_paletteCatalog))return;
-        _paletteCatalog=_catalog;_catalogFiles=_catalog.Parts.Keys.Where(f=>f!=VehicleAssembly.MasterBlock).ToArray();
+        if(_catalog?.Standard!=true||ReferenceEquals(_catalog,_paletteCatalog)&&_paletteJam==JamLandPalette)return;
+        _paletteCatalog=_catalog;_paletteJam=JamLandPalette;_catalogFiles=_catalog.Parts.Keys.Where(f=>f!=VehicleAssembly.MasterBlock).ToArray();
         _catalogLabels=_catalogFiles.Select(f=>_catalog[f].Label).ToArray();
-        _catalogCategories=StandardCategoryNames.Select(g=>_catalogFiles.Select((f,i)=>(f,i)).Where(p=>(_catalog[p.f].Group=="Mechanics"?"MECHANISMS":_catalog[p.f].Group).Equals(g,StringComparison.OrdinalIgnoreCase)).Select(p=>p.i).ToArray()).ToArray();
+        _catalogCategories=(JamLandPalette?LandCategoryNames:StandardCategoryNames).Select(g=>_catalogFiles.Select((f,i)=>(f,i)).Where(p=>(!JamLandPalette||JamLandParts.Contains(_catalog[p.f].ReferenceId))&&(_catalog[p.f].Group=="Armor"?"STRUCTURE":_catalog[p.f].Group=="Mechanics"?"MECHANISMS":_catalog[p.f].Group).Equals(g,StringComparison.OrdinalIgnoreCase)).Select(p=>p.i).ToArray()).ToArray();
     }
     private string[] BuilderPartFiles {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogFiles:VehicleBuildLayout.PartFiles;}}
     private string[] BuilderPartNames {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogLabels:VehicleBuildLayout.PartNames;}}
-    private string[] CategoryNames=>_catalog?.Standard==true?StandardCategoryNames:LegacyCategoryNames;
+    private string[] CategoryNames=>_catalog?.Standard==true?(JamLandPalette?LandCategoryNames:StandardCategoryNames):LegacyCategoryNames;
     private int[][] Categories {get{CachePaletteCatalog();return _catalog?.Standard==true?_catalogCategories:LegacyCategories;}}
 
 
@@ -188,7 +192,7 @@ public sealed partial class VehicleBuilder3D
 
         Vector2 point=normalized*Input.GameViewSize/Math.Max(.1f,scale)-new Vector2(insets.X,insets.Y);
 
-        if(FreeBuilding)return point.Y<48 || point.Y>620 || (_tooltipPanel?.Active==true&&point.X>936&&point.Y>482);
+        if(FreeBuilding)return point.Y<48 || point.Y>620 || (_tuningPanel?.Active==true&&point.X>=928&&point.Y>=78&&point.Y<=560) || (_tooltipPanel?.Active==true&&point.X>936&&point.Y>482);
 
         return point.Y<70 || point.Y>520 || (point.X<266 && point.Y<350) || (point.X>996 && point.Y<320);
 
@@ -252,9 +256,9 @@ public sealed partial class VehicleBuilder3D
 
     {
 
-        HudObject(name+" rim",buildOnly).AddComponent(new UiWidget {Offset=position-Vector2.One,Size=size+new Vector2(2),Color=new(.35f,.39f,.30f,.85f),OrderInLayer=1});
+        HudObject(name+" rim",buildOnly).BindSceneComponent(new UiWidget {Offset=position-Vector2.One,Size=size+new Vector2(2),Color=new(.35f,.39f,.30f,.85f),OrderInLayer=1});
 
-        HudObject(name,buildOnly).AddComponent(new UiWidget {Offset=position,Size=size,Color=new(.065f,.085f,.075f,.96f),OrderInLayer=2});
+        HudObject(name,buildOnly).BindSceneComponent(new UiWidget {Offset=position,Size=size,Color=new(.065f,.085f,.075f,.96f),OrderInLayer=2});
 
     }
 
@@ -262,7 +266,7 @@ public sealed partial class VehicleBuilder3D
 
     {
 
-        _canvas=Own("Goblin Scraper garage HUD");_canvas.AddComponent(new UiCanvas {ReferenceResolution=new(1280,720)});
+        _canvas=Own("Goblin Scraper garage HUD");_canvas.BindSceneComponent(new UiCanvas {ReferenceResolution=new(1280,720)});
 
         Panel("Toolbar",new(0,0),new(1280,66));
 
@@ -326,7 +330,7 @@ public sealed partial class VehicleBuilder3D
 
             _palette.Add(Button("",new(x,584),new(186,96),()=>{int index=_palettePage*6+slot;if(index<Categories[_category].Length) SelectPart(Categories[_category][index]);},true));
 
-            _cardImages.Add(HudObject("Part thumbnail "+i,true).AddComponent(new UiWidget {Kind=UiWidgetKind.Image,Offset=new(x+43,588),Size=new(100,64),Color=Vector4.One,OrderInLayer=6}));
+            _cardImages.Add(HudObject("Part thumbnail "+i,true).BindSceneComponent(new UiWidget {Kind=UiWidgetKind.Image,Offset=new(x+43,588),Size=new(100,64),Color=Vector4.One,OrderInLayer=6}));
 
             _cardLabels.Add(Text("Part label "+i,"",new(x+12,658),14,true));
 

@@ -25,6 +25,7 @@ internal sealed class SceneViewPanel : IDisposable
         new();
 
     private readonly FoliagePaintTool _foliagePaint = new();
+    private readonly TerrainSculptTool _terrainSculpt = new();
     private bool _is3D =
         true;
 
@@ -72,6 +73,11 @@ internal sealed class SceneViewPanel : IDisposable
             if (selected.GetComponent<FoliagePatch>() is { } foliage)
             {
                 state.Camera3D.Frame(foliage.GetWorldBounds());
+                return;
+            }
+            if (selected.Components.OfType<HeightfieldCollider3D>().FirstOrDefault() is {} terrain)
+            {
+                state.Camera3D.Frame(terrain.WorldTerrainBounds);
                 return;
             }
             foreach (GameObject item in state.DisplayedScene.GameObjects)
@@ -164,6 +170,7 @@ internal sealed class SceneViewPanel : IDisposable
 
         if (!visible)
         {
+            _terrainSculpt.EndStroke(state);
             ImGui.End();
 
             return;
@@ -197,6 +204,8 @@ internal sealed class SceneViewPanel : IDisposable
         _lastViewportSize =
             viewportSize;
 
+        // Keep an unfocused scene preview frozen during Play rather than drawing the world twice.
+        if(state.Mode!=EditorMode.Play||IsFocused||_framebuffer.TextureId==IntPtr.Zero)
         _framebuffer.Render(
             renderer,
             renderer3D,
@@ -345,7 +354,7 @@ internal sealed class SceneViewPanel : IDisposable
                 viewportSize
             );
 
-            if (!_foliagePaint.Update(state, hovered, minimum, viewportSize)) _gizmo3D.UpdateAndDraw(
+            if (!_terrainSculpt.Update(state, hovered, minimum, viewportSize) && !_foliagePaint.Update(state, hovered, minimum, viewportSize)) _gizmo3D.UpdateAndDraw(
                 state,
                 state.Camera3D,
                 hovered,
@@ -508,6 +517,7 @@ internal sealed class SceneViewPanel : IDisposable
         if (!_is3D) _gizmo.DrawToolbar(state);
         else _gizmo3D.DrawToolbar();
         _foliagePaint.DrawToolbar(state);
+        if (_is3D) _terrainSculpt.DrawToolbar(state);
 
         EditorUi.ToolbarSeparator();
         if (EditorUi.ToolbarButton("Frame", "Frame Selected (F)")) FrameSelected(state);

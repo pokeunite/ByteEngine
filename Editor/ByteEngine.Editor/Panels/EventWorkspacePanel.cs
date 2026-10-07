@@ -8297,6 +8297,8 @@ internal sealed class EventWorkspacePanel
                 instruction.Arguments["drawDebug"] = EventValue.Boolean(false);
                 instruction.Arguments["debugDuration"] = EventValue.Number(.25);
                 break;
+            case "scene.load":
+                instruction.Arguments["path"]=EventValue.String("Scenes/Workshop.bytescene");break;
             case "ui.setText":
             case "ui.setTextFromHealth":
             case "ui.setButtonLabel":
@@ -8931,6 +8933,8 @@ internal sealed class EventWorkspacePanel
                     EventValue.String("Ray"), state, false);
                 ImGui.TextDisabled("Writes Hit, ObjectId, Point, Normal, and Distance variables.");
                 break;
+            case "scene.load":
+                DrawValueArgument(instruction,"path","Scene Path",VariableType.String,EventValue.String("Scenes/Workshop.bytescene"),state,false);break;
             case "ui.setText":
             case "ui.setTextFromHealth":
             case "ui.setButtonLabel":

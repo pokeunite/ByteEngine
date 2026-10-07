@@ -105,6 +105,11 @@ internal sealed class PerformancePanel
 
         DrawFrameSection();
         DrawProcessSection();
+        ImGui.SeparatorText("GRAPHICS / LAST VIEW");
+        DrawMetric("Post effects CPU",$"{ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.PostCpuMs:0.00} ms");
+        DrawMetric("Post effects GPU",ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.PostGpuMs is {} gpu?$"{gpu:0.00} ms":"Enable measurement on Sky Environment");
+        DrawMetric("Extra effect passes",ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.ExtraPasses.ToString());
+        ImGui.TextWrapped("GPU measurement includes post effects and presentation only, not the entire renderer. Values refer to the most recently rendered view.");
         DrawMemorySection();
         DrawSceneSection(
             state,

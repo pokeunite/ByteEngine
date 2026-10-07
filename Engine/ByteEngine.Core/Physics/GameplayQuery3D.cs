@@ -586,6 +586,7 @@ public static class GameplayQuery3D
     {
         return collider switch
         {
+            HeightfieldCollider3D terrain => terrain.Cast(origin, direction, radius, float.PositiveInfinity, out distance, out normal),
             BoxCollider3D box =>
                 IntersectBox(
                     origin,
@@ -1118,6 +1119,17 @@ public static class GameplayQuery3D
         float radius,
         Collider3D collider)
     {
+        if (collider is HeightfieldCollider3D terrain)
+        {
+            for(int sample=0;sample<=16;sample++)
+            {
+                var center=Vector3.Lerp(pointA,pointB,sample/16f);
+                if(terrain.TrySampleWorld(center,out var surface,out var normal) &&
+                   Vector3.Dot(center-surface,normal)<=radius) return true;
+            }
+            return false;
+        }
+
         if (collider is
             CapsuleCollider3D capsule)
         {

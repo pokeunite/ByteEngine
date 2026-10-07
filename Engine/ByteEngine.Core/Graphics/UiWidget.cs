@@ -42,7 +42,7 @@ public sealed class UiWidget : Component
     }
 
     public bool IsHovered =>
-        Kind == UiWidgetKind.Button && Visible && Interactable &&
+        Enabled && GameObject.ActiveInHierarchy && Kind == UiWidgetKind.Button && Visible && Interactable &&
         UiLayout.IsVisible(GameObject) &&
         Input.IsGameViewHovered &&
         Contains(Input.GameViewMousePosition, Input.GameViewSize);
@@ -50,9 +50,9 @@ public sealed class UiWidget : Component
     public bool IsFocused => ReferenceEquals(UiNavigation.Focused, this);
 
     public bool WasClicked =>
-        (IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left)) ||
+        Enabled && GameObject.ActiveInHierarchy && Visible && Interactable && UiLayout.IsVisible(GameObject) && ((IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left)) ||
         (IsFocused && (Input.IsKeyPressed(Key.Enter) ||
-            Input.IsKeyPressed(Key.Space) || UiNavigation.SouthPressed));
+            Input.IsKeyPressed(Key.Space) || UiNavigation.SouthPressed)));
 
     protected override void OnUpdate()
     {

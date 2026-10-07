@@ -12,7 +12,7 @@ namespace ByteEngine.Core.Graphics;
 /// Add one enabled SkyEnvironment to a scene. If multiple are enabled,
 /// ByteEngine uses the first active instance encountered in scene order.
 /// </summary>
-public sealed class SkyEnvironment : Component
+public sealed partial class SkyEnvironment : Component
 {
     private Vector3 _zenithColor =
         new(

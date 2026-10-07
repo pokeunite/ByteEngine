@@ -36,7 +36,13 @@ public sealed partial class SkeletalMeshRenderer : Component
     private ModelAsset? _model;
     private readonly Dictionary<string,Matrix4x4> _physicalBoneDeformations=new();
     private Matrix4x4[] _physicalBindGlobals=Array.Empty<Matrix4x4>();
-    public void SetPhysicalBoneDeformation(string bone,Matrix4x4 deformation){_physicalBoneDeformations[bone]=deformation;_poseDirty=true;}
+    public void SetPhysicalBoneDeformation(string bone, Matrix4x4 deformation)
+    {
+        if (_physicalBoneDeformations.TryGetValue(bone, out var previous) && previous == deformation)
+            return;
+        _physicalBoneDeformations[bone] = deformation;
+        _poseDirty = true;
+    }
     public void ClearPhysicalBoneDeformations(){_physicalBoneDeformations.Clear();_poseDirty=true;}
     private SkeletonAsset? _skeleton;
 
@@ -122,6 +128,11 @@ public sealed partial class SkeletalMeshRenderer : Component
     public bool Loop { get; set; } = true;
 
     public float Speed { get; set; } = 1.0f;
+
+    /// <summary>Runtime animation sampling interval; zero evaluates every frame.
+    /// Playback time still advances normally. Physical poses and reactions remain immediate.</summary>
+    public float AnimationUpdateInterval { get; set; }
+    private float _animationPoseElapsed;
 
     public float TransitionDuration { get; set; } = 0.15f;
 
@@ -471,7 +482,13 @@ public sealed partial class SkeletalMeshRenderer : Component
                 }
             }
 
-            _poseDirty = true;
+            _animationPoseElapsed += Math.Max((float)ByteEngine.Core.Time.DeltaTime, 0f);
+            if (finished || AnimationUpdateInterval <= 0f ||
+                _animationPoseElapsed >= AnimationUpdateInterval)
+            {
+                _poseDirty = true;
+                _animationPoseElapsed = 0f;
+            }
         }
 
         if (_poseDirty)
@@ -1087,9 +1104,23 @@ public sealed partial class SkeletalMeshRenderer : Component
                     inverseMesh;
             }
 
-            long skinStart = System.Diagnostics.Stopwatch.GetTimestamp();
-            SkinMesh(runtime, skinMatrices);
-            DiagnosticSkinTicks += System.Diagnostics.Stopwatch.GetTimestamp() - skinStart;
+            // Unchanged bones cannot deform this mesh. Retain the completed
+            // vertex buffer instead of skinning and uploading it again.
+            bool skinChanged = runtime.PreviousSkinMatrices.Length != skinMatrices.Length;
+            if (!skinChanged)
+                foreach (int bone in runtime.UsedBones)
+                    if (bone >= 0 && bone < skinMatrices.Length &&
+                        runtime.PreviousSkinMatrices[bone] != skinMatrices[bone])
+                    { skinChanged = true; break; }
+            if (skinChanged)
+            {
+                long skinStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                SkinMesh(runtime, skinMatrices);
+                DiagnosticSkinTicks += System.Diagnostics.Stopwatch.GetTimestamp() - skinStart;
+                if (runtime.PreviousSkinMatrices.Length != skinMatrices.Length)
+                    runtime.PreviousSkinMatrices = new Matrix4x4[skinMatrices.Length];
+                skinMatrices.CopyTo(runtime.PreviousSkinMatrices, 0);
+            }
 
             /*
              * Keep the animation result in model space. World placement is
@@ -1759,6 +1790,8 @@ public sealed partial class SkeletalMeshRenderer : Component
         public SkinInfluences[] Influences { get; }
         public int[] SingleBoneIndices { get; }
         public bool AllSingleBone { get; }
+        public int[] UsedBones { get; }
+        public Matrix4x4[] PreviousSkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
         public Matrix4x4[] SkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
 
         public Matrix4x4 MeshToModelMatrix { get; set; } =
@@ -1798,6 +1831,11 @@ public sealed partial class SkeletalMeshRenderer : Component
                 allSingleBone &= count == 1;
             }
             AllSingleBone = allSingleBone;
+            UsedBones = Influences.SelectMany(i => new[] {
+                (i.Bone0,i.Weight0), (i.Bone1,i.Weight1),
+                (i.Bone2,i.Weight2), (i.Bone3,i.Weight3) })
+                .Where(i => i.Item2 > .000001f).Select(i => i.Item1)
+                .Distinct().ToArray();
         }
     }
 

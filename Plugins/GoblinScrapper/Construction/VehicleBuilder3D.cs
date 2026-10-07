@@ -102,15 +102,16 @@ public sealed partial class VehicleBuilder3D : Component
 
         if (Assets == null || GameObject.Scene == null) return;
 
+        BindAuthoredScene();
         Building = true;
 
         Speed = 0;
 
         Layout = new();
 
-        Transform.WorldPosition = new Vector3(0, Layout.RideHeight, 0);
+        if(!UseAuthoredScene)Transform.WorldPosition = new Vector3(0, Layout.RideHeight, 0);
 
-        Transform.WorldRotation = Quaternion.Identity;
+        if(!UseAuthoredScene)Transform.WorldRotation = Quaternion.Identity;
 
         _motion.Reset();
 
@@ -126,11 +127,11 @@ public sealed partial class VehicleBuilder3D : Component
 
         if(AutomaticCamera){_camera.ActiveGameCamera = true;_camera.FieldOfView = 52;}
 
-        CreateYard();
+        if(!UseAuthoredScene)CreateYard();
 
         CreateSkidPool();
 
-        CreateWorkshopAtmosphere();
+        if(!UseAuthoredScene)CreateWorkshopAtmosphere();
 
         if(FreeBuilding) StartAssembly();
 
@@ -172,7 +173,10 @@ public sealed partial class VehicleBuilder3D : Component
 
     {
 
+        int number=_authorCounts.TryGetValue(name,out var n)?n+1:1;_authorCounts[name]=number;string key=name+"#"+number;
+        if(UseAuthoredScene&&_authoredByKey.TryGetValue(key,out var saved))return saved;
         var obj = GameObject.Scene!.CreateGameObject(name);
+        obj.Variables.Set("GoblinAuthoringKey",ByteEngine.Core.Variables.VariableValue.FromString(key));
 
         _owned.Add(obj);
 
@@ -344,7 +348,7 @@ public sealed partial class VehicleBuilder3D : Component
 
         var obj = Own(name);
 
-        obj.SetParent(_canvas, false);
+        if(!_authoredObjects.Contains(obj))obj.SetParent(_canvas, false);
 
         if (buildOnly) _buildUi.Add(obj);
 
@@ -354,7 +358,7 @@ public sealed partial class VehicleBuilder3D : Component
 
     private UiText Text(string name, string text, Vector2 offset, int size, bool buildOnly=false) =>
 
-        HudObject(name, buildOnly).AddComponent(new UiText { Text=text, Offset=offset, FontSize=size,
+        HudObject(name, buildOnly).BindSceneComponent(new UiText { Text=text, Offset=offset, FontSize=size,
 
             Color=new(.91f,.90f,.86f,1), FontReference=new AssetReference("Assets/GarageUI/fonts/Barlow-Regular.ttf"), ShadowColor=new(0,0,0,.20f), ShadowOffset=new(0,1), OrderInLayer=10 });
 
@@ -362,7 +366,7 @@ public sealed partial class VehicleBuilder3D : Component
 
     {
 
-        var button = HudObject(label, buildOnly).AddComponent(new UiWidget { Kind=UiWidgetKind.Button, Label=label,
+        var button = HudObject("Button "+offset.X.ToString(System.Globalization.CultureInfo.InvariantCulture)+","+offset.Y.ToString(System.Globalization.CultureInfo.InvariantCulture), buildOnly).BindSceneComponent(new UiWidget { Kind=UiWidgetKind.Button, Label=label,
 
             FontSize=16, FontReference=new AssetReference("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf"), Offset=offset, Size=size, Color=new(.16f,.23f,.13f,1), HoverColor=new(.33f,.43f,.19f,1), OrderInLayer=5 });
 
@@ -394,8 +398,9 @@ public sealed partial class VehicleBuilder3D : Component
 
             if (UseBuiltInPointerControls && item.Button.GameObject.ActiveInHierarchy && item.Button.IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left))
 
-            { if(FreeBuilding)_selectSound?.Play();item.Click(); clickedUi=true; break; }
+            { if(FreeBuilding)_selectSound?.Play();if(UseBuiltInToolbarActions||!EditableToolbarNames.Contains(item.Button.GameObject.Name))item.Click(); clickedUi=true; break; }
 
+        if(UpdateTuningInput())return;
         if (ControlKeyPressed(Key.B)||(FreeBuilding&&ControlKeyPressed(Key.Space)&&Building)) ToggleDrive();
 
         if (ControlKeyPressed(Key.F5)) SaveBuild();
@@ -404,6 +409,7 @@ public sealed partial class VehicleBuilder3D : Component
 
         if (ControlKeyPressed(Key.R) && (!Building || !FreeBuilding)) ResetPosition();
 
+        UpdateTuningDrag();RefreshTuningPanel();
         if (Building && FreeBuilding) UpdateFreeBuilding(clickedUi);
 
         else if (Building)
@@ -496,6 +502,7 @@ public sealed partial class VehicleBuilder3D : Component
         if (!Building) return;
 
         if (index < 0 || index >= BuilderPartFiles.Length) return;
+        _copiedTuning=null;_copiedTuningFile=null;
 
         if (!FreeBuilding && BuilderPartFiles[index]=="scrap_frame_long") { SetChassis("scrap_frame_long"); return; }
 
@@ -505,7 +512,7 @@ public sealed partial class VehicleBuilder3D : Component
 
         _part=index;
 
-        _category=Array.FindIndex(Categories,g=>g.Contains(index));if(_category<0)return;
+        _category=Array.FindIndex(Categories,g=>g.Contains(index));if(_category<0)_category=0;
 
         _palettePage=Array.IndexOf(Categories[_category],index)/6; RefreshPalette();
 
@@ -1270,6 +1277,8 @@ public sealed partial class VehicleBuilder3D : Component
         foreach(var obj in _owned.ToArray()) if (obj.Scene!=null) obj.Scene.DestroyGameObject(obj);
 
         _workshopFloorMesh?.Dispose();_workshopFloorMesh=null;
+        _authorCounts.Clear();_authoredByKey.Clear();_authoredObjects.Clear();
+        _tuningRows.Clear();_tuningInputs.Clear();_editTuning=-1;_tuningPanel=null;_tuningTitle=null;_tuneToolButton=null;_tuneMode=false;_tunedBlock=_dragTuning=-1;_copiedTuning=null;_copiedTuningFile=null;
         _owned.Clear(); _mechanisms.Clear(); _palette.Clear(); _skids.Clear(); _motion.Reset(); Array.Clear(_skidLife); _visuals.Clear(); _buttons.Clear(); _buildUi.Clear(); _obstacles.Clear(); _markers=[];
 
         _ghost=null; _camera=null;_workshopPan=Vector3.Zero; _undo.Clear(); _redo.Clear(); _cardImages.Clear(); _cardLabels.Clear(); _categoryButtons.Clear(); _axleBridges.Clear(); _part=0; _category=0; _palettePage=0;

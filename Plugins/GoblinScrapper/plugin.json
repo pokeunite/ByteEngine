@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bytebard.goblinscrapper",
   "name": "Goblin Scrapper",
-  "version": "0.4.0",
+  "version": "0.4.5",
   "assembly": "GoblinScrapper.Plugin.dll",
   "entryPoint": "GoblinScrapper.GoblinScrapperPlugin",
   "editor": true,

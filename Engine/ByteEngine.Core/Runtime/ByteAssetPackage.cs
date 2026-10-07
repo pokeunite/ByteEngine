@@ -127,6 +127,10 @@ public sealed class GameContentSession : IDisposable
         {
             ByteAssetPackage.Extract(package, _temporaryRoot);
             if (!File.Exists(ProjectFile)) throw new InvalidDataException("Asset package has no game project.");
+            // Packages store files, so procedural examples may have no asset-folder entries.
+            var project = new ByteEngine.Core.Serialization.ProjectSerializer().Load(ProjectFile);
+            Directory.CreateDirectory(GamePackageExporter.ResolveInside(_temporaryRoot, project.AssetDirectory));
+            Directory.CreateDirectory(GamePackageExporter.ResolveInside(_temporaryRoot, project.SceneDirectory));
         }
         catch { Dispose(); throw; }
     }

@@ -38,6 +38,7 @@ internal static class ComponentPropertyRenderer
         new();
     private static string? _materialSaveError;
     private static string? _fontActionMessage;
+    private static string _graphicsAudit=string.Empty;
 
     public static IReadOnlyList<ComponentPropertyDescriptor> Descriptors(
         Type type,
@@ -80,6 +81,14 @@ internal static class ComponentPropertyRenderer
                                 type == typeof(WaveSpawner3D) && property.SetMethod?.IsPublic != true
                                     ? "Runtime" : "Properties",
                                 property.Name)))
+                .OrderBy(descriptor => type != typeof(SkyEnvironment) ? 0 : descriptor.Metadata.Category switch
+                {
+                    "Quick Setup" => 0,
+                    "Properties" => 1,
+                    "Image Quality" => 2,
+                    "Color" => 3,
+                    _ => 4
+                })
                 .ToArray();
 
         Cache[type] =
@@ -135,6 +144,7 @@ internal static class ComponentPropertyRenderer
         descriptor.Property.SetValue(
             component,
             value);
+        if(component is SkyEnvironment sky && descriptor.Property.Name==nameof(SkyEnvironment.Lighting)) sky.ApplyLightingToScene();
 
         if (component is ByteEngine.Core.Vfx.VfxPlayer vfx &&
             descriptor.Property.Name is nameof(ByteEngine.Core.Vfx.VfxPlayer.Preset) or
@@ -179,6 +189,22 @@ internal static class ComponentPropertyRenderer
         ImGui.PushID(
             component.GetHashCode());
 
+        if(component is ModelHierarchyInstance graphicsModel && project!=null)
+        {
+            if(ImGui.Button("Check Model Graphics"))
+            {
+                try { _graphicsAudit=GraphicsAssetAudit.Model(project.Assets.LoadModel(graphicsModel.Model)); }
+                catch(Exception error) { _graphicsAudit="Cannot audit model: "+error.Message; }
+                ImGui.OpenPopup("Model Graphics Audit");
+            }
+            if(ImGui.BeginPopup("Model Graphics Audit"))
+            {
+                if(ImGui.Button("Copy Report")) ImGui.SetClipboardText(_graphicsAudit);
+                ImGui.InputTextMultiline("##report",ref _graphicsAudit,65536,new System.Numerics.Vector2(620,350),ImGuiInputTextFlags.ReadOnly);
+                ImGui.EndPopup();
+            }
+        }
+
         // C9.5 UX: profile owns locomotion. Do not show duplicate component
         // authoring fields that will be overwritten by the assigned profile.
         bool profileOwnsLocomotion =
@@ -211,7 +237,7 @@ internal static class ComponentPropertyRenderer
                 continue;
             }
 
-            if (component is WaveSpawner3D &&
+            if (component is WaveSpawner3D or SkyEnvironment &&
                 descriptor.Metadata.Category != waveCategory)
             {
                 waveCategory = descriptor.Metadata.Category;

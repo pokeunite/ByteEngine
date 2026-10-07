@@ -17,13 +17,14 @@ internal sealed class ConsolePanel
         bool isOpen =
             IsOpen;
 
-        ImGui.Begin(
+        bool visible=ImGui.Begin(
             "Console",
             ref isOpen
         );
 
         IsOpen =
             isOpen;
+        if(!visible){ImGui.End();return;}
 
         if (ImGui.BeginTabBar("##ConsoleTabs"))
         {
@@ -41,12 +42,11 @@ internal sealed class ConsolePanel
                 );
 
                 ImGui.Separator();
-                string selectableText = string.Join(Environment.NewLine,
-                    log.Entries.Select(entry =>
-                        $"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"));
+                if(Environment.TickCount64>=_nextConsoleRefresh){_nextConsoleRefresh=Environment.TickCount64+500;_consolePreview=string.Join(Environment.NewLine,log.Entries.TakeLast(160).Select(entry=>$"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}"));if(_consolePreview.Length>24000)_consolePreview=_consolePreview[^24000..];}
+                string selectableText = _consolePreview;
                 if (ImGui.SmallButton("Copy All"))
                 {
-                    ImGui.SetClipboardText(selectableText);
+                    ImGui.SetClipboardText(string.Join(Environment.NewLine,log.Entries.Select(entry=>$"[{entry.Timestamp:HH:mm:ss}] [{entry.Level}] {entry.Message}")));
                 }
 
                 // Read-only input supports mouse selection and Ctrl+C, unlike TextWrapped.
@@ -67,7 +67,8 @@ internal sealed class ConsolePanel
         ImGui.End();
     }
 
-    private static string _debugSaveStatus="";
+    private static string _debugSaveStatus="",_debugPreview="",_consolePreview="";
+    private static long _nextDebugRefresh,_nextConsoleRefresh;
 
     private static void DrawDebug()
     {
@@ -115,6 +116,12 @@ internal sealed class ConsolePanel
         if (ImGui.Checkbox("Debug Building / Contraptions", ref constructionEnabled))
             ConstructionDiagnostics.Enabled = constructionEnabled;
 
+        bool performance=SurfacePerformanceDiagnostics.PerformanceEnabled;
+        if(ImGui.Checkbox("Debug Performance / Frame Pacing",ref performance)){SurfacePerformanceDiagnostics.PerformanceEnabled=performance;_nextDebugRefresh=0;}
+        ImGui.SameLine();
+        bool sand=SurfacePerformanceDiagnostics.SandEnabled;
+        if(ImGui.Checkbox("Debug Interactive Sand",ref sand)){SurfacePerformanceDiagnostics.SandEnabled=sand;_nextDebugRefresh=0;}
+
         var description =
             new List<string>();
 
@@ -132,16 +139,18 @@ internal sealed class ConsolePanel
 
         description.Add("Building / Contraptions records build snapshots, placement, connections, save/load and sampled wheel/hinge physics during Play.");
 
+        description.Add("Performance captures CPU/GPU render times, presentation waits, allocations and GC pauses. Interactive Sand records deformation depth, stamps and shader state during Play.");
+
         description.Add("Untick a debug option to freeze its trace, then copy it.");
 
         ImGui.TextWrapped(
             string.Join(" ", description));
 
-        string trace =
-            BuildVisibleDebugTrace();
+        if(Environment.TickCount64>=_nextDebugRefresh){_nextDebugRefresh=Environment.TickCount64+500;string full=BuildVisibleDebugTrace();_debugPreview=full.Length>24000?"Live view shows the latest 24KB. Copy/Save includes the full trace.\n"+full[^24000..]:full;}
+        string trace=_debugPreview;
 
         if (ImGui.SmallButton("Copy Debug"))
-            ImGui.SetClipboardText(trace);
+            ImGui.SetClipboardText(BuildVisibleDebugTrace());
 
         ImGui.SameLine();
 
@@ -150,7 +159,7 @@ internal sealed class ConsolePanel
             string? path=EditorDialogs.ChooseDebugTraceSave();
             if(path!=null)
             {
-                try {File.WriteAllText(path,trace,Encoding.UTF8);_debugSaveStatus="Saved: "+path;}
+                try {File.WriteAllText(path,BuildVisibleDebugTrace(),Encoding.UTF8);_debugSaveStatus="Saved: "+path;}
                 catch(Exception e) when(e is IOException or UnauthorizedAccessException){_debugSaveStatus="Could not save: "+e.Message;}
             }
         }
@@ -158,7 +167,7 @@ internal sealed class ConsolePanel
         if (ImGui.SmallButton("Clear Debug"))
         {
             ClearVisibleDebugTrace();
-            trace = string.Empty;
+            trace = _debugPreview=string.Empty;_nextDebugRefresh=0;
         }
 
         if(_debugSaveStatus.Length>0)ImGui.TextWrapped(_debugSaveStatus);
@@ -201,11 +210,14 @@ internal sealed class ConsolePanel
             Append("Weapons / Raycasts", RuntimeDiagnostics.GetWeaponRaycastTrace());
 
         Append("Building / Contraptions", ConstructionDiagnostics.GetTrace());
+        Append("Performance / Frame Pacing",SurfacePerformanceDiagnostics.GetPerformanceTrace());
+        Append("Interactive Sand",SurfacePerformanceDiagnostics.GetSandTrace());
         return text.ToString();
     }
 
     private static void ClearVisibleDebugTrace()
     {
+        SurfacePerformanceDiagnostics.Clear();
         ConstructionDiagnostics.Clear();
         if (EditorPreferences.ShowDebugFootIk)
             RuntimeDiagnostics.ClearFootIkTrace();

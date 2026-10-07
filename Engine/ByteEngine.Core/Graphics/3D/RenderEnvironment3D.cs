@@ -30,6 +30,7 @@ public readonly record struct RenderEnvironment3D(
     float FogMaxOpacity)
 {
     public bool SmoothEdges { get; init; } = true;
+    public GraphicsLook Look { get; init; } = GraphicsLook.Default;
 
     public static RenderEnvironment3D Default =>
         new(

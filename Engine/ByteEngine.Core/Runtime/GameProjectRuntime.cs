@@ -60,8 +60,18 @@ public sealed class GameProjectRuntime : IDisposable
             BlueprintRuntimeFactory.Spawn(scene, blueprint, position, Database, Serializer, warning));
     }
 
-    public Scene.Scene LoadStartupScene() =>
-        Serializer.Load(GamePackageExporter.ResolveInside(Root, Project.StartupScene));
+    public Scene.Scene LoadStartupScene()=>LoadScene(Project.StartupScene);
+    public Scene.Scene LoadScene(string path)
+    {
+        var scene = Serializer.Load(GamePackageExporter.ResolveInside(Root, path));
+        var missing = scene.GameObjects.SelectMany(o => o.Components).OfType<MissingComponent>()
+            .Where(c => c.AuthoredEnabled && c.GameObject.ActiveInHierarchy)
+            .Select(c => c.MissingType).Distinct().ToArray();
+        if (missing.Length > 0)
+            throw new InvalidDataException("The game cannot start because required scene components did not load: " +
+                string.Join(", ", missing) + ". Refresh the Windows player runtime and re-export with the project's runtime plugins enabled.");
+        return scene;
+    }
 
     public void Dispose()
     {

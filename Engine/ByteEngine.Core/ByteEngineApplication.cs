@@ -13,6 +13,8 @@ namespace ByteEngine.Core;
 
 public class ByteEngineApplication : GameWindow
 {
+    public static double LastRenderCpuMilliseconds {get;private set;}
+    public static double LastSwapMilliseconds {get;private set;}
     protected virtual bool UseWholeWindowForUiInput => true;
     public Renderer2D Renderer { get; }
     public Renderer3D Renderer3D { get; }
@@ -47,6 +49,8 @@ public class ByteEngineApplication : GameWindow
     protected virtual bool CloseOnEscape =>
         true;
 
+    private readonly ByteEngine.Core.Graphics.ThreeD.RenderWorld _runtimeRenderWorld = new();
+
     protected virtual bool ShouldUpdateScene =>
         true;
 
@@ -79,11 +83,14 @@ public class ByteEngineApplication : GameWindow
 
         Scenes =
             new SceneManager();
+        Scenes.QuitHandler=Close;
     }
 
     protected override void OnLoad()
     {
         base.OnLoad();
+        ByteEngine.Core.Diagnostics.CrashDebugLog.Write(
+            $"Engine runtime assembly: path={typeof(ByteEngineApplication).Assembly.Location}; mvid={typeof(ByteEngineApplication).Assembly.ManifestModule.ModuleVersionId}");
         ByteEngine.Core.Diagnostics.CrashDebugLog.Write(
             $"Graphics context ready: vendor={GL.GetString(StringName.Vendor)}; renderer={GL.GetString(StringName.Renderer)}; OpenGL={GL.GetString(StringName.Version)}");
 
@@ -206,6 +213,8 @@ public class ByteEngineApplication : GameWindow
     {
         base.OnRenderFrame(
             args);
+        ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.BeginGpu();
+        var frameWatch=System.Diagnostics.Stopwatch.StartNew();
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
@@ -274,7 +283,7 @@ public class ByteEngineApplication : GameWindow
                             WindowWidth,
                             WindowHeight,
                             camera,
-                            camera3D);
+                            camera3D, renderWorld: _runtimeRenderWorld);
 
                     Scenes.RenderInternal(
                         context);
@@ -288,7 +297,8 @@ public class ByteEngineApplication : GameWindow
                         exposure,
                         WindowWidth,
                         WindowHeight,
-                        context.CaptureRenderEnvironment3D().SmoothEdges);
+                        context.CaptureRenderEnvironment3D().SmoothEdges,
+                        context.GetProjectionMatrix3D(),context.CaptureRenderEnvironment3D().Look);
                     context.FlushUi();
                 }
                 else
@@ -308,7 +318,12 @@ public class ByteEngineApplication : GameWindow
 
         OnEngineRender();
 
+        ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.EndGpu();
+        LastRenderCpuMilliseconds=frameWatch.Elapsed.TotalMilliseconds;
+        frameWatch.Restart();
         SwapBuffers();
+        LastSwapMilliseconds=frameWatch.Elapsed.TotalMilliseconds;
+        ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.Frame(args.Time,LastRenderCpuMilliseconds,LastSwapMilliseconds);
     }
 
     protected override void OnResize(
@@ -344,6 +359,7 @@ public class ByteEngineApplication : GameWindow
 
     protected override void OnUnload()
     {
+        ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.DisposeGpu();
         Scenes.ShutdownInternal();
 
         OnEngineShutdown();

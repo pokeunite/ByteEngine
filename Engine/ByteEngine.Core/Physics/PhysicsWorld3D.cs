@@ -40,6 +40,10 @@ public sealed class PhysicsWorld3D
     private readonly Dictionary<ContactKey, PhysicsContactPair3D> _frameContacts =
         new();
 
+    // Reuse snapshots across steps; retain component order and all compound colliders.
+    private readonly List<Rigidbody3D> _stepBodies = new();
+    private readonly List<ColliderEntry> _stepColliders = new();
+
     public Vector3 Gravity { get; set; } =
         new(
             0.0f,
@@ -102,19 +106,15 @@ public sealed class PhysicsWorld3D
             safeDelta /
             substeps;
 
-        Rigidbody3D[] bodies =
-            scene.GameObjects
-                .Where(
-                    gameObject =>
-                        gameObject.ActiveInHierarchy)
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<Rigidbody3D>())
-                .Where(
-                    body =>
-                        body.Enabled)
-                .ToArray();
+        _stepBodies.Clear();
+        foreach (GameObject gameObject in scene.GameObjects)
+        {
+            if (!gameObject.ActiveInHierarchy) continue;
+            foreach (Component component in gameObject.Components)
+                if (component is Rigidbody3D { Enabled: true } body)
+                    _stepBodies.Add(body);
+        }
+        List<Rigidbody3D> bodies = _stepBodies;
 
         _frameContacts.Clear();
 
@@ -156,6 +156,8 @@ public sealed class PhysicsWorld3D
 
     public void Reset()
     {
+        _stepBodies.Clear();
+        _stepColliders.Clear();
         _previousContacts.Clear();
         _frameContacts.Clear();
     }
@@ -163,33 +165,21 @@ public sealed class PhysicsWorld3D
     private void SolveContacts(
         RuntimeScene scene)
     {
-        ColliderEntry[] colliders =
-            scene.GameObjects
-                .Where(
-                    gameObject =>
-                        gameObject.ActiveInHierarchy)
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<Collider3D>()
-                            .Where(
-                                collider =>
-                                    collider.Enabled)
-                            .Select(
-                                collider =>
-                                    new ColliderEntry(
-                                        gameObject,
-                                        collider,
-                                        FindBodyForCollider(
-                                            gameObject),
-                                        CalculateBounds(
-                                            collider))))
-                .ToArray();
+        _stepColliders.Clear();
+        foreach (GameObject gameObject in scene.GameObjects)
+        {
+            if (!gameObject.ActiveInHierarchy) continue;
+            foreach (Component component in gameObject.Components)
+                if (component is Collider3D { Enabled: true } collider)
+                    _stepColliders.Add(new ColliderEntry(gameObject, collider,
+                        FindBodyForCollider(gameObject), CalculateBounds(collider)));
+        }
+        List<ColliderEntry> colliders = _stepColliders;
 
         for (int firstIndex =
                  0;
              firstIndex <
-             colliders.Length;
+             colliders.Count;
              firstIndex++)
         {
             ColliderEntry first =
@@ -199,7 +189,7 @@ public sealed class PhysicsWorld3D
                      firstIndex +
                      1;
                  secondIndex <
-                 colliders.Length;
+                 colliders.Count;
                  secondIndex++)
             {
                 ColliderEntry second =
@@ -601,6 +591,14 @@ public sealed class PhysicsWorld3D
         out Vector3 normal,
         out float penetration)
     {
+        if (first is HeightfieldCollider3D terrainFirst)
+            return TerrainContact(terrainFirst, second, out point, out normal, out penetration);
+        if (second is HeightfieldCollider3D terrainSecond)
+        {
+            bool contact=TerrainContact(terrainSecond, first, out point, out normal, out penetration);
+            normal=-normal;return contact;
+        }
+
         if (first is
                 BoxCollider3D firstBox &&
             second is
@@ -678,6 +676,32 @@ public sealed class PhysicsWorld3D
             0.0f;
 
         return false;
+    }
+
+    private static bool TerrainContact(HeightfieldCollider3D terrain, Collider3D collider,
+        out Vector3 point, out Vector3 normal, out float penetration)
+    {
+        point=default;normal=Vector3.UnitY;penetration=0;
+        if (!terrain.SupportedTransform) return false;
+        Span<Vector3> samples=stackalloc Vector3[9];int count=0;
+        if(collider is BoxCollider3D box)
+        {
+            var b=CreateBox(box);
+            for(int x=-1;x<=1;x+=2)for(int y=-1;y<=1;y+=2)for(int z=-1;z<=1;z+=2)
+                samples[count++]=b.Center+x*b.AxisX*b.HalfSize.X+y*b.AxisY*b.HalfSize.Y+z*b.AxisZ*b.HalfSize.Z;
+            samples[count++]=b.Center-Vector3.UnitY*(Vector3.Abs(b.AxisX).Y*b.HalfSize.X+Vector3.Abs(b.AxisY).Y*b.HalfSize.Y+Vector3.Abs(b.AxisZ).Y*b.HalfSize.Z);
+        }
+        else if(collider is CapsuleCollider3D capsule)
+        {
+            var c=CreateCapsule(capsule);
+            samples[count++]=c.A-Vector3.UnitY*c.Radius;samples[count++]=c.B-Vector3.UnitY*c.Radius;
+        }
+        for(int i=0;i<count;i++)if(terrain.TrySampleWorld(samples[i],out var surface,out var n))
+        {
+            float depth=Vector3.Dot(surface-samples[i],n);
+            if(depth>penetration){penetration=depth;point=surface;normal=n;}
+        }
+        return penetration>0;
     }
 
     private static bool BoxBox(
@@ -1393,6 +1417,11 @@ public sealed class PhysicsWorld3D
     private static Bounds3D CalculateBounds(
         Collider3D collider)
     {
+        if (collider is HeightfieldCollider3D terrain)
+        {
+            var bounds=terrain.WorldTerrainBounds;
+            return new Bounds3D(bounds.Minimum, bounds.Maximum);
+        }
         if (collider is
             BoxCollider3D box)
         {

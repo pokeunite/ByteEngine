@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "bytebard.desertterrain",
+  "name": "Desert Terrain",
+  "version": "0.8.6",
+  "assembly": "DesertTerrain.Plugin.dll",
+  "entryPoint": "DesertTerrain.DesertTerrainPlugin",
+  "editor": true,
+  "runtime": true,
+  "minimumEngineVersion": "0.7.1"
+}

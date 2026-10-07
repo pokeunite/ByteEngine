@@ -1188,6 +1188,8 @@ public sealed partial class VisualLogicRegistry
             DisplayName = "Restart Current Scene",
             Execute = (_, context) => context.Scene.RequestRestart()
         });
+        registry.RegisterAction(new VisualActionDefinition{Id="scene.load",Category="Scenes",DisplayName="Load Scene",Execute=(i,c)=>c.Scene.RequestLoad(EventValueResolver.GetString(i,"path",c))});
+        registry.RegisterAction(new VisualActionDefinition{Id="game.quit",Category="Scenes",DisplayName="Quit Game",Execute=(_,c)=>c.Scene.RequestQuit()});
     }
 
     private static void RegisterObjects(

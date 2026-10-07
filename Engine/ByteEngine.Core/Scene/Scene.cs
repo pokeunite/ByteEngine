@@ -20,6 +20,18 @@ public sealed class Scene
     private bool _isUpdating;
 
     internal bool RestartRequested { get; private set; }
+    internal string? LoadRequested { get; private set; }
+    internal bool QuitRequested { get; private set; }
+    /// <summary>Queue a project-relative native scene for loading after gameplay updates finish.</summary>
+    public void RequestLoad(string path)
+    {
+        path=(path??"").Replace('\\','/').Trim();
+        if(string.IsNullOrEmpty(path)||Path.IsPathRooted(path)||path.Contains(':')||path.Split('/').Any(p=>p=="..")||!path.EndsWith(".bytescene",StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Use a project-relative .bytescene path.",nameof(path));
+        LoadRequested??=path;
+    }
+    public void RequestQuit()=>QuitRequested=true;
+    internal void ClearHostRequests(){LoadRequested=null;QuitRequested=false;RestartRequested=false;}
 
     /// <summary>Ask the host to load a fresh copy after this update finishes.</summary>
     public void RequestRestart() => RestartRequested = true;
@@ -48,15 +60,12 @@ public sealed class Scene
     {
         get
         {
-            Camera3D? selected = _gameObjects
-                .Where(item => item.ActiveInHierarchy)
-                .SelectMany(item => item.Components.OfType<Camera3D>())
-                .FirstOrDefault(camera => camera.Enabled && camera.ActiveGameCamera);
-
-            return selected ?? _gameObjects
-                .Where(item => item.ActiveInHierarchy)
-                .SelectMany(item => item.Components.OfType<Camera3D>())
-                .FirstOrDefault(camera => camera.Enabled);
+            Camera3D? fallback=null;
+            for(int i=0;i<_gameObjects.Count;i++){
+                var obj=_gameObjects[i];if(!obj.ActiveInHierarchy)continue;
+                var components=obj.Components;for(int j=0;j<components.Count;j++)if(components[j] is Camera3D camera&&camera.Enabled){if(camera.ActiveGameCamera)return camera;fallback??=camera;}
+            }
+            return fallback;
         }
     }
 
@@ -328,6 +337,9 @@ public sealed class Scene
             if (gameObject.Scene == this) gameObject.StartInternal();
     }
 
+    private readonly List<GameObject> _frameObjects = new();
+    private readonly List<(GameObject Object, int Order, int Index)> _renderObjects = new();
+
     internal void UpdateInternal()
     {
         if (!_loaded) return;
@@ -336,8 +348,9 @@ public sealed class Scene
 
         try
         {
-            GameObject[] frameObjects =
-                _gameObjects.ToArray();
+            var frameObjects = _frameObjects;
+            frameObjects.Clear();
+            frameObjects.AddRange(_gameObjects);
             UiNavigation.Update(this);
 
             foreach (GameObject gameObject in frameObjects)
@@ -381,8 +394,11 @@ public sealed class Scene
         }
     }
 
+    internal bool LoadingScreenVisible,LoadingScreenPresented;
     internal void RenderInternal(RenderContext context)
     {
+        if(LoadingScreenVisible){context.QueueUiQuad(System.Numerics.Vector2.Zero,new(context.TargetWidth,context.TargetHeight),new(.035f,.045f,.035f,1));context.QueueUiText("LOADING",FontRuntime.ResolvePath(_gameObjects.SelectMany(o=>o.Components).OfType<UiText>().FirstOrDefault(t=>!t.FontReference.IsEmpty)?.FontReference??ByteEngine.Core.Assets.AssetReference.Empty),24,new(context.TargetWidth*.5f,context.TargetHeight*.5f),new(.88f,.85f,.72f,1),400,UiAnchor.Center);context.QueueUiQuad(new(context.TargetWidth*.35f,context.TargetHeight*.5f+42),new(context.TargetWidth*.3f,2),new(.65f,.51f,.22f,1));context.FlushUi();LoadingScreenPresented=true;return;}
+
         if (!_loaded) return;
 
         context.Begin3DFrame();
@@ -418,7 +434,7 @@ public sealed class Scene
 
     internal void UnloadInternal()
     {
-        RestartRequested = false;
+        ClearHostRequests();
         if (!_loaded) return;
 
         Console.WriteLine($"Unloading scene: {Name}");
@@ -490,11 +506,14 @@ public sealed class Scene
 
     private IEnumerable<GameObject> GetRenderOrder()
     {
-        return _gameObjects
-            .Select((gameObject, index) => new { gameObject, index })
-            .OrderBy(item => item.gameObject.RenderOrder)
-            .ThenBy(item => item.index)
-            .Select(item => item.gameObject);
+        _renderObjects.Clear();
+        for (int i = 0; i < _gameObjects.Count; i++)
+            _renderObjects.Add((_gameObjects[i], _gameObjects[i].RenderOrder, i));
+        _renderObjects.Sort(static (a, b) =>
+        {
+            int order = a.Order.CompareTo(b.Order);
+            return order != 0 ? order : a.Index.CompareTo(b.Index);
+        });
+        for (int i = 0; i < _renderObjects.Count; i++) yield return _renderObjects[i].Object;
     }
 }
-

@@ -122,6 +122,9 @@ internal sealed class MaterialWorkspacePanel : IDisposable
             EditEnum("Surface Type", nameof(p.SurfaceType), p.SurfaceType,
                 value => p.SurfaceType = value);
             EditEnum("Shading", nameof(p.Shading), p.Shading, value => p.Shading = value);
+            foreach(var warning in GraphicsAssetAudit.Material(p,r=>_project.AssetDatabase.Resolve(r)?.Type==AssetType.Texture2D))
+                ImGui.TextWrapped("Check: "+warning);
+            ImGui.TextDisabled("Albedo/emission: sRGB. Normal and PBR maps: linear.");
             EditBool("Double Sided", nameof(p.DoubleSided), p.DoubleSided,
                 value => p.DoubleSided = value);
         }

@@ -11,7 +11,7 @@ internal sealed class RuntimePostProcessTarget3D
 {
     private int _framebuffer;
     private int _colorTexture;
-    private int _depthRenderbuffer;
+    private int _depthTexture;
     private int _width;
     private int _height;
 
@@ -45,7 +45,8 @@ internal sealed class RuntimePostProcessTarget3D
         float exposure,
         int windowWidth,
         int windowHeight,
-        bool smoothEdges = true)
+        bool smoothEdges = true,
+        System.Numerics.Matrix4x4? projection = null,GraphicsLook? look = null)
     {
         _postProcess.Render(
             _colorTexture,
@@ -60,7 +61,7 @@ internal sealed class RuntimePostProcessTarget3D
                 true,
             exposure:
                 exposure,
-            smoothEdges: smoothEdges);
+            smoothEdges: smoothEdges,depthTexture:_depthTexture,projection:projection,look:look);
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
@@ -151,24 +152,7 @@ internal sealed class RuntimePostProcessTarget3D
             _colorTexture,
             0);
 
-        _depthRenderbuffer =
-            GL.GenRenderbuffer();
-
-        GL.BindRenderbuffer(
-            RenderbufferTarget.Renderbuffer,
-            _depthRenderbuffer);
-
-        GL.RenderbufferStorage(
-            RenderbufferTarget.Renderbuffer,
-            RenderbufferStorage.Depth24Stencil8,
-            _width,
-            _height);
-
-        GL.FramebufferRenderbuffer(
-            FramebufferTarget.Framebuffer,
-            FramebufferAttachment.DepthStencilAttachment,
-            RenderbufferTarget.Renderbuffer,
-            _depthRenderbuffer);
+        _depthTexture=SceneDepthTexture.Create(_width,_height);
 
         FramebufferErrorCode status =
             GL.CheckFramebufferStatus(
@@ -198,13 +182,13 @@ internal sealed class RuntimePostProcessTarget3D
 
     private void DestroyFramebuffer()
     {
-        if (_depthRenderbuffer !=
+        if (_depthTexture !=
             0)
         {
-            GL.DeleteRenderbuffer(
-                _depthRenderbuffer);
+            GL.DeleteTexture(
+                _depthTexture);
 
-            _depthRenderbuffer =
+            _depthTexture =
                 0;
         }
 

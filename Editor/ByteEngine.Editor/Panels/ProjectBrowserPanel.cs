@@ -8,7 +8,8 @@ internal enum ProjectTemplate
     Clean,
     Starter3D,
     ByteArena,
-    LastStand
+    LastStand,
+    InteractiveSand
 }
 
 internal sealed record NewProjectRequest(string Name, string ParentDirectory, ProjectTemplate Template);
@@ -110,6 +111,9 @@ internal sealed class ProjectBrowserPanel
         if (ImGui.RadioButton("Last Stand", ref template, (int)ProjectTemplate.LastStand))
             _template = ProjectTemplate.LastStand;
         ImGui.TextDisabled("    Playable zombie survival: shotgun, waves, HUD, pickups and ragdolls.");
+        if (ImGui.RadioButton("Interactive Sand", ref template, (int)ProjectTemplate.InteractiveSand))
+            _template = ProjectTemplate.InteractiveSand;
+
         if (_template == ProjectTemplate.LastStand)
         {
             ImGui.Spacing();

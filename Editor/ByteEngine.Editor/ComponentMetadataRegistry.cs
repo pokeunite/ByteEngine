@@ -73,6 +73,8 @@ internal static class ComponentMetadataRegistry
             "rigidbody physics dynamic static kinematic mass gravity force impulse bounce restitution friction",
             true,
             false),
+        [typeof(ByteEngine.Core.Gameplay.InteractiveSand3D)] = new("Interactive Sand", "World", "Persistent deformable sand.", "sand"),
+        [typeof(ByteEngine.Core.Gameplay.SandLabProbe3D)] = new("Sand Probe", "Gameplay", "WASD move, Tab tracks, F6 clear; IJKL orbit, U/O zoom.", "sand ball"),
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
 
         [typeof(HealthComponent)] = new("Health", "Gameplay", "Tracks damage, healing and death.", "hit points hp damage"),
@@ -124,6 +126,16 @@ internal static class ComponentMetadataRegistry
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemiesRemaining))] = new("Enemies Remaining", "Runtime", "Still scheduled plus currently alive.", ReadOnly: true),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.TotalKilled))] = new("Total Killed", "Runtime", "Enemies killed across all waves.", ReadOnly: true),
         [(typeof(SkyEnvironment), nameof(SkyEnvironment.SmoothEdges))] = new("Smooth Edges", "Image Quality", "Lightweight spatial anti-aliasing for 3D. Slightly softens edges; no temporal ghosting."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Lighting))] = new("Lighting Preset", "Quick Setup", "Choose a scene look. Updates environment and the first enabled directional light, or creates Sunlight. Does not replace your HDRI."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Quality))] = new("Graphics Quality", "Quick Setup", "Fast: no AO/bloom, cheaper shadows. Balanced: restrained half-resolution AO and quarter-resolution bloom. High: more AO samples. Custom preserves individual settings."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.AmbientOcclusion))] = new("Contact Shading", "Image Quality", "Screen-space ambient occlusion strength. 0 disables its passes; restrained values avoid dirty-looking surfaces."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.OcclusionRadius))] = new("Contact Radius", "Image Quality", "World-space radius for contact shading.", "m", Advanced:true),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Bloom))] = new("Bloom", "Image Quality", "Soft glow around HDR highlights. 0 disables all bloom passes."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.BloomThreshold))] = new("Bloom Threshold", "Image Quality", "Only HDR values brighter than this glow.", Advanced:true),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Saturation))] = new("Saturation", "Color", "1 preserves original colour, 0 is monochrome."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Contrast))] = new("Contrast", "Color", "Display contrast; 1 is neutral."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.Warmth))] = new("Warmth", "Color", "Negative cools the image; positive warms it. 0 is neutral."),
+        [(typeof(SkyEnvironment), nameof(SkyEnvironment.ProfileGraphicsGpu))] = new("Measure Post Effects GPU", "Diagnostics", "Asynchronous GPU timing shown in Performance. Does not wait for the GPU.", Advanced:true),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Effect))] = new("Effect Asset (optional)", "VFX", "Choose a .bvfx. None uses the preset below."),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Preset))] = new("Built-in Preset", "VFX", "Choosing a preset clears Effect Asset and immediately restarts the preview."),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Size))] = new("Effect Size", "VFX", "Overall size multiplier; 1 is the authored size."),
@@ -324,4 +336,3 @@ internal static class ComponentMetadataRegistry
                 : character.ToString()));
     }
 }
-

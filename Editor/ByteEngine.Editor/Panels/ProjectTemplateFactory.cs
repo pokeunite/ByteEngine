@@ -14,8 +14,26 @@ internal static class ProjectTemplateFactory
         ProjectTemplate.Clean => new Scene("Main"),
         ProjectTemplate.Starter3D => CreateStarter3D(),
         ProjectTemplate.ByteArena => CreateByteArena(),
+        ProjectTemplate.InteractiveSand => CreateInteractiveSand(),
         _ => throw new ArgumentOutOfRangeException(nameof(template))
     };
+
+    private static Scene CreateInteractiveSand()
+    {
+        var scene = new Scene("Interactive Sand");
+        scene.CreateGameObject("Interactive sand").AddComponent(new InteractiveSand3D());
+        var camera=scene.CreateGameObject("Inspection camera").AddComponent(new Camera3D { ActiveGameCamera=true, FieldOfView=52, FarClip=100 });
+        camera.Transform.WorldPosition=new(10,9,13);
+        Matrix4x4.Invert(Matrix4x4.CreateLookAt(camera.Transform.WorldPosition,Vector3.Zero,Vector3.UnitY),out var world);
+        camera.Transform.WorldRotation=Quaternion.CreateFromRotationMatrix(world);
+        var ball=scene.CreateGameObject("Blue ball");ball.Transform.WorldPosition=new(0,.7f,0);ball.Transform.LocalScale=new(1.7f);
+        ball.AddComponent(new MeshRenderer { UsePrimitive=true,Primitive=PrimitiveMeshType.Sphere,Material=new() { BaseColor=new(.07f,.34f,.7f,1),Roughness=.32f } });
+        ball.AddComponent(new SandLabProbe3D());
+        var sun=scene.CreateGameObject("Low sunlight").AddComponent(new DirectionalLight { Intensity=2.3f,Color=new(1,.91f,.76f),CastShadows=true,ShadowResolution=1024,ShadowDistance=35 });sun.Transform.EulerAngles=new(20,-65,0);
+        scene.CreateGameObject("Sky").AddComponent(new SkyEnvironment { SkyMode=SkyMode3D.Procedural,Quality=GraphicsQuality.Fast,OverrideAmbient=true,AmbientIntensity=.28f,Exposure=1,Contrast=1.04f });
+        var hud=scene.CreateGameObject("Demo controls");hud.AddComponent(new UiCanvas());hud.AddComponent(new UiText { Text="INTERACTIVE SAND\nWASD move | TAB tyre tracks | F6 clear\nI J K L orbit | U / O zoom",FontSize=18,Offset=new(24,22),Color=new(.95f,.92f,.83f,1) });
+        return scene;
+    }
 
     private static Scene CreateStarter3D()
     {

@@ -13,7 +13,7 @@ internal sealed partial class GoblinVehicleDiagnostic
   string output=Path.Combine(Environment.CurrentDirectory,"Designs/WorkshopHud/screenshots");Directory.CreateDirectory(output);
   Vector2 Project(Vector3 local){var camera=scene.ActiveCamera!;var clip=Vector4.Transform(new Vector4(builder.Transform.WorldPosition+local,1),camera.GetViewMatrix()*camera.GetProjectionMatrix(1280f/720));return new((clip.X/clip.W+1)/2,(1-clip.Y/clip.W)/2);}
   void Idle(){for(int i=0;i<30;i++)TickInput(scene,new(.98f,.5f),[]);}
-  Idle();Screenshot(scene,Path.Combine(output,"workshop-empty.png"));
+  Idle();CheckNativeTuning(scene,builder);Idle();Screenshot(scene,Path.Combine(output,"workshop-empty.png"));
   int front=builder.PlacePartAtConnector("goblin_double_wooden_block",0,"Front"),rear=builder.PlacePartAtConnector("goblin_double_wooden_block",0,"Rear");Assert(front>0&&rear>0,"Brace frame beams failed");Idle();
   var a=builder.Assembly!;
   string Top(int id)=>c[a.Parts[id].File].Sockets.Where(s=>Vector3.Transform(s.Normal,a.Parts[id].Rotation).Y>.99f).OrderBy(s=>Math.Abs(s.Position.Z)).First().Name;
@@ -87,6 +87,6 @@ internal sealed partial class GoblinVehicleDiagnostic
   var occupied=builder.Assembly!.OccupiedSockets();foreach(var part in builder.Assembly.Parts.Values)foreach(var socket in c[part.File].Sockets)Assert(occupied.Contains((part.Id,socket.Name))==builder.Assembly.IsSocketOccupied(part.Id,socket.Name),"Indexed connected occupancy differs");
   Assert(builder.BeginDriving(),"Cog simulation start");for(int i=0;i<90;i++)TickInput(scene,new(.98f,.5f),[Key.F]);Screenshot(scene,Path.Combine(output,"cogs-035-running.png"));builder.ReturnToBuild();Idle();
   Screenshot(scene,Path.Combine(output,"cogs-035-returned.png"));
-Console.WriteLine("PASS: compact HUD native renders at 720p,1080p,16:10,ultrawide; tool tooltip; flight category; run/build transition.");
+Console.WriteLine("PASS: compact HUD native renders at 720p,1080p,16:10,ultrawide; tool tooltip; active palette; run/build transition.");
  }
 }

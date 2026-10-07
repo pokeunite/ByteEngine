@@ -30,6 +30,7 @@ public sealed class VfxPlayer : Component
     private Vector3? _beamTarget;
     public void SetBeamTarget(Vector3 worldPosition) => _beamTarget=VfxEffect.Finite(worldPosition,Transform.WorldPosition);
     public void ClearBeamTarget() => _beamTarget=null;
+    public bool IsEmitting => _simulation?.IsEmitting==true;
     public bool IsPlaying => _simulation?.IsPlaying==true;
     public int ActiveParticles => _simulation?.ActiveCount ?? 0;
     public int ParticleCapacity => _simulation?.Capacity ?? 0;
@@ -181,7 +182,7 @@ public sealed class VfxPlayer : Component
             if(b.PreviousCount>drawCount) Array.Clear(b.Vertices,drawCount*32,(b.PreviousCount-drawCount)*32);
             b.PreviousCount=drawCount; b.Mesh.UpdateVertices(b.Vertices,updateBounds:false,knownBounds:new BoundingBox3D(minimum,maximum));
             b.Mesh.SetDrawIndexCount(drawCount*6); RenderedParticles+=drawCount;
-            context.RenderWorld.Submit(b.Mesh,b.Material,Matrix4x4.Identity,frustumCulling:true,castShadows:false,receiveShadows:false);
+            context.RenderWorld.Submit(b.Mesh,b.Material,Matrix4x4.Identity,RenderQueue3D.Transparent,frustumCulling:true,castShadows:false,receiveShadows:false);
         }
     }
     private static Vector3 Side(Vector3 direction,Vector3 view,Vector3 fallback)

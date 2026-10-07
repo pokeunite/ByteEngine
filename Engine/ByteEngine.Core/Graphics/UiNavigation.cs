@@ -37,11 +37,12 @@ public static class UiNavigation
         _previousDown = down;
 
         UiWidget[] buttons = scene.GameObjects
-            .Where(obj => obj.ActiveInHierarchy && UiLayout.IsVisible(obj))
             .Select(obj => obj.GetComponent<UiWidget>())
             .Where(widget => widget is { Enabled: true, Visible: true,
                 Interactable: true, Kind: UiWidgetKind.Button })
             .Cast<UiWidget>()
+            .Where(widget => widget.GameObject.ActiveInHierarchy &&
+                UiLayout.IsVisible(widget.GameObject))
             .ToArray();
         Input.SetUiPointerBlocked(buttons.Any(widget => widget.IsHovered));
         if (buttons.Length == 0)

@@ -5,6 +5,7 @@ namespace ByteEngine.Core.Serialization;
 public sealed class MissingComponent : Component
 {
     private readonly ComponentData _original;
+    public bool AuthoredEnabled => _original.Enabled;
     public string MissingType => _original.Type;
     public MissingComponent(ComponentData original) { _original = Copy(original); Enabled = false; }
     internal ComponentData Capture() => Copy(_original);

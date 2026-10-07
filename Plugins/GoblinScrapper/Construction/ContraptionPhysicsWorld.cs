@@ -14,7 +14,7 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
 {
  // Bounded driving torque lets tire contact resolve unequal wheel speeds in a turn.
  // A near-hard velocity lock consumes the grip budget and can reverse the chassis yaw.
- private const float WheelDriveTorque=120,WheelBrakeTorque=10000;
+ private const float WheelDriveTorque=120,WheelBrakeTorque=600;
  private readonly BufferPool _pool=new(); private readonly Simulation _simulation;
  private readonly Dictionary<ulong,int> _connectedPairs=new();private readonly Dictionary<int,float> _wheelFriction=new();
  private readonly Dictionary<int,(Vector3 Normal,float Depth)> _groundContacts=new();
@@ -26,6 +26,7 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
  private float _accumulator; private bool _active;private int _projectileId;
  private readonly Dictionary<int,(BodyHandle Body,float Life)> _projectiles=new();
  public IEnumerable<(int Id,Vector3 Position)> Projectiles=>_projectiles.Select(p=>(p.Key,_simulation.Bodies[p.Value.Body].Pose.Position));
+ private static float Tune(Piece p,string key)=>BlockTuning.Value(p.Part,p.Def.ReferenceId,key);
  public int Fire()
  {
   if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("FIRE","Weapon trigger");
@@ -37,10 +38,10 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
     for(int i=0;i<number;i++)
     {
      var direction=Vector3.Normalize(forward+Vector3.Transform(new Vector3((i%3-1)*.08f,(i/3-1)*.06f,0),pose.Rotation)*(number>1?1:0));var shape=new Sphere(.075f);
-     var h=Body(pose.Position+forward*1.05f,Quaternion.Identity,shape.ComputeInertia(.4f),_simulation.Shapes.Add(shape));_simulation.Bodies[h].Velocity=new BodyVelocity(direction*(p.Def.ReferenceId==61?45:30)+Velocity(p.Part.Id));
+     var h=Body(pose.Position+forward*1.05f,Quaternion.Identity,shape.ComputeInertia(.4f),_simulation.Shapes.Add(shape));_simulation.Bodies[h].Velocity=new BodyVelocity(direction*(p.Def.ReferenceId==61?45:30)*Tune(p,"shotPower")+Velocity(p.Part.Id));
      _projectiles[++_projectileId]=(h,5);Ignore(h,p.Root);Ignore(h,p.Output);
     }
-    var body=_simulation.Bodies[p.Root];var v=body.Velocity;v.Linear-=forward*(number*.4f*30/p.Def.Mass);body.Velocity=v;count++;
+    var body=_simulation.Bodies[p.Root];var v=body.Velocity;v.Linear-=forward*(number*.4f*30*Tune(p,"shotPower")/p.Def.Mass);body.Velocity=v;count++;
    }
    if(p.Def.ReferenceId is 23 or 54){Explode(p);count++;}
    if(p.Def.ReferenceId==59){if(_attachments.Remove(p.Part.Id,out var joint))_simulation.Solver.Remove(joint);var body=_simulation.Bodies[p.Root];var v=body.Velocity;v.Linear+=Vector3.Transform(-Vector3.UnitZ,body.Pose.Orientation)*25;body.Velocity=v;count++;}
@@ -68,12 +69,12 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
   public Vector3 RootCenter,OutputCenter; public Quaternion ShapeRotation=Quaternion.Identity;
   public ConstraintHandle? Motor,Linear,Steer;public Quaternion RestRelative; public Vector3 LocalAxis; public bool Slider;
  }
- public ContraptionPhysicsWorld(VehicleAssembly assembly,Vector3 origin,Quaternion rotation)
+ public ContraptionPhysicsWorld(VehicleAssembly assembly,Vector3 origin,Quaternion rotation,bool includeGround=true)
  {
   _assembly=assembly;
   _usesSteeringJoints=assembly.Parts.Values.Any(p=>assembly.Catalog[p.File].ReferenceId is 13 or 28);
   _simulation=Simulation.Create(_pool,new Contacts(_connectedPairs,_wheelFriction,_groundContacts),new Gravity(new(0,-9.81f,0)),new SolveDescription(16,8));
-  AddObstacle(new(0,-.5f,0),new(100,1,100));
+  if(includeGround)AddObstacle(new(0,-.5f,0),new(100,1,100));
   foreach(var part in assembly.Parts.Values)
   {
    var d=assembly.Catalog[part.File]; var box=d.RootBounds??d.Bounds;
@@ -101,10 +102,10 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
     p.Slider=d.ReferenceId is 9 or 12 or 16 or 18 or 42;
     if(p.Slider)
     {
-     _simulation.Solver.Add(p.Root,p.Output,new PointOnLineServo{LocalOffsetA=oa,LocalOffsetB=ob,LocalDirection=p.LocalAxis,SpringSettings=new(30,1),ServoSettings=new(20,0,2000)});
-     _simulation.Solver.Add(p.Root,p.Output,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Normalize(Quaternion.Inverse(a.Orientation)*b.Orientation),SpringSettings=new(30,1),ServoSettings=new(20,0,2000)});
+     _simulation.Solver.Add(p.Root,p.Output,new PointOnLineServo{LocalOffsetA=oa,LocalOffsetB=ob,LocalDirection=p.LocalAxis,SpringSettings=new(120,1),ServoSettings=new(20,0,float.MaxValue)});
+     _simulation.Solver.Add(p.Root,p.Output,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Normalize(Quaternion.Inverse(a.Orientation)*b.Orientation),SpringSettings=new(120,1),ServoSettings=new(20,0,float.MaxValue)});
      _simulation.Solver.Add(p.Root,p.Output,new LinearAxisLimit{LocalOffsetA=oa,LocalOffsetB=ob,LocalAxis=p.LocalAxis,MinimumOffset=-.30f,MaximumOffset=.4f,SpringSettings=new(30,1)});
-     if(d.ReferenceId!=42)p.Linear=_simulation.Solver.Add(p.Root,p.Output,new LinearAxisServo{LocalOffsetA=oa,LocalOffsetB=ob,LocalPlaneNormal=p.LocalAxis,TargetOffset=0,SpringSettings=new(d.ReferenceId==16?4:20,1),ServoSettings=new(2,0,1500)});
+     if(d.ReferenceId!=42)p.Linear=_simulation.Solver.Add(p.Root,p.Output,new LinearAxisServo{LocalOffsetA=oa,LocalOffsetB=ob,LocalPlaneNormal=p.LocalAxis,TargetOffset=0,SpringSettings=new(d.ReferenceId==16?Tune(p,"stiffness"):20,d.ReferenceId==16?Tune(p,"damping"):1),ServoSettings=new(d.ReferenceId==16?2:Tune(p,"linearSpeed"),0,d.ReferenceId==16?1500:Tune(p,"force"))});
     }
     else if(d.ReferenceId==44)_simulation.Solver.Add(p.Root,p.Output,new BallSocket{LocalOffsetA=oa,LocalOffsetB=ob,SpringSettings=new(30,1)});
     else
@@ -116,7 +117,7 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
       if(d.ReferenceId is 13 or 28)
       {
        var worldBasis=Align(Vector3.UnitZ,axis);
-       _simulation.Solver.Add(p.Root,p.Output,new TwistLimit{LocalBasisA=Quaternion.Normalize(Quaternion.Inverse(a.Orientation)*worldBasis),LocalBasisB=Quaternion.Normalize(Quaternion.Inverse(b.Orientation)*worldBasis),MinimumAngle=-40*MathF.PI/180,MaximumAngle=40*MathF.PI/180,SpringSettings=new(30,1)});
+       _simulation.Solver.Add(p.Root,p.Output,new TwistLimit{LocalBasisA=Quaternion.Normalize(Quaternion.Inverse(a.Orientation)*worldBasis),LocalBasisB=Quaternion.Normalize(Quaternion.Inverse(b.Orientation)*worldBasis),MinimumAngle=-Tune(p,"angle")*MathF.PI/180,MaximumAngle=Tune(p,"angle")*MathF.PI/180,SpringSettings=new(30,1)});
       }
       p.Steer=_simulation.Solver.Add(p.Root,p.Output,new AngularServo{TargetRelativeRotationLocalA=p.RestRelative,SpringSettings=new(60,1),ServoSettings=new(3,0,40000)});
      }
@@ -181,7 +182,7 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
     _simulation.Solver.Add(a,b,new DistanceServo{
      LocalOffsetA=Vector3.Transform(start-pa.Position,Quaternion.Inverse(pa.Orientation)),
      LocalOffsetB=Vector3.Transform(end-pb.Position,Quaternion.Inverse(pb.Orientation)),
-     TargetDistance=Vector3.Distance(start,end),SpringSettings=new(30,1),ServoSettings=new(10,0,4000)});
+     TargetDistance=Vector3.Distance(start,end),SpringSettings=new(60,1),ServoSettings=new(2,0,30000)});
    }
   }
   var gears=_pieces.Values.Where(p=>p.Def.ReferenceId is 38 or 39 or 51).ToArray();
@@ -195,7 +196,8 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
   }
 
  }
- public void AddObstacle(Vector3 centre,Vector3 size)=>_simulation.Statics.Add(new StaticDescription(centre,_simulation.Shapes.Add(new Box(size.X,size.Y,size.Z))));
+ public void AddObstacle(Vector3 centre,Vector3 size)=>AddObstacle(centre,size,Quaternion.Identity);
+ public void AddObstacle(Vector3 centre,Vector3 size,Quaternion rotation)=>_simulation.Statics.Add(new StaticDescription(new RigidPose(centre,rotation),_simulation.Shapes.Add(new Box(size.X,size.Y,size.Z))));
  private BodyHandle BoxBody(Vector3 pos,Quaternion q,Vector3 size,float mass){size=Vector3.Max(size,new(.04f));var shape=new Box(size.X,size.Y,size.Z);return Body(pos,q,shape.ComputeInertia(mass),_simulation.Shapes.Add(shape));}
  private BodyHandle Body(Vector3 pos,Quaternion q,BodyInertia inertia,TypedIndex shape)=>_simulation.Bodies.Add(BodyDescription.CreateDynamic(new RigidPose(pos,q),inertia,shape,.01f));
  private ConstraintHandle WeldBodies(BodyHandle a,BodyHandle b){var pa=_simulation.Bodies[a].Pose;var pb=_simulation.Bodies[b].Pose;return _simulation.Solver.Add(a,b,new Weld{LocalOffset=Vector3.Transform(pb.Position-pa.Position,Quaternion.Inverse(pa.Orientation)),LocalOrientation=Quaternion.Normalize(Quaternion.Inverse(pa.Orientation)*pb.Orientation),SpringSettings=new(1000,1)});}
@@ -247,22 +249,23 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
  }
  private void StepFixed(float dt,float throttle,float steering,bool brake,bool powered,bool drift)
  {
-  foreach(var key in _wheelFriction.Keys.ToArray())_wheelFriction[key]=drift?.18f:.6f;
+  foreach(var p in _pieces.Values.Where(p=>p.Def.ReferenceId is 2 or 46 or 40 or 50 or 60 or 86)){if(_wheelFriction.ContainsKey(p.Output.Value))_wheelFriction[p.Output.Value]=Tune(p,"grip")*(drift?.3f:1);}
   foreach(var p in _pieces.Values)
   {
    if(p.Motor is {} motor)
    {
     bool wheel=p.Def.ReferenceId is 2 or 46;
     float speed=wheel?(brake?0:throttle*(p.Def.ReferenceId==46?7.3f:7.5f)*80*MathF.PI/180):p.Def.ReferenceId==14?throttle*30:powered?25:0;
+    speed*=Tune(p,"speed")*(Tune(p,"reverse")>.5f?-1:1);
     if(_health[p.Part.Id]<=0)speed=0;
     if(wheel)
     {
      // Besiege CogMotorControllerHinge: block input, degreesPerSecond*80, smoothed target; no vehicle steering mix.
      speed*=Vector3.Dot(Vector3.Transform(p.Def.Axis,p.Part.Rotation),Vector3.UnitX)<-.1f?-1:1;
-     p.MotorTarget+=(speed-p.MotorTarget)*Math.Clamp(dt*(p.Def.ReferenceId==46?8:16),0,1);
+     p.MotorTarget+=(speed-p.MotorTarget)*Math.Clamp(dt*(p.Def.ReferenceId==46?8:16)*Tune(p,"acceleration"),0,1);
      speed=p.MotorTarget;
     }
-    _simulation.Solver.ApplyDescription(motor,new AngularAxisMotor{LocalAxisA=p.LocalAxis,TargetVelocity=speed,Settings=new(wheel?(Math.Abs(throttle)<.001f||brake?WheelBrakeTorque:WheelDriveTorque):120,wheel?.00001f:.001f)});
+    _simulation.Solver.ApplyDescription(motor,new AngularAxisMotor{LocalAxisA=p.LocalAxis,TargetVelocity=speed,Settings=new(wheel?(brake||Math.Abs(throttle)<.001f&&Tune(p,"autoBrake")>.5f?WheelBrakeTorque:Math.Abs(throttle)<.001f?0:Tune(p,"torque")):Tune(p,"torque"),wheel?.00001f:.001f)});
    }
    if(p.Steer is {} servo)
    {
@@ -271,17 +274,18 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
     if(p.Def.ReferenceId is 13 or 28)
     {
      // SteeringWheel: accumulate key-driven angle, 40-degree limits; hinge auto-return when released.
-     float rate=-steering*100*MathF.PI/180;
-     if(Math.Abs(steering)<.001f)rate=-Math.Sign(p.SteeringAngle)*60*MathF.PI/180;
+     float axisY=Vector3.Transform(p.Def.Axis,p.Part.Rotation).Y;float mountSign=Math.Abs(axisY)>.5f?Math.Sign(axisY):1;
+     float rate=-steering*mountSign*Tune(p,"steerSpeed")*(Tune(p,"reverse")>.5f?-1:1)*MathF.PI/180;
+     if(Math.Abs(steering)<.001f)rate=Tune(p,"autoReturn")>.5f?-Math.Sign(p.SteeringAngle)*Tune(p,"returnSpeed")*MathF.PI/180:0;
      float next=p.SteeringAngle+rate*dt;
      if(Math.Abs(steering)<.001f&&Math.Sign(next)!=Math.Sign(p.SteeringAngle))next=0;
-     p.SteeringAngle=Math.Clamp(next,-40*MathF.PI/180,40*MathF.PI/180);angle=p.SteeringAngle;
+     p.SteeringAngle=Math.Clamp(next,-Tune(p,"angle")*MathF.PI/180,Tune(p,"angle")*MathF.PI/180);angle=p.SteeringAngle;
     }
     else angle=p.Def.ReferenceId is 27 or 77?(_active?.7f:0):steering*.6f;
     _simulation.Solver.ApplyDescription(servo,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(p.LocalAxis,angle)*p.RestRelative),SpringSettings=new(60,1),ServoSettings=new(3,0,40000)});
    }
    if(p.Linear is {} linear)
-   {_simulation.Solver.GetDescription(linear,out LinearAxisServo d);d.TargetOffset=_active?(p.Def.ReferenceId is 9 or 16?-.3f:.4f):0;_simulation.Solver.ApplyDescription(linear,d);}
+   {_simulation.Solver.GetDescription(linear,out LinearAxisServo d);d.TargetOffset=_active?(p.Def.ReferenceId==16?-.3f:p.Def.ReferenceId==9?-Tune(p,"travel"):Tune(p,"travel")):0;_simulation.Solver.ApplyDescription(linear,d);}
    var body=_simulation.Bodies[p.Root];var velocity=body.Velocity;float h=Math.Min(dt,.05f);
    if(!p.DirectWheelMount){velocity.Linear*=MathF.Exp(-p.Def.LinearDrag*dt);velocity.Angular*=MathF.Exp(-p.Def.AngularDrag*dt);}
    if(p.DirectWheelMount){var wheelBody=_simulation.Bodies[p.Output];var wheelVelocity=wheelBody.Velocity;wheelVelocity.Linear*=MathF.Exp(-p.Def.LinearDrag*dt);wheelVelocity.Angular*=MathF.Exp(-p.Def.AngularDrag*dt);wheelBody.Velocity=wheelVelocity;}
@@ -335,7 +339,7 @@ public sealed partial class ContraptionPhysicsWorld : IDisposable
   if(_traceGeneration!=ConstructionDiagnostics.Generation)
   {
    _traceGeneration=ConstructionDiagnostics.Generation;
-   ConstructionDiagnostics.Record("PHYSICS SNAPSHOT",$"plugin=0.4.0 catalog={_assembly.Catalog.Revision} steering={(_usesSteeringJoints?"hinges":"fixed axles (A/D does not drive wheels)")} wheelDriveTorque=120 autoBrakeTorque=10000 (auto-brake enabled) solver=16iterations/8substeps build={_assembly.ToJson()}");
+   ConstructionDiagnostics.Record("PHYSICS SNAPSHOT",$"plugin=0.4.1 catalog={_assembly.Catalog.Revision} steering={(_usesSteeringJoints?"hinges":"fixed axles (A/D does not drive wheels)")} wheelDriveTorque=120 autoBrakeTorque=10000 (auto-brake enabled) solver=16iterations/8substeps build={_assembly.ToJson()}");
    foreach(var p in _pieces.Values)ConstructionDiagnostics.Record("BODY SETUP",$"id={p.Part.Id} file={p.Part.File} parent={p.Part.Parent}/{p.Part.ParentBone} target={p.Part.ParentConnector} source={p.Part.OwnConnector} authoredPosition={p.Part.Position} authoredRotation={p.Part.Rotation} mass={p.Def.Mass} axis={p.Def.Axis} pivot={p.Def.Pivot} rootBounds={p.Def.RootBounds} tireBounds={p.Def.MovingCollision} rootBody={p.Root.Value} outputBody={p.Output.Value} motor={p.Motor.HasValue}");
    _traceElapsed=.25f;
   }

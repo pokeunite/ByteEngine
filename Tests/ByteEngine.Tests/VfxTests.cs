@@ -89,7 +89,12 @@ internal static class VfxTests
         var scene=new Scene("VFX tests"); var player=scene.CreateGameObject().AddComponent(new VfxPlayer { PlayOnStart=false });
         player.SetDefinition(VfxPresets.Create(VfxPreset.Sparks)); player.Play(); player.Paused=true;
         player.Advance(5); Check(player.ActiveParticles==30,"pause freezes playback");
-        player.Paused=false; player.Stop(true); Check(!player.IsPlaying,"player clear");
+        player.Paused=false;
+        player.Stop();
+        Check(player.IsPlaying&&!player.IsEmitting,"stopped emitter distinguishes lingering particles from active emission");
+        player.Play(false);
+        Check(player.IsEmitting&&player.ActiveParticles==30,"contact emission resumes without discarding its existing wake");
+        player.Stop(true); Check(!player.IsPlaying,"player clear");
         scene.DestroyGameObject(player.GameObject);
     }
     private static void AtlasAndMesh()

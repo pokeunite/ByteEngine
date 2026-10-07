@@ -12,6 +12,10 @@ public sealed class SceneManager
 
     /// <summary>Host-owned fresh scene factory used by Event Sheet scene.restart.</summary>
     public Func<Scene>? RestartSceneFactory { get; set; }
+    public Func<string,Scene>? SceneFactory { get; set; }
+    public Action? QuitHandler { get; set; }
+    public bool ShowLoadingScreen {get;set;}
+    string? _pendingLoad;
 
     public bool HasActiveScene =>
         ActiveScene != null;
@@ -66,6 +70,7 @@ public sealed class SceneManager
 
     public void UnloadScene()
     {
+        _pendingLoad=null;
         if (ActiveScene == null)
         {
             return;
@@ -114,7 +119,17 @@ public sealed class SceneManager
 
     internal void UpdateInternal()
     {
+        if(_pendingLoad is {} pending){if(ActiveScene?.LoadingScreenPresented!=true)return;_pendingLoad=null;var watch=System.Diagnostics.Stopwatch.StartNew();try{if(SceneFactory is {} factory)LoadScene(factory(pending));}catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){Console.WriteLine($"Could not load scene '{pending}': {e.Message}");}finally{if(ActiveScene!=null){ActiveScene.LoadingScreenVisible=false;ActiveScene.LoadingScreenPresented=false;}Console.WriteLine($"Scene transition: {watch.Elapsed.TotalMilliseconds:0} ms");}return;}
         ActiveScene?.UpdateInternal();
+
+        if(ActiveScene?.QuitRequested==true){ActiveScene.ClearHostRequests();QuitHandler?.Invoke();return;}
+        if(ActiveScene?.LoadRequested is { } path)
+        {
+            ActiveScene.ClearHostRequests();
+            if(ShowLoadingScreen&&SceneFactory!=null){_pendingLoad=path;ActiveScene.LoadingScreenVisible=true;ActiveScene.LoadingScreenPresented=false;return;}
+            try{if(SceneFactory is { } factory)LoadScene(factory(path));else Console.WriteLine("Scene load requested, but this host has no scene factory.");}
+            catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){Console.WriteLine($"Could not load scene '{path}': {e.Message}");}
+        }
 
         if (ActiveScene?.RestartRequested == true)
         {

@@ -53,6 +53,13 @@ internal static class GoblinEvents
   Condition("canDrive","Can Start Simulation",(b,i,e)=>b.CanSimulate);Condition("placementReady","Preview Placement Is Valid",(b,i,e)=>b.PlacementReady);
   Condition("drifting","Is Drifting",(b,i,e)=>b.IsDrifting);
   Condition("speedAbove","Speed Is Above",(b,i,e)=>b.Speed>Num(i,e,"speed"),Arg("speed",VariableValue.FromNumber(1)));
+  Action("placeTool","Choose Place Tool",(b,i,e)=>b.ChoosePlaceTool());
+  Action("moveTool","Choose Move Tool",(b,i,e)=>b.ChooseMoveTool());
+  Action("copyTool","Choose Copy Tool",(b,i,e)=>b.ChooseCopyTool());
+  Action("eraseToolMode","Choose Erase Tool",(b,i,e)=>b.ChooseEraseTool());
+  Action("tuneTool","Choose Tuning Tool",(b,i,e)=>b.ChooseTuneTool());
+  Action("tuneBlock","Open Block Tuning",(b,i,e)=>b.TuneBlock((int)Num(i,e,"block")),Arg("block",VariableValue.FromNumber(1)));
+  Action("setBlockTuning","Set Block Tuning Value",(b,i,e)=>b.SetBlockTuning((int)Num(i,e,"block"),Text(i,e,"setting"),Num(i,e,"value")),Arg("block",VariableValue.FromNumber(1)),Arg("setting",VariableValue.FromString("speed")),value);
   Action("restartBattle","Restart Battlefield Encounter",(b,i,e)=>b.RestartBattle());
   Action("battleEnemyCount","Set Next Battlefield Enemy Count",(b,i,e)=>{if(b.Building)b.BattlefieldEnemyCount=Math.Clamp((int)Num(i,e,"count"),1,24);},Arg("count",VariableValue.FromNumber(18)));
   Condition("battleRunning","Battlefield Encounter Is Running",(b,i,e)=>b.BattleRunning);

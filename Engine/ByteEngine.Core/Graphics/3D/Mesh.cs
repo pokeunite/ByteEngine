@@ -113,7 +113,7 @@ public sealed class Mesh : IDisposable
     /// specific VAOs remain valid because the buffer object and vertex layout
     /// are unchanged.
     /// </summary>
-    internal void UpdateVertices(
+    public void UpdateVertices(
         float[] vertices,
         bool updateBounds = true,
         BoundingBox3D? knownBounds = null)

@@ -18,6 +18,7 @@ public sealed class PostProcess3D
     private Shader? _shader;
 
     private int _vertexArray;
+    private readonly PostEffects3D _effects=new();
 
     public void Render(
         int sourceTexture,
@@ -26,7 +27,10 @@ public sealed class PostProcess3D
         int height,
         bool applyToneMapping,
         float exposure,
-        bool smoothEdges = true)
+        bool smoothEdges = true,
+        int depthTexture = 0,
+        System.Numerics.Matrix4x4? projection = null,
+        GraphicsLook? look = null)
     {
         if (sourceTexture ==
             0)
@@ -35,6 +39,12 @@ public sealed class PostProcess3D
         }
 
         EnsureResources();
+        var settings=look??GraphicsLook.Default;
+        _effects.Begin(applyToneMapping && settings.ProfileGpu);
+        try
+        {
+        for(int unit=0;unit<4;unit++) GL.BindSampler(unit,0);
+        _effects.Prepare(sourceTexture,depthTexture,width,height,projection??System.Numerics.Matrix4x4.Identity,applyToneMapping?settings:GraphicsLook.Default);
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
@@ -63,6 +73,12 @@ public sealed class PostProcess3D
             EnableCap.CullFace);
 
         _shader!.Use();
+        GL.ActiveTexture(TextureUnit.Texture2); GL.BindTexture(TextureTarget.Texture2D,_effects.AoTexture);
+        GL.ActiveTexture(TextureUnit.Texture3); GL.BindTexture(TextureTarget.Texture2D,_effects.BloomTexture);
+        _shader.SetInt("uAo",2); _shader.SetInt("uBloom",3);
+        _shader.SetFloat("uAoStrength",_effects.AoTexture==0?0:settings.Occlusion);
+        _shader.SetFloat("uBloomStrength",_effects.BloomTexture==0?0:settings.Bloom);
+        _shader.SetFloat("uSaturation",settings.Saturation); _shader.SetFloat("uContrast",settings.Contrast); _shader.SetFloat("uWarmth",settings.Warmth);
 
         GL.ActiveTexture(
             TextureUnit.Texture0);
@@ -118,6 +134,8 @@ public sealed class PostProcess3D
 
         GL.Disable(
             EnableCap.CullFace);
+        }
+        finally { _effects.End(); }
     }
 
     private void EnsureResources()
@@ -137,6 +155,7 @@ public sealed class PostProcess3D
 
     public void Dispose()
     {
+        _effects.Dispose();
         _shader?.Dispose();
         _shader =
             null;
@@ -203,6 +222,8 @@ public sealed class PostProcess3D
         uniform int uApplyToneMapping;
         uniform float uExposure;
         uniform int uSmoothEdges;
+        uniform sampler2D uAo,uBloom;
+        uniform float uAoStrength,uBloomStrength,uSaturation,uContrast,uWarmth;
 
         vec3 acesFilm(
             vec3 value)
@@ -249,7 +270,12 @@ public sealed class PostProcess3D
         vec3 displaySample(vec2 uv)
         {
             vec3 hdr = max(texture(uSceneTexture, uv).rgb, vec3(0.0)) * max(uExposure, 0.0);
-            return pow(acesFilm(hdr), vec3(1.0 / 2.2));
+            if(uAoStrength>0) hdr*=mix(1.0,texture(uAo,uv).r,uAoStrength);
+            if(uBloomStrength>0) hdr+=texture(uBloom,uv).rgb*uBloomStrength*max(uExposure,0.0);
+            hdr*=vec3(1+uWarmth*.12,1,1-uWarmth*.12);
+            vec3 color=pow(acesFilm(hdr),vec3(1.0/2.2));
+            color=mix(vec3(dot(color,vec3(.2126,.7152,.0722))),color,uSaturation);
+            return clamp((color-.5)*uContrast+.5,0,1);
         }
 
         // Edge-directed spatial smoothing in display space, before final dithering.
@@ -329,7 +355,7 @@ public sealed class PostProcess3D
                         1.0/
                         2.2));
 
-            if (uSmoothEdges == 1) displayColor = smoothEdges(vUV);
+            displayColor = uSmoothEdges == 1 ? smoothEdges(vUV) : displaySample(vUV);
             /*
              * This is now the only display dither in the 3D pipeline, directly
              * before writing into the final RGBA8 presentation texture.

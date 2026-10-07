@@ -19,9 +19,15 @@ public sealed class GameObject
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
-    internal int RenderOrder =>
-        _components.Select(component => component.RenderOrder)
-            .FirstOrDefault(order => order.HasValue) ?? 0;
+    internal int RenderOrder
+    {
+        get
+        {
+            for (int i = 0; i < _components.Count; i++)
+                if (_components[i].RenderOrder is int order) return order;
+            return 0;
+        }
+    }
     public GameObject? Parent { get; private set; }
     public string ParentSocket { get; set; } = string.Empty;
     public AttachmentTransformRule AttachmentLocationRule { get; set; } = AttachmentTransformRule.KeepRelative;
@@ -185,7 +191,12 @@ public sealed class GameObject
         return component;
     }
 
-    public T? GetComponent<T>() where T : Component => _components.OfType<T>().FirstOrDefault();
+    public T? GetComponent<T>() where T : Component
+    {
+        foreach (Component component in _components)
+            if (component is T match) return match;
+        return null;
+    }
 
     public bool TryGetComponent<T>(out T? component)
         where T : Component
@@ -228,11 +239,14 @@ public sealed class GameObject
 
         if (!_started) StartInternal();
 
-        foreach (Component component
-                 in _components.OrderBy(component => component.UpdateOrder))
+        // A single component needs no ordered enumeration or sort buffer.
+        if (_components.Count == 1)
         {
-            component.UpdateInternal();
+            _components[0].UpdateInternal();
+            return;
         }
+        if (_components.Count == 0) return;
+        RunOrderedComponents(late:false);
     }
 
     internal void LateUpdateInternal()
@@ -241,11 +255,27 @@ public sealed class GameObject
 
         if (!_started) StartInternal();
 
-        foreach (Component component
-                 in _components.OrderBy(component => component.UpdateOrder))
+        // A single component needs no ordered enumeration or sort buffer.
+        if (_components.Count == 1)
         {
-            component.LateUpdateInternal();
+            _components[0].LateUpdateInternal();
+            return;
         }
+        if (_components.Count == 0) return;
+        RunOrderedComponents(late:true);
+    }
+
+    private void RunOrderedComponents(bool late)
+    {
+        // A snapshot retains mutation-during-update semantics, while pooled storage avoids
+        // the two LINQ sort buffers previously allocated per object per frame.
+        int count=_components.Count;var snapshot=System.Buffers.ArrayPool<Component>.Shared.Rent(count);
+        try{
+            _components.CopyTo(snapshot,0);
+            for(int i=1;i<count;i++){var value=snapshot[i];int j=i-1;while(j>=0&&snapshot[j].UpdateOrder>value.UpdateOrder){snapshot[j+1]=snapshot[j];j--;}snapshot[j+1]=value;}
+            for(int i=0;i<count;i++){if(late)snapshot[i].LateUpdateInternal();else snapshot[i].UpdateInternal();}
+        }
+        finally{System.Buffers.ArrayPool<Component>.Shared.Return(snapshot,clearArray:true);}
     }
 
     internal void RenderInternal(Graphics.RenderContext context)

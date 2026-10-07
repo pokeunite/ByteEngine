@@ -1,0 +1,68 @@
+Advanced animation pose regressions passed.
+C12.5 skeletal socket regressions passed.
+First-person fixed eye, pitch/yaw and view-weapon regressions passed.
+Humanoid geometry mapping regressions passed.
+Loading scene: TPS-D Trigger Probe
+Loading scene: TPS-A LateUpdate Order
+Unloading scene: TPS-A LateUpdate Order
+Loading scene: TPS-A Camera Timing
+Unloading scene: TPS-A Camera Timing
+----------------------------------
+ByteEngine v0.7.0
+----------------------------------
+OpenGL Version : 3.3.0 Core Profile Context 26.5.2.260413
+GPU            : AMD Radeon(TM) RX Vega 10 Graphics
+----------------------------------
+Renderer2D initialized successfully.
+WARNING: Loaded ByteEngine plugin 'Goblin Scrapper' (bytebard.goblinscrapper) v0.4.5.
+Texture loaded: sky_93_2k.png (2048x1024)
+PASS: native shader uniform caching, changed/revisited values and independent programs.
+Texture loaded: quarry-dirt.png (512x512)
+Texture loaded: play.png (64x64)
+Texture loaded: undo-2.png (64x64)
+Texture loaded: redo-2.png (64x64)
+Texture loaded: save.png (64x64)
+Texture loaded: folder-open.png (64x64)
+Texture loaded: box.png (64x64)
+Texture loaded: move.png (64x64)
+Texture loaded: rotate-cw.png (64x64)
+Texture loaded: arrow-left-right.png (64x64)
+Texture loaded: copy.png (64x64)
+Texture loaded: trash-2.png (64x64)
+Texture loaded: wrench.png (64x64)
+Texture loaded: cog.png (64x64)
+Texture loaded: swords.png (64x64)
+Texture loaded: goblin_double_wooden_block.png (320x240)
+Texture loaded: goblin_wooden_panel.png (320x240)
+Texture loaded: goblin_single_wooden_block.png (320x240)
+Texture loaded: goblin_armor_plate_small.png (320x240)
+Texture loaded: goblin_armor_plate_round.png (320x240)
+Texture loaded: goblin_armor_plate_large.png (320x240)
+Texture loaded: info.png (64x64)
+Loading scene: Main
+----------------------------------
+Audio Device   : OpenAL Soft
+OpenAL Version : 1.1 ALSOFT 1.23.1
+Audio Renderer : OpenAL Soft
+----------------------------------
+Active scene: Main
+PROFILE OBJECT Scrap Vehicle - Build and Drive: 0.88 ms
+PROFILE OBJECT Goblin spawn 00: 0.14 ms
+PROFILE OBJECT Goblin spawn 05: 0.13 ms
+PROFILE OBJECT Goblin spawn 12: 0.13 ms
+PROFILE OBJECT Goblin spawn 01: 0.13 ms
+PROFILE OBJECT Goblin spawn 14: 0.13 ms
+PROFILE OBJECT Goblin spawn 07: 0.13 ms
+PROFILE OBJECT Goblin spawn 02: 0.13 ms
+PROFILE UPDATE ONLY: 13.35 ms
+PROFILE CORE PHYSICS: 0.82 ms
+PROFILE RENDER normal: 24.35 ms
+PROFILE RENDER no shadows: 13.21 ms
+PROFILE RENDER no HUD: 9.90 ms
+MAP PROFILE: synchronized 720p update/render 42.3 ms per frame (23.7 fps), editor panels excluded.
+BUILD PROFILE: synchronized 720p update/render 17.9 ms per frame (56.0 fps), editor panels excluded.
+PASS: imported models; native edit render; scene save/reload; deployment; clear central driving lane; existing enemy spawn reset.
+ByteEngine started successfully.
+----------------------------------
+Unloading scene: Main
+ByteEngine shutting down.

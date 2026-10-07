@@ -18,7 +18,7 @@ internal sealed class SceneFramebuffer
      * _displayTexture is the final LDR texture shown by ImGui.
      */
     private int _colorTexture;
-    private int _depthRenderbuffer;
+    private int _depthTexture;
 
     private int _displayFramebuffer;
     private int _displayTexture;
@@ -28,6 +28,8 @@ internal sealed class SceneFramebuffer
 
     private readonly EditorSkeletalPreviewCache _skeletalPreview =
         new();
+
+    private readonly RenderWorld _renderWorld = new();
 
     private int _width;
 
@@ -112,7 +114,8 @@ internal sealed class SceneFramebuffer
                     prepareEnvironmentLighting3D:
                         prepareEnvironmentLighting3D,
                     renderShadows3D:
-                        renderShadows3D
+                        renderShadows3D,
+                    renderWorld: _renderWorld
                 );
 
             if (drawGrid3D)
@@ -141,7 +144,8 @@ internal sealed class SceneFramebuffer
                     renderer3D,
                     scene,
                     _width,
-                    _height
+                    _height,
+                    renderWorld: _renderWorld
                 );
         }
 
@@ -176,7 +180,8 @@ internal sealed class SceneFramebuffer
                 is3D,
             exposure:
                 environment.Exposure,
-            smoothEdges: environment.SmoothEdges);
+            smoothEdges: environment.SmoothEdges,depthTexture:_depthTexture,
+            projection:context.Has3DCamera?context.GetProjectionMatrix3D():null,look:environment.Look);
 
         if (context.Has3DCamera)
         {
@@ -285,7 +290,8 @@ internal sealed class SceneFramebuffer
                 _width,
                 _height,
                 camera,
-                camera3D
+                camera3D,
+                renderWorld: _renderWorld
             );
 
         RenderEnvironment3D environment =
@@ -314,7 +320,8 @@ internal sealed class SceneFramebuffer
                 camera3D != null,
             exposure:
                 environment.Exposure,
-            smoothEdges: environment.SmoothEdges);
+            smoothEdges: environment.SmoothEdges,depthTexture:_depthTexture,
+            projection:context.Has3DCamera?context.GetProjectionMatrix3D():null,look:environment.Look);
 
         if (context.Has3DCamera)
         {
@@ -437,27 +444,7 @@ internal sealed class SceneFramebuffer
             0
         );
 
-        _depthRenderbuffer =
-            GL.GenRenderbuffer();
-
-        GL.BindRenderbuffer(
-            RenderbufferTarget.Renderbuffer,
-            _depthRenderbuffer
-        );
-
-        GL.RenderbufferStorage(
-            RenderbufferTarget.Renderbuffer,
-            RenderbufferStorage.Depth24Stencil8,
-            _width,
-            _height
-        );
-
-        GL.FramebufferRenderbuffer(
-            FramebufferTarget.Framebuffer,
-            FramebufferAttachment.DepthStencilAttachment,
-            RenderbufferTarget.Renderbuffer,
-            _depthRenderbuffer
-        );
+        _depthTexture=SceneDepthTexture.Create(_width,_height);
 
         FramebufferErrorCode status =
             GL.CheckFramebufferStatus(
@@ -897,14 +884,14 @@ internal sealed class SceneFramebuffer
                 0;
         }
 
-        if (_depthRenderbuffer !=
+        if (_depthTexture !=
             0)
         {
-            GL.DeleteRenderbuffer(
-                _depthRenderbuffer
+            GL.DeleteTexture(
+                _depthTexture
             );
 
-            _depthRenderbuffer =
+            _depthTexture =
                 0;
         }
 

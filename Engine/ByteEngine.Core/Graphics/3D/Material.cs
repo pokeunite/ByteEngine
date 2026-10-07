@@ -25,6 +25,15 @@ public sealed class Material
 
     public Texture2D? NormalTexture { get; set; }
 
+    /// <summary>Signed RG16 height field sampled in mesh UV space. Opaque displaced surfaces currently receive shadows but do not cast them.</summary>
+    public Texture2D? HeightFieldTexture {get;set;}
+    public Vector4 HeightFieldUvTransform {get;set;} = new(1,1,0,0);
+    public float HeightFieldRange {get;set;} = 1;
+    public float HeightFieldBias {get;set;} = -.5f;
+    public Vector2 HeightFieldWorldSize {get;set;} = Vector2.One;
+    public bool SandSurface {get;set;}
+    public Texture2D? SandImprintTexture {get;set;}
+    public Vector2 SandImprintOrigin {get;set;}
     public float NormalStrength { get; set; } = 1f;
     public bool DirectXNormalMap { get; set; }
 
@@ -112,6 +121,7 @@ public sealed class Material
         MainTexture = source.MainTexture;
         NormalTexture = source.NormalTexture;
         NormalStrength = source.NormalStrength;
+        HeightFieldTexture=source.HeightFieldTexture;HeightFieldUvTransform=source.HeightFieldUvTransform;HeightFieldRange=source.HeightFieldRange;HeightFieldBias=source.HeightFieldBias;HeightFieldWorldSize=source.HeightFieldWorldSize;SandSurface = source.SandSurface;SandImprintTexture=source.SandImprintTexture;SandImprintOrigin=source.SandImprintOrigin;
         DirectXNormalMap = source.DirectXNormalMap;
         MetallicTexture = source.MetallicTexture;
         RoughnessTexture = source.RoughnessTexture;
@@ -155,6 +165,7 @@ public sealed class Material
                 NormalTexture =
                     NormalTexture,
                 NormalStrength = NormalStrength,
+                HeightFieldTexture=HeightFieldTexture,HeightFieldUvTransform=HeightFieldUvTransform,HeightFieldRange=HeightFieldRange,HeightFieldBias=HeightFieldBias,HeightFieldWorldSize=HeightFieldWorldSize,SandSurface = SandSurface,SandImprintTexture=SandImprintTexture,SandImprintOrigin=SandImprintOrigin,
                 DirectXNormalMap = DirectXNormalMap,
                 MetallicTexture = MetallicTexture,
                 RoughnessTexture = RoughnessTexture,

@@ -82,7 +82,21 @@ public sealed class Texture2D
         );
     }
 
-    internal static Texture2D FromPixels(int width, int height, byte[] pixels, TextureFilter filter = TextureFilter.Linear)
+    /// <summary>Update a same-size dynamic RGBA map without recreating the GPU texture.</summary>
+    public void UpdatePixels(byte[] pixels){if(_disposed)throw new ObjectDisposedException(nameof(Texture2D));if(pixels.Length!=Width*Height*4)throw new ArgumentException("RGBA map size differs",nameof(pixels));Bind();GL.TexSubImage2D(TextureTarget.Texture2D,0,0,0,Width,Height,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);_pixels=pixels;ContentVersion++;}
+    /// <summary>Upload only an RGBA rectangle from a full-sized CPU backing map. No staging allocation or GPU readback.</summary>
+    public void UpdateRegion(byte[] pixels,int x,int y,int width,int height)
+    {
+        ObjectDisposedException.ThrowIf(_disposed,this);
+        if(pixels.Length!=checked(Width*Height*4)||x<0||y<0||width<=0||height<=0||x>Width-width||y>Height-height)throw new ArgumentException("Invalid texture update region");
+        if(!_cpuOnly){
+            Bind();GL.GetInteger(GetPName.UnpackRowLength,out int rowLength);GL.GetInteger(GetPName.UnpackSkipPixels,out int skipX);GL.GetInteger(GetPName.UnpackSkipRows,out int skipY);
+            try{GL.PixelStore(PixelStoreParameter.UnpackRowLength,Width);GL.PixelStore(PixelStoreParameter.UnpackSkipPixels,x);GL.PixelStore(PixelStoreParameter.UnpackSkipRows,y);GL.TexSubImage2D(TextureTarget.Texture2D,0,x,y,width,height,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);}
+            finally{GL.PixelStore(PixelStoreParameter.UnpackRowLength,rowLength);GL.PixelStore(PixelStoreParameter.UnpackSkipPixels,skipX);GL.PixelStore(PixelStoreParameter.UnpackSkipRows,skipY);}
+        }
+        _pixels=pixels;ContentVersion++;
+    }
+    public static Texture2D FromPixels(int width, int height, byte[] pixels, TextureFilter filter = TextureFilter.Linear)
     {
         ArgumentNullException.ThrowIfNull(pixels);
         if (width <= 0 || height <= 0 || pixels.Length != checked(width * height * 4))
@@ -526,6 +540,17 @@ public sealed class Texture2D
             TextureTarget.Texture2D,
             TextureParameterName.TextureWrapT,
             (int)TextureWrapMode.ClampToEdge);
+    }
+
+    public void EnableWorldSampling()
+    {
+        if (_cpuOnly || _disposed) return;
+        GL.BindTexture(TextureTarget.Texture2D, _handle);
+        GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+        GL.BindTexture(TextureTarget.Texture2D, 0);
     }
 
     internal void Bind(

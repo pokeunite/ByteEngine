@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Plugins;
 using ByteEngine.Core.Serialization;
@@ -33,6 +35,16 @@ public static class GamePackageExporter
         foreach (string required in RequiredRuntimeFiles)
             if (!File.Exists(Path.Combine(runtimeDirectory, required)))
                 throw new FileNotFoundException($"Windows player runtime is incomplete: {required}. Refresh the engine distribution.");
+
+        // AssemblyVersion stays stable; compare actual build identities before packaging plugins.
+        using (var file = File.OpenRead(Path.Combine(runtimeDirectory, "ByteEngine.Core.dll")))
+        using (var pe = new PEReader(file))
+        {
+            var metadata = pe.GetMetadataReader();
+            var runtimeId = metadata.GetGuid(metadata.GetModuleDefinition().Mvid);
+            if (runtimeId != typeof(GamePackageExporter).Assembly.ManifestModule.ModuleVersionId)
+                throw new InvalidOperationException("The Windows player runtime differs from this editor. Refresh PlayerRuntime before exporting; mismatched runtimes can lose terrain and plugin components.");
+        }
 
         string[] roots = new[] { project.AssetDirectory, project.SceneDirectory }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         foreach (string directory in roots)

@@ -121,7 +121,7 @@ public sealed class VehiclePartCatalog
         return catalog;
     }
 }
-public sealed record AssemblyPart(int Id,string File,int Parent,Vector3 Position,Quaternion Rotation,string ParentBone="Root",string ParentConnector="",string OwnConnector="");
+public sealed record AssemblyPart(int Id,string File,int Parent,Vector3 Position,Quaternion Rotation,string ParentBone="Root",string ParentConnector="",string OwnConnector="",Dictionary<string,float>? Tuning=null);
 /// <summary>Unlimited reusable parts, spatial clearance and explicit mechanical ancestry, independent of vehicle hardpoints.</summary>
 public sealed partial class VehicleAssembly
 {
@@ -243,19 +243,21 @@ public sealed partial class VehicleAssembly
         foreach(var child in Parts.Values.Where(p=>p.Parent==id).ToArray())Parts[child.Id]=child with {Parent=-1,ParentBone="Root",ParentConnector="",OwnConnector=""};
         return true;
     }
-    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(6,Parts.Values.OrderBy(p=>p.Id).ToArray(),Catalog.Revision,Braces.Values.OrderBy(b=>b.Id).ToArray()),Options);
+    public string ToJson()=>JsonSerializer.Serialize(new AssemblySnapshot(7,Parts.Values.OrderBy(p=>p.Id).ToArray(),Catalog.Revision,Braces.Values.OrderBy(b=>b.Id).ToArray()),Options);
     public static VehicleAssembly FromJson(VehiclePartCatalog catalog,string json)
     {
         if(ConstructionDiagnostics.Enabled)ConstructionDiagnostics.Record("RESTORE",$"catalogRevision={catalog.Revision} json={json}");
         var snapshot=JsonSerializer.Deserialize<AssemblySnapshot>(json,Options)??throw new JsonException("Empty build");
-        if(snapshot.Version is not (4 or 5 or 6)||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
+        if(snapshot.Version is not (4 or 5 or 6 or 7)||snapshot.Blocks==null||snapshot.Blocks.Length is <1 or >256)throw new JsonException("This machine uses an older chassis builder. Rebuild from the master block; your old file is preserved.");
         var root=snapshot.Blocks.SingleOrDefault(p=>p.Id==0)??throw new JsonException("Missing master block");
         if(root.Parent!=-1||root.File!=MasterBlock||root.Position!=Vector3.Zero||root.Rotation!=Quaternion.Identity)throw new JsonException("Invalid master block");
         var a=new VehicleAssembly(catalog);
         foreach(var p in snapshot.Blocks.Where(p=>p.Id!=0).OrderBy(p=>p.Id))
         {
             if(p.Id<1||p.Id>1000000||a.Parts.ContainsKey(p.Id)||!catalog.Parts.ContainsKey(p.File)||!Finite(p.Position)||!float.IsFinite(p.Rotation.LengthSquared())||Math.Abs(p.Rotation.LengthSquared()-1)>.01f||p.Position.Length()>16)throw new JsonException("Invalid block");
-            a.Parts.Add(p.Id,p);a._nextId=Math.Max(a._nextId,p.Id+1);
+            var restored=p;
+            if(p.Tuning!=null){restored=p with {Tuning=null};foreach(var value in p.Tuning){if(!BlockTuning.Settings(catalog[p.File].ReferenceId).Any(s=>s.Key==value.Key))throw new JsonException("Unsupported block setting");restored=BlockTuning.Set(restored,catalog[p.File].ReferenceId,value.Key,value.Value);}}
+            a.Parts.Add(p.Id,restored);a._nextId=Math.Max(a._nextId,p.Id+1);
         }
         foreach(var part in a.Parts.Values.Where(p=>p.Id!=0))
             if(part.Parent>=0 && !a.Parts.ContainsKey(part.Parent))throw new JsonException("Missing parent block");

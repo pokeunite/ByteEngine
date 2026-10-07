@@ -56,7 +56,7 @@ public sealed partial class VehicleBuilder3D
  public void DeleteSelectedBlock(){if(Building)RemoveAssemblyPart(_selectedBlock);}
  public void DeleteHoveredBlock(){if(Building)RemoveAssemblyPart(_hoveredBlock);}
  public void CancelBuildOperation(){if(Building){CancelMove();SetEraseTool(false);}}
- public void CopyHoveredPart(){if(Building&&Assembly?.Parts.TryGetValue(_hoveredBlock,out var part)==true)SelectBuildPart(part.File);}
+ public void CopyHoveredPart(){if(Building&&Assembly?.Parts.TryGetValue(_hoveredBlock,out var part)==true) {SelectBuildPart(part.File);_copiedTuningFile=part.File;_copiedTuning=part.Tuning==null?null:new(part.Tuning);}}
  public void MoveHoveredBranch()
  {
   if(!Building||Assembly==null||_hoveredBlock<=0)return;

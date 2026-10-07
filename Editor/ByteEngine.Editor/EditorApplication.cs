@@ -1995,12 +1995,19 @@ public sealed class EditorApplication
                 )
                 : null;
 
+        string? runtimePath=null;
+        Scenes.QuitHandler=StopPlayMode;
+        Scenes.ShowLoadingScreen=true;Scenes.SceneFactory=path=>{
+            string full=ByteEngine.Core.Runtime.GamePackageExporter.ResolveInside(_projectContext.ProjectRoot,path);
+            Scene fresh=_projectContext.Scenes.Load(full);runtimePath=path;
+            _state.RuntimeScene=fresh;_state.SelectedObject=null;return fresh;
+        };
         Scenes.RestartSceneFactory = () =>
         {
             Scenes.GlobalVariables.Clear();
             foreach (var definition in _state.Project.GlobalVariables)
                 Scenes.GlobalVariables.Set(definition.Name, definition.Value.Clone());
-            Scene fresh = _projectContext.Scenes.CloneForRuntime(_state.EditorScene);
+            Scene fresh = runtimePath==null?_projectContext.Scenes.CloneForRuntime(_state.EditorScene):_projectContext.Scenes.Load(ByteEngine.Core.Runtime.GamePackageExporter.ResolveInside(_projectContext.ProjectRoot,runtimePath));
             _state.RuntimeScene = fresh;
             _state.SelectedObject = null;
             return fresh;
@@ -2061,6 +2068,7 @@ public sealed class EditorApplication
         ReleaseGameInput();
 
         Scenes.RestartSceneFactory = null;
+        Scenes.SceneFactory = null;
 
         Guid? selectedId =
             _state.SelectedObject?.Id;
