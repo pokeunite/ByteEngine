@@ -56,6 +56,16 @@ public sealed class AssetManager : IDisposable
         _database.DatabaseChanged += ReloadChangedResources;
     }
 
+    private readonly Dictionary<string,Texture2D> _runtimeTextures = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Registers a cached user-generated UI image without rescanning the project asset database.
+    /// The manager owns the texture and disposes it when the project closes. Use content-addressed keys.</summary>
+    public void RegisterRuntimeTexture(string projectPath,byte[] encodedImage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
+        string key=projectPath.Replace('\\','/');
+        if (!_runtimeTextures.ContainsKey(key)) _runtimeTextures[key]=Texture2D.FromEncodedBytes(encodedImage);
+    }
+
     public Texture2D LoadTexture(AssetReference reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
@@ -65,6 +75,7 @@ public sealed class AssetManager : IDisposable
             return GetMissingTexture();
         }
 
+        if (reference.CachedProjectPath is {} runtimePath && _runtimeTextures.TryGetValue(runtimePath.Replace('\\','/'),out var runtimeTexture)) return runtimeTexture;
         AssetRecord? asset = _database.Resolve(reference);
         if (asset == null || asset.Type != AssetType.Texture2D)
         {
@@ -601,6 +612,8 @@ public sealed class AssetManager : IDisposable
         _database.DatabaseChanged -= ReloadChangedResources;
         foreach (Texture2D texture in _textures.Values.Distinct()) texture.Dispose();
         _textures.Clear();
+        foreach (var texture in _runtimeTextures.Values) texture.Dispose();
+        _runtimeTextures.Clear();
         foreach (Mesh mesh in _modelMeshes.Values.Distinct()) mesh.Dispose();
         _modelMeshes.Clear();
         foreach (Texture2D texture in _modelTextures.Values.Distinct()) texture.Dispose();

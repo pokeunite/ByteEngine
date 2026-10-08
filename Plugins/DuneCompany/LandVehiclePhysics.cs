@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using BepuPhysics;
 using BepuPhysics.Collidables;
@@ -13,14 +14,14 @@ public sealed record VehiclePartPhysics(PartBounds Fixed,PartBounds Moving,Vecto
 
 /// <summary>One rigid body per rigid assembly island, plus constrained mechanism outputs and rolling tyres.
 /// All motion comes from gravity, contacts and bounded joint motors. No terrain snapping or imposed chassis yaw.</summary>
-public sealed class LandVehiclePhysics:IDisposable
+public sealed partial class LandVehiclePhysics:IDisposable
 {
  const int TerrainChunkCells=16;
  const float FixedStep=1f/60;
- readonly BufferPool _pool=new();readonly Simulation _simulation;
+ readonly BufferPool _pool=new();readonly Simulation _simulation;readonly ThreadDispatcher? _dispatcher;
  Part[] _wheels=[];PlacedBlock[] _engines=[];float _axleMid,_mass;
  readonly List<Group> _groups=[];readonly Dictionary<int,Part> _parts=[];
- readonly Dictionary<int,float> _friction=[];readonly Dictionary<int,(Vector3 Normal,float Depth)> _contacts=[];
+ readonly Dictionary<int,float> _friction=[];readonly ConcurrentDictionary<int,(Vector3 Normal,float Depth)> _contacts=[];
  readonly HashSet<ulong> _ignored=[];readonly Dictionary<int,StaticHandle> _obstacles=[];
  readonly IReadOnlyDictionary<int,DunePart> _catalog;readonly List<PlacedBlock> _blocks;
  HeightfieldCollider3D? _sandPatch;Vector2? _patchMinimum;readonly Dictionary<(int x,int z),(StaticHandle body,TypedIndex shape)> _fineChunks=[];readonly HashSet<(int x,int z)> _fineDirty=[];readonly Dictionary<(int x,int z),float> _collisionHeights=[];readonly HashSet<(int x,int z)> _terrainHoles=[];
@@ -41,21 +42,27 @@ public sealed class LandVehiclePhysics:IDisposable
  public (Vector3 Position,Quaternion Rotation) Frame {get{var g=_parts[0].Root;var p=_simulation.Bodies[g.Body].Pose;return(p.Position-Vector3.Transform(g.Center,p.Orientation),p.Orientation);}}
  public LandVehiclePhysics(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,DunePart> catalog,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation,HeightfieldCollider3D? terrain=null)
  {
+  int workers=OperatingSystem.IsBrowser()?1:Environment.GetEnvironmentVariable("DUNE_PHYSICS_THREADS")=="1"?1:Math.Min(2,Environment.ProcessorCount);if(workers>1)_dispatcher=new ThreadDispatcher(workers);
   _blocks=blocks.ToList();_catalog=catalog;_origin=origin;_rotation=rotation;
   _simulation=Simulation.Create(_pool,new Contacts(_ignored,_friction,_contacts),new Gravity(),new SolveDescription(8,4));
   if(terrain!=null)AddTerrain(terrain);
-  foreach(var b in _blocks){var definition=definitions[b.Type];Group root;
+  AddAssembly(_blocks,definitions,origin,rotation);
+  _wheels=_parts.Values.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();_engines=_blocks.Where(b=>b.Type is 23 or 24).ToArray();_mass=_groups.Sum(g=>g.Mass);_axleMid=_wheels.Length>0?(_wheels.Min(p=>p.Block.P.Z)+_wheels.Max(p=>p.Block.P.Z))*.5f:0;
+ }
+ void AddAssembly(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation)
+ {
+  int firstGroup=_groups.Count;
+  foreach(var b in blocks){var definition=definitions[b.Type];Group root;
    if(b.Parent<0){root=new();_groups.Add(root);}else{var parent=_parts[b.Parent];root=b.MovingMount&&parent.Output!=null?parent.Output:parent.Root;}
    var p=new Part{Block=b,Definition=definition,Root=root};_parts[b.Id]=p;
-   bool split=definition.Articulated;AddBox(root,definition.Fixed,b.P,b.Q,catalog[b.Type].Mass*(split?.3f:1));
+   bool split=definition.Articulated;AddBox(root,definition.Fixed,b.P,b.Q,_catalog[b.Type].Mass*(split?.3f:1));
    if(split){var output=new Group();_groups.Add(output);p.Output=output;
-    if(catalog[b.Type].Wheel){var d=catalog[b.Type];var shape=new Cylinder(d.Radius,Math.Max(.12f,definition.Moving.Size.Z));var align=Align(Vector3.UnitY,Vector3.UnitZ);AddShape(output,_simulation.Shapes.Add(shape),new(b.P+Vector3.Transform(new(0,0,d.WheelCenterZ),b.Q),Quaternion.Normalize(b.Q*align)),shape.ComputeInertia(d.Mass*.7f),d.Mass*.7f);}
-    else AddBox(output,definition.Moving,b.P,b.Q,catalog[b.Type].Mass*.7f);
+    if(_catalog[b.Type].Wheel){var d=_catalog[b.Type];var shape=new Cylinder(d.Radius,Math.Max(.12f,definition.Moving.Size.Z));var align=Align(Vector3.UnitY,Vector3.UnitZ);AddShape(output,_simulation.Shapes.Add(shape),new(b.P+Vector3.Transform(new(0,0,d.WheelCenterZ),b.Q),Quaternion.Normalize(b.Q*align)),shape.ComputeInertia(d.Mass*.7f),d.Mass*.7f);}
+    else AddBox(output,definition.Moving,b.P,b.Q,_catalog[b.Type].Mass*.7f);
    }
   }
-  foreach(var g in _groups){using var builder=new CompoundBuilder(_pool,_simulation.Shapes,g.Shapes.Count);foreach(var s in g.Shapes)builder.Add(s.shape,s.pose,s.inertia);builder.BuildDynamicCompound(out var children,out var inertia,out var center);g.Center=center;g.Body=_simulation.Bodies.Add(BodyDescription.CreateDynamic(new(origin+Vector3.Transform(center,rotation),rotation),inertia,_simulation.Shapes.Add(new Compound(children)),new BodyActivityDescription(.005f)));}
-  foreach(var p in _parts.Values.Where(p=>p.Output!=null))AddJoint(p);
-  _wheels=_parts.Values.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();_engines=_blocks.Where(b=>b.Type is 23 or 24).ToArray();_mass=_groups.Sum(g=>g.Mass);_axleMid=_wheels.Length>0?(_wheels.Min(p=>p.Block.P.Z)+_wheels.Max(p=>p.Block.P.Z))*.5f:0;
+  foreach(var g in _groups.Skip(firstGroup)){using var builder=new CompoundBuilder(_pool,_simulation.Shapes,g.Shapes.Count);foreach(var s in g.Shapes)builder.Add(s.shape,s.pose,s.inertia);builder.BuildDynamicCompound(out var children,out var inertia,out var center);g.Center=center;g.Body=_simulation.Bodies.Add(BodyDescription.CreateDynamic(new(origin+Vector3.Transform(center,rotation),rotation),inertia,_simulation.Shapes.Add(new Compound(children)),new BodyActivityDescription(.005f)));}
+  foreach(var p in blocks.Select(b=>_parts[b.Id]).Where(p=>p.Output!=null))AddJoint(p);
  }
  static Quaternion Align(Vector3 a,Vector3 b){float dot=Vector3.Dot(a,b);return dot>.9999f?Quaternion.Identity:dot<-.9999f?Quaternion.CreateFromAxisAngle(Vector3.UnitX,MathF.PI):Quaternion.Normalize(new(Vector3.Cross(a,b),1+dot));}
  void AddShape(Group g,TypedIndex shape,RigidPose pose,BodyInertia inertia,float mass){g.Shapes.Add((shape,pose,mass,inertia));g.Mass+=mass;}
@@ -67,6 +74,7 @@ public sealed class LandVehiclePhysics:IDisposable
   if(_catalog[part.Type].Wheel||part.Type is 18 or 19 or 20){
    _simulation.Solver.Add(a.Body,b.Body,new Hinge{LocalOffsetA=p.OffsetA,LocalOffsetB=p.OffsetB,LocalHingeAxisA=p.Axis,LocalHingeAxisB=p.Axis,SpringSettings=new(_catalog[part.Type].Wheel?90:60,1)});
    if(_catalog[part.Type].Wheel){p.Motor=_simulation.Solver.Add(a.Body,b.Body,new AngularAxisMotor{LocalAxisA=p.Axis,Settings=new(0,.0001f)});_friction[b.Body.Value]=part.Grip;}
+   else if(part.Type==20)_simulation.Solver.Add(a.Body,b.Body,new AngularAxisMotor{LocalAxisA=p.Axis,TargetVelocity=0,Settings=new(120,.002f)});
    else if(part.Type is 18 or 19)p.Servo=_simulation.Solver.Add(a.Body,b.Body,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Identity,SpringSettings=new(30,1),ServoSettings=new(3,0,6000)});
   }else if(part.Type is 16 or 17 or 21 or 32){
    _simulation.Solver.Add(a.Body,b.Body,new PointOnLineServo{LocalOffsetA=p.OffsetA,LocalOffsetB=p.OffsetB,LocalDirection=p.Axis,SpringSettings=new(120,1),ServoSettings=new(30,0,120000)});
@@ -92,13 +100,14 @@ public sealed class LandVehiclePhysics:IDisposable
   if(n==0){_pool.Return(ref triangles);_terrainHoles.Add(key);return;}_terrainHoles.Remove(key);_pool.Take<Triangle>(n,out var exact);for(int i=0;i<n;i++)exact[i]=triangles[i];_pool.Return(ref triangles);triangles=exact;var mesh=new BepuPhysics.Collidables.Mesh(triangles,Vector3.One,_pool);var shape=_simulation.Shapes.Add(mesh);var body=_simulation.Statics.Add(new StaticDescription(Vector3.Zero,shape));_terrainChunks[key]=(body,shape);
  }
  public void SetSandPatch(HeightfieldCollider3D? patch){_sandPatch=patch;SyncSandPatch();}
- float FineTileSize=>32*(_sandPatch?.CellSpacing??.25f);
+ float PatchWidth=>(_sandPatch!.Columns-1)*_sandPatch.CellSpacing;
+ float FineTileSize=>16*(_sandPatch?.CellSpacing??.25f);
  void SyncSandPatch(){if(_sandPatch==null||_terrain==null||_patchMinimum==_sandPatch.GridMinimum)return;var old=_patchMinimum;_patchMinimum=_sandPatch.GridMinimum;
-  foreach(var key in _fineChunks.Keys.ToArray()){float x=key.x*FineTileSize,z=key.z*FineTileSize;if(x<_patchMinimum.Value.X||x>=_patchMinimum.Value.X+32||z<_patchMinimum.Value.Y||z>=_patchMinimum.Value.Y+32){var chunk=_fineChunks[key];_simulation.Statics.Remove(chunk.body);_simulation.Shapes.RemoveAndDispose(chunk.shape,_pool);_fineChunks.Remove(key);}}
-  for(int z=0;z<_terrain.Rows-1;z+=TerrainChunkCells)for(int x=0;x<_terrain.Columns-1;x+=TerrainChunkCells){float px=_terrain.GridMinimum.X+x*_terrain.CellSpacing,pz=_terrain.GridMinimum.Y+z*_terrain.CellSpacing,w=TerrainChunkCells*_terrain.CellSpacing;bool Overlap(Vector2 min)=>px<min.X+32&&px+w>min.X&&pz<min.Y+32&&pz+w>min.Y;if(Overlap(_patchMinimum.Value)||(old.HasValue&&Overlap(old.Value)))BuildTerrainChunk(x,z);}
-  for(int z=(int)(_patchMinimum.Value.Y/FineTileSize);z<(int)(_patchMinimum.Value.Y/FineTileSize)+(int)(32/FineTileSize);z++)for(int x=(int)(_patchMinimum.Value.X/FineTileSize);x<(int)(_patchMinimum.Value.X/FineTileSize)+(int)(32/FineTileSize);x++)if(!_fineChunks.ContainsKey((x,z)))BuildFineChunk(x,z);
+  foreach(var key in _fineChunks.Keys.ToArray()){float x=key.x*FineTileSize,z=key.z*FineTileSize;if(x<_patchMinimum.Value.X||x>=_patchMinimum.Value.X+PatchWidth||z<_patchMinimum.Value.Y||z>=_patchMinimum.Value.Y+PatchWidth){var chunk=_fineChunks[key];_simulation.Statics.Remove(chunk.body);_simulation.Shapes.RemoveAndDispose(chunk.shape,_pool);_fineChunks.Remove(key);}}
+  for(int z=0;z<_terrain.Rows-1;z+=TerrainChunkCells)for(int x=0;x<_terrain.Columns-1;x+=TerrainChunkCells){float px=_terrain.GridMinimum.X+x*_terrain.CellSpacing,pz=_terrain.GridMinimum.Y+z*_terrain.CellSpacing,w=TerrainChunkCells*_terrain.CellSpacing;bool Overlap(Vector2 min)=>px<min.X+PatchWidth&&px+w>min.X&&pz<min.Y+PatchWidth&&pz+w>min.Y;if(Overlap(_patchMinimum.Value)||(old.HasValue&&Overlap(old.Value)))BuildTerrainChunk(x,z);}
+  for(int z=(int)(_patchMinimum.Value.Y/FineTileSize);z<(int)(_patchMinimum.Value.Y/FineTileSize)+(int)(PatchWidth/FineTileSize);z++)for(int x=(int)(_patchMinimum.Value.X/FineTileSize);x<(int)(_patchMinimum.Value.X/FineTileSize)+(int)(PatchWidth/FineTileSize);x++)if(!_fineChunks.ContainsKey((x,z)))BuildFineChunk(x,z);
  }
- void BuildFineChunk(int tx,int tz){if(_sandPatch==null)return;var key=(tx,tz);if(_fineChunks.Remove(key,out var previous)){_simulation.Statics.Remove(previous.body);_simulation.Shapes.RemoveAndDispose(previous.shape,_pool);}var patch=_sandPatch;int ox=(int)MathF.Round((tx*FineTileSize-patch.GridMinimum.X)/patch.CellSpacing),oz=(int)MathF.Round((tz*FineTileSize-patch.GridMinimum.Y)/patch.CellSpacing);int cells=32,stride=cells+1;_pool.Take<Triangle>(cells*cells*2,out var triangles);int n=0;var surface=patch.SurfaceMatrix;var grid=patch.GridMinimum;float spacing=patch.CellSpacing;var vertices=new Vector3[stride*stride];for(int z=0;z<=cells;z++)for(int x=0;x<=cells;x++)vertices[z*stride+x]=Vector3.Transform(new(grid.X+(ox+x)*spacing,patch.HeightAt(ox+x,oz+z),grid.Y+(oz+z)*spacing),surface);Vector3 Point(int x,int z)=>vertices[(z-oz)*stride+x-ox];for(int z=oz;z<oz+cells;z++)for(int x=ox;x<ox+cells;x++){var a=Point(x,z);var b=Point(x+1,z);var c=Point(x,z+1);var d=Point(x+1,z+1);triangles[n++]=new(){A=a,B=b,C=c};triangles[n++]=new(){A=b,B=d,C=c};}_pool.Take<Triangle>(n,out var exact);for(int i=0;i<n;i++)exact[i]=triangles[i];_pool.Return(ref triangles);triangles=exact;var mesh=new BepuPhysics.Collidables.Mesh(triangles,Vector3.One,_pool);var shape=_simulation.Shapes.Add(mesh);_fineChunks[key]=(_simulation.Statics.Add(new StaticDescription(Vector3.Zero,shape)),shape);}
+ void BuildFineChunk(int tx,int tz){if(_sandPatch==null)return;var key=(tx,tz);if(_fineChunks.Remove(key,out var previous)){_simulation.Statics.Remove(previous.body);_simulation.Shapes.RemoveAndDispose(previous.shape,_pool);}var patch=_sandPatch;int ox=(int)MathF.Round((tx*FineTileSize-patch.GridMinimum.X)/patch.CellSpacing),oz=(int)MathF.Round((tz*FineTileSize-patch.GridMinimum.Y)/patch.CellSpacing);int cells=16,stride=cells+1;_pool.Take<Triangle>(cells*cells*2,out var triangles);int n=0;var surface=patch.SurfaceMatrix;var grid=patch.GridMinimum;float spacing=patch.CellSpacing;var vertices=new Vector3[stride*stride];for(int z=0;z<=cells;z++)for(int x=0;x<=cells;x++)vertices[z*stride+x]=Vector3.Transform(new(grid.X+(ox+x)*spacing,patch.HeightAt(ox+x,oz+z),grid.Y+(oz+z)*spacing),surface);Vector3 Point(int x,int z)=>vertices[(z-oz)*stride+x-ox];for(int z=oz;z<oz+cells;z++)for(int x=ox;x<ox+cells;x++){var a=Point(x,z);var b=Point(x+1,z);var c=Point(x,z+1);var d=Point(x+1,z+1);triangles[n++]=new(){A=a,B=b,C=c};triangles[n++]=new(){A=b,B=d,C=c};}_pool.Take<Triangle>(n,out var exact);for(int i=0;i<n;i++)exact[i]=triangles[i];_pool.Return(ref triangles);triangles=exact;var mesh=new BepuPhysics.Collidables.Mesh(triangles,Vector3.One,_pool);var shape=_simulation.Shapes.Add(mesh);_fineChunks[key]=(_simulation.Statics.Add(new StaticDescription(Vector3.Zero,shape)),shape);}
  public void MarkTerrainChanged(Vector3 position)
  {
   if(_terrain==null)return;if(_sandPatch!=null){Matrix4x4.Invert(_sandPatch.SurfaceMatrix,out var patchInverse);var point=Vector3.Transform(position,patchInverse);int tx=(int)MathF.Floor(point.X/FineTileSize),tz=(int)MathF.Floor(point.Z/FineTileSize);int gx=(int)MathF.Round((point.X-_sandPatch.GridMinimum.X)/_sandPatch.CellSpacing),gz=(int)MathF.Round((point.Z-_sandPatch.GridMinimum.Y)/_sandPatch.CellSpacing);var sampleKey=((int)MathF.Round(point.X/_sandPatch.CellSpacing),(int)MathF.Round(point.Z/_sandPatch.CellSpacing));float height=_sandPatch.HeightAt(Math.Clamp(gx,0,_sandPatch.Columns-1),Math.Clamp(gz,0,_sandPatch.Rows-1));if(_collisionHeights.TryGetValue(sampleKey,out float previousHeight)&&Math.Abs(height-previousHeight)<.012f)return;_collisionHeights[sampleKey]=height;
@@ -150,11 +159,11 @@ public sealed class LandVehiclePhysics:IDisposable
  }
  void StepFixed(float dt,float throttle,float steering,bool brake,float maximumSpeed,float servo,float piston,Func<Vector3,float>? sandGrip,bool handbrake,Func<Vector3,float>? sandResistance)
  {
-  _elapsed+=dt;SyncSandPatch();_terrainTimer+=dt;if(_terrainTimer>=.1f){_terrainTimer=0;foreach(var chunk in _dirtyTerrain)BuildTerrainChunk(chunk.x,chunk.z);_dirtyTerrain.Clear();if(_fineDirty.Count>0){var key=_fineDirty.First();_fineDirty.Remove(key);if(_fineChunks.ContainsKey(key))BuildFineChunk(key.x,key.z);}}
+  _elapsed+=dt;SyncSandPatch();_terrainTimer+=dt;if(_terrainTimer>=.1f){_terrainTimer=0;if(_sandPatch!=null)foreach(var wheel in _wheels)MarkTerrainChanged(OutputPose(wheel.Block.Id).Position);foreach(var chunk in _dirtyTerrain)BuildTerrainChunk(chunk.x,chunk.z);_dirtyTerrain.Clear();if(_fineDirty.Count>0){var key=_fineDirty.First();_fineDirty.Remove(key);if(_fineChunks.ContainsKey(key))BuildFineChunk(key.x,key.z);}}
   _servo=Math.Clamp(_servo+servo*dt,-1,1);_piston=Math.Clamp(_piston+(piston>0?1:-1)*dt*2,0,1);
   _driftBlend+=( (handbrake?1f:0f)-_driftBlend)*(1-MathF.Exp(-dt*(handbrake?10:3)));
   var wheels=_wheels;float axleMid=_axleMid;float power=_blocks.Where(b=>b.Type is 23 or 24).Sum(b=>_catalog[b.Type].Power*b.Power);float mass=_mass;var engines=_engines;if(engines.Length>0)maximumSpeed=Math.Min(maximumSpeed,engines.Max(b=>b.SpeedLimit));
-  foreach(var p in _parts.Values){var b=p.Block;
+  foreach(var p in _parts.Values){var b=p.Block;if(b.Id>=RecoveryRootId)continue;
    if(p.Motor is {} motor){var def=_catalog[b.Type];float side=Vector3.Dot(p.Axis,Vector3.UnitX)<0?-1:1;bool rear=p.Block.P.Z>axleMid+.05f;bool wheelBrake=brake||(handbrake&&rear);float target=wheelBrake?0:throttle*maximumSpeed/def.Radius*side;float torque=wheelBrake?mass*9.81f/wheels.Length*def.Radius*1.5f*b.BrakeStrength:Math.Abs(throttle)*Math.Min(power/Math.Max(1,wheels.Length)*def.Radius,mass*9.81f/Math.Max(1,wheels.Length)*def.Radius*.7f)*b.Power;
     // Unloaded tyres spin with low torque; full engine torque needs a ground contact.
       if(!wheelBrake&&!_contacts.ContainsKey(p.Output!.Body.Value))torque*=.04f;
@@ -166,16 +175,17 @@ public sealed class LandVehiclePhysics:IDisposable
    if(p.Servo is {} angular){float orientation=Vector3.Dot(p.Axis,Vector3.UnitY)>=0?1:-1;float angle=(b.Type==18?-steering*orientation:_servo)*b.Angle*MathF.PI/180;_simulation.Solver.ApplyDescription(angular,new AngularServo{TargetRelativeRotationLocalA=Quaternion.CreateFromAxisAngle(p.Axis,angle),SpringSettings=new(30,1),ServoSettings=new(2.5f,0,6000)});if(Math.Abs(steering)>.001f||Math.Abs(servo)>.001f){_simulation.Awakener.AwakenBody(p.Root.Body);_simulation.Awakener.AwakenBody(p.Output!.Body);}}
    if(p.Slider is {} linear){_simulation.Solver.GetDescription(linear,out LinearAxisServo desc);desc.TargetOffset=b.Type==21?_piston*b.Stroke:Math.Clamp(b.Preload,-b.Travel,b.Travel*.15f);if(b.Type!=21)desc.SpringSettings=new(b.SpringRate,b.Damping);_simulation.Solver.ApplyDescription(linear,desc);if(b.Type==21)_simulation.Awakener.AwakenBody(p.Output!.Body);}
   }
+  ApplyWinch(dt);ApplyRecoveryWheelContacts(sandGrip,sandResistance,dt);
   foreach(var g in _groups){var body=_simulation.Bodies[g.Body];var v=body.Velocity;v.Linear*=MathF.Exp(-.035f*dt);v.Angular*=MathF.Exp(-.06f*dt);body.Velocity=v;}
-  _contacts.Clear();_simulation.Timestep(dt);
+  _contacts.Clear();_simulation.Timestep(dt,_dispatcher);
  }
  public string DebugSnapshot(){var text=new System.Text.StringBuilder($"Bepu land physics / time={_elapsed:0.00} / rigid islands={BodyCount} / contacts={ContactCount} / velocity={Velocity}\n");foreach(var p in _parts.Values){var pose=PartPose(p.Block.Id);text.AppendLine($"block={p.Block.Id} type={p.Block.Type} parent={p.Block.Parent} moving={p.Block.MovingMount} body={p.Root.Body.Value} output={p.Output?.Body.Value} position={pose.Position} rpm={WheelRpm(p.Block.Id):0.0} travel={SuspensionOffset(p.Block.Id):0.000}");}return text.ToString();}
- public void Dispose(){if(_disposed)return;_simulation.Dispose();_pool.Clear();_disposed=true;}
+ public void Dispose(){if(_disposed)return;_simulation.Dispose();_dispatcher?.Dispose();_pool.Clear();_disposed=true;}
  static ulong Pair(BodyHandle a,BodyHandle b)=>((ulong)(uint)Math.Min(a.Value,b.Value)<<32)|(uint)Math.Max(a.Value,b.Value);
  struct Contacts:INarrowPhaseCallbacks
  {
-  readonly HashSet<ulong> _ignored;readonly Dictionary<int,float> _friction;readonly Dictionary<int,(Vector3 Normal,float Depth)> _contacts;
-  public Contacts(HashSet<ulong> ignored,Dictionary<int,float> friction,Dictionary<int,(Vector3 Normal,float Depth)> contacts){_ignored=ignored;_friction=friction;_contacts=contacts;}
+  readonly HashSet<ulong> _ignored;readonly Dictionary<int,float> _friction;readonly ConcurrentDictionary<int,(Vector3 Normal,float Depth)> _contacts;
+  public Contacts(HashSet<ulong> ignored,Dictionary<int,float> friction,ConcurrentDictionary<int,(Vector3 Normal,float Depth)> contacts){_ignored=ignored;_friction=friction;_contacts=contacts;}
   public void Initialize(Simulation simulation){}
   public bool AllowContactGeneration(int workerIndex,CollidableReference a,CollidableReference b,ref float margin)=> (a.Mobility==CollidableMobility.Dynamic||b.Mobility==CollidableMobility.Dynamic)&&(a.Mobility==CollidableMobility.Static||b.Mobility==CollidableMobility.Static||!_ignored.Contains(Pair(a.BodyHandle,b.BodyHandle)));
   public bool AllowContactGeneration(int workerIndex,CollidablePair pair,int childA,int childB)=>true;

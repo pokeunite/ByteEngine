@@ -4,6 +4,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 & dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. Install the .NET 9 wasm-tools workload.' }
 $source = Join-Path $repoRoot "Player/ByteEngine.Browser/bin/$Configuration/net9.0/publish/wwwroot"
+[IO.File]::WriteAllText((Join-Path $source 'browser-plugins.json'),'["bytebard.desertterrain","bytebard.dunecompany"]')
 foreach ($file in @('index.html','main.js','renderer.js','audio.js','content.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }

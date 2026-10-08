@@ -30,12 +30,16 @@ try
         if(!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.InteractiveSand3D>()!=null)||!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.SandLabProbe3D>()!=null))throw new Exception("Built-in sand roundtrip failed");
         Console.WriteLine("PASS Standalone sand template save/reload without plugins: "+args[1]);return;
     }
+    if(args.Length>=2&&args[0]=="--garage-ux"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),garage:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--sand-vehicle"){using var diagnostic=new DunePolishDiagnostic(args[1],false,sandVehicle:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--schedule-benchmark"){SchedulingBenchmarkTests.Run(args[1]);return;}
     if(args.Length>=2&&args[0]=="--sand-lab"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),sandLab:true);diagnostic.Run();return;}
+    if(args.Contains("--web-chunks")){BrowserChunkTests.Run(root);return;}
+    if(args.Contains("--large-sand")){LargeSandTests.Run();return;}
     if(args.Contains("--surface-debug")){SurfaceDiagnosticTests.Run();return;}
     if(args.Contains("--scene-navigation")){SceneNavigationTests.Run();return;}
     if(args.Length>=2&&args[0]=="--dune-menu"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),menu:true);diagnostic.Run();return;}
+    if(args.Length>=4&&args[0]=="--export-web"){var data=new ProjectSerializer().Load(args[1]);var result=ByteEngine.Core.Runtime.WebGamePackageExporter.Export(args[1],args[2],args[3],data.StartupScene);Console.WriteLine("EXPORTED "+result.Directory);return;}
     if(args.Length>=4&&args[0]=="--export-game"){var data=new ProjectSerializer().Load(args[1]);var result=ByteEngine.Core.Runtime.GamePackageExporter.Export(args[1],args[2],args[3],data.StartupScene);Console.WriteLine("EXPORTED "+result.Directory);return;}
     if(args.Length>=2&&args[0]=="--desert-package"){using var diagnostic=new DunePackageDiagnostic(args[1]);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--runtime-compatibility"){RuntimeCompatibilityTests.Run(root,args[1]);return;}

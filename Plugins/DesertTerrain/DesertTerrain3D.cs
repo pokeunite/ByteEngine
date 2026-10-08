@@ -29,6 +29,8 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 {
 
     public bool UseReferenceSandSurface{get;set;}
+    public float SandWindDelaySeconds{get;set;}=12;
+    public float SandWindFillSeconds{get;set;}=30;
 
     InteractiveSand3D? _referenceSand;
 
@@ -38,9 +40,9 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
             if(_referenceSand==null){foreach(var child in GameObject.Children)if(child.GetComponent<InteractiveSand3D>() is {} existing){_referenceSand=existing;break;}}
 
-            if(_referenceSand==null){var obj=GameObject.Scene!.CreateGameObject("Interactive sand - fixed GPU field");obj.SetParent(GameObject,false);_referenceSand=obj.AddComponent(new InteractiveSand3D{Center=Center});}
+            if(_referenceSand==null){var obj=GameObject.Scene!.CreateGameObject("Interactive sand - fixed GPU field");obj.SetParent(GameObject,false);_referenceSand=obj.AddComponent(new InteractiveSand3D{Center=Center,SurfaceWidth=Cells*Spacing});}
 
-            _referenceSand.ContactDepth=Math.Clamp(ContactRutDepth,.01f,.32f);return _referenceSand;
+            _referenceSand.ContactDepth=Math.Clamp(ContactRutDepth,.01f,.32f);_referenceSand.WindDelaySeconds=SandWindDelaySeconds;_referenceSand.WindFillSeconds=SandWindFillSeconds;return _referenceSand;
 
         }
 
@@ -50,9 +52,10 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
     readonly Dictionary<Chunk,Mesh> _patchCuts=[];int _patchCutRevision=-1;
 
-    public HeightfieldCollider3D EnableSimulationPatch(Vector3 focus){if(UseReferenceSandSurface)return ReferenceSand;if(SimulationPatch==null){var obj=GameObject.Scene!.CreateGameObject("Local sand simulation - 25cm cells");obj.SetParent(GameObject,false);SimulationPatch=obj.AddComponent(new SandSimulationPatch3D{Terrain=this,Center=Center});}SimulationPatch.Focus(focus);return SimulationPatch;}
+    SandCollisionWindow3D? _referenceWindow;
+    public HeightfieldCollider3D EnableSimulationPatch(Vector3 focus){if(UseReferenceSandSurface){if(ReferenceSand.SurfaceWidth<=32)return ReferenceSand;if(_referenceWindow==null){var obj=GameObject.Scene!.CreateGameObject("Local fine sand collision");obj.SetParent(GameObject,false);_referenceWindow=obj.AddComponent(new SandCollisionWindow3D { Source=ReferenceSand,Center=Center });}_referenceWindow.Focus(focus);return _referenceWindow;}if(SimulationPatch==null){var obj=GameObject.Scene!.CreateGameObject("Local sand simulation - 25cm cells");obj.SetParent(GameObject,false);SimulationPatch=obj.AddComponent(new SandSimulationPatch3D{Terrain=this,Center=Center});}SimulationPatch.Focus(focus);return SimulationPatch;}
 
-    public void FocusSimulationPatch(Vector3 focus){if(!UseReferenceSandSurface)SimulationPatch?.Focus(focus);}
+    public void FocusSimulationPatch(Vector3 focus){if(UseReferenceSandSurface)_referenceWindow?.Focus(focus);else SimulationPatch?.Focus(focus);}
 
     void ClearPatchCuts(){foreach(var mesh in _patchCuts.Values)mesh.Dispose();_patchCuts.Clear();}
 
@@ -394,7 +397,7 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
     public void ResetSand(){if(UseReferenceSandSurface)ReferenceSand.ResetTracks();SimulationPatch?.Reset();ClearPatchCuts();EnsureGenerated();Array.Copy(_base,_heights,_base.Length);Array.Copy(_initialPacked,_packed,_packed.Length);for(int i=0;i<_chunks.Count;i++)_dirty.Add(i);DeformationRevision++;}
 
-    public override float HeightAt(int x,int z){EnsureGenerated();return _heights[z*(_cells+1)+x];}
+    public override float HeightAt(int x,int z){EnsureGenerated();if(UseReferenceSandSurface){var min=GridMinimum;var source=ReferenceSand;int sx=(int)MathF.Round((min.X+x*CellSpacing-source.GridMinimum.X)/source.CellSpacing),sz=(int)MathF.Round((min.Y+z*CellSpacing-source.GridMinimum.Y)/source.CellSpacing);return source.HeightAt(Math.Clamp(sx,0,source.Columns-1),Math.Clamp(sz,0,source.Rows-1));}return _heights[z*(_cells+1)+x];}
 
     private void FillVertices(int ox,int oz,int w,int d,float[] v)
 
@@ -518,7 +521,7 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
     {
 
-        if(UseReferenceSandSurface){if(!float.IsFinite(load)||!float.IsFinite(dt)||load<=0||dt<=0||dt>.25f||!TryGetSand(to,out var contact)||Math.Abs(to.Y-contact.Position.Y)>.35f||Vector3.DistanceSquared(from,to)<.000001f)return 0;int changed=ReferenceSand.Stamp(from,to,Math.Clamp(width*.5f+.05f,.15f,.6f),Math.Clamp(load/3500,.4f,1.2f));if(changed>0)DeformationRevision++;return changed;}
+        if(UseReferenceSandSurface){if(!float.IsFinite(load)||!float.IsFinite(dt)||load<=0||dt<=0||dt>.25f||!TryGetSand(to,out var contact)||Math.Abs(to.Y-contact.Position.Y)>.35f||Vector3.DistanceSquared(from,to)<.000001f)return 0;int changed=ReferenceSand.Stamp(from,to,Math.Clamp(width*.5f+.05f,.15f,.6f),Math.Clamp(load/1500,.9f,1.2f));if(changed>0)DeformationRevision++;return changed;}
 
 
 
@@ -646,7 +649,7 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
         if(!context.Has3DCamera)return;
 
-        if(UseReferenceSandSurface){_=ReferenceSand;if(ResetDeformationRequested){ResetDeformationRequested=false;ReferenceSand.ResetTracks();}return;}
+        if(UseReferenceSandSurface){var surface=ReferenceSand;EnsureTextures();_material.UvTiling=new Vector2(surface.SurfaceWidth/Math.Clamp(Finite(TextureWorldSize,30),.5f,64));surface.SandColor=SandColor;surface.SetSurfaceMaterial(_material);if(ResetDeformationRequested){ResetDeformationRequested=false;ReferenceSand.ResetTracks();}return;}
 
         if(ReloadHeightmapRequested){ReloadHeightmapRequested=false;Regenerate();}
 

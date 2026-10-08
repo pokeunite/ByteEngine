@@ -10,7 +10,7 @@ public sealed partial class DuneWorkshop3D
  public int HighlightedBlock=>_highlighted;
  void UpdateFeedback()
  {
-  int id=_tuning>=0?_tuning:_hover>=0&&_tool is "Tune" or "Erase" or "Move"?_hover:_selected;
+  int id=_tool=="Tune"&&_hover>=0?_hover:_tuning>=0?_tuning:_hover>=0&&_tool is "Tune" or "Erase" or "Move"?_hover:_selected;
   if(!Building||id<0||!_visuals.ContainsKey(id)){if(_highlight!=null)_highlight.Active=false;_highlighted=-1;return;}
   if(_highlight==null){_highlight=GameObject.Scene!.CreateGameObject("Block selection outline");_highlight.SetParent(GameObject,false);for(int i=0;i<12;i++){var edge=GameObject.Scene!.CreateGameObject("Selection edge "+i);edge.SetParent(_highlight,false);edge.AddComponent(new MeshRenderer{UsePrimitive=true,Primitive=PrimitiveMeshType.Cube,CastShadows=false,Material=new(){Shading=MaterialShadingMode.Unlit,BaseColor=new(1,.78f,.22f,1)}});}}
   _highlight.Active=true;_highlighted=id;var block=_blocks.First(b=>b.Id==id);var def=_catalog[block.Type];_highlight.Transform.LocalPosition=block.P;_highlight.Transform.LocalRotation=block.Q;var low=def.Low-new Vector3(.014f);var high=def.High+new Vector3(.014f);var mid=(low+high)*.5f;var size=high-low;int index=0;
@@ -19,6 +19,7 @@ public sealed partial class DuneWorkshop3D
  }
  void ApplyPresentation()
  {
+  if(_ui.ContainsKey("Garage UX v2"))return; // Scene-authored layout stays editable.
   foreach(var (name,o) in _ui){if(name.EndsWith(" glyph",StringComparison.Ordinal)&&o.GetComponent<UiWidget>() is {} image&&_ui.TryGetValue(name[..^6],out var button)&&button.GetComponent<UiWidget>() is {} w){image.Size=new(22);image.Offset=w.Offset+(w.Size-image.Size)*.5f;image.Color=new(.9f,.93f,.88f,1);}if(o.GetComponent<UiText>() is {} text)text.ShadowColor=new(0,0,0,.65f);}
   SetRect("Part tray",new(0,606),new(1280,114));SetRect("Tray edge",new(0,606),new(1280,1));
   foreach(var o in _ui.Values.Where(o=>o.GetComponent<UiWidget>()?.Kind==UiWidgetKind.Panel)){var w=o.GetComponent<UiWidget>()!;if(w.Size.X>1200&&w.Offset.Y>600){w.Offset=new(0,606);w.Size=new(1280,114);}}

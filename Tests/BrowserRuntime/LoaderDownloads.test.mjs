@@ -1,0 +1,13 @@
+import {readFileSync} from 'node:fs';
+import {deflateSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
+const {loadContent}=await import('data:text/javascript;base64,'+readFileSync('Player/ByteEngine.Browser/wwwroot/content.js').toString('base64'));
+const hash=b=>createHash('sha256').update(b).digest('hex');
+const path=Buffer.from('Content/Game.byteproject'),raw=Buffer.from('{}'),compressed=deflateSync(raw);
+const int=Buffer.alloc(4);int.writeInt32LE(1);const len=Buffer.alloc(8);len.writeBigInt64LE(BigInt(raw.length));const clen=Buffer.alloc(8);clen.writeBigInt64LE(BigInt(compressed.length));
+const pak=Buffer.concat([Buffer.from('BYTEPAK2'),int,Buffer.from([path.length]),path,len,Buffer.from(hash(raw),'hex'),clen,compressed]);
+const parts=[pak.subarray(0,50),pak.subarray(50)];const manifest={formatVersion:3,packageSize:pak.length,packageSha256:hash(pak),files:parts.map((data,i)=>({path:'Game.bytepak.'+i+'.bin',size:data.length,sha256:hash(data)}))};
+let requests={},mounts=[];globalThis.fetch=async url=>{if(url.includes('web-game.json'))return Response.json(manifest);const i=url.includes('.0.bin')?0:1;requests[i]=(requests[i]||0)+1;if(requests[i]===1)return new Response(i===0?parts[i].subarray(0,5):Buffer.alloc(parts[i].length));return new Response(parts[i]);};
+await loadContent({MountFile:(p,d)=>mounts.push([p,atob(d)])},{textContent:''});if(requests[0]!==2||requests[1]!==2||mounts[0][1]!=='{}')throw Error('Retries/reassembly/mount failed');console.log('PASS Truncated body retries, corrupt chunk retries, verified reassembly and mount');
+requests={};globalThis.fetch=async url=>{if(url.includes('web-game.json'))return Response.json({...manifest,formatVersion:2,files:[{path:'Game.bytepak',size:pak.length,sha256:hash(pak)}]});return new Response(pak);};await loadContent({MountFile:()=>{}},{textContent:''});console.log('PASS Legacy format 2 still loads');
+let failures=0;globalThis.fetch=async url=>{if(url.includes('web-game.json'))return Response.json(manifest);failures++;throw new TypeError('Failed to fetch');};try{await loadContent({MountFile:()=>{throw Error('Should not mount');}},{textContent:''});throw Error('Failure accepted');}catch(e){if(!String(e).includes('after 3 attempts')||failures!==3)throw e;}console.log('PASS Failed downloads stop after three attempts with actionable error');

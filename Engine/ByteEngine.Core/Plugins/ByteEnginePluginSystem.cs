@@ -509,6 +509,9 @@ public static class ByteEnginePluginManager
         AllowTrailingCommas = true
     };
 
+    /// <summary>Register a statically linked browser plugin. Browser WASM cannot load desktop assemblies.</summary>
+    public static void RegisterLinkedPlugin(string id, IByteEnginePlugin plugin){ByteEnginePluginRegistry.BeginPlugin(id);try{plugin.Register(new ByteEnginePluginContext(id));}catch{ByteEnginePluginRegistry.RemovePlugin(id);throw;}}
+
     public static ByteEnginePluginSession LoadProjectPlugins(
         string projectRoot,
         ByteEnginePluginLoadMode mode,
@@ -525,7 +528,7 @@ public static class ByteEnginePluginManager
         if (OperatingSystem.IsBrowser())
         {
             warningSink?.Invoke(
-                "Managed ByteEngine plugins are disabled in the browser runtime in Plugin System V1.");
+                "Browser runtime uses statically linked plugins.");
             return new ByteEnginePluginSession(loaded);
         }
 

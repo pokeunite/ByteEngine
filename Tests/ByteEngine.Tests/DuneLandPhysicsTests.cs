@@ -59,6 +59,26 @@ internal static class DuneLandPhysicsTests
   float Compression(float rate,float damping){var blocks=BuildStore.Read(JsonSerializer.Serialize(suspended,BuildStore.Json),catalog);foreach(var b in blocks.Where(b=>b.Type==16)){b.SpringRate=rate;b.Damping=damping;}using var w=new LandVehiclePhysics(blocks,catalog,defs,new(0,1.5f,0),Quaternion.Identity);w.AddFlatGround();for(int i=0;i<600;i++)w.Step(1f/120,0,0,false,24);return blocks.Where(b=>b.Type==16).Average(b=>Math.Abs(w.SuspensionOffset(b.Id)));}
   float soft=Compression(2,1),stiff=Compression(9,1);Console.WriteLine($"Spring load: soft={soft:0.0000} m / stiff={stiff:0.0000} m");Check(soft>stiff+.005f,"Spring stiffness changes measured loaded suspension compression");
   var tuned=suspended[3];tuned.SpringRate=7;tuned.Damping=.4f;tuned.Preload=-.05f;tuned.SpeedLimit=17;tuned.BrakeStrength=1.7f;var roundtrip=BuildStore.Read(JsonSerializer.Serialize(suspended,BuildStore.Json),catalog).Single(b=>b.Id==tuned.Id);Check(roundtrip.SpringRate==7&&roundtrip.Damping==.4f&&roundtrip.Preload==-.05f&&roundtrip.SpeedLimit==17&&roundtrip.BrakeStrength==1.7f,"Mechanical customization survives vehicle save/reload");
+
+  defs[20]=new(new(new(-.1f,0,-.1f),new(.1f,.2f,.1f)),new(new(-.1f,.15f,-.1f),new(.1f,.25f,.1f)),new(0,.2f,0),Vector3.UnitY,true);
+  var towingCart=Cart(true);var hitch=new PlacedBlock{Id=towingCart.Count,Type=20,Parent=0};hitch.Pose(new(0,0,1.7f),Quaternion.CreateFromAxisAngle(Vector3.UnitY,MathF.PI));towingCart.Add(hitch);
+  var buggy=Cart(false).Where(b=>b.Type!=23&&b.Type!=25).ToList();
+  using(var tow=new LandVehiclePhysics(towingCart,catalog,defs,new(0,1,0),Quaternion.Identity)){
+   tow.AddFlatGround();tow.AddRecoveryVehicle(buggy,defs,new(0,1,8),Quaternion.Identity,new(0,.2f,-1.4f));
+   Check(!tow.ConnectRecovery(0)&&!tow.ConnectRecovery(hitch.Id),"Reject self/non-hinge and distant attachment");
+   for(int i=0;i<180;i++)tow.Step(1f/60,0,0,true,24);
+   var hp=tow.TrailerHitch(hitch.Id);tow.ResetRecovery(hp+new Vector3(0,-.2f,1.65f),Quaternion.Identity);
+   for(int i=0;i<180;i++)tow.Step(1f/60,0,0,true,24);
+   Console.WriteLine("HITCH CHECK "+tow.HitchAvailability(hitch.Id)+" / gap="+Vector3.Distance(tow.TrailerHitch(hitch.Id),tow.TargetHitch));
+   var beforeHitch=tow.RecoveryFrame().Position;Check(tow.ConnectRecovery(hitch.Id),"Nearby aligned stationary target attaches without pose snapping");Check(Vector3.Distance(beforeHitch,tow.RecoveryFrame().Position)<.00001f,"Hitching does not teleport the target");Check(!tow.ConnectRecovery(hitch.Id),"Duplicate attachment is rejected");
+   var start=tow.RecoveryFrame().Position;for(int i=0;i<360;i++)tow.Step(1f/60,1,0,false,24);
+   Check(tow.RecoveryFrame().Position.Z<start.Z-3&&float.IsFinite(tow.RecoveryVelocity.LengthSquared()),"Physical truck pulls separate rolling buggy forward");
+   tow.DisconnectRecovery();Check(!tow.RecoveryConnected,"Deliberate detachment removes joint");
+   hp=tow.TrailerHitch(hitch.Id);tow.ResetTruck(new(0,1,0),Quaternion.Identity);hp=tow.TrailerHitch(hitch.Id);var invalidRotation=Quaternion.CreateFromAxisAngle(Vector3.UnitY,MathF.PI/3);tow.ResetRecovery(hp-Vector3.Transform(new Vector3(0,.2f,-1.4f),invalidRotation),invalidRotation);
+   Check(tow.HitchAvailability(hitch.Id)=="Align vehicles within 40 degrees"&&!tow.ConnectRecovery(hitch.Id),"Close but incorrectly aligned hitch is rejected");tow.ResetRecovery(hp+new Vector3(0,-.2f,1.6f),Quaternion.Identity);for(int i=0;i<180;i++)tow.Step(1f/60,0,0,true,24);Check(tow.ConnectRecovery(hitch.Id),"Aligned hitch can be reattached after reset");tow.ResetTruck(new(0,1,0),Quaternion.Identity);Check(!tow.RecoveryConnected,"Reset safely removes an active hitch joint");
+  }
+  float EngineAcceleration(int count){var truck=Cart(false);for(int i=1;i<count;i++)truck.Add(new(){Id=truck.Max(b=>b.Id)+1,Type=23,Parent=0,Position=[0,.3f,2+i]});using var world=new LandVehiclePhysics(truck,catalog,defs,new(0,1,0),Quaternion.Identity);world.AddFlatGround();for(int i=0;i<180;i++)world.Step(1f/60,0,0,false,32);for(int i=0;i<120;i++)world.Step(1f/60,1,0,false,32);return -world.Velocity.Z;}
+  Console.WriteLine($"CONFIGURATION acceleration after 2s: one engine={EngineAcceleration(1):F3}m/s two engines={EngineAcceleration(2):F3}m/s (traction capped)");
   Console.WriteLine("Dune land physics tests passed.");
  }
  sealed class TestTerrain:HeightfieldCollider3D

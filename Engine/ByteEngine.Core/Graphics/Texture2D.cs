@@ -14,6 +14,9 @@ public sealed class Texture2D
 {
     private readonly bool _cpuOnly = OperatingSystem.IsBrowser();
     private byte[]? _pixels;
+    readonly Queue<(int Version,int X,int Y,int Width,int Height)> _browserUpdates=new();
+    public IReadOnlyList<(int X,int Y,int Width,int Height)> ChangedRegionsSince(int version){if(version<0||_browserUpdates.Count==0||version<_browserUpdates.Peek().Version-1)return [(0,0,Width,Height)];return _browserUpdates.Where(r=>r.Version>version).Select(r=>(r.X,r.Y,r.Width,r.Height)).ToArray();}
+    void TrackBrowserRegion(int x,int y,int width,int height){if(!_cpuOnly)return;_browserUpdates.Enqueue((ContentVersion,x,y,width,height));while(_browserUpdates.Count>256)_browserUpdates.Dequeue();}
     public ReadOnlyMemory<byte> PixelData => _pixels ?? ReadOnlyMemory<byte>.Empty;
     public TextureFilter Filter { get; private set; }
     public bool CpuOnly => _cpuOnly;
@@ -83,7 +86,7 @@ public sealed class Texture2D
     }
 
     /// <summary>Update a same-size dynamic RGBA map without recreating the GPU texture.</summary>
-    public void UpdatePixels(byte[] pixels){if(_disposed)throw new ObjectDisposedException(nameof(Texture2D));if(pixels.Length!=Width*Height*4)throw new ArgumentException("RGBA map size differs",nameof(pixels));Bind();GL.TexSubImage2D(TextureTarget.Texture2D,0,0,0,Width,Height,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);_pixels=pixels;ContentVersion++;}
+    public void UpdatePixels(byte[] pixels){if(_disposed)throw new ObjectDisposedException(nameof(Texture2D));if(pixels.Length!=Width*Height*4)throw new ArgumentException("RGBA map size differs",nameof(pixels));if(!_cpuOnly){Bind();GL.TexSubImage2D(TextureTarget.Texture2D,0,0,0,Width,Height,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);}_pixels=pixels;ContentVersion++;TrackBrowserRegion(0,0,Width,Height);}
     /// <summary>Upload only an RGBA rectangle from a full-sized CPU backing map. No staging allocation or GPU readback.</summary>
     public void UpdateRegion(byte[] pixels,int x,int y,int width,int height)
     {
@@ -94,7 +97,7 @@ public sealed class Texture2D
             try{GL.PixelStore(PixelStoreParameter.UnpackRowLength,Width);GL.PixelStore(PixelStoreParameter.UnpackSkipPixels,x);GL.PixelStore(PixelStoreParameter.UnpackSkipRows,y);GL.TexSubImage2D(TextureTarget.Texture2D,0,x,y,width,height,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);}
             finally{GL.PixelStore(PixelStoreParameter.UnpackRowLength,rowLength);GL.PixelStore(PixelStoreParameter.UnpackSkipPixels,skipX);GL.PixelStore(PixelStoreParameter.UnpackSkipRows,skipY);}
         }
-        _pixels=pixels;ContentVersion++;
+        _pixels=pixels;ContentVersion++;TrackBrowserRegion(x,y,width,height);
     }
     public static Texture2D FromPixels(int width, int height, byte[] pixels, TextureFilter filter = TextureFilter.Linear)
     {
@@ -167,6 +170,8 @@ public sealed class Texture2D
         );
     }
 
+    static (int Width,int Height,byte[] Data) BrowserImage(int width,int height,byte[] pixels){if(!OperatingSystem.IsBrowser()||Math.Max(width,height)<=1024)return(width,height,pixels);float scale=1024f/Math.Max(width,height);int w=Math.Max(1,(int)(width*scale)),h=Math.Max(1,(int)(height*scale));var output=new byte[w*h*4];for(int y=0;y<h;y++)for(int x=0;x<w;x++)pixels.AsSpan(((y*height/h)*width+x*width/w)*4,4).CopyTo(output.AsSpan((y*w+x)*4,4));return(w,h,output);}
+
     internal static Texture2D FromEncodedBytes(
         byte[] encodedData,
         TextureFilter filter = TextureFilter.Linear)
@@ -183,11 +188,8 @@ public sealed class Texture2D
                 stream,
                 ColorComponents.RedGreenBlueAlpha);
 
-        return new Texture2D(
-            image.Width,
-            image.Height,
-            image.Data,
-            filter);
+        var resized=BrowserImage(image.Width,image.Height,image.Data);
+        return new Texture2D(resized.Width,resized.Height,resized.Data,filter);
     }
 
     internal void Reload(
@@ -277,11 +279,7 @@ public sealed class Texture2D
                     stream,
                     ColorComponents.RedGreenBlueAlpha);
 
-            Width =
-                image.Width;
-
-            Height =
-                image.Height;
+            Width=image.Width;Height=image.Height;
 
             FilePath =
                 fullPath;
@@ -300,11 +298,8 @@ public sealed class Texture2D
                     stream,
                     ColorComponents.RedGreenBlueAlpha);
 
-            Width =
-                image.Width;
-
-            Height =
-                image.Height;
+            var resized=BrowserImage(image.Width,image.Height,image.Data);
+            Width=resized.Width;Height=resized.Height;
 
             FilePath =
                 fullPath;
@@ -312,9 +307,7 @@ public sealed class Texture2D
             IsHdr =
                 false;
 
-            UploadBytes(
-                image.Data,
-                filter);
+            UploadBytes(resized.Data,filter);
         }
 
         if (previousHandle != 0)
@@ -427,7 +420,7 @@ public sealed class Texture2D
         TextureFilter filter)
     {
         Filter = filter;
-        if (_cpuOnly) { _pixels = pixels.ToArray(); return; }
+        if (_cpuOnly) { Filter=filter;_pixels = pixels; return; }
         _handle =
             GL.GenTexture();
 

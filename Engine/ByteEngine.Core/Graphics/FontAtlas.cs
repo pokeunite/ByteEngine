@@ -39,7 +39,7 @@ internal sealed class FontAtlas : IDisposable
     private static FontAtlas LoadTrueType(string path, int size)
     {
         byte[] font = File.ReadAllBytes(path);
-        const int atlasSize = 2048;
+        int atlasSize = OperatingSystem.IsBrowser()&&size<=48?1024:2048;
         byte[] coverage = new byte[atlasSize * atlasSize];
         var chars = new StbTrueType.stbtt_bakedchar[224];
         if (!StbTrueType.stbtt_BakeFontBitmap(font, 0, size, coverage, atlasSize, atlasSize, 32, chars.Length, chars))

@@ -16,8 +16,11 @@ public static class WebGamePackageExporter
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         var runtimePlugins = ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ListInstalled(root)
             .Where(p => p.Enabled && ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(p.ManifestPath)).Runtime).ToArray();
-        if (runtimePlugins.Length > 0)
-            throw new InvalidOperationException("Web export does not support managed runtime plugins: " + string.Join(", ", runtimePlugins.Select(p => p.Name)) + ". Use Windows export or disable these plugins.");
+        runtimeDirectory = Path.GetFullPath(runtimeDirectory);
+        string capabilityFile = Path.Combine(runtimeDirectory,"browser-plugins.json");
+        var supported = File.Exists(capabilityFile) ? JsonSerializer.Deserialize<string[]>(File.ReadAllText(capabilityFile)) ?? [] : [];
+        var unsupported = runtimePlugins.Where(p=>!supported.Contains(p.Id,StringComparer.OrdinalIgnoreCase)).ToArray();
+        if(unsupported.Length>0)throw new InvalidOperationException("Browser runtime does not include these plugins: "+string.Join(", ",unsupported.Select(p=>p.Name))+". Refresh the browser runtime with matching statically linked plugins.");
         project.StartupScene = startupScene.Replace('\\', '/');
         if (!File.Exists(GamePackageExporter.ResolveInside(root, project.StartupScene)))
             throw new FileNotFoundException("Choose a saved startup scene.");
@@ -64,6 +67,8 @@ public static class WebGamePackageExporter
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
                 CookedModelStore.Save(content, ModelImporter.ForPath(model.FullPath).Import(model, model.Metadata.ModelImporter));
+                // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
+                File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
             int contentCount = GamePackageExporter.WalkFiles(content).Count();
@@ -77,7 +82,9 @@ public static class WebGamePackageExporter
             ByteAssetPackage.Create(packageRoot, package);
             Directory.Delete(packageRoot, true);
             GamePackageExporter.CopyAssetNotice(root, site);
-            var paths = new[] { package };
+            var packageSize = new FileInfo(package).Length;
+            string packageHash = Hash(package);
+            var paths = SplitBrowserPackage(package);
             if (paths.GroupBy(p => Path.GetRelativePath(site, p).Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .Any(g => g.Count() > 1)) throw new InvalidDataException("Content has case-colliding file names.");
             var entries = paths.Select(file => new {
@@ -86,7 +93,7 @@ public static class WebGamePackageExporter
                 sha256 = Hash(file)
             }).ToArray();
             File.WriteAllText(Path.Combine(site, "web-game.json"), JsonSerializer.Serialize(new {
-                formatVersion = 2, name = project.Name, files = entries
+                formatVersion = 3, name = project.Name, packageSize, packageSha256 = packageHash, files = entries
             }));
             var siteFiles = GamePackageExporter.WalkFiles(site).ToArray();
             if (siteFiles.Length > 1000 || siteFiles.Sum(f => new FileInfo(f).Length) > 500L * 1024 * 1024 ||
@@ -110,6 +117,24 @@ public static class WebGamePackageExporter
             string staging = Path.Combine(destination, "PackageStaging");
             if (Directory.Exists(staging)) Directory.Delete(staging, true);
         }
+    }
+
+    internal static string[] SplitBrowserPackage(string package)
+    {
+        const int chunkBytes = 8 * 1024 * 1024;
+        var paths = new List<string>();
+        using (var input = File.OpenRead(package))
+        {
+            var buffer = new byte[chunkBytes];
+            while (input.Position < input.Length)
+            {
+                int count = input.ReadAtLeast(buffer, (int)Math.Min(chunkBytes, input.Length-input.Position));
+                string path = package + "." + paths.Count.ToString("D4") + ".bin";
+                File.WriteAllBytes(path,buffer.AsSpan(0,count).ToArray());paths.Add(path);
+            }
+        }
+        File.Delete(package);
+        return paths.ToArray();
     }
 
     private static string Hash(string file)

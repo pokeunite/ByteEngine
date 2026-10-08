@@ -12,6 +12,8 @@
   </PropertyGroup>
   <ItemGroup>
     <SupportedPlatform Include="browser" />
+    <ProjectReference Include="../../Plugins/DuneCompany/DuneCompany.Plugin.csproj" />
+    <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj" />
     <WasmExtraFilesToDeploy Include="wwwroot/**/*" TargetPath="%(RecursiveDir)%(Filename)%(Extension)" />
     <Content Include="../../Editor/ByteEngine.Editor/Resources/Fonts/**/*" Link="wwwroot/Resources/Fonts/%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />

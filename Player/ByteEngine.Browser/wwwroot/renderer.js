@@ -10,7 +10,9 @@ export class BrowserRenderer {
         gl.attachShader(program,compile(gl.VERTEX_SHADER,`#version 300 es
         layout(location=0) in vec3 position;layout(location=1) in vec3 normal;layout(location=2) in vec2 uv;
         uniform mat4 vp,model;out vec3 n,world;out vec2 texcoord;
-        void main(){vec4 p=model*vec4(position,1.0);world=p.xyz;n=mat3(transpose(inverse(model)))*normal;
+        uniform sampler2D heightField;uniform bool hasHeight;uniform vec4 heightUv;uniform float heightRange,heightBias;uniform vec2 heightSize;
+        float surfaceHeight(vec2 coord){vec2 rg=textureLod(heightField,clamp(coord,vec2(0.0),vec2(1.0)),0.0).rg;return dot(rg,vec2(65280.0,255.0))/65535.0*heightRange+heightBias;}
+        void main(){vec3 pos=position,N=normal;if(hasHeight){vec2 coord=uv*heightUv.xy+heightUv.zw;vec2 step=1.0/vec2(textureSize(heightField,0));pos.y+=surfaceHeight(coord);vec2 gradient=vec2(surfaceHeight(coord+vec2(step.x,0.0))-surfaceHeight(coord-vec2(step.x,0.0)),surfaceHeight(coord+vec2(0.0,step.y))-surfaceHeight(coord-vec2(0.0,step.y)))/(2.0*step*heightSize);N=normalize(vec3(-gradient.x,1.0,-gradient.y));}vec4 p=model*vec4(pos,1.0);world=p.xyz;n=mat3(transpose(inverse(model)))*N;
         texcoord=uv;gl_Position=vp*p;gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`));
         gl.attachShader(program,compile(gl.FRAGMENT_SHADER,`#version 300 es
         precision highp float;
@@ -67,11 +69,11 @@ export class BrowserRenderer {
             let m=this.meshes.get(upload.id);
             if(!m){m={vao:gl.createVertexArray(),vbo:gl.createBuffer(),ibo:gl.createBuffer()};this.meshes.set(upload.id,m);}
             gl.bindVertexArray(m.vao);gl.bindBuffer(gl.ARRAY_BUFFER,m.vbo);
-            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(upload.vertices),gl.DYNAMIC_DRAW);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(upload.indices),gl.STATIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(Uint8Array.from(atob(upload.vertices),c=>c.charCodeAt(0)).buffer),gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(Uint8Array.from(atob(upload.indices),c=>c.charCodeAt(0)).buffer),gl.STATIC_DRAW);
             for(const [index,count,offset] of [[0,3,0],[1,3,12],[2,2,24]]){
                 gl.enableVertexAttribArray(index);gl.vertexAttribPointer(index,count,gl.FLOAT,false,32,offset);
-            }m.count=upload.indices.length;
+            }m.count=atob(upload.indices).length/4;
         }
         for(const upload of data.textures){
             let t=this.textures.get(upload.id);
@@ -79,12 +81,12 @@ export class BrowserRenderer {
             const decoded=atob(upload.pixels),bytes=new Uint8Array(decoded.length);
             for(let i=0;i<bytes.length;i++)bytes[i]=decoded.charCodeAt(i);
             gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
-            gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,upload.width,upload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
-            gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+            if(upload.allocate)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,upload.width,upload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,null);if(upload.partial)gl.texSubImage2D(gl.TEXTURE_2D,0,upload.x,upload.y,upload.w,upload.h,gl.RGBA,gl.UNSIGNED_BYTE,bytes);else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,upload.width,upload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
+            gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,upload.nearest?gl.NEAREST:gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
-            t.image.width=upload.width;t.image.height=upload.height;t.nearest=upload.nearest;
-            t.image.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(bytes.buffer),upload.width,upload.height),0,0);
+            if(!upload.partial||upload.allocate){t.image.width=upload.width;t.image.height=upload.height;}t.nearest=upload.nearest;
+            t.image.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(bytes.buffer),upload.w,upload.h),upload.x,upload.y);
         }
         gl.viewport(0,0,width,height);gl.depthMask(true);gl.clearColor(...data.background,1);
         gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -102,6 +104,7 @@ export class BrowserRenderer {
             for(const name of ['unlit','srgb','directX','packed'])gl.uniform1i(this.location(name),draw[name]?1:0);
             gl.uniform3iv(this.location('channels'),draw.channels);gl.uniform3fv(this.location('emission'),draw.emission);
             gl.uniform2fv(this.location('tiling'),draw.tiling);gl.uniform2fv(this.location('offset'),draw.offset);
+            gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(draw.heightField)?.gpu||null);gl.uniform1i(this.location('heightField'),7);gl.uniform1i(this.location('hasHeight'),draw.heightField?1:0);gl.uniform4fv(this.location('heightUv'),draw.heightUv);gl.uniform2fv(this.location('heightSize'),draw.heightSize);gl.uniform1f(this.location('heightRange'),draw.heightRange);gl.uniform1f(this.location('heightBias'),draw.heightBias);
             const maps=[draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture];
             for(let i=0;i<maps.length;i++){
                 gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(maps[i])?.gpu||null);

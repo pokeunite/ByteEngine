@@ -2,30 +2,54 @@ export async function loadContent(game, status) {
     const response = await fetch('./web-game.json', { cache: 'no-cache' });
     if (!response.ok) throw new Error('Missing web-game.json. Export the game again.');
     const manifest = await response.json();
-    if (![1,2].includes(manifest.formatVersion) || !Array.isArray(manifest.files)) throw new Error('Unsupported web package.');
+    if (![1,2,3].includes(manifest.formatVersion) || !Array.isArray(manifest.files)) throw new Error('Unsupported web package.');
     const audio = new Map();
-    let index = 0;
+    if (manifest.formatVersion === 3 && (!Number.isSafeInteger(manifest.packageSize) || manifest.packageSize < 8 || manifest.packageSize > 500*1024*1024)) throw new Error('Invalid package size.');
+    const packageBytes = manifest.formatVersion === 3 ? new Uint8Array(manifest.packageSize) : null;
+    let index = 0, offset = 0;
     for (const file of manifest.files) {
         if (typeof file.path !== 'string' || file.path.startsWith('/') || file.path.includes('\\') ||
             file.path.split('/').some(p => !p || p === '.' || p === '..')) throw new Error('Unsafe package path.');
-        status.textContent = 'Loading ' + (++index) + '/' + manifest.files.length + ': ' + file.path;
-        const url = './' + file.path.split('/').map(encodeURIComponent).join('/');
-        const result = await fetch(url);
-        if (!result.ok) throw new Error('Missing content: ' + file.path);
-        const data = new Uint8Array(await result.arrayBuffer());
-        if (data.length !== file.size) throw new Error('Content size mismatch: ' + file.path);
-        const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)))
-            .map(n => n.toString(16).padStart(2,'0')).join('');
-        if (hash !== file.sha256.toLowerCase()) throw new Error('Content integrity mismatch: ' + file.path);
-        if (manifest.formatVersion === 2) {
+        const data = await fetchContent(file,status,++index,manifest.files.length);
+        if (packageBytes) {
+            if(offset+data.length>packageBytes.length)throw new Error('Package chunks exceed declared size.');
+            packageBytes.set(data,offset);offset+=data.length;
+        } else if (manifest.formatVersion === 2) {
             if (file.path !== 'Game.bytepak') throw new Error('Unsupported asset package path.');
             await mountPackage(game, data, audio, status);
-            continue;
+        } else {
+            game.MountFile(file.path, toBase64(data));
+            if (file.path.toLowerCase().endsWith('.wav')) audio.set(file.path, data.buffer);
         }
-        game.MountFile(file.path, toBase64(data));
-        if (file.path.toLowerCase().endsWith('.wav')) audio.set(file.path, data.buffer);
+    }
+    if(packageBytes){
+        if(offset!==packageBytes.length)throw new Error('Incomplete package chunks.');
+        if(await digest(packageBytes)!==manifest.packageSha256.toLowerCase())throw new Error('Asset package integrity mismatch.');
+        await mountPackage(game,packageBytes,audio,status);
     }
     return { manifest, audio };
+}
+
+async function digest(data){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data))).map(n=>n.toString(16).padStart(2,'0')).join('');}
+async function fetchContent(file,status,index,count){
+    if(!Number.isSafeInteger(file.size)||file.size<0||file.size>500*1024*1024)throw new Error('Invalid content size.');
+    const url='./'+file.path.split('/').map(encodeURIComponent).join('/');
+    let lastError;
+    for(let attempt=1;attempt<=3;attempt++){
+        const controller=new AbortController();let timer=setTimeout(()=>controller.abort(),30000);
+        try{
+            const response=await fetch(url,{signal:controller.signal,cache:attempt>1?'reload':'default'});
+            if(!response.ok)throw new Error('HTTP '+response.status);
+            const data=new Uint8Array(file.size);let received=0;
+            if(response.body){const reader=response.body.getReader();while(true){const {done,value}=await reader.read();if(done)break;if(received+value.length>data.length)throw new Error('Response exceeds declared size');data.set(value,received);received+=value.length;clearTimeout(timer);timer=setTimeout(()=>controller.abort(),30000);status.textContent='Loading '+index+'/'+count+' / '+Math.floor(received/Math.max(1,file.size)*100)+'%'+(attempt>1?' / retry '+attempt:'');}}
+            else{const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length!==data.length)throw new Error('Incomplete download');data.set(bytes);received=bytes.length;}
+            if(received!==file.size)throw new Error('Incomplete download: '+received+'/'+file.size+' bytes');
+            if(await digest(data)!==file.sha256.toLowerCase())throw new Error('Content integrity mismatch');
+            return data;
+        }catch(error){lastError=error;controller.abort();if(attempt<3){status.textContent='Retrying download '+index+'/'+count;await new Promise(resolve=>setTimeout(resolve,attempt*500));}}
+        finally{clearTimeout(timer);}
+    }
+    throw new Error('Cannot download '+file.path+' after 3 attempts: '+lastError+'. Please reload to retry.');
 }
 
 function toBase64(data) {
@@ -74,7 +98,7 @@ async function mountPackage(game, bytes, audio, status) {
         total+=length;if(total>4294967296)throw new Error('Asset package too large.');
         status.textContent='Unpacking assets '+(index+1)+'/'+count;
         const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate'));
-        const data=new Uint8Array(await new Response(stream).arrayBuffer());
+        let data;try{data=length===0&&compressed.length===0?new Uint8Array():new Uint8Array(await new Response(stream).arrayBuffer());}catch(error){throw new Error("Unpacking "+path+": "+error);}
         if(data.length!==length)throw new Error('Asset size mismatch: '+path);
         const actual=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
         if(actual.some((value,i)=>value!==expected[i]))throw new Error('Corrupted asset: '+path);

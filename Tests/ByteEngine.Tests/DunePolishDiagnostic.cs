@@ -13,14 +13,14 @@ using DesertTerrain;
 namespace ByteEngine.Tests;
 internal sealed partial class DunePolishDiagnostic:ByteEngineApplication
 {
- readonly bool _sandVehicle;readonly bool _sandLab;readonly bool _menu;readonly bool _world;readonly bool _slice;readonly string _file;readonly bool _prepare;readonly bool _hinge;readonly string? _blueprints;EditorProjectContext? _project;
- public DunePolishDiagnostic(string file,bool prepare,bool hinge=false,string? blueprints=null,bool slice=false,bool world=false,bool menu=false,bool sandLab=false,bool sandVehicle=false):base(1280,720,"Dune cinematic validation"){_sandVehicle=sandVehicle;_sandLab=sandLab;_file=Path.GetFullPath(file);_prepare=prepare;_hinge=hinge;_blueprints=blueprints;_slice=slice;_world=world;_menu=menu;IsVisible=false;}
+ readonly bool _garage;readonly bool _sandVehicle;readonly bool _sandLab;readonly bool _menu;readonly bool _world;readonly bool _slice;readonly string _file;readonly bool _prepare;readonly bool _hinge;readonly string? _blueprints;EditorProjectContext? _project;
+ public DunePolishDiagnostic(string file,bool prepare,bool hinge=false,string? blueprints=null,bool slice=false,bool world=false,bool menu=false,bool sandLab=false,bool sandVehicle=false,bool garage=false):base(1280,720,"Dune cinematic validation"){_garage=garage;_sandVehicle=sandVehicle;_sandLab=sandLab;_file=Path.GetFullPath(file);_prepare=prepare;_hinge=hinge;_blueprints=blueprints;_slice=slice;_world=world;_menu=menu;IsVisible=false;}
  protected override bool ShouldUpdateScene=>false;protected override bool ShouldRenderSceneToWindow=>false;
  protected override void OnEngineStart()
  {
   System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory,"DuneCompany.Plugin.dll"));System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory,"DesertTerrain.Plugin.dll"));
   string root=Path.GetDirectoryName(_file)!;Directory.CreateDirectory(Path.Combine(root,"Preview"));
-  _project=EditorProjectContext.Open(_file,m=>Console.WriteLine("WARNING: "+m));if(_sandVehicle){RunSandVehicle(root);return;}if(_sandLab){RunSandLab(root);return;}if(_menu){RunMainMenu(root);return;}var path=Path.Combine(root,_world?"Scenes/Workshop.bytescene":_project.Project.StartupScene);var scene=_project.Scenes.Load(path);var terrain=scene.GameObjects.SelectMany(o=>o.Components).OfType<DesertTerrain3D>().Single();
+  _project=EditorProjectContext.Open(_file,m=>Console.WriteLine("WARNING: "+m));if(_garage){RunGarage(root);return;}if(_sandVehicle){RunSandVehicle(root);return;}if(_sandLab){RunSandLab(root);return;}if(_menu){RunMainMenu(root);return;}var path=Path.Combine(root,_world?"Scenes/Workshop.bytescene":_project.Project.StartupScene);var scene=_project.Scenes.Load(path);var terrain=scene.GameObjects.SelectMany(o=>o.Components).OfType<DesertTerrain3D>().Single();
   if(_world&&_prepare)AuthorMissionWorld(scene,terrain,root,path);
   if(_slice){RunDesertSlice(scene,terrain,root,path);return;}
   if(_prepare){

@@ -14,6 +14,7 @@ try{
     const exports=await runtime.getAssemblyExports(config.mainAssemblyName);
     await runtime.runMain();
     const game=exports.BrowserGame;
+    globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
     const {manifest,audio:files}=await loadContent(game,status);
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
@@ -24,9 +25,13 @@ try{
         canvas.addEventListener('pointerdown',start,{once:true});
         status.addEventListener('pointerdown',start,{once:true});
     });
+    let saveKey=null,lastSave='';
+    if(!manifest.demo){saveKey=game.SaveKey();try{const stored=localStorage.getItem(saveKey);if(stored)game.RestoreSaves(stored);}catch(error){console.warn('Browser save restore unavailable',error);}}
     game.Start(!!manifest.demo);
-    status.hidden=true;
-    const keys=new Set(),buttons=new Set();
+    const persist=()=>{if(!saveKey)return;try{const data=game.SaveData();if(data!==lastSave){localStorage.setItem(saveKey,data);lastSave=data;}}catch(error){console.warn('Browser save persistence unavailable',error);}};
+    setInterval(persist,5000);window.addEventListener('pagehide',persist);
+    status.hidden=true;status.style.pointerEvents="none";
+    const keys=new Set(),buttons=new Set(),keyPulses=new Set(),buttonPulses=new Set();
     let pointer=[.5,.5],delta=[0,0],wheel=0,previous=performance.now();
     const names={ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Space:'Space',
         ShiftLeft:'LeftShift',ShiftRight:'RightShift',ControlLeft:'LeftControl',ControlRight:'RightControl',
@@ -34,15 +39,15 @@ try{
         Backspace:'Backspace',Delete:'Delete',Insert:'Insert',Home:'Home',End:'End',PageUp:'PageUp',PageDown:'PageDown'};
     function keyName(code){return names[code]||(code.startsWith('Key')?code.slice(3):code.startsWith('Digit')?'D'+code.slice(5):/^F\d+$/.test(code)?code:null);}
     canvas.addEventListener('keydown',e=>{
-        const k=keyName(e.code);if(k){keys.add(k);e.preventDefault();}
+        const k=keyName(e.code);if(k){keys.add(k);if(!e.repeat)keyPulses.add(k);e.preventDefault();}
         if(e.code==='Escape')document.exitPointerLock();
     });
     window.addEventListener('keyup',e=>{const k=keyName(e.code);if(k)keys.delete(k);});
-    function release(){keys.clear();buttons.clear();delta=[0,0];wheel=0;previous=performance.now();}
+    function release(){keys.clear();buttons.clear();keyPulses.clear();buttonPulses.clear();delta=[0,0];wheel=0;previous=performance.now();}
     canvas.addEventListener('blur',release);document.addEventListener('visibilitychange',release);
     canvas.addEventListener('pointerdown',e=>{
         canvas.focus();audio.activate().catch(fail);
-        const b=['Left','Middle','Right'][e.button];if(b)buttons.add(b);
+        const b=['Left','Middle','Right'][e.button];if(b){buttons.add(b);buttonPulses.add(b);}
         if(game.WantsPointerLock()&&document.pointerLockElement!==canvas)canvas.requestPointerLock()?.catch(()=>{});
     });
     window.addEventListener('pointerup',e=>buttons.delete(['Left','Middle','Right'][e.button]));
@@ -60,12 +65,13 @@ try{
             if(canvas.width!==width||canvas.height!==height){canvas.width=overlay.width=width;canvas.height=overlay.height=height;}
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
             const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
-            const data=JSON.parse(game.Frame(document.hidden?0:(now-previous)/1000,width,height,
-                [...keys].join(','),[...buttons].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
+            const data=JSON.parse(game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
+                [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad));
-            previous=now;delta=[0,0];wheel=0;
+            previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
-            audio.commands(data.audio);renderer.draw(data,width,height);
+            globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length};audio.commands(data.audio);renderer.draw(data,width,height);
+            if(data.pendingTextures>64){status.hidden=false;status.textContent='Preparing graphics... '+data.pendingTextures+' uploads';}else status.hidden=true;
             requestAnimationFrame(frame);
         }catch(error){fail(error);}
     }

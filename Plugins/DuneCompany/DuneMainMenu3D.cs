@@ -7,24 +7,27 @@ using ByteEngine.Core.Scene;
 namespace DuneCompany;
 public sealed class DuneMainMenu3D:Component
 {
+ ByteEngine.Core.Audio.AudioSource3D? _music;
  internal string ProjectRoot="";
+ string SaveRoot=>ByteEngine.Core.Runtime.GameSaveStorage.GetDirectory(ProjectRoot);
  internal static bool ContinuePending,NewGamePending;
  public float MasterVolume{get;set;}=1;
  public bool BalancedQuality{get;set;}
  public override int UpdateOrder=>100;
  public void Command(string action){var scene=GameObject.Scene!;
-  switch(action){case "Continue":ContinuePending=true;NewGamePending=false;break;case "New Game":var save=Path.Combine(ProjectRoot,"Saves/vehicle.json");if(File.Exists(save)){var backup=Path.Combine(ProjectRoot,"Saves/Backups");Directory.CreateDirectory(backup);File.Copy(save,Path.Combine(backup,"vehicle-before-new-game-"+DateTime.UtcNow.Ticks+".json"));}NewGamePending=true;ContinuePending=false;break;
+  switch(action){case "Continue":ContinuePending=true;NewGamePending=false;break;case "New Game":var save=Path.Combine(SaveRoot,"vehicle.json");if(File.Exists(save)){var backup=Path.Combine(SaveRoot,"Backups");Directory.CreateDirectory(backup);File.Copy(save,Path.Combine(backup,"vehicle-before-new-game-"+DateTime.UtcNow.Ticks+".json"));}NewGamePending=true;ContinuePending=false;break;
    case "Settings":scene.FindGameObject("Settings panel")!.Active=true;break;case "Credits":scene.FindGameObject("Credits panel")!.Active=true;break;
    case "Close Settings":scene.FindGameObject("Settings panel")!.Active=false;break;case "Close Credits":scene.FindGameObject("Credits panel")!.Active=false;break;
    case "Volume Up":MasterVolume=Math.Min(1,MasterVolume+.1f);Save();break;case "Volume Down":MasterVolume=Math.Max(0,MasterVolume-.1f);Save();break;
    case "Quality":BalancedQuality=!BalancedQuality;Save();break;
   }
  }
- void Save(){Directory.CreateDirectory(Path.Combine(ProjectRoot,"Saves"));File.WriteAllText(Path.Combine(ProjectRoot,"Saves/menu-settings.json"),JsonSerializer.Serialize(new Preferences(MasterVolume,BalancedQuality)));}
+ protected override void OnStop(){_music?.Stop();_music=null;}
+ void Save(){Directory.CreateDirectory(SaveRoot);File.WriteAllText(Path.Combine(SaveRoot,"menu-settings.json"),JsonSerializer.Serialize(new Preferences(MasterVolume,BalancedQuality)));}
  internal sealed record Preferences(float Volume=1,bool Balanced=false);
- internal static Preferences ReadPreferences(string root){try{var file=Path.Combine(root,"Saves/menu-settings.json");return File.Exists(file)?JsonSerializer.Deserialize<Preferences>(File.ReadAllText(file))??new():new();}catch(Exception e)when(e is IOException or JsonException){return new();}}
- protected override void OnStart(){Input.NotifyGameViewPointerAim();var prefs=ReadPreferences(ProjectRoot);MasterVolume=Math.Clamp(prefs.Volume,0,1);BalancedQuality=prefs.Balanced;var button=GameObject.Scene!.FindGameObject("Continue button")?.GetComponent<UiWidget>();if(button!=null)button.Interactable=File.Exists(Path.Combine(ProjectRoot,"Saves/vehicle.json"));}
- protected override void OnUpdate(){Input.NotifyGameViewPointerAim();var scene=GameObject.Scene!;var options=new[]{"Continue","New Game","Settings","Credits","Quit"};bool hasSave=File.Exists(Path.Combine(ProjectRoot,"Saves/vehicle.json"));bool modal=scene.FindGameObject("Settings panel")!.Active||scene.FindGameObject("Credits panel")!.Active;
+ internal static Preferences ReadPreferences(string root){try{var file=Path.Combine(ByteEngine.Core.Runtime.GameSaveStorage.GetDirectory(root),"menu-settings.json");return File.Exists(file)?JsonSerializer.Deserialize<Preferences>(File.ReadAllText(file))??new():new();}catch(Exception e)when(e is IOException or JsonException){return new();}}
+ protected override void OnStart(){Input.NotifyGameViewPointerAim();var prefs=ReadPreferences(ProjectRoot);MasterVolume=Math.Clamp(prefs.Volume,0,1);BalancedQuality=prefs.Balanced;_music=GarageMusic.Create(GameObject.Scene!,ProjectRoot,"main-menu",.4f*MasterVolume);var button=GameObject.Scene!.FindGameObject("Continue button")?.GetComponent<UiWidget>();if(button!=null)button.Interactable=File.Exists(Path.Combine(SaveRoot,"vehicle.json"));}
+ protected override void OnUpdate(){Input.NotifyGameViewPointerAim();if(_music!=null)_music.Volume=.4f*MasterVolume;var scene=GameObject.Scene!;var options=new[]{"Continue","New Game","Settings","Credits","Quit"};bool hasSave=File.Exists(Path.Combine(SaveRoot,"vehicle.json"));bool modal=scene.FindGameObject("Settings panel")!.Active||scene.FindGameObject("Credits panel")!.Active;
   int selected=hasSave?0:1;int hovered=-1;for(int i=0;i<options.Length;i++){var w=scene.FindGameObject(options[i]+" button")?.GetComponent<UiWidget>();if(w==null)continue;w.Interactable=!modal&&(i!=0||hasSave);if(w.IsFocused)selected=i;if(w.IsHovered)hovered=i;}if(hovered>=0){selected=hovered;UiNavigation.Focus(scene.FindGameObject(options[selected]+" button")!.GetComponent<UiWidget>());}
 
   for(int i=0;i<options.Length;i++){var button=scene.FindGameObject(options[i]+" button")?.GetComponent<UiWidget>();if(button!=null)button.Color=i==selected?new(.18f,.19f,.085f,.58f):Vector4.Zero;}

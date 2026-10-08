@@ -1,11 +1,22 @@
 using System.Numerics;
+using ByteEngine.Core.Scene;
 namespace DuneCompany;
 public sealed partial class DuneWorkshop3D
 {
- Vector3 MountPoint(int type,Vector3 incoming){var d=_catalog[type];if(d.Wheel)return new(0,0,d.High.Z);var bounds=_physicsDefinitions.TryGetValue(type,out var p)&&p.Articulated?p.Fixed:new PartBounds(d.Low,d.High);return bounds.Center+Vector3.Multiply(incoming,bounds.Size*.5f);}
+ Vector3 MountPoint(int type,Vector3 incoming){var d=_catalog[type];if(d.Wheel)return new(0,0,_physicsDefinitions.TryGetValue(type,out var wheel)?wheel.Fixed.High.Z:d.High.Z);var bounds=_physicsDefinitions.TryGetValue(type,out var p)&&p.Articulated?p.Fixed:new PartBounds(d.Low,d.High);return bounds.Center+Vector3.Multiply(incoming,bounds.Size*.5f);}
+
+ void CloseWheelMountGaps()
+ {
+  foreach(var wheel in _blocks.Where(b=>_catalog[b.Type].Wheel&&b.MovingMount)){
+   var hinge=_blocks.FirstOrDefault(b=>b.Id==wheel.Parent);if(hinge?.Type!=18||!_physicsDefinitions.TryGetValue(18,out var definition))continue;
+   var mount=wheel.P+Vector3.Transform(MountPoint(wheel.Type,Vector3.UnitZ),wheel.Q);var local=Vector3.Transform(mount-hinge.P,Quaternion.Inverse(hinge.Q));var nearest=Vector3.Clamp(local,definition.Moving.Low,definition.Moving.High);var delta=Vector3.Transform(nearest-local,hinge.Q);float length=delta.Length();
+   if(length<.001f||length>.04f||Vector3.Dot(Vector3.Normalize(delta),Vector3.Transform(Vector3.UnitZ,wheel.Q))<.95f)continue;
+   var branch=new HashSet<int>{wheel.Id};foreach(var b in _blocks)if(branch.Contains(b.Parent))branch.Add(b.Id);foreach(var b in _blocks.Where(b=>branch.Contains(b.Id))){b.Pose(b.P+delta,b.Q);_visuals[b.Id].Transform.LocalPosition=b.P;if(_visuals[b.Id].GetComponent<DuneBlock3D>() is {} authored)authored.Transform.LocalPosition=b.P;}
+  }
+ }
  public bool HasMountSupport(int type,Vector3 position,Quaternion rotation,Vector3 incoming,int parent)
  {
-  var def=_catalog[type];if(_blocks.FirstOrDefault(b=>b.Id==parent) is {} host && host.Type is 23 or 24 or 25 or 26 or 30 or 31)return false;if(type<=12)return true;
+  var def=_catalog[type];if(_blocks.FirstOrDefault(b=>b.Id==parent) is {} host && (_catalog[host.Type].Wheel || host.Type is 23 or 24 or 25 or 26 or 30 or 31))return false;if(type<=12)return true;
   Vector3 normal=Vector3.Transform(incoming,rotation);Vector3 first=Math.Abs(incoming.Y)>.5f?Vector3.UnitX:Math.Abs(incoming.X)>.5f?Vector3.UnitZ:Vector3.UnitX;Vector3 second=Vector3.Normalize(Vector3.Cross(incoming,first));
   Vector3 own=MountPoint(type,incoming);
   Vector3 center=position+Vector3.Transform(own,rotation);first=Vector3.Transform(first,rotation);second=Vector3.Transform(second,rotation);

@@ -15,6 +15,7 @@ public sealed class GameProjectRuntime : IDisposable
 {
     public ProjectData Project { get; }
     public string Root { get; }
+    public string SaveDirectory { get; }
     public AssetDatabase Database { get; }
     public AssetManager Assets { get; }
     public SceneSerializer Serializer { get; }
@@ -34,6 +35,7 @@ public sealed class GameProjectRuntime : IDisposable
         if (!File.Exists(Path.Combine(Root, Project.StartupScene)))
             throw new FileNotFoundException($"Startup scene is missing: {Project.StartupScene}");
 
+        SaveDirectory = GameSaveStorage.Register(Root, Project.ProjectId);
         _plugins = ByteEnginePluginManager.LoadProjectPlugins(
             Root,
             ByteEnginePluginLoadMode.Runtime,
@@ -77,6 +79,7 @@ public sealed class GameProjectRuntime : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        GameSaveStorage.Unregister(Root);
         RuntimeSpawnService.ClearBlueprintSpawner(_spawner);
         AnimationRuntimeAssets.Clear(_animation);
         AudioRuntimeAssets.Clear(_audio);

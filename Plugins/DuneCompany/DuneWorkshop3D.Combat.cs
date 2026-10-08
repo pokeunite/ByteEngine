@@ -13,7 +13,7 @@ public sealed partial class DuneWorkshop3D
  readonly Dictionary<int,(GameObject node,Matrix4x4 rest)> _aimNodes=[];
  public int TargetsDefeated=>Targets().Count(t=>t.Defeated);
  DuneBountyTarget3D[] _targetCache=[];double _targetRefresh=-1;
- DuneBountyTarget3D[] Targets(){if(Time.TotalTime>=_targetRefresh){_targetRefresh=Time.TotalTime+.25;_targetCache=GameObject.Scene!.GameObjects.SelectMany(g=>g.Components).OfType<DuneBountyTarget3D>().ToArray();}return _targetCache;}
+ DuneBountyTarget3D[] Targets(){if(Time.TotalTime>=_targetRefresh){_targetRefresh=Time.TotalTime+.25;_targetCache=GameObject.Scene!.GameObjects.SelectMany(g=>g.Components).OfType<DuneBountyTarget3D>().Where(t=>t.GameObject.ActiveInHierarchy).ToArray();}return _targetCache;}
  DuneBountyTarget3D? AutoTarget(Vector3 origin,Vector3 forward,float range)
  {
   DuneBountyTarget3D? closest=null;float best=range;
@@ -45,7 +45,7 @@ public sealed partial class DuneWorkshop3D
  void UpdateCombat(float dt)
  {
   _gunCooldown=Math.Max(0,_gunCooldown-dt);_rocketCooldown=Math.Max(0,_rocketCooldown-dt);for(int i=_tracers.Count-1;i>=0;i--){var (visual,life)=_tracers[i];life-=dt;if(life<=0){GameObject.Scene!.DestroyGameObject(visual);_tracers.RemoveAt(i);}else _tracers[i]=(visual,life);}
-  if(Building){StopVehicleFeedback();foreach(var dust in _tyreDust.Values)dust.Stop(true);Text("Battle objective","PROVING CONTRACT / Build a machine and press B");return;}
+  if(Building){StopVehicleFeedback();foreach(var dust in _tyreDust.Values)dust.Stop(true);RefreshReadiness();return;}
   if(AutomaticWeapons)foreach(var gun in _blocks.Where(b=>b.Type is 30 or 31)){var matrix=_visuals[gun.Id].Transform.WorldMatrix;var origin=matrix.Translation+Vector3.UnitY*.7f;var target=AutoTarget(origin,Vector3.Normalize(Vector3.TransformNormal(-Vector3.UnitZ,matrix)),gun.Type==31?110:90);if(target!=null)AimWeapon(gun,Vector3.Normalize(target.Transform.WorldMatrix.Translation+Vector3.UnitY*.75f-origin));}
   if(AutomaticWeapons||Input.IsMouseButtonDown(MouseButton.Left)&&Input.GameViewPointerNormalized.Y>.08f)FireWeapon(false);if(AutomaticWeapons||Input.IsKeyDown(Key.F))FireWeapon(true);UpdateVehicleFeedback(dt);
   foreach(var target in Targets().Where(t=>!t.Defeated))if(Math.Abs(Speed)>5&&Vector3.Distance(Transform.WorldPosition,target.Transform.WorldPosition)<target.Radius+1)target.Damage(Math.Abs(Speed)*12*dt);
