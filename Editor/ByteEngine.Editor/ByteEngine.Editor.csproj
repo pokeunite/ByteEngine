@@ -20,6 +20,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\Resources\Branding\ByteEngine.ico</ApplicationIcon>
     <TargetFramework>net9.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
@@ -61,4 +62,8 @@
     <Error Text="ByteEngine OpenAL Soft runtime is missing at '$(ByteEngineOpenALSoftPath)'. Run dotnet restore before building." />
   </Target>
 
+  <ItemGroup>
+    <Compile Include="../../Resources/Branding/NativeIdentity.cs" Link="Branding/NativeIdentity.cs" />
+    <EmbeddedResource Include="../../Resources/Branding/ByteEngine.png" LogicalName="ByteEngine.Window.png" />
+  </ItemGroup>
 </Project>

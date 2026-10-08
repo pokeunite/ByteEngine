@@ -63,6 +63,8 @@ public sealed class ImportedTexture
 {
     public string Key { get; init; } = string.Empty;
     public string Name { get; init; } = "Texture";
+    // Content-addressed browser cooking. Source imports and legacy models leave this null.
+    public string? CookedContentHash { get; init; }
     public byte[] EncodedData { get; init; } = Array.Empty<byte>();
     public string? SourcePath { get; init; }
 }

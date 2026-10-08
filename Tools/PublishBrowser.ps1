@@ -1,9 +1,20 @@
-param([string]$Configuration = 'Release')
+param([ValidateSet('Debug','Release')][string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 & dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration
-if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. Install the .NET 9 wasm-tools workload.' }
+if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. See the build diagnostics above; ensure the .NET 9 wasm-tools workload is installed.' }
 $source = Join-Path $repoRoot "Player/ByteEngine.Browser/bin/$Configuration/net9.0/publish/wwwroot"
+# Incremental publishes can leave old fingerprinted assemblies beside the current boot manifest.
+# Keep only current versions so future exports do not ship duplicate runtime binaries.
+$framework = Join-Path $source '_framework'
+$boot = Get-Content -LiteralPath (Join-Path $framework 'blazor.boot.json') -Raw | ConvertFrom-Json
+$currentFiles = @($boot.resources.fingerprinting.PSObject.Properties.Name)
+foreach ($file in Get-ChildItem -LiteralPath $framework -File) {
+    $baseName = $file.Name -replace '\.(br|gz)$',''
+    if ($file.Name -match '\.(br|gz|symbols)$' -or ($baseName -match '\.[a-z0-9]{10}\.(wasm|js|dat)$' -and $baseName -notin $currentFiles)) {
+        Remove-Item -LiteralPath $file.FullName -Force
+    }
+}
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugins.json'),'["bytebard.desertterrain","bytebard.dunecompany"]')
 foreach ($file in @('index.html','main.js','renderer.js','audio.js','content.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }

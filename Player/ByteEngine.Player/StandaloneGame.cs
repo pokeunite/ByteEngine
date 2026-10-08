@@ -11,13 +11,16 @@ internal sealed class StandaloneGame : ByteEngineApplication
     private readonly bool _smokeTest;
     private readonly bool _validateOnly;
     private int _smokeFrames;
+    private Action? _firstFrame;
     private readonly System.Diagnostics.Stopwatch _smokeTimer=new();
     protected override bool CloseOnEscape => false;
 
-    public StandaloneGame(GameProjectRuntime project, bool smokeTest = false, bool validateOnly = false)
+    public StandaloneGame(GameProjectRuntime project, bool smokeTest = false, bool validateOnly = false, Action? firstFrame = null)
         : base(project.Project.Window.Width, project.Project.Window.Height, project.Project.Name)
     {
+        Icon = ByteEngine.Branding.NativeIdentity.LoadWindowIcon();
         _project = project;
+        _firstFrame = firstFrame;
         _smokeTest=smokeTest;
         _validateOnly=validateOnly;
         if(smokeTest||validateOnly)IsVisible=false;
@@ -70,6 +73,8 @@ internal sealed class StandaloneGame : ByteEngineApplication
 
     protected override void OnEngineRender()
     {
+        _firstFrame?.Invoke();
+        _firstFrame = null;
         if(!_smokeTest)return;
         var error=OpenTK.Graphics.OpenGL4.GL.GetError();
         if(error!=OpenTK.Graphics.OpenGL4.ErrorCode.NoError)throw new InvalidOperationException("Packaged rendering error: "+error);

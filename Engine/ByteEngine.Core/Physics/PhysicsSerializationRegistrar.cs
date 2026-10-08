@@ -47,6 +47,10 @@ public static class PhysicsSerializationRegistrar
                     Properties =
                         new JsonObject
                         {
+                            ["simulateRotation"] = body.SimulateRotation,
+                            ["angularVelocity"] = new JsonArray(body.AngularVelocity.X, body.AngularVelocity.Y, body.AngularVelocity.Z),
+                            ["inertiaTensor"] = new JsonArray(body.InertiaTensor.X, body.InertiaTensor.Y, body.InertiaTensor.Z),
+                            ["angularDamping"] = body.AngularDamping,
                             ["bodyType"] =
                                 body.BodyType.ToString(),
 
@@ -103,6 +107,10 @@ public static class PhysicsSerializationRegistrar
             return
                 new Rigidbody3D
                 {
+                    SimulateRotation = data.Properties["simulateRotation"]?.GetValue<bool>() ?? false,
+                    AngularVelocity = ReadVector3(data.Properties["angularVelocity"], Vector3.Zero),
+                    InertiaTensor = ReadVector3(data.Properties["inertiaTensor"], Vector3.One),
+                    AngularDamping = ReadFloat(data, "angularDamping", .05f),
                     BodyType =
                         bodyType,
 

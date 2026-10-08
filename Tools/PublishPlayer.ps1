@@ -7,7 +7,8 @@ New-Item -ItemType Directory -Path $output -Force | Out-Null
 try {
 dotnet publish $project -c $Configuration -r win-x64 --self-contained true -o $output -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Windows player publish failed." }
-foreach ($required in @("ByteEngine.Player.exe", "ByteEngine.Core.dll", "coreclr.dll", "hostfxr.dll", "hostpolicy.dll", "openal32.dll", "glfw3.dll", "assimp.dll")) {
+& (Join-Path $PSScriptRoot "BuildLauncher.ps1") -OutputDirectory $output
+foreach ($required in @("ByteEngine.Launcher.exe", "ByteEngine.Player.exe", "ByteEngine.Core.dll", "coreclr.dll", "hostfxr.dll", "hostpolicy.dll", "openal32.dll", "glfw3.dll", "assimp.dll")) {
     if (-not (Test-Path -LiteralPath (Join-Path $output $required))) { throw "Player publish is incomplete: $required" }
 }
 $targets = @(

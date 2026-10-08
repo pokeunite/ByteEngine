@@ -8,6 +8,10 @@ namespace ByteEngine.Core.Scene;
 
 public sealed class Scene
 {
+    public Runtime.FixedStepClock SimulationClock { get; } = new();
+    /// <summary>Opt in after migrating force/timer logic to OnFixedUpdate. Legacy scenes keep frame simulation.</summary>
+    public bool FixedSimulation { get; set; }
+    public RuntimeFrameMetrics LastFrameMetrics { get; private set; }
     private readonly List<GameObject> _gameObjects =
         new();
 
@@ -349,6 +353,8 @@ public sealed class Scene
         try
         {
             var frameObjects = _frameObjects;
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            long updateStart = System.Diagnostics.Stopwatch.GetTimestamp();
             frameObjects.Clear();
             frameObjects.AddRange(_gameObjects);
             UiNavigation.Update(this);
@@ -365,9 +371,27 @@ public sealed class Scene
              * destruction is queued until the complete gameplay+physics step
              * has finished.
              */
-            Physics.Step(
-                this,
-                (float)Time.DeltaTime);
+            long physicsStart = System.Diagnostics.Stopwatch.GetTimestamp();
+            int candidates = 0;
+            int ticks;
+            if (FixedSimulation)
+            {
+                ticks = SimulationClock.Advance(Time.DeltaTime, delta =>
+                {
+                    Time.FixedDeltaTime = delta;
+                    foreach (var gameObject in frameObjects)
+                        if (!_pendingDestroy.Contains(gameObject.Id)) gameObject.FixedUpdateInternal();
+                    Physics.Step(this, (float)delta);
+                    candidates += Physics.LastCandidateCount;
+                });
+            }
+            else
+            {
+                Physics.Step(this, (float)Time.DeltaTime);
+                ticks = 1;
+                candidates = Physics.LastCandidateCount;
+            }
+            long lateStart = System.Diagnostics.Stopwatch.GetTimestamp();
 
             /*
              * LateUpdate is a distinct, scene-wide pass after normal gameplay
@@ -386,6 +410,11 @@ public sealed class Scene
             }
 
             SkeletalAttachmentService.UpdateScene(this);
+            long end = System.Diagnostics.Stopwatch.GetTimestamp();
+            double milliseconds = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            LastFrameMetrics = new((physicsStart - updateStart) * milliseconds,
+                (lateStart - physicsStart) * milliseconds, (end - lateStart) * milliseconds,
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, ticks, candidates);
         }
         finally
         {

@@ -34,6 +34,7 @@ try
     if(args.Length>=2&&args[0]=="--sand-vehicle"){using var diagnostic=new DunePolishDiagnostic(args[1],false,sandVehicle:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--schedule-benchmark"){SchedulingBenchmarkTests.Run(args[1]);return;}
     if(args.Length>=2&&args[0]=="--sand-lab"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),sandLab:true);diagnostic.Run();return;}
+    if(args.Contains("--export-lifecycle")){ExportLifecycleTests.Run(root);return;}
     if(args.Contains("--web-chunks")){BrowserChunkTests.Run(root);return;}
     if(args.Contains("--large-sand")){LargeSandTests.Run();return;}
     if(args.Contains("--surface-debug")){SurfaceDiagnosticTests.Run();return;}
@@ -45,7 +46,7 @@ try
     if(args.Length>=2&&args[0]=="--runtime-compatibility"){RuntimeCompatibilityTests.Run(root,args[1]);return;}
     if(args.Contains("--graphics")) { GraphicsQualityTests.Run(root); return; }
     if(args.Contains("--graphics-render")) { GraphicsQualityRenderTests.Run(); return; }
-    if(args.Length>=2&&args[0]=="--dune-physics"){DuneLandPhysicsTests.Run(args[1]);return;}
+    if(args.Length>=2&&args[0]=="--dune-physics"){DuneLandPhysicsTests.Run(args[1],args.Contains("--browser-physics")?40:0);return;}
     if(args.Contains("--vfx")) { VfxTests.Run(root); return; }
     if(args.Contains("--vfx-render")) { VfxRenderTests.Run(root); return; }
     if(args.Length>=3&&args[0]=="--vehicle-blueprints"){using var diagnostic=new DunePolishDiagnostic(args[1],false,false,args[2]);diagnostic.Run();return;}

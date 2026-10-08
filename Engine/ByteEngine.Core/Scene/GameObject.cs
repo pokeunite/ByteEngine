@@ -265,6 +265,28 @@ public sealed class GameObject
         RunOrderedComponents(late:true);
     }
 
+    internal void FixedUpdateInternal()
+    {
+        if (!ActiveInHierarchy) return;
+        if (!_started) StartInternal();
+        int count = _components.Count;
+        if (count == 0) return;
+        var snapshot = System.Buffers.ArrayPool<Component>.Shared.Rent(count);
+        try
+        {
+            _components.CopyTo(snapshot, 0);
+            for (int i = 1; i < count; i++)
+            {
+                var value = snapshot[i]; int j = i - 1;
+                while (j >= 0 && snapshot[j].UpdateOrder > value.UpdateOrder)
+                { snapshot[j + 1] = snapshot[j]; j--; }
+                snapshot[j + 1] = value;
+            }
+            for (int i = 0; i < count; i++) snapshot[i].FixedUpdateInternal();
+        }
+        finally { System.Buffers.ArrayPool<Component>.Shared.Return(snapshot, clearArray: true); }
+    }
+
     private void RunOrderedComponents(bool late)
     {
         // A snapshot retains mutation-during-update semantics, while pooled storage avoids

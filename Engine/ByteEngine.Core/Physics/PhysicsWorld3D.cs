@@ -44,6 +44,11 @@ public sealed class PhysicsWorld3D
     private readonly List<Rigidbody3D> _stepBodies = new();
     private readonly List<ColliderEntry> _stepColliders = new();
 
+    private readonly List<int> _sweepOrder = new();
+    private readonly List<(int First, int Second)> _candidatePairs = new();
+    public int LastCandidateCount { get; private set; }
+    public int LastColliderCount { get; private set; }
+
     public Vector3 Gravity { get; set; } =
         new(
             0.0f,
@@ -79,6 +84,7 @@ public sealed class PhysicsWorld3D
             return;
         }
 
+        LastCandidateCount = 0;
         float safeDelta =
             Math.Min(
                 deltaTime,
@@ -176,25 +182,11 @@ public sealed class PhysicsWorld3D
         }
         List<ColliderEntry> colliders = _stepColliders;
 
-        for (int firstIndex =
-                 0;
-             firstIndex <
-             colliders.Count;
-             firstIndex++)
+        BuildCandidatePairs(colliders);
+        foreach (var candidate in _candidatePairs)
         {
-            ColliderEntry first =
-                colliders[firstIndex];
-
-            for (int secondIndex =
-                     firstIndex +
-                     1;
-                 secondIndex <
-                 colliders.Count;
-                 secondIndex++)
-            {
-                ColliderEntry second =
-                    colliders[secondIndex];
-
+                ColliderEntry first = colliders[candidate.First];
+                ColliderEntry second = colliders[candidate.Second];
                 if (ReferenceEquals(
                         first.GameObject,
                         second.GameObject) ||
@@ -256,17 +248,55 @@ public sealed class PhysicsWorld3D
                         first,
                         second,
                         normalFromFirstToSecond,
-                        penetration);
+                        penetration, point);
                 }
+        }
+    }
+
+    private void BuildCandidatePairs(List<ColliderEntry> colliders)
+    {
+        _sweepOrder.Clear();
+        _candidatePairs.Clear();
+        LastColliderCount = colliders.Count;
+        for (int i = 0; i < colliders.Count; i++) _sweepOrder.Add(i);
+        // Choose the widest center distribution to avoid an unnecessarily dense sweep axis.
+        var span = Vector3.Zero;
+        if (colliders.Count > 0)
+        {
+            var min = (colliders[0].Bounds.Minimum + colliders[0].Bounds.Maximum) * .5f; var max = min;
+            foreach (var entry in colliders)
+            { min = Vector3.Min(min, (entry.Bounds.Minimum + entry.Bounds.Maximum) * .5f); max = Vector3.Max(max, (entry.Bounds.Minimum + entry.Bounds.Maximum) * .5f); }
+            span = max - min;
+        }
+        int axis = span.Y > span.X ? 1 : 0;
+        if (span.Z > (axis == 0 ? span.X : span.Y)) axis = 2;
+        float Coordinate(Vector3 value) => axis == 0 ? value.X : axis == 1 ? value.Y : value.Z;
+        _sweepOrder.Sort((a, b) =>
+        {
+            int result = Coordinate(colliders[a].Bounds.Minimum).CompareTo(Coordinate(colliders[b].Bounds.Minimum));
+            return result != 0 ? result : a.CompareTo(b);
+        });
+        for (int i = 0; i < _sweepOrder.Count; i++)
+        {
+            int a = _sweepOrder[i]; var first = colliders[a];
+            for (int j = i + 1; j < _sweepOrder.Count; j++)
+            {
+                int b = _sweepOrder[j]; var second = colliders[b];
+                if (Coordinate(second.Bounds.Minimum) > Coordinate(first.Bounds.Maximum)) break;
+                if (!first.Bounds.Intersects(second.Bounds)) continue;
+                _candidatePairs.Add(a < b ? (a, b) : (b, a));
             }
         }
+        // Preserve scene-order solver behavior independently of the spatial ordering.
+        _candidatePairs.Sort((a, b) => a.First != b.First ? a.First.CompareTo(b.First) : a.Second.CompareTo(b.Second));
+        LastCandidateCount += _candidatePairs.Count;
     }
 
     private static void ResolveContact(
         ColliderEntry first,
         ColliderEntry second,
         Vector3 normal,
-        float penetration)
+        float penetration, Vector3 point)
     {
         Rigidbody3D? firstBody =
             IsUsableBody(
@@ -319,11 +349,11 @@ public sealed class PhysicsWorld3D
             inverseMassSecond);
 
         Vector3 firstVelocity =
-            firstBody?.Velocity ??
+            firstBody?.VelocityAt(point) ??
             Vector3.Zero;
 
         Vector3 secondVelocity =
-            secondBody?.Velocity ??
+            secondBody?.VelocityAt(point) ??
             Vector3.Zero;
 
         Vector3 relativeVelocity =
@@ -354,27 +384,28 @@ public sealed class PhysicsWorld3D
                 restitution
             ) *
             normalVelocity /
-            inverseMassSum;
+            (inverseMassSum + (firstBody?.AngularImpulseDenominator(point, normal) ?? 0) +
+                (secondBody?.AngularImpulseDenominator(point, normal) ?? 0));
 
         Vector3 impulse =
             normal *
             impulseMagnitude;
 
-        firstBody?.ApplyVelocityImpulse(
-            impulse);
+        firstBody?.ApplyContactImpulse(
+            impulse, point);
 
-        secondBody?.ApplyVelocityImpulse(
-            -impulse);
+        secondBody?.ApplyContactImpulse(
+            -impulse, point);
 
         /*
          * Coulomb friction from the remaining tangential relative velocity.
          */
         firstVelocity =
-            firstBody?.Velocity ??
+            firstBody?.VelocityAt(point) ??
             Vector3.Zero;
 
         secondVelocity =
-            secondBody?.Velocity ??
+            secondBody?.VelocityAt(point) ??
             Vector3.Zero;
 
         relativeVelocity =
@@ -405,7 +436,8 @@ public sealed class PhysicsWorld3D
             -Vector3.Dot(
                 relativeVelocity,
                 tangent) /
-            inverseMassSum;
+            (inverseMassSum + (firstBody?.AngularImpulseDenominator(point, tangent) ?? 0) +
+                (secondBody?.AngularImpulseDenominator(point, tangent) ?? 0));
 
         float friction =
             MathF.Sqrt(
@@ -433,11 +465,11 @@ public sealed class PhysicsWorld3D
             tangent *
             tangentImpulseMagnitude;
 
-        firstBody?.ApplyVelocityImpulse(
-            frictionImpulse);
+        firstBody?.ApplyContactImpulse(
+            frictionImpulse, point);
 
-        secondBody?.ApplyVelocityImpulse(
-            -frictionImpulse);
+        secondBody?.ApplyContactImpulse(
+            -frictionImpulse, point);
     }
 
     private static Rigidbody3D? FindBodyForCollider(

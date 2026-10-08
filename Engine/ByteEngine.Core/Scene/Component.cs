@@ -85,6 +85,16 @@ public abstract class Component
         OnLateUpdate();
     }
 
+    internal void FixedUpdateInternal()
+    {
+        if (!Enabled) return;
+        if (!_started) StartInternal();
+        OnFixedUpdate();
+    }
+
+    /// <summary>Runs before each fixed physics tick in scenes that opt into fixed simulation.</summary>
+    protected virtual void OnFixedUpdate() { }
+
     internal void RenderInternal(
         RenderContext context)
     {

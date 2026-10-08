@@ -132,6 +132,10 @@ public sealed class SceneSerializer
         SceneData data =
             new()
             {
+                SchemaVersion = SceneData.CurrentSchemaVersion,
+                FixedSimulation = scene.FixedSimulation,
+                FixedStepSeconds = scene.SimulationClock.StepSeconds,
+                MaximumCatchUpSteps = scene.SimulationClock.MaximumCatchUpSteps,
                 Name = scene.Name,
                 SceneId = scene.Id
             };
@@ -224,6 +228,8 @@ public sealed class SceneSerializer
     public RuntimeScene Deserialize(
         SceneData data)
     {
+        if (data.SchemaVersion < 0 || data.SchemaVersion > SceneData.CurrentSchemaVersion)
+            throw new InvalidDataException($"Unsupported scene schema {data.SchemaVersion}. Update ByteEngine before opening this scene.");
         if (data.SceneId ==
             Guid.Empty)
         {
@@ -242,6 +248,9 @@ public sealed class SceneSerializer
                 _classification
             );
 
+        scene.FixedSimulation = data.FixedSimulation;
+        scene.SimulationClock.StepSeconds = double.IsFinite(data.FixedStepSeconds) ? Math.Clamp(data.FixedStepSeconds, .001, .1) : 1.0 / 60;
+        scene.SimulationClock.MaximumCatchUpSteps = Math.Clamp(data.MaximumCatchUpSteps, 1, 64);
         foreach (VariableData variable in data.Variables)
             scene.Variables.Set(variable.Name, variable.Value.Clone());
 

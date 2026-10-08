@@ -17,7 +17,10 @@ public sealed record VehiclePartPhysics(PartBounds Fixed,PartBounds Moving,Vecto
 public sealed partial class LandVehiclePhysics:IDisposable
 {
  const int TerrainChunkCells=16;
- const float FixedStep=1f/60;
+ readonly float FixedStep;
+ public int SimulationHz {get;}
+ public int MaximumCatchUpSteps {get;}
+ public double DroppedSimulationSeconds {get;private set;}
  readonly BufferPool _pool=new();readonly Simulation _simulation;readonly ThreadDispatcher? _dispatcher;
  Part[] _wheels=[];PlacedBlock[] _engines=[];float _axleMid,_mass;
  readonly List<Group> _groups=[];readonly Dictionary<int,Part> _parts=[];
@@ -40,11 +43,15 @@ public sealed partial class LandVehiclePhysics:IDisposable
  public int BodyCount=>_groups.Count;public int ContactCount=>_contacts.Count;public float Elapsed=>_elapsed;
  public Vector3 Velocity=>_simulation.Bodies[_parts[0].Root.Body].Velocity.Linear;
  public (Vector3 Position,Quaternion Rotation) Frame {get{var g=_parts[0].Root;var p=_simulation.Bodies[g.Body].Pose;return(p.Position-Vector3.Transform(g.Center,p.Orientation),p.Orientation);}}
- public LandVehiclePhysics(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,DunePart> catalog,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation,HeightfieldCollider3D? terrain=null)
+ public LandVehiclePhysics(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,DunePart> catalog,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation,HeightfieldCollider3D? terrain=null,int simulationHz=0,int maximumCatchUpSteps=0)
  {
+  SimulationHz=simulationHz==0?60:simulationHz;
+  MaximumCatchUpSteps=maximumCatchUpSteps==0?(OperatingSystem.IsBrowser()?2:15):Math.Clamp(maximumCatchUpSteps,1,15);
+  if(SimulationHz is not (40 or 60))throw new ArgumentOutOfRangeException(nameof(simulationHz));
+  FixedStep=1f/SimulationHz;
   int workers=OperatingSystem.IsBrowser()?1:Environment.GetEnvironmentVariable("DUNE_PHYSICS_THREADS")=="1"?1:Math.Min(2,Environment.ProcessorCount);if(workers>1)_dispatcher=new ThreadDispatcher(workers);
   _blocks=blocks.ToList();_catalog=catalog;_origin=origin;_rotation=rotation;
-  _simulation=Simulation.Create(_pool,new Contacts(_ignored,_friction,_contacts),new Gravity(),new SolveDescription(8,4));
+  _simulation=Simulation.Create(_pool,new Contacts(_ignored,_friction,_contacts),new Gravity(),new SolveDescription(8,240/SimulationHz));
   if(terrain!=null)AddTerrain(terrain);
   AddAssembly(_blocks,definitions,origin,rotation);
   _wheels=_parts.Values.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();_engines=_blocks.Where(b=>b.Type is 23 or 24).ToArray();_mass=_groups.Sum(g=>g.Mass);_axleMid=_wheels.Length>0?(_wheels.Min(p=>p.Block.P.Z)+_wheels.Max(p=>p.Block.P.Z))*.5f:0;
@@ -155,7 +162,10 @@ public sealed partial class LandVehiclePhysics:IDisposable
  public void Step(float dt,float throttle,float steering,bool brake,float maximumSpeed,float servo=0,float piston=0,Func<Vector3,float>? sandGrip=null,bool handbrake=false,Func<Vector3,float>? sandResistance=null)
  {
   if(_disposed||!float.IsFinite(dt)||dt<=0)return;_accumulator=Math.Min(_accumulator+dt,.25f);
-  LastStepCount=0;while(_accumulator+1e-7f>=FixedStep){foreach(var g in _groups)_previousPoses[g.Body.Value]=_simulation.Bodies[g.Body].Pose;LastStepCount++;StepFixed(FixedStep,throttle,steering,brake,maximumSpeed,servo,piston,sandGrip,handbrake,sandResistance);_accumulator-=FixedStep;}
+  LastStepCount=0;while(_accumulator+1e-7f>=FixedStep&&LastStepCount<MaximumCatchUpSteps){foreach(var g in _groups)_previousPoses[g.Body.Value]=_simulation.Bodies[g.Body].Pose;LastStepCount++;StepFixed(FixedStep,throttle,steering,brake,maximumSpeed,servo,piston,sandGrip,handbrake,sandResistance);_accumulator=Math.Max(0,_accumulator-FixedStep);}
+  // Drop whole overdue ticks after a stall, retaining only the interpolation remainder.
+  // This prevents a slow frame from turning every later frame into a catch-up spike.
+  if(_accumulator+1e-7f>=FixedStep){int overdue=(int)MathF.Floor((_accumulator+1e-7f)/FixedStep);float dropped=overdue*FixedStep;DroppedSimulationSeconds+=dropped;_accumulator=Math.Max(0,_accumulator-dropped);}
  }
  void StepFixed(float dt,float throttle,float steering,bool brake,float maximumSpeed,float servo,float piston,Func<Vector3,float>? sandGrip,bool handbrake,Func<Vector3,float>? sandResistance)
  {

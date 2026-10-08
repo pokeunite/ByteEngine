@@ -16,6 +16,11 @@ public sealed class AssetDatabase : IDisposable
     private readonly object _eventLock = new();
     private DateTime _lastFileEventUtc;
     private bool _scanPending;
+    private bool _fullScanPending;
+    private readonly HashSet<string> _changedPaths = new(StringComparer.OrdinalIgnoreCase);
+    public int LastRefreshFileCount { get; private set; }
+    public bool LastRefreshWasFullScan { get; private set; }
+    public event Action<IReadOnlyCollection<Guid>>? AssetsChanged;
     private bool _disposed;
     private readonly bool _readOnly;
 
@@ -52,20 +57,65 @@ public sealed class AssetDatabase : IDisposable
 
     public void Update()
     {
-        bool scan;
+        string[] paths;
+        bool full;
         lock (_eventLock)
         {
-            scan = _scanPending && DateTime.UtcNow - _lastFileEventUtc >= TimeSpan.FromMilliseconds(250);
-            if (scan)
+            if (!_scanPending || DateTime.UtcNow - _lastFileEventUtc < TimeSpan.FromMilliseconds(250)) return;
+            _scanPending = false;
+            full = _fullScanPending;
+            _fullScanPending = false;
+            paths = _changedPaths.ToArray();
+            _changedPaths.Clear();
+        }
+        if (full) Scan();
+        else RefreshPaths(paths);
+    }
+
+    /// <summary>Refreshes changed files on the owner thread. Directories require a recovery scan.</summary>
+    public void RefreshPaths(IEnumerable<string> paths)
+    {
+        var changed = new HashSet<Guid>();
+        LastRefreshFileCount = 0;
+        LastRefreshWasFullScan = false;
+        foreach (string requested in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            string fullPath = Path.IsPathRooted(requested) ? Path.GetFullPath(requested) : ResolveProjectPath(requested);
+            if (fullPath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) fullPath = fullPath[..^5];
+            if (IsSidecarOrTemporary(fullPath)) continue;
+            if (Directory.Exists(fullPath)) { Scan(); return; }
+            string projectPath = ToProjectPath(fullPath);
+            // Deleted directory notifications must also remove every indexed descendant.
+            var descendants = _byPath.Keys.Where(p => p.StartsWith(projectPath + "/", StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (descendants.Length > 0) { Scan(); return; }
+            try
             {
-                _scanPending = false;
+                LastRefreshFileCount++;
+                _byPath.TryGetValue(projectPath, out var previous);
+                if (!File.Exists(fullPath))
+                {
+                    if (previous != null) { _byPath.Remove(projectPath); _byGuid.Remove(previous.Guid); changed.Add(previous.Guid); }
+                    continue;
+                }
+                var metadata = ReadOrCreateMetadata(fullPath, DetectType(fullPath));
+                if (_byGuid.TryGetValue(metadata.Guid, out var other) &&
+                    !string.Equals(other.ProjectPath, projectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Reuse the full-scan identity recovery for a duplicate or rename collision.
+                    Scan(); return;
+                }
+                if (previous != null && previous.Guid != metadata.Guid) { _byGuid.Remove(previous.Guid); changed.Add(previous.Guid); }
+                var record = new AssetRecord(metadata.Guid, metadata.Type, projectPath, fullPath, fullPath + ".meta", metadata);
+                _byPath[projectPath] = record; _byGuid[metadata.Guid] = record;
+                changed.Add(metadata.Guid);
+            }
+            catch (Exception exception)
+            {
+                if (_readOnly) throw;
+                _errorSink?.Invoke($"Could not refresh asset '{projectPath}': {exception.Message}");
             }
         }
-
-        if (scan)
-        {
-            Scan();
-        }
+        if (changed.Count > 0) { AssetsChanged?.Invoke(changed.ToArray()); DatabaseChanged?.Invoke(); }
     }
 
     public void RequestRefresh()
@@ -73,12 +123,15 @@ public sealed class AssetDatabase : IDisposable
         lock (_eventLock)
         {
             _scanPending = true;
+            _fullScanPending = true;
             _lastFileEventUtc = DateTime.MinValue;
         }
     }
 
     public void Scan()
     {
+        LastRefreshFileCount = 0;
+        LastRefreshWasFullScan = true;
         var newByGuid = new Dictionary<Guid, AssetRecord>();
         var newByPath = new Dictionary<string, AssetRecord>(StringComparer.OrdinalIgnoreCase);
 
@@ -110,6 +163,7 @@ public sealed class AssetDatabase : IDisposable
 
                 try
                 {
+                    LastRefreshFileCount++;
                     string projectPath = ToProjectPath(file);
                     AssetMetadata metadata = ReadOrCreateMetadata(file, DetectType(file));
 
@@ -214,7 +268,7 @@ public sealed class AssetDatabase : IDisposable
 
         record.Metadata.Importer.Filter = filter;
         WriteMetadata(record.MetaPath, record.Metadata);
-        Scan();
+        RefreshPaths(new[] { record.FullPath });
     }
 
     public void SetModelImporterSettings(
@@ -311,7 +365,18 @@ public sealed class AssetDatabase : IDisposable
         }
     }
 
-    private void OnFileEvent(object sender, FileSystemEventArgs args) => QueueScan();
+    private void OnFileEvent(object sender, FileSystemEventArgs args) => QueuePath(args.FullPath);
+
+    private void QueuePath(string path)
+    {
+        if (path.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return;
+        lock (_eventLock)
+        {
+            _changedPaths.Add(path);
+            _scanPending = true;
+            _lastFileEventUtc = DateTime.UtcNow;
+        }
+    }
 
     private void OnRenamed(object sender, RenamedEventArgs args)
     {
@@ -330,13 +395,16 @@ public sealed class AssetDatabase : IDisposable
             _warningSink?.Invoke($"Could not preserve asset metadata during rename: {exception.Message}");
         }
 
-        QueueScan();
+        // Process old path first to preserve the existing GUID on a rename.
+        QueuePath(args.OldFullPath);
+        QueuePath(args.FullPath);
     }
 
     private void QueueScan()
     {
         lock (_eventLock)
         {
+            _fullScanPending = true;
             _scanPending = true;
             _lastFileEventUtc = DateTime.UtcNow;
         }

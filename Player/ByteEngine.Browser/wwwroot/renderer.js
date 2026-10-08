@@ -3,7 +3,7 @@ export class BrowserRenderer {
         const gl=this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
         if(!gl) throw new Error('WebGL 2 is unavailable on this browser/device.');
         this.ui=overlay.getContext('2d');this.meshes=new Map();this.textures=new Map();
-        this.scratch=document.createElement('canvas');
+        this.tints=new Map();this.tintBytes=0;
         const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);
             gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));return shader;};
         const program=this.program=gl.createProgram();
@@ -60,26 +60,29 @@ export class BrowserRenderer {
         gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
         this.locations=new Map();
     }
+    deleteTint(key){const c=this.tints.get(key);if(c){this.tintBytes-=c.width*c.height*4;this.tints.delete(key);}}
     location(name){if(!this.locations.has(name))this.locations.set(name,this.gl.getUniformLocation(this.program,name));return this.locations.get(name);}
+    bytes(value){return typeof value==='number'?this.readBuffer(value):Uint8Array.from(atob(value),c=>c.charCodeAt(0));}
     draw(data,width,height){
         const gl=this.gl;
         for(const id of data.deadMeshes){const m=this.meshes.get(id);if(m){gl.deleteVertexArray(m.vao);gl.deleteBuffer(m.vbo);gl.deleteBuffer(m.ibo);this.meshes.delete(id);}}
-        for(const id of data.deadTextures){const t=this.textures.get(id);if(t){gl.deleteTexture(t.gpu);this.textures.delete(id);}}
+        for(const id of data.deadTextures){const t=this.textures.get(id);if(t){gl.deleteTexture(t.gpu);this.textures.delete(id);for(const key of this.tints.keys())if(key.startsWith(id+':'))this.deleteTint(key);}}
         for(const upload of data.uploads){
             let m=this.meshes.get(upload.id);
             if(!m){m={vao:gl.createVertexArray(),vbo:gl.createBuffer(),ibo:gl.createBuffer()};this.meshes.set(upload.id,m);}
+            const vertexBytes=this.bytes(upload.vertices),indexBytes=this.bytes(upload.indices);
             gl.bindVertexArray(m.vao);gl.bindBuffer(gl.ARRAY_BUFFER,m.vbo);
-            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(Uint8Array.from(atob(upload.vertices),c=>c.charCodeAt(0)).buffer),gl.DYNAMIC_DRAW);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(Uint8Array.from(atob(upload.indices),c=>c.charCodeAt(0)).buffer),gl.STATIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertexBytes.buffer,vertexBytes.byteOffset,vertexBytes.byteLength/4),gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(indexBytes.buffer,indexBytes.byteOffset,indexBytes.byteLength/4),gl.STATIC_DRAW);
             for(const [index,count,offset] of [[0,3,0],[1,3,12],[2,2,24]]){
                 gl.enableVertexAttribArray(index);gl.vertexAttribPointer(index,count,gl.FLOAT,false,32,offset);
-            }m.count=atob(upload.indices).length/4;
+            }m.count=indexBytes.byteLength/4;
         }
         for(const upload of data.textures){
+            for(const key of this.tints.keys())if(key.startsWith(upload.id+':'))this.deleteTint(key);
             let t=this.textures.get(upload.id);
             if(!t){t={gpu:gl.createTexture(),image:document.createElement('canvas')};this.textures.set(upload.id,t);}
-            const decoded=atob(upload.pixels),bytes=new Uint8Array(decoded.length);
-            for(let i=0;i<bytes.length;i++)bytes[i]=decoded.charCodeAt(i);
+            const bytes=this.bytes(upload.pixels);
             gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
             if(upload.allocate)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,upload.width,upload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,null);if(upload.partial)gl.texSubImage2D(gl.TEXTURE_2D,0,upload.x,upload.y,upload.w,upload.h,gl.RGBA,gl.UNSIGNED_BYTE,bytes);else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,upload.width,upload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,upload.nearest?gl.NEAREST:gl.LINEAR);
@@ -97,9 +100,12 @@ export class BrowserRenderer {
             gl.uniform3fv(this.location('lightColor[0]'),data.lights.flatMap(l=>l.color));}
         if(data.points.length){gl.uniform3fv(this.location('pointPosition[0]'),data.points.flatMap(l=>l.position));
             gl.uniform3fv(this.location('pointColor[0]'),data.points.flatMap(l=>l.color));gl.uniform1fv(this.location('pointRange[0]'),data.points.map(l=>l.range));}
+        let previousMaterial=null;
         for(const draw of data.draws){
             const m=this.meshes.get(draw.id);gl.bindVertexArray(m.vao);
             gl.uniformMatrix4fv(this.location('model'),false,draw.model);gl.uniform4fv(this.location('color'),draw.color);
+            const material=[draw.metallic,draw.roughness,draw.ao,draw.normalStrength,draw.cutoff,draw.unlit,draw.srgb,draw.directX,draw.packed,draw.channels,draw.emission,draw.tiling,draw.offset,draw.heightField,draw.heightUv,draw.heightSize,draw.heightRange,draw.heightBias,draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture,draw.depth,draw.write,draw.blend,draw.cull,draw.front].join('|');
+            if(material!==previousMaterial){previousMaterial=material;
             for(const name of ['metallic','roughness','ao','normalStrength','cutoff'])gl.uniform1f(this.location(name),draw[name]);
             for(const name of ['unlit','srgb','directX','packed'])gl.uniform1i(this.location(name),draw[name]?1:0);
             gl.uniform3iv(this.location('channels'),draw.channels);gl.uniform3fv(this.location('emission'),draw.emission);
@@ -116,6 +122,7 @@ export class BrowserRenderer {
             }else gl.disable(gl.BLEND);
             if(draw.cull==='None')gl.disable(gl.CULL_FACE);else{gl.enable(gl.CULL_FACE);gl.cullFace(draw.cull==='Front'?gl.FRONT:gl.BACK);}
             gl.frontFace(draw.front==='Clockwise'?gl.CW:gl.CCW);
+            }
             gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
         }
         const ui=this.ui;ui.clearRect(0,0,width,height);
@@ -127,11 +134,15 @@ export class BrowserRenderer {
                 ui.imageSmoothingEnabled=!t.nearest;
                 if(c.color[0]===1&&c.color[1]===1&&c.color[2]===1)ui.drawImage(t.image,c.sx,c.sy,c.sw,c.sh,c.x,c.y,c.w,c.h);
                 else{
-                    const s=this.scratch;s.width=Math.max(1,c.sw);s.height=Math.max(1,c.sh);
-                    const ctx=s.getContext('2d');ctx.drawImage(t.image,c.sx,c.sy,c.sw,c.sh,0,0,s.width,s.height);
-                    ctx.globalCompositeOperation='multiply';ctx.fillStyle=`rgb(${c.color[0]*255},${c.color[1]*255},${c.color[2]*255})`;ctx.fillRect(0,0,s.width,s.height);
-                    ctx.globalCompositeOperation='destination-in';ctx.drawImage(t.image,c.sx,c.sy,c.sw,c.sh,0,0,s.width,s.height);
-                    ui.drawImage(s,c.x,c.y,c.w,c.h);
+                    const key=c.texture+':'+c.color.slice(0,3).join(',');let tinted=this.tints.get(key);
+                    if(!tinted){
+                        tinted=document.createElement('canvas');tinted.width=t.image.width;tinted.height=t.image.height;
+                        const ctx=tinted.getContext('2d');ctx.drawImage(t.image,0,0);ctx.globalCompositeOperation='multiply';ctx.fillStyle=`rgb(${c.color[0]*255},${c.color[1]*255},${c.color[2]*255})`;ctx.fillRect(0,0,tinted.width,tinted.height);ctx.globalCompositeOperation='destination-in';ctx.drawImage(t.image,0,0);
+                        const bytes=tinted.width*tinted.height*4;
+                        while(this.tints.size&&(this.tints.size>=32||this.tintBytes+bytes>64*1024*1024))this.deleteTint(this.tints.keys().next().value);
+                        if(bytes<=64*1024*1024){this.tints.set(key,tinted);this.tintBytes+=bytes;}
+                    }
+                    ui.drawImage(tinted,c.sx,c.sy,c.sw,c.sh,c.x,c.y,c.w,c.h);
                 }
             }
         }ui.globalAlpha=1;

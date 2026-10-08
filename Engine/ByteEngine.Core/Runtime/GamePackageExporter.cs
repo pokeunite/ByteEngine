@@ -15,7 +15,7 @@ public static class GamePackageExporter
 {
     public static readonly string[] RequiredRuntimeFiles =
     {
-        "ByteEngine.Player.exe", "ByteEngine.Player.dll", "ByteEngine.Player.deps.json",
+        "ByteEngine.Launcher.exe", "ByteEngine.Player.exe", "ByteEngine.Player.dll", "ByteEngine.Player.deps.json",
         "ByteEngine.Player.runtimeconfig.json", "ByteEngine.Core.dll", "coreclr.dll",
         "hostfxr.dll", "hostpolicy.dll", "openal32.dll", "glfw3.dll", "assimp.dll"
     };
@@ -24,6 +24,7 @@ public static class GamePackageExporter
         string outputParent, string startupScene, IProgress<string>? progress = null)
     {
         var project = new ProjectSerializer().Load(projectFile);
+        GameSaveStorage.AssignExportIdentity(project);
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         project.StartupScene = startupScene.Replace('\\', '/');
         string scene = ResolveInside(root, project.StartupScene);
@@ -73,7 +74,8 @@ public static class GamePackageExporter
         try
         {
             progress?.Report("Copying standalone Windows runtime...");
-            CopyTree(runtimeDirectory, destination, false);
+            CopyTree(runtimeDirectory, Path.Combine(destination,"Runtime"), false);
+            File.Move(Path.Combine(destination,"Runtime","ByteEngine.Launcher.exe"),Path.Combine(destination,safeName+".exe"));
             System.IO.Directory.CreateDirectory(content);
             foreach (string directory in roots)
             {
@@ -121,7 +123,6 @@ public static class GamePackageExporter
                     engineVersion = ByteEngineInfo.Version, project.Name, startupScene = project.StartupScene,
                     files = entries }, new JsonSerializerOptions { WriteIndented = true }));
             string executable = Path.Combine(destination, safeName + ".exe");
-            File.Move(Path.Combine(destination, "ByteEngine.Player.exe"), executable);
             File.WriteAllText(Path.Combine(destination, "README.txt"),
                 $"Launch {safeName}.exe. Keep this ENTIRE folder together; zip the folder to share it.\r\n" +
                 "Windows x64 with a compatible OpenGL graphics driver is required. .NET installation is not required.\r\n" +

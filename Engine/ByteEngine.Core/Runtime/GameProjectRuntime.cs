@@ -35,7 +35,7 @@ public sealed class GameProjectRuntime : IDisposable
         if (!File.Exists(Path.Combine(Root, Project.StartupScene)))
             throw new FileNotFoundException($"Startup scene is missing: {Project.StartupScene}");
 
-        SaveDirectory = GameSaveStorage.Register(Root, Project.ProjectId);
+        SaveDirectory = GameSaveStorage.Register(Root, Project.ProjectId, Project.RuntimeSaveId);
         _plugins = ByteEnginePluginManager.LoadProjectPlugins(
             Root,
             ByteEnginePluginLoadMode.Runtime,

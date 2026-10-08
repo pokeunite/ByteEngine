@@ -13,7 +13,17 @@ and model-owned sockets/animation libraries. Fonts, materials, UI, animation,
 audio, input maps, global variables, Event Sheets and runtime Blueprint spawning
 use the engine's existing serialization and runtime systems.
 
-The player's content lookup is relative to its executable, not your original
+The root contains the game launcher and Game.bytepak. Managed/native libraries
+and the self-contained .NET player live under Runtime/. Keep that folder together.
+The Open Frame engine icon and animated loading window are embedded in the player.
+
+Each new export receives its own save identity: fresh builds start fresh, while
+reopening the same build keeps its progress. Editor saves remain project-local.
+Dune Company New Game asks for confirmation, resets the vehicle/contracts/money,
+and preserves saved blueprints and settings. Older exports retain their legacy
+save paths until replaced by a new build.
+
+The player's content lookup is relative to its launcher folder, not your original
 project path or the working directory. The runtime asset database does not watch
 files, create metadata, or rewrite packaged content. Runtime GPU assets are
 released before the window's graphics context is destroyed.

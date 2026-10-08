@@ -3,6 +3,8 @@ using ByteEngine.Core;
 namespace DuneCompany;
 public sealed partial class DuneWorkshop3D
 {
+ public int PhysicsSteps=>_physics?.LastStepCount??0;
+ public double DroppedPhysicsSeconds=>_physics?.DroppedSimulationSeconds??0;
  readonly record struct FrameSample(double Time,double Delta,double Physics,double Camera,double Ui,double Feedback,double Render,double Swap,float Y,float Vy,int Steps,int Contacts,int Gen0,int Gen1,int Gen2);
  double _consoleSample;
  readonly List<FrameSample> _frameSamples=new(18000);double _diagnosticTime;bool _showDiagnostics;

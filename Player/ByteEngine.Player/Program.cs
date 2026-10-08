@@ -24,6 +24,7 @@ internal static class Program
         Console.SetError(writer);
         bool smokeTest=args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
         bool validate = args.Contains("--validate", StringComparer.OrdinalIgnoreCase);
+        using var splash = smokeTest || validate ? null : new StartupSplash();
         try
         {
             if (RuntimeInformation.ProcessArchitecture != Architecture.X64)
@@ -42,16 +43,20 @@ internal static class Program
                         "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
                 }
             }
-            if (validate) GamePackageExporter.ValidatePackage(AppContext.BaseDirectory);
-            using var content = new GameContentSession(AppContext.BaseDirectory);
+            string gameDirectory=AppContext.BaseDirectory;
+            if(string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(gameDirectory)),"Runtime",StringComparison.OrdinalIgnoreCase))
+                gameDirectory=Directory.GetParent(Path.TrimEndingDirectorySeparator(gameDirectory))!.FullName;
+            if (validate) GamePackageExporter.ValidatePackage(gameDirectory);
+            using var content = new GameContentSession(gameDirectory);
             using var project = new GameProjectRuntime(content.ProjectFile, CrashDebugLog.Write);
-            using var game = new StandaloneGame(project,smokeTest,validate);
+            using var game = new StandaloneGame(project,smokeTest,validate, () => splash?.Dispose());
             game.Run();
             return 0;
         }
         catch (Exception error)
         {
             CrashDebugLog.WriteException("GAME FAILURE", error);
+            splash?.Dispose();
             if (!validate && !smokeTest)
                 MessageBox.Show($"The game could not continue.\n\n{error.Message}\n\nDiagnostic log:\n{log}",
                     "Game Error", MessageBoxButtons.OK, MessageBoxIcon.Error);

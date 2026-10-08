@@ -96,6 +96,7 @@ public sealed class EditorApplication
             $"ByteEngine Editor v{ByteEngineInfo.Version}"
         )
     {
+        Icon = ByteEngine.Branding.NativeIdentity.LoadWindowIcon();
         _documentWindows = new EditorDocumentWindowManager(this, _documents, () => _imgui?.MakeCurrent());
 
         _startupProjectFile =

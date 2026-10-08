@@ -29,6 +29,58 @@ public sealed class Rigidbody3D
         0.6f;
 
     private Vector3 _accumulatedForce;
+    private Vector3 _accumulatedTorque;
+
+    /// <summary>Opt-in angular dynamics; old bodies retain their authored rotation.</summary>
+    public bool SimulateRotation { get; set; }
+    public Vector3 AngularVelocity { get; set; }
+    /// <summary>Local principal moments of inertia in kg m². Tune for the compound body's geometry.</summary>
+    public Vector3 InertiaTensor { get; set; } = Vector3.One;
+    public float AngularDamping { get; set; } = .05f;
+
+    public void AddTorque(Vector3 torque)
+    {
+        if (InverseMass > 0 && SimulateRotation && IsFinite(torque)) _accumulatedTorque += torque;
+    }
+
+    public void AddTorqueImpulse(Vector3 impulse)
+    {
+        if (InverseMass > 0 && SimulateRotation && IsFinite(impulse))
+            AngularVelocity += ApplyInverseInertia(impulse);
+    }
+
+    public void AddImpulseAtPosition(Vector3 impulse, Vector3 worldPosition)
+    {
+        if (!IsFinite(impulse) || !IsFinite(worldPosition)) return;
+        AddImpulse(impulse);
+        AddTorqueImpulse(Vector3.Cross(worldPosition - Transform.WorldPosition, impulse));
+    }
+
+    internal Vector3 VelocityAt(Vector3 worldPosition) => Velocity +
+        (SimulateRotation ? Vector3.Cross(AngularVelocity, worldPosition - Transform.WorldPosition) : Vector3.Zero);
+
+    internal float AngularImpulseDenominator(Vector3 point, Vector3 direction)
+    {
+        if (!SimulateRotation || InverseMass <= 0) return 0;
+        Vector3 radius = point - Transform.WorldPosition;
+        return Vector3.Dot(direction, Vector3.Cross(ApplyInverseInertia(Vector3.Cross(radius, direction)), radius));
+    }
+
+    internal void ApplyContactImpulse(Vector3 impulse, Vector3 point)
+    {
+        ApplyVelocityImpulse(impulse);
+        AddTorqueImpulse(Vector3.Cross(point - Transform.WorldPosition, -impulse));
+    }
+
+    private Vector3 ApplyInverseInertia(Vector3 impulse)
+    {
+        var rotation = Transform.WorldRotation;
+        var local = Vector3.Transform(impulse, Quaternion.Inverse(rotation));
+        float Moment(float value) => float.IsFinite(value) ? Math.Max(.0001f, value) : 1f;
+        return Vector3.Transform(local / new Vector3(Moment(InertiaTensor.X), Moment(InertiaTensor.Y), Moment(InertiaTensor.Z)), rotation);
+    }
+
+    private static bool IsFinite(Vector3 value) => float.IsFinite(value.X) && float.IsFinite(value.Y) && float.IsFinite(value.Z);
 
     public RigidbodyBodyType3D BodyType { get; set; } =
         RigidbodyBodyType3D.Dynamic;
@@ -130,8 +182,7 @@ public sealed class Rigidbody3D
             return;
         }
 
-        _accumulatedForce +=
-            force;
+        if (IsFinite(force)) _accumulatedForce += force;
     }
 
     public void AddImpulse(
@@ -151,6 +202,7 @@ public sealed class Rigidbody3D
 
     public void ClearForces()
     {
+        _accumulatedTorque = Vector3.Zero;
         _accumulatedForce =
             Vector3.Zero;
     }
@@ -202,6 +254,17 @@ public sealed class Rigidbody3D
         Transform.WorldPosition +=
             Velocity *
             deltaTime;
+
+        if (SimulateRotation)
+        {
+            if (!IsFinite(AngularVelocity)) AngularVelocity = Vector3.Zero;
+            AngularVelocity += ApplyInverseInertia(_accumulatedTorque) * deltaTime;
+            float damping = float.IsFinite(AngularDamping) ? Math.Clamp(AngularDamping, 0, 100) : .05f;
+            AngularVelocity /= 1 + damping * deltaTime;
+            float speed = AngularVelocity.Length();
+            if (float.IsFinite(speed) && speed > .000001f)
+                Transform.WorldRotation = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(AngularVelocity / speed, speed * deltaTime) * Transform.WorldRotation);
+        }
     }
 
     internal void ApplyVelocityImpulse(
@@ -235,6 +298,7 @@ public sealed class Rigidbody3D
 
     internal void EndPhysicsFrame()
     {
+        _accumulatedTorque = Vector3.Zero;
         _accumulatedForce =
             Vector3.Zero;
     }

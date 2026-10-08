@@ -13,6 +13,7 @@ public static class WebGamePackageExporter
         string outputParent, string startupScene, IProgress<string>? progress = null)
     {
         var project = new ProjectSerializer().Load(projectFile);
+        GameSaveStorage.AssignExportIdentity(project);
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         var runtimePlugins = ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ListInstalled(root)
             .Where(p => p.Enabled && ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(p.ManifestPath)).Runtime).ToArray();

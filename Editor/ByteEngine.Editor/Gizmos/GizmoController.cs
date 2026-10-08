@@ -134,7 +134,7 @@ internal sealed class GizmoController
             _startSizes[item.Id] = EditableSize(item);
             _startRotations[item.Id] = item.Transform.Rotation;
         }
-        state.Undo?.BeginGesture(state, Mode switch { GizmoMode.Rotate => "Rotate Objects", GizmoMode.Scale => "Scale Objects", _ => "Move Objects" });
+        state.Undo?.BeginTransformGesture(state, Mode switch { GizmoMode.Rotate => "Rotate Objects", GizmoMode.Scale => "Scale Objects", _ => "Move Objects" });
     }
 
     private void ApplyDrag(EditorState state, Vector2 mouseWorld)

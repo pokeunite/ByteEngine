@@ -9,7 +9,7 @@ public sealed class DuneCompanyPlugin : IByteEnginePlugin
  public void Register(ByteEnginePluginContext c)
  {
   c.RegisterComponent(new MainMenuCodec(),new("Dune Main Menu","UI","Native menu state, saved vehicle continuation and preferences.","menu"));
-  foreach(var command in new[]{"Continue","New Game","Settings","Credits","Close Settings","Close Credits","Volume Up","Volume Down","Quality"}){string action=command;c.RegisterAction(new(){Id="bytebard.dunecompany.menu."+command.ToLowerInvariant().Replace(' ','_'),Category="Dune Company / Menu",DisplayName=command,Execute=(_,e)=>e.Self.GetComponent<DuneMainMenu3D>()?.Command(action)});}
+  foreach(var command in new[]{"Continue","New Game","Confirm New Game","Cancel New Game","Settings","Credits","Close Settings","Close Credits","Volume Up","Volume Down","Quality"}){string action=command;c.RegisterAction(new(){Id="bytebard.dunecompany.menu."+command.ToLowerInvariant().Replace(' ','_'),Category="Dune Company / Menu",DisplayName=command,Execute=(_,e)=>e.Self.GetComponent<DuneMainMenu3D>()?.Command(action)});}
   c.RegisterCondition(new(){Id="bytebard.dunecompany.building",Category="Dune Company",DisplayName="Workshop Is Building",Evaluate=(_,e)=>e.Self.GetComponent<DuneWorkshop3D>()?.Building==true});
   c.RegisterSimpleComponent<DuneRecoveryContract3D>("DuneRecoveryContract3D",new("Dune Recovery Contract","Gameplay","Place the stranded buggy anchor; edit payout, delivery size and shallow sand depression.","recovery hitch towing contract"));
   c.RegisterSimpleComponent<DuneMinimap3D>("DuneMinimap3D",new("Dune Mission Minimap","UI","North-up world map with a live vehicle position marker.","minimap mission map"));

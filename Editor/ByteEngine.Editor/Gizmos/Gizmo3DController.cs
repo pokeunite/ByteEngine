@@ -32,7 +32,7 @@ internal sealed class Gizmo3DController
     {
         if (state.Mode != EditorMode.Edit) return;
         if (_interaction.Update(state.SelectedObject, camera, hovered, minimum, size,
-            () => state.Undo?.BeginGesture(state, $"{Mode} Object 3D"),
+            () => state.Undo?.BeginTransformGesture(state, $"{Mode} Object 3D"),
             state.MarkDirty, () => state.Undo?.CommitGesture(state))) return;
         if (!hovered || !ImGui.IsMouseClicked(ImGuiMouseButton.Left)) return;
         Ray ray = ScreenRay(ImGui.GetMousePos(), camera, minimum, size);

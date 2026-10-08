@@ -5,6 +5,12 @@ namespace ByteEngine.Core.Serialization.SerializationModels;
 
 public sealed class SceneData
 {
+    public const int CurrentSchemaVersion = 1;
+    // Zero denotes an unversioned legacy scene.
+    public int SchemaVersion { get; set; }
+    public bool FixedSimulation { get; set; }
+    public double FixedStepSeconds { get; set; } = 1.0 / 60;
+    public int MaximumCatchUpSteps { get; set; } = 8;
     public string Name { get; set; } =
         "Untitled Scene";
 

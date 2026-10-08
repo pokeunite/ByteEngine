@@ -7,10 +7,18 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WasmMainJSPath>wwwroot/main.js</WasmMainJSPath>
-    <WasmBuildNative>false</WasmBuildNative>
-    <PublishTrimmed>false</PublishTrimmed>
+    <WasmBuildNative Condition="'$(Configuration)' == 'Release'">true</WasmBuildNative>
+    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
+    <WasmEnableSIMD>true</WasmEnableSIMD>
+    <WasmDedup>true</WasmDedup>
+    <PublishTrimmed>true</PublishTrimmed>
+    <!-- The static-host exporter ships plain files; CDN HTTP compression is handled by the host. -->
+    <CompressionEnabled>false</CompressionEnabled>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Scene codecs and tuning use reflection: retain application metadata for AOT. -->
+    <TrimmerRootAssembly Include="ByteEngine.Browser;ByteEngine.Core;DuneCompany.Plugin;DesertTerrain.Plugin;System.Numerics.Vectors" />
     <SupportedPlatform Include="browser" />
     <ProjectReference Include="../../Plugins/DuneCompany/DuneCompany.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
@@ -18,4 +26,18 @@
     <WasmExtraFilesToDeploy Include="wwwroot/**/*" TargetPath="%(RecursiveDir)%(Filename)%(Extension)" />
     <Content Include="../../Editor/ByteEngine.Editor/Resources/Fonts/**/*" Link="wwwroot/Resources/Fonts/%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="AdaptBrowserPhysicsMasks" BeforeTargets="_WasmAotCompileApp" Condition="'$(_WasmShouldAOT)' == 'true'">
+    <MSBuild Projects="../../Tools/BrowserPhysicsCompatibility/BrowserPhysicsCompatibility.csproj" Targets="Restore;Build" Properties="Configuration=Release" />
+    <ItemGroup>
+      <_BrowserPhysicsInput Include="@(_WasmAssembliesInternal)" Condition="'%(Filename)' == 'BepuPhysics' or '%(Filename)' == 'BepuUtilities'" />
+      <_BrowserPhysicsAssembly Include="@(_BrowserPhysicsInput->'$(IntermediateOutputPath)browser-physics/%(Filename)%(Extension)')" />
+    </ItemGroup>
+    <!-- Build can point at NuGet inputs; patch private copies, never the package cache. -->
+    <Copy SourceFiles="@(_BrowserPhysicsInput)" DestinationFiles="@(_BrowserPhysicsAssembly)" />
+    <ItemGroup>
+      <_WasmAssembliesInternal Remove="@(_BrowserPhysicsInput)" />
+      <_WasmAssembliesInternal Include="@(_BrowserPhysicsAssembly)" />
+    </ItemGroup>
+    <Exec Command="dotnet &quot;../../Tools/BrowserPhysicsCompatibility/bin/Release/net9.0/BrowserPhysicsCompatibility.dll&quot; &quot;%(_BrowserPhysicsAssembly.Identity)&quot;" />
+  </Target>
 </Project>

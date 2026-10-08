@@ -583,7 +583,15 @@ public sealed class AssetManager : IDisposable
 
     private Texture2D? GetModelTexture(Guid modelGuid, ImportedTexture? source)
     {
-        if (source == null || source.EncodedData.Length == 0) return null;
+        if(source==null)return null;
+        if(source.CookedContentHash is {} hash){
+            var sharedKey=(Guid.Empty,hash);
+            if(_modelTextures.TryGetValue(sharedKey,out var shared))return shared;
+            var encoded=File.ReadAllBytes(CookedModelStore.TexturePath(ProjectRoot,hash));
+            if(!string.Equals(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encoded)),hash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Cooked texture integrity mismatch.");
+            var sharedTexture=Texture2D.FromEncodedBytes(encoded);sharedTexture.EnableWorldSampling();_modelTextures[sharedKey]=sharedTexture;_modelTextureSources[sharedKey]=encoded;return sharedTexture;
+        }
+        if(source.EncodedData.Length==0)return null;
         var key = (modelGuid, source.Key);
         if (_modelTextures.TryGetValue(key, out Texture2D? cached))
         {

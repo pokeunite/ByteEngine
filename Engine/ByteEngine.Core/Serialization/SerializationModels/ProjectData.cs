@@ -11,6 +11,9 @@ public sealed class ProjectData
     public Guid ProjectId { get; set; } =
         Guid.NewGuid();
 
+    // Assigned only to the exported copy; keeps separate builds from sharing campaign saves.
+    public Guid? RuntimeSaveId { get; set; }
+
     public string EngineVersion { get; set; } =
         ByteEngineInfo.Version;
 

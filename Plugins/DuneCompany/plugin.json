@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bytebard.dunecompany",
   "name": "Dune Company Workshop",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "assembly": "DuneCompany.Plugin.dll",
   "entryPoint": "DuneCompany.DuneCompanyPlugin",
   "editor": true,
