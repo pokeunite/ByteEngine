@@ -356,6 +356,7 @@ internal sealed class ModelImporterInspector
         ImGui.BeginDisabled(
             !hasMeshes);
 
+        bool generateLods=_draft.GenerateLods;if(ImGui.Checkbox("Generate static LOD meshes",ref generateLods)){_draft.GenerateLods=generateLods;MarkDirty();}
         bool generateNormals =
             _draft.GenerateNormals;
 

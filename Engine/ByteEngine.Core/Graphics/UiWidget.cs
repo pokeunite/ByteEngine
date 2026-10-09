@@ -9,6 +9,7 @@ public enum UiWidgetKind { Panel, Image, ProgressBar, Button }
 
 public sealed class UiWidget : Component
 {
+    public string ThemeKey {get;set;}=string.Empty;
     public UiWidgetKind Kind { get; set; } = UiWidgetKind.Panel;
     public UiAnchor Anchor { get; set; } = UiAnchor.TopLeft;
     public Vector2 Offset { get; set; } = new(24f, 24f);
@@ -32,10 +33,22 @@ public sealed class UiWidget : Component
     public int OrderInLayer { get; set; }
     public override int? RenderOrder => OrderInLayer;
 
+    public bool AutoFitLabel {get;set;}
+    public bool FitContent {get;set;}
+    public Vector2 MinimumSize {get;set;}
+    public Vector2 MaximumSize {get;set;}=new(100000);
+    public Vector2 ContentPadding {get;set;}=new(16,8);
+    private Vector2 _measuredLabel;
+    internal Vector2 LayoutSize()
+    {
+        Vector2 desired=FitContent&&_measuredLabel.X>0?_measuredLabel+ContentPadding*2:Size;
+        return Vector2.Clamp(desired,Vector2.Max(Vector2.Zero,MinimumSize),Vector2.Max(MinimumSize,MaximumSize));
+    }
+    public int MinimumFontSize {get;set;}=12;
     public bool Contains(Vector2 screenPoint, Vector2 viewport)
     {
         var rect = UiLayout.Resolve(GameObject, Anchor, Offset, Size, viewport);
-        return screenPoint.X >= rect.Position.X &&
+        return UiLayout.IsInsideClip(GameObject,screenPoint,viewport) && screenPoint.X >= rect.Position.X &&
             screenPoint.Y >= rect.Position.Y &&
             screenPoint.X < rect.Position.X + rect.Size.X &&
             screenPoint.Y < rect.Position.Y + rect.Size.Y;
@@ -63,15 +76,19 @@ public sealed class UiWidget : Component
     protected override void OnRender(RenderContext context)
     {
         if (!Visible || !UiLayout.IsVisible(GameObject)) return;
-        var rect = UiLayout.Resolve(GameObject, Anchor, Offset, Size,
+        if(FitContent&&Kind==UiWidgetKind.Button)_measuredLabel=context.MeasureText(UiLocalization.Translate(GameObject,LabelKey,Label),FontRuntime.ResolvePath(FontReference),FontSize);
+        var rect = UiLayout.Resolve(GameObject, Anchor, Offset, LayoutSize(),
             new Vector2(context.TargetWidth, context.TargetHeight));
         if (rect.Size.X <= 0f || rect.Size.Y <= 0f) return;
+        context.QueueUiClip(UiLayout.ResolveClip(GameObject,new(context.TargetWidth,context.TargetHeight)));
         float opacity = UiLayout.ResolveOpacity(GameObject);
         Vector4 background = Color;
         if (Kind == UiWidgetKind.Button)
             background = !Interactable ? DisabledColor :
                 IsHovered && Input.IsMouseButtonDownForUi(MouseButton.Left) ? PressedColor :
                 IsHovered || IsFocused ? HoverColor : Color;
+        UiTheme? theme=Kind==UiWidgetKind.Button&&ThemeKey.Length>0?UiTheme.Find(GameObject):null;
+        if(theme!=null)background=theme.Background(ThemeKey,Interactable,IsHovered||IsFocused,IsHovered&&Input.IsMouseButtonDownForUi(MouseButton.Left));
         background.W *= opacity;
         if (Kind != UiWidgetKind.Image || ImageReference.IsEmpty)
             context.QueueUiQuad(rect.Position, rect.Size, background);
@@ -90,9 +107,18 @@ public sealed class UiWidget : Component
         }
         else if (Kind == UiWidgetKind.Button)
         {
-            context.QueueUiText(UiLocalization.Translate(GameObject, LabelKey, Label), FontRuntime.ResolvePath(FontReference),
-                Math.Max(8, (int)(FontSize * rect.Scale)),
-                rect.Position + rect.Size * .5f, new Vector4(1f, 1f, 1f, opacity), rect.Size.X, UiAnchor.Center);
+            string label=UiLocalization.Translate(GameObject,LabelKey,Label);
+            string? font=FontRuntime.ResolvePath(FontReference);
+            int size=Math.Max(8,(int)(FontSize*rect.Scale));
+            if(AutoFitLabel)
+            {
+                var measured=context.MeasureText(label,font,size);
+                float factor=Math.Min(1,Math.Min((rect.Size.X-16*rect.Scale)/Math.Max(1,measured.X),(rect.Size.Y-8*rect.Scale)/Math.Max(1,measured.Y)));
+                size=Math.Max(Math.Max(8,(int)(MinimumFontSize*rect.Scale)),(int)(size*Math.Max(0,factor)));
+            }
+            context.QueueUiText(label, font, size,
+                rect.Position + rect.Size * .5f, (theme==null?Vector4.One:theme.TextColor(ThemeKey)) with {W=opacity}, rect.Size.X, UiAnchor.Center);
         }
+        context.QueueUiClip(null);
     }
 }

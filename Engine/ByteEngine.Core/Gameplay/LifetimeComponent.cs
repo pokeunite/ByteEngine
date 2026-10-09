@@ -28,7 +28,9 @@ public sealed class LifetimeComponent : Component
         Expire();
     }
 
-    protected override void OnUpdate()
+    protected override void OnUpdate() { if (AttachedGameObject?.Scene?.FixedSimulation != true) Simulate((float)Time.DeltaTime); }
+    protected override void OnFixedUpdate() { Simulate((float)Time.FixedDeltaTime); }
+    private void Simulate(float delta)
     {
         if (_expired) return;
         RemainingSeconds = Math.Max(0f, RemainingSeconds - (float)Time.DeltaTime);

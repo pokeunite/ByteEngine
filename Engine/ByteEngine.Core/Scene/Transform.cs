@@ -70,6 +70,40 @@ public sealed class Transform
     public Matrix4x4 LocalMatrix => Matrix4x4.CreateScale(LocalScale) * Matrix4x4.CreateFromQuaternion(LocalRotation) * Matrix4x4.CreateTranslation(LocalPosition);
     public Matrix4x4 WorldMatrix => _owner.Parent == null ? LocalMatrix : LocalMatrix * _owner.Parent.Transform.WorldMatrix;
 
+    private Vector3 _previousPosition;
+    private Quaternion _previousRotation;
+    private Vector3 _previousScale;
+    private bool _hasSimulationPose;
+
+    // Presentation samples never overwrite authoritative transforms or collider poses.
+    internal void CaptureSimulationPose()
+    {
+        _previousPosition = LocalPosition;
+        _previousRotation = LocalRotation;
+        _previousScale = LocalScale;
+        _hasSimulationPose = true;
+    }
+
+    public Matrix4x4 RenderMatrix
+    {
+        get
+        {
+            var scene = _owner.Scene;
+            float alpha = scene is { FixedSimulation: true, IsLoaded: true } && _hasSimulationPose
+                ? (float)scene.SimulationClock.InterpolationAlpha : 1;
+            var local = Matrix4x4.CreateScale(Vector3.Lerp(_previousScale, LocalScale, alpha)) *
+                Matrix4x4.CreateFromQuaternion(_hasSimulationPose ? Quaternion.Slerp(_previousRotation, LocalRotation, alpha) : LocalRotation) *
+                Matrix4x4.CreateTranslation(Vector3.Lerp(_previousPosition, LocalPosition, alpha));
+            // An uninitialised pose must use authored values, including scale.
+            if (!_hasSimulationPose || scene is not { FixedSimulation: true, IsLoaded: true }) local = LocalMatrix;
+            return _owner.Parent == null ? local : local * _owner.Parent.Transform.RenderMatrix;
+        }
+    }
+
+    /// <summary>Call after teleporting/resetting a simulated object to avoid interpolating across the teleport.</summary>
+    public void ResetInterpolation() => CaptureSimulationPose();
+    internal void ClearSimulationPose()=>_hasSimulationPose=false;
+
     internal Transform(GameObject owner) => _owner = owner;
 
     private static float NonZero(float value) => MathF.Abs(value) < .0001f ? MathF.CopySign(.0001f, value == 0f ? 1f : value) : value;

@@ -45,6 +45,7 @@ public sealed class EditorApplication
     private readonly ConsolePanel _console =
         new();
 
+    private readonly UiAuthoringPanel _uiAuthoring = new();
     private readonly PerformancePanel _performance =
         new();
 
@@ -242,6 +243,7 @@ public sealed class EditorApplication
         _inspector.Dispose();
         _sceneView.Dispose();
         _gameView.Dispose();
+        _uiAuthoring.Dispose();
         _documentWindows.Dispose();
         _assets?.Dispose();
         _assets = null;
@@ -336,6 +338,7 @@ public sealed class EditorApplication
             );
         }
 
+        _uiAuthoring.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
         _projectSettings.Draw(_projectContext!);
 
         if (_console.IsOpen)
@@ -813,6 +816,9 @@ public sealed class EditorApplication
             "Performance",
             _performance
         );
+
+        bool uiPreviewOpen=_uiAuthoring.IsOpen;
+        if(ImGui.MenuItem("UI Authoring",string.Empty,uiPreviewOpen))_uiAuthoring.IsOpen=!uiPreviewOpen;
 
         bool projectSettingsOpen = _projectSettings.IsOpen;
         if (ImGui.MenuItem("Project Settings", string.Empty, projectSettingsOpen))

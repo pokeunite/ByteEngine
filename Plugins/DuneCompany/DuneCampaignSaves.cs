@@ -2,7 +2,7 @@ namespace DuneCompany;
 /// <summary>Campaign reset intentionally preserves the player's blueprint library and preferences.</summary>
 internal static class DuneCampaignSaves
 {
- internal static readonly string[] CampaignFiles=["vehicle.json","active-blueprint.txt","tow-progress-v1.json","winch-progress-v1.json","recovery-history.json","winch-history.json","recovery-payment.json"];
+ internal static readonly string[] CampaignFiles=["vehicle.json","active-blueprint.txt","tow-progress-v1.json","winch-progress-v1.json","recovery-history.json","winch-history.json","recovery-payment.json","workshop-tutorial.txt", "workshop-tutorial.json"];
  internal static void Reset(string root)
  {
   Directory.CreateDirectory(root);

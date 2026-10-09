@@ -6,6 +6,19 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public static class GraphicsDiagnostics
 {
+    private static readonly Dictionary<string,RenderPassMeasurement> _passes=new();
+    public static IReadOnlyCollection<RenderPassMeasurement> Passes=>_passes.Values;
+    internal static void RecordPass(RenderPassMeasurement pass)=>_passes[pass.Viewport+"/"+pass.Pass]=pass;
+    private static readonly Dictionary<string,object> _geometry=new();
+    internal static void RecordGeometry(string viewport,RenderWorldStats stats,long triangles,int instances)=>_geometry[viewport]=new{stats,triangles,instancedObjects=instances};
+    public static void ExportCapture(string path,ByteEngine.Core.Scene.Scene scene)
+    {
+        var data=new {utc=DateTime.UtcNow,scene=scene.Name,simulation=scene.LastFrameMetrics,passes=_passes.Values.ToArray(),geometry=_geometry,
+            gpuTiming="Delayed, nonblocking GPU timestamp results; age is reported per pass. CPU values are current samples."};
+        ByteEngine.Core.Serialization.JsonSerialization.WriteAtomic(path,data);
+    }
+    public static double GeometryCpuMs { get; internal set; }
+    public static double? GeometryGpuMs { get; internal set; }
     public static double PostCpuMs { get; internal set; }
     public static double? PostGpuMs { get; internal set; }
     public static int ExtraPasses { get; internal set; }

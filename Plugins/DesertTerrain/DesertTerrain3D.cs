@@ -1,4 +1,4 @@
-﻿using ByteEngine.Core.Gameplay;
+using ByteEngine.Core.Gameplay;
 
 using System.Numerics;
 
@@ -28,6 +28,7 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
 {
 
+    public bool Visible {get;set;}=true;
     public bool UseReferenceSandSurface{get;set;}
     public float SandWindDelaySeconds{get;set;}=12;
     public float SandWindFillSeconds{get;set;}=30;
@@ -646,6 +647,7 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
     protected override void OnRender(RenderContext context)
 
     {
+        if(!Visible)return;
 
         if(!context.Has3DCamera)return;
 

@@ -7,6 +7,8 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 public sealed class MeshRenderer : Component
 {
     public Mesh? Mesh { get; set; }
+    private readonly MeshLodGroup _modelLod=new(){ScreenSize=true};
+    public bool AutomaticModelLod {get;set;}=true;
 
     public ModelMeshReference? MeshReference { get; set; }
 
@@ -172,6 +174,7 @@ public sealed class MeshRenderer : Component
     protected override void OnRender(
         RenderContext context)
     {
+        if (context.RenderWorld.View is {} lodView && !MeshLodGroup.Allows(GameObject,lodView,context.ViewportName)) return;
         if (!Visible ||
             !context.Has3DCamera)
         {
@@ -194,11 +197,17 @@ public sealed class MeshRenderer : Component
                     Primitive);
         }
 
+        if(AutomaticModelLod&&MeshReference!=null&&context.RenderWorld.View is {} view&&AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)
+        {
+            float distance=System.Numerics.Vector3.Distance(Transform.WorldPosition,view.CameraPosition);
+            float pixels=mesh.LocalBounds.Size.Length()*.5f*System.Numerics.Vector3.Abs(Transform.WorldScale).Length()/MathF.Sqrt(3)*view.ProjectionMatrix.M22*view.TargetHeight/Math.Max(.001f,distance);
+            int level=_modelLod.SelectForViewport(context.ViewportName,view,distance,pixels);if(level>0)mesh=assets.GetModelLodMesh(MeshReference,level);
+        }
         Material effectiveMaterial = ResolveEffectiveMaterial();
         context.RenderWorld.Submit(
             mesh,
             effectiveMaterial,
-            Transform.WorldMatrix,
+            Transform.RenderMatrix,
             ResolveRenderQueue(effectiveMaterial),
             FrustumCulling,
             CastShadows,

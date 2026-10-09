@@ -12,10 +12,12 @@ public sealed partial class DuneWorkshop3D
  public float WinchTension=>_physics?.CableTension??0;
  Vector3 WinchDelivery=>RecoverySpawn+new Vector3(0,.03f,-8);
  readonly List<ByteEngine.Core.Scene.GameObject> _winchArena=[];int _activeWinch=-1;
- static bool _openContractAfterSwitch;
- public void SelectRecoveryContract(bool winch){if(!Building)return;if(winch==WinchMission){OpenGarageOverlay("Contracts overlay");_contractExpanded=true;RefreshContractBrowser();return;}AtomicSave(Path.Combine(SaveRoot,"vehicle.json"),Snapshot());DuneMainMenu3D.ContinuePending=true;_openContractAfterSwitch=true;_openCompletedAfterSwitch=_completedContracts;GameObject.Scene!.RequestLoad(winch?"Scenes/WinchRescue.bytescene":"Scenes/Workshop.bytescene");}
- static bool _openCompletedAfterSwitch;
- void BindWinchMissionSwitch(){if(!GarageUx)return;if(_openContractAfterSwitch){_openContractAfterSwitch=false;_completedContracts=_openCompletedAfterSwitch;OpenGarageOverlay("Contracts overlay");_contractExpanded=true;RefreshContractBrowser();}}
+ bool? _selectedContractWinch;
+ bool SelectedContractWinch=>_selectedContractWinch??WinchMission;
+ static bool? _deployContractAfterSwitch;
+ public void SelectRecoveryContract(bool winch){if(!Building)return;_selectedContractWinch=winch;OpenGarageOverlay("Contracts overlay");_contractExpanded=true;RefreshContractBrowser();RefreshGarageState();}
+ void BindWinchMissionSwitch(){}
+ void ResumeContractDeployment(){if(_deployContractAfterSwitch is not {} winch)return;_deployContractAfterSwitch=null;if(winch!=WinchMission){_message="Contract scene did not match the requested job.";return;}_selectedContractWinch=winch;DeployGarageContract();}
 
  void PrepareWinchArena(){
   for(int i=0;i<8;i++){float angle=i*MathF.PI/4;var point=RecoverySpawn+new Vector3(MathF.Sin(angle)*6,0,MathF.Cos(angle)*6);if(_sand?.Sample(point,out var ground,out _,out _,out _)==true)point.Y=ground.Y;

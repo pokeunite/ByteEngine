@@ -58,7 +58,9 @@ public sealed class WaveSpawner3D : Component
     }
     protected override void OnStop() => Release();
     protected override void OnDestroy() => Release();
-    protected override void OnUpdate()
+    protected override void OnUpdate(){if(AttachedGameObject?.Scene?.FixedSimulation!=true)Simulate((float)Time.DeltaTime);}
+    protected override void OnFixedUpdate()=>Simulate((float)Time.FixedDeltaTime);
+    private void Simulate(float delta)
     {
         if (_holdInitialPulse) _holdInitialPulse = false;
         else ClearPulses();
@@ -70,7 +72,7 @@ public sealed class WaveSpawner3D : Component
                 RemoveEnemy(entry.Key);
         foreach (var entry in _owned.ToArray())
             if (entry.Value.Scene != AttachedGameObject?.Scene) _owned.Remove(entry.Key);
-        float dt = (float)Time.DeltaTime;
+        float dt = delta;
         if (!float.IsFinite(dt) || dt < 0) dt = 0;
         _timer -= dt;
         if (State == WaveSpawnerState.Intermission)

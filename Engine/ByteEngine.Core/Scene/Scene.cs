@@ -12,6 +12,8 @@ public sealed class Scene
     /// <summary>Opt in after migrating force/timer logic to OnFixedUpdate. Legacy scenes keep frame simulation.</summary>
     public bool FixedSimulation { get; set; }
     public RuntimeFrameMetrics LastFrameMetrics { get; private set; }
+    internal double AnimationMilliseconds;
+    internal int AnimatedComponentCount;
     private readonly List<GameObject> _gameObjects =
         new();
 
@@ -332,6 +334,8 @@ public sealed class Scene
     {
         if (_loaded) return;
 
+        SimulationClock.Reset();
+        foreach(var item in _gameObjects)item.Transform.ClearSimulationPose();
         _loaded = true;
 
         Console.WriteLine($"Loading scene: {Name}");
@@ -354,6 +358,7 @@ public sealed class Scene
         {
             var frameObjects = _frameObjects;
             long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            AnimationMilliseconds=0;AnimatedComponentCount=0;
             long updateStart = System.Diagnostics.Stopwatch.GetTimestamp();
             frameObjects.Clear();
             frameObjects.AddRange(_gameObjects);
@@ -378,6 +383,8 @@ public sealed class Scene
             {
                 ticks = SimulationClock.Advance(Time.DeltaTime, delta =>
                 {
+                    foreach (var gameObject in frameObjects)
+                        if (gameObject.GetComponent<Rigidbody3D>() is { BodyType: not RigidbodyBodyType3D.Static }) gameObject.Transform.CaptureSimulationPose();
                     Time.FixedDeltaTime = delta;
                     foreach (var gameObject in frameObjects)
                         if (!_pendingDestroy.Contains(gameObject.Id)) gameObject.FixedUpdateInternal();
@@ -414,7 +421,7 @@ public sealed class Scene
             double milliseconds = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
             LastFrameMetrics = new((physicsStart - updateStart) * milliseconds,
                 (lateStart - physicsStart) * milliseconds, (end - lateStart) * milliseconds,
-                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, ticks, candidates);
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, ticks, candidates) {AnimationMs=AnimationMilliseconds,AnimatedComponents=AnimatedComponentCount};
         }
         finally
         {

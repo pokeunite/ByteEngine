@@ -209,6 +209,12 @@ public sealed class GameObject
         where T : Component =>
         GetComponent<T>() != null;
 
+    internal void ReorderComponents(IReadOnlyList<Component> ordered)
+    {
+        if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
+        _components.Clear();_components.AddRange(ordered);
+    }
+
     public bool RemoveComponent(Component component)
     {
         ArgumentNullException.ThrowIfNull(component);

@@ -283,6 +283,8 @@ internal sealed class EditorProjectContext
         ProjectSerializer serializer =
             new();
 
+        BundledCharacterInstaller.Install(projectRoot, project.AssetDirectory);
+
         serializer.Save(
             project,
             fullPath

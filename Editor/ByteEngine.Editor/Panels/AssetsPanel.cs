@@ -309,6 +309,7 @@ internal sealed class AssetsPanel : IDisposable
                 _showCreateAnimationProfile = true;
             }
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
+            if (ImGui.MenuItem("UI Theme")) CreateUiTheme(log);
             ImGui.Separator();
             DrawVfxCreationMenu(log);
             DrawModelImportMenu(log);
@@ -714,11 +715,8 @@ internal sealed class AssetsPanel : IDisposable
 
             try
             {
-                ModelAsset model =
-                    _project.Assets.LoadModel(
-                        new AssetReference(
-                            asset.Guid,
-                            asset.ProjectPath));
+                if (!_project.Assets.RequestModel(new AssetReference(asset.Guid,asset.ProjectPath),out var model))
+                { ImGui.TextDisabled("Importing model..."); continue; }
 
                 foreach (ImportedAnimation animation
                          in model.Animations)
@@ -1785,11 +1783,8 @@ internal sealed class AssetsPanel : IDisposable
 
         try
         {
-            ModelAsset model =
-                _project.Assets.LoadModel(
-                    new AssetReference(
-                        asset.Guid,
-                        asset.ProjectPath));
+            if (!_project.Assets.RequestModel(new AssetReference(asset.Guid,asset.ProjectPath),out var model))
+            { ImGui.TextDisabled("Importing model..."); ImGui.TreePop(); return; }
 
             if (model.Animations.Count ==
                 0)
@@ -2053,8 +2048,26 @@ state.SelectedObject =
         if (ImGui.BeginMenu("Create"))
         {
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
+            if (ImGui.MenuItem("UI Theme")) CreateUiTheme(log);
             DrawVfxCreationMenu(log);
             ImGui.EndMenu();
+        }
+        if (asset?.Type == AssetType.Blueprint)
+        {
+            ImGui.Separator();
+            if (ImGui.MenuItem("Create Blueprint Variant"))
+            {
+                try
+                {
+                    var serializer = new BlueprintSerializer(_project.AssetDatabase);
+                    string name = Path.GetFileNameWithoutExtension(asset.FullPath) + " Variant";
+                    string path = GetUniqueAssetPath(GetAssetCreationDirectory(), MakeSafeFileName(name), ".byteblueprint");
+                    serializer.Save(serializer.CreateVariant(new AssetReference(asset.Guid,asset.ProjectPath),name),path);
+                    _project.AssetDatabase.RefreshPaths([path]);
+                    log.Info($"Created variant '{name}'. Untouched properties follow its base Blueprint.");
+                }
+                catch(Exception error) { log.Error(error.Message); }
+            }
         }
         if (asset?.Type == AssetType.Material)
         {
@@ -3044,6 +3057,19 @@ state.SelectedObject =
             log.Info(
                 "Character Movement template: W/S move forward/back, A/D strafe, Space jumps while grounded.");
         }
+    }
+
+    private void CreateUiTheme(EditorLog log)
+    {
+        try
+        {
+            string directory=GetAssetCreationDirectory();
+            string path=GetUniqueAssetPath(directory,"New UI Theme",".uitheme");
+            new ByteEngine.Core.Graphics.UiThemePalette().Save(path);
+            SelectDirectory(directory);RefreshAfterFileOperation();
+            log.Info("Created UI theme. Assign it to a UI Theme component; widgets inherit its palette.");
+        }
+        catch(Exception exception){log.Error("Could not create UI theme: "+exception.Message);}
     }
 
     private void CreateMaterial(EditorLog log, AssetRecord? parent,

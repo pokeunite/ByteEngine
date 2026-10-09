@@ -63,6 +63,11 @@ public static class AudioSerializationRegistrar
                             ["spatial"] =
                                 source.Spatial,
 
+                            ["bus"] = source.Bus.ToString(),
+                            ["streaming"] = source.Streaming,
+                            ["priority"] = source.Priority,
+                            ["ducksMusic"] = source.DucksMusic,
+
                             ["volume"] =
                                 source.Volume,
 
@@ -111,6 +116,10 @@ public static class AudioSerializationRegistrar
                             .GetValue<bool>() ??
                         true,
 
+                    Bus = Enum.TryParse<AudioBus>(data.Properties["bus"]?.GetValue<string>(),true,out var bus) && Enum.IsDefined(bus) ? bus : AudioBus.Sfx,
+                    Streaming = data.Properties["streaming"]?.GetValue<bool>() ?? false,
+                    Priority = data.Properties["priority"]?.GetValue<int>() ?? 0,
+                    DucksMusic = data.Properties["ducksMusic"]?.GetValue<bool>() ?? false,
                     Volume =
                         ReadFloat(
                             data,
@@ -235,18 +244,12 @@ public static class AudioSerializationRegistrar
             return false;
         }
 
-        if (!Path.GetExtension(
-                asset.FullPath)
-            .Equals(
-                ".wav",
-                StringComparison.OrdinalIgnoreCase))
+        string extension=Path.GetExtension(asset.FullPath);
+        if(source.Streaming || source.Bus==AudioBus.Music || extension.Equals(".ogg",StringComparison.OrdinalIgnoreCase))
         {
-            warningSink?.Invoke(
-                $"Audio v0.11-A supports PCM WAV only: {asset.ProjectPath}");
-
-            return false;
+            try { source.SetStreamingClip(asset.FullPath);source.ClipReference=reference;return true; }
+            catch(Exception error){warningSink?.Invoke($"Could not stream audio '{asset.ProjectPath}': {error.Message}");return false;}
         }
-
         if (!AudioClip.TryLoadWave(
                 asset.FullPath,
                 out AudioClip? clip,

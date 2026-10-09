@@ -22,13 +22,15 @@ public sealed class Projectile3D : Component
     public Guid OwnerId { get; set; }
     public LayerMask CollisionMask { get; set; } = LayerMask.All;
 
-    protected override void OnUpdate()
+    protected override void OnUpdate() { if (AttachedGameObject?.Scene?.FixedSimulation != true) Simulate((float)Time.DeltaTime); }
+    protected override void OnFixedUpdate() { Simulate((float)Time.FixedDeltaTime); }
+    private void Simulate(float delta)
     {
         if (_stopped || Velocity.LengthSquared() <= .0000001f) return;
         GameObject? projectile = AttachedGameObject;
         RuntimeScene? scene = projectile?.Scene;
         if (projectile == null || scene == null) return;
-        Vector3 displacement = Velocity * (float)Time.DeltaTime;
+        Vector3 displacement = Velocity * delta;
         float distance = displacement.Length();
         if (distance <= .000001f) return;
         Vector3 origin = projectile.Transform.WorldPosition;

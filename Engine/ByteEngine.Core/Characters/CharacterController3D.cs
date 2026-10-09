@@ -228,11 +228,18 @@ public sealed class CharacterController3D
                 impulse);
     }
 
+    private Vector3 _fixedMoveInput;
     protected override void OnUpdate()
+    {
+        if(AttachedGameObject?.Scene?.FixedSimulation==true){_fixedMoveInput=_moveInput;_moveInput=Vector3.Zero;return;}
+        Simulate((float)Time.DeltaTime);
+    }
+    protected override void OnFixedUpdate(){_moveInput=_fixedMoveInput;Simulate((float)Time.FixedDeltaTime);}
+    private void Simulate(float delta)
     {
         float deltaTime =
             Math.Clamp(
-                (float)Time.DeltaTime,
+                delta,
                 0.0f,
                 0.1f);
 

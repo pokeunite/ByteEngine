@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
@@ -70,6 +71,13 @@ public sealed class ComponentSerializer
             UiWidget widget = (UiWidget)component;
             return new ComponentData { Type = TypeName, Properties = new JsonObject
             {
+                ["themeKey"] = widget.ThemeKey,
+                ["autoFitLabel"] = widget.AutoFitLabel,
+                ["fitContent"] = widget.FitContent,
+                ["minimumSize"] = System.Text.Json.JsonSerializer.SerializeToNode(widget.MinimumSize,JsonSerialization.Options),
+                ["maximumSize"] = System.Text.Json.JsonSerializer.SerializeToNode(widget.MaximumSize,JsonSerialization.Options),
+                ["contentPadding"] = System.Text.Json.JsonSerializer.SerializeToNode(widget.ContentPadding,JsonSerialization.Options),
+                ["minimumFontSize"] = widget.MinimumFontSize,
                 ["kind"] = widget.Kind.ToString(),
                 ["anchor"] = widget.Anchor.ToString(),
                 ["offset"] = new JsonArray(widget.Offset.X, widget.Offset.Y),
@@ -113,6 +121,13 @@ public sealed class ComponentSerializer
             JsonArray? fill = properties["fillColor"] as JsonArray;
             return new UiWidget
             {
+                ThemeKey = data.Properties["themeKey"]?.GetValue<string>() ?? string.Empty,
+                AutoFitLabel = data.Properties["autoFitLabel"]?.GetValue<bool>() ?? false,
+                FitContent = data.Properties["fitContent"]?.GetValue<bool>() ?? false,
+                MinimumSize = data.Properties["minimumSize"]?.Deserialize<System.Numerics.Vector2>(JsonSerialization.Options) ?? System.Numerics.Vector2.Zero,
+                MaximumSize = data.Properties["maximumSize"]?.Deserialize<System.Numerics.Vector2>(JsonSerialization.Options) ?? new System.Numerics.Vector2(100000),
+                ContentPadding = data.Properties["contentPadding"]?.Deserialize<System.Numerics.Vector2>(JsonSerialization.Options) ?? new System.Numerics.Vector2(16,8),
+                MinimumFontSize = data.Properties["minimumFontSize"]?.GetValue<int>() ?? 12,
                 Kind = kind,
                 Anchor = anchor,
                 Offset = offset is { Count: >= 2 }
@@ -188,6 +203,9 @@ public sealed class ComponentSerializer
                     ["anchor"] = text.Anchor.ToString(),
                     ["offset"] = new JsonArray(text.Offset.X, text.Offset.Y),
                     ["wrapWidth"] = text.WrapWidth,
+                    ["autoFit"] = text.AutoFit,
+                    ["minimumFontSize"] = text.MinimumFontSize,
+                    ["maximumLines"] = text.MaximumLines,
                     ["visible"] = text.Visible,
                     ["orderInLayer"] = text.OrderInLayer
                 }
@@ -241,6 +259,9 @@ public sealed class ComponentSerializer
                     ? new Vector2(offset[0]?.GetValue<float>() ?? 24f, offset[1]?.GetValue<float>() ?? 24f)
                     : new Vector2(24f, 24f),
                 WrapWidth = data.Properties["wrapWidth"]?.GetValue<float>() ?? 0f,
+                AutoFit = data.Properties["autoFit"]?.GetValue<bool>() ?? false,
+                MinimumFontSize = data.Properties["minimumFontSize"]?.GetValue<int>() ?? 12,
+                MaximumLines = data.Properties["maximumLines"]?.GetValue<int>() ?? 0,
                 Visible = data.Properties["visible"]?.GetValue<bool>() ?? true,
                 OrderInLayer = data.Properties["orderInLayer"]?.GetValue<int>() ?? 0
             };
@@ -323,7 +344,17 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.SandLabProbe3D>("SandLabProbe3D"));
         Register(new FoliagePatchCodec());
         Register(new VfxPlayerCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.DistanceJoint3D>("DistanceJoint3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.HingeJoint3D>("HingeJoint3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationLink3D>("NavigationLink3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationRegion3D>("NavigationRegion3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationAgent3D>("NavigationAgent3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<MeshLodGroup>("MeshLodGroup"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiTheme>("UiTheme"));
+        Register(new MeshCollider3DCodec());
         Register(new UiCanvasCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiContainer>("UiContainer"));
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());
         Register(new UiAnimatorCodec());
@@ -1015,6 +1046,12 @@ public sealed class ComponentSerializer
                         )
                 };
 
+            properties["shading"] = renderer.Material.Shading.ToString();
+            properties["blendMode"] = renderer.Material.BlendMode.ToString();
+            properties["depthTest"] = renderer.Material.DepthTest;
+            properties["depthWriteMode"] = renderer.Material.DepthWriteMode.ToString();
+            properties["cullMode"] = renderer.Material.CullMode.ToString();
+            properties["frontFace"] = renderer.Material.FrontFace.ToString();
             if (renderer.MeshReference != null)
             {
                 properties["modelGuid"] =
@@ -1099,6 +1136,12 @@ public sealed class ComponentSerializer
                         )
                 };
 
+            if(Enum.TryParse<MaterialShadingMode>(data.Properties["shading"]?.GetValue<string>(),out var shading))material.Shading=shading;
+            if(Enum.TryParse<BlendMode3D>(data.Properties["blendMode"]?.GetValue<string>(),out var blend))material.BlendMode=blend;
+            if(Enum.TryParse<DepthWriteMode3D>(data.Properties["depthWriteMode"]?.GetValue<string>(),out var depth))material.DepthWriteMode=depth;
+            if(Enum.TryParse<CullMode3D>(data.Properties["cullMode"]?.GetValue<string>(),out var cull))material.CullMode=cull;
+            if(Enum.TryParse<FrontFaceWinding3D>(data.Properties["frontFace"]?.GetValue<string>(),out var front))material.FrontFace=front;
+            material.DepthTest=data.Properties["depthTest"]?.GetValue<bool>()??true;
             var renderer =
                 new MeshRenderer
                 {
@@ -1692,6 +1735,45 @@ public sealed class ComponentSerializer
                 Damage = Float(data, "damage", 10f),
                 AttackCooldown = Float(data, "attackCooldown", 1f),
                 StopDistance = Float(data, "stopDistance", 1f)
+            };
+        }
+    }
+
+    private sealed class MeshCollider3DCodec : IComponentCodec
+    {
+        public string TypeName => "MeshCollider3D";
+        public Type ComponentType => typeof(MeshCollider3D);
+        public ComponentData Serialize(Component component, ComponentSerializationContext context)
+        {
+            var collider = (MeshCollider3D)component;
+            var vertices = new JsonArray();
+            foreach (var vertex in collider.Vertices) vertices.Add(Array(vertex));
+            var triangles = new JsonArray();
+            foreach (uint index in collider.Triangles) triangles.Add(JsonValue.Create(index));
+            return Data(TypeName, new JsonObject {
+                ["vertices"] = vertices, ["triangles"] = triangles,
+                ["model"] = new JsonObject { ["guid"] = collider.Model.Guid.ToString(), ["path"] = collider.Model.CachedProjectPath },
+                ["meshKey"] = collider.MeshKey, ["mode"] = collider.Mode.ToString(),
+                ["size"] = Array(collider.Size), ["center"] = Array(collider.Center),
+                ["isTrigger"] = collider.IsTrigger, ["useProjectMatrix"] = collider.UseProjectMatrix,
+                ["collisionMask"] = collider.CollisionMask.Bits
+            });
+        }
+        public Component Deserialize(ComponentData data, ComponentSerializationContext context)
+        {
+            var p = data.Properties;
+            Enum.TryParse(p["mode"]?.GetValue<string>(), out MeshCollisionMode mode);
+            Guid.TryParse(p["model"]?["guid"]?.GetValue<string>(), out Guid guid);
+            string? path = p["model"]?["path"]?.GetValue<string>();
+            return new MeshCollider3D {
+                Vertices = p["vertices"] is JsonArray vertices ? vertices.Select(v => Vector3(v, System.Numerics.Vector3.Zero)).ToArray() : [],
+                Triangles = p["triangles"] is JsonArray triangles ? triangles.Select(v => v?.GetValue<uint>() ?? 0).ToArray() : [],
+                Model = guid != Guid.Empty ? new AssetReference(guid, path) : !string.IsNullOrWhiteSpace(path) ? context.AssetDatabase.ResolveReference(path) : AssetReference.Empty,
+                MeshKey = p["meshKey"]?.GetValue<string>() ?? string.Empty, Mode = mode,
+                Size = Vector3(p["size"], System.Numerics.Vector3.One), Center = Vector3(p["center"], System.Numerics.Vector3.Zero),
+                IsTrigger = p["isTrigger"]?.GetValue<bool>() ?? false,
+                UseProjectMatrix = p["useProjectMatrix"]?.GetValue<bool>() ?? true,
+                CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(p["collisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
             };
         }
     }

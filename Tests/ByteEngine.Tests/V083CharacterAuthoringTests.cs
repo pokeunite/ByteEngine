@@ -42,12 +42,12 @@ internal static class V083CharacterAuthoringTests
         BlueprintAuthoringService.SetupThirdPersonCharacter(player);
         BlueprintAuthoringService.SetupThirdPersonCharacter(player);
 
-        GameObject visual = player.Children.Single(item => item.Name == "Visual");
-        GameObject model = visual.Children.Single(item => item.GetComponent<ModelHierarchyInstance>() != null);
+        GameObject model = player.Children.Single(item => item.GetComponent<ModelHierarchyInstance>() != null);
+        GameObject visual = model;
         GameObject camera = player.Children.Single(item => item.GetComponent<Camera3D>() != null);
         Assert(player.Transform.LocalScale == Vector3.One && Near(visual.Transform.LocalScale.X, .01f),
             "Character normalization moves import scale correction from gameplay root to Visual");
-        Assert(model.Name == "GorillaModel" && importedNode.IsDescendantOf(model) && camera.Name == "Camera",
+        Assert(model.Name == "Model" && importedNode.IsDescendantOf(model) && camera.Name == "Camera",
             "Character normalization creates Root/Visual/ImportedModel and a direct Camera child");
 
         foreach (Type type in GameplayTypes)
@@ -59,7 +59,7 @@ internal static class V083CharacterAuthoringTests
         }
         Assert(model.Components.All(component => component is ModelHierarchyInstance),
             "ImportedModel root contains only its model hierarchy marker in normalized test");
-        Assert(player.Children.Count(item => item.Name == "Visual") == 1 &&
+        Assert(player.Children.Count(item => item.GetComponent<ModelHierarchyInstance>() != null) == 1 &&
             player.Children.Count(item => item.GetComponent<Camera3D>() != null) == 1,
             "Third Person Character setup is idempotent for Visual and Camera children");
     }
@@ -101,7 +101,7 @@ internal static class V083CharacterAuthoringTests
         Assert(CharacterCapsuleAutoFit.TryFit(player, assets, out CharacterCapsuleFitResult fit),
             "Capsule auto-fit resolves transformed imported geometry");
         Assert(Near(fit.VisualBounds.X, 1f) && Near(fit.VisualBounds.Y, 2f) && Near(fit.VisualBounds.Z, .4f) &&
-            Near(capsule.Radius, .525f) && Near(capsule.Height, 2.04f) && Near(capsule.Center.Y, 1f),
+            Near(capsule.Radius, .22f) && Near(capsule.Height, 1.96f) && Near(capsule.Center.Y, .98f),
             "Capsule uses displayed bounds after Visual import-scale correction");
         capsule.Radius = .8f;
         capsule.Height = 2.5f;

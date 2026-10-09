@@ -25,10 +25,10 @@ public sealed partial class DuneWorkshop3D
   else if(_feedbackGroundSpeed<(_audioGear-1)*8.5f-1&&_audioGear>1)_audioGear--;
   float gearRev=Math.Clamp((_feedbackGroundSpeed-(_audioGear-1)*8.5f)/10,0,1);
   float target=Math.Clamp(Math.Abs(_feedbackThrottle)*.55f+speedLoad*.25f+Math.Clamp(_feedbackSlip/15,0,.2f),0,1);_engineLoad=FeedbackSmooth(_engineLoad,target,dt,target>_engineLoad?3:2);
-  if(!_feedbackDriving&&engines.Length>0&&_vehicleAudio.TryGetValue("engine-start",out var ignition)){ignition.Volume=VehicleSfxVolume*.12f;ignition.Play();}_feedbackDriving=true;
+  if(!_feedbackDriving&&engines.Length>0&&_vehicleAudio.TryGetValue("engine-start",out var ignition)){ignition.Volume=VehicleSfxVolume*.38f;ignition.Play();}_feedbackDriving=true;
   float rev=.86f+gearRev*.30f+_engineLoad*.12f;
-  MixSound("engine-idle",engines.Length>0?.48f*(1-_engineLoad*.65f):0,.78f+_engineLoad*.12f,dt);
-  MixSound("engine-drive",engines.Length>0?.78f*_engineLoad:0,rev,dt);
+  MixSound("engine-idle",engines.Length>0?.60f*(1-_engineLoad*.55f):0,.78f+_engineLoad*.12f,dt);
+  MixSound("engine-drive",engines.Length>0?(.22f+1.15f*_engineLoad):0,rev,dt);
   MixSound("rolling",Math.Clamp(_feedbackGroundSpeed/35,0,.085f),.94f,dt);
   // Sand is a gritty slip hiss, not a sustained concrete tyre squeal.
   float sliding=Math.Clamp((_feedbackSlip-1.2f)*.035f,0,.18f);

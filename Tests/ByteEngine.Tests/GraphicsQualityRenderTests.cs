@@ -14,6 +14,7 @@ internal static class GraphicsQualityRenderTests
         using var window=new NativeWindow(new NativeWindowSettings { ClientSize=new(128,128),StartVisible=false,API=ContextAPI.OpenGL,APIVersion=new(3,3),Profile=ContextProfile.Core,Title="Graphics offscreen checks" });
         window.Context.MakeCurrent(); GL.LoadBindings(new OpenTK.Windowing.GraphicsLibraryFramework.GLFWBindingsContext());
         Console.WriteLine("Offscreen GPU: "+GL.GetString(StringName.Renderer));
+        using(var timer=new GeometryGpuTimer()){for(int i=0;i<8;i++){timer.Begin(true);GL.Clear(ClearBufferMask.ColorBufferBit);timer.End();GL.Finish();}if(GraphicsDiagnostics.GeometryGpuMs==null||GraphicsDiagnostics.GeometryGpuMs<0)throw new Exception("Geometry GPU query failed");timer.Begin(false);timer.End();if(GraphicsDiagnostics.GeometryGpuMs!=null)throw new Exception("Disabled GPU query stays visible");}
         using var post=new PostProcess3D();
         int source=GL.GenTexture(),depth=GL.GenTexture();
         try

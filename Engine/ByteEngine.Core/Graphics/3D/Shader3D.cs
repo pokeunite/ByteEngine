@@ -83,6 +83,8 @@ internal sealed class Shader3D : IDisposable
         layout(location=1) in vec3 aNormal;
         layout(location=2) in vec2 aUV;
 
+        layout(location=5) in mat4 aInstanceModel;
+        uniform int uInstanced;
         uniform mat4 uModel;
         uniform mat4 uView;
         uniform mat4 uProjection;
@@ -110,8 +112,9 @@ internal sealed class Shader3D : IDisposable
                 vec2 gradient=vec2(surfaceHeight(uv+vec2(texel.x,0))-surfaceHeight(uv-vec2(texel.x,0)),surfaceHeight(uv+vec2(0,texel.y))-surfaceHeight(uv-vec2(0,texel.y)))/(2.0*texel*uHeightFieldWorldSize);
                 normal=normalize(vec3(-gradient.x,1.0,-gradient.y));
             }
-            vNormal=mat3(uNormalMatrix)*normal;
-            vWorldPosition=(uModel*vec4(position,1.0)).xyz;
+            mat4 model=uInstanced==1?aInstanceModel:uModel;
+            vNormal=(uInstanced==1?mat3(transpose(inverse(model))):mat3(uNormalMatrix))*normal;
+            vWorldPosition=(model*vec4(position,1.0)).xyz;
             vUV=aUV;
             gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);
         }

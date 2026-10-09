@@ -6,6 +6,7 @@ namespace ByteEngine.Core.Graphics;
 public sealed class RenderContext
 {
     /// <summary>Optional portable backend. Null keeps the existing desktop path.</summary>
+    public string ViewportName {get;set;}="Game";
     public IRenderFrameSink? FrameSink { get; }
     public Renderer2D Renderer2D { get; }
 
@@ -46,6 +47,13 @@ public sealed class RenderContext
 
     private readonly List<Action<Renderer2D>> _uiCommands = new();
 
+    public Vector2 MeasureText(string text,string? fontPath,int size) => FrameSink?.MeasureText(text,fontPath,size) ?? Renderer2D.MeasureText(text,fontPath,size);
+    internal void QueueUiClip(Vector4? rectangle)
+    {
+        if(FrameSink!=null)FrameSink.SetUiClip(rectangle);
+        else _uiCommands.Add(renderer=>renderer.SetUiClip(rectangle));
+    }
+
     internal void QueueUiText(string value, string? fontPath, int size, Vector2 position, Vector4 color, float wrapWidth, UiAnchor anchor)
     {
         if (FrameSink != null) FrameSink.DrawText(value, fontPath, size, position, color, wrapWidth, anchor);
@@ -67,9 +75,10 @@ public sealed class RenderContext
     internal void FlushUi()
     {
         if (_uiCommands.Count == 0) return;
+        using var timing=Renderer3D.ProfilePass(this,"UI");
         Renderer2D.BeginUi();
-        foreach (Action<Renderer2D> command in _uiCommands) command(Renderer2D);
-        _uiCommands.Clear();
+        try {foreach (Action<Renderer2D> command in _uiCommands) command(Renderer2D);}
+        finally {Renderer2D.SetUiClip(null);_uiCommands.Clear();}
     }
 
     public bool Has3DCamera =>
@@ -144,7 +153,7 @@ public sealed class RenderContext
     public Matrix4x4 GetViewMatrix3D()
     {
         return
-            Camera3D?.GetViewMatrix() ??
+            Camera3D?.GetRenderViewMatrix() ??
             ViewMatrix3D ??
             Matrix4x4.Identity;
     }
@@ -370,7 +379,8 @@ public sealed class RenderContext
 
     internal void Flush3D()
     {
-        RenderWorld.Execute(
-            this);
+        if(FrameSink!=null){RenderWorld.Execute(this);return;}
+        Renderer3D.BeginGeometryProfile(RenderWorld.Environment.Look.ProfileGpu);
+        try { RenderWorld.Execute(this); } finally { Renderer3D.EndGeometryProfile(); }
     }
 }

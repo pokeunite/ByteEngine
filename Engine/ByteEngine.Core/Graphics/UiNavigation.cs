@@ -20,6 +20,8 @@ public static class UiNavigation
     public static void Focus(UiWidget? widget)
     {
         _focused = widget == null ? null : new WeakReference<UiWidget>(widget);
+        if(widget!=null)for(var parent=widget.GameObject.Parent;parent!=null;parent=parent.Parent)
+            if(parent.GetComponent<UiScrollContainer>() is {Enabled:true} scroll)scroll.Reveal(widget,Input.GameViewSize);
     }
 
     public static void Update(ByteEngine.Core.Scene.Scene scene)

@@ -1,0 +1,1 @@
+Menu click and switch: Kenney UI Audio, CC0. https://kenney.nl/assets/ui-audio . Converted from click1.ogg and switch3.ogg to mono 22.05kHz PCM WAV, gain 0.6.

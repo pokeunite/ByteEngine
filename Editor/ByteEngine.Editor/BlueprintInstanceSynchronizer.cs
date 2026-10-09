@@ -53,6 +53,68 @@ internal static class BlueprintInstanceSynchronizer
         return summary;
     }
 
+    public static IReadOnlyList<string> InheritanceConflicts(GameObject root,EditorProjectContext project)
+    {
+        var instance=root.GetComponent<BlueprintInstance>();
+        return instance!=null&&TryLoadBlueprint(project,instance,out var blueprint,out _)?blueprint!.InheritanceConflicts:Array.Empty<string>();
+    }
+
+    public readonly record struct PropertyOverride(Guid SourceObject,string ObjectName,string Component,string Property,string? Value,int ComponentOrdinal=0);
+    public static IReadOnlyList<PropertyOverride> PropertyOverrides(GameObject root,EditorProjectContext project)
+    {
+        var instance=root.GetComponent<BlueprintInstance>();if(instance==null||!TryLoadBlueprint(project,instance,out var latest,out _))return Array.Empty<PropertyOverride>();
+        EnsureLegacyBaseline(root,instance,latest!);var baseline=DeserializeObjects(instance.SourceSnapshot);var current=Capture(root,project,instance,baseline);var result=new List<PropertyOverride>();
+        foreach(var item in current)
+        {
+            var old=baseline.FirstOrDefault(o=>o.Id==item.Id);if(old==null)continue;
+            if(item.Name!=old.Name)result.Add(new(item.Id,item.Name,"GameObject","Name",item.Name));
+            foreach(var pair in new[]{("LocalPosition",(object?)item.Transform.LocalPosition,(object?)old.Transform.LocalPosition),("LocalRotation",(object?)item.Transform.LocalRotation,(object?)old.Transform.LocalRotation),("LocalScale",(object?)item.Transform.LocalScale,(object?)old.Transform.LocalScale)})
+                if(!JsonNode.DeepEquals(JsonSerializer.SerializeToNode(pair.Item2,JsonOptions),JsonSerializer.SerializeToNode(pair.Item3,JsonOptions)))result.Add(new(item.Id,item.Name,"Transform",pair.Item1,JsonSerializer.Serialize(pair.Item2,JsonOptions)));
+            for(int i=0;i<item.Components.Count;i++)
+            {
+                var component=item.Components[i];int ordinal=item.Components.Take(i).Count(c=>c.Type==component.Type);var previous=old.Components.Where(c=>c.Type==component.Type).ElementAtOrDefault(ordinal);if(previous==null)continue;
+                foreach(var property in component.Properties)
+                    if(!JsonNode.DeepEquals(property.Value,previous.Properties[property.Key]))result.Add(new(item.Id,item.Name,component.Type,property.Key,property.Value?.ToJsonString(),ordinal));
+            }
+        }
+        return result;
+    }
+    public static bool RevertProperty(GameObject root,EditorProjectContext project,PropertyOverride property)
+    {
+        var instance=root.GetComponent<BlueprintInstance>();if(instance==null||!TryLoadBlueprint(project,instance,out var latest,out _))return false;
+        var source=Objects(latest!).FirstOrDefault(o=>o.Id==property.SourceObject);if(source==null||!instance.ObjectMap.TryGetValue(source.Id,out var placedId)||root.Scene?.FindGameObject(placedId) is not {} placed)return false;
+        var data=project.Scenes.SerializeObject(placed);
+        if(!CopyProperty(source,data,property))return false;
+        project.Scenes.ApplyObjectDelta(root.Scene!,new Dictionary<Guid,GameObjectData?>{{placedId,data}});return true;
+    }
+
+    private static bool CopyProperty(GameObjectData source,GameObjectData target,PropertyOverride property)
+    {
+        if(property.Component=="GameObject"&&property.Property=="Name"){target.Name=source.Name;return true;}
+        if(property.Component=="Transform")
+        {
+            switch(property.Property){case "LocalPosition":target.Transform.LocalPosition=Clone(source.Transform.LocalPosition);return true;case "LocalRotation":target.Transform.LocalRotation=Clone(source.Transform.LocalRotation);return true;case "LocalScale":target.Transform.LocalScale=Clone(source.Transform.LocalScale);return true;default:return false;}
+        }
+        var from=source.Components.Where(c=>c.Type==property.Component).ElementAtOrDefault(property.ComponentOrdinal);
+        var to=target.Components.Where(c=>c.Type==property.Component).ElementAtOrDefault(property.ComponentOrdinal);
+        if(from==null||to==null)return false;
+        if(from.Properties.TryGetPropertyValue(property.Property,out var value))to.Properties[property.Property]=value?.DeepClone();else to.Properties.Remove(property.Property);
+        return true;
+    }
+    public static GameObject? ApplyProperty(GameObject root,EditorProjectContext project,PropertyOverride property)
+    {
+        var instance=root.GetComponent<BlueprintInstance>();if(instance==null||!TryLoadBlueprint(project,instance,out var latest,out var asset))return null;
+        EnsureLegacyBaseline(root,instance,latest!);
+        var current=Capture(root,project,instance,DeserializeObjects(instance.SourceSnapshot)).FirstOrDefault(o=>o.Id==property.SourceObject);
+        var source=new[]{latest!.Root}.Concat(latest.Children).FirstOrDefault(o=>o.Id==property.SourceObject);
+        if(current==null||source==null||!CopyProperty(current,source,property))return null;
+        new BlueprintSerializer(project.AssetDatabase).Save(latest!,asset!.FullPath);
+        project.AssetDatabase.RefreshPaths([asset.FullPath]);
+        Guid instanceId=instance.InstanceId;var scene=root.Scene!;
+        Propagate(project,scene,new AssetReference(asset.Guid,asset.ProjectPath));
+        return scene.GameObjects.FirstOrDefault(o=>o.GetComponent<BlueprintInstance>()?.InstanceId==instanceId);
+    }
+
     public static GameObject? Revert(GameObject root, EditorProjectContext project)
     {
         BlueprintInstance? instance = root.GetComponent<BlueprintInstance>();
@@ -76,7 +138,7 @@ internal static class BlueprintInstanceSynchronizer
         latest!.Root = Clone(currentRoot);
         latest.Root.ParentId = null;
         latest.Children = current.Where(item => item.Id != currentRoot.Id).Select(Clone).ToList();
-        new BlueprintSerializer().Save(latest, asset!.FullPath);
+        new BlueprintSerializer(project.AssetDatabase).Save(latest, asset!.FullPath);
         project.AssetDatabase.Scan();
 
         Guid appliedInstanceId = instance.InstanceId;
@@ -87,8 +149,9 @@ internal static class BlueprintInstanceSynchronizer
 
     public static void Propagate(EditorProjectContext project, RuntimeScene scene, AssetReference blueprintReference)
     {
+        var affected = project.AssetDatabase.Dependencies.Affected([blueprintReference.Guid]);
         GameObject[] roots = scene.GameObjects
-            .Where(item => item.GetComponent<BlueprintInstance>() is { } instance && Matches(instance.Blueprint, blueprintReference))
+            .Where(item => item.GetComponent<BlueprintInstance>() is { } instance && (Matches(instance.Blueprint, blueprintReference) || affected.Contains(instance.Blueprint.Guid)))
             .ToArray();
         foreach (GameObject root in roots) Refresh(root, project);
     }
@@ -145,6 +208,7 @@ internal static class BlueprintInstanceSynchronizer
         RuntimeScene? scene = oldRoot.Scene;
         if (scene == null) return null;
         Guid instanceId = oldInstance.InstanceId;
+        GameObject? parent = oldRoot.Parent;
         Vector3 position = oldRoot.Transform.WorldPosition;
         Quaternion rotation = oldRoot.Transform.WorldRotation;
         Vector3 scale = oldRoot.Transform.WorldScale;
@@ -156,6 +220,7 @@ internal static class BlueprintInstanceSynchronizer
         IReadOnlyList<GameObject> roots = project.Scenes.InstantiateHierarchy(scene, merged, preferred, out IReadOnlyDictionary<Guid, Guid> map);
         GameObject? newRoot = roots.FirstOrDefault();
         if (newRoot == null) return null;
+        newRoot.SetParent(parent, true);
         newRoot.Transform.WorldPosition = position;
         newRoot.Transform.WorldRotation = rotation;
         newRoot.Transform.WorldScale = scale;
@@ -179,7 +244,9 @@ internal static class BlueprintInstanceSynchronizer
             Guid instanceId = item.Id;
             item.Id = reverse.GetValueOrDefault(instanceId, instanceId);
             if (item.ParentId.HasValue) item.ParentId = reverse.GetValueOrDefault(item.ParentId.Value, item.ParentId.Value);
-            item.Components.RemoveAll(component => component.Type.Equals("BlueprintInstance", StringComparison.OrdinalIgnoreCase));
+            foreach (var component in item.Components) SceneSerializer.RemapObjectReferences(component.Properties, reverse);
+            if(instanceId==root.Id) { item.ParentId = null; }
+            if(instanceId==root.Id)item.Components.RemoveAll(component => component.Type.Equals("BlueprintInstance", StringComparison.OrdinalIgnoreCase));
         }
 
         GameObjectData? rootData = result.FirstOrDefault(item => item.ParentId == null);
@@ -237,36 +304,22 @@ internal static class BlueprintInstanceSynchronizer
         merged.Variables = MergeValue(old.Variables, current.Variables, latest.Variables, counts);
         merged.Components.Clear();
 
-        Dictionary<string, ComponentData> oldComponents = old.Components.ToDictionary(item => item.Type, StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, ComponentData> currentComponents = current.Components.ToDictionary(item => item.Type, StringComparer.OrdinalIgnoreCase);
-        foreach (ComponentData source in latest.Components)
+        var oldComponents=ComponentMap(old.Components);var currentComponents=ComponentMap(current.Components);var latestComponents=ComponentMap(latest.Components);
+        foreach(var (key,source) in latestComponents)
         {
-            if (!oldComponents.TryGetValue(source.Type, out ComponentData? oldComponent))
-            {
-                merged.Components.Add(Clone(source));
-                continue;
-            }
-            if (!currentComponents.TryGetValue(source.Type, out ComponentData? placedComponent))
-            {
-                counts.RemovedComponents++;
-                continue;
-            }
-            merged.Components.Add(new ComponentData
-            {
-                Type = source.Type,
-                Enabled = Choose(oldComponent.Enabled, placedComponent.Enabled, source.Enabled, counts),
-                Properties = MergeProperties(oldComponent.Properties, placedComponent.Properties, source.Properties, counts)
-            });
+            if(!oldComponents.TryGetValue(key,out var oldComponent)){merged.Components.Add(Clone(source));continue;}
+            if(!currentComponents.TryGetValue(key,out var placedComponent)){counts.RemovedComponents++;continue;}
+            merged.Components.Add(new ComponentData{Type=source.Type,Enabled=Choose(oldComponent.Enabled,placedComponent.Enabled,source.Enabled,counts),Properties=MergeProperties(oldComponent.Properties,placedComponent.Properties,source.Properties,counts)});
         }
-        HashSet<string> latestComponentTypes = latest.Components.Select(item => item.Type)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (ComponentData added in current.Components.Where(item =>
-                     !oldComponents.ContainsKey(item.Type) && !latestComponentTypes.Contains(item.Type)))
-        {
-            counts.AddedComponents++;
-            merged.Components.Add(Clone(added));
-        }
+        foreach(var (key,added) in currentComponents)
+            if(!oldComponents.ContainsKey(key)&&!latestComponents.ContainsKey(key)){counts.AddedComponents++;merged.Components.Add(Clone(added));}
         return merged;
+    }
+
+    private static Dictionary<string,ComponentData> ComponentMap(IEnumerable<ComponentData> items)
+    {
+        var counts=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);var result=new Dictionary<string,ComponentData>(StringComparer.OrdinalIgnoreCase);
+        foreach(var item in items){int index=counts.GetValueOrDefault(item.Type);counts[item.Type]=index+1;result[item.Type+"#"+index]=item;}return result;
     }
 
     private static JsonObject MergeProperties(JsonObject old, JsonObject current, JsonObject latest, Counts counts)
@@ -339,7 +392,7 @@ internal static class BlueprintInstanceSynchronizer
             instance.LastPropagation = "Failed: Blueprint asset could not be resolved";
             return false;
         }
-        blueprint = new BlueprintSerializer().Load(asset.FullPath);
+        blueprint = new BlueprintSerializer(project.AssetDatabase).Load(asset.FullPath);
         return true;
     }
 

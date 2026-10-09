@@ -234,6 +234,22 @@ public sealed class Renderer2D : IDisposable
         ResetCamera();GL.Enable(EnableCap.Blend);GL.BlendFunc(BlendingFactor.SrcAlpha,BlendingFactor.OneMinusSrcAlpha);GL.Disable(EnableCap.DepthTest);GL.Disable(EnableCap.CullFace);
     }
 
+    internal void SetUiClip(Vector4? rectangle)
+    {
+        if(rectangle is not {} r){GL.Disable(EnableCap.ScissorTest);return;}
+        GL.Enable(EnableCap.ScissorTest);
+        int x=(int)MathF.Floor(r.X), y=(int)MathF.Floor(r.Y);
+        int width=Math.Max(0,(int)MathF.Ceiling(r.X+r.Z)-x),height=Math.Max(0,(int)MathF.Ceiling(r.Y+r.W)-y);
+        GL.Scissor(x,_viewportHeight-y-height,width,height);
+    }
+    public Vector2 MeasureText(string text,string? fontPath,int fontSize)
+    {
+        string? path=ResolveFontPath(fontPath);if(path==null)return Vector2.Zero;
+        int size=Math.Clamp(fontSize,8,96);var key=(path,size);
+        if(!_fonts.TryGetValue(key,out var atlas)){atlas=FontAtlas.Load(path,size);_fonts.Add(key,atlas);}
+        return atlas.Measure(text,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size/Math.Max(1,atlas.LineHeight):1);
+    }
+
     public void DrawText(string value, string? fontPath, int fontSize, Vector2 anchorPoint,
         Vector4 color, float maxWidth = 0f, UiAnchor anchor = UiAnchor.TopLeft)
     {

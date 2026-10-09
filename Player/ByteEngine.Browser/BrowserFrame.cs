@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 internal sealed class BrowserFrame
 {
+    public BrowserSky? sky { get; set; }
+    public float exposure { get; set; } = 1;
     public int pendingTextures { get; set; }
     public double loopMs { get; set; }
     public float ambient { get; set; }
@@ -20,6 +22,18 @@ internal sealed class BrowserFrame
     public JsonElement audio { get; set; }
 }
 
+internal sealed class BrowserSky
+{
+ public int texture { get; set; }
+ public float[] inverseVp { get; set; } = [];
+ public float rotation { get; set; }
+ public float intensity { get; set; }
+ public bool hdr { get; set; }
+ public float[] zenith { get; set; } = [];
+ public float[] horizon { get; set; } = [];
+ public float[] ground { get; set; } = [];
+ public float sharpness { get; set; }
+}
 internal sealed class BrowserLight
 {
     public float[] direction { get; set; } = [];
@@ -37,6 +51,7 @@ internal sealed class BrowserMeshUpload
 
 internal sealed class BrowserTextureUpload
 {
+    public string source { get; set; } = "";
     public int id { get; set; }
     public int width { get; set; }
     public int height { get; set; }
@@ -48,10 +63,12 @@ internal sealed class BrowserTextureUpload
     public bool allocate { get; set; }
     public bool partial { get; set; }
     public bool nearest { get; set; }
+    public bool hdr { get; set; }
 }
 
 internal sealed class BrowserDraw
 {
+    public float[] instances {get;set;}=[];
     public int id { get; set; }
     public int heightField { get; set; }
     public int texture { get; set; }

@@ -67,7 +67,7 @@ public static class WebGamePackageExporter
             foreach (var model in database.Assets.Where(a => a.Type == AssetType.Model3D))
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
-                CookedModelStore.Save(content, ModelImporter.ForPath(model.FullPath).Import(model, model.Metadata.ModelImporter));
+                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter));
                 // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
                 File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
             }
@@ -145,20 +145,8 @@ public static class WebGamePackageExporter
     }
     private static void ValidateComponents(string file)
     {
-        using var json = JsonDocument.Parse(File.ReadAllText(file));
-        Visit(json.RootElement);
-        static void Visit(JsonElement element)
-        {
-            if (element.ValueKind == JsonValueKind.Object)
-                foreach (var property in element.EnumerateObject())
-                {
-                    if (property.Name.Equals("type", StringComparison.OrdinalIgnoreCase) &&
-                        property.Value.ValueKind == JsonValueKind.String &&
-                        property.Value.GetString() is "SpriteRenderer" or "ArenaGameManager")
-                        throw new NotSupportedException("This web build does not support " + property.Value.GetString() + ".");
-                    Visit(property.Value);
-                }
-            else if (element.ValueKind == JsonValueKind.Array) foreach (var item in element.EnumerateArray()) Visit(item);
-        }
+        var issues=PlatformCapabilities.Inspect(file,RuntimePlatform.Browser);
+        var blocked=issues.Where(i=>i.BlocksExport).ToArray();
+        if(blocked.Length>0)throw new NotSupportedException(string.Join("; ",blocked.Select(i=>i.Message)));
     }
 }

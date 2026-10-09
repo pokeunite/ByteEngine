@@ -1,7 +1,7 @@
 param([ValidateSet('Debug','Release')][string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-& dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration
+& dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration -m:1 -nodeReuse:false
 if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. See the build diagnostics above; ensure the .NET 9 wasm-tools workload is installed.' }
 $source = Join-Path $repoRoot "Player/ByteEngine.Browser/bin/$Configuration/net9.0/publish/wwwroot"
 # Incremental publishes can leave old fingerprinted assemblies beside the current boot manifest.
@@ -16,7 +16,7 @@ foreach ($file in Get-ChildItem -LiteralPath $framework -File) {
     }
 }
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugins.json'),'["bytebard.desertterrain","bytebard.dunecompany"]')
-foreach ($file in @('index.html','main.js','renderer.js','audio.js','content.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
+foreach ($file in @('index.html','main.js','renderer.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
 foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),

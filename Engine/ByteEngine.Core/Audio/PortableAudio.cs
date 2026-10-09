@@ -7,6 +7,7 @@ public interface IPortableAudio
 {
     bool IsPlaying(Guid id);
     void Play(Guid id, AudioClip clip, AudioSource3D source);
+    void PlayStream(Guid id,string path,AudioSource3D source) { }
     void Pause(Guid id);
     void Stop(Guid id);
     void Update(Guid id, AudioSource3D source);

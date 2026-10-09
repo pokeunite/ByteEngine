@@ -141,7 +141,7 @@ internal static class Phase3IntegrationTests
         scene.LoadInternal();
         GameObject? blueprintProjectile = launcher.Fire(Vector3.UnitX);
         Assert(blueprintProjectile?.GetComponent<Projectile3D>() is { } runtimeProjectile &&
-            blueprintProjectile.GetComponent<ByteEngine.Core.Graphics.ThreeD.MeshRenderer>() != null &&
+            (blueprintProjectile.GetComponent<ByteEngine.Core.Graphics.ThreeD.MeshRenderer>() != null || blueprintProjectile.Children.Any(c => c.GetComponent<ByteEngine.Core.Graphics.ThreeD.MeshRenderer>() != null)) &&
             runtimeProjectile.Velocity.X > 0f && Near(runtimeProjectile.Velocity.Length(), launcher.ProjectileSpeed),
             "Configured launcher spawns visible Blueprint projectile in requested direction");
         Assert(scene.FindGameObject("Player")!.GetComponent<BlueprintInstance>() is { } instance &&

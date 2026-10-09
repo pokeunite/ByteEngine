@@ -20,6 +20,18 @@ public sealed class AudioSource3D
 {
     private readonly Guid _portableId = Guid.NewGuid();
     private AudioClip? _clip;
+    private string? _streamPath;
+    private NativeAudioStream? _stream;
+    private float _streamDuration;
+    public bool Streaming {get;set;}
+    public int Priority {get;set;}
+    public bool DucksMusic {get;set;}
+    public int StreamingBufferBytes=>_stream?.WorkingBufferBytes??0;
+    public void SetStreamingClip(string path)
+    {
+        using var reader=new StreamingPcmReader(path);
+        DestroySource();_clip?.Dispose();_clip=null;_streamPath=Path.GetFullPath(path);_streamDuration=(float)reader.DurationSeconds;Streaming=true;
+    }
 
     private int _source;
 
@@ -51,6 +63,9 @@ public sealed class AudioSource3D
 
     public bool Spatial { get; set; } =
         true;
+
+    public AudioBus Bus { get; set; } = AudioBus.Sfx;
+    public float EffectiveVolume => AudioMixer.EffectiveVolume(Bus, Volume);
 
     public float Volume
     {
@@ -135,16 +150,14 @@ public sealed class AudioSource3D
         ALSourceState.Playing;
 
     public float DurationSeconds =>
-        _clip?.DurationSeconds ??
+        _streamPath!=null ? _streamDuration : _clip?.DurationSeconds ??
         0.0f;
 
     /// <summary>
     /// True when the Audio Clip reference has been resolved and decoded into
     /// an OpenAL buffer.
     /// </summary>
-    public bool ClipLoaded =>
-        _clip !=
-        null;
+    public bool ClipLoaded => _clip != null || _streamPath != null;
 
     /// <summary>
     /// True when ByteEngine has a live OpenAL device/context.
@@ -167,6 +180,7 @@ public sealed class AudioSource3D
     public void SetClip(
         AudioClip? clip)
     {
+        if(_streamPath!=null){DestroySource();_streamPath=null;_streamDuration=0;}
         if (PortableAudio.Backend is { } portable)
         {
             if (ReferenceEquals(_clip, clip)) return;
@@ -216,23 +230,17 @@ public sealed class AudioSource3D
 
     public void Play()
     {
+        if(!ClipLoaded||!AudioMixer.AcquireVoice(this))return;
+        if(DucksMusic&&Bus!=AudioBus.Music)AudioMixer.Duck(AudioBus.Music,.35f,DurationSeconds);
         if (PortableAudio.Backend is { } portable)
         {
-            if (_clip != null) portable.Play(_portableId, _clip, this);
+            if(_streamPath!=null)portable.PlayStream(_portableId,_streamPath,this);
+            else if (_clip != null) portable.Play(_portableId, _clip, this);
             return;
         }
-        if (_clip ==
-            null)
-        {
-            return;
-        }
-
-        if (!EnsureSource())
-        {
-            return;
-        }
-
+        if (!EnsureSource()) { AudioMixer.ReleaseVoice(this); return; }
         ApplySettings();
+        if(_stream!=null){_stream.Play(Loop);return;}
 
         CrashDebugLog.Write(
             $"AudioSource3D.Play before AL.SourcePlay source={_source}.");
@@ -246,6 +254,8 @@ public sealed class AudioSource3D
 
     public void Pause()
     {
+        AudioMixer.ReleaseVoice(this);
+        if(_stream!=null){_stream.Pause();return;}
         if (PortableAudio.Backend is { } portable) { portable.Pause(_portableId); return; }
         if (_source ==
                 0 ||
@@ -260,6 +270,8 @@ public sealed class AudioSource3D
 
     public void Stop()
     {
+        AudioMixer.ReleaseVoice(this);
+        if(_stream!=null){_stream.Stop();return;}
         if (PortableAudio.Backend is { } portable) { portable.Stop(_portableId); return; }
         if (_source ==
                 0 ||
@@ -298,9 +310,10 @@ public sealed class AudioSource3D
             return;
         }
 
+        _stream?.Update(Loop);
         ApplySettings();
-
         UpdateSpatialState();
+        if(!IsPlaying)AudioMixer.ReleaseVoice(this);
     }
 
     protected override void OnStop()
@@ -323,7 +336,7 @@ public sealed class AudioSource3D
 
     private bool EnsureSource()
     {
-        if (PortableAudio.Backend != null) return _clip != null;
+        if (PortableAudio.Backend != null) return ClipLoaded;
         if (_source !=
             0)
         {
@@ -378,9 +391,16 @@ public sealed class AudioSource3D
                 "AudioSource3D.EnsureSource after buffer bind.");
         }
 
+        if (_streamPath!=null)
+        {
+            try {_stream=new NativeAudioStream(_source,_streamPath);}
+            catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException)
+            {CrashDebugLog.Write("Audio stream failed: "+e.Message);AL.DeleteSource(_source);_source=0;return false;}
+        }
+        _stream?.Update(Loop);
         ApplySettings();
-
         UpdateSpatialState();
+        if(!IsPlaying)AudioMixer.ReleaseVoice(this);
 
         CrashDebugLog.Write(
             "AudioSource3D.EnsureSource COMPLETE.");
@@ -399,7 +419,7 @@ public sealed class AudioSource3D
         AL.Source(
             _source,
             ALSourcef.Gain,
-            Volume);
+            EffectiveVolume);
 
         AL.Source(
             _source,
@@ -409,7 +429,7 @@ public sealed class AudioSource3D
         AL.Source(
             _source,
             ALSourceb.Looping,
-            Loop);
+            _stream==null&&Loop);
 
         AL.Source(
             _source,
@@ -515,6 +535,8 @@ public sealed class AudioSource3D
 
     private void DestroySource()
     {
+        AudioMixer.ReleaseVoice(this);
+        if(AudioEngine.IsAvailable)_stream?.Dispose();else _stream?.DisposeManaged();_stream=null;
         if (PortableAudio.Backend is { } portable) { portable.Stop(_portableId); return; }
         if (_source ==
             0)

@@ -35,3 +35,8 @@ internal sealed record SnapshotEditorCommand(
     Guid[] AfterSelection,
     int BeforeRevision,
     int AfterRevision) : IEditorCommand;
+
+internal sealed record ObjectDeltaEditorCommand(string Name,
+    Dictionary<Guid, GameObjectData?> BeforeObjects, Dictionary<Guid, GameObjectData?> AfterObjects,
+    Guid[] BeforeSelection, Guid[] AfterSelection,
+    int BeforeRevision, int AfterRevision) : IEditorHistoryEntry;

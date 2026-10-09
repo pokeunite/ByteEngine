@@ -4,11 +4,8 @@ using ByteEngine.Core.Scene;
 namespace ByteEngine.Core.Physics;
 
 /// <summary>
-/// Linear 3D rigid body for ByteEngine's scene-owned PhysicsWorld3D.
-///
-/// v0.10-A intentionally focuses on stable translational dynamics. Angular
-/// rigid-body response is a later extension; object rotation remains fully
-/// available through Transform and kinematic gameplay.
+/// Scene-owned rigid body with linear dynamics and opt-in angular inertia.
+/// Sleep and swept contact protection complement the iterative contact solver.
 /// </summary>
 public sealed class Rigidbody3D
     : Component
@@ -32,6 +29,23 @@ public sealed class Rigidbody3D
     private Vector3 _accumulatedTorque;
 
     /// <summary>Opt-in angular dynamics; old bodies retain their authored rotation.</summary>
+    public bool ContinuousCollision { get; set; }
+    public bool AllowSleep { get; set; } = true;
+    public bool IsSleeping { get; private set; }
+    private float _quietTime;
+    private Vector3 _sleepPosition;
+    public void WakeUp() { IsSleeping = false; _quietTime = 0; }
+    internal void UpdateSleep(float delta, bool supported, bool quietContactIsland=false)
+    {
+        if (!AllowSleep || BodyType != RigidbodyBodyType3D.Dynamic) { WakeUp(); return; }
+        if (IsSleeping) return;
+        if ((supported || !UseGravity) && (quietContactIsland || Velocity.LengthSquared() < .0064f) && AngularVelocity.LengthSquared() < .0025f)
+        {
+            _quietTime += delta;
+            if (_quietTime >= .75f) { IsSleeping = true; _sleepPosition = Transform.WorldPosition; Velocity = AngularVelocity = Vector3.Zero; }
+        }
+        else _quietTime = 0;
+    }
     public bool SimulateRotation { get; set; }
     public Vector3 AngularVelocity { get; set; }
     /// <summary>Local principal moments of inertia in kg m². Tune for the compound body's geometry.</summary>
@@ -40,13 +54,13 @@ public sealed class Rigidbody3D
 
     public void AddTorque(Vector3 torque)
     {
-        if (InverseMass > 0 && SimulateRotation && IsFinite(torque)) _accumulatedTorque += torque;
+        if (InverseMass > 0 && SimulateRotation && IsFinite(torque) && torque.LengthSquared() > 0) { WakeUp(); _accumulatedTorque += torque; }
     }
 
     public void AddTorqueImpulse(Vector3 impulse)
     {
         if (InverseMass > 0 && SimulateRotation && IsFinite(impulse))
-            AngularVelocity += ApplyInverseInertia(impulse);
+        { if (impulse.LengthSquared() > .000001f) WakeUp(); AngularVelocity += ApplyInverseInertia(impulse); }
     }
 
     public void AddImpulseAtPosition(Vector3 impulse, Vector3 worldPosition)
@@ -72,7 +86,7 @@ public sealed class Rigidbody3D
         AddTorqueImpulse(Vector3.Cross(point - Transform.WorldPosition, -impulse));
     }
 
-    private Vector3 ApplyInverseInertia(Vector3 impulse)
+    internal Vector3 ApplyInverseInertia(Vector3 impulse)
     {
         var rotation = Transform.WorldRotation;
         var local = Vector3.Transform(impulse, Quaternion.Inverse(rotation));
@@ -182,7 +196,7 @@ public sealed class Rigidbody3D
             return;
         }
 
-        if (IsFinite(force)) _accumulatedForce += force;
+        if (IsFinite(force) && force.LengthSquared() > 0) { WakeUp(); _accumulatedForce += force; }
     }
 
     public void AddImpulse(
@@ -194,6 +208,8 @@ public sealed class Rigidbody3D
             return;
         }
 
+        if (!IsFinite(impulse)) return;
+        if (impulse.LengthSquared() > .000001f) WakeUp();
         Velocity +=
             FilterFrozen(
                 impulse *
@@ -219,6 +235,9 @@ public sealed class Rigidbody3D
         {
             return;
         }
+
+        if (IsSleeping && (Transform.WorldPosition != _sleepPosition || Velocity.LengthSquared() > .000001f || AngularVelocity.LengthSquared() > .000001f)) WakeUp();
+        if (IsSleeping) return;
 
         Vector3 acceleration =
             _accumulatedForce *
@@ -276,6 +295,8 @@ public sealed class Rigidbody3D
             return;
         }
 
+        if (IsSleeping && impulse.LengthSquared() * InverseMass * InverseMass < .04f) return;
+        if (IsSleeping) WakeUp();
         Velocity -=
             FilterFrozen(
                 impulse *
@@ -291,9 +312,8 @@ public sealed class Rigidbody3D
             return;
         }
 
-        Transform.WorldPosition +=
-            FilterFrozen(
-                correction);
+        Transform.WorldPosition += FilterFrozen(correction);
+        if (IsSleeping) _sleepPosition = Transform.WorldPosition;
     }
 
     internal void EndPhysicsFrame()

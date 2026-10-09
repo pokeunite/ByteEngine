@@ -6,6 +6,7 @@ namespace ByteEngine.Core.Gameplay;
 /// <summary>Fixed-domain persistent contact field. CPU sampling and GPU displacement share the same 12.5cm grid.</summary>
 public sealed class InteractiveSand3D:HeightfieldCollider3D
 {
+ public bool Visible {get;set;}=true;
  const float Step=.125f;
  int Cells=256,N=257;
  const int RenderTileCells=128;
@@ -103,7 +104,7 @@ public sealed class InteractiveSand3D:HeightfieldCollider3D
   }
   var mesh=new Mesh(v,ids);_tiles[key]=mesh;return mesh;
  }
- protected override void OnRender(RenderContext context){if(!context.Has3DCamera)return;Ensure();Upload();_material??=new Material{Roughness=.94f,SandSurface=true};_material.BaseColor=SandColor;_material.HeightFieldTexture=_field;_material.HeightFieldRange=4f;_material.HeightFieldBias=-3f;_material.HeightFieldWorldSize=new(_surfaceWidth+Step);_material.HeightFieldUvTransform=new(Cells/(float)N,Cells/(float)N,.5f/N,.5f/N);
+ protected override void OnRender(RenderContext context){if(!Visible||!context.Has3DCamera)return;Ensure();Upload();_material??=new Material{Roughness=.94f,SandSurface=true};_material.BaseColor=SandColor;_material.HeightFieldTexture=_field;_material.HeightFieldRange=4f;_material.HeightFieldBias=-3f;_material.HeightFieldWorldSize=new(_surfaceWidth+Step);_material.HeightFieldUvTransform=new(Cells/(float)N,Cells/(float)N,.5f/N,.5f/N);
   _debugTime+=(float)ByteEngine.Core.Time.DeltaTime;if(_debugTime>=.5f){_debugTime=0;if(ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.SandEnabled)ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.RecordSand($"mode=fixed-displacement field={N}x{N} spacing={Step:0.###}m contactStamps={_stampCount} uploadedBytes={_transferBytes} lastUploadCPU={_uploadMs:0.000}ms uploads={UploadCount} gpuHeightTexture={_field!=null}");_stampCount=_transferBytes=0;}
   var camera=context.RenderWorld.View?.CameraPosition??Vector3.Zero;
   float tileSize=RenderTileCells*Step;

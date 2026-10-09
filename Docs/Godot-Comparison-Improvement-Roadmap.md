@@ -2,6 +2,27 @@
 
 Reviewed 8 October 2026. This is a source review of the current ByteEngine workspace and Godot's public `master` branch, not a runtime benchmark or exhaustive feature audit. Godot links below follow a changing development branch. Priorities are engineering recommendations inferred from the reviewed source.
 
+## Current implementation audit — 9 October 2026
+
+The original comparison below is historical. The twelve workstreams now have implementations and local acceptance checks. See [implementation and validation notes](Engine-Roadmap-Implementation-2026-10-09.md) for evidence and scope limits. This does not establish Godot feature parity or hosted-game performance.
+
+| Priority | Implemented and checked | Limits / later extensions |
+|---|---|---|
+| 1 | Fixed clock/hooks, bounded catch-up, migrated built-ins and render interpolation; 30/60/144 FPS and suspended-time checks | Opt-in migration for external plugins; not deterministic across machines |
+| 2 | Separate static/moving BVHs, moving refits/rebalancing, indexed queries, compound events; sparse benchmarks and 1,000 moving bounds checks | Live bounds gathering remains O(n) |
+| 3 | Angular contacts, sleeping/wake, swept collision, static triangle meshes/convex hulls, reusable distance/hinge joints; stack/projectile/slope/platform/joint checks | Conservative box CCD; no cross-backend joints or relative/rotational CCD |
+| 4 | Compact object/property/component records, targeted gestures, stable unaffected identities and bounded history; large-scene undo measurements | Complex operations retain snapshots; opaque changed plugin state may require reconstruction |
+| 5 | Per-path dependency invalidation, CPU/latest-result workers, first-use browser-panel import requests, content/settings cache, atomic writes and 512 MiB LRU | Immediate LoadModel remains synchronous; GPU publication stays on owner thread |
+| 6 | CPU/delayed GPU capture by Game/Scene/Asset preview, geometry/physics/animation/allocation counters and browser GPU timing | Canvas UI GPU attribution unavailable; timing is platform dependent |
+| 7 | Native/WebGL2 opaque instancing, generated/imported/static LOD and viewport hysteresis; actual GPU pixel/performance/coverage/lifecycle checks | No generated skinned LOD or shadow-pass batching; authored quality still requires asset QA |
+| 8 | Grid and static triangle navmesh baking, slope/clearance portals, bounded agents, links/debug surfaces; walls/holes/layers/links/unreachable checks | Conservative triangle obstacle rejection; no dynamic avoidance |
+| 9 | Variants, three-way inheritance/conflicts, nested ownership/reference remapping, per-property apply/revert and visible Inspector conflicts | Source asset writes use existing persistence workflow |
+| 10 | Responsive containers/scroll, clipping, measured text, palette assets and visual authoring previews; five sizes, long translations and gamepad checks | Complex script shaping/accessibility are separate work |
+| 11 | Persisted game bus settings, ducking/voice priorities, bounded native WAV/Ogg streaming and browser media/cache lifecycle; active/new gain checks | Encoded browser content remains in memory; effects/extended music soak are separate work |
+| 12 | Capability matrix, authoring/export warnings, native regressions and browser AOT/animation/render/audio CI fixtures; local solution/platform checks | Remote CI and hosted itch execution not claimed |
+
+No user game export or Git push was performed for this roadmap task. The specialized vehicle solver was not replaced or silently switched to the new general-physics features.
+
 ## Overall assessment
 
 ByteEngine already has a substantial 3D foundation: scene/components, GUID assets, model import, skeletal animation, blend spaces and layers, Blueprint propagation, ByteGraph logic, terrain tools, rigid bodies and contact events, PBR rendering, shadows, environment lighting, post effects, game UI, positional audio, plugins, Windows packaging and browser support. The README's claims that animation, physics, shadows and terrain are missing are outdated.

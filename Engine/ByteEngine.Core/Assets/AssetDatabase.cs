@@ -21,6 +21,8 @@ public sealed class AssetDatabase : IDisposable
     public int LastRefreshFileCount { get; private set; }
     public bool LastRefreshWasFullScan { get; private set; }
     public event Action<IReadOnlyCollection<Guid>>? AssetsChanged;
+    public event Action? OwnerThreadUpdate;
+    public AssetDependencyGraph Dependencies { get; } = new();
     private bool _disposed;
     private readonly bool _readOnly;
 
@@ -57,6 +59,7 @@ public sealed class AssetDatabase : IDisposable
 
     public void Update()
     {
+        OwnerThreadUpdate?.Invoke();
         string[] paths;
         bool full;
         lock (_eventLock)
@@ -115,7 +118,7 @@ public sealed class AssetDatabase : IDisposable
                 _errorSink?.Invoke($"Could not refresh asset '{projectPath}': {exception.Message}");
             }
         }
-        if (changed.Count > 0) { AssetsChanged?.Invoke(changed.ToArray()); DatabaseChanged?.Invoke(); }
+        if (changed.Count > 0) { AssetsChanged?.Invoke(Dependencies.Affected(changed)); DatabaseChanged?.Invoke(); }
     }
 
     public void RequestRefresh()
@@ -427,6 +430,7 @@ public sealed class AssetDatabase : IDisposable
         ".bmp" => AssetType.Texture2D,
         ".hdr" => AssetType.Texture2D,
         ".wav" => AssetType.AudioClip,
+        ".ogg" => AssetType.AudioClip,
         ".bytescene" => AssetType.Scene,
         ".fbx" => AssetType.Model3D,
         ".obj" => AssetType.Model3D,
@@ -438,6 +442,7 @@ public sealed class AssetDatabase : IDisposable
         ".byteanim" => AssetType.AnimationProfile,
         ".bmat" => AssetType.Material,
         ".bvfx" => AssetType.VfxEffect,
+        ".uitheme" => AssetType.UiTheme,
         ".ttf" => AssetType.Font,
         ".otf" => AssetType.Font,
         ".fnt" => AssetType.Font,

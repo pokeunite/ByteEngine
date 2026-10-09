@@ -20,6 +20,8 @@ internal sealed class InspectorPanel
 {
     public bool IsOpen { get; set; } = true;
     private string _search = string.Empty;
+    private IReadOnlyList<ByteEngine.Core.Runtime.CapabilityIssue> _capabilityIssues=Array.Empty<ByteEngine.Core.Runtime.CapabilityIssue>();
+    private bool _capabilityChecked;
     private bool? _setExpansion;
     private bool _showAdvanced;
     private string _addSearch = string.Empty;
@@ -73,9 +75,25 @@ internal sealed class InspectorPanel
                 bool variablesReadOnly = state.Mode != EditorMode.Edit;
                 ImGui.BeginDisabled(variablesReadOnly);
                 EditorUi.EmptyState("Nothing selected", "Select an object or asset to inspect its properties.");
+                if(ImGui.CollapsingHeader("Simulation settings"))
+                {
+                    bool fixedTick=state.EditorScene.FixedSimulation;
+                    if(ImGui.Checkbox("Fixed simulation tick",ref fixedTick))ExecutePersistent(state,"Set simulation cadence",()=>state.EditorScene.FixedSimulation=fixedTick);
+                    float hz=(float)(1/state.EditorScene.SimulationClock.StepSeconds);
+                    if(ImGui.InputFloat("Simulation Hz",ref hz)&&float.IsFinite(hz)&&hz>=15&&hz<=240)ExecutePersistent(state,"Set simulation rate",()=>state.EditorScene.SimulationClock.StepSeconds=1/hz);
+                    ImGui.TextWrapped("Apply simulation forces in OnFixedUpdate. Existing frame-driven plugins retain their current callbacks. ResetInterpolation after teleports.");
+                }
+
                 if (EditorUi.SectionHeader("Scene Variables", false))
                     DrawStoreVariables("SCENE VARIABLES", state.EditorScene.Variables, state);
                 DrawGlobalVariables(state.Project.GlobalVariables, state);
+                if(ImGui.CollapsingHeader("Browser compatibility"))
+                {
+                    if(ImGui.Button("Check current scene")){_capabilityIssues=ByteEngine.Core.Runtime.PlatformCapabilities.InspectJson(System.Text.Json.JsonSerializer.Serialize(project.Scenes.Serialize(state.EditorScene),ByteEngine.Core.Serialization.JsonSerialization.Options),ByteEngine.Core.Runtime.RuntimePlatform.Browser);_capabilityChecked=true;}
+                    foreach(var issue in _capabilityIssues)ImGui.TextWrapped((issue.BlocksExport?"Unsupported: ":"Reduced: ")+issue.Message);
+                    if(_capabilityChecked&&_capabilityIssues.Count==0)ImGui.TextWrapped("No known unsupported core components. Plugin availability is checked against the browser runtime during export.");
+                }
+
                 ImGui.EndDisabled();
             }
             ImGui.End();
@@ -121,6 +139,28 @@ internal sealed class InspectorPanel
             ImGui.TextDisabled($"INSTANCE OF {Path.GetFileNameWithoutExtension(blueprintInstance.Blueprint.CachedProjectPath ?? "Blueprint")}");
             if (ImGui.Button("Open Blueprint")) openBlueprint(blueprintInstance.Blueprint);
             ImGui.TextUnformatted($"Overrides: {summary.Total}");
+            var conflicts=BlueprintInstanceSynchronizer.InheritanceConflicts(selected,project);
+            if(conflicts.Count>0)
+            {
+                ImGui.TextColored(new Vector4(1,.65f,.2f,1),$"Source conflicts: {conflicts.Count} (local values preserved)");
+                if(ImGui.TreeNode("Inheritance conflict details")){foreach(string conflict in conflicts)ImGui.TextWrapped(conflict);ImGui.TreePop();}
+            }
+            if(ImGui.TreeNode("Property override details"))
+            {
+                foreach(var entry in BlueprintInstanceSynchronizer.PropertyOverrides(selected,project))
+                {
+                    ImGui.PushID(entry.SourceObject+entry.Component+entry.ComponentOrdinal+entry.Property);ImGui.TextWrapped(entry.ObjectName+" / "+entry.Component+" / "+entry.Property+" = "+entry.Value);
+                    if(ImGui.SmallButton("Revert property"))ExecutePersistent(state,"Revert Blueprint property",()=>BlueprintInstanceSynchronizer.RevertProperty(selected,project,entry));
+                    ImGui.SameLine();
+                    if(ImGui.SmallButton("Apply property to source"))
+                    {
+                        if(BlueprintInstanceSynchronizer.ApplyProperty(selected,project,entry) is {} replacement){state.SelectedObject=replacement;state.MarkDirty();}
+                    }
+                    ImGui.PopID();
+                }
+                ImGui.TreePop();
+            }
+
             if (summary.ModifiedProperties > 0) ImGui.TextDisabled($"● Properties modified: {summary.ModifiedProperties}");
             if (summary.AddedComponents > 0) ImGui.TextDisabled($"● Components added: {summary.AddedComponents}");
             if (summary.RemovedComponents > 0) ImGui.TextDisabled($"● Components removed: {summary.RemovedComponents}");
@@ -299,6 +339,8 @@ internal sealed class InspectorPanel
             }
 
             DrawComponentProperties(state, project, component, _showAdvanced);
+            if(component is ByteEngine.Core.Navigation.NavigationRegion3D region && ImGui.Button("Bake navigation"))region.Bake();
+
         }
 
         _setExpansion = null;
@@ -443,7 +485,7 @@ internal sealed class InspectorPanel
         bool runtime = state.Mode != EditorMode.Edit;
         ComponentPropertyRenderer.Draw(component,
             runtime ? PropertyEditorContext.Runtime : PropertyEditorContext.Scene, showAdvanced,
-            () => { if (!runtime) state.Undo?.BeginGesture(state, $"Edit {component.GetType().Name}"); },
+            () => { if (!runtime) state.Undo?.BeginObjectGesture(state, $"Edit {component.GetType().Name}", [component.GameObject.Id]); },
             state.MarkDirty,
             () => { if (!runtime) state.Undo?.CommitGesture(state); }, project);
     }
@@ -454,7 +496,7 @@ internal sealed class InspectorPanel
         if (ImGui.IsItemActivated())
         {
             restore();
-            state.Undo?.BeginGesture(state, name);
+            state.Undo?.BeginObjectGesture(state, name, state.Selection.Objects.Select(o => o.Id));
             apply();
         }
         if (changed && state.Undo == null) state.MarkDirty();

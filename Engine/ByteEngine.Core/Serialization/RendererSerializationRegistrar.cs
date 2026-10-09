@@ -555,6 +555,7 @@ public static class RendererSerializationRegistrar
 
                     ["frustumCulling"] =
                         renderer.FrustumCulling,
+                    ["automaticModelLod"]=renderer.AutomaticModelLod,
 
                     ["castShadows"] =
                         renderer.CastShadows,
@@ -796,6 +797,7 @@ public static class RendererSerializationRegistrar
                             .GetValue<bool>() ??
                         true,
 
+                    AutomaticModelLod = data.Properties["automaticModelLod"]?.GetValue<bool>() ?? true,
                     FrustumCulling =
                         data.Properties["frustumCulling"]?
                             .GetValue<bool>() ??

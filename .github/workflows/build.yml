@@ -28,5 +28,80 @@ jobs:
       - name: Build
         run: dotnet build ByteEngine.sln --configuration Release --no-restore
 
+      - name: Bundled mannequin characters
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --bundled-characters
+
+      - name: Engine foundations
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --engine-foundations
+
+      - name: Save and colour regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --export-lifecycle
+
+      - name: Browser content regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --web-chunks
+
+      - name: Mesh collision regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-mesh
+
+      - name: Fixed simulation and spatial physics
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-physics
+
+      - name: Authoring and navigation integration
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-integration
+
+      - name: Physics events and LOD regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-extended
+
+      - name: Prepare browser regression scene
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-fixture .artifacts/roadmap-browser-ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-regression-scene
+          path: .artifacts/roadmap-browser-ci/Content
+
       - name: Run regressions
         run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore
+
+  browser:
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - name: Install WebAssembly toolchain
+        run: dotnet workload install wasm-tools
+      - name: Browser AOT runtime build
+        run: dotnet publish Player/ByteEngine.Browser/ByteEngine.Browser.csproj --configuration Release
+      - name: Browser script syntax
+        run: |
+          node --check Player/ByteEngine.Browser/wwwroot/main.js
+          node --check Player/ByteEngine.Browser/wwwroot/content.js
+          node --check Player/ByteEngine.Browser/wwwroot/renderer.js
+          node --check Player/ByteEngine.Browser/wwwroot/audio.js
+          node --check Player/ByteEngine.Browser/wwwroot/performance.js
+          node Tests/BrowserSmoke/performance.mjs
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-regression-scene
+          path: .artifacts/roadmap-browser-ci/Content
+      - name: Install browser test tools
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Browser streaming audio lifecycle
+        run: python Tests/BrowserSmoke/audio.py .artifacts/roadmap-browser-audio
+
+      - name: Browser runtime smoke
+        run: python Tests/BrowserSmoke/run.py .artifacts/roadmap-browser-ci Player/ByteEngine.Browser/bin/Release/net9.0/publish/wwwroot
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-validation
+          path: |
+            .artifacts/roadmap-browser-ci/browser-smoke.png
+            .artifacts/roadmap-browser-ci/browser-smoke.json
+            .artifacts/roadmap-browser-audio/audio-smoke.json

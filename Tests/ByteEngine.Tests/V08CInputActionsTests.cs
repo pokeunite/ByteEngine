@@ -94,7 +94,7 @@ internal static class V08CInputActionsTests
         InputActions.Update(raw);
         Vector2 movement = InputActions.ReadAxis2D("Move");
         Assert(Near(movement, Vector2.Normalize(Vector2.One)), "W+D composite is normalized");
-        Assert(Near(InputActions.ReadAxis2D("Look"), new Vector2(8f, -3f)), "mouse delta remains unbounded");
+        Assert(Near(InputActions.ReadAxis2D("Look"), new Vector2(8f, 3f)), "mouse delta remains unbounded and screen Y maps to look-up");
         Assert(InputActions.IsDown("Fire"), "multiple bindings resolve with OR semantics");
 
         raw.MouseButtonsDown.Clear();
@@ -129,7 +129,7 @@ internal static class V08CInputActionsTests
         Assert(InputActions.ReadAxis2D("Move") == Vector2.Zero && InputActions.ReadAxis2D("Look") == Vector2.Zero &&
             !InputActions.WasPressed("Move"), "edit mode does not leak gameplay input");
         InputActions.Update(raw, gameplayEnabled: true);
-        Assert(InputActions.ReadAxis2D("Move").Y > .99f && InputActions.ReadAxis2D("Look") == raw.MouseDelta,
+        Assert(InputActions.ReadAxis2D("Move").Y > .99f && InputActions.ReadAxis2D("Look") == new Vector2(raw.MouseDelta.X,-raw.MouseDelta.Y),
             "play mode resolves raw input before gameplay");
     }
 
@@ -180,8 +180,8 @@ internal static class V08CInputActionsTests
         ground.AddComponent(new GroundSurface());
         ground.AddComponent(new BoxCollider3D { Size = new Vector3(20f, 1f, 20f), Center = new Vector3(0f, -.5f, 0f) });
         GameObject player = scene.CreateGameObject("Player");
-        player.Transform.WorldPosition = new Vector3(0f, 1f, 0f);
-        player.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f });
+        player.Transform.WorldPosition = Vector3.Zero;
+        player.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f, Center = new(0,1,0) });
         CharacterController3D motor = player.AddComponent(new CharacterController3D
         {
             MoveSpeed = 5f, Acceleration = 1000f, AirControl = 1f, Gravity = 0f, JumpForce = 7f
@@ -198,7 +198,7 @@ internal static class V08CInputActionsTests
         Time.Update(.016);
         scene.UpdateInternal();
         Assert(motor.Velocity.Z < 0f, "Move Action drives camera-relative movement");
-        Assert(MathF.Abs(controller.ControlYaw - 1.2f) < .001f && controller.ControlPitch > 12f,
+        Assert(MathF.Abs(controller.ControlYaw - 1.2f) < .001f && MathF.Abs(controller.ControlPitch-11.6f)<.001f,
             "Look Action drives control rotation through component sensitivity");
         Assert(motor.VerticalVelocity > 0f, "Jump Action calls CharacterController3D.Jump");
     }

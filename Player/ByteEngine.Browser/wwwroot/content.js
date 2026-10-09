@@ -1,3 +1,4 @@
+const trace=(kind,detail)=>globalThis.byteEngineCapture?.event(kind,detail);
 export async function loadContent(game, status) {
     const mountedGame=Promise.resolve(game);
     const cache=await openContentCache();
@@ -28,7 +29,7 @@ export async function loadContent(game, status) {
             await mountPackage(await mountedGame, data, audio, status);
         } else {
             mountFile(await mountedGame,file.path,data);
-            if (file.path.toLowerCase().endsWith('.wav')) audio.set(file.path, data.buffer);
+            if (/\.(wav|ogg)$/i.test(file.path)) audio.set(file.path, data.buffer);
         }
     }
     if(packageBytes){
@@ -59,10 +60,11 @@ async function rememberContent(cache,file,data){
 }
 async function fetchContent(file,status,index,count,cache,update){
     if(!Number.isSafeInteger(file.size)||file.size<0||file.size>500*1024*1024||!/^[0-9a-f]{64}$/i.test(file.sha256))throw new Error('Invalid content metadata.');
-    const stored=await cachedContent(cache,file);if(stored){update(file.path,stored.length);return stored;}
+    const loadStart=performance.now();const stored=await cachedContent(cache,file);if(stored){trace('content-cache-hit',{path:file.path,bytes:stored.length,durationMs:performance.now()-loadStart});update(file.path,stored.length);return stored;}
     const url='./'+file.path.split('/').map(encodeURIComponent).join('/');
     const data=new Uint8Array(file.size);let received=0,lastError;
     for(let attempt=1;attempt<=4;attempt++){
+        trace('download-attempt',{path:file.path,attempt,resumeBytes:received});
         const controller=new AbortController();let timer;
         const watch=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(globalThis.document?.hidden){watch();return;}controller.abort(new Error('No download progress for 120 seconds'));},120000);};
         try{
@@ -77,8 +79,8 @@ async function fetchContent(file,status,index,count,cache,update){
             else{const bytes=new Uint8Array(await response.arrayBuffer());if(received+bytes.length>data.length)throw new Error('Response exceeds declared size');data.set(bytes,received);received+=bytes.length;update(file.path,received);}
             if(received!==file.size)throw new Error('Incomplete download: '+received+'/'+file.size+' bytes');
             if(await digest(data)!==file.sha256.toLowerCase()){received=0;throw new Error('Content integrity mismatch');}
-            await rememberContent(cache,file,data);return data;
-        }catch(error){lastError=error;controller.abort();if(received===file.size)received=0;if(attempt<4){if(!status.dataset?.failed)status.textContent=`Reconnecting download ${index}/${count} / keeping completed downloads`;await new Promise(resolve=>setTimeout(resolve,1000));}}
+            await rememberContent(cache,file,data);trace('download-ready',{path:file.path,bytes:data.length,durationMs:performance.now()-loadStart});return data;
+        }catch(error){trace('download-retry',{path:file.path,attempt,message:String(error)});lastError=error;controller.abort();if(received===file.size)received=0;if(attempt<4){if(!status.dataset?.failed)status.textContent=`Reconnecting download ${index}/${count} / keeping completed downloads`;await new Promise(resolve=>setTimeout(resolve,1000));}}
         finally{clearTimeout(timer);}
     }
     throw new Error('Cannot download '+file.path+' after 4 attempts: '+lastError+'. Reload to resume verified downloads.');
@@ -123,7 +125,7 @@ async function mountPackage(game, bytes, audio, status) {
     if(count<1 || count>100000)throw new Error('Invalid asset package entry count.');
     let total=0;
     for(let index=0;index<count;index++) {
-        const path=pathString();
+        const unpackStart=performance.now(),path=pathString();
         if(path.startsWith('/') || path.includes('\\') || path.includes(':') ||
             path.split('/').some(part=>!part || part==='.' || part==='..') || seen.has(path.toLowerCase()))
             throw new Error('Unsafe or duplicate asset package path.');
@@ -136,8 +138,8 @@ async function mountPackage(game, bytes, audio, status) {
         if(data.length!==length)throw new Error('Asset size mismatch: '+path);
         const actual=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
         if(actual.some((value,i)=>value!==expected[i]))throw new Error('Corrupted asset: '+path);
-        mountFile(game,path,data);
-        if(path.toLowerCase().endsWith('.wav'))audio.set(path,data.buffer);
+        mountFile(game,path,data);trace('asset-mounted',{path,bytes:data.length,compressedBytes:compressed.length,durationMs:performance.now()-unpackStart});
+        if(/\.(wav|ogg)$/i.test(path))audio.set(path,data.buffer);
     }
     if(offset!==bytes.length)throw new Error('Unexpected package trailing data.');
 }

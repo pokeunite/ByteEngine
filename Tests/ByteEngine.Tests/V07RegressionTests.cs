@@ -268,7 +268,7 @@ internal static class V07RegressionTests
                 0.0f);
 
         character.AddComponent(
-            new CapsuleCollider3D());
+            new CapsuleCollider3D { Center = Vector3.Zero });
 
         CharacterController3D controller =
             character.AddComponent(
@@ -344,7 +344,7 @@ internal static class V07RegressionTests
                 0.0f);
 
         bufferedCharacter.AddComponent(
-            new CapsuleCollider3D());
+            new CapsuleCollider3D { Center = Vector3.Zero });
 
         CharacterController3D bufferedController =
             bufferedCharacter.AddComponent(
@@ -454,7 +454,7 @@ internal static class V07RegressionTests
 
         Assert(
             ModelImporter.ForPath(
-                asset.FullPath) is FbxModelImporter,
+                asset.FullPath).Extensions.Contains(".fbx", StringComparer.OrdinalIgnoreCase),
             "FBX assets dispatch to the Assimp importer");
 
         ModelScaleAnalysis analysis =

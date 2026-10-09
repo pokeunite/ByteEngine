@@ -19,9 +19,8 @@ namespace ByteEngine.Core.Physics;
 /// - trigger and collision enter/stay/exit callbacks
 /// - sub-stepping and broad-phase AABB rejection
 ///
-/// The solver is intentionally linear-only in this first core pass. Rotational
-/// inertia/torque are not faked; they can be added later without changing the
-/// collision/contact API introduced here.
+/// Iterative linear/angular contacts, reusable spatial trees, sleeping and
+/// opt-in swept collision protection. Specialized vehicle physics remains separate.
 /// </summary>
 public sealed class PhysicsWorld3D
 {
@@ -42,11 +41,15 @@ public sealed class PhysicsWorld3D
 
     // Reuse snapshots across steps; retain component order and all compound colliders.
     private readonly List<Rigidbody3D> _stepBodies = new();
+    private readonly Dictionary<Rigidbody3D,Vector3> _framePositions=new();
     private readonly List<ColliderEntry> _stepColliders = new();
 
     private readonly List<int> _sweepOrder = new();
     private readonly List<(int First, int Second)> _candidatePairs = new();
     public int LastCandidateCount { get; private set; }
+    public double LastColliderGatherMs {get;private set;}
+    public double LastIndexUpdateMs {get;private set;}
+    public double LastCandidateQueryMs {get;private set;}
     public int LastColliderCount { get; private set; }
 
     public Vector3 Gravity { get; set; } =
@@ -62,6 +65,8 @@ public sealed class PhysicsWorld3D
     public float MaximumSubstep { get; set; } =
         1.0f /
         60.0f;
+
+    public int SolverIterations { get; set; } = 8;
 
     public int MaximumSubsteps { get; set; } =
         8;
@@ -84,7 +89,7 @@ public sealed class PhysicsWorld3D
             return;
         }
 
-        LastCandidateCount = 0;
+        LastCandidateCount = 0;LastColliderGatherMs=LastIndexUpdateMs=LastCandidateQueryMs=0;
         float safeDelta =
             Math.Min(
                 deltaTime,
@@ -121,6 +126,8 @@ public sealed class PhysicsWorld3D
                     _stepBodies.Add(body);
         }
         List<Rigidbody3D> bodies = _stepBodies;
+        _framePositions.Clear();foreach(var body in bodies)_framePositions[body]=body.Transform.WorldPosition;
+        var joints=scene.GameObjects.Where(o=>o.ActiveInHierarchy).SelectMany(o=>o.Components.Where(c=>c.Enabled).OfType<IPhysicsConstraint3D>()).ToArray();
 
         _frameContacts.Clear();
 
@@ -133,18 +140,26 @@ public sealed class PhysicsWorld3D
             foreach (Rigidbody3D body
                      in bodies)
             {
-                body.Integrate(
-                    stepDelta,
-                    Gravity);
+                Vector3 before = body.Transform.WorldPosition;
+                body.Integrate(stepDelta, Gravity);
+                if (body.ContinuousCollision && !body.IsSleeping) SweepBody(scene, body, before);
             }
 
-            SolveContacts(
-                scene);
+            for (int iteration = 0; iteration < Math.Clamp(SolverIterations, 1, 32); iteration++)
+            {
+                SolveContacts(scene);
+                foreach (var joint in joints) joint.Solve(stepDelta);
+                if (_frameContacts.Count==0 && joints.Length==0) break;
+            }
         }
 
+        var quietIslands=QuietContactIslands(bodies);
+        var supportedBodies=new HashSet<Rigidbody3D>();foreach(var pair in _frameContacts.Values)if(!pair.IsTrigger){if(FindBodyForCollider(pair.A) is {} a)supportedBodies.Add(a);if(FindBodyForCollider(pair.B) is {} b)supportedBodies.Add(b);}
         foreach (Rigidbody3D body
                  in bodies)
         {
+            bool supported = supportedBodies.Contains(body);
+            body.UpdateSleep(safeDelta, supported, supported && quietIslands.Contains(body));
             body.EndPhysicsFrame();
         }
 
@@ -160,9 +175,58 @@ public sealed class PhysicsWorld3D
         }
     }
 
+    private HashSet<Rigidbody3D> QuietContactIslands(List<Rigidbody3D> bodies)
+    {
+        var parents=bodies.Where(b=>b.BodyType==RigidbodyBodyType3D.Dynamic).ToDictionary(b=>b,b=>b);
+        Rigidbody3D Root(Rigidbody3D b){while(parents[b]!=b){parents[b]=parents[parents[b]];b=parents[b];}return b;}
+        foreach(var contact in _frameContacts.Values)
+        {if(contact.IsTrigger)continue;var a=FindBodyForCollider(contact.A);var b=FindBodyForCollider(contact.B);if(a!=null&&b!=null&&parents.ContainsKey(a)&&parents.ContainsKey(b))parents[Root(a)]=Root(b);}
+        var noisy=new HashSet<Rigidbody3D>();
+        foreach(var body in parents.Keys)
+            if(!body.AllowSleep||body.AngularVelocity.LengthSquared()>.0025f||Vector3.DistanceSquared(body.Transform.WorldPosition,_framePositions[body])>.00000025f)noisy.Add(Root(body));
+        return parents.Keys.Where(b=>!noisy.Contains(Root(b))).ToHashSet();
+    }
+
+    private static int ComponentOrdinal(GameObject obj,Component component)
+    {for(int i=0;i<obj.Components.Count;i++)if(ReferenceEquals(obj.Components[i],component))return i;return -1;}
+
+    private void SweepBody(RuntimeScene scene, Rigidbody3D body, Vector3 before)
+    {
+        Vector3 after = body.Transform.WorldPosition;
+        Vector3 movement = after - before;
+        float length = movement.Length();
+        if (length < .00001f) return;
+        body.Transform.WorldPosition = before;
+        float allowed = length;
+        foreach (var obj in scene.GameObjects)
+            if (ReferenceEquals(FindBodyForCollider(obj), body))
+                foreach (var collider in obj.Components.OfType<Collider3D>())
+                {
+                    if (!collider.Enabled || collider.IsTrigger) continue;
+                    var bounds = CalculateBounds(collider);
+                    Vector3 half = (bounds.Maximum - bounds.Minimum) * .5f;
+                    // Capsule endpoints preserve the complete long shape. Boxes use a conservative enclosing sphere,
+                    // so CCD cannot miss an outer corner; elongated boxes may stop before exact contact.
+                    Vector3 start=(bounds.Minimum+bounds.Maximum)*.5f,end=start;
+                    float radius=half.Length();
+                    if(collider is CapsuleCollider3D capsule){var shape=CreateCapsule(capsule);start=shape.A;end=shape.B;radius=shape.Radius;}
+                    if (GameplayQuery3D.CapsuleCast(scene, start,end, movement, radius, out var hit,
+                        allowed, body.GameObject, source: obj, includeTriggers: false))
+                    {
+                        allowed = Math.Max(0, hit.Distance - .001f);
+                        var pair = new PhysicsContactPair3D(obj, collider, hit.GameObject, hit.Collider, hit.Point, -hit.Normal, 0, false);
+                        _frameContacts[ContactKey.Create(pair)] = pair;
+                        float incoming = Vector3.Dot(body.Velocity, hit.Normal);
+                        if (incoming < 0) body.Velocity -= (1 + body.Restitution) * incoming * hit.Normal;
+                    }
+                }
+        body.Transform.WorldPosition = before + movement * (allowed / length);
+    }
+
     public void Reset()
     {
         _stepBodies.Clear();
+        _framePositions.Clear();_staticIndex.Clear();_movingIndex.Clear();
         _stepColliders.Clear();
         _previousContacts.Clear();
         _frameContacts.Clear();
@@ -171,6 +235,7 @@ public sealed class PhysicsWorld3D
     private void SolveContacts(
         RuntimeScene scene)
     {
+        long gatherStart=System.Diagnostics.Stopwatch.GetTimestamp();
         _stepColliders.Clear();
         foreach (GameObject gameObject in scene.GameObjects)
         {
@@ -180,6 +245,7 @@ public sealed class PhysicsWorld3D
                     _stepColliders.Add(new ColliderEntry(gameObject, collider,
                         FindBodyForCollider(gameObject), CalculateBounds(collider)));
         }
+        LastColliderGatherMs+=System.Diagnostics.Stopwatch.GetElapsedTime(gatherStart).TotalMilliseconds;
         List<ColliderEntry> colliders = _stepColliders;
 
         BuildCandidatePairs(colliders);
@@ -253,43 +319,133 @@ public sealed class PhysicsWorld3D
         }
     }
 
+    private readonly BoundsTree _staticIndex = new();
+    private readonly BoundsTree _movingIndex = new();
+    private readonly List<int> _queryResults = new();
+    public int StaticIndexRebuilds => _staticIndex.Rebuilds;
+    public int MovingIndexRebuilds => _movingIndex.Rebuilds;
+    public int MovingIndexRefits => _movingIndex.Refits;
+
     private void BuildCandidatePairs(List<ColliderEntry> colliders)
     {
-        _sweepOrder.Clear();
         _candidatePairs.Clear();
         LastColliderCount = colliders.Count;
-        for (int i = 0; i < colliders.Count; i++) _sweepOrder.Add(i);
-        // Choose the widest center distribution to avoid an unnecessarily dense sweep axis.
-        var span = Vector3.Zero;
-        if (colliders.Count > 0)
+        long indexStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        _staticIndex.Update(colliders, moving: false);
+        _movingIndex.Update(colliders, moving: true);
+        LastIndexUpdateMs+=System.Diagnostics.Stopwatch.GetElapsedTime(indexStart).TotalMilliseconds;
+        long queryStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        for (int a = 0; a < colliders.Count; a++)
         {
-            var min = (colliders[0].Bounds.Minimum + colliders[0].Bounds.Maximum) * .5f; var max = min;
-            foreach (var entry in colliders)
-            { min = Vector3.Min(min, (entry.Bounds.Minimum + entry.Bounds.Maximum) * .5f); max = Vector3.Max(max, (entry.Bounds.Minimum + entry.Bounds.Maximum) * .5f); }
-            span = max - min;
+            _queryResults.Clear();
+            _staticIndex.Query(colliders[a].Bounds, _queryResults);
+            _movingIndex.Query(colliders[a].Bounds, _queryResults);
+            foreach (int b in _queryResults)
+                if (b > a) _candidatePairs.Add((a, b));
         }
-        int axis = span.Y > span.X ? 1 : 0;
-        if (span.Z > (axis == 0 ? span.X : span.Y)) axis = 2;
-        float Coordinate(Vector3 value) => axis == 0 ? value.X : axis == 1 ? value.Y : value.Z;
-        _sweepOrder.Sort((a, b) =>
-        {
-            int result = Coordinate(colliders[a].Bounds.Minimum).CompareTo(Coordinate(colliders[b].Bounds.Minimum));
-            return result != 0 ? result : a.CompareTo(b);
-        });
-        for (int i = 0; i < _sweepOrder.Count; i++)
-        {
-            int a = _sweepOrder[i]; var first = colliders[a];
-            for (int j = i + 1; j < _sweepOrder.Count; j++)
-            {
-                int b = _sweepOrder[j]; var second = colliders[b];
-                if (Coordinate(second.Bounds.Minimum) > Coordinate(first.Bounds.Maximum)) break;
-                if (!first.Bounds.Intersects(second.Bounds)) continue;
-                _candidatePairs.Add(a < b ? (a, b) : (b, a));
-            }
-        }
-        // Preserve scene-order solver behavior independently of the spatial ordering.
         _candidatePairs.Sort((a, b) => a.First != b.First ? a.First.CompareTo(b.First) : a.Second.CompareTo(b.Second));
         LastCandidateCount += _candidatePairs.Count;
+        LastCandidateQueryMs+=System.Diagnostics.Stopwatch.GetElapsedTime(queryStart).TotalMilliseconds;
+    }
+
+    /// <summary>Conservative candidates in scene order. Refreshes bounds so editor moves and teleports are immediately visible.</summary>
+    public IReadOnlyList<GameObject> QueryBounds(RuntimeScene scene, Vector3 minimum, Vector3 maximum)
+    {
+        if (!float.IsFinite(minimum.X + minimum.Y + minimum.Z + maximum.X + maximum.Y + maximum.Z))
+            return scene.GameObjects;
+        var entries = new List<ColliderEntry>();
+        foreach (var obj in scene.GameObjects)
+            if (obj.ActiveInHierarchy)
+                foreach (var collider in obj.Components.OfType<Collider3D>())
+                    if (collider.Enabled) entries.Add(new(obj, collider, FindBodyForCollider(obj), CalculateBounds(collider)));
+        _staticIndex.Update(entries, false);
+        _movingIndex.Update(entries, true);
+        var results = new List<int>();
+        var bounds = new Bounds3D(Vector3.Min(minimum, maximum), Vector3.Max(minimum, maximum));
+        _staticIndex.Query(bounds, results);
+        _movingIndex.Query(bounds, results);
+        results.Sort();
+        return results.Select(i => entries[i].GameObject).Distinct().ToArray();
+    }
+
+    // Median BVH: static nodes are retained until membership or bounds change.
+    // Moving nodes live in a separate tree so moving one body does not rebuild scenery.
+    private sealed class BoundsTree
+    {
+        private readonly List<(Collider3D Collider, Bounds3D Bounds, int Index)> _leaves = new();
+        private Node? _root;
+        public int Rebuilds { get; private set; }
+        public int Refits { get; private set; }
+        private int _refitsSinceBuild;
+        public void Clear(){_leaves.Clear();_root=null;Rebuilds=Refits=_refitsSinceBuild=0;}
+        private sealed class Node(Bounds3D bounds, int index, int leaf = -1, Node? left = null, Node? right = null)
+        {
+            public Bounds3D Bounds = bounds;
+            public int Index = index;
+            public readonly int Leaf = leaf;
+            public readonly Node? Left = left, Right = right;
+        }
+        public void Update(List<ColliderEntry> source, bool moving)
+        {
+            int count = 0;
+            bool changed = false, membershipChanged = false;
+            for (int i = 0; i < source.Count; i++)
+            {
+                var item = source[i];
+                bool isMoving = item.Body is { BodyType: not RigidbodyBodyType3D.Static };
+                if (isMoving != moving) continue;
+                var value = (item.Collider, item.Bounds, i);
+                if (count >= _leaves.Count) { _leaves.Add(value); changed = membershipChanged = true; }
+                else if (_leaves[count] != value)
+                {
+                    membershipChanged |= !ReferenceEquals(_leaves[count].Collider,item.Collider) || _leaves[count].Index != i;
+                    _leaves[count] = value; changed = true;
+                }
+                count++;
+            }
+            if (count < _leaves.Count) { _leaves.RemoveRange(count, _leaves.Count - count); changed = membershipChanged = true; }
+            if (!changed) return;
+            // Preserve topology during motion; periodically rebalance to avoid a degraded tree.
+            if (!membershipChanged && _root != null && _refitsSinceBuild < 60)
+            {
+                Refit(_root); Refits++; _refitsSinceBuild++; return;
+            }
+            _refitsSinceBuild = 0;
+            var order = Enumerable.Range(0, count).ToArray();
+            _root = Build(order, 0, count);
+            Rebuilds++;
+        }
+        private Node? Build(int[] order, int start, int count)
+        {
+            if (count == 0) return null;
+            var bounds = _leaves[order[start]].Bounds;
+            for (int i = start + 1; i < start + count; i++)
+            {
+                var b = _leaves[order[i]].Bounds;
+                bounds = new(Vector3.Min(bounds.Minimum, b.Minimum), Vector3.Max(bounds.Maximum, b.Maximum));
+            }
+            if (count == 1) return new(bounds, _leaves[order[start]].Index, order[start]);
+            var span = bounds.Maximum - bounds.Minimum;
+            int axis = span.Y > span.X ? 1 : 0;
+            if (span.Z > (axis == 0 ? span.X : span.Y)) axis = 2;
+            float Center(int index) { var b = _leaves[index].Bounds; var c = b.Minimum + b.Maximum; return axis == 0 ? c.X : axis == 1 ? c.Y : c.Z; }
+            Array.Sort(order, start, count, Comparer<int>.Create((a,b) => { int c = Center(a).CompareTo(Center(b)); return c != 0 ? c : a.CompareTo(b); }));
+            int half = count / 2;
+            return new(bounds, -1, -1, Build(order, start, half), Build(order, start + half, count - half));
+        }
+        private Bounds3D Refit(Node node)
+        {
+            if (node.Leaf >= 0) return node.Bounds = _leaves[node.Leaf].Bounds;
+            var left = Refit(node.Left!); var right = Refit(node.Right!);
+            return node.Bounds = new(Vector3.Min(left.Minimum,right.Minimum),Vector3.Max(left.Maximum,right.Maximum));
+        }
+        public void Query(Bounds3D bounds, List<int> results) => Visit(_root, bounds, results);
+        private static void Visit(Node? node, Bounds3D bounds, List<int> results)
+        {
+            if (node == null || !node.Bounds.Intersects(bounds)) return;
+            if (node.Index >= 0) results.Add(node.Index);
+            else { Visit(node.Left, bounds, results); Visit(node.Right, bounds, results); }
+        }
     }
 
     private static void ResolveContact(
@@ -623,6 +779,10 @@ public sealed class PhysicsWorld3D
         out Vector3 normal,
         out float penetration)
     {
+        if (first is MeshCollider3D meshFirst && second is not HeightfieldCollider3D)
+            return MeshContacts.Contact(meshFirst,second,out point,out normal,out penetration);
+        if(second is MeshCollider3D meshSecond && first is not HeightfieldCollider3D)
+        {bool result=MeshContacts.Contact(meshSecond,first,out point,out normal,out penetration);normal=-normal;return result;}
         if (first is HeightfieldCollider3D terrainFirst)
             return TerrainContact(terrainFirst, second, out point, out normal, out penetration);
         if (second is HeightfieldCollider3D terrainSecond)
@@ -715,6 +875,11 @@ public sealed class PhysicsWorld3D
     {
         point=default;normal=Vector3.UnitY;penetration=0;
         if (!terrain.SupportedTransform) return false;
+        if(collider is MeshCollider3D mesh && mesh.Geometry is {Convex:true} geometry)
+        {
+            bool found=false;foreach(var vertex in geometry.Points)if(terrain.TrySampleWorld(vertex,out var surface,out var up))
+            {float depth=Vector3.Dot(surface-vertex,up);if(depth>=0&&(!found||depth>penetration)){found=true;point=surface;normal=up;penetration=depth;}}return found;
+        }
         Span<Vector3> samples=stackalloc Vector3[9];int count=0;
         if(collider is BoxCollider3D box)
         {
@@ -1449,6 +1614,7 @@ public sealed class PhysicsWorld3D
     private static Bounds3D CalculateBounds(
         Collider3D collider)
     {
+        if(collider is MeshCollider3D mesh){var bounds=mesh.WorldBounds;return new Bounds3D(bounds.Minimum,bounds.Maximum);}
         if (collider is HeightfieldCollider3D terrain)
         {
             var bounds=terrain.WorldTerrainBounds;
@@ -1819,17 +1985,15 @@ public sealed class PhysicsWorld3D
                 pair.ColliderA
                     .GetType()
                     .FullName ??
-                pair.ColliderA
-                    .GetType()
-                    .Name;
+                pair.ColliderA.GetType().Name;
+            firstType += ":" + ComponentOrdinal(pair.A,pair.ColliderA);
 
             string secondType =
                 pair.ColliderB
                     .GetType()
                     .FullName ??
-                pair.ColliderB
-                    .GetType()
-                    .Name;
+                pair.ColliderB.GetType().Name;
+            secondType += ":" + ComponentOrdinal(pair.B,pair.ColliderB);
 
             if (pair.A.Id.CompareTo(
                     pair.B.Id) <=

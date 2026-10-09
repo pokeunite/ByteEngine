@@ -1,0 +1,26 @@
+{
+  "source": "C:\\Users\\codex\\Documents\\MannequinCharacter\\manny full body\\Mannequin-Rigged.blend",
+  "blender": "5.0.0",
+  "bones": 41,
+  "skinned_meshes": 60,
+  "all_vertices_normalized": true,
+  "rig_checks": [
+    "upper_arm.L",
+    "forearm.L",
+    "index.01.L",
+    "Arm IK L",
+    "upper_arm.R",
+    "forearm.R",
+    "index.01.R",
+    "Arm IK R"
+  ],
+  "default_pose": "T-pose",
+  "stored_action": "FPS_Ready_Pose",
+  "no_body_meshes": true,
+  "outputs": [
+    "FPS-Arms-Rigged.blend",
+    "FPS-Arms-Tpose.png",
+    "FPS-Arms-FirstPerson.png"
+  ],
+  "visual_check": "Full T-pose silhouette framed; matching finger curl; gray material on white background"
+}

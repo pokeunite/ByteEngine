@@ -68,7 +68,7 @@ internal static class Phase1GameplayTests
         box.AddComponent(new BoxCollider3D { Size = Vector3.One });
         GameObject capsule = scene.CreateGameObject("Capsule");
         capsule.Transform.WorldPosition = new Vector3(3, 0, -5);
-        capsule.AddComponent(new CapsuleCollider3D { Radius = .5f, Height = 2f });
+        capsule.AddComponent(new CapsuleCollider3D { Center = Vector3.Zero, Radius = .5f, Height = 2f });
 
         Assert(GameplayQuery3D.Raycast(scene, Vector3.Zero, -Vector3.UnitZ, out RaycastHit3D first, 20f) &&
             first.GameObject == ignored && Near(first.Distance, 1.5f), "BoxCollider3D raycast");

@@ -14,6 +14,8 @@ public sealed class Texture2D
 {
     private readonly bool _cpuOnly = OperatingSystem.IsBrowser();
     private byte[]? _pixels;
+    private float[]? _floatPixels;
+    public ReadOnlyMemory<float> FloatPixelData => _floatPixels ?? ReadOnlyMemory<float>.Empty;
     readonly Queue<(int Version,int X,int Y,int Width,int Height)> _browserUpdates=new();
     public IReadOnlyList<(int X,int Y,int Width,int Height)> ChangedRegionsSince(int version){if(version<0||_browserUpdates.Count==0||version<_browserUpdates.Peek().Version-1)return [(0,0,Width,Height)];return _browserUpdates.Where(r=>r.Version>version).Select(r=>(r.X,r.Y,r.Width,r.Height)).ToArray();}
     void TrackBrowserRegion(int x,int y,int width,int height){if(!_cpuOnly)return;_browserUpdates.Enqueue((ContentVersion,x,y,width,height));while(_browserUpdates.Count>256)_browserUpdates.Dequeue();}
@@ -420,6 +422,7 @@ public sealed class Texture2D
         TextureFilter filter)
     {
         Filter = filter;
+        _floatPixels=null;
         if (_cpuOnly) { Filter=filter;_pixels = pixels; return; }
         _handle =
             GL.GenTexture();
@@ -456,7 +459,11 @@ public sealed class Texture2D
         Filter = filter;
         if (_cpuOnly)
         {
-            _pixels = pixels.Select(p => (byte)Math.Clamp((float.IsFinite(p) ? p : 0) * 255f, 0, 255)).ToArray();
+            // Keep radiance linear and unclipped for portable HDR rendering.
+            int sourceWidth=Width,sourceHeight=Height;
+            if(Width>1024){Height=Math.Max(1,(int)Math.Round(Height*(1024.0/Width)));Width=1024;var reduced=new float[Width*Height*4];for(int y=0;y<Height;y++)for(int x=0;x<Width;x++)for(int c=0;c<4;c++)reduced[(y*Width+x)*4+c]=pixels[((y*sourceHeight/Height)*sourceWidth+x*sourceWidth/Width)*4+c];pixels=reduced;}
+            _floatPixels=pixels;
+            _pixels = null;
             return;
         }
         _handle =
@@ -575,6 +582,7 @@ public sealed class Texture2D
         if (_handle != 0) GL.DeleteTexture(
             _handle);
         _pixels = null;
+        _floatPixels = null;
 
         _handle =
             0;

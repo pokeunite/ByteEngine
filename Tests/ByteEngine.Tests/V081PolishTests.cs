@@ -36,7 +36,7 @@ internal static class V081PolishTests
         input.CharacterRotation = CharacterRotationMode.FaceMovement;
         player.Transform.EulerAngles = Vector3.Zero;
         input.UpdateCharacterRotation(Vector3.UnitX, 1f);
-        Assert(MathF.Abs(PlayerController3D.DeltaAngle(player.Transform.EulerAngles.Y, 90f)) < .01f,
+        Assert(MathF.Abs(PlayerController3D.DeltaAngle(PlayerController3D.YawFromDirection(Vector3.Transform(-Vector3.UnitZ,player.Transform.WorldRotation)), PlayerController3D.YawFromDirection(Vector3.UnitX))) < .01f,
             "Face Movement rotates toward movement direction");
 
         input.CharacterRotation = CharacterRotationMode.FaceCamera;
@@ -44,7 +44,7 @@ internal static class V081PolishTests
         player.Transform.EulerAngles = new Vector3(0f, 170f, 0f);
         input.TurnSpeed = 10f;
         input.UpdateCharacterRotation(-Vector3.UnitZ, 1f);
-        Assert(MathF.Abs(PlayerController3D.DeltaAngle(170f, player.Transform.EulerAngles.Y)) <= 10.01f,
+        Assert(MathF.Abs(PlayerController3D.DeltaAngle(170f, PlayerController3D.YawFromDirection(Vector3.Transform(-Vector3.UnitZ,player.Transform.WorldRotation)))) <= 10.01f,
             "Face Camera uses shortest-yaw interpolation");
 
         input.CharacterRotation = CharacterRotationMode.Independent;
@@ -128,6 +128,7 @@ internal static class V081PolishTests
         Type[] visibleComponents = typeof(Component).Assembly.GetTypes()
             .Where(type => !type.IsAbstract && typeof(Component).IsAssignableFrom(type))
             .ToArray();
+        Console.WriteLine("Missing component metadata: "+string.Join(",",visibleComponents.Where(t=>!ComponentMetadataRegistry.RegisteredTypes.Contains(t)).Select(t=>t.Name)));
         Assert(visibleComponents.All(type =>
                 ComponentMetadataRegistry.RegisteredTypes.Contains(type) &&
                 !string.IsNullOrWhiteSpace(ComponentMetadataRegistry.Get(type).Category)),

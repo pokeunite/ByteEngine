@@ -14,5 +14,5 @@ public sealed partial class DuneWorkshop3D
   if(obj==null){obj=scene.CreateGameObject("Company balance");obj.SetParent(scene.GameObjects.First(o=>o.GetComponent<UiCanvas>()!=null),false);obj.AddComponent(new UiText{Text="BALANCE  $0",Offset=new(665,15),FontSize=20,FontReference=new AssetReference("Assets/GarageUI/fonts/BarlowCondensed-SemiBold.ttf"),Color=new(.96f,.68f,.30f,1),ShadowColor=new(0,0,0,.8f),OrderInLayer=25});}
   _balanceText=obj.GetComponent<UiText>();RefreshBalanceDisplay();
  }
- void RefreshBalanceDisplay(){if(_balanceText!=null)_balanceText.Text=$"BALANCE  ${_credits:N0}";}
+ void RefreshBalanceDisplay(){if(_balanceText!=null){_balanceText.GameObject.Active=!Building||!WorkshopV3;_balanceText.Anchor=UiAnchor.TopRight;_balanceText.Offset=new(-42,38);_balanceText.FontSize=23;_balanceText.Text=$"${_credits:N0}";}Text("Garage wallet",$"${_credits:N0}");}
 }

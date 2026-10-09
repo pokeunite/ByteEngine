@@ -8,6 +8,13 @@ public sealed class Renderer3D : IDisposable
     private readonly Dictionary<PrimitiveMeshType, Mesh> _primitives =
         new();
 
+    private int _instanceBuffer;
+    private Matrix4x4[] _instanceMatrices=[];
+    private readonly RenderPassProfiler _passes=new();
+    internal IDisposable ProfilePass(RenderContext context,string name)=>_passes.Begin(context.ViewportName,name,context.TargetWidth,context.TargetHeight,context.RenderWorld.Environment.Look.ProfileGpu);
+    private readonly GeometryGpuTimer _geometryTimer = new();
+    internal void BeginGeometryProfile(bool enabled) => _geometryTimer.Begin(enabled);
+    internal void EndGeometryProfile() => _geometryTimer.End();
     private readonly MaterialTextureSampling _materialSampling = new();
 
     private readonly List<RenderSubmission> _directionalCasters = new();
@@ -543,7 +550,7 @@ public sealed class Renderer3D : IDisposable
         RenderDirectionalShadow3D? directionalShadow,
         IReadOnlyList<RenderPointShadow3D> pointShadows,
         bool receiveShadows,
-        RenderEnvironment3D? environment = null)
+        RenderEnvironment3D? environment = null, IReadOnlyList<RenderSubmission>? instances = null)
     {
         ArgumentNullException.ThrowIfNull(
             mesh);
@@ -561,6 +568,8 @@ public sealed class Renderer3D : IDisposable
         try
         {
             _shader!.Use();
+            bool instanced=instances is {Count:>1};
+            _shader.SetInt("uInstanced",instanced?1:0);
 
             _shader.SetMatrix(
                 "uModel",
@@ -684,11 +693,20 @@ public sealed class Renderer3D : IDisposable
 
             mesh.Bind();
 
-            GL.DrawElements(
-                BeginMode.Triangles,
-                mesh.IndexCount,
-                DrawElementsType.UnsignedInt,
-                0);
+            if(instanced)
+            {
+                int count=instances!.Count;
+                if(_instanceMatrices.Length<count)Array.Resize(ref _instanceMatrices,Math.Max(count,_instanceMatrices.Length*2));
+                for(int i=0;i<count;i++)_instanceMatrices[i]=instances[i].ModelMatrix;
+                if(_instanceBuffer==0)_instanceBuffer=GL.GenBuffer();
+                GL.BindBuffer(BufferTarget.ArrayBuffer,_instanceBuffer);
+                GL.BufferData(BufferTarget.ArrayBuffer,count*64,_instanceMatrices,BufferUsageHint.StreamDraw);
+                for(int column=0;column<4;column++)
+                {int location=5+column;GL.EnableVertexAttribArray(location);GL.VertexAttribPointer(location,4,VertexAttribPointerType.Float,false,64,column*16);GL.VertexAttribDivisor(location,1);}
+                try { GL.DrawElementsInstanced(PrimitiveType.Triangles,mesh.IndexCount,DrawElementsType.UnsignedInt,IntPtr.Zero,count); }
+                finally { for(int location=5;location<9;location++){GL.DisableVertexAttribArray(location);GL.VertexAttribDivisor(location,0);} }
+            }
+            else GL.DrawElements(BeginMode.Triangles,mesh.IndexCount,DrawElementsType.UnsignedInt,0);
 
             GL.BindVertexArray(
                 0);
@@ -1545,6 +1563,9 @@ public sealed class Renderer3D : IDisposable
 
     public void Dispose()
     {
+        if(_instanceBuffer!=0){GL.DeleteBuffer(_instanceBuffer);_instanceBuffer=0;}
+        _passes.Dispose();
+        _geometryTimer.Dispose();
         _materialSampling.Dispose();
         foreach (Mesh mesh
                  in _primitives.Values)

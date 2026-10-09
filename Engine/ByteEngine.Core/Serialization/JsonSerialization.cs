@@ -23,6 +23,7 @@ internal static class JsonSerialization
                 JsonCommentHandling.Skip,
             IncludeFields = true
         };
+        options.Converters.Add(new Vector4JsonConverter());
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }

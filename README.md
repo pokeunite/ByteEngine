@@ -35,7 +35,7 @@ Create a `.byteblueprint` from the Assets panel and choose Generic Object or Cha
 
 Double-click a Blueprint to open its dedicated workspace with hierarchy/components, a 3D preview viewport, variables, logic-module relationships, skeleton information, and socket data. Drag a Blueprint into the 3D Scene View to create a fresh instance with new object IDs while retaining the Blueprint asset/instance relationship.
 
-The skeletal foundation persists skeletons, bones, joint/weight data, `SkeletalMeshRenderer`, character animation-state clip names, and bone-relative sockets with optional preview-asset GUIDs. Runtime GPU skinning and animation playback/blending remain future work.
+The skeletal foundation persists skeletons, bones, joint/weight data, `SkeletalMeshRenderer`, character animation-state clip names, and bone-relative sockets with optional preview-asset GUIDs. Runtime GPU skinning, animation playback, blend spaces, layers, root motion and animation events are implemented.
 
 `CharacterController3D` includes acceleration, air control, gravity, finite ground-collider bounds, rotated ground normals, maximum-slope rejection, snapping, step tolerance, coyote time, and buffered jumping. Trigger colliders are excluded from grounding.
 
@@ -65,8 +65,10 @@ The publish script produces a self-contained Windows x64 editor at `Dist/ByteEng
 
 ## Current limits
 
-- Imported skeleton and animation data is persistent, but runtime deformation and playback are not implemented yet.
-- Character grounding is geometry-aware for bounded ground colliders, but ByteEngine does not yet provide a general rigid-body collision or trigger-event solver.
-- Live socket attachment previews and a complete per-instance override UI are incomplete.
+- Skeletal animation, skinning and socket attachments are implemented; importer/rig compatibility still needs validation for each asset.
+- Core rigid-body physics includes box/capsule/heightfield, static triangle meshes and validated convex hulls, reusable spatial BVHs, angular contacts, sleeping, conservative swept collision, and distance/hinge joints. Construction vehicles retain a separate specialised solver; see [the ownership boundary](Docs/PHYSICS-BACKEND-BOUNDARY.md).
+- Blueprint variants use three-way inheritance; nested instance references and local overrides survive propagation. Inspector controls apply/revert individual properties and display source conflicts.
 - OBJ support is intentionally basic; GLB is the recommended exchange format.
-- Shadows, terrain, navigation meshes, and full physics are not yet included.
+- Shadows, terrain and interactive sand are implemented. Height-aware grid and static triangle navmesh baking support clearance/slope constraints, links and debug paths. Native/WebGL2 opaque instancing and authored/generated static mesh LODs are available; dynamic avoidance and skinned LOD generation remain separate work.
+- UI supports responsive row/column/grid/scroll containers, palette assets, measured text sizing and Window > UI Authoring resolution previews. Audio has Master/Music/Sfx/UI buses, ducking/voice priorities and bounded native WAV/Ogg music streaming; the browser uses media playback.
+- Fixed scene simulation is opt-in for compatibility. Migrate simulation callbacks before enabling it. Profiling records CPU and delayed GPU work by viewport/pass, plus physics candidates, geometry and animation/allocation metrics. Browser Canvas UI reports CPU timing. See [roadmap validation](Docs/Engine-Roadmap-Implementation-2026-10-09.md).

@@ -90,6 +90,7 @@ public static class UiLayout
     {
         if (!TryGetCanvas(gameObject, out UiCanvas? canvas) || canvas == null)
             return (Vector2.Zero, Vector2.Zero, 1f);
+        if(gameObject.GetComponent<UiWidget>() is {} sizing)size=sizing.LayoutSize();
         var root = ResolveCanvas(canvas, viewport);
         Vector2 parentOrigin = root.Origin;
         Vector2 parentSize = root.Size;
@@ -101,6 +102,8 @@ public static class UiLayout
                     widget.Size, viewport);
                 parentOrigin = parentRect.Position;
                 parentSize = parentRect.Size;
+                if(parent.GetComponent<UiContainer>() is {Enabled:true} container && container.TryPlace(gameObject,parentSize/root.Scale,out var arranged,out var arrangedSize)) {offset=arranged;size=arrangedSize;anchor=UiAnchor.TopLeft;}
+                if(parent.GetComponent<UiScrollContainer>() is {Enabled:true} scroll) offset.Y -= Math.Max(0,scroll.ScrollY);
                 break;
             }
             if (ReferenceEquals(parent, canvas.GameObject)) break;
@@ -148,4 +151,21 @@ public static class UiLayout
         }
         return (position, scaledSize, root.Scale);
     }
+    public static Vector4? ResolveClip(GameObject obj,Vector2 viewport)
+    {
+        Vector2 minimum=Vector2.Zero,maximum=viewport;bool clipped=false;
+        for(var parent=obj.Parent;parent!=null;parent=parent.Parent)
+            if(parent.GetComponent<UiScrollContainer>() is {Enabled:true} && parent.GetComponent<UiWidget>() is {} widget)
+            {
+                var rect=Resolve(parent,widget.Anchor,widget.Offset,widget.Size,viewport);
+                minimum=Vector2.Max(minimum,rect.Position);maximum=Vector2.Min(maximum,rect.Position+rect.Size);clipped=true;
+            }
+        return clipped ? new Vector4(minimum,Math.Max(0,maximum.X-minimum.X),Math.Max(0,maximum.Y-minimum.Y)) : null;
+    }
+    public static bool IsInsideClip(GameObject obj,Vector2 point,Vector2 viewport)
+    {
+        var clip=ResolveClip(obj,viewport);
+        return !clip.HasValue || point.X>=clip.Value.X&&point.Y>=clip.Value.Y&&point.X<clip.Value.X+clip.Value.Z&&point.Y<clip.Value.Y+clip.Value.W;
+    }
+
 }

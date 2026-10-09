@@ -25,6 +25,17 @@ internal sealed class FontAtlas : IDisposable
         BaseLine = baseLine;
     }
 
+    public System.Numerics.Vector2 Measure(string text,float scale=1)
+    {
+        float maximum=0,width=0;int lines=1,previous=-1;
+        foreach(char c in text)
+        {
+            if(c=='\n'){maximum=Math.Max(maximum,width);width=0;previous=-1;lines++;continue;}
+            if(!TryGetGlyph(c,out var g)&&!TryGetGlyph('?',out g))continue;
+            width+=(g.Advance+(previous<0?0:GetKerning(previous,c)))*scale;previous=c;
+        }
+        return new(Math.Max(maximum,width),lines*LineHeight*scale);
+    }
     public bool TryGetGlyph(int codepoint, out Glyph glyph) => _glyphs.TryGetValue(codepoint, out glyph);
     public float GetKerning(int first, int second) => _kernings.GetValueOrDefault((first, second));
     public void Dispose() => Texture.Dispose();

@@ -12,6 +12,8 @@ public interface IRenderFrameSink
 {
     void Draw3D(RenderView3D? view, RenderLighting3D lighting,
         RenderEnvironment3D environment, IReadOnlyList<RenderSubmission> submissions);
+    void SetUiClip(Vector4? rectangle) { }
+    Vector2 MeasureText(string text,string? fontPath,int size) => new(text.Length*size*.6f,size*1.2f);
     void DrawText(string value, string? fontPath, int size, Vector2 position,
         Vector4 color, float wrapWidth, UiAnchor anchor);
     void DrawQuad(Vector2 position, Vector2 size, Vector4 color);

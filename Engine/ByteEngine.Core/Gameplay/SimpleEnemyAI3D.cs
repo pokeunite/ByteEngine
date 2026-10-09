@@ -34,12 +34,14 @@ public sealed class SimpleEnemyAI3D : Component
 
     public void ResetCombatState() => _cooldownRemaining = 0f;
 
-    protected override void OnUpdate()
+    protected override void OnUpdate(){if(AttachedGameObject?.Scene?.FixedSimulation!=true)Simulate((float)Time.DeltaTime);}
+    protected override void OnFixedUpdate()=>Simulate((float)Time.FixedDeltaTime);
+    private void Simulate(float stepDelta)
     {
         State = SimpleEnemyAIState.Idle;
         IsMoving = false;
         AttackFiredThisFrame = false;
-        _cooldownRemaining = Math.Max(0f, _cooldownRemaining - (float)Time.DeltaTime);
+        _cooldownRemaining = Math.Max(0f, _cooldownRemaining - stepDelta);
         GameObject? enemy = AttachedGameObject;
         RuntimeScene? scene = enemy?.Scene;
         if (enemy == null || scene == null || enemy.GetComponent<HealthComponent>()?.IsDead == true) return;
@@ -58,7 +60,7 @@ public sealed class SimpleEnemyAI3D : Component
             enemy.Transform.EulerAngles = euler;
             if (distance > StopDistance)
             {
-                float movement = Math.Min(MoveSpeed * (float)Time.DeltaTime, distance - StopDistance);
+                float movement = Math.Min(MoveSpeed * stepDelta, distance - StopDistance);
                 IsMoving = movement > 0f;
                 enemy.Transform.WorldPosition += direction * Math.Max(0f, movement);
                 distance -= Math.Max(0f, movement);

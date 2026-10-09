@@ -9,7 +9,8 @@ public sealed partial class DuneWorkshop3D
  {
   if(_camera==null)return;float dt=Math.Clamp((float)Time.DeltaTime,0,.1f);Vector3 low=new(float.MaxValue),high=new(float.MinValue);foreach(var block in _blocks){var bounds=Box(_catalog[block.Type],block.P,block.Q);low=Vector3.Min(low,bounds.low);high=Vector3.Max(high,bounds.high);}float span=Math.Max(high.X-low.X,high.Z-low.Z);
   var localCenter=(low+high)*.5f;var target=Transform.WorldPosition+Vector3.Transform(localCenter,Transform.WorldRotation);
-  if(Building){_camera.FieldOfView=62;var pos=target+new Vector3(MathF.Sin(_orbit)*MathF.Cos(_elevation),MathF.Sin(_elevation),MathF.Cos(_orbit)*MathF.Cos(_elevation))*_zoom;LookCamera(pos,target);UpdateUndersideVisibility(pos);_cameraReady=false;return;}
+  if(Building){_camera.FieldOfView=62;var pos=target+new Vector3(MathF.Sin(_orbit)*MathF.Cos(_elevation),MathF.Sin(_elevation),MathF.Cos(_orbit)*MathF.Cos(_elevation))*_zoom;var aim=target;if(WorkshopV3&&!_garageEditing){var right=new Vector3(MathF.Cos(_orbit),0,-MathF.Sin(_orbit));aim-=right*(_zoom*.12f);}
+  LookCamera(pos,aim);UpdateUndersideVisibility(pos);_cameraReady=false;return;}
   RestoreGroundVisibility();if(!_cameraReady){_followYaw=_yaw;_cameraTarget=target;_cameraReady=true;}
   _lookTimer=Math.Max(0,_lookTimer-dt);float delta=MathF.Atan2(MathF.Sin(_yaw-_followYaw),MathF.Cos(_yaw-_followYaw));_followYaw+=delta*(1-MathF.Exp(-5*dt));float orbit=_followYaw+(_lookTimer>0?_orbit:WinchMission&&(WinchConnected||Input.IsKeyDown(Key.S))?MathF.PI:0);float pitch=_lookTimer>0?Math.Clamp(_elevation,.15f,.8f):.30f;
   float distance=Math.Clamp(span*.8f+3.0f+Math.Min(Math.Abs(Speed)*.012f,.45f),4.5f,12);_cameraTarget=Vector3.Lerp(_cameraTarget,target,1-MathF.Exp(-10*dt));var desired=_cameraTarget+new Vector3(MathF.Sin(orbit)*MathF.Cos(pitch),MathF.Sin(pitch),MathF.Cos(orbit)*MathF.Cos(pitch))*distance;

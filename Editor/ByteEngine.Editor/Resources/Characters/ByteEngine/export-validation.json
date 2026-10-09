@@ -1,0 +1,22 @@
+[
+  {
+    "file": "Mannequin.glb",
+    "bytes": 2776176,
+    "meshes": 1,
+    "primitives": 2,
+    "triangles": 84160,
+    "joints": 49,
+    "animations": []
+  },
+  {
+    "file": "Mannequin-FPS-Arms.glb",
+    "bytes": 1257452,
+    "meshes": 1,
+    "primitives": 2,
+    "triangles": 36096,
+    "joints": 36,
+    "animations": [
+      "FPS_Ready_Pose"
+    ]
+  }
+]

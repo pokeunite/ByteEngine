@@ -8,6 +8,16 @@ namespace ByteEngine.Core.Assets;
 public sealed class AssetManager : IDisposable
 {
     private readonly AssetDatabase _database;
+    private readonly Dictionary<Guid,(long Stamp,long Size,UiThemePalette Palette)> _uiThemes=new();
+    public UiThemePalette? LoadUiTheme(AssetReference reference)
+    {
+        var asset=_database.Resolve(reference);if(asset==null)return null;
+        var info=new FileInfo(asset.FullPath);if(!info.Exists)return null;
+        if(_uiThemes.TryGetValue(asset.Guid,out var cached)&&cached.Stamp==info.LastWriteTimeUtc.Ticks&&cached.Size==info.Length)return cached.Palette;
+        try {var palette=UiThemePalette.Load(asset.FullPath);_uiThemes[asset.Guid]=(info.LastWriteTimeUtc.Ticks,info.Length,palette);return palette;}
+        catch(Exception e)when(e is IOException or System.Text.Json.JsonException){_warningSink?.Invoke("UI theme: "+e.Message);return null;}
+    }
+
     private readonly Action<string>? _warningSink;
     private readonly Dictionary<Guid, Texture2D> _textures = new();
     private readonly Dictionary<Guid, ModelAsset> _models = new();
@@ -41,6 +51,11 @@ public sealed class AssetManager : IDisposable
     private readonly Dictionary<(Guid Model, string Key), Texture2D> _modelTextures = new();
     private readonly Dictionary<(Guid Model,string Key),byte[]> _modelTextureSources=new();
     private readonly HashSet<string> _reportedMissing = new(StringComparer.OrdinalIgnoreCase);
+    private readonly BackgroundImportQueue _imports = new();
+    public int PendingImports => _imports.PendingCount;
+    private HashSet<Guid>? _affectedAssets;
+    private void OnAssetsChanged(IReadOnlyCollection<Guid> assets) { if(_affectedAssets==null)_affectedAssets=assets.ToHashSet();else _affectedAssets.UnionWith(assets); }
+    private void PumpImports() => _imports.Pump();
     private readonly TextureImporter _textureImporter = new();
     private readonly AnimationProfileImporter _animationProfileImporter = new();
     private Texture2D? _missingTexture;
@@ -54,6 +69,8 @@ public sealed class AssetManager : IDisposable
         FontRuntime.Configure(database);
         _warningSink = warningSink;
         _database.DatabaseChanged += ReloadChangedResources;
+        _database.AssetsChanged += OnAssetsChanged;
+        _database.OwnerThreadUpdate += PumpImports;
     }
 
     private readonly Dictionary<string,Texture2D> _runtimeTextures = new(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +119,19 @@ public sealed class AssetManager : IDisposable
         }
     }
 
+    private readonly Dictionary<Guid,AssetRevision> _requestedModels = new();
+    /// <summary>Queues first-use CPU import without blocking the editor. Poll after AssetDatabase.Update publishes results.</summary>
+    public bool RequestModel(AssetReference reference, out ModelAsset? model)
+    {
+        var asset=_database.Resolve(reference);
+        if(asset?.Type!=AssetType.Model3D)throw new FileNotFoundException($"Model asset '{reference}' could not be resolved.");
+        if(_models.TryGetValue(asset.Guid,out model))return true;
+        var revision=CaptureRevision(asset);
+        if(!_requestedModels.TryGetValue(asset.Guid,out var requested)||requested!=revision)
+        { _requestedModels[asset.Guid]=revision; QueueModelImport(asset,revision); }
+        return false;
+    }
+
     public ModelAsset LoadModel(AssetReference reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
@@ -115,7 +145,7 @@ public sealed class AssetManager : IDisposable
         ImportedModel imported =
             OperatingSystem.IsBrowser()
                 ? CookedModelStore.Load(ProjectRoot, asset.Guid)
-                : ModelImporter.ForPath(asset.FullPath).Import(asset, asset.Metadata.ModelImporter);
+                : ModelImportCache.LoadOrImport(ProjectRoot, asset, asset.Metadata.ModelImporter, ModelImportDependencies.Discover(asset.FullPath));
 
         var model =
             new ModelAsset(
@@ -139,6 +169,7 @@ public sealed class AssetManager : IDisposable
 
         ModelSocketMetadataStore.MergeInto(ProjectRoot, model, _warningSink);
 
+        TrackModelDependencies(asset,model);
         _models[asset.Guid] = model;
         _modelRevisions[asset.Guid] = CaptureRevision(asset);
         return model;
@@ -201,9 +232,21 @@ public sealed class AssetManager : IDisposable
         if (_materialAssets.TryGetValue(asset.Guid, out MaterialAsset? cached))
             return cached;
         MaterialAsset material = MaterialAssetSerializer.Load(asset.FullPath);
+        TrackMaterialDependencies(asset.Guid, material);
         _materialAssets[asset.Guid] = material;
         _materialRevisions[asset.Guid] = CaptureRevision(asset);
         return material;
+    }
+
+    private void TrackMaterialDependencies(Guid id, MaterialAsset material)
+    {
+        var refs = typeof(MaterialParameters).GetProperties().Where(p => p.PropertyType == typeof(AssetReference))
+            .Select(p => (AssetReference)p.GetValue(material.Standard)!).Append(material.ParentMaterial).Where(r => !r.IsEmpty).Select(r => r.Guid).ToList();
+        foreach (var value in material.Overrides.Values)
+            if (value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                foreach (var property in value.EnumerateObject())
+                    if (property.Name.Equals("guid", StringComparison.OrdinalIgnoreCase) && property.Value.TryGetGuid(out var guid)) refs.Add(guid);
+        _database.Dependencies.SetDependencies(id, refs);
     }
 
     public Material LoadMaterial(AssetReference reference)
@@ -254,6 +297,12 @@ public sealed class AssetManager : IDisposable
         return mesh;
     }
 
+    public Mesh GetModelLodMesh(ModelMeshReference reference,int level)
+    {
+        string key=reference.SubAssetKey+".lod"+Math.Clamp(level,1,2);
+        return LoadModel(reference.Model).Meshes.Any(m=>m.Key==key)?GetModelMesh(reference.Model,key):GetModelMesh(reference.Model,reference.SubAssetKey);
+    }
+
     public Material GetModelMaterial(AssetReference modelReference, string subAssetKey)
     {
         ModelAsset model = LoadModel(modelReference);
@@ -275,6 +324,7 @@ public sealed class AssetManager : IDisposable
     {
         foreach (var guid in _vfxEffects.Keys.ToArray())
         {
+            if (_affectedAssets != null && !_affectedAssets.Contains(guid)) continue;
             if (_database.TryGetAsset(guid, out var effectRecord) && effectRecord?.Type == AssetType.VfxEffect &&
                 _vfxRevisions.TryGetValue(guid, out var previousVfx) && previousVfx == CaptureRevision(effectRecord))
                 continue;
@@ -291,6 +341,7 @@ public sealed class AssetManager : IDisposable
          */
         foreach ((Guid guid, Texture2D texture) in _textures.ToArray())
         {
+            if (_affectedAssets != null && !_affectedAssets.Contains(guid)) continue;
             if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
                 record == null ||
                 record.Type != AssetType.Texture2D)
@@ -321,6 +372,7 @@ public sealed class AssetManager : IDisposable
 
         foreach ((Guid guid, ModelAsset _) in _models.ToArray())
         {
+            if (_affectedAssets != null && !_affectedAssets.Contains(guid)) continue;
             if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
                 record?.Type != AssetType.Model3D)
             {
@@ -330,14 +382,14 @@ public sealed class AssetManager : IDisposable
 
             AssetRevision revision = CaptureRevision(record);
             if (_modelRevisions.TryGetValue(guid, out AssetRevision previous) &&
-                previous == revision)
+                previous == revision && _affectedAssets==null)
             {
                 continue;
             }
 
             try
             {
-                RefreshModel(record);
+                QueueModelImport(record, revision);
             }
             catch (Exception exception)
             {
@@ -347,6 +399,7 @@ public sealed class AssetManager : IDisposable
 
         foreach ((Guid guid, AnimationProfile profile) in _animationProfiles.ToArray())
         {
+            if (_affectedAssets != null && !_affectedAssets.Contains(guid)) continue;
             if (!_database.TryGetAsset(guid, out AssetRecord? record) ||
                 record?.Type != AssetType.AnimationProfile)
             {
@@ -375,6 +428,7 @@ public sealed class AssetManager : IDisposable
         }
         ReloadChangedMaterialAssets();
         RefreshRuntimeMaterials();
+        _affectedAssets = null;
     }
 
     private void RefreshRuntimeMaterials()
@@ -467,6 +521,7 @@ public sealed class AssetManager : IDisposable
             try
             {
                 _materialAssets[guid] = MaterialAssetSerializer.Load(record.FullPath);
+                TrackMaterialDependencies(guid, _materialAssets[guid]);
                 _materialRevisions[guid] = revision;
             }
             catch (Exception exception)
@@ -494,19 +549,38 @@ public sealed class AssetManager : IDisposable
         long MetaWriteTicks,
         long MetaLength);
 
+    private void TrackModelDependencies(AssetRecord asset,ModelAsset model)
+    {
+        var paths=ModelImportDependencies.Discover(asset.FullPath).Concat(model.Materials.SelectMany(m=>new[]{m.BaseColorTexture,m.NormalTexture,m.MetallicRoughnessTexture,m.MetallicTexture,m.RoughnessTexture,m.AmbientOcclusionTexture,m.EmissionTexture}).Where(t=>t?.SourcePath!=null).Select(t=>t!.SourcePath!));
+        var ids=new List<Guid>();foreach(string path in paths)if(_database.TryGetAsset(Path.GetRelativePath(ProjectRoot,path).Replace('\\','/'),out var dependency)&&dependency!=null)ids.Add(dependency.Guid);
+        _database.Dependencies.SetDependencies(asset.Guid,ids);
+    }
+
     private ModelAsset RefreshModel(AssetRecord record)
     {
-        Guid guid = record.Guid;
         record.Metadata.ModelImporter.Normalize();
+        return CommitModel(record, new ModelAsset(ModelImportPipeline.Import(record, record.Metadata.ModelImporter), record.Metadata.ModelImporter));
+    }
 
-        var refreshed =
-            new ModelAsset(
-                ModelImporter.ForPath(record.FullPath)
-                    .Import(
-                        record,
-                        record.Metadata.ModelImporter),
-                record.Metadata.ModelImporter);
+    private void QueueModelImport(AssetRecord record, AssetRevision revision)
+    {
+        // Copy settings so a later Inspector edit cannot mutate the worker's import inputs.
+        var settings = System.Text.Json.JsonSerializer.Deserialize<ModelImporterSettings>(System.Text.Json.JsonSerializer.Serialize(record.Metadata.ModelImporter, ByteEngine.Core.Serialization.JsonSerialization.Options), ByteEngine.Core.Serialization.JsonSerialization.Options)!;
+        settings.Normalize();
+        string[] dependencies = ModelImportDependencies.Discover(record.FullPath).Concat(_models.TryGetValue(record.Guid, out var loaded) ? loaded.Materials.SelectMany(m => new[] { m.BaseColorTexture, m.NormalTexture, m.MetallicRoughnessTexture, m.MetallicTexture, m.RoughnessTexture, m.AmbientOcclusionTexture, m.EmissionTexture }).Where(t => t?.SourcePath != null).Select(t => t!.SourcePath!) : Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        _imports.Enqueue(record.Guid, () =>
+            {
+                ImportedModel imported=OperatingSystem.IsBrowser()?CookedModelStore.Load(ProjectRoot,record.Guid):ModelImportCache.LoadOrImport(ProjectRoot,record,settings,dependencies);
+                return new ModelAsset(imported,settings);
+            },
+            model => { if (_database.TryGetAsset(record.Guid, out var latest) && latest != null && CaptureRevision(latest) == revision) CommitModel(latest, model); },
+            error => { _requestedModels.Remove(record.Guid); _warningSink?.Invoke($"Could not import model '{record.ProjectPath}': {error.Message}"); });
+    }
 
+    private ModelAsset CommitModel(AssetRecord record, ModelAsset refreshed)
+    {
+        Guid guid = record.Guid;
+        _requestedModels.Remove(guid);
         /*
          * Baked model-owned animations survive FBX/GLTF reimport because they
          * live in project-internal GUID-keyed data rather than in the source
@@ -523,6 +597,7 @@ public sealed class AssetManager : IDisposable
 
         ModelSocketMetadataStore.MergeInto(ProjectRoot, refreshed, _warningSink);
 
+        TrackModelDependencies(record,refreshed);
         _models[guid] = refreshed;
         _modelRevisions[guid] = CaptureRevision(record);
         foreach (ImportedMesh source in refreshed.Meshes)
@@ -618,6 +693,9 @@ public sealed class AssetManager : IDisposable
     public void Dispose()
     {
         _database.DatabaseChanged -= ReloadChangedResources;
+        _database.AssetsChanged -= OnAssetsChanged;
+        _database.OwnerThreadUpdate -= PumpImports;
+        _imports.Dispose();
         foreach (Texture2D texture in _textures.Values.Distinct()) texture.Dispose();
         _textures.Clear();
         foreach (var texture in _runtimeTextures.Values) texture.Dispose();

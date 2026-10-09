@@ -356,7 +356,7 @@ internal static class EditorSceneCommands
         EditorLog log)
     {
         BlueprintDefinition blueprint =
-            new BlueprintSerializer()
+            new BlueprintSerializer(project.AssetDatabase)
                 .Load(
                     asset.FullPath
                 );

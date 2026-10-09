@@ -143,9 +143,14 @@ public sealed class SceneSerializer
         foreach (var variable in scene.Variables)
             data.Variables.Add(new VariableData { Name = variable.Key, Value = variable.Value.Clone() });
 
-        foreach (GameObject gameObject
-                 in scene.GameObjects)
-        {
+        foreach (GameObject gameObject in scene.GameObjects)
+            data.GameObjects.Add(SerializeObject(gameObject));
+
+        return data;
+    }
+
+    public GameObjectData SerializeObject(GameObject gameObject)
+    {
             GameObjectData gameObjectData =
                 new()
                 {
@@ -217,12 +222,79 @@ public sealed class SceneSerializer
                 }
             }
 
-            data.GameObjects.Add(
-                gameObjectData
-            );
-        }
+        return gameObjectData;
+    }
 
-        return data;
+    /// <summary>Applies an object delta in-place; unchanged components keep identity and plugin state.</summary>
+    public void ApplyObjectDelta(RuntimeScene scene, IReadOnlyDictionary<Guid, GameObjectData?> objects)
+    {
+        foreach (var (id, data) in objects)
+            if (data == null && scene.FindGameObject(id) is { } old)
+            {
+                foreach (var child in old.Children.ToArray()) child.SetParent(null, false);
+                scene.DestroyGameObject(old);
+            }
+        foreach (var (id, data) in objects)
+        {
+            if (data == null) continue;
+            var target = scene.FindGameObject(id);
+            if (target == null) { target = new GameObject(id, data.Name); scene.AddGameObject(target); }
+            target.Name = data.Name;
+            target.Active = data.Active;
+            target.Layer = data.Layer;
+            target.SetTags(data.Tags);
+            target.ParentSocket = data.ParentSocket;
+            target.AttachmentLocationRule = data.AttachmentLocationRule;
+            target.AttachmentRotationRule = data.AttachmentRotationRule;
+            target.AttachmentScaleRule = data.AttachmentScaleRule;
+            if (data.AttachmentOffset is { } offset)
+            {
+                if (offset.LocalPosition is { } p) target.AttachmentPosition = new(p.X,p.Y,p.Z);
+                if (offset.LocalRotation is { } r) target.AttachmentRotation = new(r.X,r.Y,r.Z,r.W);
+                if (offset.LocalScale is { } c) target.AttachmentScale = new(c.X,c.Y,c.Z);
+            }
+            if (data.Transform.LocalPosition is { } pos) target.Transform.LocalPosition = new(pos.X,pos.Y,pos.Z);
+            if (data.Transform.LocalRotation is { } rot) target.Transform.LocalRotation = new(rot.X,rot.Y,rot.Z,rot.W);
+            if (data.Transform.LocalScale is { } scale) target.Transform.LocalScale = new(scale.X,scale.Y,scale.Z);
+            target.Variables.Clear();
+            foreach (var variable in data.Variables) target.Variables.Set(variable.Name, variable.Value.Clone());
+            var oldComponents = target.Components.ToArray();
+            var unused=new HashSet<Component>(oldComponents);
+            var ordered=new List<Component>();
+            ComponentData? CaptureComponent(Component c){var result=_components.Serialize(c);if(result!=null)ApplyComponentSerializationCompatibility(c,result);return result;}
+            string Encode(ComponentData? value)=>JsonSerializer.Serialize(value,JsonSerialization.Options);
+            var previous=oldComponents.ToDictionary(c=>c,c=>CaptureComponent(c));
+            // Reserve every exact match first. Restoring an earlier same-type component must not consume
+            // an unchanged later component and destroy its live identity.
+            var reserved=new HashSet<Component>();var exact=new Component?[data.Components.Count];
+            for(int i=0;i<data.Components.Count;i++){string wanted=Encode(data.Components[i]);exact[i]=oldComponents.FirstOrDefault(c=>!reserved.Contains(c)&&Encode(previous[c])==wanted);if(exact[i]!=null)reserved.Add(exact[i]!);}
+            for(int i=0;i<data.Components.Count;i++)
+            {
+                var value=data.Components[i];string encoded=Encode(value);
+                Component? old=exact[i]??oldComponents.FirstOrDefault(c=>unused.Contains(c)&&!reserved.Contains(c)&&previous[c]?.Type==value.Type);
+                if(old!=null)
+                {
+                    unused.Remove(old);
+                    if(Encode(previous[old])==encoded){ordered.Add(old);continue;}
+                    if(_components.Deserialize(value) is {} desired&&desired.GetType()==old.GetType())
+                    {
+                        foreach(var property in old.GetType().GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance))
+                            if(property.CanRead&&property.CanWrite&&property.GetIndexParameters().Length==0&&(property.Name==nameof(Component.Enabled)||value.Properties.Any(p=>string.Equals(p.Key,property.Name,StringComparison.OrdinalIgnoreCase))))
+                                property.SetValue(old,property.GetValue(desired));
+                        ApplyComponentDeserializationCompatibility(old,value);
+                        if(Encode(CaptureComponent(old))==encoded){ordered.Add(old);continue;}
+                    }
+                    target.RemoveComponent(old);
+                }
+                if(_components.Deserialize(value) is {} replacement){ApplyComponentDeserializationCompatibility(replacement,value);target.AddComponent(replacement);ordered.Add(replacement);}
+            }
+            foreach(var removed in oldComponents.Where(unused.Contains))
+                if(previous[removed]==null)ordered.Add(removed);else target.RemoveComponent(removed);
+            target.ReorderComponents(ordered);
+        }
+        foreach (var (id, data) in objects)
+            if (data != null && scene.FindGameObject(id) is { } target)
+            { target.SetParent(data.ParentId.HasValue ? scene.FindGameObject(data.ParentId.Value) : null, false); target.ParentSocket = data.ParentSocket; target.Transform.ResetInterpolation(); }
     }
 
     public RuntimeScene Deserialize(
@@ -535,6 +607,30 @@ public sealed class SceneSerializer
         }
     }
 
+    public static void RemapObjectReferences(JsonNode? node, IReadOnlyDictionary<Guid, Guid> map)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var pair in obj.ToArray())
+            {
+                bool objectReference = pair.Key.EndsWith("Object", StringComparison.OrdinalIgnoreCase) ||
+                    pair.Key.Equals("objectId", StringComparison.OrdinalIgnoreCase) ||
+                    pair.Key.EndsWith("ObjectId", StringComparison.OrdinalIgnoreCase) ||
+                    pair.Key.Equals("targetId", StringComparison.OrdinalIgnoreCase);
+                if (objectReference && pair.Value is JsonValue value && value.TryGetValue<string>(out var text) &&
+                    Guid.TryParse(text, out var id) && map.TryGetValue(id, out var mapped)) obj[pair.Key] = mapped.ToString();
+                else if (pair.Key == "objectMap" && pair.Value is JsonObject identities)
+                {
+                    foreach (var identity in identities.ToArray())
+                        if (identity.Value is JsonValue v && v.TryGetValue<string>(out var target) &&
+                            Guid.TryParse(target, out var old) && map.TryGetValue(old, out var placed)) identities[identity.Key] = placed.ToString();
+                }
+                else RemapObjectReferences(pair.Value, map);
+            }
+        }
+        else if (node is JsonArray array) foreach (var item in array) RemapObjectReferences(item, map);
+    }
+
     public IReadOnlyList<GameObject> InstantiateHierarchy(
         RuntimeScene target,
         IReadOnlyList<GameObjectData> sourceObjects)
@@ -566,6 +662,12 @@ public sealed class SceneSerializer
             clone.ParentId = source.ParentId.HasValue && idMap.TryGetValue(source.ParentId.Value, out Guid parentId)
                 ? parentId
                 : null;
+            foreach (var component in clone.Components)
+            {
+                RemapObjectReferences(component.Properties, idMap);
+                if (component.Type == "BlueprintInstance" && preferredIds == null)
+                    component.Properties["instanceId"] = Guid.NewGuid().ToString();
+            }
             clones.Add(clone);
         }
 

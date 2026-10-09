@@ -17,6 +17,17 @@ internal sealed class UndoManager
     private string _transformName = "Transform Objects";
     public int MaximumHistoryEntries { get; set; } = 128;
     private PendingEdit? _pending;
+    private Dictionary<Guid, GameObjectData?>? _pendingObjects;
+    private string _objectName = "Edit Objects";
+    private Guid[] _objectSelection = [];
+    public long RetainedHistoryBytes => _undo.Concat(_redo).Sum(entry => (long)JsonSerializer.Serialize(entry, entry.GetType(), JsonSerialization.Options).Length * 2);
+
+    public void BeginObjectGesture(EditorState state, string name, IEnumerable<Guid> ids)
+    {
+        if (_pending != null || _pendingTransforms != null || _pendingObjects != null || state.Mode != EditorMode.Edit) return;
+        _objectName = name; _objectSelection = SelectionIds(state);
+        _pendingObjects = ids.Distinct().ToDictionary(id => id, id => state.EditorScene.FindGameObject(id) is { } obj ? _serializer.SerializeObject(obj) : null);
+    }
     private int _currentRevision;
     private int _savedRevision;
     private int _nextRevision;
@@ -38,6 +49,7 @@ internal sealed class UndoManager
         _redo.Clear();
         _pending = null;
         _pendingTransforms = null;
+        _pendingObjects = null;
         _currentRevision = 0;
         _nextRevision = 0;
         _savedRevision = isSaved ? 0 : -1;
@@ -68,7 +80,7 @@ internal sealed class UndoManager
 
     public void BeginGesture(EditorState state, string name)
     {
-        if (_pending != null || _pendingTransforms != null || state.Mode != EditorMode.Edit) return;
+        if (_pending != null || _pendingTransforms != null || _pendingObjects != null || state.Mode != EditorMode.Edit) return;
         SceneData scene = _serializer.Serialize(state.EditorScene);
         List<VariableData> globals = CloneGlobals(state.Project.GlobalVariables);
         _pending = new PendingEdit(name, scene, globals, JsonSerializer.Serialize(new { Scene=scene, Globals=globals }, JsonSerialization.Options), SelectionIds(state));
@@ -76,6 +88,17 @@ internal sealed class UndoManager
 
     public void CommitGesture(EditorState state)
     {
+        if (_pendingObjects != null)
+        {
+            var afterObjects = _pendingObjects.Keys.ToDictionary(id => id, id => state.EditorScene.FindGameObject(id) is { } obj ? _serializer.SerializeObject(obj) : null);
+            if (JsonSerializer.Serialize(_pendingObjects, JsonSerialization.Options) != JsonSerializer.Serialize(afterObjects, JsonSerialization.Options))
+            {
+                int next = ++_nextRevision;
+                _undo.Push(new ObjectDeltaEditorCommand(_objectName, _pendingObjects, afterObjects, _objectSelection, SelectionIds(state), _currentRevision, next));
+                _redo.Clear(); _currentRevision = next; TrimHistory();
+            }
+            _pendingObjects = null; UpdateDirty(state); return;
+        }
         if (_pendingTransforms != null)
         {
             var afterTransforms = CaptureTransforms(state, _pendingTransforms.Keys);
@@ -98,7 +121,21 @@ internal sealed class UndoManager
         if (_pending.Json != afterJson)
         {
             int next = ++_nextRevision;
-            _undo.Push(new SnapshotEditorCommand(
+            var beforeHeader = _pending.Scene.GameObjects; var afterHeader = after.GameObjects;
+            _pending.Scene.GameObjects = []; after.GameObjects = [];
+            bool delta = JsonSerializer.Serialize(_pending.Scene, JsonSerialization.Options) == JsonSerializer.Serialize(after, JsonSerialization.Options) &&
+                JsonSerializer.Serialize(_pending.Globals, JsonSerialization.Options) == JsonSerializer.Serialize(afterGlobals, JsonSerialization.Options);
+            _pending.Scene.GameObjects = beforeHeader; after.GameObjects = afterHeader;
+            if (delta)
+            {
+                var beforeMap = beforeHeader.ToDictionary(o => o.Id);
+                var afterMap = afterHeader.ToDictionary(o => o.Id);
+                var ids = beforeMap.Keys.Union(afterMap.Keys).Where(id =>
+                    JsonSerializer.Serialize(beforeMap.GetValueOrDefault(id), JsonSerialization.Options) != JsonSerializer.Serialize(afterMap.GetValueOrDefault(id), JsonSerialization.Options)).ToArray();
+                _undo.Push(new ObjectDeltaEditorCommand(_pending.Name, ids.ToDictionary(id => id, id => beforeMap.GetValueOrDefault(id)),
+                    ids.ToDictionary(id => id, id => afterMap.GetValueOrDefault(id)), _pending.Selection, SelectionIds(state), _currentRevision, next));
+            }
+            else _undo.Push(new SnapshotEditorCommand(
                 _pending.Name, _pending.Scene, after, _pending.Globals, afterGlobals, _pending.Selection, SelectionIds(state), _currentRevision, next));
             _redo.Clear();
             _currentRevision = next;
@@ -108,11 +145,11 @@ internal sealed class UndoManager
         UpdateDirty(state);
     }
 
-    public void CancelGesture() { _pending = null; _pendingTransforms = null; }
+    public void CancelGesture() { _pending = null; _pendingTransforms = null; _pendingObjects = null; }
 
     public void BeginTransformGesture(EditorState state, string name)
     {
-        if (_pending != null || _pendingTransforms != null || state.Mode != EditorMode.Edit) return;
+        if (_pending != null || _pendingTransforms != null || _pendingObjects != null || state.Mode != EditorMode.Edit) return;
         _transformName = name;
         _pendingTransforms = CaptureTransforms(state, SelectionIds(state));
     }
@@ -137,7 +174,13 @@ internal sealed class UndoManager
 
     private void RestoreEntry(EditorState state, IEditorHistoryEntry entry, bool after)
     {
-        if (entry is TransformEditorCommand transform)
+        if (entry is ObjectDeltaEditorCommand delta)
+        {
+            _serializer.ApplyObjectDelta(state.EditorScene, after ? delta.AfterObjects : delta.BeforeObjects);
+            var selection = after ? delta.AfterSelection : delta.BeforeSelection;
+            state.Selection.Set(selection.Select(state.EditorScene.FindGameObject).Where(o => o != null).Cast<GameObject>());
+        }
+        else if (entry is TransformEditorCommand transform)
         {
             foreach (var (id, value) in after ? transform.After : transform.Before)
                 if (state.EditorScene.FindGameObject(id) is { } gameObject)

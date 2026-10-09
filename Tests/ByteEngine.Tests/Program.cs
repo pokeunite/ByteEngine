@@ -20,6 +20,7 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Contains("--bundled-characters")) { BundledCharacterTests.Run(); return; }
     if(args.Length>=2&&args[0]=="--create-sand-example")
     {
         using var example=EditorProjectContext.Create(args[1], message=>throw new Exception(message));
@@ -30,10 +31,20 @@ try
         if(!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.InteractiveSand3D>()!=null)||!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.SandLabProbe3D>()!=null))throw new Exception("Built-in sand roundtrip failed");
         Console.WriteLine("PASS Standalone sand template save/reload without plugins: "+args[1]);return;
     }
+    if(args.Length>=3&&args[0]=="--cook-diagnostic-model"){string fixture=Path.GetFullPath(args[1]);if(!fixture.StartsWith(Path.GetFullPath(".artifacts")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("Private diagnostic fixture required");using var db=new AssetDatabase(fixture,["Assets","Scenes"]);var record=db.Assets.Single(a=>a.ProjectPath==args[2]);CookedModelStore.Save(fixture,ModelImporter.ForPath(record.FullPath).Import(record,record.Metadata.ModelImporter));Console.WriteLine("Prepared private browser diagnostic model");return;}
     if(args.Length>=2&&args[0]=="--garage-ux"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),garage:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--sand-vehicle"){using var diagnostic=new DunePolishDiagnostic(args[1],false,sandVehicle:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--schedule-benchmark"){SchedulingBenchmarkTests.Run(args[1]);return;}
     if(args.Length>=2&&args[0]=="--sand-lab"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),sandLab:true);diagnostic.Run();return;}
+    if(args.Length>1&&args[0]=="--roadmap-fixture"){RoadmapBrowserFixture.Create(args[1]);return;}
+    if(args.Contains("--roadmap-ui-visual")){RoadmapUiVisualTests.Run();return;}
+    if(args.Contains("--roadmap-media")){RoadmapMediaTests.Run(root);return;}
+    if(args.Contains("--roadmap-mesh")){RoadmapMeshTests.Run(root);return;}
+    if(args.Contains("--roadmap-extended")){RoadmapExtendedTests.Run();return;}
+    if(args.Contains("--roadmap-render")){RoadmapMediaTests.Render();return;}
+    if(args.Contains("--roadmap-integration")){RoadmapIntegrationTests.Run(root);return;}
+    if(args.Contains("--roadmap-physics")){RoadmapPhysicsTests.Run();return;}
+    if(args.Contains("--engine-foundations")){EngineFoundationTests.Run(root);return;}
     if(args.Contains("--export-lifecycle")){ExportLifecycleTests.Run(root);return;}
     if(args.Contains("--web-chunks")){BrowserChunkTests.Run(root);return;}
     if(args.Contains("--large-sand")){LargeSandTests.Run();return;}

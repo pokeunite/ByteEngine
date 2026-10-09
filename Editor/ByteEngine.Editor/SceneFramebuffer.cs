@@ -149,6 +149,7 @@ internal sealed class SceneFramebuffer
                 );
         }
 
+        context.ViewportName=prepareEnvironmentLighting3D ? "Scene" : "Asset preview";
         RenderEnvironment3D environment =
             context.CaptureRenderEnvironment3D();
 
@@ -171,7 +172,7 @@ internal sealed class SceneFramebuffer
          * to display space once here. 2D keeps its existing display-space
          * behavior and is copied without tone mapping.
          */
-        _postProcess.Render(
+        using(renderer3D.ProfilePass(context,"Postprocessing / presentation")) _postProcess.Render(
             _colorTexture,
             _displayFramebuffer,
             _width,
@@ -225,7 +226,8 @@ internal sealed class SceneFramebuffer
         int width,
         int height,
         int windowWidth,
-        int windowHeight)
+        int windowHeight,
+        bool uiOnly = false)
     {
         Resize(
             width,
@@ -261,7 +263,7 @@ internal sealed class SceneFramebuffer
             _height
         );
 
-        Camera3D? camera3D = scene.ActiveCamera;
+        Camera3D? camera3D = uiOnly ? null : scene.ActiveCamera;
 
         Camera2D? camera =
             camera3D ==
@@ -294,6 +296,7 @@ internal sealed class SceneFramebuffer
                 renderWorld: _renderWorld
             );
 
+        context.ViewportName=uiOnly?"UI preview":"Game";
         RenderEnvironment3D environment =
             context.CaptureRenderEnvironment3D();
 
@@ -311,7 +314,7 @@ internal sealed class SceneFramebuffer
             );
         }
 
-        _postProcess.Render(
+        using(renderer3D.ProfilePass(context,"Postprocessing / presentation")) _postProcess.Render(
             _colorTexture,
             _displayFramebuffer,
             _width,

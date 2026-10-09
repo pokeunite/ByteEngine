@@ -45,6 +45,8 @@ public sealed class RenderWorld
         _environment;
 
     public RenderWorldStats LastStats { get; private set; }
+    public long MainTriangles {get;private set;}
+    public int InstancedObjects {get;private set;}
 
     public void BeginFrame(
         RenderView3D? view,
@@ -192,6 +194,7 @@ public sealed class RenderWorld
          */
         if (context.PrepareEnvironmentLighting3D)
         {
+            using var timing=context.Renderer3D.ProfilePass(context,"Environment preparation");
             context.Renderer3D.PrepareEnvironmentLighting(
                 _environment,
                 view);
@@ -202,6 +205,7 @@ public sealed class RenderWorld
 
         if (_environment.DrawSky)
         {
+            using var timing=context.Renderer3D.ProfilePass(context,"Sky");
             SkyShader3D.CurrentEnvironment =
                 _environment;
 
@@ -269,7 +273,8 @@ public sealed class RenderWorld
          * shadow behavior while auxiliary previews can remain a single main
          * mesh pass.
          */
-        DirectionalShadowPassResult shadowPass =
+        DirectionalShadowPassResult shadowPass;
+        using(context.Renderer3D.ProfilePass(context,"Directional shadows")) shadowPass =
             context.RenderShadows3D &&
             visible.Count >
             0
@@ -279,7 +284,8 @@ public sealed class RenderWorld
                     _lighting)
                 : DirectionalShadowPassResult.None;
 
-        PointShadowPassResult pointShadowPass =
+        PointShadowPassResult pointShadowPass;
+        using(context.Renderer3D.ProfilePass(context,"Point shadows")) pointShadowPass =
             context.RenderShadows3D &&
             visible.Count >
             0
@@ -293,12 +299,16 @@ public sealed class RenderWorld
 
         int drawCalls =
             0;
+        MainTriangles=0;InstancedObjects=0;
 
+        using var mainTiming=context.Renderer3D.ProfilePass(context,"Main geometry");
         context.Renderer3D.BeginMainBatch();
         try {
-        foreach (RenderSubmission submission
-                 in visible)
+        foreach (var batch in RenderBatcher.Build(visible))
         {
+            var submission=batch.First;
+            MainTriangles+=(long)submission.Mesh.IndexCount/3*batch.Instances.Count;
+            if(batch.Instances.Count>1)InstancedObjects+=batch.Instances.Count;
             context.Renderer3D.Draw(
                 submission.Mesh,
                 submission.Material,
@@ -315,7 +325,7 @@ public sealed class RenderWorld
                     {
                         FogEnabled = false
                     }
-                    : _environment);
+                    : _environment, batch.Instances);
 
             drawCalls++;
         }
@@ -338,6 +348,7 @@ public sealed class RenderWorld
                 shadowPass.DrawCalls +
                 pointShadowPass.DrawCalls,
                 environmentDrawCalls);
+        GraphicsDiagnostics.RecordGeometry(context.ViewportName,LastStats,MainTriangles,InstancedObjects);
 
         _submissions.Clear();
     }

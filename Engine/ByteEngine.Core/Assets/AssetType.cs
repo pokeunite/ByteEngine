@@ -13,5 +13,6 @@ public enum AssetType
     AnimationProfile,
     Material,
     Font,
-    VfxEffect
+    VfxEffect,
+    UiTheme
 }

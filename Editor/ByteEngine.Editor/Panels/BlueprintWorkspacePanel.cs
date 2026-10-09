@@ -153,7 +153,7 @@ internal sealed class BlueprintWorkspacePanel
             project;
 
         _blueprint =
-            new BlueprintSerializer()
+            new BlueprintSerializer(_project!.AssetDatabase)
                 .Load(
                     asset.FullPath);
 
@@ -2218,7 +2218,7 @@ internal sealed class BlueprintWorkspacePanel
     private void DiscardBlueprint()
     {
         if (_asset == null) return;
-        _blueprint = new BlueprintSerializer().Load(_asset.FullPath);
+        _blueprint = new BlueprintSerializer(_project!.AssetDatabase).Load(_asset.FullPath);
         RebuildPreview();
         _propertyUndo.Clear();
         _propertyRedo.Clear();
@@ -2351,7 +2351,7 @@ internal sealed class BlueprintWorkspacePanel
                 .ToList()
             ?? new List<Guid>();
 
-        new BlueprintSerializer()
+        new BlueprintSerializer(_project!.AssetDatabase)
             .Save(
                 _blueprint,
                 _asset.FullPath);

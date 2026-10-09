@@ -20,6 +20,7 @@ internal static class LastStandStarterFactory
         project.Name = projectName;
         project.ProjectId = Guid.NewGuid();
         project.EngineVersion = ByteEngineInfo.Version;
+        BundledCharacterInstaller.Install(projectDirectory, project.AssetDirectory);
         string projectFile = Path.Combine(projectDirectory, projectName + ".byteproject");
         serializer.Save(project, projectFile);
         if (!string.Equals(sourceProject, projectFile, StringComparison.OrdinalIgnoreCase)) File.Delete(sourceProject);

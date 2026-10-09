@@ -46,6 +46,7 @@ public abstract class ModelImporter
 /// </summary>
 public sealed class ModelImporterSettings
 {
+    public bool GenerateLods {get;set;}
     public float ImportScale { get; set; } =
         1.0f;
 
@@ -123,6 +124,7 @@ public sealed class ModelImporterSettings
         return
             new ModelImporterSettings
             {
+                GenerateLods=GenerateLods,
                 ImportScale =
                     ImportScale,
 

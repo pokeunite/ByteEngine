@@ -63,6 +63,15 @@ internal static class AuthoringUxTests
         first = BlueprintInstanceSynchronizer.Revert(first, project)!;
         Assert(Near(first.GetComponent<CharacterController3D>()!.MoveSpeed, 7f),
             "Revert restores current Blueprint property value");
+        first.GetComponent<CharacterController3D>()!.MoveSpeed=8;
+        first.GetComponent<CharacterController3D>()!.Gravity=5;
+        var property=BlueprintInstanceSynchronizer.PropertyOverrides(first,project).Single(p=>p.Component=="CharacterController3D"&&p.Property=="moveSpeed");
+        first=BlueprintInstanceSynchronizer.ApplyProperty(first,project,property)!;
+        second=FindInstance(scene,secondInstanceId);
+        Assert(first!=null&&Near(second.GetComponent<CharacterController3D>()!.MoveSpeed,8)&&Near(first.GetComponent<CharacterController3D>()!.Gravity,5),"Individual property apply propagates one source value and preserves other overrides");
+        var sourceAfterProperty=new BlueprintSerializer(project.AssetDatabase).Load(projectAsset!.FullPath);
+        Assert(!Near(sourceAfterProperty.Root.Components.Single(c=>c.Type=="CharacterController3D").Properties["gravity"]!.GetValue<float>(),5),"Individual apply accidentally writes other overrides");
+        first=BlueprintInstanceSynchronizer.Revert(first,project)!;
         first.RemoveComponent(first.GetComponent<CharacterController3D>()!);
         Assert(BlueprintInstanceSynchronizer.Analyze(first, project).RemovedComponents == 1,
             "Removed inherited component is tracked as an override");
@@ -113,6 +122,49 @@ internal static class AuthoringUxTests
         TestVisualModelOverride(project);
         TestModelGrounding(project);
         TestPresetAndDependencies();
+        TestNestedBlueprintReferences(project);
+    }
+
+    private static void TestNestedBlueprintReferences(EditorProjectContext project)
+    {
+        var source = new Scene("Nested source");
+        var nestedRoot = source.CreateGameObject("Nested mechanism");
+        var child = source.CreateGameObject("Linked body"); child.SetParent(nestedRoot, false);
+        nestedRoot.AddComponent(new ByteEngine.Core.Physics.DistanceJoint3D { ConnectedObject = child.Id });
+        child.AddComponent(new CharacterController3D { MoveSpeed = 3 });
+        var data = project.Scenes.Serialize(source);
+        var inner = new BlueprintDefinition { Name = "Inner", Root = data.GameObjects.Single(o=>o.Id==nestedRoot.Id), Children = data.GameObjects.Where(o=>o.Id!=nestedRoot.Id).ToList() };
+        string innerPath = Path.Combine(project.ProjectRoot,"Assets","NestedInner.byteblueprint");
+        new BlueprintSerializer().Save(inner,innerPath); project.AssetDatabase.Scan();
+        project.AssetDatabase.TryGetAsset("Assets/NestedInner.byteblueprint",out var innerAsset);
+        var variantSerializer=new BlueprintSerializer(project.AssetDatabase);
+        var innerVariant=variantSerializer.CreateVariant(new AssetReference(innerAsset!.Guid,innerAsset.ProjectPath),"Nested variant");
+        innerVariant.Children.Single().Components.Single(c=>c.Type=="CharacterController3D").Properties["gravity"]=4;
+        string variantPath=Path.Combine(project.ProjectRoot,"Assets","NestedVariant.byteblueprint");variantSerializer.Save(innerVariant,variantPath);project.AssetDatabase.Scan();
+        project.AssetDatabase.TryGetAsset("Assets/NestedVariant.byteblueprint",out var variantAsset);
+        var containerScene = new Scene("Outer source"); var container = containerScene.CreateGameObject("Container");
+        var innerPlaced = Place(containerScene,project,variantAsset!,variantSerializer.Load(variantPath)); innerPlaced.SetParent(container,false);
+        data = project.Scenes.Serialize(containerScene);
+        var outer = new BlueprintDefinition { Name = "Outer", Root = data.GameObjects.Single(o=>o.Id==container.Id), Children = data.GameObjects.Where(o=>o.Id!=container.Id).ToList() };
+        string outerPath=Path.Combine(project.ProjectRoot,"Assets","NestedOuter.byteblueprint");
+        new BlueprintSerializer().Save(outer,outerPath); project.AssetDatabase.Scan();
+        project.AssetDatabase.TryGetAsset("Assets/NestedOuter.byteblueprint",out var outerAsset);
+        var scene = new Scene("Nested instances"); var a=Place(scene,project,outerAsset!,outer); var b=Place(scene,project,outerAsset!,outer);
+        var an=a.Children.Single(); var bn=b.Children.Single();
+        Guid nestedId=an.GetComponent<BlueprintInstance>()!.InstanceId;
+        Assert(nestedId!=bn.GetComponent<BlueprintInstance>()!.InstanceId,"Nested instances share identity");
+        Assert(an.GetComponent<ByteEngine.Core.Physics.DistanceJoint3D>()!.ConnectedObject==an.Children.Single().Id && bn.GetComponent<ByteEngine.Core.Physics.DistanceJoint3D>()!.ConnectedObject==bn.Children.Single().Id,"Blueprint joint points outside its own instance");
+        Assert(an.GetComponent<BlueprintInstance>()!.ObjectMap[inner.Children.Single().Id]==an.Children.Single().Id,"Nested object map was not remapped");
+        an.Children.Single().GetComponent<CharacterController3D>()!.Gravity=2;
+        inner.Children.Single().Components.Single(c=>c.Type=="CharacterController3D").Properties["moveSpeed"]=6;
+        inner.Children.Single().Components.Single(c=>c.Type=="CharacterController3D").Properties["gravity"]=9;
+        new BlueprintSerializer().Save(inner,innerPath);project.AssetDatabase.Scan();
+        BlueprintInstanceSynchronizer.Propagate(project,scene,new AssetReference(innerAsset!.Guid,innerAsset.ProjectPath));
+        an=FindInstance(scene,nestedId);
+        Assert(BlueprintInstanceSynchronizer.InheritanceConflicts(an,project).Any(c=>c.Contains("gravity")),"Nested variant source conflict is not exposed to authoring");
+        Assert(an.Parent!=null&&Near(an.Children.Single().GetComponent<CharacterController3D>()!.MoveSpeed,6)&&Near(an.Children.Single().GetComponent<CharacterController3D>()!.Gravity,2),"Nested update loses parent, source change or local override");
+        Assert(an.GetComponent<ByteEngine.Core.Physics.DistanceJoint3D>()!.ConnectedObject==an.Children.Single().Id,"Nested propagation loses joint reference");
+        Console.WriteLine("PASS nested Blueprint instance identities, remapped joints/maps, parent preservation and source/override propagation");
     }
 
     private static BlueprintDefinition CreateBlueprint(SceneSerializer serializer)

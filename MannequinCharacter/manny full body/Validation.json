@@ -1,0 +1,27 @@
+{
+  "blender": "5.0.0",
+  "mesh_objects": 73,
+  "bones": 58,
+  "unweighted_vertices": 0,
+  "non_normalized_weights": 0,
+  "arm_deformation_test": "passed",
+  "height_metres": 1.863,
+  "reference": "Packed original front image; rear/depth reconstructed",
+  "outputs": [
+    "Mannequin-Rigged.blend",
+    "Mannequin-front.png",
+    "Mannequin-three-quarter.png",
+    "Mannequin-pose-test.png"
+  ],
+  "additional_rig_checks": {
+    "index.01.L": "passed",
+    "thigh.L": "passed",
+    "thigh.R": "passed",
+    "arm IK L": "passed",
+    "leg IK L": "passed",
+    "arm IK R": "passed",
+    "leg IK R": "passed"
+  },
+  "visual_refinement": "Curved chest seam, pectoral relief, close fitting knees and ankles, white backdrop",
+  "proportion_pass": "Reference waist, crotch and thigh landmarks corrected; spine rest positions updated"
+}

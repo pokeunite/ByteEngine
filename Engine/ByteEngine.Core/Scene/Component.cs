@@ -67,7 +67,9 @@ public abstract class Component
             StartInternal();
         }
 
-        OnUpdate();
+        if(this is ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer && AttachedGameObject?.Scene is {} scene)
+        {long start=System.Diagnostics.Stopwatch.GetTimestamp();try {OnUpdate();}finally{scene.AnimationMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;scene.AnimatedComponentCount++;}}
+        else OnUpdate();
     }
 
     internal void LateUpdateInternal()

@@ -37,7 +37,7 @@ internal static class ComponentMetadataRegistry
     public static readonly string[] CategoryOrder =
     {
         "Character", "Camera", "Rendering", "Physics", "Gameplay",
-        "AI", "Audio", "UI", "World", "Utility", "Advanced"
+        "AI", "Navigation", "Audio", "UI", "World", "Utility", "Advanced"
     };
 
     private static readonly Dictionary<Type, ComponentMetadata> Components = new()
@@ -45,7 +45,7 @@ internal static class ComponentMetadataRegistry
         [typeof(CharacterController3D)] = new("Character Movement", "Character", "Controls grounded movement, jumping, slopes and air control.", "controller motor walking jump"),
         [typeof(PlayerController3D)] = new("Player Input", "Character", "Creates camera-relative movement intent and player control rotation.", "controls wasd mouse control yaw pitch", true, false, new[] { typeof(CharacterController3D) }),
         [typeof(AnimationController)] = new("Animation Controller", "Character", "Selects character animation states from movement.", "character animator"),
-        [typeof(CameraBoom3D)] = new("Player Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow"),
+        [typeof(CameraBoom3D)] = new("Player Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow third person"),
         [typeof(Camera3D)] = new("Camera", "Camera", "Renders a perspective 3D game view.", "perspective fov"),
         [typeof(Camera2D)] = new("2D Camera", "Camera", "Renders a two-dimensional game view.", "orthographic zoom"),
         [typeof(ThirdPersonCamera3D)] = new("Legacy Third Person Camera", "Camera", "Legacy standalone follow camera kept for older projects.", "tps orbit follow", false, true),
@@ -57,6 +57,19 @@ internal static class ComponentMetadataRegistry
         [typeof(SkeletalMeshRenderer)] = new("Skeletal Mesh Renderer", "Rendering", "Draws an animated skinned mesh.", "character bones model"),
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
         [typeof(UiCanvas)] = new("Canvas", "UI", "Screen-space root for HUDs and menus.", "ui overlay screen"),
+        [typeof(ByteEngine.Core.Navigation.NavigationRegion3D)] = new("Navigation Region", "Navigation", "Bakes a static walkable grid with obstacle clearance.", "navigation bake path grid"),
+        [typeof(ByteEngine.Core.Navigation.NavigationAgent3D)] = new("Navigation Agent", "Navigation", "Follows budgeted obstacle-aware paths to a destination.", "navigation agent path destination"),
+        [typeof(HingeJoint3D)]=new("Hinge Joint","Physics","Local-anchor articulated joint with angular limits and a bounded motor.","hinge joint articulation limit motor"),
+        [typeof(ByteEngine.Core.Physics.DistanceJoint3D)] = new("Distance Joint", "Physics", "Articulated local-anchor constraint with optional break force.", "joint rope constraint anchors"),
+        [typeof(MeshLodGroup)] = new("Mesh LOD Group", "Rendering", "Direct child groups are high, medium, and low detail. Physics remains active.", "lod distance mesh detail"),
+        [typeof(UiTheme)] = new("UI Theme", "UI", "Inherited primary, secondary and danger button colours.", "ui theme palette"),
+        [typeof(ByteEngine.Core.Serialization.MissingComponent)]=new("Unavailable Component","Advanced","Preserves serialized data for an unavailable component.","missing plugin",false,true),
+        [typeof(ByteEngine.Core.Construction.ImpactParticles3D)]=new("Impact Particles","Rendering","Lightweight impact effects.","impact particles"),
+        [typeof(ByteEngine.Core.Construction.SwarmRenderer3D)]=new("Swarm Renderer","Rendering","Instanced swarm rendering.","swarm instance"),
+        [typeof(UiScrollContainer)] = new("UI Scroll Container","UI","Clips child widgets and scrolls with the mouse wheel or focus navigation.","ui scroll list clip"),
+        [typeof(ByteEngine.Core.Navigation.NavigationLink3D)] = new("Navigation Link","Navigation","Connects two walkable cells for authored traversal.","navigation jump bridge link"),
+        [typeof(HeightfieldCollider3D)] = new("Heightfield Collider","Physics","Terrain heightfield collision surface.","terrain collision heightfield"),
+        [typeof(UiContainer)] = new("UI Container", "UI", "Responsive row, column or grid for child widgets.", "ui layout row column grid"),
         [typeof(UiWidget)] = new("UI Widget", "UI", "Panel, image, progress bar, or clickable button.", "ui image panel health bar button"),
         [typeof(UiText)] = new("Text", "UI", "Draws screen-space text using a font asset or the system default.", "label font bitmap ttf"),
         [typeof(UiAnimator)] = new("UI Animator", "UI", "Fades, slides or pulses a Text or Widget without changing its authored layout.", "ui transition fade slide pop pulse"),
@@ -64,6 +77,7 @@ internal static class ComponentMetadataRegistry
         [typeof(PointLight)] = new("Point Light", "Rendering", "Lights nearby 3D surfaces outward from a position.", "lamp bulb local omni light"),
         [typeof(SkyEnvironment)] = new("Sky Environment", "World", "Draws a procedural 3D world sky and can control scene ambient light.", "sky environment horizon background ambient world"),
 
+        [typeof(MeshCollider3D)] = new("Mesh Collider", "Physics", "Static triangle geometry or a validated closed convex hull for dynamic bodies. Independent of rendering LOD.", "convex triangle mesh collision"),
         [typeof(BoxCollider3D)] = new("Box Collider", "Physics", "A box-shaped collision volume.", "collision cube"),
         [typeof(CapsuleCollider3D)] = new("Capsule Collider", "Physics", "A character-friendly capsule collision volume.", "collision character"),
         [typeof(Rigidbody3D)] = new(

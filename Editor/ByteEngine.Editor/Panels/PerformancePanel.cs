@@ -106,15 +106,25 @@ internal sealed class PerformancePanel
         DrawFrameSection();
         DrawProcessSection();
         ImGui.SeparatorText("GRAPHICS / LAST VIEW");
+        DrawMetric("Sky / shadows / geometry CPU",$"{ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.GeometryCpuMs:0.00} ms");
+        DrawMetric("Sky / shadows / geometry GPU",ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.GeometryGpuMs is {} geometry?$"{geometry:0.00} ms":"Enable measurement on Sky Environment");
         DrawMetric("Post effects CPU",$"{ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.PostCpuMs:0.00} ms");
         DrawMetric("Post effects GPU",ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.PostGpuMs is {} gpu?$"{gpu:0.00} ms":"Enable measurement on Sky Environment");
         DrawMetric("Extra effect passes",ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.ExtraPasses.ToString());
-        ImGui.TextWrapped("GPU measurement includes post effects and presentation only, not the entire renderer. Values refer to the most recently rendered view.");
+        ImGui.TextWrapped("GPU samples are delayed and never block rendering. Passes are attributed to Scene, Game or asset preview viewports.");
+        foreach(var pass in ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.Passes)
+            DrawMetric(pass.Viewport+" / "+pass.Pass,$"CPU {pass.CpuMs:0.00} ms / GPU {(pass.GpuMs.HasValue?pass.GpuMs.Value.ToString("0.00"):"off")} ms");
+        if(ImGui.Button("Export frame capture"))
+        {
+            string folder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ByteEngine","Diagnostics");Directory.CreateDirectory(folder);
+            ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.ExportCapture(Path.Combine(folder,"frame-"+DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")+".json"),state.RuntimeScene??state.EditorScene);
+        }
         var frame = (state.RuntimeScene ?? state.EditorScene).LastFrameMetrics;
         ImGui.SeparatorText("SCENE CPU / LAST UPDATE");
         DrawMetric("Gameplay", $"{frame.UpdateMs:0.00} ms");
         DrawMetric("Physics + fixed callbacks", $"{frame.PhysicsMs:0.00} ms");
         DrawMetric("Late update + attachments", $"{frame.LateUpdateMs:0.00} ms");
+        DrawMetric("Animation (within gameplay)", $"{frame.AnimationMs:0.00} ms / {frame.AnimatedComponents} components");
         DrawMetric("Update allocations", $"{frame.AllocatedBytes:N0} bytes");
         DrawMetric("Physics ticks / candidates", $"{frame.PhysicsTicks} / {frame.BroadPhaseCandidates}");
         DrawMemorySection();

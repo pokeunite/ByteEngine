@@ -290,7 +290,7 @@ public static class GameplayQuery3D
             new List<OverlapHit3D>();
 
         foreach (GameObject gameObject
-                 in scene.GameObjects)
+                 in scene.Physics.QueryBounds(scene, Vector3.Min(pointA, pointB) - new Vector3(radius), Vector3.Max(pointA, pointB) + new Vector3(radius)))
         {
             if (!gameObject.ActiveInHierarchy ||
                 ShouldIgnore(
@@ -390,7 +390,9 @@ public static class GameplayQuery3D
                 source);
 
         foreach (GameObject gameObject
-                 in scene.GameObjects)
+                 in float.IsFinite(maxDistance)
+                     ? scene.Physics.QueryBounds(scene, Vector3.Min(origin, origin + rayDirection * maxDistance) - new Vector3(radius), Vector3.Max(origin, origin + rayDirection * maxDistance) + new Vector3(radius))
+                     : scene.GameObjects)
         {
             if (!gameObject.ActiveInHierarchy ||
                 ShouldIgnore(
@@ -584,8 +586,10 @@ public static class GameplayQuery3D
         out float distance,
         out Vector3 normal)
     {
+        distance=0;normal=-direction;
         return collider switch
         {
+            MeshCollider3D mesh => mesh.Geometry is {} geometry && geometry.Cast(origin,direction,radius,out distance,out normal),
             HeightfieldCollider3D terrain => terrain.Cast(origin, direction, radius, float.PositiveInfinity, out distance, out normal),
             BoxCollider3D box =>
                 IntersectBox(
@@ -1119,6 +1123,11 @@ public static class GameplayQuery3D
         float radius,
         Collider3D collider)
     {
+        if(collider is MeshCollider3D mesh)
+        {
+            var geometry=mesh.Geometry;if(geometry==null)return false;
+            return geometry.Contains((pointA+pointB)*.5f,out _,out _)||geometry.SegmentDistance(pointA,pointB,out _,out _)<=radius;
+        }
         if (collider is HeightfieldCollider3D terrain)
         {
             for(int sample=0;sample<=16;sample++)

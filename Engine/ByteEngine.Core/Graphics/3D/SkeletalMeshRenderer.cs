@@ -499,6 +499,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     protected override void OnRender(RenderContext context)
     {
+        if (context.RenderWorld.View is {} lodView && !MeshLodGroup.Allows(GameObject,lodView,context.ViewportName)) return;
         if (!Visible || !context.Has3DCamera)
         {
             return;
@@ -515,7 +516,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         }
 
         Matrix4x4 liveWorldMatrix =
-            Transform.WorldMatrix;
+            Transform.RenderMatrix;
 
         AnimationRuntimeAssets.TryGet(out AssetManager? materialAssets);
         Material? modelOverride = ModelHierarchyInstance.ResolveMaterialOverride(GameObject);

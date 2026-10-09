@@ -48,6 +48,8 @@ public static class PhysicsSerializationRegistrar
                         new JsonObject
                         {
                             ["simulateRotation"] = body.SimulateRotation,
+                            ["continuousCollision"] = body.ContinuousCollision,
+                            ["allowSleep"] = body.AllowSleep,
                             ["angularVelocity"] = new JsonArray(body.AngularVelocity.X, body.AngularVelocity.Y, body.AngularVelocity.Z),
                             ["inertiaTensor"] = new JsonArray(body.InertiaTensor.X, body.InertiaTensor.Y, body.InertiaTensor.Z),
                             ["angularDamping"] = body.AngularDamping,
@@ -108,6 +110,8 @@ public static class PhysicsSerializationRegistrar
                 new Rigidbody3D
                 {
                     SimulateRotation = data.Properties["simulateRotation"]?.GetValue<bool>() ?? false,
+                    ContinuousCollision = data.Properties["continuousCollision"]?.GetValue<bool>() ?? false,
+                    AllowSleep = data.Properties["allowSleep"]?.GetValue<bool>() ?? true,
                     AngularVelocity = ReadVector3(data.Properties["angularVelocity"], Vector3.Zero),
                     InertiaTensor = ReadVector3(data.Properties["inertiaTensor"], Vector3.One),
                     AngularDamping = ReadFloat(data, "angularDamping", .05f),

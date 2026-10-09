@@ -63,7 +63,7 @@ public static class BlueprintRuntimeFactory
         try
         {
             blueprint =
-                new BlueprintSerializer()
+                new BlueprintSerializer(database)
                     .Load(
                         asset.FullPath);
         }
