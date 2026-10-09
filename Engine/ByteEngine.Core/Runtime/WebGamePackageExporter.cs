@@ -67,9 +67,27 @@ public static class WebGamePackageExporter
             foreach (var model in database.Assets.Where(a => a.Type == AssetType.Model3D))
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
-                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter));
+                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true);
                 // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
                 File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
+            }
+            var dataTextures=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void DataReferences(JsonElement element){
+                if(element.ValueKind==JsonValueKind.Object)foreach(var property in element.EnumerateObject()){
+                    if(property.Name.Contains("heightmap",StringComparison.OrdinalIgnoreCase)&&property.Value.ValueKind==JsonValueKind.String&&property.Value.GetString() is {Length:>0} path){
+                        string full=Path.GetFullPath(Path.IsPathRooted(path)?path:Path.Combine(root,path));
+                        if(GamePackageExporter.IsInside(root,full))dataTextures.Add(Path.GetRelativePath(root,full).Replace('\\','/'));
+                    }
+                    DataReferences(property.Value);
+                }else if(element.ValueKind==JsonValueKind.Array)foreach(var item in element.EnumerateArray())DataReferences(item);
+            }
+            foreach(var asset in database.Assets.Where(a=>a.Type==AssetType.Scene||a.Type==AssetType.Blueprint)){
+                using var document=JsonDocument.Parse(File.ReadAllText(asset.FullPath));DataReferences(document.RootElement);
+            }
+            foreach(string texture in GamePackageExporter.WalkFiles(content).Where(p=>new[]{".png",".jpg",".jpeg",".bmp",".tga"}.Contains(Path.GetExtension(p).ToLowerInvariant()))){
+                if(dataTextures.Contains(Path.GetRelativePath(content,texture).Replace('\\','/')))continue;
+                byte[] original=File.ReadAllBytes(texture),optimized=WebTextureCooker.Optimize(original);
+                if(!ReferenceEquals(original,optimized))File.WriteAllBytes(texture,optimized);
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
             int contentCount = GamePackageExporter.WalkFiles(content).Count();

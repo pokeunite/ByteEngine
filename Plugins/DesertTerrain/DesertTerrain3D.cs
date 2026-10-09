@@ -41,7 +41,10 @@ public sealed partial class DesertTerrain3D : HeightfieldCollider3D
 
             if(_referenceSand==null){foreach(var child in GameObject.Children)if(child.GetComponent<InteractiveSand3D>() is {} existing){_referenceSand=existing;break;}}
 
-            if(_referenceSand==null){var obj=GameObject.Scene!.CreateGameObject("Interactive sand - fixed GPU field");obj.SetParent(GameObject,false);_referenceSand=obj.AddComponent(new InteractiveSand3D{Center=Center,SurfaceWidth=Cells*Spacing});}
+            if(_referenceSand==null){var obj=GameObject.Scene!.CreateGameObject("Interactive sand - fixed GPU field");obj.SetParent(GameObject,false);_referenceSand=obj.AddComponent(new InteractiveSand3D{Center=Center,SurfaceWidth=Cells*Spacing,
+                // The browser uses material normals for centimetre-scale ripples.
+                // Preserve authored pits and contact deformation in the collision field.
+                RippleHeight=OperatingSystem.IsBrowser()?0:.018f});}
 
             _referenceSand.ContactDepth=Math.Clamp(ContactRutDepth,.01f,.32f);_referenceSand.WindDelaySeconds=SandWindDelaySeconds;_referenceSand.WindFillSeconds=SandWindFillSeconds;return _referenceSand;
 

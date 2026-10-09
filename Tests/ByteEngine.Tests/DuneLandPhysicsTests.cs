@@ -19,6 +19,7 @@ internal static class DuneLandPhysicsTests
   List<PlacedBlock> Cart(bool hinges){var list=new List<PlacedBlock>{new(){Id=0,Type=3}};void Add(int type,int parent,Vector3 pos,Quaternion q,bool moving=false){var p=new PlacedBlock{Id=list.Count,Type=type,Parent=parent,MovingMount=moving};p.Pose(pos,q);list.Add(p);}Add(23,0,new(0,.3f,.5f),Quaternion.Identity);Add(25,0,new(0,.3f,-.5f),Quaternion.Identity);foreach(int z in new[]{-1,1})foreach(int x in new[]{-1,1}){int parent=0;bool moving=false;if(hinges&&z<0){Add(18,0,new(x*.6f,.1f,z*.85f),Quaternion.Identity);parent=list.Last().Id;moving=true;}Add(13,parent,new(x*.9f,.1f,z*.85f),Quaternion.CreateFromAxisAngle(Vector3.UnitY,-x*MathF.PI*.5f),moving);}return list;}
   using(var budget=new LandVehiclePhysics(Cart(false),catalog,defs,new(0,2,0),Quaternion.Identity,simulationHz:60,maximumCatchUpSteps:2)){
    budget.AddFlatGround();for(int i=0;i<120;i++)budget.Step(1f/60,0,0,false,24);
+   Check(budget.SolverMilliseconds>0&&budget.TerrainMilliseconds>=0&&budget.ControlsMilliseconds>=0&&budget.StepAllocatedBytes>=0&&budget.StaticColliderCount==1,"Physics phase diagnostics report real work and collider counts");
    Check(budget.DroppedSimulationSeconds==0,"Normal-rate frames preserve all simulation time");
    budget.Step(.2f,0,0,false,24);Check(budget.LastStepCount==2&&budget.DroppedSimulationSeconds>.15,"A long stall has bounded catch-up work");
    budget.Step(1f/60,0,0,false,24);Check(budget.LastStepCount==1&&float.IsFinite(budget.RenderFrame.Position.Y),"The frame after a stall resumes normally without old catch-up debt");
@@ -61,6 +62,16 @@ internal static class DuneLandPhysicsTests
    for(int i=0;i<240;i++)world.Step(1f/120,0,0,false,24);Check(world.Frame.Position.Y>-.2f&&world.ContactCount>=2,"One-sided sand mesh supports tyres from above across chunk seams");
    terrain.Depth=.12f;world.MarkAllTerrainChanged();for(int i=0;i<480;i++)world.Step(1f/120,1,0,false,24);Check(world.Frame.Position.Y>-.35f&&world.Frame.Position.Z<-5,"Rut collider rebuilds preserve tyre traction and ground support");
   }
+  var patch=scene.CreateGameObject("Fine sand patch").AddComponent(new TestPatch());
+  using(var world=new LandVehiclePhysics(Cart(false),catalog,defs,new(0,1,0),Quaternion.Identity,terrain,simulationHz:simulationHz)){
+   terrain.Depth=0;world.MarkAllTerrainChanged();world.SetSandPatch(patch);
+   Check(world.FineTriangleCount==8,"Four flat fine tiles merge from 2048 triangles to eight without changing the surface");
+   for(int i=0;i<240;i++)world.Step(1f/60,0,0,false,24);
+   float flatHeight=world.Frame.Position.Y;Check(world.ContactCount>=2,"Merged fine terrain physically supports the tyres");
+   patch.Depth=.12f;world.MarkAllTerrainChanged();for(int i=0;i<300;i++)world.Step(1f/60,0,0,false,24);
+   Check(world.FineTriangleCount>8&&world.FineTriangleCount<=2048,"Deformed tiles automatically restore detail around the rut");
+   Check(flatHeight-world.Frame.Position.Y>.02f&&world.Frame.Position.Y>-.4f&&world.ContactCount>=2,"Tyres settle into the actual rut and remain physically supported");
+  }
   // Tunable suspension must alter the physical response, not just a UI number.
   float Compression(float rate,float damping){var blocks=BuildStore.Read(JsonSerializer.Serialize(suspended,BuildStore.Json),catalog);foreach(var b in blocks.Where(b=>b.Type==16)){b.SpringRate=rate;b.Damping=damping;}using var w=new LandVehiclePhysics(blocks,catalog,defs,new(0,1.5f,0),Quaternion.Identity,simulationHz:simulationHz);w.AddFlatGround();for(int i=0;i<600;i++)w.Step(1f/120,0,0,false,24);return blocks.Where(b=>b.Type==16).Average(b=>Math.Abs(w.SuspensionOffset(b.Id)));}
   float soft=Compression(2,1),stiff=Compression(9,1);Console.WriteLine($"Spring load: soft={soft:0.0000} m / stiff={stiff:0.0000} m");Check(soft>stiff+.005f,"Spring stiffness changes measured loaded suspension compression");
@@ -91,6 +102,13 @@ internal static class DuneLandPhysicsTests
  {
   public override Vector3 Size {get=>LocalTerrainBounds.Size;set{}} public float Depth;public override int Columns=>70;public override int Rows=>70;public override float CellSpacing=>2;public override Vector2 GridMinimum=>new(-64);
   public override float HeightAt(int x,int z)=>-Depth;public override BoundingBox3D LocalTerrainBounds=>new(new(-64,-1,-64),new(74,0,74));
+ }
+ sealed class TestPatch:HeightfieldCollider3D {
+  public float Depth;
+  public override Vector3 Size {get=>LocalTerrainBounds.Size;set{}}
+  public override int Columns=>33;public override int Rows=>33;public override float CellSpacing=>.25f;public override Vector2 GridMinimum=>new(-4);
+  public override float HeightAt(int x,int z){float px=-4+x*.25f,pz=-4+z*.25f;return -Depth*Math.Max(0,1-(px*px+pz*pz)/9);}
+  public override BoundingBox3D LocalTerrainBounds=>new(new(-4,-1,-4),new(4,0,4));
  }
  static void Check(bool okay,string message){if(!okay)throw new InvalidOperationException(message);Console.WriteLine("PASS "+message);}
 }

@@ -27,3 +27,20 @@ const firstKey=[...stored.keys()][0];stored.set(firstKey,new Response(Buffer.fro
 console.log('PASS Cached chunks survive reload; corrupt cached data is discarded and downloaded again');
 globalThis.caches={open:async()=>{throw Error('Storage blocked');}};await loadContent({MountBytes:()=>{}},{textContent:''});console.log('PASS Restricted browser storage falls back to network');delete globalThis.caches;
 let ready=false,downloadedBeforeRuntime=false;const delayedGame=new Promise(resolve=>setTimeout(()=>{ready=true;resolve({MountBytes:()=>{}});},100));globalThis.fetch=async url=>{if(url.includes('web-game.json'))return Response.json(manifest);if(!ready)downloadedBeforeRuntime=true;return new Response(url.includes('.0.bin')?parts[0]:parts[1]);};await loadContent(delayedGame,{textContent:''});if(!downloadedBeforeRuntime)throw Error('Data download waits for runtime initialization');console.log('PASS Runtime initialization and content downloads overlap');
+
+// A slow first chunk must not leave completed later network slots idle.
+const five=Array.from({length:5},(_,i)=>pak.subarray(Math.floor(i*pak.length/5),Math.floor((i+1)*pak.length/5)));
+const pipelined={...manifest,files:five.map((data,i)=>({path:`Game.bytepak.${i}.bin`,size:data.length,sha256:hash(data)}))};
+let releaseFirst,active=0,peak=0,started=[],pipelineTimedOut=false;
+const firstWait=new Promise(resolve=>releaseFirst=resolve);
+const watchdog=setTimeout(()=>{pipelineTimedOut=true;releaseFirst();},2000);
+globalThis.fetch=async url=>{
+ if(url.includes('web-game.json'))return Response.json(pipelined);
+ const i=Number(/\.(\d+)\.bin$/.exec(url)[1]);started.push(i);peak=Math.max(peak,++active);
+ if(i===4)releaseFirst();if(i===0)await firstWait;
+ active--;return new Response(five[i]);
+};
+mounts=[];await loadContent({MountBytes:(p,d)=>mounts.push(new TextDecoder().decode(d))},{textContent:''});clearTimeout(watchdog);
+if(pipelineTimedOut||started.indexOf(4)<0||peak>3||mounts[0]!=='{}')throw Error('Download pipeline/order/concurrency failure');
+if(started[1]!==1||started[2]!==2)throw Error('Initial parallel slots incorrect');
+console.log('PASS Three bounded download workers keep fetching while the first chunk waits; final bytes mount in order');

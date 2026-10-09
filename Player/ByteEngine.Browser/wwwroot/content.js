@@ -9,33 +9,34 @@ export async function loadContent(game, status) {
     const audio = new Map();
     if (manifest.formatVersion === 3 && (!Number.isSafeInteger(manifest.packageSize) || manifest.packageSize < 8 || manifest.packageSize > 500*1024*1024)) throw new Error('Invalid package size.');
     const packageBytes = manifest.formatVersion === 3 ? new Uint8Array(manifest.packageSize) : null;
-    let index = 0, offset = 0;
+    let index = 0;
     const progress=new Map();
-    const update=(path,loaded)=>{if(status.dataset?.failed)return;progress.set(path,loaded);const total=manifest.files.reduce((sum,file)=>sum+file.size,0),done=[...progress.values()].reduce((sum,n)=>sum+n,0);status.textContent=`Downloading game / ${Math.floor(done/Math.max(1,total)*100)}% / ${(done/1048576).toFixed(1)} MB of ${(total/1048576).toFixed(1)} MB`;};
+    const update=(path,loaded)=>{if(status.dataset?.failed)return;progress.set(path,loaded);const total=manifest.files.reduce((sum,file)=>sum+file.size,0),done=[...progress.values()].reduce((sum,n)=>sum+n,0),fraction=Math.min(1,done/Math.max(1,total)),label=`Loading game · ${Math.floor(fraction*100)}%`;if(status.setProgress)status.setProgress(fraction,label);else status.textContent=label;};
     for(const file of manifest.files)if(typeof file.path !== 'string' || file.path.startsWith('/') || file.path.includes('\\') || file.path.includes(':') || file.path.split('/').some(p=>!p||p==='.'||p==='..'))throw new Error('Unsafe package path.');
-    const pending=new Map();
-    const prefetch=i=>{if(i<manifest.files.length){const task=fetchContent(manifest.files[i],status,i+1,manifest.files.length,cache,update);task.catch(()=>{});pending.set(i,task);}};
-    if(packageBytes)for(let i=0;i<Math.min(3,manifest.files.length);i++)prefetch(i);
+    if(packageBytes){
+        // Keep all network slots busy, even when an earlier chunk retries. Copy
+        // each verified result directly to its final offset, then release it.
+        const offsets=[];let size=0;
+        for(const file of manifest.files){if(!Number.isSafeInteger(file.size)||file.size<0)throw new Error('Invalid content size');offsets.push(size);size+=file.size;}
+        if(size!==packageBytes.length)throw new Error('Package chunks do not match declared size.');
+        let next=0;
+        const worker=async()=>{while(next<manifest.files.length){const i=next++,file=manifest.files[i];const data=await fetchContent(file,status,i+1,manifest.files.length,cache,update);packageBytes.set(data,offsets[i]);}};
+        await Promise.all(Array.from({length:Math.min(3,manifest.files.length)},worker));
+        if(await digest(packageBytes)!==manifest.packageSha256.toLowerCase())throw new Error('Asset package integrity mismatch.');
+        await mountPackage(await mountedGame,packageBytes,audio,status);
+        return {manifest,audio};
+    }
     for (const file of manifest.files) {
         if (typeof file.path !== 'string' || file.path.startsWith('/') || file.path.includes('\\') ||
             file.path.split('/').some(p => !p || p === '.' || p === '..')) throw new Error('Unsafe package path.');
-        const data = packageBytes?await pending.get(index):await fetchContent(file,status,index+1,manifest.files.length,cache,update);
-        if(packageBytes){pending.delete(index);prefetch(index+3);}index++;
-        if (packageBytes) {
-            if(offset+data.length>packageBytes.length)throw new Error('Package chunks exceed declared size.');
-            packageBytes.set(data,offset);offset+=data.length;
-        } else if (manifest.formatVersion === 2) {
+        const data=await fetchContent(file,status,index+1,manifest.files.length,cache,update);index++;
+        if (manifest.formatVersion === 2) {
             if (file.path !== 'Game.bytepak') throw new Error('Unsupported asset package path.');
             await mountPackage(await mountedGame, data, audio, status);
         } else {
             mountFile(await mountedGame,file.path,data);
             if (/\.(wav|ogg)$/i.test(file.path)) audio.set(file.path, data.buffer);
         }
-    }
-    if(packageBytes){
-        if(offset!==packageBytes.length)throw new Error('Incomplete package chunks.');
-        if(await digest(packageBytes)!==manifest.packageSha256.toLowerCase())throw new Error('Asset package integrity mismatch.');
-        await mountPackage(await mountedGame,packageBytes,audio,status);
     }
     return { manifest, audio };
 }
@@ -80,7 +81,7 @@ async function fetchContent(file,status,index,count,cache,update){
             if(received!==file.size)throw new Error('Incomplete download: '+received+'/'+file.size+' bytes');
             if(await digest(data)!==file.sha256.toLowerCase()){received=0;throw new Error('Content integrity mismatch');}
             await rememberContent(cache,file,data);trace('download-ready',{path:file.path,bytes:data.length,durationMs:performance.now()-loadStart});return data;
-        }catch(error){trace('download-retry',{path:file.path,attempt,message:String(error)});lastError=error;controller.abort();if(received===file.size)received=0;if(attempt<4){if(!status.dataset?.failed)status.textContent=`Reconnecting download ${index}/${count} / keeping completed downloads`;await new Promise(resolve=>setTimeout(resolve,1000));}}
+        }catch(error){trace('download-retry',{path:file.path,attempt,message:String(error)});lastError=error;controller.abort();if(received===file.size)received=0;if(attempt<4){if(!status.dataset?.failed)status.textContent='Loading game · reconnecting…';await new Promise(resolve=>setTimeout(resolve,1000));}}
         finally{clearTimeout(timer);}
     }
     throw new Error('Cannot download '+file.path+' after 4 attempts: '+lastError+'. Reload to resume verified downloads.');
@@ -132,7 +133,7 @@ async function mountPackage(game, bytes, audio, status) {
         seen.add(path.toLowerCase());
         const length=size(), expected=take(32), compressed=take(size());
         total+=length;if(total>4294967296)throw new Error('Asset package too large.');
-        status.textContent='Unpacking assets '+(index+1)+'/'+count;
+        if(status.setProgress)status.setProgress(index/count,'Preparing assets · '+Math.floor(index/count*100)+'%');else status.textContent='Preparing assets '+(index+1)+'/'+count;
         const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate'));
         let data;try{data=length===0&&compressed.length===0?new Uint8Array():new Uint8Array(await new Response(stream).arrayBuffer());}catch(error){throw new Error("Unpacking "+path+": "+error);}
         if(data.length!==length)throw new Error('Asset size mismatch: '+path);

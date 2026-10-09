@@ -9,11 +9,17 @@ internal static class BundledCharacterInstaller
         "Mannequin-FPS-Arms.glb"
     };
 
+    internal static readonly string[] SupportFiles =
+    {
+        "README.txt", "ANIMATION-CREDITS.txt", "LICENSE-CC-BY-4.0.txt",
+        "LICENSE-CC0-1.0.txt", "ROKOKO-SOURCE-NOTICE.txt", "animations.json"
+    };
+
     public static int Install(string projectRoot, string assetDirectory = "Assets", string? sourceDirectory = null)
     {
         string source = sourceDirectory ??
             Path.Combine(AppContext.BaseDirectory, "Resources", "Characters", "ByteEngine");
-        string[] files = ModelFiles.Append("README.txt").ToArray();
+        string[] files = ModelFiles.Concat(SupportFiles).ToArray();
         // Validate the complete bundle before installing any of it.
         foreach (string name in files)
         {

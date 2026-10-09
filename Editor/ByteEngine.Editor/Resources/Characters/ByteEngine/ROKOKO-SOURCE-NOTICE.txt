@@ -1,0 +1,22 @@
+Rokoko free gun mocap source notice
+
+Creator: Sam Lazarus / Rokoko
+Source: https://www.rokoko.com/resources/rokoko-mocap-11-free-gun-animations
+Related collection: https://www.rokoko.com/resources/download-263-rokoko-motion-capture-assets
+Terms: https://www.rokoko.com/terms-of-service
+Source checked: 9 October 2026
+
+Rokoko's resource page permits its free captures in personal and commercial
+animation, VFX, game, 3D art and other 3D projects. These fifteen captures are
+embedded as retargeted animations of ByteEngine's original mannequin models.
+The source page advertises eleven clips; its public archive contains fifteen.
+
+Changes: retargeted to the mannequin deform skeletons; scaled limb motion;
+solved fixed-length arm chains; compressed thumb chains; baked at 30 FPS;
+extracted fixed-root arm motion for the first-person mannequin.
+No source character mesh, Rokoko software or raw FBX archive is included.
+
+These motions are not licensed as CC0 or CC BY by ByteEngine. The source
+page grants project use; it does not state a general standalone-animation
+redistribution license. Preserve this source notice and consult the author
+for uses outside the stated project-use permission.

@@ -20,3 +20,12 @@ layout.ini
 /output/video-wheel/
 **/node_modules/
 **/__pycache__/
+
+# Local design studies and generated diagnostic work (tracked references remain tracked).
+/output/
+/Designs/
+/Diagnostics/
+/tmp/
+/engine_startup_error.txt
+/parts-before-cleanup.csv
+/parts-removed.txt

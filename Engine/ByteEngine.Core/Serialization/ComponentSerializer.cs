@@ -355,6 +355,8 @@ public sealed class ComponentSerializer
         Register(new UiCanvasCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiContainer>("UiContainer"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Speedometer>("Speedometer"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Minimap>("Minimap"));
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());
         Register(new UiAnimatorCodec());

@@ -1,0 +1,25 @@
+ByteEngine mannequin animation credits
+
+Full-body source: Universal Animation Library Standard by Quaternius
+https://quaternius.itch.io/universal-animation-library
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+
+PSX FPS Arms Free by heyheythere - https://heyheythere.itch.io/psx-fps-arms-free - CC BY 4.0
+https://creativecommons.org/licenses/by/4.0/
+Keep this attribution with redistributed animation files and in game credits.
+
+Supplemental hand/melee source: PSX First Person Arms by Drillimpact
+https://drillimpact.itch.io/psx-first-person-arms-free
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
+
+Changes: retargeted to the ByteEngine mannequin skeletons, scaled wrist motion,
+baked FK and finger keys at 30 FPS, compressed thumb chains, extracted arm
+motion from full-body clips and applied FPS clips to a standing body.
+Source meshes, textures, scripts and weapon mechanism animations are omitted.
+These notices apply to the third-party animation contributions. Preserve CC BY
+credit and license links when using or adapting those clips in your project.
+
+Rokoko free gun mocap by Sam Lazarus / Rokoko
+https://www.rokoko.com/resources/rokoko-mocap-11-free-gun-animations
+15 retargeted takes; author project-use permission, not CC0 or CC BY.
+See ROKOKO-SOURCE-NOTICE.txt.

@@ -31,6 +31,9 @@ jobs:
       - name: Bundled mannequin characters
         run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --bundled-characters
 
+      - name: Reusable game systems
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --reusable-game-systems
+
       - name: Engine foundations
         run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --engine-foundations
 

@@ -53,7 +53,7 @@ public sealed partial class DuneWorkshop3D
  float _sandStampTimer;
  public void StepDrive(float throttle,float steer,bool brake,float dt,bool handbrake=false)
  {
-  if(Building||_physics==null)return;_sand?.FocusPatch(Transform.WorldPosition);_feedbackThrottle=throttle;_feedbackBrake=brake||handbrake;foreach(var entry in _physicalTargets.ToArray()){if(entry.Value.Target.Defeated){_physics.RemoveObstacle(entry.Key);_physicalTargets.Remove(entry.Key);}else{var node=entry.Value.Node;Matrix4x4.Decompose(node.Transform.WorldMatrix,out _,out var rotation,out _);_physics.MoveObstacle(entry.Key,Vector3.Transform(entry.Value.Center,node.Transform.WorldMatrix),rotation);}}
+  if(Building||_physics==null)return;_sand?.ResetSampleMetrics();_sand?.FocusPatch(Transform.WorldPosition);_feedbackThrottle=throttle;_feedbackBrake=brake||handbrake;foreach(var entry in _physicalTargets.ToArray()){if(entry.Value.Target.Defeated){_physics.RemoveObstacle(entry.Key);_physicalTargets.Remove(entry.Key);}else{var node=entry.Value.Node;Matrix4x4.Decompose(node.Transform.WorldMatrix,out _,out var rotation,out _);_physics.MoveObstacle(entry.Key,Vector3.Transform(entry.Value.Center,node.Transform.WorldMatrix),rotation);}}
   float Resistance(Vector3 pos)=>_sand!=null&&_sand.Sample(pos,out _,out _,out _,out float resistance)?resistance:0;
   float Grip(Vector3 pos)=>_sand!=null&&_sand.Sample(pos,out _,out _,out float grip,out _)?grip:.65f;
   _physics.Step(dt,throttle,steer,brake,MaximumSpeed,(Input.IsKeyDown(Key.E)?1:0)-(Input.IsKeyDown(Key.Q)?1:0),Input.IsKeyDown(Key.E)?1:0,Grip,handbrake,Resistance);

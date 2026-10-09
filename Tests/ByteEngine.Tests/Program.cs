@@ -20,6 +20,7 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Contains("--reusable-game-systems")) { ReusableGameSystemsTests.Run(root); return; }
     if (args.Contains("--bundled-characters")) { BundledCharacterTests.Run(); return; }
     if(args.Length>=2&&args[0]=="--create-sand-example")
     {

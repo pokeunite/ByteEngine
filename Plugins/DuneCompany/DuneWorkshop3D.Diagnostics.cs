@@ -3,6 +3,8 @@ using ByteEngine.Core;
 namespace DuneCompany;
 public sealed partial class DuneWorkshop3D
 {
+ public void SetPhysicsProfile(int iterations,int substeps)=>_physics?.SetSolverProfile(iterations,substeps);
+ public object PhysicsPhases=>new {iterations=_physics?.SolverIterations??0,substeps=_physics?.SolverSubsteps??0,terrainMs=_physics?.TerrainMilliseconds??0,controlsMs=_physics?.ControlsMilliseconds??0,solverMs=_physics?.SolverMilliseconds??0,collisionMs=_physics?.CollisionMilliseconds??0,constraintMs=_physics?.ConstraintMilliseconds??0,allocatedBytes=_physics?.StepAllocatedBytes??0,terrainRebuilds=_physics?.TerrainRebuilds??0,fineRebuilds=_physics?.FineRebuilds??0,bodies=_physics?.BodyCount??0,contacts=_physics?.ContactCount??0,fineTriangles=_physics?.FineTriangleCount??0,staticColliders=_physics?.StaticColliderCount??0,sandSampleMs=_sand?.SampleMilliseconds??0,sandSamples=_sand?.SampleCount??0};
  public int PhysicsSteps=>_physics?.LastStepCount??0;
  public double DroppedPhysicsSeconds=>_physics?.DroppedSimulationSeconds??0;
  readonly record struct FrameSample(double Time,double Delta,double Physics,double Camera,double Ui,double Feedback,double Render,double Swap,float Y,float Vy,int Steps,int Contacts,int Gen0,int Gen1,int Gen2);

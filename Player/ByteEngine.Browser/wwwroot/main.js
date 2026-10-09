@@ -5,9 +5,11 @@ import { BrowserAudio } from './audio.js';
 import { createPerformanceCapture } from './performance.js';
 const capture=createPerformanceCapture();
 const status=document.querySelector('#status'),canvas=document.querySelector('#game'),overlay=document.querySelector('#ui');
+const progress=document.querySelector('#progress');
+status.setProgress=(value,label)=>{if(status.dataset.failed)return;progress.hidden=false;if(value===null)progress.removeAttribute('value');else progress.value=Math.max(0,Math.min(1,value));status.textContent=label;};
 const retry=document.querySelector("#retry");retry?.addEventListener("click",()=>location.reload());
 let stopped=false;globalThis.byteEnginePerf={begin:performance.now(),frames:[]};
-function fail(error){capture.event('error',{message:String(error?.stack||error).slice(0,2000)});stopped=true;status.dataset.failed='true';status.hidden=false;status.style.pointerEvents='auto';if(retry)retry.hidden=false;status.textContent='ByteEngine browser error\n'+(error?.stack||error);console.error(error);}
+function fail(error){capture.event('error',{message:String(error?.stack||error).slice(0,2000)});stopped=true;progress.hidden=true;status.dataset.failed='true';status.hidden=false;status.style.pointerEvents='auto';if(retry)retry.hidden=false;status.textContent='ByteEngine browser error\n'+(error?.stack||error);console.error(error);}
 window.addEventListener('error',e=>fail(e.error||e.message));
 window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
@@ -24,8 +26,10 @@ try{
     const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
+    status.setProgress(null,'Preparing audio…');
     const decodeStart=performance.now();await audio.decode();capture.event('audio-ready',{durationMs:performance.now()-decodeStart});
     if(stopped)throw new Error("Startup was interrupted; use Retry loading.");
+    progress.hidden=true;
     status.textContent=(manifest.demo?'Backend verification â€” W/A/S/D moves the cube.\n':'')+'Click to start';
     await new Promise(resolve=>{
         const start=()=>{canvas.focus();audio.activate().then(resolve).catch(fail);};
@@ -34,13 +38,13 @@ try{
     });
     let saveKey=null,lastSave='';
     if(!manifest.demo){saveKey=game.SaveKey();try{const stored=localStorage.getItem(saveKey);if(stored)game.RestoreSaves(stored);}catch(error){console.warn('Browser save restore unavailable',error);}}
-    status.textContent="Preparing workshop…";
+    status.setProgress(null,'Preparing workshop…');
     await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
     const startMs=performance.now();game.Start(!!manifest.demo);byteEnginePerf.startMs=performance.now()-startMs;capture.event('scene-start',{durationMs:byteEnginePerf.startMs});
     const persist=()=>{if(!saveKey)return;try{const data=game.SaveData();if(data!==lastSave){localStorage.setItem(saveKey,data);lastSave=data;}}catch(error){console.warn('Browser save persistence unavailable',error);}};
     setInterval(persist,5000);window.addEventListener('pagehide',persist);
     if(stopped)throw new Error("Startup failed; use Retry loading.");
-    status.textContent="Preparing graphics...";
+    status.setProgress(null,'Preparing graphics…');
     const keys=new Set(),buttons=new Set(),keyPulses=new Set(),buttonPulses=new Set();
     let pointer=[.5,.5],delta=[0,0],wheel=0,previous=performance.now(),graphicsReady=false,previousPending=-1;
     const names={ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Space:'Space',

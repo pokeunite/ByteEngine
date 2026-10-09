@@ -19,7 +19,10 @@ internal sealed partial class DunePolishDiagnostic
   if(!w.ConnectWinch())throw new Exception("Winch cannot connect from the clear rescue shelf");if(w.ConnectWinch())throw new Exception("Duplicate cable accepted");w.DisconnectWinch();if(w.WinchConnected)throw new Exception("Cable did not detach");if(!w.ConnectWinch())throw new Exception("Cable cannot reconnect");
   int before=w.RecoveryPayment;bool paid=false;for(int i=0;i<3600;i++){Tick(scene,new(.5f),false,w.WinchCableLength<1 && w.RecoveryPosition.Z>23.5f && w.PhysicalVelocity.Z> -1.5f ? Key.W : Key.Space,Key.E);if(i%180==0)Console.WriteLine($"WINCH t={i/60f:F1} truck={w.Transform.WorldPosition} target={w.RecoveryPosition} length={w.WinchCableLength:F2} force={w.WinchTension:F0} objective={w.RecoveryObjective}");if(w.RecoveryPayment==before+500){paid=true;break;}}
   Capture(scene,Path.Combine(root,"Preview/winch-extracted.png"),false);if(!paid)throw new Exception("Actual winch rescue did not extract and pay");for(int i=0;i<120;i++)Tick(scene,new(.5f),false,Key.Space,Key.E);if(w.RecoveryPayment!=before+500)throw new Exception("Winch payment repeated");
-  w.Command("Return to base");Tick(scene,new(.5f),false);w.Command("Deploy contract");for(int i=0;i<120;i++)Tick(scene,new(.5f),false,Key.Space);if(!w.MissionActive||w.WinchConnected||w.RecoveryPosition.Z<26)throw new Exception("Winch restart dirty");Tick(scene,new(.5f),false,Key.R);if(w.WinchConnected||!float.IsFinite(w.PhysicalVelocity.Length()))throw new Exception("Reset unsafe");w.Command("Quit mission");w.Command("Return to base");
-  Console.WriteLine("PASS Workshop -> reverse to pit -> attach/detach/reattach -> reel -> extract -> $500 once -> restart -> reset -> return");
+  w.Command("Return to base");Tick(scene,new(.5f),false);
+  // Reset only this private diagnostic campaign before checking a second deployment.
+  foreach(string progress in new[]{"winch-progress-v1.json","winch-history.json"})File.Delete(Path.Combine(root,"Saves",progress));
+  w.Command("Open contracts");w.Command("Deploy contract");for(int i=0;i<120;i++)Tick(scene,new(.5f),false,Key.Space);if(!w.MissionActive||w.WinchConnected||w.RecoveryPosition.Z<26)throw new Exception("Winch restart dirty");Tick(scene,new(.5f),false,Key.R);if(w.WinchConnected||!float.IsFinite(w.PhysicalVelocity.Length()))throw new Exception("Reset unsafe");w.Command("Quit mission");w.Command("Return to base");
+  Console.WriteLine("PASS Workshop -> reverse to pit -> attach/detach/reattach -> reel -> extract -> $500 once -> restart -> reset -> return");Close();
  }
 }

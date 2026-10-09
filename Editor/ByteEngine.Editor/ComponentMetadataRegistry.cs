@@ -56,6 +56,8 @@ internal static class ComponentMetadataRegistry
         [typeof(MeshRenderer)] = new("Mesh Renderer", "Rendering", "Draws a static 3D mesh.", "material primitive"),
         [typeof(SkeletalMeshRenderer)] = new("Skeletal Mesh Renderer", "Rendering", "Draws an animated skinned mesh.", "character bones model"),
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
+        [typeof(Speedometer)] = new("Speedometer", "UI", "Reusable speed readout and optional dial frames; accepts metres per second or tracks a target.", "speed vehicle hud mph kmh"),
+        [typeof(Minimap)] = new("Minimap", "UI", "Maps a world X/Z rectangle to an authored marker widget.", "map radar player marker"),
         [typeof(UiCanvas)] = new("Canvas", "UI", "Screen-space root for HUDs and menus.", "ui overlay screen"),
         [typeof(ByteEngine.Core.Navigation.NavigationRegion3D)] = new("Navigation Region", "Navigation", "Bakes a static walkable grid with obstacle clearance.", "navigation bake path grid"),
         [typeof(ByteEngine.Core.Navigation.NavigationAgent3D)] = new("Navigation Agent", "Navigation", "Follows budgeted obstacle-aware paths to a destination.", "navigation agent path destination"),

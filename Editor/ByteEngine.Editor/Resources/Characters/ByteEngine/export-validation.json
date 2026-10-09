@@ -1,22 +1,14 @@
 [
   {
     "file": "Mannequin.glb",
-    "bytes": 2776176,
-    "meshes": 1,
-    "primitives": 2,
-    "triangles": 84160,
-    "joints": 49,
-    "animations": []
+    "animation_count": 146,
+    "sha256": "659756d979ccd729b43a3781e7ab4b93249e5304529dce5b93c2fa3817ee0f5b",
+    "bytes": 19054244
   },
   {
     "file": "Mannequin-FPS-Arms.glb",
-    "bytes": 1257452,
-    "meshes": 1,
-    "primitives": 2,
-    "triangles": 36096,
-    "joints": 36,
-    "animations": [
-      "FPS_Ready_Pose"
-    ]
+    "animation_count": 103,
+    "sha256": "d7e1714ff1d653c551b4147237850cf8ed8d4eabfb833034773e3babfa757677",
+    "bytes": 12439880
   }
 ]

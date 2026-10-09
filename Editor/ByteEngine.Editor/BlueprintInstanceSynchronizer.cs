@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Numerics;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Blueprints;
@@ -27,7 +28,8 @@ internal static class BlueprintInstanceSynchronizer
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        IncludeFields = true
+        IncludeFields = true,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public static void Initialize(BlueprintInstance instance, BlueprintDefinition blueprint,
