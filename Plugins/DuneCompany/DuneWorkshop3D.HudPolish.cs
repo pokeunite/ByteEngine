@@ -20,11 +20,12 @@ public sealed partial class DuneWorkshop3D
  }
  float _resultRemaining;bool _resultWasComplete;
  void RefreshMissionPresentation(){
-  if(!WorkshopV3)return;
   bool completed=!Building&&_contractRun&&_contractComplete;
   if(completed&&!_resultWasComplete)_resultRemaining=2.5f;
   if(!completed)_resultRemaining=0;else _resultRemaining=Math.Max(0,_resultRemaining-(float)ByteEngine.Core.Time.DeltaTime);
   _resultWasComplete=completed;GarageActive("Contract result",completed&&_resultRemaining>0);
+  if(completed&&_resultRemaining<=0){Command("Return to base");_resultWasComplete=false;return;}
+  if(!WorkshopV3)return;
   Text("Mission title",_contractRun?(WinchMission?"THE WELL ATE MY TRUCK":"STRANDED IN THE SAND"):"VEHICLE TEST");
   if(!Building){
    GarageActive("Recovery interaction",true);

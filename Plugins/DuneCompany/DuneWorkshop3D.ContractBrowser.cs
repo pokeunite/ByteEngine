@@ -39,7 +39,7 @@ public sealed partial class DuneWorkshop3D
  }
  void RefreshContractDetails(){
   bool winch=SelectedContractWinch;
-  Text("Contract brief",winch?"A utility buggy fell into an extraction pit. Fit a powered winch, park on firm sand and pull it onto the green recovery pad.":"A stranded buggy needs a tow back to the garage. Fit a trailer hinge and follow the world marker.\nAlign the hitches, press H to connect, then tow home.\nR safely resets both vehicles if you get stuck.");
+  Text("Contract brief",winch?"Reach the abandoned extraction site via its winding ramp. Park on the firm apron and winch the buggy out of the pit. Bring it down the access road to the depot; stop both vehicles in the green bay. Build for climbing, stability and braking.":"Follow the dry riverbed to a stranded buggy. Connect your trailer hinge, then bring it home. The dune shortcut is steep; the western track is longer and flatter. Stop both vehicles in the green depot bay. Build for clearance and control under tow.");
   int type=winch?33:20;
   if(_ui.TryGetValue("Contract required 3",out var icon))icon.GetComponent<UiWidget>()!.ImageReference=new(_catalog[type].Preview);
   Text("Contract required label 3",winch?"Powered winch":"Trailer hinge");
