@@ -4,7 +4,7 @@ export class BrowserRenderer {
         if(!gl) throw new Error('WebGL 2 is unavailable on this browser/device.');
         this.gpuTimer=gl.getExtension('EXT_disjoint_timer_query_webgl2');this.gpuQueries=[];this.profile={gpuMs:null,cpu3DMs:0,uiCpuMs:0,drawCalls:0};
         this.ui=overlay.getContext('2d');this.meshes=new Map();this.textures=new Map();
-        this.tints=new Map();this.tintBytes=0;
+        this.tints=new Map();this.tintBytes=0;this.materials=new Map();
         const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);
             gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));return shader;};
         const program=this.program=gl.createProgram();
@@ -20,6 +20,7 @@ export class BrowserRenderer {
         in vec3 n,world;in vec2 texcoord;out vec4 fragment;
         uniform vec4 color;uniform vec3 eye,emission;uniform vec2 tiling,offset;
         uniform sampler2D tex0,tex1,tex2,tex3,tex4,tex5,tex6;
+        uniform sampler2D sandImprint;uniform bool hasSandImprint;uniform vec2 sandOrigin;
         uniform bool has0,has1,has2,has3,has4,has5,has6,unlit,srgb,directX,packed;
         uniform float metallic,roughness,ao,normalStrength,cutoff,ambient,exposure;
         uniform ivec3 channels;uniform int lightCount,pointCount;
@@ -43,6 +44,7 @@ export class BrowserRenderer {
                 float det=du1.x*du2.y-du1.y*du2.x;
                 if(abs(det)>0.000001){T=normalize(T*sign(det));B=normalize(B*sign(det));N=normalize(mat3(T,B,N)*map);}
             }
+            if(hasSandImprint){vec4 imprint=texture(sandImprint,(world.xz-sandOrigin+vec2(.125))/8.25);N=normalize(N+vec3((imprint.r-.5)*2.0,0.0,(imprint.g-.5)*2.0));base.rgb*=1.0-sqrt(imprint.b)*.34;}
             if(!gl_FrontFacing)N=-N;
             float metal=metallic*(has2?texture(tex2,uv).r:1.0),rough=roughness*(has3?texture(tex3,uv).r:1.0);
             float occlusion=has4?texture(tex4,uv).r:1.0;
@@ -79,19 +81,22 @@ export class BrowserRenderer {
     location(name){if(!this.locations.has(name))this.locations.set(name,this.gl.getUniformLocation(this.program,name));return this.locations.get(name);}
     bytes(value){return typeof value==='number'?this.readBuffer(value):Uint8Array.from(atob(value),c=>c.charCodeAt(0));}
     draw(data,width,height){
+        for(const material of data.materials??[])this.materials.set(material.material,material);
+        for(const id of data.deadMaterials??[])this.materials.delete(id);
         const gl=this.gl,uploadStart=performance.now();let meshBytes=0,textureBytes=0;
         for(const id of data.deadMeshes){const m=this.meshes.get(id);if(m){gl.deleteVertexArray(m.vao);gl.deleteBuffer(m.vbo);gl.deleteBuffer(m.ibo);this.meshes.delete(id);}}
         for(const id of data.deadTextures){const t=this.textures.get(id);if(t){gl.deleteTexture(t.gpu);this.textures.delete(id);for(const key of this.tints.keys())if(key.startsWith(id+':'))this.deleteTint(key);}}
         for(const upload of data.uploads){
             let m=this.meshes.get(upload.id);
             if(!m){m={vao:gl.createVertexArray(),vbo:gl.createBuffer(),ibo:gl.createBuffer()};this.meshes.set(upload.id,m);}
-            const vertexBytes=this.bytes(upload.vertices),indexBytes=this.bytes(upload.indices);meshBytes+=vertexBytes.byteLength+indexBytes.byteLength;
+            const vertexBytes=this.bytes(upload.vertices),indexBytes=upload.indices!==-1?this.bytes(upload.indices):null;meshBytes+=vertexBytes.byteLength+(indexBytes?.byteLength||0);
             gl.bindVertexArray(m.vao);gl.bindBuffer(gl.ARRAY_BUFFER,m.vbo);
-            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertexBytes.buffer,vertexBytes.byteOffset,vertexBytes.byteLength/4),gl.DYNAMIC_DRAW);
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(indexBytes.buffer,indexBytes.byteOffset,indexBytes.byteLength/4),gl.STATIC_DRAW);
+            const vertices=new Float32Array(vertexBytes.buffer,vertexBytes.byteOffset,vertexBytes.byteLength/4);
+            if(m.vertexBytes===vertexBytes.byteLength)gl.bufferSubData(gl.ARRAY_BUFFER,0,vertices);else{gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);m.vertexBytes=vertexBytes.byteLength;}
+            if(indexBytes){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,m.ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(indexBytes.buffer,indexBytes.byteOffset,indexBytes.byteLength/4),gl.STATIC_DRAW);m.count=indexBytes.byteLength/4;}
             for(const [index,count,offset] of [[0,3,0],[1,3,12],[2,2,24]]){
                 gl.enableVertexAttribArray(index);gl.vertexAttribPointer(index,count,gl.FLOAT,false,32,offset);
-            }m.count=indexBytes.byteLength/4;
+            }
         }
         for(const upload of data.textures){
             for(const key of this.tints.keys())if(key.startsWith(upload.id+':'))this.deleteTint(key);
@@ -100,11 +105,13 @@ export class BrowserRenderer {
             const raw=this.bytes(upload.pixels),bytes=upload.hdr?new Float32Array(raw.buffer,raw.byteOffset,raw.byteLength/4):raw;const format=upload.hdr?gl.RGBA16F:gl.RGBA8,type=upload.hdr?gl.FLOAT:gl.UNSIGNED_BYTE;
             textureBytes+=raw.byteLength;
             gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
-            if(upload.allocate)gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,null);if(upload.partial)gl.texSubImage2D(gl.TEXTURE_2D,0,upload.x,upload.y,upload.w,upload.h,gl.RGBA,type,bytes);else gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,bytes);
+            const allocate=upload.allocate||t.width!==upload.width||t.height!==upload.height||t.hdr!==!!upload.hdr;
+            if(allocate)gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,null);if(upload.partial)gl.texSubImage2D(gl.TEXTURE_2D,0,upload.x,upload.y,upload.w,upload.h,gl.RGBA,type,bytes);else gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,bytes);
+            t.width=upload.width;t.height=upload.height;t.hdr=!!upload.hdr;
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,upload.nearest?gl.NEAREST:gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
-            if(!upload.partial||upload.allocate){t.image.width=upload.width;t.image.height=upload.height;}t.nearest=upload.nearest;
+            if(!upload.partial||allocate){t.image.width=upload.width;t.image.height=upload.height;}t.nearest=upload.nearest;
             if(!upload.hdr)t.image.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(bytes.buffer),upload.w,upload.h),upload.x,upload.y);
         }
         Object.assign(this.profile,{uploadMs:performance.now()-uploadStart,meshUploadBytes:meshBytes,textureUploadBytes:textureBytes,meshUploads:data.uploads.length,textureUploads:data.textures.length,residentMeshes:this.meshes.size,residentTextures:this.textures.size,tintBytes:this.tintBytes});
@@ -127,22 +134,25 @@ export class BrowserRenderer {
                 this.profile.gpuMs=gl.getParameter(this.gpuTimer.GPU_DISJOINT_EXT)?null:gl.getQueryParameter(query,gl.QUERY_RESULT)/1e6;gl.deleteQuery(query);this.gpuQueries.splice(i,1);}
             if(this.gpuQueries.length<3){gpuQuery=gl.createQuery();gl.beginQuery(this.gpuTimer.TIME_ELAPSED_EXT,gpuQuery);}
         }
-        for(const draw of data.draws){
-            const m=this.meshes.get(draw.id);gl.bindVertexArray(m.vao);
-            const instanceCount=(draw.instances?.length??0)/16;
+        for(const command of data.draws){
+            const draw=command.material===undefined?command:this.materials.get(command.material);
+            if(!draw)throw new Error('Missing browser material '+command.material);
+            const m=this.meshes.get(command.id);gl.bindVertexArray(m.vao);
+            const instanceCount=(command.instances?.length??0)/16;
             gl.uniform1i(this.location('instanced'),instanceCount>1?1:0);
             if(instanceCount>1){
                 this.instanceBuffer??=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.instanceBuffer);
-                gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(draw.instances),gl.STREAM_DRAW);
+                gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(command.instances),gl.STREAM_DRAW);
                 for(let column=0;column<4;column++){const location=5+column;gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,4,gl.FLOAT,false,64,column*16);gl.vertexAttribDivisor(location,1);}
             }
-            gl.uniformMatrix4fv(this.location('model'),false,draw.model);gl.uniform4fv(this.location('color'),draw.color);
-            const material=[draw.metallic,draw.roughness,draw.ao,draw.normalStrength,draw.cutoff,draw.unlit,draw.srgb,draw.directX,draw.packed,draw.channels,draw.emission,draw.tiling,draw.offset,draw.heightField,draw.heightUv,draw.heightSize,draw.heightRange,draw.heightBias,draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture,draw.depth,draw.write,draw.blend,draw.cull,draw.front].join('|');
+            gl.uniformMatrix4fv(this.location('model'),false,command.model);gl.uniform4fv(this.location('color'),draw.color);
+            const material=command.material??[draw.metallic,draw.roughness,draw.ao,draw.normalStrength,draw.cutoff,draw.unlit,draw.srgb,draw.directX,draw.packed,draw.channels,draw.emission,draw.tiling,draw.offset,draw.heightField,draw.heightUv,draw.heightSize,draw.heightRange,draw.heightBias,draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture,draw.depth,draw.write,draw.blend,draw.cull,draw.front].join('|');
             if(material!==previousMaterial){previousMaterial=material;
             for(const name of ['metallic','roughness','ao','normalStrength','cutoff'])gl.uniform1f(this.location(name),draw[name]);
             for(const name of ['unlit','srgb','directX','packed'])gl.uniform1i(this.location(name),draw[name]?1:0);
             gl.uniform3iv(this.location('channels'),draw.channels);gl.uniform3fv(this.location('emission'),draw.emission);
             gl.uniform2fv(this.location('tiling'),draw.tiling);gl.uniform2fv(this.location('offset'),draw.offset);
+            gl.activeTexture(gl.TEXTURE8);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(draw.sandImprint)?.gpu||null);gl.uniform1i(this.location('sandImprint'),8);gl.uniform1i(this.location('hasSandImprint'),draw.sandImprint?1:0);gl.uniform2fv(this.location('sandOrigin'),draw.sandOrigin||[0,0]);
             gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(draw.heightField)?.gpu||null);gl.uniform1i(this.location('heightField'),7);gl.uniform1i(this.location('hasHeight'),draw.heightField?1:0);gl.uniform4fv(this.location('heightUv'),draw.heightUv);gl.uniform2fv(this.location('heightSize'),draw.heightSize);gl.uniform1f(this.location('heightRange'),draw.heightRange);gl.uniform1f(this.location('heightBias'),draw.heightBias);
             const maps=[draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture];
             for(let i=0;i<maps.length;i++){

@@ -5,6 +5,10 @@ namespace DuneCompany;
 public sealed class DuneRecoveryContract3D:Component
 {
  public bool WinchMission{get;set;}
+ public bool RunawayMission{get;set;}
+ public bool RelayMission{get;set;}
+ public bool AnchorMission{get;set;}
+ public Vector3 ResetPosition{get;set;}=new(12,0,52);
  public string Title{get;set;}="Stranded in the sand";
  public int Payment{get;set;}=250;
  public float DepressionDepth{get;set;}=.24f;

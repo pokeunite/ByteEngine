@@ -154,7 +154,8 @@ internal static class PlayablePresetCombatTests
                    blueprintChildren.Any(item => item.Name == "Camera") &&
                    blueprintChildren.Any(item => item.Name == "Model"),
                 $"{preset} creates a playable Blueprint hierarchy");
-            var boomData = blueprintRoot.Components.Single(item => item.Type == "CameraBoom3D");
+            var boomData = blueprintRoot.Components.Single(item => item.Type ==
+                (preset == PlayerViewPreset.FirstPerson ? "FirstPersonCamera3D" : "CameraBoom3D"));
             var shooterData = blueprintRoot.Components.Single(item => item.Type == "PlayerShooter3D");
             bool fixedView = preset is PlayerViewPreset.TopDownTwinStick or PlayerViewPreset.Isometric;
             Assert(boomData.Properties["useControlRotation"]!.GetValue<bool>() == !fixedView &&

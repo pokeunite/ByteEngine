@@ -40,7 +40,7 @@ internal sealed class EditorCamera3D
         Pitch = -22f;
     }
 
-    public void Frame(GameObject target)
+    public void Frame(GameObject target, float aspectRatio = 1f)
     {
         Vector3 minimum = new(float.PositiveInfinity);
         Vector3 maximum = new(float.NegativeInfinity);
@@ -88,15 +88,17 @@ internal sealed class EditorCamera3D
             return;
         }
 
-        Frame(new BoundingBox3D(minimum, maximum));
+        Frame(new BoundingBox3D(minimum, maximum), aspectRatio);
     }
 
-    public void Frame(BoundingBox3D bounds)
+    public void Frame(BoundingBox3D bounds, float aspectRatio = 1f)
     {
         if (!bounds.IsValid) return;
         Vector3 center = bounds.Center;
         float radius = bounds.Size.Length() * 0.5f;
         float halfFov = Math.Clamp(FieldOfView, 1f, 170f) * MathF.PI / 360f;
+        float aspect = float.IsFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1f;
+        halfFov = Math.Min(halfFov, MathF.Atan(MathF.Tan(halfFov) * aspect));
         float distance = MathF.Max(radius / MathF.Sin(halfFov) * 1.35f, radius + 0.065f);
         Position = center - Forward * distance;
     }

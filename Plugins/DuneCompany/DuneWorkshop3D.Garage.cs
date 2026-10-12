@@ -21,11 +21,13 @@ public sealed partial class DuneWorkshop3D
   BindWorkshopV3();ResizeGarageLayout();RefreshGarageState();
  }
  void DeployGarageContract(){
-  if(!Building)return;bool winch=SelectedContractWinch;
-  if(ContractCompletions(winch)>0){_message="This job is completed. Choose an available contract.";return;}
+  if(!Building)return;int id=SelectedContract;bool winch=id is >0 and <4;
+  if(ContractCompletions(id)>0){_message="This job is completed. Choose an available contract.";return;}
+  if(!OwnsBuild(_blocks))return;
   if(!ReadyToDrive){_message="Add a seat, engine and two wheels before deploying.";return;}
-  if(!_blocks.Any(b=>b.Type==(winch?33:20))){_message="Fit the required recovery tool from Mechanical.";Text("Contract requirements",_message);return;}
-  if(winch!=WinchMission){AtomicSave(Path.Combine(SaveRoot,"vehicle.json"),Snapshot());DuneMainMenu3D.ContinuePending=true;_deployContractAfterSwitch=winch;GameObject.Scene!.RequestLoad(winch?"Scenes/WinchRescue.bytescene":"Scenes/Workshop.bytescene");return;}
+  if(id!=4&&!_blocks.Any(b=>winch?IsWinch(b.Type):b.Type==20)){_message="Fit the required recovery tool from Mechanical.";Text("Contract requirements",_message);return;}
+  if(_tutorialStep==5&&id==0)FinishWorkshopTutorial();
+  if(id!=CurrentContract){AtomicSave(Path.Combine(SaveRoot,"vehicle.json"),Snapshot());DuneMainMenu3D.ContinuePending=true;_deployContractAfterSwitch=id;GameObject.Scene!.RequestLoad(ContractScene(id));return;}
   _contractRun=true;_contractComplete=false;CloseGarageOverlay();ToggleDrive();
  }
 
@@ -49,13 +51,13 @@ public sealed partial class DuneWorkshop3D
  void RefreshGarageSelection()
  {
   if(!GarageUx||_catalog.Count==0)return;var def=_catalog[_type];
-  Text("Selected block",def.Label.ToUpperInvariant());Text("Block function",def.Function);
+  Text("Selected block",def.Label.ToUpperInvariant());Text("Block function",PartFunction(def));
   if(_ui.TryGetValue("Inspector part preview",out var preview)&&preview.GetComponent<UiWidget>() is {} picture)picture.ImageReference=new(def.Preview);
  }
  void RefreshGarageState()
  {
-  if(!GarageUx)return;Text("Contract name",(SelectedContractWinch?"The Well Ate My Truck":"Stranded in the sand").ToUpperInvariant());Text("Contract reward",SelectedContractWinch?"$500":"$250");Text("Contract requirements",_blocks.Any(b=>b.Type==(SelectedContractWinch?33:20))?(SelectedContractWinch?"Powered winch fitted / Seat, engine and wheels required":"Trailer hinge fitted / Seat, engine and wheels required"):(SelectedContractWinch?"Fit a powered winch before accepting this rescue":"Fit a trailer hinge before accepting this recovery job"));RefreshContractDetails();RefreshRequirementIcons();ResizeGarageLayout();Text("Garage readiness",ReadyToDrive?"READY TO DRIVE":"BUILD REQUIREMENTS");if(_ui.TryGetValue("Garage readiness",out var readiness)&&readiness.GetComponent<UiText>() is {} status)status.Color=ReadyToDrive?new(.7f,.8f,.59f,1):new(.94f,.66f,.29f,1);Text("Seat readiness",_blocks.Any(b=>b.Type is 25 or 26)?"Seat OK":"Seat needed");Text("Engine readiness",_blocks.Any(b=>b.Type is 23 or 24)?"Engine OK":"Engine needed");Text("Wheel readiness",_blocks.Any(b=>_catalog[b.Type].Wheel)?"Wheel OK":"Wheel needed");
-  Text("Garage mass",$"{_blocks.Sum(b=>_catalog[b.Type].Mass):0} kg");Text("Garage wheels",_blocks.Count(b=>_catalog[b.Type].Wheel).ToString());Text("Garage engines",_blocks.Count(b=>b.Type is 23 or 24).ToString());
+  if(!GarageUx)return;Text("Contract name",ContractTitle(SelectedContract).ToUpperInvariant());Text("Contract reward","$"+ContractReward(SelectedContract));Text("Contract requirements",SelectedContract==4?"Seat, engine and wheels / Beat the rival to the finish":_blocks.Any(b=>SelectedContractWinch?IsWinch(b.Type):b.Type==20)?(SelectedContractWinch?"Powered winch fitted / Seat, engine and wheels required":"Trailer hinge fitted / Seat, engine and wheels required"):(SelectedContractWinch?"Fit a powered winch before accepting this rescue":"Fit a trailer hinge before accepting this recovery job"));RefreshContractDetails();RefreshRequirementIcons();ResizeGarageLayout();Text("Garage readiness",ReadyToDrive?"READY TO DRIVE":"BUILD REQUIREMENTS");if(_ui.TryGetValue("Garage readiness",out var readiness)&&readiness.GetComponent<UiText>() is {} status)status.Color=ReadyToDrive?new(.7f,.8f,.59f,1):new(.94f,.66f,.29f,1);Text("Seat readiness",_blocks.Any(b=>b.Type is 25 or 26)?"Seat OK":"Seat needed");Text("Engine readiness",_blocks.Any(b=>b.Type is 23 or 24 or 34 or 38)?"Engine OK":"Engine needed");Text("Wheel readiness",_blocks.Any(b=>_catalog[b.Type].Wheel)?"Wheel OK":"Wheel needed");
+  Text("Garage mass",$"{_blocks.Sum(b=>_catalog[b.Type].Mass):0} kg");Text("Garage wheels",_blocks.Count(b=>_catalog[b.Type].Wheel).ToString());Text("Garage engines",_blocks.Count(b=>b.Type is 23 or 24 or 34 or 38).ToString());
   Text("Garage save status",_garageSaved?"Saved":"Unsaved");GarageActive("Tune selection",_tuning<0);
   if(_ui.TryGetValue("Search parts",out var search)&&search.GetComponent<UiWidget>() is {} field)field.Label=(_search.Length==0?"Search parts...":_search)+(_searching?" |":"");
   for(int i=0;i<5;i++)if(_ui.TryGetValue($"Button {8+i*42},639",out var category)&&category.GetComponent<UiWidget>() is {} tab)tab.Color=_search.Length==0&&i==_category?new(.27f,.22f,.14f,1):new(.095f,.10f,.10f,1);

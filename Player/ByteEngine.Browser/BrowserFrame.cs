@@ -15,7 +15,11 @@ internal sealed class BrowserFrame
     public BrowserLight[] points { get; set; } = [];
     public List<BrowserMeshUpload> uploads { get; set; } = [];
     public List<BrowserTextureUpload> textures { get; set; } = [];
-    public List<BrowserDraw> draws { get; set; } = [];
+    public List<BrowserDrawCommand> draws { get; set; } = [];
+    public List<BrowserDraw> materials { get; set; } = [];
+    public int[] deadMaterials { get; set; } = [];
+    public int uiBuffer { get; set; } = -1;
+    public int uiCount { get; set; }
     public List<BrowserUi> ui { get; set; } = [];
     public int[] deadMeshes { get; set; } = [];
     public int[] deadTextures { get; set; } = [];
@@ -68,9 +72,12 @@ internal sealed class BrowserTextureUpload
 
 internal sealed class BrowserDraw
 {
+    public int material { get; set; }
     public float[] instances {get;set;}=[];
     public int id { get; set; }
     public int heightField { get; set; }
+    public int sandImprint { get; set; }
+    public float[] sandOrigin { get; set; } = [];
     public int texture { get; set; }
     public int normal { get; set; }
     public int metallicTexture { get; set; }
@@ -102,6 +109,14 @@ internal sealed class BrowserDraw
     public string blend { get; set; } = "";
     public string cull { get; set; } = "";
     public string front { get; set; } = "";
+}
+
+internal sealed class BrowserDrawCommand
+{
+    public int id { get; set; }
+    public int material { get; set; }
+    public float[] model { get; set; } = [];
+    public float[] instances { get; set; } = [];
 }
 
 internal sealed class BrowserUi

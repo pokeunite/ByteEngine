@@ -6,13 +6,13 @@ internal static class BundledCharacterInstaller
     internal static readonly string[] ModelFiles =
     {
         "Mannequin.glb",
-        "Mannequin-FPS-Arms.glb"
+        "Mannequin-FPS-Arms.glb",
+        "Mannequin-Advanced-FPS.glb"
     };
 
     internal static readonly string[] SupportFiles =
     {
-        "README.txt", "ANIMATION-CREDITS.txt", "LICENSE-CC-BY-4.0.txt",
-        "LICENSE-CC0-1.0.txt", "ROKOKO-SOURCE-NOTICE.txt", "animations.json"
+        "README.txt", "ANIMATION-CREDITS.txt", "LICENSE-CC0-1.0.txt", "animations.json"
     };
 
     public static int Install(string projectRoot, string assetDirectory = "Assets", string? sourceDirectory = null)

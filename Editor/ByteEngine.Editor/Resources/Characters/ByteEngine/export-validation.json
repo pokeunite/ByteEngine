@@ -1,14 +1,20 @@
 [
   {
-    "file": "Mannequin.glb",
-    "animation_count": 146,
-    "sha256": "659756d979ccd729b43a3781e7ab4b93249e5304529dce5b93c2fa3817ee0f5b",
-    "bytes": 19054244
+    "file": "Mannequin-Advanced-FPS.glb",
+    "animation_count": 18,
+    "bytes": 1791924,
+    "sha256": "1926b62d366ab9df38b9e163c7c3656ad0ed6c69d1f5ce104f3d505617758696"
   },
   {
     "file": "Mannequin-FPS-Arms.glb",
-    "animation_count": 103,
-    "sha256": "d7e1714ff1d653c551b4147237850cf8ed8d4eabfb833034773e3babfa757677",
-    "bytes": 12439880
+    "animation_count": 18,
+    "bytes": 1288768,
+    "sha256": "88cb0aa4e0b72511ffe10fb4a5da1873179ea41196cdde35674e7cba4ecbf4b3"
+  },
+  {
+    "file": "Mannequin.glb",
+    "animation_count": 18,
+    "bytes": 2296408,
+    "sha256": "2f351d19a35dbd7de38904823642ab16e46cbb43f3e9ecdb248c3389e15c1135"
   }
 ]

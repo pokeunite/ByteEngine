@@ -345,6 +345,7 @@ public sealed class ComponentSerializer
         Register(new FoliagePatchCodec());
         Register(new VfxPlayerCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.DistanceJoint3D>("DistanceJoint3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.RopeWinch3D>("RopeWinch3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.HingeJoint3D>("HingeJoint3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationLink3D>("NavigationLink3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationRegion3D>("NavigationRegion3D"));
@@ -357,6 +358,10 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiContainer>("UiContainer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Speedometer>("Speedometer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Minimap>("Minimap"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.RaceDirector3D>("RaceDirector3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.AiAgent3D>("AiAgent3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.RoutePath3D>("RoutePath3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.ThreeD.CableRenderer3D>("CableRenderer3D"));
         Register(new UiTextCodec());
         Register(new UiWidgetCodec());
         Register(new UiAnimatorCodec());
@@ -424,6 +429,7 @@ public sealed class ComponentSerializer
         Register(new PlayerShooter3DCodec());
         Register(new ThirdPersonCamera3DCodec());
         Register(new CameraBoom3DCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<FirstPersonCamera3D>("FirstPersonCamera3D"));
         Register(new ArenaGameManagerCodec());
         Register(new WaveSpawner3DCodec());
 

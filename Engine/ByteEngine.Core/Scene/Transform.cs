@@ -36,8 +36,10 @@ public sealed class Transform
 
     public Quaternion WorldRotation
     {
-        get => _owner.Parent == null ? LocalRotation : Quaternion.Normalize(LocalRotation * _owner.Parent.Transform.WorldRotation);
-        set => LocalRotation = _owner.Parent == null ? value : Quaternion.Normalize(value * Quaternion.Inverse(_owner.Parent.Transform.WorldRotation));
+        // Numerics quaternions compose parent * local; row-vector matrices compose
+        // localMatrix * parentMatrix. Reversing these creates roll in a yaw/pitch hierarchy.
+        get => _owner.Parent == null ? LocalRotation : Quaternion.Normalize(_owner.Parent.Transform.WorldRotation * LocalRotation);
+        set => LocalRotation = _owner.Parent == null ? value : Quaternion.Normalize(Quaternion.Inverse(_owner.Parent.Transform.WorldRotation) * value);
     }
 
     public Vector3 WorldScale

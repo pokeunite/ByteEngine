@@ -24,6 +24,7 @@ public sealed partial class LandVehiclePhysics:IDisposable
  readonly BufferPool _pool=new();readonly Simulation _simulation;readonly ThreadDispatcher? _dispatcher;
  Part[] _wheels=[];PlacedBlock[] _engines=[];float _axleMid,_mass;
  readonly List<Group> _groups=[];readonly Dictionary<int,Part> _parts=[];
+ int _normalSolverIterations;Part[] _springArms=[];
  readonly Dictionary<int,float> _friction=[];readonly ContactCache _contacts=new();
  readonly HashSet<ulong> _ignored=[];readonly Dictionary<int,StaticHandle> _obstacles=[];
  readonly IReadOnlyDictionary<int,DunePart> _catalog;readonly List<PlacedBlock> _blocks;
@@ -44,11 +45,12 @@ public sealed partial class LandVehiclePhysics:IDisposable
  sealed class ContactCache {
   readonly Dictionary<int,(Vector3 Normal,float Depth)> _values=new(32);
   readonly object _gate=new();
+  public bool AnyContact;
   public int Count=>_values.Count;
   public bool ContainsKey(int key)=>_values.ContainsKey(key);
   public bool TryGetValue(int key,out (Vector3 Normal,float Depth) value)=>_values.TryGetValue(key,out value);
   public (Vector3 Normal,float Depth) this[int key]{set{lock(_gate)_values[key]=value;}}
-  public void Clear()=>_values.Clear();
+  public void Clear(){_values.Clear();AnyContact=false;}
  }
 
  public long StepAllocatedBytes {get;private set;}
@@ -56,7 +58,7 @@ public sealed partial class LandVehiclePhysics:IDisposable
  public int FineRebuilds {get;private set;}
  public int SolverIterations=>_simulation.Solver.VelocityIterationCount;
  public int SolverSubsteps=>_simulation.Solver.SubstepCount;
- public void SetSolverProfile(int iterations,int substeps){if(iterations<1||iterations>16||substeps<1||substeps>8)throw new ArgumentOutOfRangeException();_simulation.Solver.VelocityIterationCount=iterations;_simulation.Solver.SubstepCount=substeps;}
+ public void SetSolverProfile(int iterations,int substeps){if(iterations<1||iterations>16||substeps<1||substeps>8)throw new ArgumentOutOfRangeException();_springArms=_parts.Values.Where(p=>p.Block.Type==32).ToArray();_normalSolverIterations=Math.Max(iterations,_springArms.Length>0?8:1);_simulation.Solver.VelocityIterationCount=Math.Max(_normalSolverIterations,_springArms.Length>0?12:1);_simulation.Solver.SubstepCount=Math.Max(substeps,_springArms.Length>0?4:1);}
  public int FineTriangleCount=>_fineTriangleCounts.Values.Sum();
  readonly Dictionary<(int x,int z),int> _fineTriangleCounts=[];
  public int StaticColliderCount=>_terrainChunks.Count+_fineChunks.Count+_obstacles.Count;
@@ -65,9 +67,11 @@ public sealed partial class LandVehiclePhysics:IDisposable
  public (Vector3 Position,Quaternion Rotation) RenderFrame {get{var g=_parts[0].Root;var p=RenderPose(g);return(p.Position-Vector3.Transform(g.Center,p.Orientation),p.Orientation);}}
  public (Vector3 Position,Quaternion Rotation) RenderPartPose(int id,bool output=false){var p=_parts[id];var g=output&&p.Output!=null?p.Output:p.Root;var body=RenderPose(g);return(body.Position+Vector3.Transform(p.Block.P-g.Center,body.Orientation),Quaternion.Normalize(body.Orientation*p.Block.Q));}
  public Matrix4x4 RenderOutputDeformation(int id){if(_parts[id].Output==null)return Matrix4x4.Identity;var a=RenderPartPose(id);var b=RenderPartPose(id,true);Matrix4x4.Invert(Matrix4x4.CreateFromQuaternion(a.Rotation)*Matrix4x4.CreateTranslation(a.Position),out var inverse);return Matrix4x4.CreateFromQuaternion(b.Rotation)*Matrix4x4.CreateTranslation(b.Position)*inverse;}
+ public float RenderSuspensionOffset(int id){var p=_parts[id];if(p.Output==null)return 0;var a=RenderPose(p.Root);var b=RenderPose(p.Output);var delta=b.Position+Vector3.Transform(p.OffsetB,b.Orientation)-a.Position-Vector3.Transform(p.OffsetA,a.Orientation);return Vector3.Dot(delta,Vector3.Transform(p.Axis,a.Orientation));}
  public float DriftBlend=>_driftBlend;
  public float WheelGrip(int id)=>_parts[id].Output is {} output&&_friction.TryGetValue(output.Body.Value,out var grip)?grip:0;
  public int BodyCount=>_groups.Count;public int ContactCount=>_contacts.Count;public float Elapsed=>_elapsed;
+ public bool HasPhysicalContact=>_contacts.AnyContact;
  public Vector3 Velocity=>_simulation.Bodies[_parts[0].Root.Body].Velocity.Linear;
  public (Vector3 Position,Quaternion Rotation) Frame {get{var g=_parts[0].Root;var p=_simulation.Bodies[g.Body].Pose;return(p.Position-Vector3.Transform(g.Center,p.Orientation),p.Orientation);}}
  public LandVehiclePhysics(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,DunePart> catalog,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation,HeightfieldCollider3D? terrain=null,int simulationHz=0,int maximumCatchUpSteps=0)
@@ -80,29 +84,40 @@ public sealed partial class LandVehiclePhysics:IDisposable
   _blocks=blocks.ToList();_catalog=catalog;_origin=origin;_rotation=rotation;
   int iterations=int.TryParse(Environment.GetEnvironmentVariable("DUNE_SOLVER_ITERATIONS"),out var iterationOverride)?iterationOverride:(OperatingSystem.IsBrowser()?6:8);
   int substeps=int.TryParse(Environment.GetEnvironmentVariable("DUNE_SOLVER_SUBSTEPS"),out var substepOverride)?substepOverride:(OperatingSystem.IsBrowser()?2:240/SimulationHz);
+  // Long arms carrying heavy tyres need 240 Hz constraint integration. Keep
+  // the cheaper browser profile for builds without this mechanism.
+  _normalSolverIterations=Math.Max(iterations,blocks.Any(b=>b.Type==32)?8:1);
+  if(blocks.Any(b=>b.Type==32)){substeps=Math.Max(4,substeps);iterations=Math.Max(12,iterations);}
   _simulation=Simulation.Create(_pool,new Contacts(_ignored,_friction,_contacts),new Gravity(),new SolveDescription(Math.Clamp(iterations,1,16),Math.Clamp(substeps,1,8)));
   var timestepper=(DefaultTimestepper)_simulation.Timestepper;
   timestepper.BeforeCollisionDetection+=(dt,dispatcher)=>_phaseStart=System.Diagnostics.Stopwatch.GetTimestamp();
   timestepper.CollisionsDetected+=(dt,dispatcher)=>{CollisionMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(_phaseStart).TotalMilliseconds;_phaseStart=System.Diagnostics.Stopwatch.GetTimestamp();};
   timestepper.ConstraintsSolved+=(dt,dispatcher)=>ConstraintMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(_phaseStart).TotalMilliseconds;
   if(terrain!=null)AddTerrain(terrain);
-  AddAssembly(_blocks,definitions,origin,rotation);
+  AddAssembly(_blocks,definitions,origin,rotation);_springArms=_parts.Values.Where(p=>p.Block.Type==32).ToArray();_playerRig=DescribeDrive(_parts.Values.ToArray());
   _wheels=_parts.Values.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();_engines=_blocks.Where(b=>b.Type is 23 or 24).ToArray();_mass=_groups.Sum(g=>g.Mass);_axleMid=_wheels.Length>0?(_wheels.Min(p=>p.Block.P.Z)+_wheels.Max(p=>p.Block.P.Z))*.5f:0;
  }
- void AddAssembly(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation)
+ void AddAssembly(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 origin,Quaternion rotation,float massScale=1)
  {
   int firstGroup=_groups.Count;
   foreach(var b in blocks){var definition=definitions[b.Type];Group root;
    if(b.Parent<0){root=new();_groups.Add(root);}else{var parent=_parts[b.Parent];root=b.MovingMount&&parent.Output!=null?parent.Output:parent.Root;}
    var p=new Part{Block=b,Definition=definition,Root=root};_parts[b.Id]=p;
-   bool split=definition.Articulated;AddBox(root,definition.Fixed,b.P,b.Q,_catalog[b.Type].Mass*(split?.3f:1));
+   bool split=definition.Articulated;AddBox(root,definition.Fixed,b.P,b.Q,_catalog[b.Type].Mass*massScale*(split?.3f:1));
    if(split){var output=new Group();_groups.Add(output);p.Output=output;
-    if(_catalog[b.Type].Wheel){var d=_catalog[b.Type];var shape=new Cylinder(d.Radius,Math.Max(.12f,definition.Moving.Size.Z));var align=Align(Vector3.UnitY,Vector3.UnitZ);AddShape(output,_simulation.Shapes.Add(shape),new(b.P+Vector3.Transform(new(0,0,d.WheelCenterZ),b.Q),Quaternion.Normalize(b.Q*align)),shape.ComputeInertia(d.Mass*.7f),d.Mass*.7f);}
-    else AddBox(output,definition.Moving,b.P,b.Q,_catalog[b.Type].Mass*.7f);
+    if(_catalog[b.Type].Wheel){var d=_catalog[b.Type];var shape=new Cylinder(d.Radius,Math.Max(.12f,definition.Moving.Size.Z));var align=Align(Vector3.UnitY,Vector3.UnitZ);AddShape(output,_simulation.Shapes.Add(shape),new(b.P+Vector3.Transform(new(0,0,d.WheelCenterZ),b.Q),Quaternion.Normalize(b.Q*align)),shape.ComputeInertia(d.Mass*.7f*massScale),d.Mass*.7f*massScale);}
+    else AddBox(output,definition.Moving,b.P,b.Q,_catalog[b.Type].Mass*.7f*massScale);
    }
   }
   foreach(var g in _groups.Skip(firstGroup)){using var builder=new CompoundBuilder(_pool,_simulation.Shapes,g.Shapes.Count);foreach(var s in g.Shapes)builder.Add(s.shape,s.pose,s.inertia);builder.BuildDynamicCompound(out var children,out var inertia,out var center);g.Center=center;g.Body=_simulation.Bodies.Add(BodyDescription.CreateDynamic(new(origin+Vector3.Transform(center,rotation),rotation),inertia,_simulation.Shapes.Add(new Compound(children)),new BodyActivityDescription(.005f)));}
   foreach(var p in blocks.Select(b=>_parts[b.Id]).Where(p=>p.Output!=null))AddJoint(p);
+  // A tyre on a suspended mount belongs to the same mechanical chain as the
+  // chassis. Internal contacts must not fight its suspension and wheel joints.
+  foreach(var wheel in blocks.Select(b=>_parts[b.Id]).Where(p=>_catalog[p.Block.Type].Wheel&&p.Output!=null)){
+   int parent=wheel.Block.Parent;for(int depth=0;parent>=0&&depth<4;depth++){
+    var support=_parts[parent];if(support.Block.Type is 16 or 17 or 18 or 32){_ignored.Add(Pair(wheel.Output!.Body,support.Root.Body));if(support.Output!=null)_ignored.Add(Pair(wheel.Output.Body,support.Output.Body));}else break;parent=support.Block.Parent;
+   }
+  }
  }
  static Quaternion Align(Vector3 a,Vector3 b){float dot=Vector3.Dot(a,b);return dot>.9999f?Quaternion.Identity:dot<-.9999f?Quaternion.CreateFromAxisAngle(Vector3.UnitX,MathF.PI):Quaternion.Normalize(new(Vector3.Cross(a,b),1+dot));}
  void AddShape(Group g,TypedIndex shape,RigidPose pose,BodyInertia inertia,float mass){g.Shapes.Add((shape,pose,mass,inertia));g.Mass+=mass;}
@@ -117,8 +132,10 @@ public sealed partial class LandVehiclePhysics:IDisposable
    else if(part.Type==20)_simulation.Solver.Add(a.Body,b.Body,new AngularAxisMotor{LocalAxisA=p.Axis,TargetVelocity=0,Settings=new(120,.002f)});
    else if(part.Type is 18 or 19)p.Servo=_simulation.Solver.Add(a.Body,b.Body,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Identity,SpringSettings=new(30,1),ServoSettings=new(3,0,6000)});
   }else if(part.Type is 16 or 17 or 21 or 32){
+   // These guides lock lateral motion and upright orientation; only the spring
+   // axis is compliant. Heavy tyres need firm guides and four solver substeps.
    _simulation.Solver.Add(a.Body,b.Body,new PointOnLineServo{LocalOffsetA=p.OffsetA,LocalOffsetB=p.OffsetB,LocalDirection=p.Axis,SpringSettings=new(120,1),ServoSettings=new(30,0,120000)});
-   _simulation.Solver.Add(a.Body,b.Body,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Identity,SpringSettings=new(120,1),ServoSettings=new(12,0,120000)});
+   _simulation.Solver.Add(a.Body,b.Body,new AngularServo{TargetRelativeRotationLocalA=Quaternion.Identity,SpringSettings=new(120,1),ServoSettings=new(part.Type==32?40:12,0,120000)});
    float travel=part.Type==21?part.Stroke:part.Travel;
    _simulation.Solver.Add(a.Body,b.Body,new LinearAxisLimit{LocalOffsetA=p.OffsetA,LocalOffsetB=p.OffsetB,LocalAxis=p.Axis,MinimumOffset=part.Type==21?0:-travel,MaximumOffset=part.Type==21?travel:travel*.15f,SpringSettings=new(40,1)});
    p.Slider=_simulation.Solver.Add(a.Body,b.Body,new LinearAxisServo{LocalOffsetA=p.OffsetA,LocalOffsetB=p.OffsetB,LocalPlaneNormal=p.Axis,TargetOffset=0,SpringSettings=new(part.Type==21?20:part.SpringRate,part.Type==21?1:part.Damping),ServoSettings=new(part.Type==21?1:4,0,part.Type==21?8000:20000)});
@@ -201,6 +218,7 @@ public sealed partial class LandVehiclePhysics:IDisposable
  }
 
  public float WheelAxisError(int id){var p=_parts[id];if(p.Output==null)return 0;var a=Vector3.Normalize(Vector3.Transform(p.Axis,_simulation.Bodies[p.Root.Body].Pose.Orientation));var b=Vector3.Normalize(Vector3.Transform(p.Axis,_simulation.Bodies[p.Output.Body].Pose.Orientation));return MathF.Acos(Math.Clamp(Vector3.Dot(a,b),-1,1))*180/MathF.PI;}
+ public float SuspensionAngularError(int id){var p=_parts[id];if(p.Output==null)return 0;var a=_simulation.Bodies[p.Root.Body].Pose.Orientation;var b=_simulation.Bodies[p.Output.Body].Pose.Orientation;return 2*MathF.Acos(Math.Clamp(Math.Abs(Quaternion.Dot(a,b)),0,1))*180/MathF.PI;}
  public float WheelRpm(int id){var p=_parts[id];if(p.Output==null)return 0;var root=_simulation.Bodies[p.Root.Body];return Vector3.Dot(_simulation.Bodies[p.Output.Body].Velocity.Angular-root.Velocity.Angular,Vector3.Transform(p.Axis,root.Pose.Orientation))*60/MathF.Tau;}
  public float SuspensionLateralError(int id){var p=_parts[id];if(p.Output==null)return 0;var a=_simulation.Bodies[p.Root.Body].Pose;var b=_simulation.Bodies[p.Output.Body].Pose;var delta=b.Position+Vector3.Transform(p.OffsetB,b.Orientation)-a.Position-Vector3.Transform(p.OffsetA,a.Orientation);var axis=Vector3.Transform(p.Axis,a.Orientation);return (delta-axis*Vector3.Dot(delta,axis)).Length();}
  public float SuspensionOffset(int id){var p=_parts[id];if(p.Output==null)return 0;var a=_simulation.Bodies[p.Root.Body].Pose;var b=_simulation.Bodies[p.Output.Body].Pose;return Vector3.Dot(b.Position+Vector3.Transform(p.OffsetB,b.Orientation)-a.Position-Vector3.Transform(p.OffsetA,a.Orientation),Vector3.Transform(p.Axis,a.Orientation));}
@@ -217,28 +235,36 @@ public sealed partial class LandVehiclePhysics:IDisposable
  }
  void StepFixed(float dt,float throttle,float steering,bool brake,float maximumSpeed,float servo,float piston,Func<Vector3,float>? sandGrip,bool handbrake,Func<Vector3,float>? sandResistance)
  {
+  // Keep the firm four-substep guides. Reserve extra convergence work for
+  // impacts and stressed mounts rather than paying twelve iterations forever.
+  if(_springArms.Length>0){bool stressed=false;foreach(var p in _springArms){var a=_simulation.Bodies[p.Root.Body];var b=_simulation.Bodies[p.Output!.Body];if(Math.Abs(a.Velocity.Linear.Y)>2||Math.Abs(b.Velocity.Linear.Y)>2||a.Velocity.Angular.LengthSquared()>1||SuspensionLateralError(p.Block.Id)>.004f||SuspensionAngularError(p.Block.Id)>2){stressed=true;break;}}_simulation.Solver.VelocityIterationCount=Math.Max(_normalSolverIterations,stressed?12:8);}
   long terrainStart=System.Diagnostics.Stopwatch.GetTimestamp();
   _elapsed+=dt;SyncSandPatch();_terrainTimer+=dt;if(_terrainTimer>=.1f){_terrainTimer=0;if(_sandPatch!=null)foreach(var wheel in _wheels)MarkTerrainChanged(OutputPose(wheel.Block.Id).Position);foreach(var chunk in _dirtyTerrain)BuildTerrainChunk(chunk.x,chunk.z);_dirtyTerrain.Clear();if(_fineDirty.Count>0){var key=_fineDirty.First();_fineDirty.Remove(key);if(_fineChunks.ContainsKey(key))BuildFineChunk(key.x,key.z);}}
   TerrainMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(terrainStart).TotalMilliseconds;long controlsStart=System.Diagnostics.Stopwatch.GetTimestamp();
   _servo=Math.Clamp(_servo+servo*dt,-1,1);_piston=Math.Clamp(_piston+(piston>0?1:-1)*dt*2,0,1);
   _driftBlend+=( (handbrake?1f:0f)-_driftBlend)*(1-MathF.Exp(-dt*(handbrake?10:3)));
-  var wheels=_wheels;float axleMid=_axleMid;float power=_blocks.Where(b=>b.Type is 23 or 24).Sum(b=>_catalog[b.Type].Power*b.Power);float mass=_mass;var engines=_engines;if(engines.Length>0)maximumSpeed=Math.Min(maximumSpeed,engines.Max(b=>b.SpeedLimit));
-  foreach(var p in _parts.Values){var b=p.Block;if(b.Id>=RecoveryRootId)continue;
+  ApplyAssemblyControls(_playerRig,dt,throttle,steering,brake,maximumSpeed,_servo,_piston,_driftBlend,sandGrip,handbrake,sandResistance);
+  foreach(var rig in _drivenAssemblies.Values)ApplyAssemblyControls(rig,dt,rig.Input.Throttle,rig.Input.Steering,rig.Input.Brake,rig.MaximumSpeed,0,0,0,sandGrip,false,sandResistance);
+  ApplyWinch(dt);ApplyRecoveryWheelContacts(sandGrip,sandResistance,dt);
+  foreach(var g in _groups){var body=_simulation.Bodies[g.Body];var v=body.Velocity;v.Linear*=MathF.Exp(-.035f*dt);v.Angular*=MathF.Exp(-.06f*dt);body.Velocity=v;}
+  ControlsMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(controlsStart).TotalMilliseconds;long solverStart=System.Diagnostics.Stopwatch.GetTimestamp();
+  _contacts.Clear();_simulation.Timestep(dt,_dispatcher);SolverMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(solverStart).TotalMilliseconds;
+ }
+ void ApplyAssemblyControls(DrivenAssembly rig,float dt,float throttle,float steering,bool brake,float maximumSpeed,float servoPosition,float pistonPosition,float drift,Func<Vector3,float>? sandGrip,bool handbrake,Func<Vector3,float>? sandResistance)
+ {
+  var parts=rig.Parts;var wheels=rig.Wheels;float axleMid=rig.AxleMid;var engines=rig.Engines;float power=engines.Sum(b=>_catalog[b.Type].Power*b.Power);float mass=rig.Mass;if(engines.Length>0)maximumSpeed=Math.Min(maximumSpeed,engines.Max(b=>b.SpeedLimit));
+  foreach(var p in parts){var b=p.Block;
    if(p.Motor is {} motor){var def=_catalog[b.Type];float side=Vector3.Dot(p.Axis,Vector3.UnitX)<0?-1:1;bool rear=p.Block.P.Z>axleMid+.05f;bool wheelBrake=brake||(handbrake&&rear);float target=wheelBrake?0:throttle*maximumSpeed/def.Radius*side;float torque=wheelBrake?mass*9.81f/wheels.Length*def.Radius*1.5f*b.BrakeStrength:Math.Abs(throttle)*Math.Min(power/Math.Max(1,wheels.Length)*def.Radius,mass*9.81f/Math.Max(1,wheels.Length)*def.Radius*.7f)*b.Power;
     // Unloaded tyres spin with low torque; full engine torque needs a ground contact.
       if(!wheelBrake&&!_contacts.ContainsKey(p.Output!.Body.Value))torque*=.04f;
       var wheelBody=_simulation.Bodies[p.Output!.Body];var rootBody=_simulation.Bodies[p.Root.Body];float rolling=Math.Abs(Vector3.Dot(wheelBody.Velocity.Angular-rootBody.Velocity.Angular,Vector3.Transform(p.Axis,rootBody.Pose.Orientation)))*def.Radius;float translation=new Vector2(wheelBody.Velocity.Linear.X,wheelBody.Velocity.Linear.Z).Length();if(!wheelBrake&&_contacts.ContainsKey(p.Output.Body.Value))torque*=1-Math.Clamp((rolling-translation-1)/3,0,.9f);
     p.MotorTarget+=(target-p.MotorTarget)*Math.Clamp(dt*8,0,1);_simulation.Solver.ApplyDescription(motor,new AngularAxisMotor{LocalAxisA=p.Axis,TargetVelocity=p.MotorTarget,Settings=new(torque,.0001f)});
-    var wheel=_simulation.Bodies[p.Output!.Body];_friction[p.Output.Body.Value]=Math.Clamp(b.Grip*(sandGrip?.Invoke(wheel.Pose.Position)??.8f)*(rear?1-_driftBlend*.65f:1),.05f,3);
-    if(sandResistance!=null&&_contacts.TryGetValue(p.Output.Body.Value,out var groundContact)){var n=Vector3.Normalize(groundContact.Normal);var planar=wheel.Velocity.Linear-n*Vector3.Dot(wheel.Velocity.Linear,n);float speed=planar.Length();if(speed>.01f){float resistance=Math.Clamp(sandResistance(wheel.Pose.Position),0,2);float force=Math.Min(mass*9.81f/Math.Max(1,wheels.Length)*resistance,mass/Math.Max(1,wheels.Length)*speed/dt);wheel.ApplyLinearImpulse(-planar/speed*force*dt);}}if(Math.Abs(throttle)>.001f||wheelBrake)_simulation.Awakener.AwakenBody(p.Output.Body);
+    var wheel=_simulation.Bodies[p.Output!.Body];_friction[p.Output.Body.Value]=Math.Clamp(b.Grip*(b.Type==37?1.15f:1)*(sandGrip?.Invoke(wheel.Pose.Position)??.8f)*(rear?1-drift*.65f:1),.05f,3);
+    if(sandResistance!=null&&_contacts.TryGetValue(p.Output.Body.Value,out var groundContact)){var n=Vector3.Normalize(groundContact.Normal);var planar=wheel.Velocity.Linear-n*Vector3.Dot(wheel.Velocity.Linear,n);float speed=planar.Length();if(speed>.01f){float resistance=Math.Clamp(sandResistance(wheel.Pose.Position),0,2)*(b.Type==37?.65f:1);float force=Math.Min(mass*9.81f/Math.Max(1,wheels.Length)*resistance,mass/Math.Max(1,wheels.Length)*speed/dt);wheel.ApplyLinearImpulse(-planar/speed*force*dt);}}if(Math.Abs(throttle)>.001f||wheelBrake)_simulation.Awakener.AwakenBody(p.Output.Body);
    }
-   if(p.Servo is {} angular){float orientation=Vector3.Dot(p.Axis,Vector3.UnitY)>=0?1:-1;float angle=(b.Type==18?-steering*orientation:_servo)*b.Angle*MathF.PI/180;_simulation.Solver.ApplyDescription(angular,new AngularServo{TargetRelativeRotationLocalA=Quaternion.CreateFromAxisAngle(p.Axis,angle),SpringSettings=new(30,1),ServoSettings=new(2.5f,0,6000)});if(Math.Abs(steering)>.001f||Math.Abs(servo)>.001f){_simulation.Awakener.AwakenBody(p.Root.Body);_simulation.Awakener.AwakenBody(p.Output!.Body);}}
-   if(p.Slider is {} linear){_simulation.Solver.GetDescription(linear,out LinearAxisServo desc);desc.TargetOffset=b.Type==21?_piston*b.Stroke:Math.Clamp(b.Preload,-b.Travel,b.Travel*.15f);if(b.Type!=21)desc.SpringSettings=new(b.SpringRate,b.Damping);_simulation.Solver.ApplyDescription(linear,desc);if(b.Type==21)_simulation.Awakener.AwakenBody(p.Output!.Body);}
+   if(p.Servo is {} angular){float orientation=Vector3.Dot(p.Axis,Vector3.UnitY)>=0?1:-1;float angle=(b.Type==18?-steering*orientation:servoPosition)*b.Angle*MathF.PI/180;_simulation.Solver.ApplyDescription(angular,new AngularServo{TargetRelativeRotationLocalA=Quaternion.CreateFromAxisAngle(p.Axis,angle),SpringSettings=new(30,1),ServoSettings=new(2.5f,0,6000)});if(Math.Abs(steering)>.001f||Math.Abs(servoPosition)>.001f){_simulation.Awakener.AwakenBody(p.Root.Body);_simulation.Awakener.AwakenBody(p.Output!.Body);}}
+   if(p.Slider is {} linear){_simulation.Solver.GetDescription(linear,out LinearAxisServo desc);desc.TargetOffset=b.Type==21?pistonPosition*b.Stroke:Math.Clamp(b.Preload,-b.Travel,b.Travel*.15f);if(b.Type!=21)desc.SpringSettings=new(b.SpringRate,b.Damping);_simulation.Solver.ApplyDescription(linear,desc);if(b.Type==21)_simulation.Awakener.AwakenBody(p.Output!.Body);}
   }
-  ApplyWinch(dt);ApplyRecoveryWheelContacts(sandGrip,sandResistance,dt);
-  foreach(var g in _groups){var body=_simulation.Bodies[g.Body];var v=body.Velocity;v.Linear*=MathF.Exp(-.035f*dt);v.Angular*=MathF.Exp(-.06f*dt);body.Velocity=v;}
-  ControlsMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(controlsStart).TotalMilliseconds;long solverStart=System.Diagnostics.Stopwatch.GetTimestamp();
-  _contacts.Clear();_simulation.Timestep(dt,_dispatcher);SolverMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(solverStart).TotalMilliseconds;
  }
  public string DebugSnapshot(){var text=new System.Text.StringBuilder($"Bepu land physics / time={_elapsed:0.00} / rigid islands={BodyCount} / contacts={ContactCount} / velocity={Velocity}\n");foreach(var p in _parts.Values){var pose=PartPose(p.Block.Id);text.AppendLine($"block={p.Block.Id} type={p.Block.Type} parent={p.Block.Parent} moving={p.Block.MovingMount} body={p.Root.Body.Value} output={p.Output?.Body.Value} position={pose.Position} rpm={WheelRpm(p.Block.Id):0.0} travel={SuspensionOffset(p.Block.Id):0.000}");}return text.ToString();}
  public void Dispose(){if(_disposed)return;_simulation.Dispose();_dispatcher?.Dispose();_pool.Clear();_disposed=true;}
@@ -252,6 +278,7 @@ public sealed partial class LandVehiclePhysics:IDisposable
   public bool AllowContactGeneration(int workerIndex,CollidablePair pair,int childA,int childB)=>true;
   public bool ConfigureContactManifold<T>(int workerIndex,CollidablePair pair,ref T manifold,out PairMaterialProperties material) where T:unmanaged,IContactManifold<T>
   {
+   if(manifold.Count>0)_contacts.AnyContact=true;
    bool tireA=pair.A.Mobility!=CollidableMobility.Static&&_friction.ContainsKey(pair.A.BodyHandle.Value),tireB=pair.B.Mobility!=CollidableMobility.Static&&_friction.ContainsKey(pair.B.BodyHandle.Value);
    float friction=tireA?_friction[pair.A.BodyHandle.Value]:tireB?_friction[pair.B.BodyHandle.Value]:.6f;
    if(pair.A.Mobility==CollidableMobility.Static||pair.B.Mobility==CollidableMobility.Static){var body=pair.A.Mobility==CollidableMobility.Static?pair.B:pair.A;for(int i=0;i<manifold.Count;i++){manifold.GetContact(i,out _,out var normal,out float depth,out _);if(depth>=-.04f&&Math.Abs(normal.Y)>.35f)_contacts[body.BodyHandle.Value]=(normal,depth);}}

@@ -22,9 +22,14 @@ def height(x,z,winch):
  if winch:
   h=4*smooth((z-12)/42)+1.3*(.5+.5*math.sin(x*.09+z*.07))
   d,y=route(x,z,WINCH);h=y+(h-y)*smooth((d-5)/7)
-  # Broad level apron; shallow bowl has a drivable south-facing exit.
+  # Excavation: flat deep floor, steep enclosing banks and one south extraction ramp.
   apron=1-smooth((math.hypot(x-12,z-64)-10)/6);h=h*(1-apron)+4*apron
-  r=math.hypot(x-12,z-70);h-=1.7*(1-smooth(r/6.5))
+  r=math.hypot(x-12,z-70);h-=5*(1-smooth((r-3)/3.5))
+  # A linear slope keeps a raised cable clear; the other banks deliberately do not.
+  if 58<=z<=70:
+   ramp=4-5*max(0,min(1,(z-60)/9))
+   corridor=1-smooth((abs(x-12)-2.4)/1.8)
+   h=h*(1-corridor)+ramp*corridor
  else:
   h=1.1+1.9*(.5+.5*math.sin(x*.13+z*.09))+1.1*(.5+.5*math.cos(z*.14-x*.04))
   d,y=route(x,z,TOW);e,ey=route(x,z,EASY)
@@ -42,6 +47,8 @@ def packing(x,z,winch):
  if winch:
   apron=1-smooth((math.hypot(x-12,z-61)-6)/3);value=max(value,apron)
   value*=smooth((math.hypot(x-12,z-70)-4)/3)
+  # Firm west pulling apron; loose east shoulder is visibly marked in the scene.
+  value=max(value,(1-smooth((math.hypot(x-6,z-60)-3)/2)))
  else:
   e,_=route(x,z,EASY);value=max(value,(1-smooth((e-3)/4))*.85)
  return max(value,1-smooth((math.hypot(x,z)-7)/4))

@@ -37,6 +37,14 @@ internal sealed class BlueprintWorkspacePanel
 
     private readonly EditorCamera3D _camera =
         new();
+    private readonly BlueprintViewportStateStore _viewportStates = new();
+    private float _viewportAspect = 1f;
+    private bool _frameOnNextViewport;
+    private bool _cameraView;
+    private void SaveViewportState()
+    {
+        if (_asset != null && _project != null) _viewportStates.Save(_project.ProjectFilePath, _asset.Guid, _camera);
+    }
 
     private BlueprintDefinition? _blueprint;
 
@@ -65,6 +73,7 @@ internal sealed class BlueprintWorkspacePanel
     {
         if (_asset == null || _project == null ||
             (_project.AssetDatabase.TryGetAsset(_asset.Guid, out _) && File.Exists(_asset.FullPath))) return;
+        SaveViewportState();
         _open = false;
         _blueprint = null;
         _preview = null;
@@ -146,6 +155,8 @@ internal sealed class BlueprintWorkspacePanel
         _propertyRedo.Clear();
         _propertyBefore = null;
 
+        SaveViewportState();
+        _cameraView = false;
         _asset =
             asset;
 
@@ -165,6 +176,7 @@ internal sealed class BlueprintWorkspacePanel
         if (_blueprint.Type == BlueprintType.Character)
             NormalizeExistingModelScales();
         RefreshPreviewImportSpaces();
+        _frameOnNextViewport = !_viewportStates.Restore(project.ProjectFilePath, asset.Guid, _camera);
 
         _open =
             true;
@@ -305,7 +317,7 @@ internal sealed class BlueprintWorkspacePanel
 
         EditorUi.ToolbarSeparator();
         ImGui.BeginDisabled(!_previewBoundsMin.HasValue || !_previewBoundsMax.HasValue);
-        if (EditorUi.ToolbarButton("Frame", "Frame Blueprint bounds")) FramePreviewBounds();
+        if (EditorUi.ToolbarButton("Frame All", "Fit Blueprint bounds without changing your viewing angle")) FramePreviewBounds();
         ImGui.EndDisabled();
 
         ImGui.SameLine();
@@ -313,6 +325,12 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.OpenPopup("More##BlueprintToolbarMore");
         if (ImGui.BeginPopup("More##BlueprintToolbarMore"))
         {
+            if (ImGui.MenuItem("Frame Selected")) { _cameraView = false; if (GetSelectedPreviewObject() is { } selected) _camera.Frame(selected, _viewportAspect); }
+            if (ImGui.MenuItem("Reset Editor View")) { _cameraView = false; _camera.Reset(); FramePreviewBounds(); }
+            ImGui.BeginDisabled(PreviewCamera() == null);
+            if (ImGui.MenuItem("Game Camera View", "", _cameraView)) _cameraView = !_cameraView;
+            ImGui.EndDisabled();
+            ImGui.Separator();
             bool canDelete = GetSelectedPreviewObject()?.Parent != null;
             ImGui.BeginDisabled(!canDelete);
             if (ImGui.MenuItem("Delete Object##BlueprintDelete")) DeleteSelectedObject();
@@ -379,19 +397,6 @@ internal sealed class BlueprintWorkspacePanel
             new Vector2(
                 0.0f,
                 8.0f));
-
-        if (EditorUi.SectionHeader("Blueprint"))
-        {
-            int type = (int)_blueprint!.Type;
-            EditorUi.PropertyRow("Type", () =>
-            {
-                if (ImGui.Combo("##BlueprintType", ref type, "Generic Object\0Character\0"))
-                {
-                    _blueprint.Type = (BlueprintType)type;
-                    MarkDirty();
-                }
-            });
-        }
 
         if (EditorUi.SectionHeader("Advanced", defaultOpen: false))
         {
@@ -543,7 +548,13 @@ internal sealed class BlueprintWorkspacePanel
                 viewport.Y,
                 1.0f);
 
-        _framebuffer.Render(
+        _viewportAspect = viewport.X / viewport.Y;
+        if (_frameOnNextViewport) { FramePreviewBounds(); _frameOnNextViewport = false; }
+        Camera3D? previewCamera = _cameraView ? PreviewCamera() : null;
+        if (previewCamera != null)
+            _framebuffer.RenderGame(renderer, renderer3D, _preview!, EditorMode.Edit, (int)viewport.X, (int)viewport.Y,
+                windowWidth, windowHeight, cameraOverride: previewCamera);
+        else _framebuffer.Render(
             renderer,
             renderer3D,
             _preview!,
@@ -568,6 +579,7 @@ internal sealed class BlueprintWorkspacePanel
                 1.0f,
                 0.0f));
 
+        if (previewCamera != null) { ImGui.EndChild(); return; }
         if (ImGui.BeginDragDropTarget())
         {
             Guid? assetId = AssetDragDrop.Accept();
@@ -1140,6 +1152,12 @@ internal sealed class BlueprintWorkspacePanel
                 if (added is Camera3D camera)
                     _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                 MarkDirty();
+            }, preset =>
+            {
+                BeginPropertyEdit();
+                if (preset.HasValue) SetupPlayablePlayer(target, preset.Value);
+                else SetupThirdPersonCharacter(target);
+                CommitPropertyEdit();
             });
         }
 
@@ -1148,6 +1166,12 @@ internal sealed class BlueprintWorkspacePanel
 
     private void DrawKnownComponentProperties(Component component)
     {
+        if (component is Camera3D && _preview != null && _preview.GameObjects.Any(item =>
+                item.GetComponent<FirstPersonCamera3D>() is { Enabled: true } view && view.CameraObjectId == component.GameObject.Id))
+            ImGui.TextWrapped("First Person Camera owns rotation during Play. Camera position is the authored eye anchor. Attach view arms and weapons beneath this Camera; FOV and clipping remain camera settings.");
+        if (component is Camera3D && _preview != null && _preview.GameObjects.Any(item =>
+                item.GetComponent<CameraBoom3D>() is { Enabled: true } rig && rig.CameraObjectId == component.GameObject.Id))
+            ImGui.TextWrapped("Runtime view: Camera Boom controls rotation and placement during Play. In first person, the saved camera position is the eye anchor; camera children follow look.");
         ComponentPropertyRenderer.Draw(component, PropertyEditorContext.Blueprint, _showAdvanced,
             BeginPropertyEdit, MarkDirty, CommitPropertyEdit, _project);
     }
@@ -1388,30 +1412,14 @@ internal sealed class BlueprintWorkspacePanel
             ImGui.EndMenu();
         }
 
-        if (root != null && ImGui.BeginMenu("Setup"))
-        {
-            if (ImGui.MenuItem("Playable TPS Player")) SetupPlayablePlayer(root, PlayerViewPreset.ThirdPerson);
-            if (ImGui.BeginMenu("View Preset"))
-            {
-                if (ImGui.MenuItem("Third Person Shooter")) SetupPlayablePlayer(root, PlayerViewPreset.ThirdPerson);
-                if (ImGui.MenuItem("First Person Shooter")) SetupPlayablePlayer(root, PlayerViewPreset.FirstPerson);
-                if (ImGui.MenuItem("Top-Down Twin-Stick")) SetupPlayablePlayer(root, PlayerViewPreset.TopDownTwinStick);
-                if (ImGui.MenuItem("Isometric")) SetupPlayablePlayer(root, PlayerViewPreset.Isometric);
-                ImGui.Separator();
-                ImGui.TextDisabled("Click-to-move is a separate control option.");
-                ImGui.EndMenu();
-            }
-            if (ImGui.MenuItem("Movement + Camera Only (Legacy)")) SetupThirdPersonCharacter(root);
-            ImGui.EndMenu();
-        }
         ImGui.EndPopup();
     }
 
     private void SetupPlayablePlayer(GameObject root, PlayerViewPreset preset)
     {
         Camera3D? previousActive = root.Scene?.ActiveCamera;
-        CameraBoom3D boom = BlueprintAuthoringService.SetupPlayablePlayer(root, _project!.Assets, preset);
-        Camera3D? camera = _preview!.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
+        Guid cameraId = BlueprintAuthoringService.SetupPlayablePlayer(root, _project!.Assets, preset);
+        Camera3D? camera = _preview!.FindGameObject(cameraId)?.GetComponent<Camera3D>();
         if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
             _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
         _selectedPreviewObjectId = root.Id;
@@ -1913,11 +1921,7 @@ internal sealed class BlueprintWorkspacePanel
                 1.0f;
         }
 
-        _camera.Yaw =
-            -135.0f;
-
-        _camera.Pitch =
-            -18.0f;
+        _cameraView = false;
 
         /*
          * Frame the model from its actual bounds instead of forcing a
@@ -1940,11 +1944,12 @@ internal sealed class BlueprintWorkspacePanel
             _camera.FieldOfView *
             MathF.PI /
             360.0f;
+        halfFovRadians = Math.Min(halfFovRadians, MathF.Atan(MathF.Tan(halfFovRadians) * _viewportAspect));
 
         float fitDistance =
             radius /
             Math.Max(
-                MathF.Tan(
+                MathF.Sin(
                     halfFovRadians),
                 0.01f);
 
@@ -2121,8 +2126,6 @@ internal sealed class BlueprintWorkspacePanel
 
         RefreshPreviewBoundsFromScene();
 
-        FramePreviewBounds();
-
         _statusMessage =
             refreshed ==
                 0
@@ -2206,6 +2209,7 @@ internal sealed class BlueprintWorkspacePanel
 
     private void CloseNow()
     {
+        SaveViewportState();
         _open = false;
         _cameraActivationPrompt.Reset();
         if (_registeredDocumentId.HasValue)
@@ -2530,6 +2534,8 @@ internal sealed class BlueprintWorkspacePanel
 
     private void RebuildPreview()
     {
+        Guid previousSelection = _selectedPreviewObjectId;
+        _selectedComponent = null;
         _previewBoundsMin =
             null;
 
@@ -2575,13 +2581,9 @@ internal sealed class BlueprintWorkspacePanel
                         gameObject.Parent ==
                         null);
 
-        _selectedPreviewObjectId =
-            firstRoot?.Id ??
-            Guid.Empty;
+        _selectedPreviewObjectId = _preview.FindGameObject(previousSelection)?.Id ?? firstRoot?.Id ?? Guid.Empty;
 
         RefreshPreviewBoundsFromScene();
-
-        FramePreviewBounds();
 
         WriteDebugDump(
             "Blueprint preview rebuilt");
@@ -2634,7 +2636,9 @@ internal sealed class BlueprintWorkspacePanel
 
     public void Dispose()
     {
+        SaveViewportState();
         if (_project != null) _project.AssetDatabase.DatabaseChanged -= EvictDeletedAsset;
         _framebuffer.Dispose();
     }
+    private Camera3D? PreviewCamera() => GetSelectedPreviewObject()?.GetComponent<Camera3D>() ?? _preview?.ActiveCamera;
 }

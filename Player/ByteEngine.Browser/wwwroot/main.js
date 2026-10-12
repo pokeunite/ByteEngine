@@ -1,6 +1,7 @@
 import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
 import { BrowserRenderer } from './renderer.js';
+import { decodeUiPacket } from './frame-wire.js';
 import { BrowserAudio } from './audio.js';
 import { createPerformanceCapture } from './performance.js';
 const capture=createPerformanceCapture();
@@ -72,6 +73,7 @@ try{
         pointer=document.pointerLockElement===canvas?[.5,.5]:[(e.clientX-rect.left)/rect.width,(e.clientY-rect.top)/rect.height];
         delta[0]+=e.movementX;delta[1]+=e.movementY;
     });
+    const uiCommands=[];
     function frame(now){
         if(stopped){status.hidden=false;return;}
         try{
@@ -85,6 +87,7 @@ try{
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad);
             const wasmEnd=performance.now();const data=JSON.parse(payload);
+            if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};

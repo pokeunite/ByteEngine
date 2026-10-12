@@ -18,7 +18,7 @@ public sealed partial class DuneMainMenu3D
   var panel=Widget("New Game confirmation panel",overlay,new(340,220),new(600,270),new(.06f,.065f,.06f,1),101);
   void Text(string name,string text,Vector2 offset,int size,Vector4 color){var obj=scene.CreateGameObject(name);obj.SetParent(panel,false);obj.AddComponent(new UiText{Text=text,Offset=offset,FontSize=size,FontReference=font,Color=color,OrderInLayer=104});}
   Text("New Game confirmation title","START A NEW GAME?",new(28,22),30,new(.95f,.9f,.8f,1));
-  Text("New Game confirmation explanation","Your vehicle, contract progress and money will reset.\nSaved blueprints and settings will be kept.",new(28,73),21,new(.75f,.75f,.7f,1));
+  Text("New Game confirmation explanation","Your vehicle, contracts, money, parts and tuning unlocks will reset.\nSaved blueprints and settings will be kept.",new(28,73),21,new(.75f,.75f,.7f,1));
   Text("New Game confirmation error","",new(28,136),16,new(1,.4f,.25f,1));
   foreach(var (name,label,x,gold) in new[]{("Cancel New Game button","CANCEL",28f,false),("Confirm New Game button","START NEW GAME",308f,true)}){var obj=Widget(name,panel,new(x,199),new(264,45),gold?new(.85f,.51f,.15f,1):new(.16f,.17f,.16f,1),103);var button=obj.GetComponent<UiWidget>()!;button.Kind=UiWidgetKind.Button;button.Label=label;button.FontReference=font;button.FontSize=20;button.HoverColor=new(.55f,.37f,.17f,1);button.Interactable=true;}
   overlay.Active=false;

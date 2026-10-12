@@ -227,7 +227,8 @@ internal sealed class SceneFramebuffer
         int height,
         int windowWidth,
         int windowHeight,
-        bool uiOnly = false)
+        bool uiOnly = false,
+        Camera3D? cameraOverride = null)
     {
         Resize(
             width,
@@ -263,7 +264,7 @@ internal sealed class SceneFramebuffer
             _height
         );
 
-        Camera3D? camera3D = uiOnly ? null : scene.ActiveCamera;
+        Camera3D? camera3D = uiOnly ? null : cameraOverride ?? scene.ActiveCamera;
 
         Camera2D? camera =
             camera3D ==

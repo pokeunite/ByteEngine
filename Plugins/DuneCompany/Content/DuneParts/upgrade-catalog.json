@@ -1,0 +1,156 @@
+[
+  {
+    "id": 33,
+    "name": "powered_winch",
+    "label": "Powered winch",
+    "file": "Assets/DuneParts/glb/33_powered_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/33_powered_winch.png",
+    "group": "Mechanics",
+    "function": "12 kN pull / 24 m cable. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.4350000023841858,
+      0.0,
+      -0.3149999976158142
+    ],
+    "max": [
+      0.4350000023841858,
+      0.5379999876022339,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 35,
+    "power": 0,
+    "price": 0,
+    "tuningCost": 50
+  },
+  {
+    "id": 34,
+    "name": "low_gear_engine",
+    "label": "Low-gear engine",
+    "file": "Assets/DuneParts/glb/34_low_gear_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/34_low_gear_engine.png",
+    "group": "Drive",
+    "function": "High torque for heavy recovery / heavier than the stock engine. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.6570000052452087,
+      -7.450582373280668e-10,
+      -0.6480000019073486
+    ],
+    "max": [
+      0.6570000052452087,
+      1.3949999809265137,
+      0.8622000217437744
+    ],
+    "mass": 55,
+    "power": 5400,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "price": 450,
+    "tuningCost": 50
+  },
+  {
+    "id": 35,
+    "name": "long_line_winch",
+    "label": "Long-line winch",
+    "file": "Assets/DuneParts/glb/35_long_line_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/35_long_line_winch.png",
+    "group": "Mechanics",
+    "function": "12 kN pull / 40 m cable / hook reach 22 m. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.6100000143051147,
+      0.0,
+      -0.3149999976158142
+    ],
+    "max": [
+      0.6100000143051147,
+      0.6860000491142273,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 42,
+    "power": 0,
+    "price": 650,
+    "tuningCost": 50
+  },
+  {
+    "id": 36,
+    "name": "power_winch",
+    "label": "Power winch",
+    "file": "Assets/DuneParts/glb/36_power_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/36_power_winch.png",
+    "group": "Mechanics",
+    "function": "20 kN pull / 24 m cable / heavier motor. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.5699999928474426,
+      0.0,
+      -0.4099999964237213
+    ],
+    "max": [
+      0.5699999928474426,
+      0.6349999904632568,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 55,
+    "power": 0,
+    "price": 900,
+    "tuningCost": 50
+  },
+  {
+    "id": 37,
+    "name": "sand_tyre",
+    "label": "Wide sand tyre",
+    "file": "Assets/DuneParts/glb/37_sand_tyre.glb",
+    "preview": "Assets/DuneParts/cutouts/37_sand_tyre.png",
+    "group": "Drive",
+    "function": "Wide footprint / lower loose-sand resistance / $125 per tyre. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.617277204990387,
+      -0.5945000052452087,
+      -0.42750000953674316
+    ],
+    "max": [
+      0.617277204990387,
+      0.5945000052452087,
+      0.06750000268220901
+    ],
+    "mass": 22,
+    "power": 0,
+    "radius": 0.6,
+    "supportWidth": 0.25,
+    "supportLength": 0.25,
+    "wheelCenterZ": -0.18,
+    "price": 125,
+    "tuningCost": 25
+  },
+  {
+    "id": 38,
+    "name": "race_engine",
+    "label": "Race engine",
+    "file": "Assets/DuneParts/glb/38_race_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/38_race_engine.png",
+    "group": "Drive",
+    "function": "High power / 42 m/s stock speed cap / lighter than the heavy engine. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.6934999823570251,
+      0.0,
+      -0.6840000152587891
+    ],
+    "max": [
+      0.7723500728607178,
+      1.3000725507736206,
+      0.768549919128418
+    ],
+    "mass": 45,
+    "power": 6500,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "price": 1200,
+    "tuningCost": 50
+  }
+]

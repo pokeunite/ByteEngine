@@ -80,6 +80,7 @@ internal static class FirstPersonCameraTests
         var setupCamera = setupPlayer.Children.Single(child => child.GetComponent<Camera3D>() != null);
         var setupModel = setupCamera.Children.Single(child => child.Name == "Model");
         setupCamera.Transform.LocalPosition = new Vector3(.2f, 1.5f, .1f);
+        setupCamera.GetComponent<Camera3D>()!.NearClip = .07f;
         setupModel.Transform.LocalPosition = new Vector3(.1f, -.25f, -.5f);
         ByteEngine.Editor.BlueprintAuthoringService.SetupPlayablePlayer(setupPlayer, null,
             ByteEngine.Editor.PlayerViewPreset.FirstPerson);
@@ -88,6 +89,24 @@ internal static class FirstPersonCameraTests
             Vector3.Distance(setupModel.Transform.LocalPosition, new Vector3(.1f,-.25f,-.5f)) > .0001f ||
             setupPlayer.Children.Any(child => child.Name == "Model"))
             throw new Exception("Reapplying FPS setup must preserve authored viewmesh hierarchy and transforms.");
+        setupPlayer.GetComponent<FirstPersonCamera3D>()!.SnapToView();
+        if (Math.Abs(setupCamera.GetComponent<Camera3D>()!.NearClip - .07f) > .0001f)
+            throw new Exception("FPS setup and runtime must preserve authored camera clipping.");
+        var siblingScene = new Scene("FPS sibling migration");
+        var siblingRoot = siblingScene.CreateGameObject("Player");
+        var siblingCamera = siblingScene.CreateGameObject("FPS Camera");
+        siblingCamera.SetParent(siblingRoot, false);
+        siblingCamera.Transform.LocalPosition = new Vector3(0, .12901306f, .41626298f);
+        siblingCamera.AddComponent(new Camera3D());
+        var siblingModel = siblingScene.CreateGameObject("Model");
+        siblingModel.SetParent(siblingRoot, false);
+        siblingModel.Transform.LocalPosition = new Vector3(0, .055217672f, 0);
+        Vector3 oldEye = siblingCamera.Transform.WorldPosition, oldArms = siblingModel.Transform.WorldPosition;
+        ByteEngine.Editor.BlueprintAuthoringService.SetupPlayablePlayer(siblingRoot, null,
+            ByteEngine.Editor.PlayerViewPreset.FirstPerson);
+        if (siblingModel.Parent != siblingCamera || Vector3.Distance(oldEye, siblingCamera.Transform.WorldPosition) > .0001f ||
+            Vector3.Distance(oldArms, siblingModel.Transform.WorldPosition) > .0001f)
+            throw new Exception("FPS migration must attach sibling arms without moving authored eye or arms.");
         Console.WriteLine("First-person fixed eye, pitch/yaw and view-weapon regressions passed.");
     }
 }

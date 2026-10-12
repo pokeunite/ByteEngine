@@ -8,8 +8,16 @@ namespace ByteEngine.Editor;
 
 internal static class ComponentAddMenu
 {
-    public static void Draw(GameObject target, string search, Action<Component, string> add)
+    public static void Draw(GameObject target, string search, Action<Component, string> add, Action<PlayerViewPreset?>? preset = null)
     {
+        if (preset != null && string.IsNullOrWhiteSpace(search) && ImGui.BeginMenu("Character Presets"))
+        {
+            if (ImGui.MenuItem("Third Person Character")) preset(null);
+            if (ImGui.MenuItem("Third Person Shooter")) preset(PlayerViewPreset.ThirdPerson);
+            if (ImGui.MenuItem("First Person Character")) preset(PlayerViewPreset.FirstPerson);
+            ImGui.TextDisabled("Configures components, camera and model hierarchy.");
+            ImGui.EndMenu();
+        }
         IEnumerable<Type> candidates = ComponentMetadataRegistry.RegisteredTypes
             .Where(type => type != typeof(BlueprintInstance) && typeof(Component).IsAssignableFrom(type))
             .Where(type => type != typeof(VisualModelOverride) ||

@@ -33,7 +33,7 @@ public sealed partial class DuneWorkshop3D
   bool connected=active&&(WinchMission?WinchConnected:RecoveryConnected);
   if(active&&!_contractComplete&&connected!=_wasJobConnected){JobNotice(connected?(WinchMission?"CABLE CONNECTED / E to reel in":"HITCH LOCKED / Ready to tow"):(WinchMission?"CABLE DETACHED":"HITCH RELEASED"));JobSound(connected?"hitch-lock":"hitch-release");}
   if(active&&_contractComplete&&!_wasJobCompleted){JobNotice($"PAYMENT RECEIVED  +${Math.Max(0,_credits-_lastCredits)}");JobSound("contract-victory",.85f);_noticeTime=5;}
-  if(active&&WinchConnected&&!_contractComplete&&Input.IsKeyDown(Key.E))JobSound("winch-motor",.25f+Math.Clamp(WinchTension/15000,0,.3f),true);
+  if(active&&WinchConnected&&!_contractComplete&&_blocks.Any(b=>IsWinch(b.Type)&&Input.IsKeyDown(BlockKey(b,"Reel in"))))JobSound("winch-motor",.25f+Math.Clamp(WinchTension/15000,0,.3f),true);
   else if(_jobSounds.TryGetValue("winch-motor",out var motor))motor.Stop();
   _wasJobConnected=connected;_wasJobCompleted=active&&_contractComplete;_lastCredits=_credits;
   _noticeTime=Math.Max(0,_noticeTime-dt);if(_recoveryNotice!=null){_recoveryNotice.Active=active&&_noticeTime>0&&(!WorkshopV3||!_contractComplete);if(_recoveryNoticePanel!=null)_recoveryNoticePanel.Color=new(.055f,.07f,.06f,.95f*Math.Clamp(_noticeTime/.3f,0,1));}

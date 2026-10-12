@@ -111,12 +111,16 @@ internal static class BlueprintAuthoringService
         return (root, children);
     }
 
-    public static CameraBoom3D SetupPlayablePlayer(
+    public static Guid SetupPlayablePlayer(
         GameObject player,
         AssetManager? assets = null,
         PlayerViewPreset preset = PlayerViewPreset.ThirdPerson)
     {
-        CameraBoom3D boom = SetupThirdPersonCharacter(player, preset == PlayerViewPreset.FirstPerson ? null : assets);
+        GameObject? authoredCamera = Descendants(player).FirstOrDefault(child => child.GetComponent<Camera3D>() != null);
+        Vector3? authoredCameraPosition = authoredCamera?.Transform.WorldPosition;
+        Quaternion? authoredCameraRotation = authoredCamera?.Transform.WorldRotation;
+        CameraBoom3D boom = SetupThirdPersonCharacter(player, preset == PlayerViewPreset.FirstPerson ? null : assets,
+            preserveFirstPerson: preset == PlayerViewPreset.FirstPerson);
         EnsureSingleRootComponent(player, () => new HealthComponent
         {
             MaxHealth = 100f,
@@ -145,26 +149,36 @@ internal static class BlueprintAuthoringService
         GameObject? viewCamera = player.Scene?.FindGameObject(boom.CameraObjectId);
         if (preset == PlayerViewPreset.FirstPerson && viewCamera != null)
         {
-            viewCamera.GetComponent<Camera3D>()!.NearClip = .01f;
+            if (authoredCameraPosition is { } position)
+            {
+                viewCamera.Transform.WorldPosition = position;
+                viewCamera.Transform.WorldRotation = authoredCameraRotation!.Value;
+            }
+            else
+            {
+                viewCamera.Transform.LocalPosition = new Vector3(0, 1.65f, 0);
+                viewCamera.GetComponent<Camera3D>()!.NearClip = .03f;
+            }
             if (!ReferenceEquals(model.Parent, viewCamera))
             {
-                viewCamera.Transform.LocalPosition = new Vector3(0,1.65f,0);
-                viewCamera.Transform.LocalRotation = Quaternion.Identity;
-                if (CharacterModelPoseBounds.TryGetWorldBounds(model,out var bounds))
-                {
-                    Vector3 size = bounds.Maximum-bounds.Minimum;
-                    Vector3 center = (bounds.Minimum+bounds.Maximum)*.5f;
-                    float distance = Math.Max(.35f, Math.Max(size.X,size.Y)*.85f + size.Z*.5f);
-                    Vector3 targetCenter = viewCamera.Transform.WorldPosition +
-                        viewCamera.Transform.Forward*distance - Vector3.UnitY*size.Y*.2f;
-                    model.Transform.WorldPosition += targetCenter-center;
-                }
+                // View meshes use authored offsets; their bounds must never move the eye or arms.
                 model.SetParent(viewCamera,true);
             }
         }
         else if (viewCamera != null && model.IsDescendantOf(viewCamera))
             model.SetParent(player,true);
-        return boom;
+        if (preset == PlayerViewPreset.FirstPerson && viewCamera != null)
+        {
+            FirstPersonCamera3D view = EnsureSingleRootComponent(player, () => new FirstPersonCamera3D
+            {
+                MouseSensitivityX = boom.MouseSensitivityX, MouseSensitivityY = boom.MouseSensitivityY,
+                InvertHorizontalLook = boom.InvertHorizontalLook, InvertVerticalLook = boom.InvertVerticalLook
+            });
+            view.CameraObjectId = viewCamera.Id;
+            view.Enabled = true;
+            player.RemoveComponent(boom);
+        }
+        return viewCamera?.Id ?? Guid.Empty;
     }
 
     public static void ApplyPlayerViewPreset(GameObject player, PlayerViewPreset preset)
@@ -230,7 +244,7 @@ internal static class BlueprintAuthoringService
         }
     }
 
-    public static CameraBoom3D SetupThirdPersonCharacter(GameObject player, AssetManager? assets = null)
+    public static CameraBoom3D SetupThirdPersonCharacter(GameObject player, AssetManager? assets = null, bool preserveFirstPerson = false)
     {
         ClassificationSettings? classification = player.Scene?.Classification ?? EditorProjectContext.Active?.Project.Classification;
         if (classification != null)
@@ -389,6 +403,11 @@ internal static class BlueprintAuthoringService
                     capsule.Center.Z);
         }
 
+        if (!preserveFirstPerson)
+        {
+            foreach (var fps in player.Components.OfType<FirstPersonCamera3D>().ToArray()) player.RemoveComponent(fps);
+            if (!ReferenceEquals(modelRoot.Parent, player)) modelRoot.SetParent(player, true);
+        }
         return boom;
     }
 
@@ -418,7 +437,8 @@ internal static class BlueprintAuthoringService
         }
 
         model ??= EnsureModelRoot(player);
-        if (!ReferenceEquals(model.Parent, player) && !(model.Parent?.GetComponent<Camera3D>() != null && player.GetComponent<CameraBoom3D>()?.FirstPerson == true))
+        if (!ReferenceEquals(model.Parent, player) && !(model.Parent?.GetComponent<Camera3D>() != null &&
+            (player.GetComponent<CameraBoom3D>()?.FirstPerson == true || player.GetComponent<FirstPersonCamera3D>() != null)))
             model.SetParent(player, true);
         model.Name = "Model";
 
@@ -649,7 +669,8 @@ internal static class BlueprintAuthoringService
             typeof(CharacterController3D),
             typeof(PlayerController3D),
             typeof(AnimationController),
-            typeof(CameraBoom3D)
+            typeof(CameraBoom3D),
+            typeof(FirstPersonCamera3D)
         };
 
         foreach (GameObject child in Descendants(root))

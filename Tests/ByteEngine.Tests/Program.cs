@@ -20,6 +20,13 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Contains("--browser-texture-lifecycle")){BrowserTextureTransferTests.Run();return;}
+    if(args.Contains("--rope-winch")){RopeWinchTests.Run();return;}
+    if(args.Length>=2&&args[0]=="--dune-starter-levels"){using var diagnostic=new DunePolishDiagnostic(args[1],false,levels:true);diagnostic.Run();return;}
+    if (args.Contains("--blueprint-camera")) { BlueprintCameraAuthoringTests.Run(root); return; }
+    if (args.Contains("--fps-component")) { FirstPersonComponentTests.Run(root); return; }
+    if (args.Length == 2 && args[0] == "--fps-view-render") { using var view = new FirstPersonViewDiagnostic(args[1]); view.IsVisible = false; view.Run(); return; }
+    if (args.Length == 2 && args[0] == "--fps-view-check") { BlueprintCameraAuthoringTests.CheckProject(args[1]); return; }
     if (args.Contains("--reusable-game-systems")) { ReusableGameSystemsTests.Run(root); return; }
     if (args.Contains("--bundled-characters")) { BundledCharacterTests.Run(); return; }
     if(args.Length>=2&&args[0]=="--create-sand-example")

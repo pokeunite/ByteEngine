@@ -48,6 +48,16 @@ if ($LASTEXITCODE -ne 0)
     throw "ByteEngine Editor publish failed."
 }
 
+$runtimeConfig = Get-Content -LiteralPath (Join-Path $resolvedOutput "ByteEngine.Editor.runtimeconfig.json") -Raw | ConvertFrom-Json
+$runtimeProperties = $runtimeConfig.runtimeOptions.PSObject.Properties
+if ($null -ne $runtimeProperties['frameworks'] -or $null -ne $runtimeProperties['framework'] -or
+    $null -eq $runtimeProperties['includedFrameworks'] -or
+    -not (Test-Path -LiteralPath (Join-Path $resolvedOutput "coreclr.dll")) -or
+    -not (Test-Path -LiteralPath (Join-Path $resolvedOutput "hostpolicy.dll")))
+{
+    throw "Editor package must include its .NET runtime; refusing a package that requires a separate runtime installation."
+}
+
 if (-not (Test-Path -LiteralPath $publishedExecutable))
 {
     throw "Published ByteEngine.Editor.exe was not produced."

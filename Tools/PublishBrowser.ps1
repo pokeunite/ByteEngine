@@ -16,7 +16,16 @@ foreach ($file in Get-ChildItem -LiteralPath $framework -File) {
     }
 }
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugins.json'),'["bytebard.desertterrain","bytebard.dunecompany"]')
-foreach ($file in @('index.html','main.js','renderer.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
+$pluginBuilds = @{}
+foreach ($pluginName in @('DesertTerrain','DuneCompany')) {
+    $pluginRoot = Join-Path $repoRoot "Plugins/$pluginName"
+    $manifest = Get-Content (Join-Path $pluginRoot 'plugin.json') -Raw | ConvertFrom-Json
+    $assembly = Join-Path $pluginRoot "bin/$Configuration/net9.0/$($manifest.assembly)"
+    if (!(Test-Path -LiteralPath $assembly)) { throw "Missing compiled browser plugin: $assembly" }
+    $pluginBuilds[$manifest.id] = @{ version=$manifest.version; sha256=(Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash }
+}
+[IO.File]::WriteAllText((Join-Path $source 'browser-plugin-builds.json'),($pluginBuilds | ConvertTo-Json -Depth 4))
+foreach ($file in @('index.html','main.js','renderer.js','frame-wire.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
 foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),

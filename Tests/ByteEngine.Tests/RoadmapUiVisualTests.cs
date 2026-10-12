@@ -38,7 +38,7 @@ internal static class RoadmapUiVisualTests
   var activate=new ByteEngine.Core.InputSystem.RawInputSnapshot();activate.Gamepad.ButtonsDown.Add(ByteEngine.Core.InputSystem.GamepadControl.South);ByteEngine.Core.Input.UpdatePortable(activate,false);ByteEngine.Core.Time.Update(1d/60);UiNavigation.Update(scene);if(!buttons[^1].WasClicked)throw new Exception("Controller confirm does not activate focused button");UiNavigation.Focus(null);
   Console.WriteLine("PASS actual UI authoring framebuffer at five sizes, long German/French labels, shared hit testing and focus reveal; screenshots saved");
  }
-    private static void Png(string file,byte[] rgba,int width,int height)
+    internal static void Png(string file,byte[] rgba,int width,int height)
     {
         using var output=File.Create(file);output.Write(new byte[]{137,80,78,71,13,10,26,10});byte[] header=new byte[13];System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(0,4),width);System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4,4),height);header[8]=8;header[9]=6;Chunk(output,"IHDR",header);
         using var compressed=new MemoryStream();using(var z=new ZLibStream(compressed,CompressionLevel.Fastest,true))for(int y=height-1;y>=0;y--){z.WriteByte(0);z.Write(rgba,y*width*4,width*4);}Chunk(output,"IDAT",compressed.ToArray());Chunk(output,"IEND",[]);

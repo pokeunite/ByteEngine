@@ -177,6 +177,50 @@ internal static class ComponentPropertyRenderer
             _ => true
         };
 
+    private static void DrawRoute(ByteEngine.Core.AI.RoutePath3D route, PropertyEditorContext context,Action begin,Action changed,Action end)
+    {
+        ImGui.SeparatorText("Route points");ImGui.TextWrapped("World positions, in driving order. Set gate radius and corridor width below.");
+        ImGui.BeginDisabled(context==PropertyEditorContext.Runtime);var points=route.Points.ToList();
+        void Save(){route.WaypointsJson=System.Text.Json.JsonSerializer.Serialize(points.Select(p=>new[]{p.X,p.Y,p.Z}));changed();}
+        for(int i=0;i<points.Count;i++){ImGui.PushID(i);var point=points[i];bool edited=ImGui.DragFloat3("Point "+(i+1),ref point,.1f);if(ImGui.IsItemActivated()||edited)begin();if(edited){points[i]=point;Save();}if(ImGui.IsItemDeactivatedAfterEdit())end();ImGui.SameLine();if(ImGui.SmallButton("Remove")){begin();points.RemoveAt(i);Save();end();ImGui.PopID();break;}ImGui.PopID();}
+        if(ImGui.Button("Add next point")){begin();points.Add(points.Count>0?points[^1]-Vector3.UnitZ*10:route.Transform.WorldPosition);Save();end();}
+        ImGui.SameLine();if(ImGui.Button("Use child objects as points")){begin();points=route.GameObject.Children.Select(o=>o.Transform.WorldPosition).ToList();Save();end();}
+        ImGui.EndDisabled();
+    }
+
+    private static void DrawFirstPersonFraming(FirstPersonCamera3D fps,
+        PropertyEditorContext context, Action begin, Action changed, Action end)
+    {
+        var cameraObject = fps.GameObject.Scene?.FindGameObject(fps.CameraObjectId);
+        var camera = cameraObject?.GetComponent<Camera3D>();
+        if (camera == null) return;
+        ImGui.SeparatorText("FPS framing");
+        ImGui.TextWrapped("Adjust the eye and arms here. Use Game Camera View in the Blueprint preview to see the framing.");
+        ImGui.BeginDisabled(context == PropertyEditorContext.Runtime);
+        void Position(string label, GameObject target)
+        {
+            var value = target.Transform.LocalPosition;
+            bool edited = ImGui.DragFloat3(label, ref value, .01f);
+            if (ImGui.IsItemActivated() || edited) begin();
+            if (edited) { target.Transform.LocalPosition = value; changed(); }
+            if (ImGui.IsItemDeactivatedAfterEdit()) end();
+        }
+        Position("Eye position", cameraObject!);
+        float fov = camera.FieldOfView;
+        bool fovEdited = ImGui.DragFloat("View FOV", ref fov, .25f, 30f, 120f);
+        if (ImGui.IsItemActivated() || fovEdited) begin();
+        if (fovEdited) { camera.FieldOfView = Math.Clamp(fov, 30f, 120f); changed(); }
+        if (ImGui.IsItemDeactivatedAfterEdit()) end();
+        var model = cameraObject!.Children.FirstOrDefault(child => child.Name == "Model");
+        if (model != null)
+        {
+            Position("Arms position", model);
+            ImGui.TextDisabled("Y: raise/lower arms. Z: move arms closer/further.");
+        }
+        else ImGui.TextDisabled("Attach a child named Model under the view camera for arm framing.");
+        ImGui.EndDisabled();
+    }
+
     public static void Draw(
         Component component,
         PropertyEditorContext context,
@@ -188,6 +232,10 @@ internal static class ComponentPropertyRenderer
     {
         ImGui.PushID(
             component.GetHashCode());
+
+        if (component is ByteEngine.Core.AI.RoutePath3D route) DrawRoute(route,context,begin,changed,end);
+        if (component is FirstPersonCamera3D fps)
+            DrawFirstPersonFraming(fps, context, begin, changed, end);
 
         if(component is ModelHierarchyInstance graphicsModel && project!=null)
         {
@@ -244,6 +292,7 @@ internal static class ComponentPropertyRenderer
                 ImGui.SeparatorText(waveCategory);
             }
 
+            if(component is ByteEngine.Core.AI.RoutePath3D && descriptor.Property.Name=="WaypointsJson")continue;
             object? before =
                 descriptor.Property.GetValue(
                     component);

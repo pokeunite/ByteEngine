@@ -46,7 +46,6 @@ internal sealed class AssetsPanel : IDisposable
     private string _blueprintName =
         "New Blueprint";
 
-    private int _blueprintType;
 
     private bool _showCreateEventModule;
 
@@ -2617,16 +2616,11 @@ state.SelectedObject =
             ref _blueprintName,
             128);
 
-        ImGui.Combo(
-            "Type",
-            ref _blueprintType,
-            "Generic Object\0Character (Empty)\0Third Person Shooter\0First Person Shooter\0Top-Down Twin-Stick\0Isometric\0");
+        ImGui.TextWrapped("Creates a reusable prefab. Add components or a character preset in the inspector.");
 
         bool valid =
             !string.IsNullOrWhiteSpace(
                 _blueprintName);
-        if (_blueprintType >= 2)
-            ImGui.TextDisabled("Creates a playable Character Blueprint. Add a render model to its Model child.");
 
         ImGui.BeginDisabled(
             !valid);
@@ -2690,7 +2684,7 @@ state.SelectedObject =
         }
 
         BlueprintType type =
-            _blueprintType == 0 ? BlueprintType.GenericObject : BlueprintType.Character;
+            BlueprintType.GenericObject;
 
         GameObjectData root =
             new GameObjectData
@@ -2703,43 +2697,6 @@ state.SelectedObject =
             };
 
         var children = new List<GameObjectData>();
-        if (_blueprintType >= 2)
-        {
-            (root, children) = BlueprintAuthoringService.CreatePlayableBlueprintHierarchy(
-                _project, safeName, (PlayerViewPreset)(_blueprintType - 2));
-        }
-        else if (type == BlueprintType.Character)
-        {
-            Guid cameraId = Guid.NewGuid();
-            children.Add(new GameObjectData { Id = Guid.NewGuid(), ParentId = root.Id, Name = "Model" });
-            children.Add(new GameObjectData
-            {
-                Id = cameraId,
-                ParentId = root.Id,
-                Name = "Camera",
-                Components = new List<ComponentData> { new() { Type = "Camera3D" } }
-            });
-
-            root.Components.Add(new ComponentData { Type = "CharacterController3D" });
-            root.Components.Add(new ComponentData
-            {
-                Type = "CapsuleCollider3D",
-                Properties = new JsonObject
-                {
-                    ["radius"] = 0.5f,
-                    ["height"] = 2.0f,
-                    ["center"] = new JsonArray(JsonValue.Create(0f), JsonValue.Create(1f), JsonValue.Create(0f))
-                }
-            });
-            root.Components.Add(new ComponentData { Type = "AnimationController" });
-            root.Components.Add(new ComponentData { Type = "PlayerController3D" });
-            root.Components.Add(new ComponentData
-            {
-                Type = "CameraBoom3D",
-                Properties = new JsonObject { ["cameraObjectId"] = cameraId.ToString() }
-            });
-        }
-
         var blueprint =
             new BlueprintDefinition
             {

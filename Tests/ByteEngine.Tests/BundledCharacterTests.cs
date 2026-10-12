@@ -36,16 +36,15 @@ internal static class BundledCharacterTests
                     foreach (Vector4 w in mesh.JointWeights)
                         Check(Math.Abs(w.X + w.Y + w.Z + w.W - 1) < .001f, "Imported weights must remain normalized.");
                 }
-                if (name.Contains("FPS", StringComparison.Ordinal))
+                Check(model.Animations.Count == 18, $"{name} must import fifteen ActionForge clips and three armed locomotion variants.");
+                Check(model.Animations.Any(a => a.Name == "AF_pistol_reload") &&
+                    model.Animations.Any(a => a.Name == "AF_pistol_shoot"), "Pistol clips must survive engine import.");
+                if (name.Contains("FPS-Arms", StringComparison.Ordinal))
                 {
-                    Check(model.Animations.Count == 103, $"FPS rig must import every bundled animation clip (imported {model.Animations.Count}, expected 103).");
-                    Check(model.Animations.Any(a => a.Name == "PSX_pistol_reload") &&
-                        model.Animations.Any(a => a.Name == "UAL_Pistol_Shoot"), "FPS pistol clips must survive engine import.");
                     Check(!model.Skeleton.Bones.Any(b => b.Name.StartsWith("thigh.", StringComparison.Ordinal)), "FPS rig must contain arms only.");
                 }
                 else
                 {
-                    Check(model.Animations.Count == 146, $"Full body must import every bundled animation clip and root-motion variant (imported {model.Animations.Count}, expected 146).");
                     Check(model.Skeleton.Bones.Any(b => b.Name == "head") && model.Skeleton.Bones.Any(b => b.Name == "thigh.L"), "Full body retains its head and legs.");
                 }
                 foreach (ImportedAnimation clip in model.Animations)
@@ -67,8 +66,8 @@ internal static class BundledCharacterTests
                         }
                     }
                 }
-                Check(model.Animations.Count(a => a.Name.StartsWith("Rokoko_", StringComparison.Ordinal)) == 15,
-                    "Every starter mannequin must retain all fifteen downloaded Rokoko takes.");
+                Check(model.Animations.All(a => a.Name.StartsWith("AF_", StringComparison.Ordinal)),
+                    "Superseded animation packs must not remain bundled.");
                 Console.WriteLine($"{name}: {model.Meshes.Sum(m => m.Indices.Length / 3)} triangles, {model.Skeleton.Bones.Count} joints, {model.Animations.Count} animations.");
             }
 
@@ -79,8 +78,9 @@ internal static class BundledCharacterTests
             {
                 foreach ((string name, int expected) in new[]
                 {
-                    ("Mannequin-FullBody-All-Available.glb", 146),
-                    ("Mannequin-FPS-Arms-All-Available.glb", 103)
+                    ("Mannequin.glb", 18),
+                    ("Mannequin-FPS-Arms.glb", 18),
+                    ("Mannequin-Advanced-FPS.glb", 18)
                 })
                 {
                     string file = Path.Combine(exportDirectory, name);
@@ -89,8 +89,8 @@ internal static class BundledCharacterTests
                         new AssetMetadata { Guid = guid, Type = AssetType.Model3D });
                     ImportedModel imported = ModelImporter.ForPath(file).Import(source, new ModelImporterSettings());
                     Check(imported.Animations.Count == expected, "Combined export must preserve every downloaded animation.");
-                    Check(imported.Animations.Count(a => a.Name.StartsWith("Rokoko_", StringComparison.Ordinal)) == 15,
-                        "Combined export must include all fifteen Rokoko takes.");
+                    Check(imported.Animations.All(a => a.Name.StartsWith("AF_", StringComparison.Ordinal)),
+                        "Exports contain the replacement ActionForge set.");
                     Console.WriteLine($"{name}: engine imported {imported.Animations.Count} combined clips.");
                 }
             }

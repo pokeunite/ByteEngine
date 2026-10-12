@@ -9,12 +9,12 @@ public sealed partial class LandVehiclePhysics
  public bool RecoveryConnected=>_recoveryConnection.HasValue;
  public bool HasRecovery=>_parts.ContainsKey(RecoveryRootId);
  public float RecoveryMass {get;private set;}
- public void AddRecoveryVehicle(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 position,Quaternion rotation,Vector3 hitch)
+ public void AddRecoveryVehicle(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 position,Quaternion rotation,Vector3 hitch,float massScale=1)
  {
   if(HasRecovery)throw new InvalidOperationException("Only one recovery target is supported.");
   var copies=blocks.Select(b=>System.Text.Json.JsonSerializer.Deserialize<PlacedBlock>(System.Text.Json.JsonSerializer.Serialize(b,BuildStore.Json),BuildStore.Json)!).ToArray();
   foreach(var b in copies){b.Id+=RecoveryRootId;if(b.Parent>=0)b.Parent+=RecoveryRootId;b.Power=0;}
-  AddAssembly(copies,definitions,position,rotation);_recoveryHitch=hitch;RecoveryMass=copies.Sum(b=>_catalog[b.Type].Mass);
+  massScale=Math.Clamp(massScale,1,5);AddAssembly(copies,definitions,position,rotation,massScale);_recoveryHitch=hitch;RecoveryMass=copies.Sum(b=>_catalog[b.Type].Mass)*massScale;
  }
  public (Vector3 Position,Quaternion Rotation) RecoveryFrame(bool rendered=false){var p=_parts[RecoveryRootId];var pose=rendered?RenderPose(p.Root):_simulation.Bodies[p.Root.Body].Pose;return(pose.Position-Vector3.Transform(p.Root.Center,pose.Orientation),pose.Orientation);}
  public Vector3 RecoveryVelocity=>HasRecovery?_simulation.Bodies[_parts[RecoveryRootId].Root.Body].Velocity.Linear:Vector3.Zero;
@@ -36,7 +36,7 @@ public sealed partial class LandVehiclePhysics
  bool RecoveryOverlapsTruck()
  {
   (Vector3 low,Vector3 high) Bounds(Part p,bool output){var pose=output?OutputPose(p.Block.Id):PartPose(p.Block.Id);var bounds=output?p.Definition.Moving:p.Definition.Fixed;Vector3 low=new(float.MaxValue),high=new(float.MinValue);for(int i=0;i<8;i++){var point=pose.Position+Vector3.Transform(new Vector3((i&1)==0?bounds.Low.X:bounds.High.X,(i&2)==0?bounds.Low.Y:bounds.High.Y,(i&4)==0?bounds.Low.Z:bounds.High.Z),pose.Rotation);low=Vector3.Min(low,point);high=Vector3.Max(high,point);}return(low,high);}
-  var a=_parts.Values.Where(p=>p.Block.Id<RecoveryRootId).SelectMany(p=>p.Output==null?new[]{Bounds(p,false)}:new[]{Bounds(p,false),Bounds(p,true)}).ToArray();var b=_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId).SelectMany(p=>p.Output==null?new[]{Bounds(p,false)}:new[]{Bounds(p,false),Bounds(p,true)}).ToArray();
+  var a=_parts.Values.Where(p=>p.Block.Id<RecoveryRootId).SelectMany(p=>p.Output==null?new[]{Bounds(p,false)}:new[]{Bounds(p,false),Bounds(p,true)}).ToArray();var b=_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId&&p.Block.Id<20000).SelectMany(p=>p.Output==null?new[]{Bounds(p,false)}:new[]{Bounds(p,false),Bounds(p,true)}).ToArray();
   return a.Any(x=>b.Any(y=>Vector3.Min(x.high,y.high).X-Vector3.Max(x.low,y.low).X>.1f&&Vector3.Min(x.high,y.high).Y-Vector3.Max(x.low,y.low).Y>.1f&&Vector3.Min(x.high,y.high).Z-Vector3.Max(x.low,y.low).Z>.1f));
  }
  public bool ConnectRecovery(int hinge)
@@ -48,14 +48,17 @@ public sealed partial class LandVehiclePhysics
   _connectedHinge=hinge;_ignored.Add(Pair(output.Body,target.Body));_simulation.Awakener.AwakenBody(output.Body);_simulation.Awakener.AwakenBody(target.Body);return true;
  }
  public void DisconnectRecovery(){if(_recoveryConnection is {} handle){_simulation.Solver.Remove(handle);if(_parts.TryGetValue(_connectedHinge,out var hinge))_ignored.Remove(Pair(hinge.Output!.Body,_parts[RecoveryRootId].Root.Body));}_recoveryConnection=null;_connectedHinge=-1;}
+ public void SetTruckVelocity(Vector3 velocity)=>SetAssemblyVelocity(_parts.Values.Where(p=>p.Block.Id<RecoveryRootId),velocity);
+ public void SetRecoveryVelocity(Vector3 velocity)=>SetAssemblyVelocity(_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId&&p.Block.Id<20000),velocity);
+ void SetAssemblyVelocity(IEnumerable<Part> parts,Vector3 velocity){foreach(var group in parts.SelectMany(p=>p.Output==null?new[]{p.Root}:new[]{p.Root,p.Output}).Distinct()){var body=_simulation.Bodies[group.Body];body.Velocity.Linear=velocity;body.Velocity.Angular=Vector3.Zero;_simulation.Awakener.AwakenBody(group.Body);}foreach(var p in parts.Where(p=>_catalog[p.Block.Type].Wheel&&p.Output!=null))_simulation.Bodies[p.Output!.Body].Velocity.Angular=Vector3.Cross(Vector3.UnitY,velocity)/_catalog[p.Block.Type].Radius;}
  public void ResetRecovery(Vector3 position,Quaternion rotation)
  {
-  DisconnectWinch();DisconnectRecovery();if(!HasRecovery)return;ResetAssembly(_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId),position,rotation);
+  DisconnectWinch();DisconnectRecovery();if(!HasRecovery)return;ResetAssembly(_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId&&p.Block.Id<20000),position,rotation);
  }
  public void ResetTruck(Vector3 position,Quaternion rotation){DisconnectWinch();DisconnectRecovery();ResetAssembly(_parts.Values.Where(p=>p.Block.Id<RecoveryRootId),position,rotation);}
  void ResetAssembly(IEnumerable<Part> parts,Vector3 position,Quaternion rotation){foreach(var group in parts.SelectMany(p=>p.Output==null?new[]{p.Root}:new[]{p.Root,p.Output}).Distinct()){var body=_simulation.Bodies[group.Body];body.Pose=new(position+Vector3.Transform(group.Center,rotation),rotation);body.Velocity=default;_previousPoses.Remove(group.Body.Value);_simulation.Awakener.AwakenBody(group.Body);} _contacts.Clear();}
  void ApplyRecoveryWheelContacts(Func<Vector3,float>? grip,Func<Vector3,float>? resistance,float dt)
  {
-  var wheels=_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId&&_catalog[p.Block.Type].Wheel).ToArray();foreach(var p in wheels){var wheel=_simulation.Bodies[p.Output!.Body];_friction[p.Output.Body.Value]=Math.Clamp(p.Block.Grip*(grip?.Invoke(wheel.Pose.Position)??.8f),.05f,3);if(resistance!=null&&_contacts.ContainsKey(p.Output.Body.Value)){var v=wheel.Velocity.Linear;v.Y=0;float speed=v.Length();if(speed>.01f)wheel.ApplyLinearImpulse(-v/speed*Math.Min(RecoveryMass*9.81f/wheels.Length*Math.Clamp(resistance(wheel.Pose.Position),0,2),RecoveryMass/wheels.Length*speed/dt)*dt);}}
+  var wheels=_parts.Values.Where(p=>p.Block.Id>=RecoveryRootId&&p.Block.Id<20000&&_catalog[p.Block.Type].Wheel).ToArray();foreach(var p in wheels){var wheel=_simulation.Bodies[p.Output!.Body];_friction[p.Output.Body.Value]=Math.Clamp(p.Block.Grip*(grip?.Invoke(wheel.Pose.Position)??.8f),.05f,3);if(resistance!=null&&_contacts.ContainsKey(p.Output.Body.Value)){var v=wheel.Velocity.Linear;v.Y=0;float speed=v.Length();if(speed>.01f)wheel.ApplyLinearImpulse(-v/speed*Math.Min(RecoveryMass*9.81f/wheels.Length*Math.Clamp(resistance(wheel.Pose.Position),0,2),RecoveryMass/wheels.Length*speed/dt)*dt);}}
  }
 }

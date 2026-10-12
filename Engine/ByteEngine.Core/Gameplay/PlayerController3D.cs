@@ -210,13 +210,15 @@ public sealed class PlayerController3D : Component
 
         CameraBoom3D? boom =
             player.GetComponent<CameraBoom3D>();
+        FirstPersonCamera3D? firstPerson = player.GetComponent<FirstPersonCamera3D>();
+        if (firstPerson?.Enabled != true) firstPerson = null;
 
         if (AcceptLookInput && InputActions.GameplayEnabled)
         {
             Vector2 lookInput =
                 InputActions.ReadAxis2D(LookAction);
 
-            Vector2 look =
+            Vector2 look = firstPerson?.CalculateLookDelta(lookInput) ??
                 CalculateLookDelta(
                     lookInput,
                     boom);
@@ -224,8 +226,8 @@ public sealed class PlayerController3D : Component
             AddLookInput(
                 look.X,
                 look.Y,
-                boom?.MinPitch ?? -40f,
-                boom?.MaxPitch ?? 65f);
+                firstPerson?.MinimumPitch ?? boom?.MinPitch ?? -40f,
+                firstPerson?.MaximumPitch ?? boom?.MaxPitch ?? 65f);
         }
 
         Vector2 moveInput =
@@ -307,6 +309,17 @@ public sealed class PlayerController3D : Component
             CharacterRotationMode.Independent)
         {
             _idleTurnInPlaceActive = false;
+            return;
+        }
+
+        // FPS body yaw follows control rotation immediately. Smoothing the body
+        // while rotating an offset eye immediately makes the viewpoint slide sideways.
+        if (CharacterRotation == CharacterRotationMode.FaceCamera &&
+            player.GetComponent<FirstPersonCamera3D>() is { Enabled: true, UseControlRotation: true })
+        {
+            _idleTurnInPlaceActive = false;
+            _desiredCharacterYaw = TransformYawFromControlYaw(ControlYaw);
+            SetCharacterYaw(player.Transform, _desiredCharacterYaw);
             return;
         }
 

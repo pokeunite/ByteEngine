@@ -362,19 +362,6 @@ internal sealed class InspectorPanel
             if (string.IsNullOrWhiteSpace(_addSearch))
             {
                 ImGui.SeparatorText("Recommended");
-                if (ImGui.MenuItem("Third Person Character"))
-                {
-                    Camera3D? previousActive = selected.Scene?.ActiveCamera;
-                    ExecutePersistent(state, "Setup Third Person Character", () =>
-                    {
-                        CameraBoom3D boom = BlueprintAuthoringService.SetupThirdPersonCharacter(selected, project.Assets);
-                        Camera3D? camera = selected.Scene?.FindGameObject(boom.CameraObjectId)?.GetComponent<Camera3D>();
-                        if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
-                        {
-                            _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
-                        }
-                    });
-                }
                 if (ImGui.MenuItem("Health", string.Empty, false, !selected.HasComponent<HealthComponent>()))
                     ExecutePersistent(state, "Add Health", () => BlueprintAuthoringService.AddComponent(selected, new HealthComponent()));
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip("Adds reusable damage, healing and death state.");
@@ -394,7 +381,16 @@ internal sealed class InspectorPanel
                         _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
                     }
                 });
-            });
+            }, preset => ExecutePersistent(state, "Apply Character Preset", () =>
+            {
+                Camera3D? previousActive = selected.Scene?.ActiveCamera;
+                Guid cameraId = preset.HasValue
+                    ? BlueprintAuthoringService.SetupPlayablePlayer(selected, project.Assets, preset.Value)
+                    : BlueprintAuthoringService.SetupThirdPersonCharacter(selected, project.Assets).CameraObjectId;
+                var camera = selected.Scene?.FindGameObject(cameraId)?.GetComponent<Camera3D>();
+                if (camera != null && previousActive != null && !ReferenceEquals(previousActive, camera))
+                    _cameraActivationPrompt.Begin(CameraActivationPrompt.Create(camera, previousActive));
+            }));
             ImGui.EndPopup();
         }
 
@@ -485,7 +481,9 @@ internal sealed class InspectorPanel
         bool runtime = state.Mode != EditorMode.Edit;
         ComponentPropertyRenderer.Draw(component,
             runtime ? PropertyEditorContext.Runtime : PropertyEditorContext.Scene, showAdvanced,
-            () => { if (!runtime) state.Undo?.BeginObjectGesture(state, $"Edit {component.GetType().Name}", [component.GameObject.Id]); },
+            () => { if (!runtime) state.Undo?.BeginObjectGesture(state, $"Edit {component.GetType().Name}", component is ByteEngine.Core.Gameplay.FirstPersonCamera3D
+                ? component.GameObject.Scene!.GameObjects.Where(o => o == component.GameObject || o.IsDescendantOf(component.GameObject)).Select(o => o.Id)
+                : [component.GameObject.Id]); },
             state.MarkDirty,
             () => { if (!runtime) state.Undo?.CommitGesture(state); }, project);
     }

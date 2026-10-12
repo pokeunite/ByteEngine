@@ -12,6 +12,7 @@ for item in runtime.iterdir():
 # Diagnostic-only runtime access; no change to installed player files.
 p=site/'main.js'
 s=p.read_text(encoding='utf-8-sig').replace('async runtime=>{','async runtime=>{globalThis.byteEngineTestRuntime=runtime;',1)
+s=s.replace('const drawCount=data.draws.length','globalThis.byteEngineTestFrame=data;const drawCount=data.draws.length',1)
 p.write_text(s,encoding='utf-8')
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self,*a,**k): super().__init__(*a,directory=str(site),**k)
@@ -53,6 +54,11 @@ try:
         assert report['diagnostics']['velocity']>.5, 'Vehicle did not drive during capture'
         assert any(f.get('diagnostics',{}).get('physicsPhases',{}).get('solverMs',0)>0 for f in report['frames']), 'Missing solver phase'
         assert not errors, errors
+        transport=page.evaluate('({uiCommands:byteEngineTestFrame.ui.length,materialUploads:byteEngineTestFrame.materials?.length??null,draws:byteEngineTestFrame.draws.length,binaryUi:byteEngineTestFrame.uiBuffer>=0})')
+        assert transport['uiCommands']>0 and transport['draws']>0, 'Missing rendered vehicle or HUD commands'
+        assert page.evaluate('byteEngineGraphics().error')==0, 'WebGL error'
+        report['transport']=transport
+        page.screenshot(path=str(site/'driving-frame.png'))
         (site/f'physics-phases-{iterations}x{substeps}.json').write_text(json.dumps(report,indent=2))
         print(json.dumps({'summary':report['summary'],'diagnostics':report['diagnostics'],'hardware':report['hardware'],'errors':errors}),flush=True)
         browser.close()

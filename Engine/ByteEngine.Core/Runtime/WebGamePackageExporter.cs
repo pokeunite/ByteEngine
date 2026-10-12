@@ -22,6 +22,7 @@ public static class WebGamePackageExporter
         var supported = File.Exists(capabilityFile) ? JsonSerializer.Deserialize<string[]>(File.ReadAllText(capabilityFile)) ?? [] : [];
         var unsupported = runtimePlugins.Where(p=>!supported.Contains(p.Id,StringComparer.OrdinalIgnoreCase)).ToArray();
         if(unsupported.Length>0)throw new InvalidOperationException("Browser runtime does not include these plugins: "+string.Join(", ",unsupported.Select(p=>p.Name))+". Refresh the browser runtime with matching statically linked plugins.");
+        ValidatePluginBuilds(runtimeDirectory, runtimePlugins);
         project.StartupScene = startupScene.Replace('\\', '/');
         if (!File.Exists(GamePackageExporter.ResolveInside(root, project.StartupScene)))
             throw new FileNotFoundException("Choose a saved startup scene.");
@@ -135,6 +136,22 @@ public static class WebGamePackageExporter
             if (Directory.Exists(content)) Directory.Delete(content, true);
             string staging = Path.Combine(destination, "PackageStaging");
             if (Directory.Exists(staging)) Directory.Delete(staging, true);
+        }
+    }
+
+    internal static void ValidatePluginBuilds(string runtimeDirectory, IEnumerable<ByteEngine.Core.Plugins.InstalledByteEnginePlugin> plugins)
+    {
+        var required = plugins.ToArray();
+        if (required.Length == 0) return;
+        string file = Path.Combine(runtimeDirectory, "browser-plugin-builds.json");
+        if (!File.Exists(file)) throw new InvalidOperationException("Browser runtime is outdated: its compiled plugin versions are unknown. Refresh the browser runtime before exporting.");
+        using var builds = JsonDocument.Parse(File.ReadAllText(file));
+        foreach (var plugin in required)
+        {
+            var manifest = ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(plugin.ManifestPath));
+            if (!builds.RootElement.TryGetProperty(plugin.Id, out var build) ||
+                !build.TryGetProperty("version", out var version) || version.GetString() != plugin.Version)
+                throw new InvalidOperationException("Browser runtime has an outdated or different compiled plugin: " + plugin.Name + ". Refresh the browser runtime to include this project's updates before exporting.");
         }
     }
 

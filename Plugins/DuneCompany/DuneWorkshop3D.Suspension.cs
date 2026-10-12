@@ -7,7 +7,8 @@ public sealed partial class DuneWorkshop3D
  void UpdateSuspensionVisual(PlacedBlock b,GameObject root)
  {
   if(_physics==null||b.Type is not (16 or 17 or 32))return;
-  var delta=_physicsDefinitions[b.Type].Axis*_physics.SuspensionOffset(b.Id);
+  // Arms, spring and wheel mounts must use the same interpolated physics pose.
+  var delta=_physicsDefinitions[b.Type].Axis*_physics.RenderSuspensionOffset(b.Id);
   foreach(var name in new[]{"Visual_Spring","Visual_Damper","Visual_LowerArm","Visual_UpperArm"}){
    var node=Descendants(root).FirstOrDefault(n=>n.Name==name);if(node==null)continue;
    var key=(b.Id,name);if(!_suspensionVisualRest.TryGetValue(key,out var rest)){Matrix4x4.Invert(root.Transform.WorldMatrix,out var inv);rest=node.Transform.WorldMatrix*inv;_suspensionVisualRest[key]=rest;}

@@ -252,6 +252,9 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
 
     private void UpdateRig(bool immediate)
     {
+        // A dedicated FPS view owns its camera; never let a legacy boom compete.
+        if (AttachedGameObject?.GetComponent<FirstPersonCamera3D>() is { Enabled: true } fps &&
+            fps.CameraObjectId == CameraObjectId) return;
         GameObject? root = AttachedGameObject;
         if (root?.Scene is not { } scene) return;
         _cameraObject = ResolveCamera(root, scene);
@@ -279,7 +282,6 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             desiredPivot += CalculateCameraRight(_desiredBoomYaw) * FirstPersonCameraOffset.X +
                 Vector3.UnitY * FirstPersonCameraOffset.Y +
                 CalculateViewForward(_desiredBoomYaw, 0) * -FirstPersonCameraOffset.Z;
-            camera.NearClip = Math.Min(camera.NearClip, .01f);
             _smoothedPivot = desiredPivot;
             _smoothedBoomYaw = _desiredBoomYaw;
             _smoothedBoomPitch = _desiredBoomPitch;

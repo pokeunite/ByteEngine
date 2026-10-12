@@ -5,7 +5,7 @@ public sealed partial class DuneWorkshop3D
 {
  readonly Dictionary<int,(GameObject node,Vector3 position,Quaternion rotation,Matrix4x4 rest)> _outputs=[];readonly Dictionary<int,Matrix4x4> _poses=[];
  void CacheOutputs(){_suspensionVisualRest.Clear();_outputs.Clear();_poses.Clear();_outputRest.Clear();foreach(var b in _blocks){var root=_visuals[b.Id];var name=OutputName(b.Type);var node=Descendants(root).FirstOrDefault(o=>o.Name==name);CaptureDefinition(b,root,node);if(node==null)continue;Matrix4x4.Invert(root.Transform.WorldMatrix,out var inverse);_outputs[b.Id]=(node,node.Transform.LocalPosition,node.Transform.LocalRotation,node.Transform.WorldMatrix*inverse);}}
- static string OutputName(int type)=>type switch{13 or 14 or 15=>"Moving_Wheel",16 or 17 or 32=>"Moving_SuspensionOutput",18=>"Moving_SteeringOutput",19=>"Moving_ServoOutput",20=>"Moving_TrailerOutput",21=>"Moving_PistonOutput",22=>"Moving_ReleasedOutput",_=>""};
+ static string OutputName(int type)=>type switch{13 or 14 or 15 or 37=>"Moving_Wheel",16 or 17 or 32=>"Moving_SuspensionOutput",18=>"Moving_SteeringOutput",19=>"Moving_ServoOutput",20=>"Moving_TrailerOutput",21=>"Moving_PistonOutput",22=>"Moving_ReleasedOutput",_=>""};
  static Matrix4x4 Pose(Vector3 p,Quaternion q)=>Matrix4x4.CreateFromQuaternion(q)*Matrix4x4.CreateTranslation(p);
  (PartBounds bounds,bool moving)[] PickingBounds(int type)
  {

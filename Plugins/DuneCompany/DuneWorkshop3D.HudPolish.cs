@@ -8,8 +8,9 @@ public sealed partial class DuneWorkshop3D
   PlaceText("Mission title",UiAnchor.TopLeft,new(36,34),15);
   PlaceText("Battle objective",UiAnchor.TopLeft,new(36,61),22);
   if(_ui.TryGetValue("Battle objective",out var objective)){var t=objective.GetComponent<UiText>()!;t.WrapWidth=422;}
-  PlaceWidget("Recovery interaction background",UiAnchor.TopLeft,new(0,height-72),new(width,72));
-  PlaceText("Recovery interaction",UiAnchor.TopLeft,new(184,height-52),16);
+  float controlsHeight=_blocks.Count(b=>IsWinch(b.Type))>1?100:72;
+  PlaceWidget("Recovery interaction background",UiAnchor.TopLeft,new(0,height-controlsHeight),new(width,controlsHeight));
+  PlaceText("Recovery interaction",UiAnchor.TopLeft,new(184,height-controlsHeight+16),16);
   if(_ui.TryGetValue("Recovery interaction",out var hint)){var t=hint.GetComponent<UiText>()!;t.WrapWidth=width-460;}
   PlaceWidget("Recover machine",UiAnchor.BottomLeft,new(20,-18),new(142,36));
   foreach(string n in new[]{"Return workshop","Quit contract"})PlaceWidget(n,UiAnchor.BottomRight,new(-20,-18),new(216,36));
@@ -26,7 +27,7 @@ public sealed partial class DuneWorkshop3D
   _resultWasComplete=completed;GarageActive("Contract result",completed&&_resultRemaining>0);
   if(completed&&_resultRemaining<=0){Command("Return to base");_resultWasComplete=false;return;}
   if(!WorkshopV3)return;
-  Text("Mission title",_contractRun?(WinchMission?"THE WELL ATE MY TRUCK":"STRANDED IN THE SAND"):"VEHICLE TEST");
+  Text("Mission title",_contractRun?ContractTitle(CurrentContract).ToUpperInvariant():"VEHICLE TEST");
   if(!Building){
    GarageActive("Recovery interaction",true);
    Text("Battle objective",completed?"Recovery delivered. Job paid.":_contractRun?RecoveryObjective:"Test your build in the sand.");
