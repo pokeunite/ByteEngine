@@ -35,7 +35,7 @@ public sealed partial class DuneWorkshop3D
   if(Input.IsKeyPressed(Key.Escape)){_bindingAction=null;RefreshBlockBindings();return true;}
   var b=_blocks.FirstOrDefault(b=>b.Id==_tuning);if(b==null){_bindingAction=null;return true;}
   foreach(var key in Enum.GetValues<Key>())if(Input.IsKeyPressed(key)){
-   if(key is Key.W or Key.A or Key.S or Key.D or Key.Space or Key.B or Key.R or Key.Escape or Key.LeftShift or Key.Tab or Key.Enter or Key.KeyPadEnter){_message="That key is used for driving or menus. Choose another key.";return true;}
+   if(_driveKeys.Values.Contains(key)||key is Key.Escape or Key.Tab or Key.Enter or Key.KeyPadEnter){_message="That key is used for driving or menus. Choose another key.";return true;}
    Record();b.ControlKeys[_bindingAction]=key.ToString();_bindingAction=null;BuildJson=Snapshot();RefreshBlockBindings();break;
   }
   return true;

@@ -20,6 +20,7 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Contains("--drift-scoring")){DriftScoringTests.Run();return;}
     if(args.Contains("--browser-texture-lifecycle")){BrowserTextureTransferTests.Run();return;}
     if(args.Contains("--rope-winch")){RopeWinchTests.Run();return;}
     if(args.Length>=2&&args[0]=="--dune-starter-levels"){using var diagnostic=new DunePolishDiagnostic(args[1],false,levels:true);diagnostic.Run();return;}
@@ -39,7 +40,7 @@ try
         if(!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.InteractiveSand3D>()!=null)||!reloaded.GameObjects.Any(o=>o.GetComponent<ByteEngine.Core.Gameplay.SandLabProbe3D>()!=null))throw new Exception("Built-in sand roundtrip failed");
         Console.WriteLine("PASS Standalone sand template save/reload without plugins: "+args[1]);return;
     }
-    if(args.Length>=3&&args[0]=="--cook-diagnostic-model"){string fixture=Path.GetFullPath(args[1]);if(!fixture.StartsWith(Path.GetFullPath(".artifacts")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("Private diagnostic fixture required");using var db=new AssetDatabase(fixture,["Assets","Scenes"]);var record=db.Assets.Single(a=>a.ProjectPath==args[2]);CookedModelStore.Save(fixture,ModelImporter.ForPath(record.FullPath).Import(record,record.Metadata.ModelImporter));Console.WriteLine("Prepared private browser diagnostic model");return;}
+    if(args.Length>=3&&args[0]=="--cook-diagnostic-model"){string fixture=Path.GetFullPath(args[1]);if(!fixture.StartsWith(Path.GetFullPath(".artifacts")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("Private diagnostic fixture required");using var db=new AssetDatabase(fixture,["Assets","Scenes"]);foreach(string model in args.Skip(2)){var record=db.Assets.Single(a=>a.ProjectPath==model);CookedModelStore.Save(fixture,ModelImporter.ForPath(record.FullPath).Import(record,record.Metadata.ModelImporter));Console.WriteLine("Prepared private browser diagnostic model: "+model);}return;}
     if(args.Length>=2&&args[0]=="--garage-ux"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),garage:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--sand-vehicle"){using var diagnostic=new DunePolishDiagnostic(args[1],false,sandVehicle:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--schedule-benchmark"){SchedulingBenchmarkTests.Run(args[1]);return;}

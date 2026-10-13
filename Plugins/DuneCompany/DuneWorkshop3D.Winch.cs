@@ -16,16 +16,16 @@ public sealed partial class DuneWorkshop3D
  public bool AnchorMission=>RecoveryJob?.AnchorMission==true;
  public bool RelayMission=>RecoveryJob?.RelayMission==true;
  public bool NoBrakesMission=>RecoveryJob?.RunawayMission==true;
- int CurrentContract=>SprintMission?4:NoBrakesMission?3:RelayMission?3:AnchorMission?2:WinchMission?1:0;
+ int CurrentContract=>DriftMission?5:SprintMission?Math.Clamp(Sprint!.ContractIndex,4,7):NoBrakesMission?3:RelayMission?3:AnchorMission?2:WinchMission?1:0;
  int? _selectedContract;
  int SelectedContract=>_selectedContract??CurrentContract;
  bool SelectedContractWinch=>SelectedContract is >0 and <4;
  static int? _deployContractAfterSwitch;
- static string ContractTitle(int id)=>id==4?"Scrapyard Sprint":id==3?"No Brakes":id==2?"Down With the Patient":id==1?"The Well Ate My Truck":"Stranded in the sand";
- static int ContractReward(int id)=>id==4?1000:id==3?1800:id==2?850:id==1?500:250;
- static string ContractScene(int id)=>id==4?"Scenes/ScrapyardSprint.bytescene":id==3?"Scenes/AnchorRelay.bytescene":id==2?"Scenes/AnchorRescue.bytescene":id==1?"Scenes/WinchRescue.bytescene":"Scenes/Workshop.bytescene";
+ static string ContractTitle(int id)=>id switch {7=>"Red Rock Rally",6=>"Dead Straight",5=>"Dust Bowl Drift",4=>"Scrapyard Sprint",3=>"No Brakes",2=>"Down With the Patient",1=>"The Well Ate My Truck",_=>"Stranded in the sand"};
+ static int ContractReward(int id)=>id switch {7=>1500,6=>1200,5=>900,4=>1000,3=>1800,2=>850,1=>500,_=>250};
+ static string ContractScene(int id)=>id switch {7=>"Scenes/RedRockRally.bytescene",6=>"Scenes/DeadStraight.bytescene",5=>"Scenes/DustBowlDrift.bytescene",4=>"Scenes/ScrapyardSprint.bytescene",3=>"Scenes/AnchorRelay.bytescene",2=>"Scenes/AnchorRescue.bytescene",1=>"Scenes/WinchRescue.bytescene",_=>"Scenes/Workshop.bytescene"};
  public void SelectRecoveryContract(bool winch)=>SelectRecoveryContract(winch?1:0);
- public void SelectRecoveryContract(int id){if(!Building||id<0||id>4)return;_selectedContract=id;OpenGarageOverlay("Contracts overlay");_contractExpanded=true;RefreshContractBrowser();RefreshGarageState();}
+ public void SelectRecoveryContract(int id){if(!Building||id<0||id>7)return;_selectedContract=id;_contractPage=id/4;OpenGarageOverlay("Contracts overlay");_contractExpanded=true;RefreshContractBrowser();RefreshGarageState();}
  void BindWinchMissionSwitch(){}
  void ResumeContractDeployment(){if(_deployContractAfterSwitch is not {} id)return;_deployContractAfterSwitch=null;if(id!=CurrentContract){_message="Contract scene did not match the requested job.";return;}_selectedContract=id;DeployGarageContract();}
 
@@ -34,7 +34,7 @@ public sealed partial class DuneWorkshop3D
   for(int i=0;i<8;i++){float angle=i*MathF.PI/4;var point=RecoverySpawn+new Vector3(MathF.Sin(angle)*6,0,MathF.Cos(angle)*6);if(_sand?.Sample(point,out var ground,out _,out _,out _)==true)point.Y=ground.Y;
    var post=RecoveryPrimitive("Pit warning post "+i,point+Vector3.UnitY*.65f,new(.12f,1.3f,.12f),new(.8f,.43f,.1f,1));_winchArena.Add(post);
   }
-  foreach(float x in new[]{-5f,5f}){var point=RecoverySpawn+new Vector3(x,0,0);if(_sand?.Sample(point,out var ground,out _,out _,out _)==true)point.Y=ground.Y;var rock=RecoveryPrimitive("Pit rim rock",point+Vector3.UnitY*.35f,new(1,.7f,2),new(.36f,.31f,.24f,1));rock.AddComponent(new DuneWorldObstacle3D{Size=Vector3.One});_winchArena.Add(rock);}
+  foreach(float x in new[]{-5f,5f}){var point=RecoverySpawn+new Vector3(x,0,0);if(_sand?.Sample(point,out var ground,out _,out _,out _)==true)point.Y=ground.Y;var rock=RecoveryPrimitive("Pit rim rock",point+Vector3.UnitY*.35f,new(1,.7f,2),new(.36f,.31f,.24f,1));rock.GetComponent<MeshRenderer>()!.Visible=false;rock.AddComponent(new DuneWorldObstacle3D{Size=Vector3.One});Model(GameObject.Scene!,Assets!,"Assets/ContractLevels/rock_07.obj",rock,"Scanned pit rim stone");_winchArena.Add(rock);}
  }
  void ClearWinchArena(){foreach(var obj in _winchArena)if(obj.Scene!=null)obj.Scene.DestroyGameObject(obj);_winchArena.Clear();}
  public bool ConnectWinch(){if(Building||!_contractRun||!WinchMission||_contractComplete||_physics==null)return false;int id=_blocks.Where(b=>IsWinch(b.Type)).OrderBy(b=>Vector3.DistanceSquared(_physics.WinchPoint(b.Id),_physics.TargetHitch)).Select(b=>b.Id).DefaultIfEmpty(-1).First();if(id<0)return false;bool connected=_physics.ConnectWinch(id);if(connected)_activeWinch=id;return connected;}

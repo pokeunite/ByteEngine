@@ -11,6 +11,9 @@ public sealed class Scene
     public Runtime.FixedStepClock SimulationClock { get; } = new();
     /// <summary>Opt in after migrating force/timer logic to OnFixedUpdate. Legacy scenes keep frame simulation.</summary>
     public bool FixedSimulation { get; set; }
+    /// <summary>Runtime scene-local scale. Zero pauses simulation while unscaled UI can continue.</summary>
+    public float SimulationTimeScale { get; set; } = 1f;
+    public double SimulationTime { get; private set; }
     public RuntimeFrameMetrics LastFrameMetrics { get; private set; }
     internal double AnimationMilliseconds;
     internal int AnimatedComponentCount;
@@ -351,6 +354,9 @@ public sealed class Scene
     internal void UpdateInternal()
     {
         if (!_loaded) return;
+
+        using var timeScope = Time.EnterSceneScale(SimulationTimeScale);
+        SimulationTime += Time.DeltaTime;
 
         _isUpdating = true;
 

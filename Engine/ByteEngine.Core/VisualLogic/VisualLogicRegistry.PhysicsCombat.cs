@@ -15,6 +15,10 @@ public sealed partial class VisualLogicRegistry
 {
     private static void RegisterPhysicsAndCombat(VisualLogicRegistry registry)
     {
+        registry.RegisterAction(new VisualActionDefinition{Id="combat.fireHitscan",Category="Gameplay / Weapons",DisplayName="Fire Hitscan",TargetComponent="HitscanEmitter3D",Execute=(_,e)=>{var camera=e.Self.Scene?.ActiveCamera;var emitter=e.Self.GetComponent<HitscanEmitter3D>();if(camera!=null)emitter?.Fire(camera.Transform.WorldPosition,camera.Transform.Forward,e.Self);}});
+        registry.RegisterAction(new VisualActionDefinition{Id="health.revive",Category="Gameplay / Health",DisplayName="Revive",TargetComponent="HealthComponent",Execute=(i,e)=>ResolveObjectTarget(i,e,false)?.GetComponent<HealthComponent>()?.Revive()});
+        registry.RegisterAction(new VisualActionDefinition{Id="resource.restore",Category="Gameplay / Resources",DisplayName="Restore Resource",TargetComponent="ResourceMeter3D",Arguments=[new("amount","Amount",VariableValue.FromNumber(10))],Execute=(i,e)=>ResolveObjectTarget(i,e,false)?.GetComponent<ResourceMeter3D>()?.Restore((float)EventValueResolver.GetNumber(i,"amount",e,10))});
+        registry.RegisterAction(new VisualActionDefinition{Id="resource.spend",Category="Gameplay / Resources",DisplayName="Spend Resource",TargetComponent="ResourceMeter3D",Arguments=[new("amount","Amount",VariableValue.FromNumber(10))],Execute=(i,e)=>ResolveObjectTarget(i,e,false)?.GetComponent<ResourceMeter3D>()?.TrySpend((float)EventValueResolver.GetNumber(i,"amount",e,10))});
         registry.RegisterCondition(new VisualConditionDefinition
         {
             Id = "physics.rayHitsAnything",

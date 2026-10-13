@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><LangVersion>latest</LangVersion></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../Plugins/Karlson/Karlson.Plugin.csproj"/><ProjectReference Include="../../Editor/ByteEngine.Editor/ByteEngine.Editor.csproj"/></ItemGroup>
+  <Target Name="CopyOpenAL" AfterTargets="Build"><Copy SourceFiles="$(NuGetPackageRoot)silk.net.openal.soft.native/1.23.1/runtimes/win-x64/native/soft_oal.dll" DestinationFiles="$(TargetDir)openal32.dll" SkipUnchangedFiles="true"/></Target>
+</Project>

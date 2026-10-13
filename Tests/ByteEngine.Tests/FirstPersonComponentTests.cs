@@ -48,6 +48,20 @@ internal static class FirstPersonComponentTests
             if (Math.Abs(renderedRight.Y) > .0001f || Vector3.Distance(arms.Transform.WorldPosition, arms.Transform.RenderMatrix.Translation) > .0001f)
                 throw new Exception("FPS pitch introduced rendered roll or mismatched view-arm placement.");
         }
+        var liveEye = new Vector3(.25f, 1.8f, -.15f);
+        camera.Transform.LocalPosition = liveEye;
+        fps.RebindAuthoredEye();
+        camera.GetComponent<Camera3D>()!.FieldOfView = 92;
+        arms.Transform.LocalPosition = new(.1f, -.4f, -.7f);
+        for (int frame = 0; frame < 3; frame++)
+        {
+            controller.ControlPitch = 30 + frame * 10;
+            Time.Update(1f / 60); scene.UpdateInternal();
+            if (Vector3.Distance(camera.Transform.WorldPosition, Vector3.Transform(liveEye, root.Transform.WorldMatrix)) > .0001f ||
+                camera.GetComponent<Camera3D>()!.FieldOfView != 92 ||
+                Vector3.Distance(arms.Transform.LocalPosition, new(.1f, -.4f, -.7f)) > .0001f)
+                throw new Exception("Live FPS framing edits must survive subsequent simulation and look updates.");
+        }
         var delta = fps.CalculateLookDelta(new(10,10));
         fps.InvertVerticalLook = true;
         if (Math.Abs(delta.X-1.2f) > .0001f || delta.Y >= 0 || fps.CalculateLookDelta(new(10,10)).Y <= 0)

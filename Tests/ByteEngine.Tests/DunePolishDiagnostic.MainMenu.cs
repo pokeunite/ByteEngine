@@ -52,8 +52,9 @@ internal sealed partial class DunePolishDiagnostic
   }
   Console.WriteLine("PASS Accept & Deploy loads and drives selected winch/tow mission with the saved build");
 
-fresh.Command("Close garage overlay");Step(1220,23);Step(1220,23,true);if(Scenes.ActiveScene!.Name!="Dune Company - Main Menu")throw new InvalidOperationException("Workshop menu event did not load the menu scene");
-  if(savedVehicle!=null)File.WriteAllText(Path.Combine(root,"Saves/vehicle.json"),savedVehicle);Step(130,289);Step(130,289,true);if(!Scenes.ActiveScene!.GameObjects.SelectMany(o=>o.Components).OfType<DuneWorkshop3D>().Any())throw new InvalidOperationException("Continue scene transition failed");Step(1220,23);Step(1220,23,true);Step(130,513);Step(130,513,true);if(!quit)throw new InvalidOperationException("Quit event failed");
+  void BackToMenu(){Step(110,365);Step(110,365,true);Step(110,365);Step(740,602);Step(740,602,true);Step(740,602);}
+  fresh.Command("Close garage overlay");BackToMenu();if(Scenes.ActiveScene!.Name!="Dune Company - Main Menu")throw new InvalidOperationException("Workshop settings Main Menu action did not load the menu scene");
+  if(savedVehicle!=null)File.WriteAllText(Path.Combine(root,"Saves/vehicle.json"),savedVehicle);Step(130,289);Step(130,289,true);if(!Scenes.ActiveScene!.GameObjects.SelectMany(o=>o.Components).OfType<DuneWorkshop3D>().Any())throw new InvalidOperationException("Continue scene transition failed");BackToMenu();Step(130,513);Step(130,513,true);if(!quit)throw new InvalidOperationException("Quit event failed");
   Console.WriteLine("PASS Native menu save/reload; settings; credits; New Game -> Workshop -> Menu -> Continue; Quit event");Scenes.UnloadScene();_project.Dispose();Close();
  }
 }

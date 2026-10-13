@@ -1300,7 +1300,7 @@ public sealed class Renderer3D : IDisposable
         };
     }
 
-    private static Matrix4x4 BuildDirectionalShadowMatrix(
+    public static Matrix4x4 BuildDirectionalShadowMatrix(
         RenderView3D view,
         RenderDirectionalLight3D light)
     {

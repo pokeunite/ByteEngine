@@ -1,0 +1,26 @@
+{
+  "guid": "1338e21c-3963-4109-a961-f65113689d09",
+  "type": "Texture2D",
+  "importer": {
+    "filter": "Nearest"
+  },
+  "modelImporter": {
+    "generateLods": false,
+    "importScale": 1,
+    "generateNormals": true,
+    "preferEmbeddedMaterials": true,
+    "importAnimations": true,
+    "autoDetectHumanoidRig": true,
+    "rigType": "Generic",
+    "humanoidMapping": {
+      "bones": {},
+      "mappedCount": 0
+    },
+    "animationSourceRigModel": {
+      "guid": "00000000-0000-0000-0000-000000000000",
+      "cachedProjectPath": null,
+      "projectPath": "",
+      "isEmpty": true
+    }
+  }
+}

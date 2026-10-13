@@ -1,0 +1,985 @@
+[
+  {
+    "id": 1,
+    "name": "short_block",
+    "label": "Short rail",
+    "file": "Assets/DuneParts/glb/01_short_block.glb",
+    "preview": "Assets/DuneParts/cutouts/01_short_block.png",
+    "group": "Structure",
+    "function": "Short structural rail; attach blocks to any outer face.",
+    "min": [
+      -0.25,
+      0,
+      -0.5
+    ],
+    "max": [
+      0.25,
+      0.5,
+      0.5
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 2,
+    "name": "long_block",
+    "label": "Long rail",
+    "file": "Assets/DuneParts/glb/02_long_block.glb",
+    "preview": "Assets/DuneParts/cutouts/02_long_block.png",
+    "group": "Structure",
+    "function": "Long frame rail with multiple half-metre mounting positions.",
+    "min": [
+      -0.25,
+      0,
+      -1.0
+    ],
+    "max": [
+      0.25,
+      0.5,
+      1.0
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 3,
+    "name": "deck_block",
+    "label": "Deck panel",
+    "file": "Assets/DuneParts/glb/03_deck_block.glb",
+    "preview": "Assets/DuneParts/cutouts/03_deck_block.png",
+    "group": "Structure",
+    "function": "Wide deck for seating, engines and armour.",
+    "min": [
+      -0.5,
+      0,
+      -1.0
+    ],
+    "max": [
+      0.5,
+      0.5,
+      1.0
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 4,
+    "name": "cube_block",
+    "label": "Cube base",
+    "file": "Assets/DuneParts/glb/04_cube_block.glb",
+    "preview": "Assets/DuneParts/cutouts/04_cube_block.png",
+    "group": "Structure",
+    "function": "Thick structural mounting block.",
+    "min": [
+      -0.5,
+      0,
+      -0.5
+    ],
+    "max": [
+      0.5,
+      1,
+      0.5
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 5,
+    "name": "open_frame",
+    "label": "Open rail",
+    "file": "Assets/DuneParts/glb/05_open_frame.glb",
+    "preview": "Assets/DuneParts/cutouts/05_open_frame.png",
+    "group": "Structure",
+    "function": "Light open frame rail.",
+    "min": [
+      -0.25,
+      0,
+      -1.0
+    ],
+    "max": [
+      0.25,
+      0.5,
+      1.0
+    ],
+    "mass": 14,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 6,
+    "name": "flat_connector",
+    "label": "Flat connector",
+    "file": "Assets/DuneParts/glb/06_flat_connector.glb",
+    "preview": "Assets/DuneParts/cutouts/06_flat_connector.png",
+    "group": "Structure",
+    "function": "Thin structural connector.",
+    "min": [
+      -0.25,
+      0,
+      -1.0
+    ],
+    "max": [
+      0.25,
+      0.08,
+      1.0
+    ],
+    "mass": 14,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 7,
+    "name": "l_bracket",
+    "label": "L bracket",
+    "file": "Assets/DuneParts/glb/07_l_bracket.glb",
+    "preview": "Assets/DuneParts/cutouts/07_l_bracket.png",
+    "group": "Structure",
+    "function": "Corner mount for offset connections.",
+    "min": [
+      -0.2524999976158142,
+      -0.002499999478459358,
+      -0.5
+    ],
+    "max": [
+      0.2524999976158142,
+      1.0299999993294477,
+      0.5814999863505363
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 8,
+    "name": "small_armour",
+    "label": "Armour plate",
+    "file": "Assets/DuneParts/glb/08_small_armour.glb",
+    "preview": "Assets/DuneParts/cutouts/08_small_armour.png",
+    "group": "Structure",
+    "function": "Small armour panel.",
+    "min": [
+      -0.5,
+      0.0,
+      -0.5
+    ],
+    "max": [
+      0.5,
+      0.11950000002980232,
+      0.5
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 9,
+    "name": "long_armour",
+    "label": "Long armour",
+    "file": "Assets/DuneParts/glb/09_long_armour.glb",
+    "preview": "Assets/DuneParts/cutouts/09_long_armour.png",
+    "group": "Structure",
+    "function": "Long armour panel.",
+    "min": [
+      -0.5,
+      0.0,
+      -1.0
+    ],
+    "max": [
+      0.5,
+      0.11950000002980232,
+      1.0
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 10,
+    "name": "sloped_nose",
+    "label": "Sloped nose",
+    "file": "Assets/DuneParts/glb/10_sloped_nose.glb",
+    "preview": "Assets/DuneParts/cutouts/10_sloped_nose.png",
+    "group": "Structure",
+    "function": "Sloped protective nose.",
+    "min": [
+      -0.5,
+      -0.3804312825866497,
+      -1.0925174260246806
+    ],
+    "max": [
+      0.5,
+      0.5457033080773267,
+      1.0257095505478167
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 11,
+    "name": "fender",
+    "label": "Wheel arch",
+    "file": "Assets/DuneParts/glb/11_fender.glb",
+    "preview": "Assets/DuneParts/cutouts/11_fender.png",
+    "group": "Body",
+    "function": "Decorative wheel arch.",
+    "min": [
+      -0.7199999690055847,
+      0.019999999552965164,
+      -0.28999999165534973
+    ],
+    "max": [
+      0.7199999690055847,
+      0.6710000038146973,
+      0.28999999165534973
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 12,
+    "name": "windshield",
+    "label": "Windshield",
+    "file": "Assets/DuneParts/glb/12_windshield.glb",
+    "preview": "Assets/DuneParts/cutouts/12_windshield.png",
+    "group": "Body",
+    "function": "Decorative windshield.",
+    "min": [
+      -1.024999976158142,
+      -0.08000002064345434,
+      -0.13500005037463605
+    ],
+    "max": [
+      1.0249999165534973,
+      0.8068600796626121,
+      0.09550010215383281
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 13,
+    "name": "offroad_tyre",
+    "label": "Off-road tyre",
+    "file": "Assets/DuneParts/glb/13_offroad_tyre.glb",
+    "preview": "Assets/DuneParts/cutouts/13_offroad_tyre.png",
+    "group": "Drive",
+    "function": "Powered tyre. Steering requires a connected steering hinge output.",
+    "min": [
+      -0.572,
+      -0.572,
+      -0.4475
+    ],
+    "max": [
+      0.572,
+      0.572,
+      0.0875
+    ],
+    "mass": 18,
+    "power": 0,
+    "radius": 0.572,
+    "supportWidth": 0.25,
+    "supportLength": 0.25,
+    "wheelCenterZ": -0.18,
+    "tuningCost": 25
+  },
+  {
+    "id": 14,
+    "name": "road_tyre",
+    "label": "Road tyre",
+    "file": "Assets/DuneParts/glb/14_road_tyre.glb",
+    "preview": "Assets/DuneParts/cutouts/14_road_tyre.png",
+    "group": "Drive",
+    "function": "Powered tyre. Steering requires a connected steering hinge output.",
+    "min": [
+      -0.549,
+      -0.549,
+      -0.4475
+    ],
+    "max": [
+      0.549,
+      0.549,
+      0.0875
+    ],
+    "mass": 18,
+    "power": 0,
+    "radius": 0.549,
+    "supportWidth": 0.25,
+    "supportLength": 0.25,
+    "wheelCenterZ": -0.18,
+    "tuningCost": 25
+  },
+  {
+    "id": 15,
+    "name": "truck_tyre",
+    "label": "Truck tyre",
+    "file": "Assets/DuneParts/glb/15_truck_tyre.glb",
+    "preview": "Assets/DuneParts/cutouts/15_truck_tyre.png",
+    "group": "Drive",
+    "function": "Powered tyre. Steering requires a connected steering hinge output.",
+    "min": [
+      -0.759,
+      -0.759,
+      -0.5564
+    ],
+    "max": [
+      0.759,
+      0.759,
+      0.0864
+    ],
+    "mass": 28,
+    "power": 0,
+    "radius": 0.759,
+    "supportWidth": 0.3,
+    "supportLength": 0.3,
+    "wheelCenterZ": -0.235,
+    "tuningCost": 25
+  },
+  {
+    "id": 16,
+    "name": "standard_suspension",
+    "label": "Suspension",
+    "file": "Assets/DuneParts/glb/16_standard_suspension.glb",
+    "preview": "Assets/DuneParts/cutouts/16_standard_suspension.png",
+    "group": "Mechanics",
+    "function": "Guided strut suspension. Attach the frame at the upper plate and the wheel assembly at the lower plate. Tune stiffness, damping, travel and preload; the coil visibly compresses under load.",
+    "min": [
+      -0.23000006870368722,
+      0.014999978244304657,
+      -0.23000006870368722
+    ],
+    "max": [
+      0.23000006870368722,
+      1.3700000047683716,
+      0.23000006870368722
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 17,
+    "name": "heavy_suspension",
+    "label": "Heavy suspension",
+    "file": "Assets/DuneParts/glb/17_heavy_suspension.glb",
+    "preview": "Assets/DuneParts/cutouts/17_heavy_suspension.png",
+    "group": "Mechanics",
+    "function": "Guided strut suspension. Attach the frame at the upper plate and the wheel assembly at the lower plate. Tune stiffness, damping, travel and preload; the coil visibly compresses under load.",
+    "min": [
+      -0.23000006870368722,
+      0.014999978244304657,
+      -0.2307628095149994
+    ],
+    "max": [
+      0.2308395653963089,
+      1.75,
+      0.23000006870368722
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 18,
+    "name": "steering_hinge",
+    "label": "Steering hinge",
+    "file": "Assets/DuneParts/glb/18_steering_hinge.glb",
+    "preview": "Assets/DuneParts/cutouts/18_steering_hinge.png",
+    "group": "Mechanics",
+    "function": "Powered steering pivot. Mount on a frame side and fit a wheel to the moving plate. Tune angle and direction.",
+    "min": [
+      -0.25,
+      0,
+      -0.25
+    ],
+    "max": [
+      0.25,
+      0.83,
+      0.25
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 19,
+    "name": "rotating_servo",
+    "label": "Rotary servo",
+    "file": "Assets/DuneParts/glb/19_rotating_servo.glb",
+    "preview": "Assets/DuneParts/cutouts/19_rotating_servo.png",
+    "group": "Mechanics",
+    "function": "Servo output carries attached blocks. Q/E turns within the tuned angle.",
+    "min": [
+      -0.41499999165534973,
+      -1.4901161193847656e-08,
+      -0.41499999165534973
+    ],
+    "max": [
+      0.41499999165534973,
+      0.580499991774559,
+      0.41499999165534973
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 20,
+    "name": "trailer_hinge",
+    "label": "Trailer hinge",
+    "file": "Assets/DuneParts/glb/20_trailer_hinge.glb",
+    "preview": "Assets/DuneParts/cutouts/20_trailer_hinge.png",
+    "group": "Mechanics",
+    "function": "Rear recovery hitch. Align with the buggy green hitch and stop. H connects or detaches; the joint swivels freely.",
+    "min": [
+      -0.27000008328262143,
+      0.01999990696196241,
+      -0.9004999995231628
+    ],
+    "max": [
+      0.28050006871934247,
+      0.5600000749379712,
+      0.09049999713897705
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 21,
+    "name": "piston",
+    "label": "Piston",
+    "file": "Assets/DuneParts/glb/21_piston.glb",
+    "preview": "Assets/DuneParts/cutouts/21_piston.png",
+    "group": "Mechanics",
+    "function": "Piston output carries attached blocks. Hold E to extend; release to retract.",
+    "min": [
+      -0.2849999964237213,
+      0.014999951609571072,
+      -1.170499972999096
+    ],
+    "max": [
+      0.2849999964237213,
+      0.5850001568111852,
+      0.09050006847719425
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 22,
+    "name": "release_coupler",
+    "label": "Release coupler",
+    "file": "Assets/DuneParts/glb/22_release_coupler.glb",
+    "preview": "Assets/DuneParts/cutouts/22_release_coupler.png",
+    "group": "Mechanics",
+    "function": "Release coupling; detached-body physics is under development.",
+    "min": [
+      -0.25,
+      0.01999993297689312,
+      -0.750500120413958
+    ],
+    "max": [
+      0.25,
+      0.5220000290975061,
+      0.09050013449557281
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 35
+  },
+  {
+    "id": 23,
+    "name": "compact_engine",
+    "label": "Compact engine",
+    "file": "Assets/DuneParts/glb/23_compact_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/23_compact_engine.png",
+    "group": "Drive",
+    "function": "Adds torque and weight. Tune output and speed cap; extra engines do not automatically raise top speed.",
+    "min": [
+      -0.43699997663497925,
+      0.009999990463256836,
+      -0.5591961741447449
+    ],
+    "max": [
+      0.42099999636411667,
+      1.2300000190734863,
+      0.4099999964237213
+    ],
+    "mass": 35,
+    "power": 1900,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "tuningCost": 50
+  },
+  {
+    "id": 24,
+    "name": "heavy_engine",
+    "label": "Heavy engine",
+    "file": "Assets/DuneParts/glb/24_heavy_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/24_heavy_engine.png",
+    "group": "Drive",
+    "function": "Adds torque and weight. Tune output and speed cap; extra engines do not automatically raise top speed.",
+    "min": [
+      -0.5712155103683472,
+      0.009999990463256836,
+      -0.5400000214576721
+    ],
+    "max": [
+      0.5712155103683472,
+      1.165499985218048,
+      0.5399999916553497
+    ],
+    "mass": 65,
+    "power": 3800,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1.5,
+    "tuningCost": 50
+  },
+  {
+    "id": 25,
+    "name": "open_driver_seat",
+    "label": "Driver seat",
+    "file": "Assets/DuneParts/glb/25_open_driver_seat.glb",
+    "preview": "Assets/DuneParts/cutouts/25_open_driver_seat.png",
+    "group": "Drive",
+    "function": "Open driver seat required to drive.",
+    "min": [
+      -0.34800004959106445,
+      -0.06862245933580735,
+      -0.37654416304755356
+    ],
+    "max": [
+      0.34800001978874207,
+      1.3017352391792836,
+      0.45376190680619716
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "tuningCost": 10
+  },
+  {
+    "id": 26,
+    "name": "armoured_cockpit",
+    "label": "Armoured cab",
+    "file": "Assets/DuneParts/glb/26_armoured_cockpit.glb",
+    "preview": "Assets/DuneParts/cutouts/26_armoured_cockpit.png",
+    "group": "Drive",
+    "function": "Armoured driver seat required to drive.",
+    "min": [
+      -0.7074999809265137,
+      0.0,
+      -0.6255000233650208
+    ],
+    "max": [
+      0.7074999809265137,
+      1.5120001286268234,
+      0.5900000333786011
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 1.5,
+    "supportLength": 1.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 27,
+    "name": "stabilizer",
+    "label": "Stabilizer",
+    "file": "Assets/DuneParts/glb/27_stabilizer.glb",
+    "preview": "Assets/DuneParts/cutouts/27_stabilizer.png",
+    "group": "Mechanics",
+    "function": "Stability unit; anti-roll control is under development.",
+    "min": [
+      -0.4400000274181366,
+      -2.2351741790771484e-08,
+      -0.4400000274181366
+    ],
+    "max": [
+      0.4400000274181366,
+      1.008194200694561,
+      0.4400000274181366
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "tuningCost": 10
+  },
+  {
+    "id": 28,
+    "name": "headlamp",
+    "label": "Headlamp",
+    "file": "Assets/DuneParts/glb/28_headlamp.glb",
+    "preview": "Assets/DuneParts/cutouts/28_headlamp.png",
+    "group": "Body",
+    "function": "Headlamp. The first two placed lamps emit unshadowed light.",
+    "min": [
+      -0.31049999594688416,
+      0.0,
+      -0.22499999403953552
+    ],
+    "max": [
+      0.31049999594688416,
+      0.8099999949336052,
+      0.22499999403953552
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 29,
+    "name": "brake_light",
+    "label": "Brake light",
+    "file": "Assets/DuneParts/glb/29_brake_light.glb",
+    "preview": "Assets/DuneParts/cutouts/29_brake_light.png",
+    "group": "Body",
+    "function": "Brake-light housing.",
+    "min": [
+      -0.25999999046325684,
+      0.0,
+      -0.22499999403953552
+    ],
+    "max": [
+      0.25999999046325684,
+      0.5899999663233757,
+      0.22499999403953552
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 30,
+    "name": "machine_gun",
+    "label": "Machine gun",
+    "file": "Assets/DuneParts/glb/30_machine_gun.glb",
+    "preview": "Assets/DuneParts/cutouts/30_machine_gun.png",
+    "group": "Combat",
+    "function": "Machine gun. Hold LMB while driving to attack bounty targets.",
+    "min": [
+      -0.4699999988079071,
+      0.0,
+      -1.0575000318923622
+    ],
+    "max": [
+      0.31999996304512024,
+      0.859999991953373,
+      0.48072609305381775
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "tuningCost": 10
+  },
+  {
+    "id": 31,
+    "name": "rocket_launcher",
+    "label": "Rocket launcher",
+    "file": "Assets/DuneParts/glb/31_rocket_launcher.glb",
+    "preview": "Assets/DuneParts/cutouts/31_rocket_launcher.png",
+    "group": "Combat",
+    "function": "Rocket launcher. Hold F while driving; explosive area damage on target hits.",
+    "min": [
+      -0.3199999928474426,
+      -2.2303568925075012e-07,
+      -0.5900001396234691
+    ],
+    "max": [
+      0.3199999928474426,
+      1.1580001430705633,
+      0.5900000922531234
+    ],
+    "mass": 25,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "tuningCost": 10
+  },
+  {
+    "id": 32,
+    "name": "spring_arm_suspension",
+    "label": "Spring arm",
+    "file": "Assets/DuneParts/glb/32_spring_arm_suspension.glb",
+    "preview": "Assets/DuneParts/cutouts/32_spring_arm_suspension.png",
+    "group": "Mechanics",
+    "function": "Spring-arm suspension. Mount a wheel on its outer moving plate. Tune travel, stiffness, damping and preload.",
+    "min": [
+      -0.23000000417232513,
+      0.0,
+      -0.9354999661445618
+    ],
+    "max": [
+      0.23000000417232513,
+      0.5676350593566895,
+      0.140500009059906
+    ],
+    "mass": 16,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.4,
+    "supportLength": 0.4,
+    "tuningCost": 35
+  },
+  {
+    "id": 33,
+    "name": "powered_winch",
+    "label": "Powered winch",
+    "file": "Assets/DuneParts/glb/33_powered_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/33_powered_winch.png",
+    "group": "Mechanics",
+    "function": "12 kN pull / 24 m cable. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.4350000023841858,
+      0.0,
+      -0.3149999976158142
+    ],
+    "max": [
+      0.4350000023841858,
+      0.5379999876022339,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 35,
+    "power": 0,
+    "price": 0,
+    "tuningCost": 50
+  },
+  {
+    "id": 34,
+    "name": "low_gear_engine",
+    "label": "Low-gear engine",
+    "file": "Assets/DuneParts/glb/34_low_gear_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/34_low_gear_engine.png",
+    "group": "Drive",
+    "function": "5.4 kN drive force / 22 m/s stock cap / 55 kg. High torque for loaded recovery. One unlock gives unlimited copies.",
+    "min": [
+      -0.6570000052452087,
+      -7.450582373280668e-10,
+      -0.6480000019073486
+    ],
+    "max": [
+      0.6570000052452087,
+      1.3949999809265137,
+      0.8622000217437744
+    ],
+    "mass": 55,
+    "power": 5400,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "price": 450,
+    "tuningCost": 50
+  },
+  {
+    "id": 35,
+    "name": "long_line_winch",
+    "label": "Long-line winch",
+    "file": "Assets/DuneParts/glb/35_long_line_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/35_long_line_winch.png",
+    "group": "Mechanics",
+    "function": "12 kN pull / 40 m cable / hook reach 22 m. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.6100000143051147,
+      0.0,
+      -0.3149999976158142
+    ],
+    "max": [
+      0.6100000143051147,
+      0.6860000491142273,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 42,
+    "power": 0,
+    "price": 650,
+    "tuningCost": 50
+  },
+  {
+    "id": 36,
+    "name": "power_winch",
+    "label": "Power winch",
+    "file": "Assets/DuneParts/glb/36_power_winch.glb",
+    "preview": "Assets/DuneParts/cutouts/36_power_winch.png",
+    "group": "Mechanics",
+    "function": "20 kN pull / 24 m cable / heavier motor. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.5699999928474426,
+      0.0,
+      -0.4099999964237213
+    ],
+    "max": [
+      0.5699999928474426,
+      0.6349999904632568,
+      0.4025000035762787
+    ],
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "mass": 55,
+    "power": 0,
+    "price": 900,
+    "tuningCost": 50
+  },
+  {
+    "id": 37,
+    "name": "sand_tyre",
+    "label": "Wide sand tyre",
+    "file": "Assets/DuneParts/glb/37_sand_tyre.glb",
+    "preview": "Assets/DuneParts/cutouts/37_sand_tyre.png",
+    "group": "Drive",
+    "function": "Wide footprint / lower loose-sand resistance. Unlock once for unlimited copies; tuning is a separate one-time unlock.",
+    "min": [
+      -0.617277204990387,
+      -0.5945000052452087,
+      -0.42750000953674316
+    ],
+    "max": [
+      0.617277204990387,
+      0.5945000052452087,
+      0.06750000268220901
+    ],
+    "mass": 22,
+    "power": 0,
+    "radius": 0.6,
+    "supportWidth": 0.25,
+    "supportLength": 0.25,
+    "wheelCenterZ": -0.18,
+    "price": 125,
+    "tuningCost": 25
+  },
+  {
+    "id": 38,
+    "name": "race_engine",
+    "label": "Race engine",
+    "file": "Assets/DuneParts/glb/38_race_engine.glb",
+    "preview": "Assets/DuneParts/cutouts/38_race_engine.png",
+    "group": "Drive",
+    "function": "6.5 kN drive force / 42 m/s stock cap / 45 kg. High-speed racing engine. One unlock gives unlimited copies.",
+    "min": [
+      -0.6934999823570251,
+      0.0,
+      -0.6840000152587891
+    ],
+    "max": [
+      0.7723500728607178,
+      1.3000725507736206,
+      0.768549919128418
+    ],
+    "mass": 45,
+    "power": 6500,
+    "radius": 0.55,
+    "supportWidth": 1,
+    "supportLength": 1,
+    "price": 1200,
+    "tuningCost": 50
+  },
+  {
+    "id": 39,
+    "name": "gearbox",
+    "label": "Gearbox",
+    "file": "Assets/DuneParts/glb/39_gearbox.glb",
+    "preview": "Assets/DuneParts/cutouts/39_gearbox.png",
+    "group": "Drive",
+    "function": "Compulsory for drag races. Final drive ratio: higher gives more torque and less top speed. Multiple boxes do not stack. Mount to a structural rail or mechanical plate.",
+    "min": [
+      -0.25,
+      0,
+      -0.35
+    ],
+    "max": [
+      0.25,
+      0.48,
+      0.35
+    ],
+    "mass": 30,
+    "power": 0,
+    "radius": 0.55,
+    "supportWidth": 0.5,
+    "supportLength": 0.5,
+    "price": 0,
+    "tuningCost": 0
+  }
+]

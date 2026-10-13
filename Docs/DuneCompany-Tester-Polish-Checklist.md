@@ -9,7 +9,7 @@ Get the current recovery-and-racing loop into testers' hands. Finish the fixes b
 - [x] Confirm spring arms still hold heavy tyres upright while turning and landing.
 - [x] Confirm recovery, racing, payment and automatic garage return still work.
 
-Installed plugin/runtime: **0.20.3**. Native checks cover recovery, spring-arm loads and racing/economy; Chrome checks cover suspension, track texture data and graphics errors. A local comparison cut average mesh upload bytes by about 41%. FPS improvement on itch still needs a clean capture; other active Chrome pages affected local timing.
+Installed plugin/runtime: **0.21.0**. The [presentation pass](DuneCompany-Presentation-Polish-Pass.md) adds garage materials/dressing, field scenery, main-menu artwork, contract/HUD layouts, camera/input settings, feedback and browser contact shading. Native checks cover recovery, spring-arm loads, menu flow and racing/economy; Chrome checks cover onboarding, real input rebinding, suspension, track texture data and graphics errors. A previous local comparison cut average mesh upload bytes by about 41%. Browser physics remains expensive with multiple spring arms; sustained frame time on itch still needs work and a clean capture.
 
 ## Check before sending the build
 

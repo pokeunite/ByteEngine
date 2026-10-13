@@ -3,11 +3,16 @@ using System.Text.Json.Serialization;
 
 internal sealed class BrowserFrame
 {
+    public string quality { get; set; } = "Balanced";
+    public string worldResolution { get; set; } = "Auto";
     public BrowserSky? sky { get; set; }
+    public BrowserShadow? shadow { get; set; }
     public float exposure { get; set; } = 1;
     public int pendingTextures { get; set; }
     public double loopMs { get; set; }
     public float ambient { get; set; }
+    public float[] look { get; set; } = [1,1,0];
+    public float[] fog { get; set; } = [0,0,0,0,1,0,0,0];
     public float[] vp { get; set; } = [];
     public float[] eye { get; set; } = [];
     public float[] background { get; set; } = [];
@@ -24,6 +29,15 @@ internal sealed class BrowserFrame
     public int[] deadMeshes { get; set; } = [];
     public int[] deadTextures { get; set; } = [];
     public JsonElement audio { get; set; }
+}
+
+internal sealed class BrowserShadow
+{
+    public float[] matrix { get; set; } = [];
+    public int resolution { get; set; }
+    public int light { get; set; }
+    public float bias { get; set; }
+    public float strength { get; set; }
 }
 
 internal sealed class BrowserSky
@@ -113,6 +127,8 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public bool receiveShadows { get; set; }
+    public float[] shadowInstances { get; set; } = [];
     public int id { get; set; }
     public int material { get; set; }
     public float[] model { get; set; } = [];

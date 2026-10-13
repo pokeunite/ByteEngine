@@ -1,0 +1,4 @@
+newmtl Race_kit_atlas
+Kd 1 1 1
+Ns 32
+map_Kd ../ContractLevels/rock_09_diff_2k.jpg

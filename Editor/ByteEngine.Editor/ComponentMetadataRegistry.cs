@@ -58,6 +58,7 @@ internal static class ComponentMetadataRegistry
         [typeof(SkeletalMeshRenderer)] = new("Skeletal Mesh Renderer", "Rendering", "Draws an animated skinned mesh.", "character bones model"),
         [typeof(SpriteRenderer)] = new("Sprite Renderer", "Rendering", "Draws a textured 2D sprite.", "image texture"),
         [typeof(ByteEngine.Core.AI.RaceDirector3D)] = new("Race Director", "Navigation", "Countdown, ordered gates, position and finish events for any vehicle adapter.", "race laps sprint director"),
+        [typeof(ByteEngine.Core.Gameplay.DriftScore3D)] = new("Drift Score", "Gameplay", "Grounded vehicle drift chains, multipliers and banking. Feed physical velocity from the game driver.", "drift scoring racing multiplier"),
         [typeof(ByteEngine.Core.AI.AiAgent3D)] = new("AI Vehicle Agent", "Navigation", "Follows an ordered route through physics controls with local avoidance and recovery.", "ai racing vehicle opponent"),
         [typeof(ByteEngine.Core.AI.RoutePath3D)] = new("Route Path", "Navigation", "Ordered world-space vehicle waypoints, corridor width and gates.", "ai racing path route"),
         [typeof(ByteEngine.Core.Graphics.ThreeD.CableRenderer3D)] = new("Cable Renderer", "Rendering", "Round cable with gravity slack and reusable dynamic geometry.", "winch rope cord cable"),
@@ -100,6 +101,9 @@ internal static class ComponentMetadataRegistry
         [typeof(GroundSurface)] = new("Ground Surface", "Physics", "Marks a surface as walkable by character movement.", "floor slope"),
 
         [typeof(HealthComponent)] = new("Health", "Gameplay", "Tracks damage, healing and death.", "hit points hp damage"),
+        [typeof(HitscanEmitter3D)] = new("Hitscan Emitter", "Gameplay", "Reusable bounded ray firing with damage, owner exclusion and physical impact. Drive from gameplay or events.", "weapon ray hitscan shoot"),
+        [typeof(LaunchVolume3D)] = new("Launch Volume", "Gameplay", "Launches characters or dynamic bodies entering a trigger.", "jump pad bounce launch"),
+        [typeof(ResourceMeter3D)] = new("Resource Meter", "Gameplay", "Bounded ammo, focus, stamina or energy. Spending and recharge policy are controlled by gameplay or events.", "resource meter stamina focus energy ammo"),
         [typeof(HealthPickup3D)] = new("Health Pickup", "Gameplay", "Heals a player on trigger contact and is consumed once.", "pickup heal medkit"),
         [typeof(SkeletalRagdoll3D)] = new("Skeletal Ragdoll", "Animation", "Adds hit flinch and a short physics-assisted skeletal collapse on death. Add beside Health and a skinned model; a Rigidbody provides whole-body collision.", "ragdoll death hit reaction corpse"),
         [typeof(LifetimeComponent)] = new("Lifetime", "Gameplay", "Destroys its object after a configured duration.", "timer destroy despawn"),

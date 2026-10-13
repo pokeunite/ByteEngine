@@ -6,4 +6,5 @@ public sealed class DuneWorldObstacle3D : Component
 {
  public Vector3 Size {get;set;}=Vector3.One;
  public Vector3 Center {get;set;}=Vector3.Zero;
+ public bool DriveSurface {get;set;}
 }

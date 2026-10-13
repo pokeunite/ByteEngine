@@ -1,0 +1,11 @@
+{
+  "guid": "965932c9-1665-5ade-9ef6-09875f0382b9",
+  "type": "Model3D",
+  "modelImporter": {
+    "importScale": 1,
+    "generateNormals": false,
+    "preferEmbeddedMaterials": true,
+    "importAnimations": false,
+    "rigType": "Generic"
+  }
+}

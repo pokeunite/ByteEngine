@@ -7,7 +7,7 @@ using ByteEngine.Core.Scene;
 namespace DuneCompany;
 public sealed partial class DuneMainMenu3D:Component
 {
- ByteEngine.Core.Audio.AudioSource3D? _music;
+ ByteEngine.Core.Audio.AudioSource3D? _music;string _menuGraphics="Balanced";
  internal string ProjectRoot="";
  string SaveRoot=>ByteEngine.Core.Runtime.GameSaveStorage.GetDirectory(ProjectRoot);
  internal static bool ContinuePending,NewGamePending;
@@ -21,23 +21,33 @@ public sealed partial class DuneMainMenu3D:Component
    case "Settings":scene.FindGameObject("Settings panel")!.Active=true;break;case "Credits":scene.FindGameObject("Credits panel")!.Active=true;break;
    case "Close Settings":scene.FindGameObject("Settings panel")!.Active=false;break;case "Close Credits":scene.FindGameObject("Credits panel")!.Active=false;break;
    case "Volume Up":MasterVolume=Math.Min(1,MasterVolume+.1f);Save();break;case "Volume Down":MasterVolume=Math.Max(0,MasterVolume-.1f);Save();break;
-   case "Quality":BalancedQuality=!BalancedQuality;Save();break;
+   case "Quality":var qualityPrefs=ReadPreferences(ProjectRoot);qualityPrefs=qualityPrefs with {Graphics=NextQuality(qualityPrefs.Graphics)};WriteGraphicsPreferences(qualityPrefs);BalancedQuality=qualityPrefs.Graphics!="Low";break;
   }
  }
  protected override void OnStop(){_music?.Stop();_music=null;_menuClick?.Stop();_menuClick=null;}
  void Save(){ApplyAudioPreferences(ReadPreferences(ProjectRoot) with {Volume=MasterVolume,Balanced=BalancedQuality});Directory.CreateDirectory(SaveRoot);File.WriteAllText(Path.Combine(SaveRoot,"menu-settings.json"),JsonSerializer.Serialize(ReadPreferences(ProjectRoot) with {Volume=MasterVolume,Balanced=BalancedQuality}));}
- internal sealed record Preferences(float Volume=1,bool Balanced=false,float Music=1,float Sfx=1,float Ui=1);
+ internal sealed record Preferences(float Volume=1,bool Balanced=true,float Music=1,float Sfx=1,float Ui=1,float CameraMotion=.35f,float CameraSensitivity=1,Dictionary<string,string>? DriveBindings=null,string Graphics="Balanced",string WorldResolution="Auto");
+ internal static string QualityName(string? value)=>value is "Low" or "High"?value:"Balanced";
+ internal static string NextQuality(string? value)=>QualityName(value) switch {"Low"=>"Balanced","Balanced"=>"High",_=>"Low"};
+ internal static string ResolutionName(string? value)=>value is "Native" or "75%" or "50%"?value:"Auto";
+ internal static string NextResolution(string? value)=>ResolutionName(value) switch {"Auto"=>"Native","Native"=>"75%","75%"=>"50%",_=>"Auto"};
+ internal void WriteGraphicsPreferences(Preferences p){Directory.CreateDirectory(SaveRoot);File.WriteAllText(Path.Combine(SaveRoot,"menu-settings.json"),JsonSerializer.Serialize(p));_menuGraphics=QualityName(p.Graphics);ApplyGraphicsPreferences(GameObject.Scene!,p);}
+ internal static void ApplyGraphicsPreferences(ByteEngine.Core.Scene.Scene scene,Preferences p){
+  var tier=QualityName(p.Graphics);var quality=tier=="Low"?GraphicsQuality.Fast:tier=="High"?GraphicsQuality.High:GraphicsQuality.Balanced;
+  BrowserPresentationSettings.Quality=quality;BrowserPresentationSettings.WorldResolution=ResolutionName(p.WorldResolution);
+  foreach(var sky in scene.GameObjects.SelectMany(o=>o.Components).OfType<SkyEnvironment>()){sky.Quality=quality;sky.Saturation=.94f;sky.Contrast=1.035f;sky.Warmth=.025f;sky.Bloom=tier=="Low"?0:.04f;if(OperatingSystem.IsBrowser())sky.AmbientIntensity=.30f;}
+ }
  internal static Preferences ReadPreferences(string root){try{var file=Path.Combine(ByteEngine.Core.Runtime.GameSaveStorage.GetDirectory(root),"menu-settings.json");return File.Exists(file)?JsonSerializer.Deserialize<Preferences>(File.ReadAllText(file))??new():new();}catch(Exception e)when(e is IOException or JsonException){return new();}}
- protected override void OnStart(){Input.NotifyGameViewPointerAim();EnsureNewGameConfirmation();var prefs=ReadPreferences(ProjectRoot);MasterVolume=Math.Clamp(prefs.Volume,0,1);BalancedQuality=prefs.Balanced;ApplyAudioPreferences(prefs);_music=GarageMusic.Create(GameObject.Scene!,ProjectRoot,"main-menu",.4f);var button=GameObject.Scene!.FindGameObject("Continue button")?.GetComponent<UiWidget>();if(button!=null)button.Interactable=File.Exists(Path.Combine(SaveRoot,"vehicle.json"));}
+ protected override void OnStart(){Input.NotifyGameViewPointerAim();EnsureNewGameConfirmation();var prefs=ReadPreferences(ProjectRoot);MasterVolume=Math.Clamp(prefs.Volume,0,1);_menuGraphics=QualityName(prefs.Graphics);BalancedQuality=_menuGraphics!="Low";ApplyAudioPreferences(prefs);ApplyGraphicsPreferences(GameObject.Scene!,prefs);_music=GarageMusic.Create(GameObject.Scene!,ProjectRoot,"main-menu",.4f);var button=GameObject.Scene!.FindGameObject("Continue button")?.GetComponent<UiWidget>();if(button!=null)button.Interactable=File.Exists(Path.Combine(SaveRoot,"vehicle.json"));}
  protected override void OnUpdate(){Input.NotifyGameViewPointerAim();if(_music!=null)_music.Volume=.4f;UpdateMenuAudio();var scene=GameObject.Scene!;var options=new[]{"Continue","New Game","Settings","Credits","Quit"};bool hasSave=File.Exists(Path.Combine(SaveRoot,"vehicle.json"));bool modal=scene.FindGameObject("Settings panel")!.Active||scene.FindGameObject("Credits panel")!.Active||_newGameConfirmation;
   int selected=hasSave?0:1;int hovered=-1;for(int i=0;i<options.Length;i++){var w=scene.FindGameObject(options[i]+" button")?.GetComponent<UiWidget>();if(w==null)continue;w.Interactable=!modal&&(i!=0||hasSave);if(w.IsFocused)selected=i;if(w.IsHovered)hovered=i;}if(hovered>=0){selected=hovered;UiNavigation.Focus(scene.FindGameObject(options[selected]+" button")!.GetComponent<UiWidget>());}
 
   for(int i=0;i<options.Length;i++){var button=scene.FindGameObject(options[i]+" button")?.GetComponent<UiWidget>();if(button!=null)button.Color=i==selected?new(.18f,.19f,.085f,.58f):Vector4.Zero;}
-  var saveStatus=scene.FindGameObject("Save status")?.GetComponent<UiText>();if(saveStatus!=null)saveStatus.Text=hasSave?"S A V E  0 1  /  S A L V A G E  C O N T R A C T":"NO SAVED VEHICLE / START A NEW GAME";
+  var saveStatus=scene.FindGameObject("Save status")?.GetComponent<UiText>();if(saveStatus!=null)saveStatus.Text=hasSave?"S A V E  0 1  /  R E C O V E R Y  O P E R A T I O N S":"NO SAVED VEHICLE / START A NEW GAME";
   var continueLabel=scene.FindGameObject("Continue button label")?.GetComponent<UiText>();if(continueLabel!=null)continueLabel.Color=hasSave?new(.89f,.86f,.75f,1):new(.5f,.5f,.45f,1);
   var marker=scene.FindGameObject("Menu selection stripe")?.GetComponent<UiWidget>();if(marker!=null)marker.Offset=new(65,269+selected*56);
   var label=scene.FindGameObject("Volume value")?.GetComponent<UiText>();if(label!=null)label.Text=$"MASTER VOLUME  {MasterVolume*100:0}%";
-  var quality=scene.FindGameObject("Quality value")?.GetComponent<UiText>();if(quality!=null)quality.Text="GRAPHICS  "+(BalancedQuality?"BALANCED":"FAST");
+  var quality=scene.FindGameObject("Quality value")?.GetComponent<UiText>();if(quality!=null)quality.Text="GRAPHICS  "+_menuGraphics.ToUpperInvariant();
   if(_newGameConfirmation){if(scene.FindGameObject("Confirm New Game button")?.GetComponent<UiWidget>()?.WasClicked==true)ConfirmNewGame();else if(scene.FindGameObject("Cancel New Game button")?.GetComponent<UiWidget>()?.WasClicked==true)CloseNewGameConfirmation();}
   if(Input.IsKeyPressed(Key.Escape)){CloseNewGameConfirmation();scene.FindGameObject("Settings panel")!.Active=false;scene.FindGameObject("Credits panel")!.Active=false;}
  }

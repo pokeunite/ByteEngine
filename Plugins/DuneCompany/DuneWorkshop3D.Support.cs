@@ -16,7 +16,8 @@ public sealed partial class DuneWorkshop3D
  }
  public bool HasMountSupport(int type,Vector3 position,Quaternion rotation,Vector3 incoming,int parent)
  {
-  var def=_catalog[type];if(_blocks.FirstOrDefault(b=>b.Id==parent) is {} host && (_catalog[host.Type].Wheel || host.Type is 23 or 24 or 34 or 38 or 25 or 26 or 30 or 31))return false;if(type<=12)return true;
+  if(type==39)return TryGearboxMount(parent,out var mount,out var facing)&&Vector3.Distance(position,mount)<.015f&&Math.Abs(Quaternion.Dot(rotation,facing))>.999f;
+  var def=_catalog[type];if(_blocks.FirstOrDefault(b=>b.Id==parent) is {} host && (_catalog[host.Type].Wheel || host.Type is 23 or 24 or 34 or 38 or 39 or 25 or 26 or 30 or 31))return false;if(type<=12)return true;
   Vector3 normal=Vector3.Transform(incoming,rotation);Vector3 first=Math.Abs(incoming.Y)>.5f?Vector3.UnitX:Math.Abs(incoming.X)>.5f?Vector3.UnitZ:Vector3.UnitX;Vector3 second=Vector3.Normalize(Vector3.Cross(incoming,first));
   Vector3 own=MountPoint(type,incoming);
   Vector3 center=position+Vector3.Transform(own,rotation);first=Vector3.Transform(first,rotation);second=Vector3.Transform(second,rotation);

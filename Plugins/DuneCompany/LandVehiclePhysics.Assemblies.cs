@@ -3,10 +3,10 @@ using ByteEngine.Core.AI;
 namespace DuneCompany;
 public sealed partial class LandVehiclePhysics
 {
- sealed class DrivenAssembly{public required Part[] Parts;public required Part[] Wheels;public required PlacedBlock[] Engines;public float Mass,AxleMid;public AiDriveCommand Input;public float MaximumSpeed=32;}
+ sealed class DrivenAssembly{public required Part[] Parts;public required Part[] Wheels;public required PlacedBlock[] Engines;public required PlacedBlock[] Gearboxes;public ManualTransmission Transmission=new();public float Mass,AxleMid;public AiDriveCommand Input;public float MaximumSpeed=32;}
  public float ConfiguredMaximumSpeed{get{float speed=0;foreach(var engine in _playerRig.Engines)speed=Math.Max(speed,engine.SpeedLimit);return speed;}}
  DrivenAssembly _playerRig=null!;
- DrivenAssembly DescribeDrive(Part[] parts){var wheels=parts.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();return new(){Parts=parts,Wheels=wheels,Engines=parts.Select(p=>p.Block).Where(b=>_catalog[b.Type].Power>0).ToArray(),Mass=parts.Sum(p=>_catalog[p.Block.Type].Mass),AxleMid=wheels.Length>0?(wheels.Min(p=>p.Block.P.Z)+wheels.Max(p=>p.Block.P.Z))*.5f:0};}
+ DrivenAssembly DescribeDrive(Part[] parts){var wheels=parts.Where(p=>_catalog[p.Block.Type].Wheel).ToArray();return new(){Parts=parts,Wheels=wheels,Engines=parts.Select(p=>p.Block).Where(b=>_catalog[b.Type].Power>0).ToArray(),Gearboxes=parts.Select(p=>p.Block).Where(b=>b.Type==39&&GearboxMounts.Connected(b,parts.Select(p=>p.Block).ToArray(),_catalog)).ToArray(),Mass=parts.Sum(p=>_catalog[p.Block.Type].Mass),AxleMid=wheels.Length>0?(wheels.Min(p=>p.Block.P.Z)+wheels.Max(p=>p.Block.P.Z))*.5f:0};}
  readonly Dictionary<int,DrivenAssembly> _drivenAssemblies=[];
  /// <summary>Adds an independently motorised rig to this simulation. All rigs collide through the same solver.</summary>
  public int AddDrivenAssembly(IReadOnlyList<PlacedBlock> blocks,IReadOnlyDictionary<int,VehiclePartPhysics> definitions,Vector3 position,Quaternion rotation)

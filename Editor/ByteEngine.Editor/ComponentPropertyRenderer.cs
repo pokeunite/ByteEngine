@@ -196,13 +196,19 @@ internal static class ComponentPropertyRenderer
         if (camera == null) return;
         ImGui.SeparatorText("FPS framing");
         ImGui.TextWrapped("Adjust the eye and arms here. Use Game Camera View in the Blueprint preview to see the framing.");
-        ImGui.BeginDisabled(context == PropertyEditorContext.Runtime);
+        if (context == PropertyEditorContext.Runtime)
+            ImGui.TextDisabled("Live preview changes reset when you stop. Copy the values to keep them.");
         void Position(string label, GameObject target)
         {
             var value = target.Transform.LocalPosition;
             bool edited = ImGui.DragFloat3(label, ref value, .01f);
             if (ImGui.IsItemActivated() || edited) begin();
-            if (edited) { target.Transform.LocalPosition = value; changed(); }
+            if (edited)
+            {
+                target.Transform.LocalPosition = value;
+                if (target == cameraObject) fps.RebindAuthoredEye();
+                changed();
+            }
             if (ImGui.IsItemDeactivatedAfterEdit()) end();
         }
         Position("Eye position", cameraObject!);
@@ -218,7 +224,6 @@ internal static class ComponentPropertyRenderer
             ImGui.TextDisabled("Y: raise/lower arms. Z: move arms closer/further.");
         }
         else ImGui.TextDisabled("Attach a child named Model under the view camera for arm framing.");
-        ImGui.EndDisabled();
     }
 
     public static void Draw(

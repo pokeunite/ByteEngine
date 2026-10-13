@@ -20,7 +20,7 @@ internal sealed partial class DunePolishDiagnostic:ByteEngineApplication
  {
   System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory,"DuneCompany.Plugin.dll"));System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(AppContext.BaseDirectory,"DesertTerrain.Plugin.dll"));
   string root=Path.GetDirectoryName(_file)!;Directory.CreateDirectory(Path.Combine(root,"Preview"));
-  if(_levels){ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.desertterrain",new DesertTerrainPlugin());ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.dunecompany",new DuneCompanyPlugin());}
+  if(_levels||_menu){ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.desertterrain",new DesertTerrainPlugin());ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.dunecompany",new DuneCompanyPlugin());}
   _project=EditorProjectContext.Open(_file,m=>Console.WriteLine("WARNING: "+m));if(_levels){RunStarterLevels(root);return;}if(_garage){RunGarage(root);return;}if(_sandVehicle){RunSandVehicle(root);return;}if(_sandLab){RunSandLab(root);return;}if(_menu){RunMainMenu(root);return;}var path=Path.Combine(root,_world?"Scenes/Workshop.bytescene":_project.Project.StartupScene);var scene=_project.Scenes.Load(path);var terrain=scene.GameObjects.SelectMany(o=>o.Components).OfType<DesertTerrain3D>().Single();
   if(_world&&_prepare)AuthorMissionWorld(scene,terrain,root,path);
   if(_slice){RunDesertSlice(scene,terrain,root,path);return;}

@@ -19,7 +19,10 @@ public sealed partial class DuneWorkshop3D
  void UpdateVehicleFeedback(float dt){if(Building||_physics==null)return;EnsureVehicleFeedback();
   _impactCooldown=Math.Max(0,_impactCooldown-dt);var velocity=_physics.Velocity;
   float knock=_impactReady?(velocity-_impactVelocity).Length():0;
-  if(_impactReady&&_physics.HasPhysicalContact&&knock>2.2f&&_impactCooldown<=0){JobSound("vehicle-impact",Math.Clamp(knock/9,.25f,.95f));_impactCooldown=.35f;}
+  // A collision loses horizontal speed or abruptly arrests a fall; normal acceleration is silent.
+  float speedLost=new Vector2(_impactVelocity.X,_impactVelocity.Z).Length()-new Vector2(velocity.X,velocity.Z).Length();
+  bool landing=_impactVelocity.Y < -2.5f && velocity.Y-_impactVelocity.Y > 2;
+  if(_impactReady&&_physics.HasPhysicalContact&&(speedLost>1.2f||landing)&&knock>1.6f&&_impactCooldown<=0){JobSound(knock>4.5f?"vehicle-crash":"vehicle-knock",Math.Clamp(knock/8,.35f,1));_cameraImpulse=Math.Min(.12f,knock*.009f);_impactCooldown=.45f;}
   _impactVelocity=velocity;_impactReady=true;
   var engines=_blocks.Where(b=>(b.Type is 23 or 24 or 34 or 38)&&b.Power>0).ToArray();var enginePosition=engines.Length>0?engines.Select(b=>_visuals[b.Id].Transform.WorldMatrix.Translation).Aggregate(Vector3.Zero,(a,b)=>a+b)/engines.Length:Transform.WorldPosition;
   foreach(var s in _vehicleAudio.Values)s.Transform.WorldPosition=enginePosition;
@@ -29,10 +32,10 @@ public sealed partial class DuneWorkshop3D
   // Audio-only gear bands with hysteresis; they never impose forces or alter the drivetrain.
   if(_feedbackGroundSpeed>_audioGear*8.5f+1&&_audioGear<4)_audioGear++;
   else if(_feedbackGroundSpeed<(_audioGear-1)*8.5f-1&&_audioGear>1)_audioGear--;
-  float gearRev=Math.Clamp((_feedbackGroundSpeed-(_audioGear-1)*8.5f)/10,0,1);
+  float gearRev=_physics.Transmission is {} transmission?Math.Clamp((transmission.Rpm-900)/6100,0,1):Math.Clamp((_feedbackGroundSpeed-(_audioGear-1)*8.5f)/10,0,1);
   float target=Math.Clamp(Math.Abs(_feedbackThrottle)*.55f+speedLoad*.25f+Math.Clamp(_feedbackSlip/15,0,.2f),0,1);_engineLoad=FeedbackSmooth(_engineLoad,target,dt,target>_engineLoad?3:2);
   if(!_feedbackDriving&&engines.Length>0&&_vehicleAudio.TryGetValue("engine-start",out var ignition)){ignition.Volume=VehicleSfxVolume*.38f;ignition.Play();}_feedbackDriving=true;
-  float rev=.86f+gearRev*.30f+_engineLoad*.12f;
+  float rev=.78f+gearRev*.95f+_engineLoad*.12f;
   MixSound("engine-idle",engines.Length>0?.60f*(1-_engineLoad*.55f):0,.78f+_engineLoad*.12f,dt);
   MixSound("engine-drive",engines.Length>0?(.22f+1.15f*_engineLoad):0,rev,dt);
   MixSound("rolling",Math.Clamp(_feedbackGroundSpeed/35,0,.085f),.94f,dt);

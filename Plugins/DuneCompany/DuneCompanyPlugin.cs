@@ -12,6 +12,10 @@ public sealed class DuneCompanyPlugin : IByteEnginePlugin
   foreach(var command in new[]{"Continue","New Game","Confirm New Game","Cancel New Game","Settings","Credits","Close Settings","Close Credits","Volume Up","Volume Down","Quality"}){string action=command;c.RegisterAction(new(){Id="bytebard.dunecompany.menu."+command.ToLowerInvariant().Replace(' ','_'),Category="Dune Company / Menu",DisplayName=command,Execute=(_,e)=>e.Self.GetComponent<DuneMainMenu3D>()?.Command(action)});}
   c.RegisterCondition(new(){Id="bytebard.dunecompany.building",Category="Dune Company",DisplayName="Workshop Is Building",Evaluate=(_,e)=>e.Self.GetComponent<DuneWorkshop3D>()?.Building==true});
   c.RegisterSimpleComponent<DuneSprintContract3D>("DuneSprintContract3D",new("Dune Sprint Contract","Gameplay","Physical opponent, ordered course and sprint reward.","race sprint"));
+  c.RegisterSimpleComponent<DuneDriftContract3D>("DuneDriftContract3D",new("Dune Drift Contract","Gameplay","Timed drift chains, multiplier and banked-score objective.","drift motorsport score"));
+  c.RegisterComponent(new RacePropCodec(),new("Dune Race Prop","Rendering","Blender-authored race scenery with a shared PBR atlas.","race scenery"));
+  c.RegisterSimpleComponent<DuneLaunchTree3D>("DuneLaunchTree3D",new("Dune Launch Tree","Rendering","Race countdown illuminates the Blender signal lenses.","drag race launch signal"));
+  c.RegisterSimpleComponent<DuneGearboxAnimation3D>("DuneGearboxAnimation3D",new("Dune Gearbox Animation","Rendering","Sequential up/down lever motion without moving the physical housing.","gearbox lever shift"));
   c.RegisterSimpleComponent<DuneEngineAnimation3D>("DuneEngineAnimation3D",new("Dune Engine Animation","Rendering","Visual pulley spin without moving physics mounts.","engine pulley animation"));
   c.RegisterSimpleComponent<DuneRecoveryContract3D>("DuneRecoveryContract3D",new("Dune Recovery Contract","Gameplay","Place the stranded buggy anchor; edit payout, delivery size and shallow sand depression.","recovery hitch towing contract"));
   c.RegisterSimpleComponent<DuneWinchAnchor3D>("DuneWinchAnchor3D",new("Dune Rock Anchor","Gameplay","Fixed winch attachment on a solid anchor rock.","winch rock anchor"));
@@ -21,7 +25,7 @@ public sealed class DuneCompanyPlugin : IByteEnginePlugin
   c.RegisterSimpleComponent<DuneBlock3D>("DuneBlock3D",new("Dune Vehicle Block 3D","Gameplay","Authored block type, connectivity and wheel settings. Move the object to edit its build pose.","dune block vehicle part"));
   c.RegisterSimpleComponent<DuneBountyTarget3D>("DuneBountyTarget3D",new("Dune Bounty Target 3D","Gameplay","Destructible proving-ground contract target.","target combat bounty"));
   c.RegisterComponent(new WorkshopCodec(),new("Dune Vehicle Workshop","Gameplay","Editable block construction and desert vehicle test driving.","dune desert vehicle builder workshop"));
-  foreach(var command in new[]{"Toggle drive","Save session","Save vehicle","Load vehicle","Undo","Redo","Delete selected","Recover vehicle","Tune selected","Quit mission","Return to base","Open contracts","Open blueprints","Close garage overlay","Deploy contract","Connect recovery","Disconnect recovery"})
+  foreach(var command in new[]{"Shift up","Shift down","Toggle drive","Save session","Save vehicle","Load vehicle","Undo","Redo","Delete selected","Recover vehicle","Tune selected","Quit mission","Return to base","Open contracts","Open blueprints","Close garage overlay","Deploy contract","Connect recovery","Disconnect recovery"})
   {string action=command;c.RegisterAction(new(){Id="bytebard.dunecompany."+command.ToLowerInvariant().Replace(' ','_'),Category="Dune Company",DisplayName=command,Execute=(_,e)=>e.Self.GetComponent<DuneWorkshop3D>()?.Command(action)});}
  }
 }

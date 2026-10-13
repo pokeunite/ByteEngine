@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"bytebard.karlson","name":"Karlson Parkour Lab","version":"1.0.1","assembly":"Karlson.Plugin.dll","entryPoint":"Karlson.Plugin.KarlsonPlugin","editor":true,"runtime":true,"minimumEngineVersion":"0.7.0","dependencies":[]}

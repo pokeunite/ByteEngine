@@ -40,6 +40,17 @@ internal sealed class MaterialTextureSampling : IDisposable
                 (int)TextureWrapMode.Repeat);
             GL.SamplerParameter(_sampler, SamplerParameterName.TextureWrapT,
                 (int)TextureWrapMode.Repeat);
+            // Roads and terrain are seen at shallow angles. Isotropic mip sampling
+            // otherwise erases markings long before their screen size warrants it.
+            GL.GetInteger(GetPName.NumExtensions, out int extensionCount);
+            for(int i=0;i<extensionCount;i++)
+            {
+                string? extension=GL.GetString(StringNameIndexed.Extensions,i);
+                if(extension is not ("GL_EXT_texture_filter_anisotropic" or "GL_ARB_texture_filter_anisotropic"))continue;
+                float maximum=GL.GetFloat((GetPName)0x84FF);
+                GL.SamplerParameter(_sampler,(SamplerParameterName)0x84FE,Math.Min(8f,maximum));
+                break;
+            }
         }
 
         GL.BindSampler(slot, _sampler);

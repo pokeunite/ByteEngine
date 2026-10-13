@@ -1,0 +1,4 @@
+race-checkpoint source: https://freesound.org/people/suntemple/sounds/253172/
+Author: suntemple
+CC0 1.0 — https://creativecommons.org/publicdomain/zero/1.0/
+Freesound HQ preview, first 0.45 seconds, mono 22.05 kHz PCM WAV, fade and gain adjusted.

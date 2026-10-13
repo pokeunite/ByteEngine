@@ -18,7 +18,7 @@ public sealed partial class DuneWorkshop3D
   var lines=new List<string>();
   foreach(var b in _blocks.Where(b=>IsWinch(b.Type)).OrderBy(b=>b.Id)){
    var attach=BlockKey(b,"Attach");var reel=BlockKey(b,"Reel in");var pay=BlockKey(b,"Pay out");
-   if(!_contractComplete&&Input.IsKeyPressed(attach)){if(physics.IsWinchConnected(b.Id))physics.DisconnectWinch(b.Id);else if(!ConnectBlockWinch(b.Id)){_winchNotice=NoBrakesMission?"Match the truck speed and get within 12 m.":"No clear hook within 12 m. Stop or reposition.";_winchNoticeRemaining=3;}}
+   if(!_contractComplete&&Input.IsKeyPressed(attach)){if(physics.IsWinchConnected(b.Id)){physics.DisconnectWinch(b.Id);JobSound("hitch-release",.45f);}else if(!ConnectBlockWinch(b.Id)){int reach=b.Type==35?22:12;_winchNotice=NoBrakesMission?$"Match the truck speed and get within {reach} m.":$"No clear hook within {reach} m. Stop or reposition.";_winchNoticeRemaining=3;JobNotice(_winchNotice);}else{JobSound("hitch-lock",.5f);JobNotice(physics.IsAnchorCable(b.Id)?"ANCHOR SECURED":"VEHICLE CABLE SECURED");}}
    physics.SetWinchInput(b.Id,!_contractComplete?(Input.IsKeyDown(reel)?1:Input.IsKeyDown(pay)?-1:0):0);
    bool connected=physics.IsWinchConnected(b.Id);
    lines.Add($"#{b.Id} [{attach}] attach / [{reel}] in / [{pay}] out"+(connected?$" / {(physics.IsAnchorCable(b.Id)?"ANCHOR":"VEHICLE")} {physics.WinchLength(b.Id):0.0}m":""));

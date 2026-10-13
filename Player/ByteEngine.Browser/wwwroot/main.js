@@ -4,6 +4,7 @@ import { BrowserRenderer } from './renderer.js';
 import { decodeUiPacket } from './frame-wire.js';
 import { BrowserAudio } from './audio.js';
 import { createPerformanceCapture } from './performance.js';
+import { BrowserPresentation } from './graphics.js';
 const capture=createPerformanceCapture();
 const status=document.querySelector('#status'),canvas=document.querySelector('#game'),overlay=document.querySelector('#ui');
 const progress=document.querySelector('#progress');
@@ -15,6 +16,7 @@ window.addEventListener('error',e=>fail(e.error||e.message));
 window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
     const renderer=new BrowserRenderer(canvas,overlay);
+    const presentation=new BrowserPresentation();let graphics={quality:'Balanced',worldResolution:'Auto'};
     globalThis.byteEngineGraphics=()=>{const gl=renderer.gl,ext=gl.getExtension('WEBGL_debug_renderer_info');return {renderer:gl.getParameter(ext?ext.UNMASKED_RENDERER_WEBGL:gl.RENDERER),error:gl.getError(),meshes:renderer.meshes.size,textures:renderer.textures.size,tintBytes:renderer.tintBytes};};
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fail('Graphics context lost. Reload this page.');});
     capture.setHardware(byteEngineGraphics());
@@ -77,16 +79,17 @@ try{
     function frame(now){
         if(stopped){status.hidden=false;return;}
         try{
-            // Keep the browser framebuffer within the game's 720p budget on high-DPI displays.
-            const scale=Math.min(devicePixelRatio,1280/Math.max(1,canvas.clientWidth),720/Math.max(1,canvas.clientHeight));
-            const width=Math.max(1,Math.round(canvas.clientWidth*scale)),height=Math.max(1,Math.round(canvas.clientHeight*scale));
-            if(canvas.width!==width||canvas.height!==height){canvas.width=overlay.width=width;canvas.height=overlay.height=height;}
+            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_SIZE));
+            const {width,height,worldWidth,worldHeight,uiWidth,uiHeight}=size;
+            if(canvas.width!==worldWidth||canvas.height!==worldHeight){canvas.width=worldWidth;canvas.height=worldHeight;}
+            if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
             const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
             const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad);
             const wasmEnd=performance.now();const data=JSON.parse(payload);
+            graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
             if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
@@ -95,12 +98,14 @@ try{
             const drawCount=data.draws.length,uiCount=data.ui.length;
             if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi)data.ui=[];
             renderer.draw(data,width,height);
+            presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures);
+            globalThis.byteEnginePresentation={...size,...graphics,adaptiveScale:presentation.factor};
             const renderEnd=performance.now();
             const allocations=data.textures.filter(t=>t.allocate||!t.partial);
             if(allocations.length||renderer.profile.uploadMs>8)capture.event('graphics-upload',{durationMs:renderer.profile.uploadMs,meshBytes:renderer.profile.meshUploadBytes,textureBytes:renderer.profile.textureUploadBytes,allocations:allocations.map(t=>({id:t.id,source:t.source,width:t.width,height:t.height,hdr:t.hdr}))});
             byteEnginePerf.frames.push({frameMs:renderEnd-frameStart,managedMs:managedEnd-frameStart,renderMs:renderEnd-managedEnd,intervalMs,loopMs:data.loopMs,draws:data.draws.length,pending:data.pendingTextures});
             if(byteEnginePerf.frames.length>600)byteEnginePerf.frames.shift();
-            capture.frame({frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,renderMs:renderEnd-audioEnd,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,draws:drawCount,uiCommands:uiCount,pending:data.pendingTextures,width,height,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
+            capture.frame({frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,renderMs:renderEnd-audioEnd,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,draws:drawCount,uiCommands:uiCount,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
             if(data.pendingTextures!==previousPending){capture.event('graphics-queue',{pending:data.pendingTextures,reason:graphicsReady?'background asset uploads':'initial graphics'});previousPending=data.pendingTextures;}
             if(!graphicsReady&&data.pendingTextures===0){graphicsReady=true;capture.event('first-ready-frame');}
             // A background upload must not replace gameplay with the startup splash.

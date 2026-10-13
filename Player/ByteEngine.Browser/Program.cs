@@ -48,7 +48,7 @@ public static partial class BrowserGame
     [JSExport]
     public static void PhysicsProfile(int iterations,int substeps){Loop.Scenes.ActiveScene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault()?.SetPhysicsProfile(iterations,substeps);}
     [JSExport]
-    public static string Diagnostics(){var scene=Loop.Scenes.ActiveScene;var vehicle=scene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault();return JsonSerializer.Serialize(new {scene=scene?.Name,building=vehicle?.Building,velocity=vehicle?.PhysicalVelocity.Length(),position=vehicle?.Transform.WorldPosition.ToString(),winch=vehicle?.WinchMission,blocks=vehicle?.Blocks.Count, physicsMs=vehicle?.LastDriveCpuMilliseconds,physicsSteps=vehicle?.PhysicsSteps,physicsPhases=vehicle?.PhysicsPhases,suspension=vehicle?.SuspensionDiagnostics,droppedPhysicsSeconds=vehicle?.DroppedPhysicsSeconds, loopMs=_lastLoopMilliseconds, encodeMs=_lastEncodeMilliseconds,managedMemoryMB=GC.GetTotalMemory(false)/1048576.0,gc0=GC.CollectionCount(0),gc1=GC.CollectionCount(1),gc2=GC.CollectionCount(2)});}
+    public static string Diagnostics(){var scene=Loop.Scenes.ActiveScene;var vehicle=scene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault();return JsonSerializer.Serialize(new {scene=scene?.Name,building=vehicle?.Building,velocity=vehicle?.PhysicalVelocity.Length(),position=vehicle?.Transform.WorldPosition.ToString(),winch=vehicle?.WinchMission,blocks=vehicle?.Blocks.Count,motorsport=vehicle?.MotorsportDiagnostics,physicsMs=vehicle?.LastDriveCpuMilliseconds,physicsSteps=vehicle?.PhysicsSteps,physicsPhases=vehicle?.PhysicsPhases,suspension=vehicle?.SuspensionDiagnostics,droppedPhysicsSeconds=vehicle?.DroppedPhysicsSeconds, loopMs=_lastLoopMilliseconds, encodeMs=_lastEncodeMilliseconds,managedMemoryMB=GC.GetTotalMemory(false)/1048576.0,gc0=GC.CollectionCount(0),gc1=GC.CollectionCount(1),gc2=GC.CollectionCount(2)});}
     [JSExport]
     public static string SaveKey(){var data=new ByteEngine.Core.Serialization.ProjectSerializer().Load("/game/Content/Game.byteproject");return "byteengine-saves-"+data.ProjectId.ToString("N")+(data.RuntimeSaveId is {} id ? "-"+id.ToString("N") : "");}
     [JSExport]
@@ -151,7 +151,7 @@ public static partial class BrowserGame
         }
         catch(Exception exception)
         {
-            throw new InvalidOperationException($"Browser frame failed during {phase} in '{Loop.Scenes.ActiveScene?.Name}' ({width}x{height}): {exception.GetType().Name}: {exception.Message}",exception);
+            throw new InvalidOperationException($"Browser frame failed during {phase} in '{Loop.Scenes.ActiveScene?.Name}' ({width}x{height}): {exception}",exception);
         }
     }
 
@@ -201,13 +201,15 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     private float[] _vp = new float[16], _eye = [0,0,0], _background = [.07f,.1f,.15f];
     private BrowserLight[] _lights = [], _points = [];
     private float _ambient = .25f, _exposure = 1;
+    private float[] _look=[1,1,0],_fog=[0,0,0,0,1,0,0,0];
     private BrowserSky? _sky;
+    private BrowserShadow? _shadow;
     private int _nextId, _nextTexture;
     public void Begin()
     {
         _frameNumber++;
         _uploads.Clear(); _textureUploads.Clear(); _draws.Clear(); _ui.Clear(); _buffers.Clear();
-        _usedMeshes.Clear(); _usedTextures.Clear(); _usedFonts.Clear(); _sky=null;
+        _usedMeshes.Clear(); _usedTextures.Clear(); _usedFonts.Clear(); _sky=null;_shadow=null;
         _usedMaterials.Clear(); _materialUploads.Clear();
     }
 
@@ -235,8 +237,17 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         _background = environment.DrawSky ? V3(environment.HorizonColor * environment.SkyIntensity) : [.07f,.1f,.15f];
         _ambient = lighting.AmbientIntensity;
         _exposure=environment.Exposure;
+        _look=[environment.Look.Saturation,environment.Look.Contrast,environment.Look.Warmth];
+        _fog=[environment.FogColor.X,environment.FogColor.Y,environment.FogColor.Z,environment.FogStartDistance,environment.FogEndDistance,environment.FogDensity,environment.FogEnabled?environment.FogMaxOpacity:0,(float)environment.FogMode];
+        if(BrowserPresentationSettings.Quality!=GraphicsQuality.Fast){
+            for(int i=0;i<lighting.DirectionalLights.Count;i++){
+                var sun=lighting.DirectionalLights[i];if(!sun.CastShadows||sun.ShadowStrength<=0)continue;
+                sun=sun with {ShadowResolution=BrowserPresentationSettings.Quality==GraphicsQuality.High?2048:1024,ShadowDistance=Math.Min(40,sun.ShadowDistance)};
+                _shadow=new BrowserShadow{matrix=Matrix(Renderer3D.BuildDirectionalShadowMatrix(camera,sun)),resolution=sun.ShadowResolution,light=i,bias=sun.ShadowBias,strength=sun.ShadowStrength};break;
+            }
+        }
         if(environment.DrawSky){Matrix4x4.Invert(camera.ViewProjectionMatrix,out var inverse);var map=environment.SkyMode==SkyMode3D.EnvironmentMap?environment.EnvironmentMapTexture:null;
-         _sky=new BrowserSky{texture=Texture(map),hdr=map?.IsHdr==true,inverseVp=Matrix(inverse),rotation=environment.EnvironmentRotationDegrees*MathF.PI/180,intensity=map!=null?environment.EnvironmentIntensity:environment.SkyIntensity,zenith=V3(environment.ZenithColor),horizon=V3(environment.HorizonColor),ground=V3(environment.GroundColor),sharpness=environment.HorizonSharpness};}
+         _sky=new BrowserSky{texture=Texture(map),hdr=map?.IsHdr==true,inverseVp=Matrix(inverse),rotation=environment.EnvironmentRotationDegrees*MathF.PI/180,intensity=environment.SkyIntensity,zenith=V3(environment.ZenithColor),horizon=V3(environment.HorizonColor),ground=V3(environment.GroundColor),sharpness=environment.HorizonSharpness};}
 
         _lights = lighting.DirectionalLights.Select(l => new BrowserLight { direction = V3(l.Direction),
             color = V3(l.Color * l.Intensity) }).ToArray();
@@ -286,6 +297,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
                 cull = m.CullMode.ToString(), front = m.FrontFace.ToString() });
             }
             _draws.Add(new BrowserDrawCommand { id = cached.Id, material = materialId, model = Matrix(draw.ModelMatrix),
+                receiveShadows=draw.ReceiveShadows,shadowInstances=batch.Instances.Where(s=>s.CastShadows&&s.Queue==RenderQueue3D.Opaque).SelectMany(s=>Matrix(s.ModelMatrix)).ToArray(),
                 instances = batch.Instances.Count > 1 ? batch.Instances.SelectMany(s => Matrix(s.ModelMatrix)).ToArray() : [] });
         }
     }
@@ -298,10 +310,10 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     public Vector2 MeasureText(string text,string? fontPath,int size)
     {
         string path=string.IsNullOrWhiteSpace(fontPath)?"/game/Resources/Fonts/TypeLightSans.ttf":fontPath;
-        size=Math.Clamp(size,8,96);var key=(path,size);
-        if(!_fonts.TryGetValue(key,out var atlas)){atlas=FontAtlas.Load(path,size);_fonts.Add(key,atlas);}
+        size=Math.Clamp(size,8,96);var key=(path,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size:size*2);
+        if(!_fonts.TryGetValue(key,out var atlas)){atlas=FontAtlas.Load(path,key.Item2);_fonts.Add(key,atlas);}
         _usedFonts.Add(atlas);
-        return atlas.Measure(text,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size/Math.Max(1,atlas.LineHeight):1);
+        return atlas.Measure(text,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size/Math.Max(1,atlas.LineHeight):.5f);
     }
     public void DrawText(string value, string? fontPath, int size, Vector2 position,
         Vector4 color, float wrapWidth, UiAnchor anchor)
@@ -309,10 +321,10 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         if (string.IsNullOrEmpty(value)) return;
         string path = string.IsNullOrWhiteSpace(fontPath) ? "/game/Resources/Fonts/TypeLightSans.ttf" : fontPath;
         size = Math.Clamp(size, 8, 96);
-        var key = (path, size);
-        if (!_fonts.TryGetValue(key, out var atlas)) { atlas = FontAtlas.Load(path, size); _fonts.Add(key, atlas); }
+        var key = (path, path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size:size*2);
+        if (!_fonts.TryGetValue(key, out var atlas)) { atlas = FontAtlas.Load(path, key.Item2); _fonts.Add(key, atlas); }
         _usedFonts.Add(atlas);
-        float scale = path.EndsWith(".fnt", StringComparison.OrdinalIgnoreCase) ? size / Math.Max(1, atlas.LineHeight) : 1;
+        float scale = path.EndsWith(".fnt", StringComparison.OrdinalIgnoreCase) ? size / Math.Max(1, atlas.LineHeight) : .5f;
         float Measure(string line)
         {
             float width = 0; int previous = -1;
@@ -361,7 +373,9 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         // Retain a small cache; size animations must not accumulate large atlas textures forever.
         foreach (var key in _fonts.Keys.Where(k => !_usedFonts.Contains(_fonts[k])).ToArray())
         {
-            if (_fonts.Count <= 8) break;
+            // Layout measurements and scaled drawing can use different sizes.
+            // Keep both resident across frames instead of recreating measurement atlases.
+            if (_fonts.Count <= 32) break;
             _fonts[key].Dispose(); _fonts.Remove(key);
         }
         var hiddenMeshes=_meshes.Keys.Where(k=>!_usedMeshes.Contains(k)).OrderBy(k=>_meshLastFrame[k]).ToArray();
@@ -392,7 +406,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             for (int j = 0; j < values.Length; j++) System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(bytes[(8+j*4)..], values[j]);
         }
         int uiBuffer = _buffers.Count; _buffers.Add(uiBytes);
-        return JsonSerializer.Serialize(new BrowserFrame { sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp, eye = _eye, background = _background, ambient = _ambient,
+        return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp, eye = _eye, background = _background, ambient = _ambient,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,
             draws = _draws, materials = _materialUploads, deadMaterials = deadMaterials, uiBuffer = uiBuffer, uiCount = _ui.Count,
             deadMeshes=deadMeshes, deadTextures=deadTextures, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);

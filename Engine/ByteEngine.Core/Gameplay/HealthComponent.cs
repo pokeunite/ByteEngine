@@ -53,6 +53,14 @@ public sealed class HealthComponent : Component
         TriggerDeath();
     }
 
+    /// <summary>Explicitly begins another life, including after death or pool reuse.</summary>
+    public void Revive(float health = -1f)
+    {
+        _deathTriggered = false;
+        CurrentHealth = health < 0 ? MaxHealth : health;
+        TriggerDeath();
+    }
+
     protected override void OnStart() => TriggerDeath();
     protected override void OnUpdate() => TriggerDeath();
 

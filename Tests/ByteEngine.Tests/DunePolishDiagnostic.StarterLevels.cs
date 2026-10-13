@@ -11,6 +11,20 @@ internal sealed partial class DunePolishDiagnostic
  void RunStarterLevels(string root)
  {
   if(!Path.GetFullPath(root).StartsWith(Path.GetFullPath(".artifacts")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new Exception("Use an isolated diagnostic fixture, never player saves");
+  if(Environment.GetEnvironmentVariable("DUNE_GEARBOX_ONLY")=="1"){RunDragGearbox(root);return;}
+  if(Environment.GetEnvironmentVariable("DUNE_MOTORSPORT_ONLY")=="1"){RunMotorsport(root);return;}
+  if(Environment.GetEnvironmentVariable("DUNE_PLACEMENT_ONLY")=="1"){
+   foreach(string name in new[]{"WinchRescue","AnchorRescue","AnchorRelay"}){
+    var placementScene=_project!.Scenes.Load(Path.Combine(root,$"Scenes/{name}.bytescene"));Scenes.LoadScene(placementScene);Tick(placementScene,new(.5f),false);
+    var workshop=placementScene.GameObjects.SelectMany(o=>o.Components).OfType<DuneWorkshop3D>().Single();workshop.Command("Deploy contract");Tick(placementScene,new(.5f),false);
+    Vector3 pos=new(49,16,45),target=new(35,7,64);
+    if(name!="WinchRescue") {var eye=placementScene.GameObjects.First(o=>o.GetComponent<DuneWinchAnchor3D>()!=null);target=eye.Transform.WorldPosition;pos=target+new Vector3(2,1.5f,4);}
+    var camera=placementScene.ActiveCamera!;camera.Transform.WorldPosition=pos;var forward=Vector3.Normalize(target-pos);camera.Transform.WorldRotation=Quaternion.CreateFromYawPitchRoll(MathF.Atan2(-forward.X,-forward.Z),MathF.Asin(forward.Y),0);
+    Capture(placementScene,Path.Combine(root,$"Preview/placement-{name}.png"),false);Scenes.UnloadScene();
+   }
+   Close();return;
+  }
+  if(Environment.GetEnvironmentVariable("DUNE_PRESENTATION_ONLY")=="1"){RunPresentation(root);return;}
   if(Environment.GetEnvironmentVariable("DUNE_CONTRACT_CATEGORY_ONLY")=="1"){RunContractCategory(root);Close();return;}
   if(Environment.GetEnvironmentVariable("DUNE_NO_BRAKES_ONLY")=="1"){RunAnchorRelay(root);Close();return;}
   if(Environment.GetEnvironmentVariable("DUNE_RACING_ONLY")=="1"){RunSprintAndEconomy(root);Close();return;}
@@ -51,7 +65,9 @@ internal sealed partial class DunePolishDiagnostic
     for(int i=0;i<90;i++)Tick(scene,new(.5f),false,Key.Space);
     if(!workshop.ConnectWinch())throw new Exception("Deep pit cable cannot connect from the south ramp approach");
     var pitStart=workshop.RecoveryPosition;
-    for(int i=0;i<720;i++)Tick(scene,new(.5f),false,Key.Space,Key.E);
+    // A loose ramp does not behave like a fixed anchor: briefly drive away while
+    // reeling, then brake on the apron. This exercises the actual extraction inputs.
+    for(int i=0;i<720;i++)Tick(scene,new(.5f),false,i<120?Key.W:Key.Space,Key.E);
     float pulled=pitStart.Z-workshop.RecoveryPosition.Z;
     if(pulled<2)throw new Exception($"Deep pit winch did not move casualty up ramp: {pulled}; player={workshop.Transform.WorldPosition} load={workshop.RecoveryPosition} tension={physics.CableTension}");
     Console.WriteLine($"PASS Deep pit cable clears ramp and physically pulls casualty {pulled:F2}m");

@@ -25,7 +25,7 @@ foreach ($pluginName in @('DesertTerrain','DuneCompany')) {
     $pluginBuilds[$manifest.id] = @{ version=$manifest.version; sha256=(Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash }
 }
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugin-builds.json'),($pluginBuilds | ConvertTo-Json -Depth 4))
-foreach ($file in @('index.html','main.js','renderer.js','frame-wire.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
+foreach ($file in @('index.html','main.js','renderer.js','graphics.js','frame-wire.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
 foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),

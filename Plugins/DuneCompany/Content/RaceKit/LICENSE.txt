@@ -1,0 +1,1 @@
+Original procedural textures and Blender race-kit geometry authored for Dune Company. CC0 1.0. Existing fonts and rock scans retain their own licenses.

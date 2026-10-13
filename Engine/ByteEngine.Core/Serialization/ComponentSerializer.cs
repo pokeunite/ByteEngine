@@ -359,6 +359,7 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Speedometer>("Speedometer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Minimap>("Minimap"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.RaceDirector3D>("RaceDirector3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DriftScore3D>("DriftScore3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.AiAgent3D>("AiAgent3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.AI.RoutePath3D>("RoutePath3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.ThreeD.CableRenderer3D>("CableRenderer3D"));
@@ -419,6 +420,9 @@ public sealed class ComponentSerializer
         );
 
         Register(new HealthComponentCodec());
+        Register(new HitscanEmitter3DCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
         Register(new HealthPickup3DCodec());
         Register(new SkeletalRagdoll3DCodec());
         Register(new LifetimeComponentCodec());
