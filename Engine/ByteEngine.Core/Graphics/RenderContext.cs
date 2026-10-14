@@ -202,18 +202,9 @@ public sealed class RenderContext
 
     public RenderEnvironment3D CaptureRenderEnvironment3D()
     {
-        SkyEnvironment? environment =
-            Scene.GameObjects
-                .Where(
-                    gameObject =>
-                        gameObject.ActiveInHierarchy)
-                .SelectMany(
-                    gameObject =>
-                        gameObject.Components
-                            .OfType<SkyEnvironment>())
-                .FirstOrDefault(
-                    component =>
-                        component.Enabled);
+        SkyEnvironment? environment = null;
+        foreach (var sky in Scene.Environments)
+            if (sky.Enabled && sky.GameObject.ActiveInHierarchy) { environment = sky; break; }
 
         if (environment ==
             null)
@@ -261,11 +252,10 @@ public sealed class RenderContext
         RenderEnvironment3D environment)
     {
         var directionalList=new List<DirectionalLight>();var pointList=new List<PointLight>();
-        var objects=Scene.GameObjects;
-        for(int i=0;i<objects.Count;i++){
-            var obj=objects[i];if(!obj.ActiveInHierarchy)continue;var components=obj.Components;
-            for(int j=0;j<components.Count;j++){var component=components[j];if(!component.Enabled)continue;if(component is DirectionalLight sun)directionalList.Add(sun);else if(component is PointLight lamp)pointList.Add(lamp);}
-        }
+        foreach(var sun in Scene.DirectionalLights)
+            if(sun.Enabled && sun.GameObject.ActiveInHierarchy)directionalList.Add(sun);
+        foreach(var lamp in Scene.PointLights)
+            if(lamp.Enabled && lamp.GameObject.ActiveInHierarchy)pointList.Add(lamp);
         var directional=directionalList.ToArray();var point=pointList.ToArray();
 
         RenderDirectionalLight3D[] directionalSnapshots =

@@ -186,7 +186,7 @@ public sealed class GameObject
         component.Attach(this);
         _components.Add(component);
         _contactComponents=null;
-        _scene?.InvalidatePhysicsRegistry();
+        _scene?.InvalidateComponentRegistries();
 
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
             _scene.SetActiveCamera(camera);
@@ -217,7 +217,7 @@ public sealed class GameObject
     {
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
         _components.Clear();_contactComponents=null;
-        _scene?.InvalidatePhysicsRegistry();_components.AddRange(ordered);
+        _scene?.InvalidateComponentRegistries();_components.AddRange(ordered);
     }
 
     public bool RemoveComponent(Component component)
@@ -225,7 +225,7 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
         _contactComponents=null;
-        _scene?.InvalidatePhysicsRegistry();
+        _scene?.InvalidateComponentRegistries();
 
         CrashDebugLog.Write(
             $"GameObject.RemoveComponent: object='{Name}' component='{component.GetType().FullName}' BEGIN.");
@@ -412,7 +412,7 @@ public sealed class GameObject
         }
 
         _components.Clear();_contactComponents=null;
-        _scene?.InvalidatePhysicsRegistry();
+        _scene?.InvalidateComponentRegistries();
         _started = false;
 
     }

@@ -366,13 +366,19 @@ public static class SkeletalAttachmentService
     internal static void UpdateScene(
         Scene scene)
     {
-        foreach (GameObject item
-                 in scene.GameObjects.ToArray())
+        var objects=scene.GameObjects;
+        int count=objects.Count;
+        if(count==0)return;
+        var snapshot=System.Buffers.ArrayPool<GameObject>.Shared.Rent(count);
+        try
         {
-            if (item.IsAttached)
-            {
-                Apply(item);
-            }
+            for(int i=0;i<count;i++)snapshot[i]=objects[i];
+            for(int i=0;i<count;i++)if(snapshot[i].IsAttached)Apply(snapshot[i]);
+        }
+        finally
+        {
+            Array.Clear(snapshot,0,count);
+            System.Buffers.ArrayPool<GameObject>.Shared.Return(snapshot);
         }
     }
 

@@ -154,6 +154,7 @@ internal sealed class AssetsPanel : IDisposable
 
     private void OnAssetDatabaseChanged()
     {
+        _directoryChildren.Clear();
         _listingDirty =
             true;
     }
@@ -161,6 +162,7 @@ internal sealed class AssetsPanel : IDisposable
     public void Refresh(
         EditorLog log)
     {
+        _directoryChildren.Clear();
         _project.AssetDatabase.Scan();
 
         _listingDirty =
@@ -387,12 +389,6 @@ internal sealed class AssetsPanel : IDisposable
         bool defaultOpen,
         EditorLog log)
     {
-        if (!Directory.Exists(
-                directory))
-        {
-            return;
-        }
-
         string[] children =
             GetDirectoriesSafe(
                 directory);
@@ -523,12 +519,14 @@ internal sealed class AssetsPanel : IDisposable
         ImGui.TreePop();
     }
 
-    private static string[] GetDirectoriesSafe(
+    private readonly Dictionary<string, string[]> _directoryChildren = new(StringComparer.OrdinalIgnoreCase);
+    private string[] GetDirectoriesSafe(
         string directory)
     {
+        if (_directoryChildren.TryGetValue(directory, out var cached)) return cached;
         try
         {
-            return Directory
+            return _directoryChildren[directory] = Directory
                 .EnumerateDirectories(
                     directory)
                 .OrderBy(
@@ -540,7 +538,7 @@ internal sealed class AssetsPanel : IDisposable
         }
         catch
         {
-            return Array.Empty<string>();
+            return _directoryChildren[directory] = Array.Empty<string>();
         }
     }
 
@@ -4281,6 +4279,7 @@ state.SelectedObject =
 
     private void RefreshAfterFileOperation()
     {
+        _directoryChildren.Clear();
         _project.AssetDatabase.Scan();
 
         _listingDirty =

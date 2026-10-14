@@ -121,6 +121,22 @@ internal static class RenderOptimizationTests
             else foreach(var item in multi)renderer.Draw(item.Mesh,item.Material,item.ModelMatrix,Matrix4x4.Identity,Matrix4x4.Identity,RenderLighting3D.Default);
             GL.Finish();var pixels=new byte[128*128*4];GL.ReadPixels(0,0,128,128,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);return pixels;}
         var reference=Main(false);var streamed=Main(true);Check(reference.Zip(streamed).All(p=>Math.Abs(p.First-p.Second)<=1),"Shared instance-stream offsets change pixels");
+        // The instance normal transform must match the CPU normal matrix for signed,
+        // nonuniform, rotated and sheared transforms, across distinct stream offsets.
+        var litRed=new Material{BaseColor=new(.8f,.3f,.1f,1),CullMode=CullMode3D.None};
+        var litBlue=new Material{BaseColor=new(.1f,.3f,.8f,1),CullMode=CullMode3D.None};
+        multi.Clear();
+        for(int i=0;i<16;i++)
+        {
+            var matrix=Matrix4x4.CreateScale(i%3==0?-.4f:.4f,.25f,.5f)*Matrix4x4.CreateRotationX(.4f)*Matrix4x4.CreateRotationY(.2f);
+            matrix.M12+=.06f;
+            matrix*=Matrix4x4.CreateTranslation((i%4-1.5f)*.45f,(i/4-1.5f)*.45f,0);
+            multi.Add(Submission(i%2==0?litRed:litBlue) with{ModelMatrix=matrix});
+        }
+        reference=Main(false);streamed=Main(true);
+        Check(reference.Zip(streamed).All(p=>Math.Abs(p.First-p.Second)<=1),"Fast instance normals change lit pixels");
+        Check(reference.Where((v,i)=>i%4!=3&&v>10).Count()>100,"Normal-stream fixture is blank");
+        Console.WriteLine("PASS fast instance normals: signed/nonuniform scale, rotation, shear and multiple material offsets");
         Check(GL.GetError()==ErrorCode.NoError,"Shadow instancing GL error");
         Console.WriteLine("PASS all material states, transparent ordering, independent shadow flags, and pixel-equivalent opaque/cutout directional and six-face point shadows");
     }

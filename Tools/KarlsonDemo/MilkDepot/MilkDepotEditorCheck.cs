@@ -8,9 +8,9 @@ using ByteEngine.Editor;
 namespace KarlsonDemoTool;
 internal static class MilkDepotEditorCheck
 {
-    internal static void Run()
+    internal static void Run(string? projectFile = null)
     {
-        using var editor=new EditorApplication(Program.Root+"/karlson demo.byteproject");int frames=0;
+        using var editor=new EditorApplication(projectFile ?? Environment.GetEnvironmentVariable("BYTE_KARLSON_TEST_PROJECT") ?? Program.Root+"/karlson demo.byteproject");int frames=0;
         editor.Load+=()=>editor.IsVisible=false;
         editor.UpdateFrame+=_=>
         {

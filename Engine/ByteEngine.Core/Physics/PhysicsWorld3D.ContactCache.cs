@@ -11,6 +11,40 @@ public sealed partial class PhysicsWorld3D
     private readonly Dictionary<(Collider3D, Collider3D), CachedPrimitiveContact> _primitiveContacts = new();
     private readonly List<(Collider3D, Collider3D)> _expiredPrimitiveContacts = new();
     public int LastCachedContactHits { get; private set; }
+    public int LastStaticSolveReuseCount { get; private set; }
+    private readonly List<StaticSolveState> _staticSolveStates = new();
+    private readonly Dictionary<ContactKey, PhysicsContactPair3D> _staticSolveContacts = new();
+    private readonly uint[] _staticSolveMatrix = new uint[32];
+    private bool _staticSolveValid;
+    private readonly record struct StaticSolveState(Collider3D Collider, PrimitiveState Shape,
+        Rigidbody3D? Body, int Layer, bool UseProjectMatrix, uint Mask);
+
+    private StaticSolveState CaptureStaticState(ColliderEntry entry) => new(entry.Collider,
+        _primitiveStates[entry.Collider], entry.Body, entry.GameObject.Layer,
+        entry.Collider.UseProjectMatrix, entry.Collider.CollisionMask.Bits);
+
+    private bool TryReuseStaticSolve(List<ColliderEntry> entries, uint[] matrix)
+    {
+        if (!_staticSolveValid || _primitiveStates.Count != entries.Count || matrix.Length != 32 ||
+            entries.Count != _staticSolveStates.Count) return false;
+        for (int i = 0; i < 32; i++) if (matrix[i] != _staticSolveMatrix[i]) return false;
+        for (int i = 0; i < entries.Count; i++)
+            if (CaptureStaticState(entries[i]) != _staticSolveStates[i]) return false;
+        foreach (var contact in _staticSolveContacts) _frameContacts[contact.Key] = contact.Value;
+        LastCachedContactHits += _staticSolveContacts.Count;
+        LastStaticSolveReuseCount++;
+        return true;
+    }
+
+    private void BeginStaticSolve(List<ColliderEntry> entries, uint[] matrix)
+    {
+        _staticSolveValid = _primitiveStates.Count == entries.Count && matrix.Length == 32;
+        _staticSolveStates.Clear();
+        _staticSolveContacts.Clear();
+        if (!_staticSolveValid) return;
+        foreach (var entry in entries) _staticSolveStates.Add(CaptureStaticState(entry));
+        Array.Copy(matrix, _staticSolveMatrix, 32);
+    }
 
     private readonly record struct PrimitiveState(Matrix4x4 World, Vector3 Center,
         Vector3 Size, bool Trigger, int Ordinal);
@@ -43,7 +77,11 @@ public sealed partial class PhysicsWorld3D
             !_primitiveContacts.TryGetValue((first.Collider, second.Collider), out var cached) ||
             cached.First != a || cached.Second != b) return false;
         LastCachedContactHits++;
-        if (cached.Intersects) _frameContacts[cached.Key] = cached.Pair;
+        if (cached.Intersects)
+        {
+            _frameContacts[cached.Key] = cached.Pair;
+            if (_staticSolveValid) _staticSolveContacts[cached.Key] = cached.Pair;
+        }
         return true;
     }
 

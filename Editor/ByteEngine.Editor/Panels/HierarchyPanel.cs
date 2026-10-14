@@ -196,7 +196,7 @@ internal sealed class HierarchyPanel
         Vector2 rowMaximum =
             ImGui.GetItemRectMax();
 
-        ImGui.GetWindowDrawList()
+        if (ImGui.IsItemVisible()) ImGui.GetWindowDrawList()
             .AddCircleFilled(
                 new Vector2(
                     rowMinimum.X +
@@ -342,7 +342,7 @@ internal sealed class HierarchyPanel
         }
     }
 
-    private void DrawSiblingGroup(
+    private unsafe void DrawSiblingGroup(
         GameObject[] siblings,
         EditorState state,
         Action delete,
@@ -367,7 +367,31 @@ internal sealed class HierarchyPanel
             GameObject sibling =
                 siblings[index];
 
-            DrawReorderDropTarget(
+            // Only contiguous leaves have a fixed row height. Expanded branches retain
+            // their normal tree traversal and editing/drag targets retain their behavior.
+            if (sibling.Children.Count == 0 && _renaming != sibling.Id)
+            {
+                int start = index;
+                while (index + 1 < siblings.Length && siblings[index + 1].Children.Count == 0 &&
+                    _renaming != siblings[index + 1].Id) index++;
+                var clipper = new ImGuiListClipperPtr(ImGuiNative.ImGuiListClipper_ImGuiListClipper());
+                try
+                {
+                    clipper.Begin(index - start + 1);
+                    while (clipper.Step())
+                        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
+                        {
+                            var item = siblings[start + row];
+                            if (state.Mode == EditorMode.Edit)
+                                DrawReorderDropTarget(state, item, false, $"Before:{item.Id}");
+                            DrawNode(item, state, delete, duplicate, copy, paste, createChild, instantiateAsset);
+                        }
+                }
+                finally { clipper.End(); ImGuiNative.ImGuiListClipper_destroy(clipper.NativePtr); }
+                continue;
+            }
+
+            if (state.Mode == EditorMode.Edit) DrawReorderDropTarget(
                 state,
                 sibling,
                 after:
@@ -388,7 +412,7 @@ internal sealed class HierarchyPanel
         GameObject last =
             siblings[^1];
 
-        DrawReorderDropTarget(
+        if (state.Mode == EditorMode.Edit) DrawReorderDropTarget(
             state,
             last,
             after:

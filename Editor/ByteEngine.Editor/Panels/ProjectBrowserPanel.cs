@@ -9,7 +9,8 @@ internal enum ProjectTemplate
     Starter3D,
     ByteArena,
     LastStand,
-    InteractiveSand
+    InteractiveSand,
+    KarlsonDemo
 }
 
 internal sealed record NewProjectRequest(string Name, string ParentDirectory, ProjectTemplate Template);
@@ -72,7 +73,7 @@ internal sealed class ProjectBrowserPanel
             _openCreatePopup = false;
         }
 
-        ImGui.SetNextWindowSize(new Vector2(680f, 550f), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSize(new Vector2(680f, 620f), ImGuiCond.Appearing);
         if (!ImGui.BeginPopupModal("Create New ByteEngine Project", ImGuiWindowFlags.NoResize)) return;
 
         ImGui.Text("Project name");
@@ -113,6 +114,11 @@ internal sealed class ProjectBrowserPanel
         ImGui.TextDisabled("    Playable zombie survival: shotgun, waves, HUD, pickups and ragdolls.");
         if (ImGui.RadioButton("Interactive Sand", ref template, (int)ProjectTemplate.InteractiveSand))
             _template = ProjectTemplate.InteractiveSand;
+        if (ImGui.RadioButton("Karlson Demo", ref template, (int)ProjectTemplate.KarlsonDemo))
+            _template = ProjectTemplate.KarlsonDemo;
+        ImGui.TextDisabled("    Milk Depot FPS course, animated weapons, ammo, targets and checkpoints.");
+        if (_template == ProjectTemplate.KarlsonDemo)
+            ImGui.TextWrapped("Creates an editable copy with the weapon gameplay plugin included. Press Play, click Game View, clear eight targets and collect the milk. Testing instructions are in START-HERE.txt.");
 
         if (_template == ProjectTemplate.LastStand)
         {

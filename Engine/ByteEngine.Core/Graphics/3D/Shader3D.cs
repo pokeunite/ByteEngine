@@ -113,7 +113,19 @@ internal sealed class Shader3D : IDisposable
                 normal=normalize(vec3(-gradient.x,1.0,-gradient.y));
             }
             mat4 model=uInstanced==1?aInstanceModel:uModel;
-            vNormal=(uInstanced==1?mat3(transpose(inverse(model))):mat3(uNormalMatrix))*normal;
+            if(uInstanced==1)
+            {
+                // Cofactors give inverse-transpose direction without a full mat4 inverse
+                // or another instance stream. Every fragment consumer normalizes vNormal;
+                // determinant magnitude cancels, but its sign must survive mirrored scale.
+                mat3 basis=mat3(model);
+                vec3 c0=cross(basis[1],basis[2]);
+                vec3 c1=cross(basis[2],basis[0]);
+                vec3 c2=cross(basis[0],basis[1]);
+                float orientation=dot(basis[0],c0)<0.0?-1.0:1.0;
+                vNormal=(mat3(c0,c1,c2)*normal)*orientation;
+            }
+            else vNormal=mat3(uNormalMatrix)*normal;
             vWorldPosition=(model*vec4(position,1.0)).xyz;
             vUV=aUV;
             gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);

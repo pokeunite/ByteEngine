@@ -156,7 +156,7 @@ public sealed partial class Scene
             return;
         }
 
-        InvalidatePhysicsRegistry();
+        InvalidateComponentRegistries();
         _gameObjects.Add(
             gameObject);
 
@@ -191,7 +191,7 @@ public sealed partial class Scene
         GameObject parent =
             gameObject.Parent;
 
-        InvalidatePhysicsRegistry();
+        InvalidateComponentRegistries();
         _gameObjects.Remove(gameObject);
 
         int insertAfter =
@@ -234,7 +234,7 @@ public sealed partial class Scene
             return false;
         }
 
-        InvalidatePhysicsRegistry();
+        InvalidateComponentRegistries();
         _gameObjects.Remove(moving);
 
         int siblingIndex =
@@ -508,7 +508,7 @@ public sealed partial class Scene
 
         _pendingDestroy.Remove(gameObject.Id);
 
-        InvalidatePhysicsRegistry();
+        InvalidateComponentRegistries();
         _gameObjects.Remove(gameObject);
 
         UnregisterClassification(gameObject);

@@ -92,6 +92,11 @@ try
         LastStandStarterTests.Prepare(args[1], args[2]);
         return;
     }
+    if (args.Length >= 3 && args[0] == "--prepare-karlson-starter")
+    {
+        KarlsonStarterTests.Prepare(args[1], args[2]);
+        return;
+    }
 
     if (args.Contains("--audio-play-clip"))
     {

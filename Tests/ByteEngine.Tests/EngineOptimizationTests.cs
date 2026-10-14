@@ -20,11 +20,20 @@ internal static class EngineOptimizationTests
     public static void Run()
     {
         EngineAllocationRegressionTests.Run();
+        SceneRenderRegistryTests.Run();
+        ModelLodCacheTests.Run();
         var scene=new Scene("Cached contacts");
         var a=scene.CreateGameObject("A");var ca=a.AddComponent(new BoxCollider3D());var events=a.AddComponent(new Events());
         var b=scene.CreateGameObject("B");b.Transform.LocalPosition=new(.25f,0,0);var cb=b.AddComponent(new BoxCollider3D());
         void Tick()=>scene.Physics.Step(scene,1f/60);
         Tick();Tick();Check(events.Enter==1&&events.Stay==1&&scene.Physics.LastCachedContactHits>0,"Cached solid enter/stay");
+        Check(scene.Physics.LastStaticSolveReuseCount > 0 && scene.Physics.LastCandidateCount == 0,
+            "Unchanged static scene rebuilds candidate pairs");
+        scene.Classification.CollisionMatrix.SetInteraction(0,0,false);Tick();
+        Check(scene.Physics.Contacts.Count==0 && events.Exit==1,"Matrix invalidates whole static solve");
+        scene.Classification.CollisionMatrix.SetInteraction(0,0,true);Tick();
+        Check(events.Enter==2,"Matrix restore refreshes contacts");
+        events.Enter=1;events.Exit=0;
         b.Transform.LocalPosition=new(3,0,0);Tick();Check(events.Exit==1&&scene.Physics.Contacts.Count==0,"Move invalidates cached solid");
         cb.Size=new(8,1,1);Tick();Check(events.Enter==2,"Resize invalidates cached miss");
         cb.UseProjectMatrix=false;cb.CollisionMask=LayerMask.None;Tick();Check(events.Exit==2,"Filter invalidates cached hit");

@@ -17,6 +17,10 @@ public sealed class Renderer2D : IDisposable
     private bool _initialized;
 
     private readonly Dictionary<(string Path, int Size), FontAtlas> _fonts = new();
+    private readonly Dictionary<(string? Root, string Source), string> _fontPaths = new();
+    private float[] _textVertices = [];
+    private int _textVertexArray, _textVertexBuffer;
+    public bool EnableTextBatching { get; set; } = true;
 
     public static string? FontProjectRoot { get; set; }
 
@@ -292,6 +296,9 @@ public sealed class Renderer2D : IDisposable
             anchor is UiAnchor.BottomLeft or UiAnchor.BottomCenter or UiAnchor.BottomRight ? 1f : 0f;
         float lineHeight = atlas.LineHeight * scale;
         float top = anchorPoint.Y - lines.Count * lineHeight * vertical;
+        int used = 0;
+        if (EnableTextBatching && _textVertices.Length < value.Length * 24)
+            Array.Resize(ref _textVertices, Math.Max(value.Length * 24, _textVertices.Length * 2));
 
         for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
@@ -310,31 +317,86 @@ public sealed class Renderer2D : IDisposable
                     var center = new Vector2(
                         x + (glyph.OffsetX + glyph.Width * .5f) * scale,
                         baseline + (glyph.OffsetY + glyph.Height * .5f) * scale);
-                    DrawGlyph(atlas.Texture, center,
-                        new Vector2(glyph.Width * scale, glyph.Height * scale), color,
-                        new Vector2((float)glyph.X / atlas.Width, (float)glyph.Y / atlas.Height),
-                        new Vector2((float)(glyph.X + glyph.Width) / atlas.Width,
-                            (float)(glyph.Y + glyph.Height) / atlas.Height));
+                    var glyphSize = new Vector2(glyph.Width * scale, glyph.Height * scale);
+                    var uvMin = new Vector2((float)glyph.X / atlas.Width, (float)glyph.Y / atlas.Height);
+                    var uvMax = new Vector2((float)(glyph.X + glyph.Width) / atlas.Width,
+                        (float)(glyph.Y + glyph.Height) / atlas.Height);
+                    if (EnableTextBatching) AppendTextQuad(center, glyphSize, uvMin, uvMax, ref used);
+                    else DrawGlyph(atlas.Texture, center, glyphSize, color, uvMin, uvMax);
                 }
                 x += glyph.Advance * scale;
                 previous = codepoint;
             }
         }
+        if (EnableTextBatching && used > 0) DrawTextBatch(atlas.Texture, color, used);
+    }
+
+    private void AppendTextQuad(Vector2 center, Vector2 size, Vector2 uvMin, Vector2 uvMax, ref int used)
+    {
+        Vector2 minimum = center - size * .5f, maximum = center + size * .5f;
+        void Vertex(float x, float y, float u, float v, int offset)
+        { _textVertices[offset] = x; _textVertices[offset + 1] = y; _textVertices[offset + 2] = u; _textVertices[offset + 3] = v; }
+        Vertex(minimum.X, minimum.Y, uvMin.X, uvMin.Y, used);
+        Vertex(maximum.X, minimum.Y, uvMax.X, uvMin.Y, used + 4);
+        Vertex(maximum.X, maximum.Y, uvMax.X, uvMax.Y, used + 8);
+        Vertex(maximum.X, maximum.Y, uvMax.X, uvMax.Y, used + 12);
+        Vertex(minimum.X, maximum.Y, uvMin.X, uvMax.Y, used + 16);
+        Vertex(minimum.X, minimum.Y, uvMin.X, uvMin.Y, used + 20);
+        used += 24;
+    }
+
+    private void DrawTextBatch(Texture2D texture, Vector4 color, int used)
+    {
+        if (_shader == null) return;
+        if (_textVertexArray == 0)
+        {
+            _textVertexArray = GL.GenVertexArray();
+            _textVertexBuffer = GL.GenBuffer();
+            GL.BindVertexArray(_textVertexArray);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _textVertexBuffer);
+            for (int i = 0; i < 2; i++)
+            {
+                GL.EnableVertexAttribArray(i);
+                GL.VertexAttribPointer(i, 2, VertexAttribPointerType.Float, false, 16, i * 8);
+            }
+        }
+        GL.Disable(EnableCap.DepthTest);
+        _shader.Use();
+        _shader.SetVector2("uPosition", Vector2.Zero);
+        _shader.SetVector2("uSize", Vector2.One);
+        _shader.SetFloat("uRotation", 0);
+        _shader.SetVector2("uUvMin", Vector2.Zero);
+        _shader.SetVector2("uUvMax", Vector2.One);
+        _shader.SetVector4("uColor", color);
+        _shader.SetInt("uTexture", 0);
+        _shader.SetInt("uUseTexture", 1);
+        texture.Bind(0);
+        GL.BindVertexArray(_textVertexArray);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _textVertexBuffer);
+        GL.BufferData(BufferTarget.ArrayBuffer, used * sizeof(float), _textVertices, BufferUsageHint.StreamDraw);
+        GL.DrawArrays(PrimitiveType.Triangles, 0, used / 4);
+        GL.BindVertexArray(0);
     }
 
     private string? ResolveFontPath(string? path)
     {
+        var cacheKey = (FontProjectRoot, path ?? string.Empty);
+        if (_fontPaths.TryGetValue(cacheKey, out var cached)) return cached;
         if (!string.IsNullOrWhiteSpace(path))
         {
             string candidate = Path.IsPathRooted(path) ? path :
                 Path.Combine(FontProjectRoot ?? Directory.GetCurrentDirectory(), path);
-            if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+            if (File.Exists(candidate)) return _fontPaths[cacheKey] = Path.GetFullPath(candidate);
         }
         string fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
         foreach (string name in new[] { "segoeui.ttf", "arial.ttf", "DejaVuSans.ttf" })
         {
             string candidate = Path.Combine(fonts, name);
-            if (File.Exists(candidate)) return candidate;
+            if (File.Exists(candidate))
+            {
+                if (string.IsNullOrWhiteSpace(path)) _fontPaths[cacheKey] = candidate;
+                return candidate;
+            }
         }
         return null;
     }
@@ -490,6 +552,11 @@ public sealed class Renderer2D : IDisposable
 
         foreach (FontAtlas font in _fonts.Values) font.Dispose();
         _fonts.Clear();
+        _fontPaths.Clear();
+        if (_textVertexBuffer != 0) GL.DeleteBuffer(_textVertexBuffer);
+        if (_textVertexArray != 0) GL.DeleteVertexArray(_textVertexArray);
+        _textVertexBuffer = _textVertexArray = 0;
+        _textVertices = [];
         _shader?.Dispose();
 
         GL.DeleteBuffer(

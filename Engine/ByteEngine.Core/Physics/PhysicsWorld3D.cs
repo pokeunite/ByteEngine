@@ -92,6 +92,7 @@ public sealed partial class PhysicsWorld3D
         }
 
         long stepStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        LastStaticSolveReuseCount = 0;
         LastCachedContactHits = 0;LastCandidateCount = 0;LastColliderGatherMs=LastIndexUpdateMs=LastCandidateQueryMs=0;
         float safeDelta =
             Math.Min(
@@ -233,6 +234,7 @@ public sealed partial class PhysicsWorld3D
 
     public void Reset()
     {
+        _staticSolveValid = false; _staticSolveStates.Clear(); _staticSolveContacts.Clear();
         _queryEntries.Clear();_queryIndices.Clear();_queryObjects.Clear();_queryUnique.Clear();
         _stepBodies.Clear();_stepJoints.Clear();_primitiveStates.Clear();_primitiveContacts.Clear();_expiredPrimitiveContacts.Clear();
         _framePositions.Clear();_staticIndex.Clear();_movingIndex.Clear();
@@ -257,6 +259,10 @@ public sealed partial class PhysicsWorld3D
         List<ColliderEntry> colliders = _stepColliders;
 
         PreparePrimitiveStates(colliders);
+        LastColliderCount = colliders.Count;
+        var matrix = scene.Classification.CollisionMatrix.LayerMasks;
+        if (TryReuseStaticSolve(colliders, matrix)) return;
+        BeginStaticSolve(colliders, matrix);
         BuildCandidatePairs(colliders);
         foreach (var candidate in _candidatePairs)
         {
@@ -318,6 +324,7 @@ public sealed partial class PhysicsWorld3D
 
                 _frameContacts[key] =
                     pair;
+                if (_staticSolveValid) _staticSolveContacts[key] = pair;
                 CacheContact(first, second, true, pair, key);
 
                 if (!trigger)

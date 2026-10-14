@@ -47,6 +47,7 @@ public sealed class AssetManager : IDisposable
     private readonly Dictionary<Guid, AssetRevision> _modelRevisions = new();
     private readonly Dictionary<Guid, AssetRevision> _animationProfileRevisions = new();
     private readonly Dictionary<(Guid Model, string Key), Mesh> _modelMeshes = new();
+    private readonly Dictionary<(ModelMeshReference Reference, int Level), Mesh> _modelLodMeshes = new();
     private readonly Dictionary<(Guid Model, string Key), Material> _modelMaterials = new();
     private readonly Dictionary<(Guid Model, string Key), Texture2D> _modelTextures = new();
     private readonly Dictionary<(Guid Model,string Key),byte[]> _modelTextureSources=new();
@@ -299,8 +300,16 @@ public sealed class AssetManager : IDisposable
 
     public Mesh GetModelLodMesh(ModelMeshReference reference,int level)
     {
-        string key=reference.SubAssetKey+".lod"+Math.Clamp(level,1,2);
-        return LoadModel(reference.Model).Meshes.Any(m=>m.Key==key)?GetModelMesh(reference.Model,key):GetModelMesh(reference.Model,reference.SubAssetKey);
+        var cacheKey = (reference, Math.Clamp(level, 1, 2));
+        if (_modelLodMeshes.TryGetValue(cacheKey, out var cached)) return cached;
+        string key = reference.SubAssetKey + ".lod" + cacheKey.Item2;
+        var model = LoadModel(reference.Model);
+        bool hasLod = false;
+        foreach (var mesh in model.Meshes)
+            if (mesh.Key == key) { hasLod = true; break; }
+        var resolved = GetModelMesh(reference.Model, hasLod ? key : reference.SubAssetKey);
+        _modelLodMeshes.Add(cacheKey, resolved);
+        return resolved;
     }
 
     public Material GetModelMaterial(AssetReference modelReference, string subAssetKey)
@@ -322,6 +331,7 @@ public sealed class AssetManager : IDisposable
 
     private void ReloadChangedResources()
     {
+        _modelLodMeshes.Clear();
         foreach (var guid in _vfxEffects.Keys.ToArray())
         {
             if (_affectedAssets != null && !_affectedAssets.Contains(guid)) continue;
@@ -599,6 +609,7 @@ public sealed class AssetManager : IDisposable
 
         TrackModelDependencies(record,refreshed);
         _models[guid] = refreshed;
+        _modelLodMeshes.Clear();
         _modelRevisions[guid] = CaptureRevision(record);
         foreach (ImportedMesh source in refreshed.Meshes)
             if (_modelMeshes.TryGetValue((guid, source.Key), out Mesh? mesh))
@@ -702,6 +713,7 @@ public sealed class AssetManager : IDisposable
         _runtimeTextures.Clear();
         foreach (Mesh mesh in _modelMeshes.Values.Distinct()) mesh.Dispose();
         _modelMeshes.Clear();
+        _modelLodMeshes.Clear();
         foreach (Texture2D texture in _modelTextures.Values.Distinct()) texture.Dispose();
         _modelTextures.Clear();
         _modelTextureSources.Clear();
