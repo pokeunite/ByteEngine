@@ -48,6 +48,8 @@ internal sealed class PointShadowShader3D : IDisposable
         layout(location=0) in vec3 aPosition;
         layout(location=2) in vec2 aUV;
 
+        layout(location=5) in mat4 aInstanceModel;
+        uniform int uInstanced;
         uniform mat4 uModel;
         uniform mat4 uLightViewProjection;
 
@@ -57,7 +59,7 @@ internal sealed class PointShadowShader3D : IDisposable
         void main()
         {
             vec4 world=
-                uModel*
+                (uInstanced==1?aInstanceModel:uModel)*
                 vec4(aPosition,1.0);
 
             vWorldPosition=world.xyz;

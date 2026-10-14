@@ -10,7 +10,7 @@ public static class GraphicsDiagnostics
     public static IReadOnlyCollection<RenderPassMeasurement> Passes=>_passes.Values;
     internal static void RecordPass(RenderPassMeasurement pass)=>_passes[pass.Viewport+"/"+pass.Pass]=pass;
     private static readonly Dictionary<string,object> _geometry=new();
-    internal static void RecordGeometry(string viewport,RenderWorldStats stats,long triangles,int instances)=>_geometry[viewport]=new{stats,triangles,instancedObjects=instances};
+    internal static void RecordGeometry(string viewport,RenderWorldStats stats,long triangles,int instances,int occluded=0,double visibilityMs=0)=>_geometry[viewport]=new{stats,triangles,instancedObjects=instances,occludedMeshes=occluded,visibilityCpuMs=visibilityMs};
     public static void ExportCapture(string path,ByteEngine.Core.Scene.Scene scene)
     {
         var data=new {utc=DateTime.UtcNow,scene=scene.Name,simulation=scene.LastFrameMetrics,passes=_passes.Values.ToArray(),geometry=_geometry,

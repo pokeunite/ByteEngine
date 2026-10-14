@@ -6,5 +6,6 @@ public sealed class DuneSprintContract3D:Component
  public float OpponentSpeed{get;set;}=22;
  public int ContractIndex{get;set;}=4;
  public string RaceKind{get;set;}="Sprint";
+ public bool DragLaneAssist{get;set;}=true;
  public Guid DrivingRouteObject{get;set;}
 }

@@ -1,0 +1,5 @@
+combat-blast
+Source: https://freesound.org/people/qubodup/sounds/741175/
+Author: qubodup
+License: CC0 1.0 https://creativecommons.org/publicdomain/zero/1.0/
+Converted from the public high-quality preview; mono, trimmed, gain normalized and tail faded.

@@ -6,7 +6,7 @@ using ByteEngine.Core.Physics;
 
 namespace ByteEngine.Core.Scene;
 
-public sealed class Scene
+public sealed partial class Scene
 {
     public Runtime.FixedStepClock SimulationClock { get; } = new();
     /// <summary>Opt in after migrating force/timer logic to OnFixedUpdate. Legacy scenes keep frame simulation.</summary>
@@ -156,6 +156,7 @@ public sealed class Scene
             return;
         }
 
+        InvalidatePhysicsRegistry();
         _gameObjects.Add(
             gameObject);
 
@@ -190,6 +191,7 @@ public sealed class Scene
         GameObject parent =
             gameObject.Parent;
 
+        InvalidatePhysicsRegistry();
         _gameObjects.Remove(gameObject);
 
         int insertAfter =
@@ -232,6 +234,7 @@ public sealed class Scene
             return false;
         }
 
+        InvalidatePhysicsRegistry();
         _gameObjects.Remove(moving);
 
         int siblingIndex =
@@ -505,6 +508,7 @@ public sealed class Scene
 
         _pendingDestroy.Remove(gameObject.Id);
 
+        InvalidatePhysicsRegistry();
         _gameObjects.Remove(gameObject);
 
         UnregisterClassification(gameObject);

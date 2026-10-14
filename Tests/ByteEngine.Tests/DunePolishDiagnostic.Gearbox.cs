@@ -9,6 +9,7 @@ internal sealed partial class DunePolishDiagnostic
 {
  void RunDragGearbox(string root)
  {
+  if(Environment.GetEnvironmentVariable("DUNE_DRAG_BALANCE_ONLY")=="1"){RunDragBalance(root);return;}
   void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
   Check(LandVehiclePhysics.FinalDriveRatio([])==1,"Legacy vehicle ratio remains 1:1");
   Check(LandVehiclePhysics.FinalDriveRatio([new(){Type=39,Power=2},new(){Type=39,Power=2}])==2,"Gearboxes cannot stack torque multipliers");
@@ -23,6 +24,7 @@ internal sealed partial class DunePolishDiagnostic
   for(int i=0;i<10;i++)good.Update(.1f,13,32,1);
   Check(!good.Shift(-1,13,32,1)&&good.Gear==2,"Unsafe downshift cannot over-rev the engine");
   var blocks=JsonSerializer.Deserialize<List<PlacedBlock>>(File.ReadAllText(Path.Combine(root,"Assets/RecoveryBlueprints/Recovery-demo.json")),BuildStore.Json)!;
+  foreach(var b in blocks.Where(b=>GearboxMounts.IsEngine(b.Type)))b.SpeedLimit=32;
   var saves=Path.Combine(root,"Saves");Directory.CreateDirectory(saves);
   File.WriteAllText(Path.Combine(saves,"vehicle.json"),JsonSerializer.Serialize(blocks,BuildStore.Json));
   File.WriteAllText(Path.Combine(saves,"workshop-tutorial.json"),"{\"version\":2,\"complete\":true}");
@@ -42,7 +44,7 @@ internal sealed partial class DunePolishDiagnostic
   var surface=scene.GameObjects.SelectMany(o=>o.Components).OfType<DuneWorldObstacle3D>().Single(o=>o.DriveSurface);
   Check(Math.Abs(surface.Transform.WorldPosition.Y+surface.Size.Y/2-.12f)<.0001f,"Solid road collider aligns with asphalt elevation");
   var catalog=JsonSerializer.Deserialize<List<DunePart>>(File.ReadAllText(Path.Combine(root,"Assets/DuneParts/catalog.json")),BuildStore.Json)!.ToDictionary(p=>p.Id);
-  var engine=blocks.First(b=>GearboxMounts.IsEngine(b.Type));var gearbox=new PlacedBlock{Id=blocks.Max(b=>b.Id)+1,Type=39,Parent=engine.Id,Power=1};gearbox.Pose(GearboxMounts.Position(engine,catalog[engine.Type]),engine.Q);blocks.Add(gearbox);
+  var engine=blocks.First(b=>GearboxMounts.IsEngine(b.Type));var gearbox=new PlacedBlock{Id=blocks.Max(b=>b.Id)+1,Type=39,Parent=engine.Id,Power=1};gearbox.Pose(GearboxMounts.Position(engine,catalog[engine.Type]),GearboxMounts.Rotation(engine));blocks.Add(gearbox);
   Check(GearboxMounts.Connected(gearbox,blocks,catalog),"Gearbox input connector snaps to the engine rear casting");
   var wrong=new PlacedBlock{Id=99,Type=39,Parent=0,Position=[0,2,2]};Check(!GearboxMounts.Connected(wrong,blocks,catalog),"A gearbox on the frame does not satisfy the engine attachment requirement");
   File.WriteAllText(Path.Combine(saves,"vehicle.json"),JsonSerializer.Serialize(blocks,BuildStore.Json));workshop.Command("Load vehicle");
@@ -62,11 +64,17 @@ internal sealed partial class DunePolishDiagnostic
   Check(physics.Transmission?.Gear==1&&new Vector2(workshop.PhysicalVelocity.X,workshop.PhysicalVelocity.Z).Length()<11,"Staying in first limits road speed");
   Console.WriteLine($"FIRST gear speed={workshop.PhysicalVelocity.Length():0.00} rpm={physics.Transmission!.Rpm:0} state={JsonSerializer.Serialize(workshop.MotorsportDiagnostics)}");
   Check(workshop.ShiftPlayerGear(1)&&physics.Transmission!.Gear==2,"Player gear input changes the physical transmission");
-  var animation=scene.GameObjects.SelectMany(o=>o.Components).OfType<DuneGearboxAnimation3D>().Single();animation.Advance(.055f);Check(animation.LeverResolved&&animation.LeverAngle>0,"Upshift moves the actual lever node");
-  for(int i=0;i<240;i++)Tick(scene,new(.5f),false,ByteEngine.Core.Key.W);
+  var visuals=(Dictionary<int,ByteEngine.Core.Scene.GameObject>)typeof(DuneWorkshop3D).GetField("_visuals",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(workshop)!;
+  var animation=visuals[gearbox.Id].GetComponent<DuneGearboxAnimation3D>()!;animation.Advance(.055f);Check(animation.LeverResolved&&animation.LeverAngle>0,"Upshift moves the actual lever node");
+  bool capturedGreen=false;for(int i=0;i<240;i++){Tick(scene,new(.5f),false,ByteEngine.Core.Key.W);if(!capturedGreen&&physics.Transmission!.ShiftReady){Capture(scene,Path.Combine(root,"Preview/gearbox-green-shift-cue.png"),false);capturedGreen=true;}}
   Console.WriteLine($"SECOND gear speed={workshop.PhysicalVelocity.Length():0.00} rpm={physics.Transmission!.Rpm:0} state={JsonSerializer.Serialize(workshop.MotorsportDiagnostics)}");
   Check(new Vector2(workshop.PhysicalVelocity.X,workshop.PhysicalVelocity.Z).Length()>10,"Higher gear allows speed beyond first gear");
+  animation.Shift(-1);animation.Advance(.055f);Check(animation.LeverResolved&&animation.LeverAngle<0,"Downshift moves the lever in the opposite direction");
   Capture(scene,Path.Combine(root,"Preview/drag-gearbox-driving.png"),false);
+  var camera=scene.ActiveCamera!;var target=(visuals[engine.Id].Transform.WorldPosition+visuals[gearbox.Id].Transform.WorldPosition)*.5f;
+  camera.Transform.WorldPosition=target+new Vector3(2.6f,1.4f,1.8f);var forward=Vector3.Normalize(target-camera.Transform.WorldPosition);camera.Transform.WorldRotation=Quaternion.CreateFromYawPitchRoll(MathF.Atan2(-forward.X,-forward.Z),MathF.Asin(forward.Y),0);
+  foreach(var o in scene.GameObjects.Where(o=>o.GetComponent<ByteEngine.Core.Graphics.UiCanvas>()!=null))o.Active=false;
+  Capture(scene,Path.Combine(root,"Preview/gearbox-engine-connection.png"),false);
   Console.WriteLine("DRAG GEARBOX PASS");Scenes.UnloadScene();Close();
  }
 }

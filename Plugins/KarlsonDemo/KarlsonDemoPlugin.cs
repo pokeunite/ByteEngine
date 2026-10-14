@@ -10,6 +10,8 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Equip any number of independently configured weapon instances; optional input and HUD bindings.", "fps inventory guns"));
         context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Editable tuning and presentation settings. Author variants as weapon Blueprints.", "ammo hitscan projectile pistol spread"));
         context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Independent current and reserve ammo; shared behavior for every weapon definition.", "ammo state reload"));
+        context.RegisterSimpleComponent<MilkDepotCourse3D>("MilkDepotCourse3D", new("Milk Depot Course", "Karlson", "Editable targets, milk goal, checkpoints and fall recovery.", "level objective checkpoint"));
+        context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
         WeaponEvents.Register(context);
     }
 }
@@ -47,6 +49,9 @@ internal static class WeaponEvents
         }, Arg("currentVariable","Magazine variable name",VariableValue.FromString("Ammo")), Arg("reserveVariable","Reserve variable name",VariableValue.FromString("Reserve")));
         Action("tuneShot", "Set damage, fire rate and spread", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.DamagePerPellet=Num(i,e,"damage");d.RoundsPerMinute=Num(i,e,"rpm");d.SpreadDegrees=Num(i,e,"spread");d.PelletsPerShot=Math.Clamp((int)Num(i,e,"pellets"),1,32); } },
             Arg("damage","Damage per pellet",VariableValue.FromNumber(25)),Arg("rpm","Rounds per minute",VariableValue.FromNumber(270)),Arg("spread","Spread cone degrees",VariableValue.FromNumber(0)),Arg("pellets","Pellets per shot",VariableValue.FromNumber(1)));
+        Action("reloadTiming", "Set reload timing", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.ReloadSeconds=Num(i,e,"seconds"); d.EmptyReloadSeconds=Num(i,e,"emptySeconds"); d.ReloadSpeedMultiplier=Num(i,e,"speed"); d.AllowReloadInterrupt=Bool(i,e,"interrupt"); } },
+            Arg("seconds","Reload seconds (per shell for shotgun)",VariableValue.FromNumber(1)), Arg("emptySeconds","Empty reload seconds",VariableValue.FromNumber(1.6)), Arg("speed","Reload speed multiplier",VariableValue.FromNumber(1)), Arg("interrupt","Allow per-shell reload interruption",VariableValue.FromBoolean(true)));
+        Action("muzzleFlash", "Set muzzle flash", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.MuzzleFlashEnabled=Bool(i,e,"enabled"); d.MuzzleFlashSize=Num(i,e,"size"); } }, enabled, Arg("size","Flash size",VariableValue.FromNumber(.6)));
         Condition("fired", "Weapon fired this frame", (w,i,e) => w.SelectedWeapon?.FiredThisFrame==true);
         Condition("hit", "Hitscan hit this frame", (w,i,e) => w.SelectedWeapon?.HitThisFrame==true);
         Condition("reloadComplete", "Reload completed this frame", (w,i,e) => w.SelectedWeapon?.ReloadCompletedThisFrame==true);

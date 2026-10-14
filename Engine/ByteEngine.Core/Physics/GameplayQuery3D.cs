@@ -179,6 +179,14 @@ public static class GameplayQuery3D
         float closest =
             maxDistance;
 
+        // One conservative swept-capsule broadphase snapshot serves every spine sample.
+        // QueryBounds refreshes authored transforms before this call; no scene mutation occurs in Cast.
+        var candidates = float.IsFinite(maxDistance)
+            ? scene.Physics.QueryBounds(scene,
+                Vector3.Min(Vector3.Min(pointA,pointB),Vector3.Min(pointA+rayDirection*maxDistance,pointB+rayDirection*maxDistance))-new Vector3(radius),
+                Vector3.Max(Vector3.Max(pointA,pointB),Vector3.Max(pointA+rayDirection*maxDistance,pointB+rayDirection*maxDistance))+new Vector3(radius))
+            : scene.GameObjects;
+
         for (int index =
                  0;
              index <
@@ -215,7 +223,7 @@ public static class GameplayQuery3D
                     source,
                     bypassCollisionMatrix,
                     includeTriggers,
-                    true))
+                    true, candidates))
             {
                 continue;
             }
@@ -303,10 +311,9 @@ public static class GameplayQuery3D
                 continue;
             }
 
-            foreach (Collider3D collider
-                     in gameObject.Components
-                         .OfType<Collider3D>())
+            foreach (Component component in gameObject.Components)
             {
+                if (component is not Collider3D collider) continue;
                 if (!collider.Enabled ||
                     (
                         !includeTriggers &&
@@ -355,7 +362,8 @@ public static class GameplayQuery3D
         GameObject? source,
         bool bypassCollisionMatrix,
         bool includeTriggers,
-        bool ignoreInitialOverlapWhenMovingOut)
+        bool ignoreInitialOverlapWhenMovingOut,
+        IReadOnlyList<GameObject>? candidates = null)
     {
         ArgumentNullException.ThrowIfNull(
             scene);
@@ -390,9 +398,9 @@ public static class GameplayQuery3D
                 source);
 
         foreach (GameObject gameObject
-                 in float.IsFinite(maxDistance)
+                 in candidates ?? (float.IsFinite(maxDistance)
                      ? scene.Physics.QueryBounds(scene, Vector3.Min(origin, origin + rayDirection * maxDistance) - new Vector3(radius), Vector3.Max(origin, origin + rayDirection * maxDistance) + new Vector3(radius))
-                     : scene.GameObjects)
+                     : scene.GameObjects))
         {
             if (!gameObject.ActiveInHierarchy ||
                 ShouldIgnore(
@@ -405,10 +413,9 @@ public static class GameplayQuery3D
                 continue;
             }
 
-            foreach (Collider3D collider
-                     in gameObject.Components
-                         .OfType<Collider3D>())
+            foreach (Component component in gameObject.Components)
             {
+                if (component is not Collider3D collider) continue;
                 if (!collider.Enabled ||
                     (
                         !includeTriggers &&

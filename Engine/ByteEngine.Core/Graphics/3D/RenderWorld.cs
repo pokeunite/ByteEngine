@@ -13,6 +13,11 @@ public sealed class RenderWorld
 
     private RenderView3D? _view;
     private readonly List<RenderSubmission> _visible = new();
+    private readonly RenderBatcher.Builder _batchBuilder=new();
+    private readonly SoftwareOcclusionCuller _occlusion=new();
+    public bool EnableOcclusionCulling {get;set;}=true;
+    public int OccludedMeshes {get;private set;}
+    public double OcclusionMilliseconds {get;private set;}
     private static readonly Comparison<RenderSubmission> SubmissionComparison = (a, b) =>
     {
         int queue = ((int)a.Queue).CompareTo((int)b.Queue);
@@ -295,6 +300,15 @@ public sealed class RenderWorld
                     _lighting)
                 : PointShadowPassResult.None;
 
+        OccludedMeshes=0;OcclusionMilliseconds=0;
+        if(EnableOcclusionCulling)
+        {
+            long occlusionStart=System.Diagnostics.Stopwatch.GetTimestamp();
+            _occlusion.Cull(visible,view);
+            OccludedMeshes=_occlusion.LastCulledCount;
+            OcclusionMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(occlusionStart).TotalMilliseconds;
+            culled+=OccludedMeshes;
+        }
         visible.Sort(SubmissionComparison);
 
         int drawCalls =
@@ -302,9 +316,11 @@ public sealed class RenderWorld
         MainTriangles=0;InstancedObjects=0;
 
         using var mainTiming=context.Renderer3D.ProfilePass(context,"Main geometry");
+        var batches=_batchBuilder.Build(visible);
+        context.Renderer3D.PrepareInstanceStream(batches);
         context.Renderer3D.BeginMainBatch();
         try {
-        foreach (var batch in RenderBatcher.Build(visible))
+        foreach (var batch in batches)
         {
             var submission=batch.First;
             MainTriangles+=(long)submission.Mesh.IndexCount/3*batch.Instances.Count;
@@ -348,7 +364,7 @@ public sealed class RenderWorld
                 shadowPass.DrawCalls +
                 pointShadowPass.DrawCalls,
                 environmentDrawCalls);
-        GraphicsDiagnostics.RecordGeometry(context.ViewportName,LastStats,MainTriangles,InstancedObjects);
+        GraphicsDiagnostics.RecordGeometry(context.ViewportName,LastStats,MainTriangles,InstancedObjects,OccludedMeshes,OcclusionMilliseconds);
 
         _submissions.Clear();
     }

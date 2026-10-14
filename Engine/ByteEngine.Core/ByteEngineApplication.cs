@@ -31,6 +31,8 @@ public class ByteEngineApplication : GameWindow
         ClientSize.Y;
 
     public bool IsGameInputCaptured => Input.IsGameInputCaptured;
+    /// <summary>Opt into monitor-synchronized presentation at startup. Uncapped presentation is the default; simulation keeps its fixed cadence.</summary>
+    public bool SynchronizePresentation {get;set;}
 
     public void CaptureGameInput(bool grabCursor = true)
     {
@@ -101,8 +103,7 @@ public class ByteEngineApplication : GameWindow
             1.0f
         );
 
-        VSync =
-            VSyncMode.On;
+        VSync = SynchronizePresentation ? VSyncMode.On : VSyncMode.Off;
 
         CenterWindow();
 

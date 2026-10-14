@@ -22,7 +22,7 @@ namespace ByteEngine.Core.Physics;
 /// Iterative linear/angular contacts, reusable spatial trees, sleeping and
 /// opt-in swept collision protection. Specialized vehicle physics remains separate.
 /// </summary>
-public sealed class PhysicsWorld3D
+public sealed partial class PhysicsWorld3D
 {
     private const float Epsilon =
         0.000001f;
@@ -41,12 +41,14 @@ public sealed class PhysicsWorld3D
 
     // Reuse snapshots across steps; retain component order and all compound colliders.
     private readonly List<Rigidbody3D> _stepBodies = new();
+    private readonly List<IPhysicsConstraint3D> _stepJoints = new();
     private readonly Dictionary<Rigidbody3D,Vector3> _framePositions=new();
     private readonly List<ColliderEntry> _stepColliders = new();
 
     private readonly List<int> _sweepOrder = new();
     private readonly List<(int First, int Second)> _candidatePairs = new();
     public int LastCandidateCount { get; private set; }
+    public double LastStepMilliseconds { get; private set; }
     public double LastColliderGatherMs {get;private set;}
     public double LastIndexUpdateMs {get;private set;}
     public double LastCandidateQueryMs {get;private set;}
@@ -89,7 +91,8 @@ public sealed class PhysicsWorld3D
             return;
         }
 
-        LastCandidateCount = 0;LastColliderGatherMs=LastIndexUpdateMs=LastCandidateQueryMs=0;
+        long stepStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        LastCachedContactHits = 0;LastCandidateCount = 0;LastColliderGatherMs=LastIndexUpdateMs=LastCandidateQueryMs=0;
         float safeDelta =
             Math.Min(
                 deltaTime,
@@ -118,16 +121,19 @@ public sealed class PhysicsWorld3D
             substeps;
 
         _stepBodies.Clear();
-        foreach (GameObject gameObject in scene.GameObjects)
-        {
-            if (!gameObject.ActiveInHierarchy) continue;
-            foreach (Component component in gameObject.Components)
-                if (component is Rigidbody3D { Enabled: true } body)
-                    _stepBodies.Add(body);
-        }
-        List<Rigidbody3D> bodies = _stepBodies;
+        var registeredBodies=scene.PhysicsBodies;
+        for(int i=0;i<registeredBodies.Count;i++)
+            if(registeredBodies[i] is {Enabled:true} body && body.GameObject.ActiveInHierarchy)_stepBodies.Add(body);
+        List<Rigidbody3D> bodies=_stepBodies;
         _framePositions.Clear();foreach(var body in bodies)_framePositions[body]=body.Transform.WorldPosition;
-        var joints=scene.GameObjects.Where(o=>o.ActiveInHierarchy).SelectMany(o=>o.Components.Where(c=>c.Enabled).OfType<IPhysicsConstraint3D>()).ToArray();
+        _stepJoints.Clear();
+        var registeredConstraints=scene.PhysicsConstraints;
+        for(int i=0;i<registeredConstraints.Count;i++)
+            if(registeredConstraints[i].Enabled && registeredConstraints[i].GameObject.ActiveInHierarchy)
+                _stepJoints.Add((IPhysicsConstraint3D)registeredConstraints[i]);
+        var joints=_stepJoints;
+        int iterations=bodies.Any(body=>body.BodyType==RigidbodyBodyType3D.Dynamic)||joints.Count>0
+            ? Math.Clamp(SolverIterations,1,32) : 1;
 
         _frameContacts.Clear();
 
@@ -145,21 +151,22 @@ public sealed class PhysicsWorld3D
                 if (body.ContinuousCollision && !body.IsSleeping) SweepBody(scene, body, before);
             }
 
-            for (int iteration = 0; iteration < Math.Clamp(SolverIterations, 1, 32); iteration++)
+            for (int iteration = 0; iteration < iterations; iteration++)
             {
                 SolveContacts(scene);
                 foreach (var joint in joints) joint.Solve(stepDelta);
-                if (_frameContacts.Count==0 && joints.Length==0) break;
+                if (_frameContacts.Count==0 && joints.Count==0) break;
             }
         }
 
-        var quietIslands=QuietContactIslands(bodies);
-        var supportedBodies=new HashSet<Rigidbody3D>();foreach(var pair in _frameContacts.Values)if(!pair.IsTrigger){if(FindBodyForCollider(pair.A) is {} a)supportedBodies.Add(a);if(FindBodyForCollider(pair.B) is {} b)supportedBodies.Add(b);}
+        bool hasDynamicBodies = bodies.Any(body => body.BodyType == RigidbodyBodyType3D.Dynamic);
+        var quietIslands=hasDynamicBodies ? QuietContactIslands(bodies) : null;
+        var supportedBodies=new HashSet<Rigidbody3D>();if(hasDynamicBodies) foreach(var pair in _frameContacts.Values)if(!pair.IsTrigger){if(FindBodyForCollider(pair.A) is {} a)supportedBodies.Add(a);if(FindBodyForCollider(pair.B) is {} b)supportedBodies.Add(b);}
         foreach (Rigidbody3D body
                  in bodies)
         {
             bool supported = supportedBodies.Contains(body);
-            body.UpdateSleep(safeDelta, supported, supported && quietIslands.Contains(body));
+            body.UpdateSleep(safeDelta, supported, supported && quietIslands!.Contains(body));
             body.EndPhysicsFrame();
         }
 
@@ -173,6 +180,7 @@ public sealed class PhysicsWorld3D
             _previousContacts[pair.Key] =
                 pair.Value;
         }
+        LastStepMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(stepStart).TotalMilliseconds;
     }
 
     private HashSet<Rigidbody3D> QuietContactIslands(List<Rigidbody3D> bodies)
@@ -225,7 +233,8 @@ public sealed class PhysicsWorld3D
 
     public void Reset()
     {
-        _stepBodies.Clear();
+        _queryEntries.Clear();_queryIndices.Clear();_queryObjects.Clear();_queryUnique.Clear();
+        _stepBodies.Clear();_stepJoints.Clear();_primitiveStates.Clear();_primitiveContacts.Clear();_expiredPrimitiveContacts.Clear();
         _framePositions.Clear();_staticIndex.Clear();_movingIndex.Clear();
         _stepColliders.Clear();
         _previousContacts.Clear();
@@ -237,17 +246,17 @@ public sealed class PhysicsWorld3D
     {
         long gatherStart=System.Diagnostics.Stopwatch.GetTimestamp();
         _stepColliders.Clear();
-        foreach (GameObject gameObject in scene.GameObjects)
+        var registeredColliders=scene.PhysicsColliders;
+        for(int i=0;i<registeredColliders.Count;i++)
         {
-            if (!gameObject.ActiveInHierarchy) continue;
-            foreach (Component component in gameObject.Components)
-                if (component is Collider3D { Enabled: true } collider)
-                    _stepColliders.Add(new ColliderEntry(gameObject, collider,
-                        FindBodyForCollider(gameObject), CalculateBounds(collider)));
+            var collider=registeredColliders[i];var obj=collider.GameObject;
+            if(collider.Enabled && obj.ActiveInHierarchy)
+                _stepColliders.Add(new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider)));
         }
         LastColliderGatherMs+=System.Diagnostics.Stopwatch.GetElapsedTime(gatherStart).TotalMilliseconds;
         List<ColliderEntry> colliders = _stepColliders;
 
+        PreparePrimitiveStates(colliders);
         BuildCandidatePairs(colliders);
         foreach (var candidate in _candidatePairs)
         {
@@ -274,6 +283,7 @@ public sealed class PhysicsWorld3D
                     continue;
                 }
 
+                if (TryCachedContact(first, second)) continue;
                 if (!TryContact(
                         first.Collider,
                         second.Collider,
@@ -281,6 +291,7 @@ public sealed class PhysicsWorld3D
                         out Vector3 normalFromFirstToSecond,
                         out float penetration))
                 {
+                    CacheContact(first, second, false);
                     continue;
                 }
 
@@ -307,6 +318,7 @@ public sealed class PhysicsWorld3D
 
                 _frameContacts[key] =
                     pair;
+                CacheContact(first, second, true, pair, key);
 
                 if (!trigger)
                 {
@@ -353,20 +365,29 @@ public sealed class PhysicsWorld3D
     {
         if (!float.IsFinite(minimum.X + minimum.Y + minimum.Z + maximum.X + maximum.Y + maximum.Z))
             return scene.GameObjects;
-        var entries = new List<ColliderEntry>();
-        foreach (var obj in scene.GameObjects)
-            if (obj.ActiveInHierarchy)
-                foreach (var collider in obj.Components.OfType<Collider3D>())
-                    if (collider.Enabled) entries.Add(new(obj, collider, FindBodyForCollider(obj), CalculateBounds(collider)));
-        _staticIndex.Update(entries, false);
-        _movingIndex.Update(entries, true);
-        var results = new List<int>();
-        var bounds = new Bounds3D(Vector3.Min(minimum, maximum), Vector3.Max(minimum, maximum));
-        _staticIndex.Query(bounds, results);
-        _movingIndex.Query(bounds, results);
-        results.Sort();
-        return results.Select(i => entries[i].GameObject).Distinct().ToArray();
+        var entries = _queryEntries;
+        entries.Clear();
+        var registeredColliders=scene.PhysicsColliders;
+        for(int i=0;i<registeredColliders.Count;i++)
+        {
+            var collider=registeredColliders[i];var obj=collider.GameObject;
+            if(collider.Enabled && obj.ActiveInHierarchy)
+                entries.Add(new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider)));
+        }
+        _staticIndex.Update(entries,false);_movingIndex.Update(entries,true);
+        var results=_queryIndices;results.Clear();
+        var bounds=new Bounds3D(Vector3.Min(minimum,maximum),Vector3.Max(minimum,maximum));
+        _staticIndex.Query(bounds,results);_movingIndex.Query(bounds,results);results.Sort();
+        _queryObjects.Clear();_queryUnique.Clear();
+        foreach(int index in results) if(_queryUnique.Add(entries[index].GameObject))_queryObjects.Add(entries[index].GameObject);
+        // The caller owns a stable snapshot, including when it starts a nested query.
+        return _queryObjects.ToArray();
     }
+
+    private readonly List<ColliderEntry> _queryEntries=new();
+    private readonly List<int> _queryIndices=new();
+    private readonly List<GameObject> _queryObjects=new();
+    private readonly HashSet<GameObject> _queryUnique=new();
 
     // Median BVH: static nodes are retained until membership or bounds change.
     // Moving nodes live in a separate tree so moving one body does not rebuild scenery.
@@ -908,39 +929,37 @@ public sealed class PhysicsWorld3D
         out Vector3 normal,
         out float penetration)
     {
-        Vector3[] firstAxes =
+        Span<Vector3> firstAxes = stackalloc Vector3[3]
         {
             first.AxisX,
             first.AxisY,
             first.AxisZ
         };
 
-        Vector3[] secondAxes =
+        Span<Vector3> secondAxes = stackalloc Vector3[3]
         {
             second.AxisX,
             second.AxisY,
             second.AxisZ
         };
 
-        float[] firstHalf =
+        Span<float> firstHalf = stackalloc float[3]
         {
             first.HalfSize.X,
             first.HalfSize.Y,
             first.HalfSize.Z
         };
 
-        float[] secondHalf =
+        Span<float> secondHalf = stackalloc float[3]
         {
             second.HalfSize.X,
             second.HalfSize.Y,
             second.HalfSize.Z
         };
 
-        float[,] rotation =
-            new float[3, 3];
+        Span<float> rotation = stackalloc float[9];
 
-        float[,] absoluteRotation =
-            new float[3, 3];
+        Span<float> absoluteRotation = stackalloc float[9];
 
         for (int row =
                  0;
@@ -954,14 +973,14 @@ public sealed class PhysicsWorld3D
                  3;
                  column++)
             {
-                rotation[row, column] =
+                rotation[(row) * 3 + (column)] =
                     Vector3.Dot(
                         firstAxes[row],
                         secondAxes[column]);
 
-                absoluteRotation[row, column] =
+                absoluteRotation[(row) * 3 + (column)] =
                     MathF.Abs(
-                        rotation[row, column]) +
+                        rotation[(row) * 3 + (column)]) +
                     0.00001f;
             }
         }
@@ -970,7 +989,7 @@ public sealed class PhysicsWorld3D
             second.Center -
             first.Center;
 
-        float[] translated =
+        Span<float> translated = stackalloc float[3]
         {
             Vector3.Dot(
                 centerDelta,
@@ -1058,11 +1077,11 @@ public sealed class PhysicsWorld3D
 
             float secondRadius =
                 secondHalf[0] *
-                    absoluteRotation[index, 0] +
+                    absoluteRotation[(index) * 3 + (0)] +
                 secondHalf[1] *
-                    absoluteRotation[index, 1] +
+                    absoluteRotation[(index) * 3 + (1)] +
                 secondHalf[2] *
-                    absoluteRotation[index, 2];
+                    absoluteRotation[(index) * 3 + (2)];
 
             if (!TestAxis(
                     firstAxes[index],
@@ -1085,11 +1104,11 @@ public sealed class PhysicsWorld3D
         {
             float firstRadius =
                 firstHalf[0] *
-                    absoluteRotation[0, index] +
+                    absoluteRotation[(0) * 3 + (index)] +
                 firstHalf[1] *
-                    absoluteRotation[1, index] +
+                    absoluteRotation[(1) * 3 + (index)] +
                 firstHalf[2] *
-                    absoluteRotation[2, index];
+                    absoluteRotation[(2) * 3 + (index)];
 
             float secondRadius =
                 secondHalf[index];
@@ -1168,22 +1187,22 @@ public sealed class PhysicsWorld3D
 
                 float firstRadius =
                     firstHalf[firstNext] *
-                        absoluteRotation[firstOther, secondAxis] +
+                        absoluteRotation[(firstOther) * 3 + (secondAxis)] +
                     firstHalf[firstOther] *
-                        absoluteRotation[firstNext, secondAxis];
+                        absoluteRotation[(firstNext) * 3 + (secondAxis)];
 
                 float secondRadius =
                     secondHalf[secondNext] *
-                        absoluteRotation[firstAxis, secondOther] +
+                        absoluteRotation[(firstAxis) * 3 + (secondOther)] +
                     secondHalf[secondOther] *
-                        absoluteRotation[firstAxis, secondNext];
+                        absoluteRotation[(firstAxis) * 3 + (secondNext)];
 
                 float distance =
                     MathF.Abs(
                         translated[firstOther] *
-                            rotation[firstNext, secondAxis] -
+                            rotation[(firstNext) * 3 + (secondAxis)] -
                         translated[firstNext] *
-                            rotation[firstOther, secondAxis]);
+                            rotation[(firstOther) * 3 + (secondAxis)]);
 
                 if (!TestAxis(
                         axis,
@@ -1972,48 +1991,10 @@ public sealed class PhysicsWorld3D
         }
     }
 
-    private readonly record struct ContactKey(
-        Guid FirstObject,
-        string FirstCollider,
-        Guid SecondObject,
-        string SecondCollider)
+    private readonly record struct ContactKey(Collider3D FirstCollider, Collider3D SecondCollider)
     {
-        public static ContactKey Create(
-            PhysicsContactPair3D pair)
-        {
-            string firstType =
-                pair.ColliderA
-                    .GetType()
-                    .FullName ??
-                pair.ColliderA.GetType().Name;
-            firstType += ":" + ComponentOrdinal(pair.A,pair.ColliderA);
-
-            string secondType =
-                pair.ColliderB
-                    .GetType()
-                    .FullName ??
-                pair.ColliderB.GetType().Name;
-            secondType += ":" + ComponentOrdinal(pair.B,pair.ColliderB);
-
-            if (pair.A.Id.CompareTo(
-                    pair.B.Id) <=
-                0)
-            {
-                return
-                    new ContactKey(
-                        pair.A.Id,
-                        firstType,
-                        pair.B.Id,
-                        secondType);
-            }
-
-            return
-                new ContactKey(
-                    pair.B.Id,
-                    secondType,
-                    pair.A.Id,
-                    firstType);
-        }
+        public static ContactKey Create(PhysicsContactPair3D pair) =>
+            pair.A.Id.CompareTo(pair.B.Id) <= 0 ? new(pair.ColliderA,pair.ColliderB) : new(pair.ColliderB,pair.ColliderA);
     }
 
     private enum ContactPhase

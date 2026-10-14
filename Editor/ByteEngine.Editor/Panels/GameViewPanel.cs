@@ -14,6 +14,7 @@ internal sealed class GameViewPanel : IDisposable
     private bool _pointerAimInputCaptured;
 
     public bool IsOpen { get; set; } = true;
+    public bool IsVisible { get; private set; }
 
     public void RequestFocus()
     {
@@ -45,6 +46,7 @@ internal sealed class GameViewPanel : IDisposable
             ImGuiWindowFlags.NoScrollWithMouse);
 
         IsOpen = isOpen;
+        IsVisible = visible && isOpen;
 
         if (!visible)
         {

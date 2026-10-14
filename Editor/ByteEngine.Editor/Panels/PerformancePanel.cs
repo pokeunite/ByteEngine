@@ -104,6 +104,9 @@ internal sealed class PerformancePanel
         }
 
         DrawFrameSection();
+        DrawMetric("Editor presentation wait",$"{ByteEngineApplication.LastSwapMilliseconds:0.00} ms");
+        foreach(var panel in EditorFrameProfile.Panels)
+            DrawMetric("Editor / "+panel.Key,$"{panel.Value.Milliseconds:0.00} ms / {panel.Value.AllocatedBytes/1024.0:0.0} KB");
         DrawProcessSection();
         ImGui.SeparatorText("GRAPHICS / LAST VIEW");
         DrawMetric("Sky / shadows / geometry CPU",$"{ByteEngine.Core.Graphics.ThreeD.GraphicsDiagnostics.GeometryCpuMs:0.00} ms");

@@ -1,6 +1,23 @@
 param([ValidateSet('Debug','Release')][string]$Configuration = 'Release')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+# Serialize the entire build and installation, including generated AOT inputs.
+# Concurrent chats may publish this shared engine; those builds must not rewrite
+# the same physics assemblies or browser runtime while another publish uses them.
+$identityHash = [Security.Cryptography.SHA256]::Create()
+try {
+    $lockIdentity = [BitConverter]::ToString($identityHash.ComputeHash(
+        [Text.Encoding]::UTF8.GetBytes([IO.Path]::GetFullPath($repoRoot).ToLowerInvariant()))).Replace('-', '')
+}
+finally { $identityHash.Dispose() }
+$publishMutex = [Threading.Mutex]::new($false, "Local\ByteEngineBrowserPublish_$lockIdentity")
+$publishLockHeld = $false
+try {
+    while (-not $publishLockHeld) {
+        try { $publishLockHeld = $publishMutex.WaitOne(1000) }
+        catch [Threading.AbandonedMutexException] { $publishLockHeld = $true }
+        if (-not $publishLockHeld) { Write-Verbose 'Waiting for the active browser publish.' }
+    }
 & dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration -m:1 -nodeReuse:false
 if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. See the build diagnostics above; ensure the .NET 9 wasm-tools workload is installed.' }
 $source = Join-Path $repoRoot "Player/ByteEngine.Browser/bin/$Configuration/net9.0/publish/wwwroot"
@@ -40,3 +57,8 @@ foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),
     }
 }
 Write-Host 'Browser game runtime bundled with Dist and Debug editor.'
+}
+finally {
+    if ($publishLockHeld) { $publishMutex.ReleaseMutex() }
+    $publishMutex.Dispose()
+}

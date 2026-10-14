@@ -1,1 +1,1 @@
-{"schemaVersion":1,"id":"bytebard.karlsondemo","name":"Modular Weapon Gameplay","version":"2.2.0","assembly":"KarlsonDemo.Plugin.dll","entryPoint":"KarlsonDemo.Plugin.KarlsonDemoPlugin","editor":true,"runtime":true,"minimumEngineVersion":"0.7.1","dependencies":[]}
+{"schemaVersion":1,"id":"bytebard.karlsondemo","name":"Modular Weapon Gameplay","version":"2.4.0","assembly":"KarlsonDemo.Plugin.dll","entryPoint":"KarlsonDemo.Plugin.KarlsonDemoPlugin","editor":true,"runtime":true,"minimumEngineVersion":"0.7.1","dependencies":[]}

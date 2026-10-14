@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core;
+using ByteEngine.Core.Vfx;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Classification;
 using ByteEngine.Core.Gameplay;
@@ -25,13 +26,20 @@ public sealed class WeaponInstance3D : Component
     public bool HitThisFrame { get; private set; }
     public bool ReloadCompletedThisFrame { get; private set; }
     public float CooldownRemaining => _cooldown;
-    public bool CanFire => Equipped && !Reloading && _cooldown <= 0 &&
-        Definition is {} d && CurrentAmmo >= Math.Clamp(d.AmmoPerShot, 1, 10000);
+    public bool CanFire => Equipped && _cooldown <= 0 &&
+        Definition is {} d && (!Reloading || (d.ReloadMode == WeaponReloadMode.PerRound && d.AllowReloadInterrupt)) && CurrentAmmo >= Math.Clamp(d.AmmoPerShot, 1, 10000);
     public event Action<WeaponInstance3D>? Fired;
     public event Action<WeaponInstance3D>? ReloadCompleted;
     public event Action<RaycastHit3D>? Hit;
     private float _cooldown, _reloadRemaining;
     private Random? _random;
+    private float? _reloadBasePlaybackSpeed;
+    private VfxPlayer? _muzzleFlash;
+    private void RestoreReloadSpeed()
+    {
+        if (_reloadBasePlaybackSpeed is {} speed && GameObject.GetComponent<AnimationController>() is {} animation) animation.PlaybackSpeed = speed;
+        _reloadBasePlaybackSpeed = null;
+    }
 
     protected override void OnStart() { ClampAmmo(); _random = new Random(RandomSeed); }
     public void ClampAmmo()
@@ -52,6 +60,7 @@ public sealed class WeaponInstance3D : Component
     }
     public void CancelReload()
     {
+        RestoreReloadSpeed();
         if (Reloading) GameObject.GetComponent<AnimationController>()?.CancelCurrentAction();
         _reloadRemaining = 0;
     }
@@ -61,8 +70,17 @@ public sealed class WeaponInstance3D : Component
         ClampAmmo();
         if (CurrentAmmo >= Math.Clamp(d.MagazineCapacity, 1, 10000) || (!d.InfiniteReserve && ReserveAmmo == 0)) return false;
         bool empty = CurrentAmmo == 0;
-        _reloadRemaining = WeaponDefinition3D.Bound(empty ? d.EmptyReloadSeconds : d.ReloadSeconds, 1.6f, .05f, 30);
-        Play(empty ? d.EmptyReloadAnimation : d.ReloadAnimation); return true;
+        _reloadRemaining = WeaponDefinition3D.Bound(empty ? d.EmptyReloadSeconds : d.ReloadSeconds, 1.6f, .05f, 30)
+            / WeaponDefinition3D.Bound(d.ReloadSpeedMultiplier, 1, .1f, 10);
+        Play(empty ? d.EmptyReloadAnimation : d.ReloadAnimation);
+        if (GameObject.GetComponent<AnimationController>() is {} animation &&
+            GameObject.GetComponent<SkeletalMeshRenderer>() is {} renderer && renderer.Duration > 0 && renderer.Speed > 0)
+        {
+            _reloadBasePlaybackSpeed = animation.PlaybackSpeed;
+            animation.PlaybackSpeed *= renderer.Duration / (_reloadRemaining * renderer.Speed);
+            renderer.Speed = renderer.Duration / _reloadRemaining;
+        }
+        return true;
     }
     internal void Tick(float dt)
     {
@@ -71,6 +89,7 @@ public sealed class WeaponInstance3D : Component
         if (!Reloading) return;
         _reloadRemaining = Math.Max(0, _reloadRemaining - dt);
         if (_reloadRemaining > 0 || Definition is not {} d) return;
+        RestoreReloadSpeed();
         int needed = Math.Max(0, Math.Clamp(d.MagazineCapacity, 1, 10000) - CurrentAmmo);
         int transfer = d.ReloadMode == WeaponReloadMode.PerRound ? Math.Min(1, needed) : needed;
         if (!d.InfiniteReserve) transfer = Math.Min(transfer, Math.Max(0, ReserveAmmo));
@@ -85,12 +104,13 @@ public sealed class WeaponInstance3D : Component
         if (!CanFire || Definition is not {} d || GameObject.Scene is not {} scene ||
             !float.IsFinite(direction.LengthSquared()) || direction.LengthSquared() < 1e-6f) return false;
         direction = Vector3.Normalize(direction);
-        Vector3 muzzlePosition = TryGetMuzzleWorldPosition(out var resolvedMuzzle) ? resolvedMuzzle : origin;
         _random ??= new Random(RandomSeed);
         int count = Math.Clamp(d.PelletsPerShot, 1, 32);
         if (d.ShotMode == WeaponShotMode.Projectile && scene.GameObjects.Count(o =>
                 o.GetComponent<Projectile3D>()?.OwnerId == owner.Id) + count > Math.Clamp(d.MaxActiveProjectiles, 1, 512))
             return false;
+        if (Reloading) CancelReload();
+        Vector3 muzzlePosition = TryGetMuzzleWorldPosition(out var resolvedMuzzle) ? resolvedMuzzle : origin;
         float range = WeaponDefinition3D.Bound(d.Range, 80, .1f, 1000);
         var mask = LayerMask.FromLayers(Enumerable.Range(0, 32).Where(bit => (d.HitMaskBits & (1 << bit)) != 0).ToArray());
         for (int n = 0; n < count; n++)
@@ -138,7 +158,27 @@ public sealed class WeaponInstance3D : Component
         }
         CurrentAmmo -= Math.Clamp(d.AmmoPerShot, 1, 10000);
         _cooldown = 60 / WeaponDefinition3D.Bound(d.RoundsPerMinute, 270, 1, 3000);
-        ShotsFired++; FiredThisFrame = true; Play(d.FireAnimation); Fired?.Invoke(this); return true;
+        ShotsFired++; FiredThisFrame = true; Play(d.FireAnimation); Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
+    }
+    private void Flash(Vector3 position, Vector3 direction)
+    {
+        if (Definition is not { MuzzleFlashEnabled: true } d || GameObject.Scene is not {} scene) return;
+        if (_muzzleFlash == null)
+        {
+            var emitter = scene.CreateGameObject("Weapon muzzle flash");
+            emitter.SetParent(GameObject, false);
+            _muzzleFlash = emitter.AddComponent(new VfxPlayer { PlayOnStart = false, Preset = VfxPreset.MuzzleFlash, DistanceQuality = false });
+        }
+        _muzzleFlash.Effect = d.MuzzleFlashEffect;
+        _muzzleFlash.Size = WeaponDefinition3D.Bound(d.MuzzleFlashSize, .6f, .05f, 3);
+        _muzzleFlash.Transform.WorldPosition = position;
+        // VFX muzzle preset emits along local -Z; orient it along the shot.
+        var axis = Vector3.Cross(-Vector3.UnitZ, direction);
+        var dot = Math.Clamp(Vector3.Dot(-Vector3.UnitZ, direction), -1, 1);
+        _muzzleFlash.Transform.WorldRotation = axis.LengthSquared() > 1e-6f
+            ? Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), MathF.Acos(dot))
+            : dot > 0 ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI);
+        _muzzleFlash.Play(restart: true);
     }
     /// <summary>Uses editor-authored animation-workspace sockets, imported bones, or a local offset.</summary>
     public bool TryGetMuzzleWorldPosition(out Vector3 position)

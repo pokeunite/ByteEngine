@@ -59,6 +59,8 @@ internal static class RoadmapMediaTests
   var high=DrawLod(detailed);var coarse=DrawLod(reduced);int highCoverage=high.Where((v,i)=>i%4==0&&v>10).Count(),lowCoverage=coarse.Where((v,i)=>i%4==0&&v>10).Count();
   Check(reduced.IndexCount<detailed.IndexCount&&highCoverage>500&&lowCoverage>=highCoverage*.90,"Generated planar LOD loses more than 10 percent silhouette coverage");
   Console.WriteLine($"PASS generated static LOD GPU silhouette fixture: {detailed.IndexCount/3}->{reduced.IndexCount/3} triangles; coverage {lowCoverage/(float)highCoverage:P1} (budget >=90%)");
+  RenderOptimizationTests.Run(renderer,mesh);
+  OcclusionTests.Run(renderer);
   Console.WriteLine("PASS actual GPU instancing visual/state validation");
  }
 }

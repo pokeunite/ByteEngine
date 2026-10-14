@@ -22,8 +22,9 @@ internal sealed class HierarchyPanel
         Action<Guid, GameObject?> instantiateAsset)
     {
         bool isOpen = IsOpen;
-        ImGui.Begin("Hierarchy", ref isOpen);
+        bool visible = ImGui.Begin("Hierarchy", ref isOpen);
         IsOpen = isOpen;
+        if (!visible) { ImGui.End(); return; }
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.PanelRaised);
 
@@ -264,11 +265,12 @@ internal sealed class HierarchyPanel
 
         bool deletedThisNode = false;
 
-        GameObject[] siblings = GetSiblings(gameObject, state.DisplayedScene);
-        int siblingIndex = Array.IndexOf(siblings, gameObject);
-
         if (state.Mode == EditorMode.Edit && ImGui.BeginPopupContextItem($"ObjectContext{gameObject.Id}"))
         {
+            // Only an open context menu needs sibling navigation. Rebuilding
+            // this list for every row makes a large hierarchy quadratic.
+            GameObject[] siblings = GetSiblings(gameObject, state.DisplayedScene);
+            int siblingIndex = Array.IndexOf(siblings, gameObject);
             if (ImGui.MenuItem("Rename", "F2")) BeginRename(gameObject, state);
             if (ImGui.MenuItem("Duplicate", "Ctrl+D")) { state.Selection.Set(gameObject); duplicate(); }
 

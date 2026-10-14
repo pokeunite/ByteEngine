@@ -57,7 +57,7 @@ bpy.context.view_layer.objects.active=body_parts[0];bpy.ops.object.join();body=b
 bpy.ops.object.select_all(action='DESELECT')
 for o in lever_parts:o.select_set(True)
 bpy.context.view_layer.objects.active=lever_parts[0];bpy.ops.object.join();lever=bpy.context.object;lever.name='Shift_Lever';bpy.ops.object.transform_apply(location=False,rotation=True,scale=True);scene=bpy.context.scene;scene.cursor.location=a;bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
-bpy.ops.object.armature_add();rig=bpy.context.object;rig.name='Gearbox_Rig';bpy.ops.object.mode_set(mode='EDIT');bone=rig.data.edit_bones[0];bone.name='GearboxBody';bone.head=(0,0,0);bone.tail=(0,0,.1);moving=rig.data.edit_bones.new('GearboxLever');moving.head=a;moving.tail=a+Vector((0,0,.1));moving.parent=bone;bpy.ops.object.mode_set(mode='OBJECT')
+bpy.ops.object.armature_add(location=(0,0,0));rig=bpy.context.object;rig.name='Gearbox_Rig';bpy.ops.object.mode_set(mode='EDIT');bone=rig.data.edit_bones[0];bone.name='GearboxBody';bone.head=(0,0,0);bone.tail=(0,0,.1);moving=rig.data.edit_bones.new('GearboxLever');moving.head=a;moving.tail=a+Vector((0,0,.1));moving.parent=bone;bpy.ops.object.mode_set(mode='OBJECT')
 for obj,name in [(body,'GearboxBody'),(lever,'GearboxLever')]:
  group=obj.vertex_groups.new(name=name);group.add(list(range(len(obj.data.vertices))),1,'REPLACE');modifier=obj.modifiers.new('Gearbox rig','ARMATURE');modifier.object=rig;obj.parent=rig
 for name,angle in [('Idle',0),('ShiftUp',.32),('ShiftDown',-.32)]:

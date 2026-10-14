@@ -99,7 +99,14 @@ public static partial class BrowserGame
     }
 
     [JSExport]
-    public static void AudioEnded(string id) => Audio.Ended(Guid.Parse(id));
+    public static void AudioEnded(string id)
+    {
+        if (Guid.TryParse(id, out var voiceId)) Audio.Ended(voiceId);
+    }
+
+    private static string _lastFrameError = "";
+    [JSExport]
+    public static string LastFrameError() => _lastFrameError;
 
     [JSExport]
     public static bool WantsPointerLock() => !Input.KeepGameViewPointerFree &&
@@ -113,6 +120,7 @@ public static partial class BrowserGame
     {
         if (!_started) throw new InvalidOperationException("Call Start first.");
         string phase="input";
+        _lastFrameError = "";
         try
         {
         Snapshot.Clear();
@@ -151,7 +159,8 @@ public static partial class BrowserGame
         }
         catch(Exception exception)
         {
-            throw new InvalidOperationException($"Browser frame failed during {phase} in '{Loop.Scenes.ActiveScene?.Name}' ({width}x{height}): {exception}",exception);
+            _lastFrameError = $"Browser frame failed during {phase} in '{Loop.Scenes.ActiveScene?.Name}' ({width}x{height}): {exception}";
+            throw new InvalidOperationException(_lastFrameError,exception);
         }
     }
 

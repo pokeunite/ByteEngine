@@ -12,9 +12,9 @@ public sealed partial class DuneWorkshop3D
   Row("Contracts recovery page","RECOVERY",new(27,442),new(132,36),()=>{_contractPage=0;_contractExpanded=false;RefreshContractBrowser();});
   Row("Contracts motorsport page","MOTORSPORT",new(168,442),new(132,36),()=>{_contractPage=1;_contractExpanded=false;RefreshContractBrowser();});
  }
- static string MotorsportBrief(int id)=>id switch {
+ string MotorsportBrief(int id)=>id switch {
   5=>"The quarry is yours for two minutes. Bank 6,000 drift points. Controlled slides build the multiplier; straighten up to bank your chain. Hitting an obstacle loses the current chain. Use the broad outer turns or link the figure-eight.",
-  6=>"A flat 400-metre asphalt run against a physical rival. A gearbox is compulsory. Fit it from Drive, then tune the final drive ratio for acceleration versus top speed. Wait for green: an early throttle press delays your launch. Cross the finish first, then use the long braking zone.",
+  6=>$"A flat 400-metre run against a physical rival. Fit a gearbox directly to the engine's rear. {DriveKey("Shift up")} shifts up; {DriveKey("Shift down")} shifts down. Shift in the green RPM band. Early shifts lose acceleration; late shifts hit the limiter. Hold the accelerator through the countdown. Launch on green, use all six gears, then stop in the long braking zone.",
   7=>"Beat the rival along the 900-metre Red Rock stage. Pass all six gates in order. Carry speed through the sweeps, settle the car for the rock passage, and land straight over the crest. The rival shares the road.",
   _=>"Beat the rival through the dry riverbed. Gates must be passed in order. Keep your line through the bends; the rival shares the track and can make contact. Win the sprint to earn $1000."};
 }

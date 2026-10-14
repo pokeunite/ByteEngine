@@ -22,6 +22,19 @@ internal sealed class ShadowMap3D : IDisposable
     public int Resolution =>
         _resolution;
 
+    internal void CopyDepthFrom(ShadowMap3D source)
+    {
+        if (source.Resolution != Resolution) throw new InvalidOperationException("Shadow depth sizes differ.");
+        GL.GetInteger(GetPName.ReadFramebufferBinding, out int previousRead);
+        try
+        {
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source._framebuffer);
+            GL.BlitFramebuffer(0, 0, Resolution, Resolution, 0, 0, Resolution, Resolution,
+                ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest);
+        }
+        finally { GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, previousRead); }
+    }
+
     public int Begin(
         int requestedResolution)
     {

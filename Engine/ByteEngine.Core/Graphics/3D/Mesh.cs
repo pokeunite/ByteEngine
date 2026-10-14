@@ -17,6 +17,7 @@ public sealed class Mesh : IDisposable
     private uint[] _indices;
 
     private readonly bool _dynamicVertices;
+    internal bool IsDynamic=>_dynamicVertices;
     private bool _vertexDataDirty;
 
     /*

@@ -963,7 +963,7 @@
     "file": "Assets/DuneParts/glb/39_gearbox.glb",
     "preview": "Assets/DuneParts/cutouts/39_gearbox.png",
     "group": "Drive",
-    "function": "Compulsory for drag races. Final drive ratio: higher gives more torque and less top speed. Multiple boxes do not stack. Mount to a structural rail or mechanical plate.",
+    "function": "Five-speed manual gearbox. Attach directly to the rear face of an engine. X shifts up; Z shifts down (rebind in Driving Controls). Shift in the green RPM band. Final drive ratio trades torque for top speed.",
     "min": [
       -0.25,
       0,

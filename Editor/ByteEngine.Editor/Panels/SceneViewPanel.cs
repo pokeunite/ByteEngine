@@ -29,6 +29,13 @@ internal sealed class SceneViewPanel : IDisposable
     private bool _is3D =
         true;
 
+    private int _colliderDisplay;
+    private bool _liveDuringPlay;
+    private Scene? _renderedScene;
+    private Matrix4x4 _renderedCamera;
+    private Vector2 _renderedSize;
+    private float _renderedFieldOfView;
+
     private Vector2 _lastViewportSize =
         new(
             800.0f,
@@ -120,7 +127,8 @@ internal sealed class SceneViewPanel : IDisposable
         Action<Vector3> createEmpty,
         Action<Vector3> createSprite,
         Action<Vector3> createCamera,
-        Action paste)
+        Action paste,
+        bool gameViewVisible)
     {
         if (!EditorPreferences.Enable2DEditor)
         {
@@ -204,8 +212,14 @@ internal sealed class SceneViewPanel : IDisposable
         _lastViewportSize =
             viewportSize;
 
-        // Keep an unfocused scene preview frozen during Play rather than drawing the world twice.
-        if(state.Mode!=EditorMode.Play||IsFocused||_framebuffer.TextureId==IntPtr.Zero)
+        // Play keeps the secondary viewport on demand. Navigation/resize still refreshes it;
+        // continuous simulation inspection is an explicit toolbar option.
+        bool refreshScene = state.Mode != EditorMode.Play || !gameViewVisible || _liveDuringPlay || !_is3D ||
+            _framebuffer.TextureId == IntPtr.Zero || !ReferenceEquals(_renderedScene, state.DisplayedScene) ||
+            _renderedCamera != state.Camera3D.View || _renderedSize != viewportSize ||
+            _renderedFieldOfView != state.Camera3D.FieldOfView;
+        if (refreshScene)
+        {
         _framebuffer.Render(
             renderer,
             renderer3D,
@@ -219,6 +233,11 @@ internal sealed class SceneViewPanel : IDisposable
             windowWidth,
             windowHeight
         );
+            _renderedScene = state.DisplayedScene;
+            _renderedCamera = state.Camera3D.View;
+            _renderedSize = viewportSize;
+            _renderedFieldOfView = state.Camera3D.FieldOfView;
+        }
 
         if (RuntimeDiagnostics.DebugBlueprintVisibility)
             BlueprintVisibilityTrace.Sample(state, viewportSize, _is3D, _framebuffer);
@@ -537,6 +556,18 @@ internal sealed class SceneViewPanel : IDisposable
         });
 
         EditorUi.EndToolbar();
+        if (_is3D)
+        {
+            ImGui.SetNextItemWidth(125);
+            ImGui.Combo("Colliders", ref _colliderDisplay, "Hidden\0Selected\0All\0");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Collision outlines for debugging. Hidden avoids the scene-wide overlay.");
+            if (state.Mode == EditorMode.Play)
+            {
+                ImGui.SameLine();
+                ImGui.Checkbox("Live Scene", ref _liveDuringPlay);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("When Game View is visible, continuously render this second viewport too. Otherwise refresh it on navigation or resize. Scene View always stays live when it is the only visible viewport.");
+            }
+        }
     }
 
     private static void HandleCameraInput(
@@ -713,198 +744,70 @@ internal sealed class SceneViewPanel : IDisposable
         }
     }
 
-    private static void DrawColliderOutlines(
-        EditorState state,
-        Vector2 minimum,
-        Vector2 size)
+    private void DrawColliderOutlines(EditorState state, Vector2 minimum, Vector2 size)
     {
-        ImDrawListPtr drawList =
-            ImGui.GetWindowDrawList();
-
-        foreach (GameObject gameObject
-                 in state.DisplayedScene.GameObjects)
+        if (_colliderDisplay == 0) return;
+        var drawList = ImGui.GetWindowDrawList();
+        var selected = state.SelectedObject == null ? null :
+            state.DisplayedScene.FindGameObject(state.SelectedObject.Id);
+        var frustum = new Frustum3D(state.Camera3D.View * state.Camera3D.Projection(size.X / size.Y));
+        void DrawObject(GameObject gameObject)
         {
-            if (!gameObject.ActiveInHierarchy)
+            if (!gameObject.ActiveInHierarchy) return;
+            foreach (var component in gameObject.Components)
             {
-                continue;
+                if (component is not Collider3D collider || !collider.Enabled) continue;
+                var bounds = new BoundingBox3D(collider.Center - collider.Size * .5f,
+                    collider.Center + collider.Size * .5f).Transform(gameObject.Transform.WorldMatrix);
+                if (!frustum.Intersects(bounds)) continue;
+                uint color = ImGui.GetColorU32(ReferenceEquals(selected, gameObject)
+                    ? new Vector4(1, .75f, .15f, 1) : new Vector4(.25f, .9f, .45f, .75f));
+                if (collider is CapsuleCollider3D capsule)
+                    DrawCapsule(drawList, gameObject, capsule, state.Camera3D, minimum, size, color);
+                else
+                    DrawBox(drawList, gameObject, collider, state.Camera3D, minimum, size, color);
             }
-
-            Collider3D? collider =
-                gameObject.Components
-                    .OfType<Collider3D>()
-                    .FirstOrDefault();
-
-            if (collider ==
-                    null ||
-                !collider.Enabled)
+        }
+        drawList.PushClipRect(minimum, minimum + size, true);
+        try
+        {
+            if (_colliderDisplay == 1)
             {
-                continue;
-            }
-
-            uint color =
-                ImGui.GetColorU32(
-                    ReferenceEquals(
-                        state.SelectedObject,
-                        gameObject)
-                        ? new Vector4(
-                            1.0f,
-                            0.75f,
-                            0.15f,
-                            1.0f
-                        )
-                        : new Vector4(
-                            0.25f,
-                            0.9f,
-                            0.45f,
-                            0.75f
-                        )
-                );
-
-            if (collider is
-                CapsuleCollider3D capsule)
-            {
-                DrawCapsule(
-                    drawList,
-                    gameObject,
-                    capsule,
-                    state.Camera3D,
-                    minimum,
-                    size,
-                    color
-                );
+                if (selected != null) DrawObject(selected);
             }
             else
-            {
-                DrawBox(
-                    drawList,
-                    gameObject,
-                    collider,
-                    state.Camera3D,
-                    minimum,
-                    size,
-                    color
-                );
-            }
+                foreach (var gameObject in state.DisplayedScene.GameObjects) DrawObject(gameObject);
         }
+        finally { drawList.PopClipRect(); }
     }
 
-    private static void DrawBox(
-        ImDrawListPtr drawList,
-        GameObject gameObject,
-        Collider3D collider,
-        EditorCamera3D camera,
-        Vector2 minimum,
-        Vector2 size,
-        uint color)
+    private static void DrawBox(ImDrawListPtr drawList, GameObject gameObject, Collider3D collider,
+        EditorCamera3D camera, Vector2 minimum, Vector2 size, uint color)
     {
-        Vector3 half =
-            collider.Size *
-            0.5f;
-
-        Vector3[] local =
+        var half = collider.Size * .5f;
+        var matrix = gameObject.Transform.WorldMatrix * camera.View * camera.Projection(size.X / size.Y);
+        Span<Vector4> corners = stackalloc Vector4[8];
+        for (int i = 0; i < 8; i++)
         {
-            collider.Center +
-            new Vector3(
-                -half.X,
-                -half.Y,
-                -half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                half.X,
-                -half.Y,
-                -half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                half.X,
-                half.Y,
-                -half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                -half.X,
-                half.Y,
-                -half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                -half.X,
-                -half.Y,
-                half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                half.X,
-                -half.Y,
-                half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                half.X,
-                half.Y,
-                half.Z
-            ),
-
-            collider.Center +
-            new Vector3(
-                -half.X,
-                half.Y,
-                half.Z
-            )
-        };
-
-        Vector2[] points =
-            local
-                .Select(
-                    point =>
-                        Gizmo3DController.Project(
-                            Vector3.Transform(
-                                point,
-                                gameObject.Transform.WorldMatrix
-                            ),
-                            camera,
-                            minimum,
-                            size
-                        )
-                )
-                .ToArray();
-
-        int[] edges =
-        {
-            0, 1,
-            1, 2,
-            2, 3,
-            3, 0,
-
-            4, 5,
-            5, 6,
-            6, 7,
-            7, 4,
-
-            0, 4,
-            1, 5,
-            2, 6,
-            3, 7
-        };
-
-        for (int index = 0;
-             index < edges.Length;
-             index += 2)
-        {
-            drawList.AddLine(
-                points[edges[index]],
-                points[edges[index + 1]],
-                color,
-                2.0f
-            );
+            var local = collider.Center + new Vector3((i & 1) == 0 ? -half.X : half.X,
+                (i & 2) == 0 ? -half.Y : half.Y, (i & 4) == 0 ? -half.Z : half.Z);
+            corners[i] = Vector4.Transform(new Vector4(local, 1), matrix);
         }
+        for (int i = 0; i < 8; i++)
+            for (int bit = 1; bit <= 4; bit *= 2)
+            {
+                if ((i & bit) != 0) continue;
+                var a = corners[i]; var b = corners[i | bit];
+                // Clip against the near plane before division. Boxes behind the camera
+                // must not produce mirrored, screen-spanning diagonal lines.
+                if (a.Z < 0 && b.Z < 0) continue;
+                if (a.Z < 0) a = Vector4.Lerp(a, b, -a.Z / (b.Z - a.Z));
+                if (b.Z < 0) b = Vector4.Lerp(b, a, -b.Z / (a.Z - b.Z));
+                if (a.W <= .0001f || b.W <= .0001f) continue;
+                var pa = minimum + new Vector2((a.X / a.W + 1) * .5f * size.X, (1 - a.Y / a.W) * .5f * size.Y);
+                var pb = minimum + new Vector2((b.X / b.W + 1) * .5f * size.X, (1 - b.Y / b.W) * .5f * size.Y);
+                drawList.AddLine(pa, pb, color, 2);
+            }
     }
 
     private static void DrawCapsule(

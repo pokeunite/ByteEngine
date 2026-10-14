@@ -28,7 +28,7 @@ public sealed partial class DuneWorkshop3D
    AimWeapon(gun, direction);Effect(VfxPreset.MuzzleFlash,origin,FromTo(-Vector3.UnitZ,direction),rocket?1.4f:.7f);
    var line=GameObject.Scene!.CreateGameObject(rocket?"Rocket trail":"Gun tracer");line.Transform.WorldPosition=(origin+end)*.5f;line.Transform.WorldRotation=FromTo(Vector3.UnitZ,direction);line.Transform.LocalScale=new(rocket?.065f:.018f,rocket?.065f:.018f,distance);line.AddComponent(new MeshRenderer{UsePrimitive=true,Primitive=PrimitiveMeshType.Cube,Material=new(){Shading=MaterialShadingMode.Unlit,BaseColor=rocket?new(1,.52f,.15f,1):new(1,.9f,.5f,1)},CastShadows=false});_tracers.Add((line,rocket?.18f:.045f));fired=true;
   }
-  if(fired){if(rocket)_rocketCooldown=1.5f;else _gunCooldown=.16f;}return fired;
+  if(fired){JobSound(rocket?"combat-blast":"combat-gun",rocket?.65f:.4f);if(rocket)_rocketCooldown=1.5f;else _gunCooldown=.16f;}return fired;
  }
  void AimWeapon(PlacedBlock gun,Vector3 direction)
  {

@@ -7,6 +7,8 @@ namespace ByteEngine.Core.Scene;
 public sealed class GameObject
 {
     private readonly List<Component> _components = new();
+    private Component[]? _contactComponents;
+    private Component[] ContactComponents => _contactComponents ??= _components.ToArray();
     private readonly List<GameObject> _children = new();
     private readonly HashSet<Guid> _tags = new();
     private int _layer;
@@ -183,6 +185,8 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
+        _contactComponents=null;
+        _scene?.InvalidatePhysicsRegistry();
 
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
             _scene.SetActiveCamera(camera);
@@ -212,13 +216,16 @@ public sealed class GameObject
     internal void ReorderComponents(IReadOnlyList<Component> ordered)
     {
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
-        _components.Clear();_components.AddRange(ordered);
+        _components.Clear();_contactComponents=null;
+        _scene?.InvalidatePhysicsRegistry();_components.AddRange(ordered);
     }
 
     public bool RemoveComponent(Component component)
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
+        _contactComponents=null;
+        _scene?.InvalidatePhysicsRegistry();
 
         CrashDebugLog.Write(
             $"GameObject.RemoveComponent: object='{Name}' component='{component.GetType().FullName}' BEGIN.");
@@ -277,6 +284,7 @@ public sealed class GameObject
         if (!_started) StartInternal();
         int count = _components.Count;
         if (count == 0) return;
+        if (count == 1) { _components[0].FixedUpdateInternal(); return; }
         var snapshot = System.Buffers.ArrayPool<Component>.Shared.Rent(count);
         try
         {
@@ -332,7 +340,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.CollisionEnterInternal(
                 contact);
@@ -343,7 +351,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.CollisionStayInternal(
                 contact);
@@ -354,7 +362,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.CollisionExitInternal(
                 contact);
@@ -365,7 +373,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.TriggerEnterInternal(
                 contact);
@@ -376,7 +384,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.TriggerStayInternal(
                 contact);
@@ -387,7 +395,7 @@ public sealed class GameObject
         PhysicsContact3D contact)
     {
         foreach (Component component
-                 in _components.ToArray())
+                 in ContactComponents)
         {
             component.TriggerExitInternal(
                 contact);
@@ -403,7 +411,8 @@ public sealed class GameObject
             component.DestroyInternal();
         }
 
-        _components.Clear();
+        _components.Clear();_contactComponents=null;
+        _scene?.InvalidatePhysicsRegistry();
         _started = false;
 
     }

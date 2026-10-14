@@ -5,7 +5,7 @@
     "importScale": 1,
     "generateNormals": false,
     "preferEmbeddedMaterials": true,
-    "importAnimations": false,
+    "importAnimations": true,
     "rigType": "Generic"
   }
 }

@@ -111,6 +111,7 @@ public sealed class EditorApplication
 
     protected override void OnEngineStart()
     {
+        VSync=EditorPreferences.EditorVSync?OpenTK.Windowing.Common.VSyncMode.On:OpenTK.Windowing.Common.VSyncMode.Off;
         _imgui =
             new ImGuiController(
                 this,
@@ -146,6 +147,8 @@ public sealed class EditorApplication
             return;
         }
 
+        EditorFrameProfile.BeginFrame();
+        using var frameProfile = EditorFrameProfile.Measure("Editor total");
         _imgui.Update(
             Math.Max(
                 (float)Time.DeltaTime,
@@ -173,7 +176,7 @@ public sealed class EditorApplication
             _state?.Mode != EditorMode.Edit, _log);
         UpdateWindowTitle();
 
-        _imgui.Render();
+        using (EditorFrameProfile.Measure("UI submission")) _imgui.Render();
         _documentWindows.PumpAndRender(Math.Max((float)Time.DeltaTime, 1.0f / 1000.0f));
         _imgui.MakeCurrent();
     }
@@ -263,6 +266,7 @@ public sealed class EditorApplication
 
         if (_hierarchy.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Hierarchy");
             _hierarchy.Draw(
                 _state,
                 () => CreateGameObject(
@@ -279,6 +283,7 @@ public sealed class EditorApplication
 
         if (_inspector.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Inspector");
             _inspector.Draw(
                 _state,
                 _projectContext!,
@@ -301,6 +306,7 @@ public sealed class EditorApplication
         }
         if (_sceneView.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Scene viewport");
             _sceneView.Draw(
                 _state,
                 Renderer,
@@ -314,7 +320,8 @@ public sealed class EditorApplication
                 position => CreateObjectAtPosition("GameObject", position, null),
                 position => CreateObjectAtPosition("Sprite", position, () => new SpriteRenderer()),
                 position => CreateObjectAtPosition("Camera", position, () => new Camera2D()),
-                PasteObjects
+                PasteObjects,
+                _gameView.IsOpen && _gameView.IsVisible
             );
             if (_sceneView.IsFocused && _sceneDocumentId.HasValue)
                 _documents.Activate(_sceneDocumentId.Value);
@@ -322,6 +329,7 @@ public sealed class EditorApplication
 
         if (_gameView.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Game viewport");
             _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y,
                 grabCursor => CaptureGameInput(grabCursor), ReleaseGameInput);
         }
@@ -331,6 +339,7 @@ public sealed class EditorApplication
         // Console or Performance in the same dock node.
         if (_performance.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Performance");
             _performance.Draw(
                 _state,
                 _sceneView.IsOpen,
@@ -343,6 +352,7 @@ public sealed class EditorApplication
 
         if (_console.IsOpen)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Console");
             _console.Draw(
                 _log
             );
@@ -350,6 +360,7 @@ public sealed class EditorApplication
 
         if (_assets?.IsOpen == true)
         {
+            using var panelProfile = EditorFrameProfile.Measure("Assets");
             _assets.Draw(
                 _state,
                 _log,
@@ -606,6 +617,13 @@ public sealed class EditorApplication
                 !enable2D;
         }
 
+        bool sync=EditorPreferences.EditorVSync;
+        if(ImGui.MenuItem("Sync editor to monitor",string.Empty,sync))
+        {
+            EditorPreferences.EditorVSync=!sync;
+            VSync=!sync?OpenTK.Windowing.Common.VSyncMode.On:OpenTK.Windowing.Common.VSyncMode.Off;
+        }
+        if(ImGui.IsItemHovered())ImGui.SetTooltip("Synchronizes editor presentation. Turn off for the fastest response. Game-player settings are independent.");
         bool showFps =
             EditorPreferences.ShowFpsCounter;
 

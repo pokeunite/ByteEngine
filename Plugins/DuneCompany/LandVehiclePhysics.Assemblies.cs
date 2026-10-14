@@ -20,6 +20,8 @@ public sealed partial class LandVehiclePhysics
  public void SetAssemblyInput(int root,AiDriveCommand input,float maximumSpeed=32){var rig=_drivenAssemblies[root];rig.Input=new(float.IsFinite(input.Throttle)?Math.Clamp(input.Throttle,-1,1):0,float.IsFinite(input.Steering)?Math.Clamp(input.Steering,-1,1):0,input.Brake);rig.MaximumSpeed=float.IsFinite(maximumSpeed)?Math.Clamp(maximumSpeed,1,50):32;}
  public (Vector3 Position,Quaternion Rotation) AssemblyFrame(int root,bool rendered=false){var g=_parts[root].Root;var p=rendered?RenderPose(g):_simulation.Bodies[g.Body].Pose;return(p.Position-Vector3.Transform(g.Center,p.Orientation),p.Orientation);}
  public Vector3 AssemblyVelocity(int root)=>_simulation.Bodies[_parts[root].Root.Body].Velocity.Linear;
+ public float AssemblyConfiguredMaximumSpeed(int root)=>_drivenAssemblies[root].Engines.Length==0?0:_drivenAssemblies[root].Engines.Max(b=>b.SpeedLimit);
+ public ManualTransmission? AssemblyTransmission(int root)=>_drivenAssemblies[root].Gearboxes.Length>0?_drivenAssemblies[root].Transmission:null;
  public bool AssemblyGrounded(int root)=>_drivenAssemblies[root].Parts.Any(p=>p.Output!=null&&_catalog[p.Block.Type].Wheel&&WheelFeedback(p.Block.Id).Grounded);
  public void ResetDrivenAssembly(int root,Vector3 position,Quaternion rotation)=>ResetAssembly(_drivenAssemblies[root].Parts,position,rotation);
 }

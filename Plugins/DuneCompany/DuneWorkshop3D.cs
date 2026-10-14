@@ -46,7 +46,7 @@ public sealed partial class DuneWorkshop3D:Component
   _engineAnimations.Clear();
   ClearCombatVisuals();_highlight=null;_highlighted=-1;foreach(var o in GameObject.Children.ToArray())GameObject.Scene!.DestroyGameObject(o);_visuals.Clear();_ghost=null;_mountMarker=null;
   foreach(var p in _blocks){var o=Model(GameObject.Scene!,Assets!,_catalog[p.Type].File,GameObject,"Block "+p.Id+" - "+_catalog[p.Type].Label);o.Transform.LocalPosition=p.P;o.Transform.LocalRotation=p.Q;_visuals[p.Id]=o;o.AddComponent(new DuneBlock3D{BlockId=p.Id,PartType=p.Type,ParentBlock=p.Parent,DriveMultiplier=p.Power,SteeringAngle=p.Steering,TyreGrip=p.Grip,MechanicalTuningAuthored=true,Paint=p.Paint,Travel=p.Travel,Angle=p.Angle,Stroke=p.Stroke,SpringRate=p.SpringRate,Damping=p.Damping,Preload=p.Preload,SpeedLimit=p.SpeedLimit,BrakeStrength=p.BrakeStrength});}
-  foreach(var b in _blocks.Where(b=>b.Type==39))_visuals[b.Id].AddComponent(new DuneGearboxAnimation3D());
+  foreach(var b in _blocks.Where(b=>b.Type==39))_visuals[b.Id].AddComponent(new DuneGearboxAnimation3D{Source=Assets!.LoadModel(new AssetReference(_catalog[b.Type].File))});
   foreach(var b in _blocks.Where(b=>_catalog[b.Type].Power>0))_engineAnimations.Add(_visuals[b.Id].AddComponent(new DuneEngineAnimation3D()));
   foreach(var head in _blocks.Where(b=>b.Type==28).Take(2)){var lamp=_visuals[head.Id].AddComponent(new PointLight{Color=new(1,.85f,.6f),Intensity=1.3f,Range=9,CastShadows=false});}foreach(var b in _blocks)ApplyPaint(b);CacheOutputs();CloseWheelMountGaps();BuildJson=JsonSerializer.Serialize(_blocks,BuildStore.Json);_contacts.Clear();RefreshGhost();RefreshHud();
  }
@@ -56,11 +56,11 @@ public sealed partial class DuneWorkshop3D:Component
  public bool AddBlock(int type,int parent,Vector3 position,Quaternion rotation,bool movingMount=false)
  {
   if(!CanPlacePaid(type))return false;
-  if(type==39){if(!TryGearboxMount(parent,out position,out rotation)){_message="Attach the gearbox directly to the rear of an engine.";return false;}movingMount=false;}
+  if(type==39){if(_blocks.Any(b=>b.Type==39&&b.Parent==parent)){_message="This engine already has a gearbox.";return false;}if(!TryGearboxMount(parent,out position,out rotation)){_message="Attach the gearbox directly to the rear of an engine.";return false;}movingMount=false;}
   if(!Building||_blocks.Count>=256||!_catalog.ContainsKey(type)||!_blocks.Any(b=>b.Id==parent)||!float.IsFinite(position.LengthSquared())||position.Length()>100||!float.IsFinite(rotation.LengthSquared())||rotation.LengthSquared()<.01f)return false;
   Record();var block=new PlacedBlock{Id=_blocks.Max(b=>b.Id)+1,Type=type,Parent=parent,MovingMount=movingMount,SpeedLimit=type==38?42:type==34?22:32};block.Pose(position,Quaternion.Normalize(rotation));_blocks.Add(block);_selected=block.Id;BuildVisuals();return true;
  }
- public bool ReparentBlock(int id,int parent,bool moving){if(!Building||id==0||!_blocks.Any(b=>b.Id==parent)||!_blocks.Any(b=>b.Id==id))return false;var copy=BuildStore.Read(Snapshot(),_catalog);var b=copy.First(b=>b.Id==id);b.Parent=parent;b.MovingMount=moving;try{copy=BuildStore.Read(JsonSerializer.Serialize(copy,BuildStore.Json),_catalog);}catch(InvalidDataException){return false;}Record();_blocks=copy;BuildVisuals();return true;}
+ public bool ReparentBlock(int id,int parent,bool moving){if(!Building||id==0||!_blocks.Any(b=>b.Id==parent)||!_blocks.Any(b=>b.Id==id))return false;var copy=BuildStore.Read(Snapshot(),_catalog);var b=copy.First(b=>b.Id==id);if(b.Type==39){if(!TryGearboxMount(parent,out var mount,out var facing)||copy.Any(p=>p.Type==39&&p.Id!=id&&p.Parent==parent))return false;b.Pose(mount,facing);moving=false;}b.Parent=parent;b.MovingMount=moving;try{copy=BuildStore.Read(JsonSerializer.Serialize(copy,BuildStore.Json),_catalog);}catch(InvalidDataException){return false;}Record();_blocks=copy;BuildVisuals();return true;}
  public bool RemoveBlock(int id)
  {
   if(!Building||_blocks.Count<=1||!_blocks.Any(b=>b.Id==id))return false;Record();var removed=_blocks.First(b=>b.Id==id);
@@ -80,7 +80,7 @@ public sealed partial class DuneWorkshop3D:Component
   if(!Building&&MissionActive){_message="Finish or quit the mission before returning to the workshop.";return;}
   if(!Building&&Mission!=null&&Vector3.Distance(Transform.WorldPosition,_garage)>22){_message="Return to base before building.";return;}
   if(Building&&!OwnsBuild(_blocks))return;
-  if(Building&&DragRace&&!HasGearbox){_message="Fit a gearbox from Drive before driving on the drag strip.";_contractRun=false;return;}
+  if(Building&&DragRace&&!HasGearbox){_message="Attach a gearbox directly to the rear face of an engine before driving on the drag strip.";_contractRun=false;return;}
   if(Building&&!ReadyToDrive){_message="Add a seat, engine and at least two wheels to drive.";return;}
   Building=!Building;_cameraReady=false;_lookTimer=0;Speed=0;_contacts.Clear();if(_mountMarker!=null)_mountMarker.Active=false;if(_ghost!=null)_ghost.Active=false;CloseGarageOverlay();CloseTuning();if(Building){_contractRun=false;StopPhysics();Transform.WorldPosition=_garage;Transform.WorldRotation=Quaternion.Identity;_yaw=0;BuildVisuals();}else{StartPhysics();if(!_contractRun)Mission?.BeginMission();}UpdateFeedback();_message=Building?"Ready to build.":"WASD drive / Space brake / Shift drift / R recover / B return to workshop";UpdateVisibility();RefreshHud();
  }
@@ -111,8 +111,8 @@ public sealed partial class DuneWorkshop3D:Component
    if(selected.Id<=12&&!_manualFace){incoming=NearestAxis(Vector3.Transform(-n,Quaternion.Inverse(rotation)));q=Quaternion.Normalize(target.Q*rotation);}
    else{incoming=selected.Wheel?Vector3.UnitZ:!_manualFace&&selected.Id is 20 or 21 or 22 or 32?Vector3.UnitZ:selected.Id==18&&!_manualFace?-Vector3.UnitY:selected.Id is 16 or 17&&!_manualFace?Vector3.UnitY:Normals[_face];var align=FromTo(incoming,-n);if(selected.Id==18&&!_manualFace&&Math.Abs(n.Y)<.5f){var pin=Vector3.Transform(Vector3.UnitZ,align);var up=Vector3.Normalize(Vector3.UnitY-n*Vector3.Dot(Vector3.UnitY,n));float angle=MathF.Atan2(Vector3.Dot(n,Vector3.Cross(pin,up)),Vector3.Dot(pin,up));align=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(n,angle)*align);}var local=Quaternion.Normalize(Quaternion.CreateFromAxisAngle(n,_twist*MathF.PI*.5f)*align*Quaternion.CreateFromYawPitchRoll(0,_pitchSteps*MathF.PI*.5f,_rollSteps*MathF.PI*.5f));q=Quaternion.Normalize(target.Q*FromTo(Vector3.Transform(incoming,local),-n)*local);}
    Vector3 own=MountPoint(_type,incoming);
-   _candidate=target.P+Vector3.Transform(snap,target.Q)-Vector3.Transform(own,q);_candidateQ=q;if(_type==39&&GearboxMounts.IsEngine(target.Type)&&n.Z>.5f){_candidate=GearboxMounts.Position(target,def);_candidateQ=q=target.Q;incoming=-Vector3.UnitZ;}
-   _valid=!Overlap(_candidate,q,_type,_move);string placementError=_valid?"": "Part intersects another block";if(_type==39&&(!GearboxMounts.IsEngine(target.Type)||n.Z<=.5f)){_valid=false;placementError="Gearbox must attach to the rear face of an engine";}if(_valid&&!HasMountSupport(_type,_candidate,q,incoming,_hover)){_valid=false;placementError=(_catalog[target.Type].Wheel||target.Type is 23 or 24 or 34 or 38 or 39 or 25 or 26 or 30 or 31)?"Attach to a frame or mechanical mounting plate, not a tyre, engine or seat housing":$"Needs {selected.SupportWidth:0.##} ï¿½ {selected.SupportLength:0.##} m of connected mounting surface";}
+   _candidate=target.P+Vector3.Transform(snap,target.Q)-Vector3.Transform(own,q);_candidateQ=q;if(_type==39&&GearboxMounts.IsEngine(target.Type)&&GearboxMounts.RearFace(target.Type,n)){_candidate=GearboxMounts.Position(target,def);_candidateQ=q=GearboxMounts.Rotation(target);incoming=Vector3.UnitZ;}
+   _valid=!Overlap(_candidate,q,_type,_move);string placementError=_valid?"": "Part intersects another block";if(_type==39&&(!GearboxMounts.IsEngine(target.Type)||!GearboxMounts.RearFace(target.Type,n))){_valid=false;placementError="Gearbox must attach to the rear face of an engine";}if(_valid&&!HasMountSupport(_type,_candidate,q,incoming,_hover)){_valid=false;placementError=(_catalog[target.Type].Wheel||target.Type is 23 or 24 or 34 or 38 or 39 or 25 or 26 or 30 or 31)?"Attach to a frame or mechanical mounting plate, not a tyre, engine or seat housing":$"Needs {selected.SupportWidth:0.##} ï¿½ {selected.SupportLength:0.##} m of connected mounting surface";}
    _message=_tool=="Tune"?"Click the highlighted part to tune it":_valid?"Click to place":placementError+" / Add support or choose another face";
    if(_ghost!=null){_ghost.Transform.LocalPosition=_candidate;_ghost.Transform.LocalRotation=q;_ghost.Active=_tool=="Place";foreach(var renderer in Descendants(_ghost).SelectMany(o=>o.Components).OfType<MeshRenderer>())renderer.Material.BaseColor=_valid?new(.2f,1,.65f,.3f):new(1,.15f,.1f,.3f);}
    if(Input.IsMouseButtonPressed(MouseButton.Left)){_selected=_hover;if(_tool=="Erase")RemoveBlock(_hover);else if(_tool=="Tune")OpenTuning();else if(_tool=="Move"){if(_hover!=0){_move=_hover;_type=target.Type;_tool="Place";RefreshGhost();_message="Click a new mount to move the selected branch.";}}else if(_valid){if(_move>=0)MoveBranch();else AddBlock(_type,_hover,_candidate,_candidateQ,_candidateMoving);}else _message=placementError+" / Add support or choose another face";}
@@ -128,3 +128,6 @@ public sealed partial class DuneWorkshop3D:Component
  protected override void OnStop(){ClearContactShadows();StopGarageMusic();ClearJobFeedback();RestoreGroundVisibility();ExportFrameDiagnostics();ClearVehicleFeedback();StopPhysics();_contacts.Clear();}
  protected override void OnDestroy(){ClearContactShadows();StopGarageMusic();ClearJobFeedback();ReleaseGarageCutaways();ClearVehicleFeedback();StopPhysics();}
 }
+
+
+

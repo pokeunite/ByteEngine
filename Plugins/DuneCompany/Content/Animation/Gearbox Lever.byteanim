@@ -1,0 +1,100 @@
+{
+  "version": 5,
+  "name": "Gearbox lever",
+  "rig": {
+    "type": "Generic",
+    "referenceModel": {
+      "guid": "bf3ff9e1-8a57-5765-8ca5-e02764fb8689",
+      "cachedProjectPath": "Assets/DuneParts/glb/39_gearbox.glb",
+      "projectPath": null,
+      "path": null
+    }
+  },
+  "locomotion": {
+    "enabled": false,
+    "driveFromCharacterController": false,
+    "idle": "Idle",
+    "walk": "Idle",
+    "run": "Idle",
+    "jump": "Idle",
+    "fall": "Idle",
+    "land": "Idle",
+    "runThreshold": 4,
+    "moveThreshold": 0.05,
+    "stateHysteresis": 0.15,
+    "directionalMovement": false,
+    "blendSpace": "",
+    "syncGroup": "",
+    "walkForward": "",
+    "walkBackward": "",
+    "walkLeft": "",
+    "walkRight": "",
+    "runForward": "",
+    "runBackward": "",
+    "runLeft": "",
+    "runRight": "",
+    "directionHysteresis": 0.1,
+    "matchPlaybackToSpeed": false,
+    "walkReferenceSpeed": 2,
+    "runReferenceSpeed": 5,
+    "minimumPlaybackRate": 0.7,
+    "maximumPlaybackRate": 1.4,
+    "transitionDuration": 0,
+    "playbackSpeed": 1,
+    "rootMotionMode": "InPlace"
+  },
+  "actions": [
+    {
+      "name": "ShiftUp",
+      "clip": "ShiftUp",
+      "loop": false,
+      "blendIn": 0,
+      "blendOut": 0,
+      "playbackSpeed": 1,
+      "priority": 10,
+      "interruptible": false,
+      "nextAction": "",
+      "comboWindow": ""
+    },
+    {
+      "name": "ShiftDown",
+      "clip": "ShiftDown",
+      "loop": false,
+      "blendIn": 0,
+      "blendOut": 0,
+      "playbackSpeed": 1,
+      "priority": 10,
+      "interruptible": false,
+      "nextAction": "",
+      "comboWindow": ""
+    }
+  ],
+  "procedural": {
+    "aimEnabled": false,
+    "lookAtEnabled": false,
+    "footIkEnabled": false,
+    "handIkEnabled": false,
+    "aimWeight": 1,
+    "aimYawLimit": 80,
+    "aimPitchLimit": 65,
+    "aimSmoothing": 12,
+    "aimBone": "",
+    "lookAtBone": "",
+    "lookAtTarget": "",
+    "lookAtWeight": 1,
+    "footRayDistance": 0.75,
+    "footOffset": 0,
+    "pelvisCompensation": 0.5,
+    "ikChains": []
+  },
+  "blendSpaces": [],
+  "layers": [],
+  "syncGroups": [],
+  "stateGraph": {
+    "enabled": false,
+    "entryState": "",
+    "parameters": [],
+    "states": [],
+    "transitions": []
+  }
+}

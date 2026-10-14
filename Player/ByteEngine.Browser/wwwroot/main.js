@@ -11,7 +11,18 @@ const progress=document.querySelector('#progress');
 status.setProgress=(value,label)=>{if(status.dataset.failed)return;progress.hidden=false;if(value===null)progress.removeAttribute('value');else progress.value=Math.max(0,Math.min(1,value));status.textContent=label;};
 const retry=document.querySelector("#retry");retry?.addEventListener("click",()=>location.reload());
 let stopped=false;globalThis.byteEnginePerf={begin:performance.now(),frames:[]};
-function fail(error){capture.event('error',{message:String(error?.stack||error).slice(0,2000)});stopped=true;progress.hidden=true;status.dataset.failed='true';status.hidden=false;status.style.pointerEvents='auto';if(retry)retry.hidden=false;status.textContent='ByteEngine browser error\n'+(error?.stack||error);console.error(error);}
+let readManagedError=()=>'';
+function fail(error){
+    if(stopped)return;
+    let managed='';try{managed=readManagedError();}catch{}
+    const detail=[managed,String(error?.stack||error)].filter(Boolean).join('\n');
+    capture.failure({message:detail.slice(0,16000)});
+    stopped=true;progress.hidden=true;status.dataset.failed='true';status.hidden=false;status.style.pointerEvents='auto';
+    if(retry)retry.hidden=false;
+    status.textContent='The game stopped unexpectedly. Save the error report and send it with what you were doing, then retry.';
+    const saveReport=document.createElement('button');saveReport.textContent='Save error report';saveReport.style.cssText='margin:16px;padding:12px 24px;background:#2986c5;color:white;border:0;border-radius:4px;font:inherit;cursor:pointer';saveReport.onclick=()=>capture.save();status.append(document.createElement('br'),saveReport);
+    const details=document.createElement('details'),label=document.createElement('summary'),text=document.createElement('pre');label.textContent='Technical details';text.textContent=detail;text.style.cssText='max-height:25vh;overflow:auto;text-align:left;white-space:pre-wrap;font-size:12px';details.append(label,text);status.append(details);console.error(detail);
+}
 window.addEventListener('error',e=>fail(e.error||e.message));
 window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
@@ -24,6 +35,7 @@ try{
     const gameReady=runtimeReady.then(async runtime=>{const config=runtime.getConfig();const exports=await runtime.getAssemblyExports(config.mainAssemblyName);await runtime.runMain();return exports.BrowserGame;});
     const contentReady=loadContent(gameReady,status);
     const [runtime,game,content]=await Promise.all([runtimeReady,gameReady,contentReady]);
+    readManagedError=()=>game.LastFrameError();
     renderer.readBuffer=index=>game.ReadBuffer(index);
     globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
     const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();

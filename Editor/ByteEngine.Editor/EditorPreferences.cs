@@ -9,6 +9,7 @@ internal static class EditorPreferences
         public bool Enable2DEditor { get; set; }
 
         public bool ShowFpsCounter { get; set; }
+        public bool EditorVSync { get; set; }
 
         public int LayoutVersion { get; set; }
 
@@ -114,6 +115,12 @@ internal static class EditorPreferences
             Settings.AssetIconScale = normalized;
             SaveSettings();
         }
+    }
+
+    public static bool EditorVSync
+    {
+        get => Settings.EditorVSync;
+        set { if(Settings.EditorVSync==value)return;Settings.EditorVSync=value;SaveSettings(); }
     }
 
     public static bool ShowFpsCounter

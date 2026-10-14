@@ -585,6 +585,13 @@ internal static class ComponentPropertyRenderer
                     ImGui.EndCombo();
                 }
             }
+            else if (descriptor.Property.PropertyType == typeof(string) &&
+                     descriptor.Property.IsDefined(typeof(AnimationActionPickerAttribute), inherit: true))
+            {
+                string actionName = before?.ToString() ?? string.Empty;
+                edited = DrawAnimationActionSelector(component, project, label, ref actionName);
+                after = actionName;
+            }
             else if (component is AnimationController clipController &&
                      project != null &&
                      descriptor.Property.PropertyType ==
@@ -1325,6 +1332,40 @@ internal static class ComponentPropertyRenderer
 
             _ => "None"
         };
+    }
+
+    internal static IReadOnlyList<string> GetAnimationActionNames(Component component, EditorProjectContext? project)
+    {
+        var controller = AnimationController.FindForObject(component.GameObject);
+        if (controller == null || project == null || controller.AnimationProfile.IsEmpty) return Array.Empty<string>();
+        try
+        {
+            return project.Assets.LoadAnimationProfile(controller.AnimationProfile).Actions
+                .Select(action => action.Name).Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+        catch { return Array.Empty<string>(); }
+    }
+
+    private static bool DrawAnimationActionSelector(Component component, EditorProjectContext? project,
+        string label, ref string actionName)
+    {
+        var names = GetAnimationActionNames(component, project);
+        string current = actionName;
+        string preview = string.IsNullOrWhiteSpace(current) ? "None" : names.Contains(current, StringComparer.OrdinalIgnoreCase)
+            ? current : current + " (missing action)";
+        bool changed = false;
+        if (!ImGui.BeginCombo(label, preview)) return false;
+        if (ImGui.Selectable("None", string.IsNullOrWhiteSpace(current))) { actionName = string.Empty; changed = true; }
+        if (names.Count == 0) ImGui.TextDisabled("Assign an animation profile with named actions to this weapon.");
+        foreach (string name in names)
+        {
+            bool selected = string.Equals(current, name, StringComparison.OrdinalIgnoreCase);
+            if (ImGui.Selectable(name, selected)) { actionName = name; changed = true; }
+            if (selected) ImGui.SetItemDefaultFocus();
+        }
+        ImGui.EndCombo();
+        return changed;
     }
 
     private static bool DrawAnimationClipSelector(

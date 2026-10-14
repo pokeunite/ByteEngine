@@ -1,4 +1,5 @@
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
 
 namespace KarlsonDemo.Plugin;
@@ -29,6 +30,11 @@ public sealed class WeaponDefinition3D : Component
     public float HitImpulse { get; set; } = 3;
     public float ReloadSeconds { get; set; } = 1.6f;
     public float EmptyReloadSeconds { get; set; } = 1.6f;
+    public bool AllowReloadInterrupt { get; set; } = true;
+    public float ReloadSpeedMultiplier { get; set; } = 1;
+    public bool MuzzleFlashEnabled { get; set; } = true;
+    public AssetReference MuzzleFlashEffect { get; set; } = AssetReference.Empty;
+    public float MuzzleFlashSize { get; set; } = .6f;
     public float EquipSeconds { get; set; } = .45f;
     public float ProjectileSpeed { get; set; } = 30;
     public float ProjectileLifetime { get; set; } = 5;
@@ -38,9 +44,13 @@ public sealed class WeaponDefinition3D : Component
     public string MuzzleSocket { get; set; } = "WeaponMuzzle";
     public string MuzzleBone { get; set; } = "MuzzleSocket";
     public System.Numerics.Vector3 MuzzleLocalOffset { get; set; }
+    [AnimationActionPicker]
     public string FireAnimation { get; set; } = "Fire";
+    [AnimationActionPicker]
     public string ReloadAnimation { get; set; } = "Reload";
+    [AnimationActionPicker]
     public string EmptyReloadAnimation { get; set; } = "Reload";
+    [AnimationActionPicker]
     public string EquipAnimation { get; set; } = "Equip";
     public bool ShowShotTrace { get; set; } = true;
     public bool ShowCameraAimRay { get; set; }

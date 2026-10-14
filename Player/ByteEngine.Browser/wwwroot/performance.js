@@ -22,7 +22,11 @@ export function createPerformanceCapture() {
     window.addEventListener('keydown',e=>{if(e.code==='F8'){e.preventDefault();e.stopImmediatePropagation();panel.hidden=!panel.hidden;}},true);
     document.addEventListener('visibilitychange',()=>event('visibility',{state:document.visibilityState}));
     try{new PerformanceObserver(list=>{for(const item of list.getEntries())event('long-task',{startMs:item.startTime-epoch,durationMs:item.duration});}).observe({type:'longtask',buffered:true});}catch{}
-    const api={event,probes,report,save,setHardware(value){hardware=value;},frame(value,readDiagnostics){
+    const api={event,probes,report,save,failure(detail){
+        // Preserve the failure even when the tester paused recording earlier.
+        const wasRecording=recording;recording=true;event('error',detail);recording=false;
+        if(wasRecording)frozenAt=time();toggle.textContent='Resume capture';
+    },setHardware(value){hardware=value;},frame(value,readDiagnostics){
         if(!recording)return;const now=performance.now();
         if(now-lastSample>=250){lastSample=now;try{diagnostics=readDiagnostics();if(diagnostics.scene!==lastScene){event('scene',{name:diagnostics.scene,building:diagnostics.building});lastScene=diagnostics.scene;}}catch(error){event('diagnostic-error',{message:String(error)});}}
         frames[cursor]={t:time(),visible:!document.hidden,...value,diagnostics};cursor=(cursor+1)%capacity;if(count<capacity)count++;else droppedFrames++;

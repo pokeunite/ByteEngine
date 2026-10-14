@@ -8,24 +8,35 @@ public sealed class Transform
     private Vector3 _localScale = Vector3.One;
     private Quaternion _localRotation = Quaternion.Identity;
 
-    public Vector3 LocalPosition { get; set; }
+    private Vector3 _localPosition;
+    private long _localVersion, _cachedLocalVersion = -1, _worldVersion;
+    private Transform? _cachedParent;
+    private long _cachedParentVersion = -1;
+    private Vector3 _worldPosition, _worldScale;
+    private Quaternion _worldRotation;
+    private Matrix4x4 _worldMatrix, _localMatrix;
+    public Vector3 LocalPosition
+    {
+        get => _localPosition;
+        set { if (_localPosition != value) { _localPosition = value; _localVersion++; } }
+    }
     public Quaternion LocalRotation
     {
         get => _localRotation;
-        set => _localRotation = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value);
+        set { var normalized = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value); if (_localRotation != normalized) { _localRotation = normalized; _localVersion++; } }
     }
     public Vector3 LocalScale
     {
         get => _localScale;
-        set => _localScale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z));
+        set { var scale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z)); if (_localScale != scale) { _localScale = scale; _localVersion++; } }
     }
 
     public Vector3 WorldPosition
     {
         get
         {
-            Transform? parent = _owner.Parent?.Transform;
-            return parent == null ? LocalPosition : parent.WorldPosition + Vector3.Transform(LocalPosition * parent.WorldScale, parent.WorldRotation);
+            EnsureWorld();
+            return _worldPosition;
         }
         set
         {
@@ -38,13 +49,13 @@ public sealed class Transform
     {
         // Numerics quaternions compose parent * local; row-vector matrices compose
         // localMatrix * parentMatrix. Reversing these creates roll in a yaw/pitch hierarchy.
-        get => _owner.Parent == null ? LocalRotation : Quaternion.Normalize(_owner.Parent.Transform.WorldRotation * LocalRotation);
+        get { EnsureWorld(); return _worldRotation; }
         set => LocalRotation = _owner.Parent == null ? value : Quaternion.Normalize(Quaternion.Inverse(_owner.Parent.Transform.WorldRotation) * value);
     }
 
     public Vector3 WorldScale
     {
-        get => _owner.Parent == null ? LocalScale : LocalScale * _owner.Parent.Transform.WorldScale;
+        get { EnsureWorld(); return _worldScale; }
         set => LocalScale = _owner.Parent == null ? value : value / _owner.Parent.Transform.WorldScale;
     }
 
@@ -69,8 +80,23 @@ public sealed class Transform
     public Vector3 Forward => Vector3.Normalize(Vector3.Transform(-Vector3.UnitZ, WorldRotation));
     public Vector3 Right => Vector3.Normalize(Vector3.Transform(Vector3.UnitX, WorldRotation));
     public Vector3 Up => Vector3.Normalize(Vector3.Transform(Vector3.UnitY, WorldRotation));
-    public Matrix4x4 LocalMatrix => Matrix4x4.CreateScale(LocalScale) * Matrix4x4.CreateFromQuaternion(LocalRotation) * Matrix4x4.CreateTranslation(LocalPosition);
-    public Matrix4x4 WorldMatrix => _owner.Parent == null ? LocalMatrix : LocalMatrix * _owner.Parent.Transform.WorldMatrix;
+    public Matrix4x4 LocalMatrix { get { EnsureWorld(); return _localMatrix; } }
+    public Matrix4x4 WorldMatrix { get { EnsureWorld(); return _worldMatrix; } }
+
+    private void EnsureWorld()
+    {
+        var parent = _owner.Parent?.Transform;
+        parent?.EnsureWorld();
+        long parentVersion = parent?._worldVersion ?? 0;
+        if (_cachedLocalVersion == _localVersion && ReferenceEquals(parent, _cachedParent) && _cachedParentVersion == parentVersion) return;
+        _localMatrix = Matrix4x4.CreateScale(_localScale) * Matrix4x4.CreateFromQuaternion(_localRotation) * Matrix4x4.CreateTranslation(_localPosition);
+        _worldMatrix = parent == null ? _localMatrix : _localMatrix * parent._worldMatrix;
+        _worldPosition = parent == null ? _localPosition : parent._worldPosition + Vector3.Transform(_localPosition * parent._worldScale, parent._worldRotation);
+        _worldRotation = parent == null ? _localRotation : Quaternion.Normalize(parent._worldRotation * _localRotation);
+        _worldScale = parent == null ? _localScale : _localScale * parent._worldScale;
+        _cachedLocalVersion = _localVersion; _cachedParent = parent; _cachedParentVersion = parentVersion;
+        _worldVersion++;
+    }
 
     private Vector3 _previousPosition;
     private Quaternion _previousRotation;
@@ -91,6 +117,8 @@ public sealed class Transform
         get
         {
             var scene = _owner.Scene;
+            if (!_hasSimulationPose || scene is not { FixedSimulation: true, IsLoaded: true })
+                return _owner.Parent == null ? WorldMatrix : LocalMatrix * _owner.Parent.Transform.RenderMatrix;
             float alpha = scene is { FixedSimulation: true, IsLoaded: true } && _hasSimulationPose
                 ? (float)scene.SimulationClock.InterpolationAlpha : 1;
             var local = Matrix4x4.CreateScale(Vector3.Lerp(_previousScale, LocalScale, alpha)) *

@@ -108,47 +108,19 @@ public readonly record struct BoundingBox3D(
             : Empty;
     }
 
-    public BoundingBox3D Transform(
-        Matrix4x4 matrix)
+    public BoundingBox3D Transform(Matrix4x4 matrix)
     {
-        Vector3[] corners =
-            GetCorners();
-
-        Vector3 minimum =
-            new(
-                float.PositiveInfinity,
-                float.PositiveInfinity,
-                float.PositiveInfinity);
-
-        Vector3 maximum =
-            new(
-                float.NegativeInfinity,
-                float.NegativeInfinity,
-                float.NegativeInfinity);
-
-        foreach (Vector3 corner
-                 in corners)
-        {
-            Vector3 transformed =
-                Vector3.Transform(
-                    corner,
-                    matrix);
-
-            minimum =
-                Vector3.Min(
-                    minimum,
-                    transformed);
-
-            maximum =
-                Vector3.Max(
-                    maximum,
-                    transformed);
-        }
-
-        return
-            new BoundingBox3D(
-                minimum,
-                maximum);
+        // Transform the interval directly. This also covers non-uniform scale,
+        // reflection and shear without allocating eight corners per submission.
+        Vector3 x0 = new Vector3(matrix.M11, matrix.M12, matrix.M13) * Minimum.X;
+        Vector3 x1 = new Vector3(matrix.M11, matrix.M12, matrix.M13) * Maximum.X;
+        Vector3 y0 = new Vector3(matrix.M21, matrix.M22, matrix.M23) * Minimum.Y;
+        Vector3 y1 = new Vector3(matrix.M21, matrix.M22, matrix.M23) * Maximum.Y;
+        Vector3 z0 = new Vector3(matrix.M31, matrix.M32, matrix.M33) * Minimum.Z;
+        Vector3 z1 = new Vector3(matrix.M31, matrix.M32, matrix.M33) * Maximum.Z;
+        Vector3 translation = new(matrix.M41, matrix.M42, matrix.M43);
+        return new BoundingBox3D(Vector3.Min(x0, x1) + Vector3.Min(y0, y1) + Vector3.Min(z0, z1) + translation,
+            Vector3.Max(x0, x1) + Vector3.Max(y0, y1) + Vector3.Max(z0, z1) + translation);
     }
 
     public Vector3[] GetCorners()

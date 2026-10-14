@@ -64,11 +64,21 @@ try:
             def click(x,y):page.locator('#game').click(position={'x':x,'y':y});page.wait_for_timeout(1000)
             for title,kind,row in [('Dust Bowl Drift','Drift',320),('Dead Straight','Drag',384),('Red Rock Rally','Rally',448)]:
                 if os.environ.get('TEST_MOTORSPORT_TARGET') and os.environ['TEST_MOTORSPORT_TARGET']!=kind:continue
-                click(110,276);click(470,524);click(400,row);page.screenshot(path=str(site/(kind+'-contract.png')));click(830,629)
+                click(110,276);click(470,524);click(400,row);page.screenshot(path=str(site/(kind+'-contract.png')))
+                held_launch=kind=='Drag' and os.environ.get('TEST_DRAG_LAUNCH')=='1'
+                if held_launch:page.keyboard.down('w')
+                click(830,629)
                 page.wait_for_function('byteEngineDebug().building===false||document.querySelector("#status").dataset.failed',timeout=90000)
                 assert not page.evaluate('!!document.querySelector("#status").dataset.failed'),page.locator('#status').inner_text()
                 page.wait_for_function('byteEngineTestFrame.pendingTextures===0',timeout=60000);page.wait_for_timeout(4500)
                 debug=page.evaluate('byteEngineDebug()');assert debug['scene']==title and debug['motorsport']['kind']==kind,debug
+                if held_launch:
+                    assert debug['motorsport']['launchPenalty']==0 and debug['velocity']>0.1,debug
+                    page.keyboard.up('w')
+                    for i in range(5):page.keyboard.press('x');page.wait_for_timeout(950)
+                    debug=page.evaluate('byteEngineDebug()');assert debug['motorsport']['gear']==6 and debug['motorsport']['topGear'],debug
+                    assert not page.evaluate('byteEngineTestFrame.ui.some(c=>String(c.text||"").includes("REV LIMIT / SHIFT UP"))'),debug
+                    page.screenshot(path=str(site/'Drag-top-gear.png'))
                 page.screenshot(path=str(site/(kind+'-start.png')))
                 start=debug['position'];page.keyboard.down('w');page.wait_for_timeout(4000);page.keyboard.up('w')
                 moving=page.evaluate('byteEngineDebug()');assert moving['velocity']>1 and moving['position']!=start,moving

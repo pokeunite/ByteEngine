@@ -10,6 +10,28 @@ public sealed class Renderer3D : IDisposable
 
     private int _instanceBuffer;
     private Matrix4x4[] _instanceMatrices=[];
+    private readonly RenderBatcher.Builder _shadowBatchBuilder=new();
+    private readonly Dictionary<IReadOnlyList<RenderSubmission>,int> _instanceOffsets=new(ReferenceEqualityComparer.Instance);
+    internal void PrepareInstanceStream(IReadOnlyList<RenderBatcher.Batch> batches)
+    {
+        _instanceOffsets.Clear();
+        int count=0;
+        foreach(var batch in batches)if(batch.Instances.Count>1){_instanceOffsets.Add(batch.Instances,count);count+=batch.Instances.Count;}
+        if(count==0)return;
+        if(_instanceMatrices.Length<count)Array.Resize(ref _instanceMatrices,Math.Max(count,_instanceMatrices.Length*2));
+        foreach(var batch in batches)if(batch.Instances.Count>1)
+        {
+            int offset=_instanceOffsets[batch.Instances];
+            for(int i=0;i<batch.Instances.Count;i++)_instanceMatrices[offset+i]=batch.Instances[i].ModelMatrix;
+        }
+        UploadInstanceMatrices(count);
+    }
+    private void UploadInstanceMatrices(int count)
+    {
+        if(_instanceBuffer==0)_instanceBuffer=GL.GenBuffer();
+        GL.BindBuffer(BufferTarget.ArrayBuffer,_instanceBuffer);
+        GL.BufferData(BufferTarget.ArrayBuffer,count*64,_instanceMatrices,BufferUsageHint.StreamDraw);
+    }
     private readonly RenderPassProfiler _passes=new();
     internal IDisposable ProfilePass(RenderContext context,string name)=>_passes.Begin(context.ViewportName,name,context.TargetWidth,context.TargetHeight,context.RenderWorld.Environment.Look.ProfileGpu);
     private readonly GeometryGpuTimer _geometryTimer = new();
@@ -19,6 +41,18 @@ public sealed class Renderer3D : IDisposable
 
     private readonly List<RenderSubmission> _directionalCasters = new();
     private readonly List<RenderSubmission> _pointCasters = new();
+    public bool EnableShadowCaching { get; set; } = true;
+    public string DirectionalShadowCacheStatus => _directionalDepthCache.Status == "Dynamic caster" ? "Static: " + _staticDirectionalDepthCache.Status : _directionalDepthCache.Status;
+    private readonly ShadowDepthCache _directionalDepthCache = new();
+    private readonly ShadowDepthCache _staticDirectionalDepthCache = new();
+    private readonly ShadowDepthCache _pendingStaticDepthInputs = new();
+    private Matrix4x4 _previousDirectionalView;
+    private bool _hasDirectionalView;
+    private ShadowMap3D? _staticDirectionalMap;
+    private readonly List<RenderSubmission> _staticDirectionalCasters = new();
+    private readonly List<RenderSubmission> _movingDirectionalCasters = new();
+    private readonly ShadowDepthCache[] _pointDepthCaches = Enumerable.Range(0, RenderLighting3D.MaxPointShadowLights)
+        .Select(_ => new ShadowDepthCache()).ToArray();
     private static readonly string[][] DirectionalUniforms = Enumerable.Range(0, RenderLighting3D.MaxDirectionalLights)
         .Select(i => new[] { $"uDirectionalLightDirections[{i}]", $"uDirectionalLightColors[{i}]", $"uDirectionalLightIntensities[{i}]" }).ToArray();
     private static readonly string[][] PointUniforms = Enumerable.Range(0, RenderLighting3D.MaxPointLights)
@@ -214,9 +248,77 @@ public sealed class Renderer3D : IDisposable
                 light);
 
         var shadowFrustum = new Frustum3D(lightViewProjection);
+        casters.RemoveAll(submission => !shadowFrustum.Intersects(submission.WorldBounds));
 
+        var cacheKey = new ShadowDepthCache.Key(lightViewProjection, Vector3.Zero, 0,
+            light.ShadowResolution, GraphicsContextScope.CurrentContextId);
+        bool useCache = EnableShadowCaching && _hasDirectionalView && _previousDirectionalView == view.ViewMatrix;
+        _previousDirectionalView = view.ViewMatrix;
+        _hasDirectionalView = true;
+        if (useCache && _directionalDepthCache.Matches(cacheKey, casters))
+            return new DirectionalShadowPassResult(new RenderDirectionalShadow3D(shadowLightIndex,
+                lightViewProjection, _shadowMap!.DepthTextureId, _shadowMap.Resolution,
+                light.ShadowBias, light.ShadowStrength, light.ShadowSoftness), 0);
+        _directionalDepthCache.Invalidate(useCache ? null : "Camera moving");
+
+        int drawCalls;
+        _staticDirectionalCasters.Clear();
+        _movingDirectionalCasters.Clear();
+        if (useCache)
+            foreach (var caster in casters)
+                (caster.Mesh.IsDynamic ? _movingDirectionalCasters : _staticDirectionalCasters).Add(caster);
+        if (useCache && _movingDirectionalCasters.Count > 0)
+        {
+            bool cached = _staticDirectionalDepthCache.Matches(cacheKey, _staticDirectionalCasters);
+            // While turning/moving, do the original single full pass. Allocate and compose
+            // a cached static layer only after its inputs survive two successive passes.
+            if (!cached && !_pendingStaticDepthInputs.Matches(cacheKey, _staticDirectionalCasters))
+            {
+                drawCalls = RenderDirectionalDepth(casters, view, light, lightViewProjection, _shadowMap!);
+                _pendingStaticDepthInputs.Capture(cacheKey, _staticDirectionalCasters);
+            }
+            else
+            {
+                _staticDirectionalMap ??= new ShadowMap3D();
+                drawCalls = 0;
+                if (!cached)
+                {
+                    _staticDirectionalDepthCache.Invalidate();
+                    drawCalls += RenderDirectionalDepth(_staticDirectionalCasters, view, light,
+                        lightViewProjection, _staticDirectionalMap);
+                    _staticDirectionalDepthCache.Capture(cacheKey, _staticDirectionalCasters);
+                }
+                drawCalls += RenderDirectionalDepth(_movingDirectionalCasters, view, light,
+                    lightViewProjection, _shadowMap!, _staticDirectionalMap);
+            }
+        }
+        else
+            drawCalls = RenderDirectionalDepth(casters, view, light, lightViewProjection, _shadowMap!);
+
+        if (useCache)
+        {
+            if (_movingDirectionalCasters.Count == 0) _directionalDepthCache.Capture(cacheKey, casters);
+            else _directionalDepthCache.MarkDynamic();
+        }
+        return
+            new DirectionalShadowPassResult(
+                new RenderDirectionalShadow3D(
+                    shadowLightIndex,
+                    lightViewProjection,
+                    _shadowMap!.DepthTextureId,
+                    _shadowMap.Resolution,
+                    light.ShadowBias,
+                    light.ShadowStrength,
+                    light.ShadowSoftness),
+                drawCalls);
+    }
+
+    private int RenderDirectionalDepth(IReadOnlyList<RenderSubmission> casters, RenderView3D view,
+        RenderDirectionalLight3D light, Matrix4x4 lightViewProjection, ShadowMap3D target,
+        ShadowMap3D? depthSource = null)
+    {
         int previousFramebuffer =
-            _shadowMap!.Begin(
+            target.Begin(
                 light.ShadowResolution);
 
         int drawCalls =
@@ -224,6 +326,7 @@ public sealed class Renderer3D : IDisposable
 
         try
         {
+            if (depthSource != null) target.CopyDepthFrom(depthSource);
             GL.Enable(
                 EnableCap.DepthTest);
 
@@ -251,11 +354,12 @@ public sealed class Renderer3D : IDisposable
                 "uLightViewProjection",
                 lightViewProjection);
 
-            foreach (RenderSubmission submission
-                     in casters)
+            var shadowBatches=_shadowBatchBuilder.Build(casters,shadows:true);
+            PrepareInstanceStream(shadowBatches);
+            foreach (var batch in shadowBatches)
             {
-                // Casters outside the light volume cannot affect this shadow map.
-                if (!shadowFrustum.Intersects(submission.WorldBounds)) continue;
+                var submission = batch.First;
+                _shadowShader.SetInt("uInstanced", batch.Instances.Count > 1 ? 1 : 0);
 
                 _shadowShader.SetMatrix(
                     "uModel",
@@ -299,11 +403,7 @@ public sealed class Renderer3D : IDisposable
 
                 submission.Mesh.Bind();
 
-                GL.DrawElements(
-                    BeginMode.Triangles,
-                    submission.Mesh.IndexCount,
-                    DrawElementsType.UnsignedInt,
-                    0);
+                DrawMeshInstances(submission.Mesh, batch.Instances);
 
                 drawCalls++;
             }
@@ -313,7 +413,8 @@ public sealed class Renderer3D : IDisposable
         }
         finally
         {
-            _shadowMap.End(
+            _instanceOffsets.Clear();
+            target.End(
                 previousFramebuffer,
                 view.TargetWidth,
                 view.TargetHeight);
@@ -321,17 +422,7 @@ public sealed class Renderer3D : IDisposable
             RestoreBaselineState();
         }
 
-        return
-            new DirectionalShadowPassResult(
-                new RenderDirectionalShadow3D(
-                    shadowLightIndex,
-                    lightViewProjection,
-                    _shadowMap.DepthTextureId,
-                    _shadowMap.Resolution,
-                    light.ShadowBias,
-                    light.ShadowStrength,
-                    light.ShadowSoftness),
-                drawCalls);
+        return drawCalls;
     }
 
     public PointShadowPassResult RenderPointShadowMaps(
@@ -392,6 +483,21 @@ public sealed class Renderer3D : IDisposable
                 continue;
             }
 
+            var cache = _pointDepthCaches[shadowSlot];
+            var cacheKey = new ShadowDepthCache.Key(Matrix4x4.Identity, light.Position, light.Range,
+                light.ShadowResolution, GraphicsContextScope.CurrentContextId);
+            if (EnableShadowCaching && cache.Matches(cacheKey, casters))
+            {
+                var map = _pointShadowMaps[shadowSlot]!;
+                shadows.Add(new RenderPointShadow3D(lightIndex, map.DepthCubeTextureId, light.Range,
+                    light.ShadowBias, light.ShadowStrength, light.ShadowSoftness, map.Resolution));
+                continue;
+            }
+            cache.Invalidate();
+
+            var shadowBatches = _shadowBatchBuilder.Build(casters,shadows:true);
+            PrepareInstanceStream(shadowBatches);
+
             PointShadowMap3D shadowMap =
                 _pointShadowMaps[shadowSlot]!;
 
@@ -444,9 +550,10 @@ public sealed class Renderer3D : IDisposable
                         "uFarPlane",
                         light.Range);
 
-                    foreach (RenderSubmission submission
-                             in casters)
+                    foreach (var batch in shadowBatches)
                     {
+                        var submission = batch.First;
+                        _pointShadowShader.SetInt("uInstanced", batch.Instances.Count > 1 ? 1 : 0);
                         _pointShadowShader.SetMatrix(
                             "uModel",
                             submission.ModelMatrix);
@@ -489,11 +596,7 @@ public sealed class Renderer3D : IDisposable
 
                         submission.Mesh.Bind();
 
-                        GL.DrawElements(
-                            BeginMode.Triangles,
-                            submission.Mesh.IndexCount,
-                            DrawElementsType.UnsignedInt,
-                            0);
+                        DrawMeshInstances(submission.Mesh, batch.Instances);
 
                         drawCalls++;
                     }
@@ -511,6 +614,7 @@ public sealed class Renderer3D : IDisposable
                 }
             }
 
+            if (EnableShadowCaching) cache.Capture(cacheKey, casters);
             shadows.Add(
                 new RenderPointShadow3D(
                     lightIndex,
@@ -533,7 +637,7 @@ public sealed class Renderer3D : IDisposable
     bool _mainBatch;
     (bool depth,bool write,BlendMode3D blend,CullMode3D cull,FrontFaceWinding3D front,PolygonMode3D polygon)? _batchState;
     internal void BeginMainBatch(){_mainBatch=EnableStateBatching;_batchState=null;}
-    internal void EndMainBatch(){_mainBatch=false;_batchState=null;RestoreBaselineState();}
+    internal void EndMainBatch(){_instanceOffsets.Clear();_mainBatch=false;_batchState=null;RestoreBaselineState();}
     void ApplyMainState(Material material){
         var state=(material.DepthTest,material.ResolveDepthWrite(),material.BlendMode,material.CullMode,material.FrontFace,material.PolygonMode);
         if(_mainBatch&&_batchState==state)return;
@@ -693,20 +797,7 @@ public sealed class Renderer3D : IDisposable
 
             mesh.Bind();
 
-            if(instanced)
-            {
-                int count=instances!.Count;
-                if(_instanceMatrices.Length<count)Array.Resize(ref _instanceMatrices,Math.Max(count,_instanceMatrices.Length*2));
-                for(int i=0;i<count;i++)_instanceMatrices[i]=instances[i].ModelMatrix;
-                if(_instanceBuffer==0)_instanceBuffer=GL.GenBuffer();
-                GL.BindBuffer(BufferTarget.ArrayBuffer,_instanceBuffer);
-                GL.BufferData(BufferTarget.ArrayBuffer,count*64,_instanceMatrices,BufferUsageHint.StreamDraw);
-                for(int column=0;column<4;column++)
-                {int location=5+column;GL.EnableVertexAttribArray(location);GL.VertexAttribPointer(location,4,VertexAttribPointerType.Float,false,64,column*16);GL.VertexAttribDivisor(location,1);}
-                try { GL.DrawElementsInstanced(PrimitiveType.Triangles,mesh.IndexCount,DrawElementsType.UnsignedInt,IntPtr.Zero,count); }
-                finally { for(int location=5;location<9;location++){GL.DisableVertexAttribArray(location);GL.VertexAttribDivisor(location,0);} }
-            }
-            else GL.DrawElements(BeginMode.Triangles,mesh.IndexCount,DrawElementsType.UnsignedInt,0);
+            DrawMeshInstances(mesh, instances);
 
             GL.BindVertexArray(
                 0);
@@ -718,6 +809,31 @@ public sealed class Renderer3D : IDisposable
 
             if(!_mainBatch)RestoreBaselineState();
         }
+    }
+
+    private void DrawMeshInstances(Mesh mesh, IReadOnlyList<RenderSubmission>? instances)
+    {
+        if (instances is not { Count: > 1 })
+        { GL.DrawElements(BeginMode.Triangles, mesh.IndexCount, DrawElementsType.UnsignedInt, 0); return; }
+        int count=instances.Count;
+        if(!_instanceOffsets.TryGetValue(instances,out int first))
+        {
+            // Public standalone draws retain their existing caller-owned API.
+            _instanceOffsets.Clear();
+            if(_instanceMatrices.Length<count)Array.Resize(ref _instanceMatrices,Math.Max(count,_instanceMatrices.Length*2));
+            for(int i=0;i<count;i++)_instanceMatrices[i]=instances[i].ModelMatrix;
+            UploadInstanceMatrices(count);first=0;
+        }
+        GL.BindBuffer(BufferTarget.ArrayBuffer,_instanceBuffer);
+        for(int column=0;column<4;column++)
+        {
+            int location=5+column;
+            GL.EnableVertexAttribArray(location);
+            GL.VertexAttribPointer(location,4,VertexAttribPointerType.Float,false,64,first*64+column*16);
+            GL.VertexAttribDivisor(location,1);
+        }
+        try { GL.DrawElementsInstanced(PrimitiveType.Triangles,mesh.IndexCount,DrawElementsType.UnsignedInt,IntPtr.Zero,count); }
+        finally { for(int location=5;location<9;location++){GL.DisableVertexAttribArray(location);GL.VertexAttribDivisor(location,0);} }
     }
 
     private void UploadStandardMaterialMaps(Material material)
@@ -1595,6 +1711,13 @@ public sealed class Renderer3D : IDisposable
         _shadowShader =
             null;
 
+        _staticDirectionalMap?.Dispose();
+        _staticDirectionalMap = null;
+        _staticDirectionalDepthCache.Invalidate();
+        _pendingStaticDepthInputs.Invalidate();
+        _hasDirectionalView = false;
+        _directionalDepthCache.Invalidate();
+        foreach (var cache in _pointDepthCaches) cache.Invalidate();
         _shadowMap?.Dispose();
 
         _shadowMap =
