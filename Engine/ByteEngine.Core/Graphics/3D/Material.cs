@@ -31,6 +31,10 @@ public sealed class Material
     public float HeightFieldRange {get;set;} = 1;
     public float HeightFieldBias {get;set;} = -.5f;
     public Vector2 HeightFieldWorldSize {get;set;} = Vector2.One;
+    public bool WaterSurface {get;set;}
+    public Vector4 WaterMotion {get;set;}
+    public Vector4 WaterWake {get;set;}
+    public Vector2 WaterSize {get;set;} = Vector2.One;
     public bool SandSurface {get;set;}
     public Texture2D? SandImprintTexture {get;set;}
     public Vector2 SandImprintOrigin {get;set;}
@@ -118,6 +122,7 @@ public sealed class Material
     public void CopyFrom(Material source)
     {
         BaseColor = source.BaseColor;
+        WaterSurface=source.WaterSurface;WaterMotion=source.WaterMotion;WaterWake=source.WaterWake;WaterSize=source.WaterSize;
         MainTexture = source.MainTexture;
         NormalTexture = source.NormalTexture;
         NormalStrength = source.NormalStrength;
@@ -156,6 +161,7 @@ public sealed class Material
         return
             new Material
             {
+                WaterSurface=WaterSurface,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterSize=WaterSize,
                 BaseColor =
                     BaseColor,
 

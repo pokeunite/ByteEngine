@@ -89,6 +89,10 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uView;
         uniform mat4 uProjection;
         uniform mat4 uNormalMatrix;
+        uniform int uWaterSurface;
+        uniform vec4 uWaterMotion;
+        uniform vec4 uWaterWake;
+        uniform vec2 uWaterSize;
         uniform int uUseHeightField;
         uniform sampler2D uHeightFieldTexture;
         uniform vec4 uHeightFieldUvTransform;
@@ -127,6 +131,12 @@ internal sealed class Shader3D : IDisposable
             }
             else vNormal=mat3(uNormalMatrix)*normal;
             vWorldPosition=(model*vec4(position,1.0)).xyz;
+            if(uWaterSurface==1){
+                float t=uWaterMotion.x;vec2 q=vWorldPosition.xz;
+                float edge=smoothstep(0.0,0.07,min(min(aUV.x,1.0-aUV.x),min(aUV.y,1.0-aUV.y)));
+                float h=(sin(dot(q,vec2(2.6,1.1))-t*1.6)*0.65+sin(dot(q,vec2(-1.4,3.6))+t*1.1)*0.35)*uWaterMotion.z*edge;
+                if(abs(normal.y)>0.5)vWorldPosition.y+=h;else vWorldPosition.z+=h;
+            }
             vUV=aUV;
             gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);
         }
@@ -187,6 +197,10 @@ internal sealed class Shader3D : IDisposable
         uniform int uPackedMetallicChannel;
         uniform float uAoStrength;
         uniform float uNormalStrength;
+        uniform int uWaterSurface;
+        uniform vec4 uWaterMotion;
+        uniform vec4 uWaterWake;
+        uniform vec2 uWaterSize;
         uniform int uUseHeightField;
         uniform sampler2D uHeightFieldTexture;
         uniform vec4 uHeightFieldUvTransform;
@@ -977,6 +991,16 @@ internal sealed class Shader3D : IDisposable
                     base.rgb*=1.0-sqrt(imprint.b)*0.34;
                 }
             }
+            if(uWaterSurface==1){
+                float t=uWaterMotion.x;float speed=clamp(abs(uWaterMotion.y)*0.15,0.0,2.5);
+                vec2 q=abs(n.y)>0.5?vWorldPosition.xz:vec2(vWorldPosition.x,-vWorldPosition.y*1.5);
+                float p=dot(q,vec2(6.2,2.8))-t*(1.4+speed);
+                float r=dot(q,vec2(-3.8,8.1))+t*1.1;
+                vec2 slope=vec2(cos(p)*0.18+cos(r)*0.08,cos(p)*0.08-cos(r)*0.16);
+                if(abs(n.y)>0.5)n=normalize(vec3(-slope.x,1.0,-slope.y));
+                else n=normalize(n+vec3(slope.x,slope.y,0.0));
+                uRoughness=0.11;uMetallic=0.08;
+            }
             vec3 v=normalize(uCameraPosition-vWorldPosition);
 
             vec3 direct=
@@ -1217,6 +1241,27 @@ internal sealed class Shader3D : IDisposable
                 direct+
                 emission;
 
+            if(uWaterSurface==1){
+                float t=uWaterMotion.x;float speed=clamp(abs(uWaterMotion.y)*0.1,0.0,2.0);
+                vec2 q=abs(normalize(vNormal).y)>0.5?vWorldPosition.xz:vec2(vWorldPosition.x,-vWorldPosition.y*1.5);
+                float a=sin(q.x*4.5+sin(q.y*3.1-t)*1.3-t*(1.2+speed));
+                float b=sin(q.y*8.5+sin(q.x*2.8+t)*1.7+t*1.6);
+                float veins=pow(clamp(1.0-abs(a+b*0.58),0.0,1.0),15.0);
+                vec2 edgeDistance=min(vUV,vec2(1.0)-vUV)*uWaterSize;
+                float edge=1.0-smoothstep(0.015,0.14,min(edgeDistance.x,edgeDistance.y));
+                vec2 wakePoint=vWorldPosition.xz-uWaterWake.xy;
+                vec2 wakeRadius=vec2(max(0.1,uWaterWake.z*0.54),max(0.1,uWaterWake.z*0.19));
+                float wakeRing=(1.0-smoothstep(0.04,0.26,abs(length(wakePoint/wakeRadius)-1.0)))*uWaterWake.w;
+                float trail=(1.0-smoothstep(0.3,0.9,abs(wakePoint.y)))*smoothstep(-6.0,-2.0,wakePoint.x)*(1.0-smoothstep(-2.1,-1.8,wakePoint.x))*uWaterWake.w;
+                bool vertical=abs(normalize(vNormal).y)<0.5;
+                float foam=vertical?clamp((veins*(0.25+speed*0.2)+edge*0.25)*uWaterMotion.w,0.0,0.85):clamp((veins*0.01+edge*(0.3+0.3*max(0.0,a))+wakeRing*(0.4+veins*0.6)+trail*veins*0.8)*uWaterMotion.w,0.0,0.85);
+                float fresnel=pow(1.0-max(dot(n,v),0.0),4.0);
+                vec3 reflection=mix(vec3(0.04,0.16,0.2),vec3(0.2,0.43,0.48),clamp(n.y*0.5+0.5,0.0,1.0));
+                linearColor=mix(linearColor,reflection,0.05+fresnel*0.35);
+                linearColor+=vec3(0.13,0.32,0.31)*(veins*0.18);
+                linearColor=mix(linearColor,vec3(0.72,0.88,0.86),foam);
+                base.a=clamp(base.a+foam*0.2+fresnel*0.1,0.0,1.0);
+            }
             if(uFogEnabled==1)
             {
                 float fogDistance=

@@ -8,7 +8,7 @@ internal sealed class MaterialRenderStateComparer : IEqualityComparer<Material>
     {
         if(ReferenceEquals(x,y))return true;
         if(x is null || y is null)return false;
-        return x.BaseColor == y.BaseColor &&
+        return x.WaterSurface==y.WaterSurface && x.WaterMotion==y.WaterMotion && x.WaterWake==y.WaterWake && x.WaterSize==y.WaterSize && x.BaseColor == y.BaseColor &&
             x.MainTexture == y.MainTexture &&
             x.NormalTexture == y.NormalTexture &&
             x.HeightFieldTexture == y.HeightFieldTexture &&
@@ -51,6 +51,7 @@ internal sealed class MaterialRenderStateComparer : IEqualityComparer<Material>
     public int GetHashCode(Material value)
     {
         var hash=new HashCode();
+        hash.Add(value.WaterSurface);hash.Add(value.WaterMotion);hash.Add(value.WaterWake);hash.Add(value.WaterSize);
         hash.Add(value.BaseColor);
         hash.Add(value.MainTexture);
         hash.Add(value.NormalTexture);

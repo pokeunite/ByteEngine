@@ -844,6 +844,7 @@ public sealed class Renderer3D : IDisposable
         _shader.SetVector2("uUvOffset", material.UvOffset);
         _shader.SetFloat("uNormalStrength", material.NormalStrength);
         _shader.SetInt("uSandSurface", material.SandSurface ? 1 : 0);
+        _shader.SetInt("uWaterSurface",material.WaterSurface?1:0);_shader.SetVector4("uWaterMotion",material.WaterMotion);_shader.SetVector4("uWaterWake",material.WaterWake);_shader.SetVector2("uWaterSize",material.WaterSize);
         _shader.SetInt("uUseSandImprint",material.SandImprintTexture!=null?1:0);
         _shader.SetVector2("uSandImprintOrigin",material.SandImprintOrigin);
         if(material.SandImprintTexture!=null){material.SandImprintTexture.Bind(13);GL.BindSampler(13,0);_shader.SetInt("uSandImprintTexture",13);}

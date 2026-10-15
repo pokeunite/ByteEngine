@@ -107,6 +107,8 @@ internal static class ComponentMetadataRegistry
         [typeof(HitscanEmitter3D)] = new("Hitscan Emitter", "Gameplay", "Reusable bounded ray firing with damage, owner exclusion and physical impact. Drive from gameplay or events.", "weapon ray hitscan shoot"),
         [typeof(LaunchVolume3D)] = new("Launch Volume", "Gameplay", "Launches characters or dynamic bodies entering a trigger.", "jump pad bounce launch"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D)] = new("Water Basin", "Physics", "Finite rectangular water volume with rigid-body displacement.", "water fluid hydraulics"),
+        [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterSurface3D)] = new("Water Surface", "Rendering", "Flow-driven water waves, highlights and shoreline foam. Does not alter simulation volume.", "water waves foam surface"),
+        [typeof(ByteEngine.Core.Gameplay.Hydraulics.FlowRotor3D)] = new("Flow Rotor", "Physics", "Rotate a wheel or shaft using measured water throughput.", "water pulley wheel rotor"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterGate3D)] = new("Water Gate / Pump", "Physics", "Gravity sluice or recovery pump between finite basins.", "water valve sluice pump"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterNetwork3D)] = new("Water Network", "Physics", "Conserves water across connected basins and computes head-driven flow.", "water fluid simulation"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterCurrentPath3D)] = new("Water Current Path", "Physics", "Measured-flow streamline for bent channels and branches.", "water current canal branch"),
