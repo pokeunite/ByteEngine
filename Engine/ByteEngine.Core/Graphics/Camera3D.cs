@@ -19,6 +19,8 @@ public sealed class Camera3D : Component
 
     internal void SetActiveGameCameraWithoutNotification(bool value) => _activeGameCamera = value;
     public float FieldOfView { get; set; } = 60f;
+    public bool Orthographic { get; set; }
+    public float OrthographicWidth { get; set; } = 40f;
     public float NearClip { get; set; } = .1f;
     public float FarClip { get; set; } = 1000f;
     public Matrix4x4 GetViewMatrix() => Matrix4x4.CreateLookAt(Transform.WorldPosition, Transform.WorldPosition + Transform.Forward, Transform.Up);
@@ -28,7 +30,9 @@ public sealed class Camera3D : Component
         return Matrix4x4.CreateLookAt(world.Translation,world.Translation+Vector3.Normalize(Vector3.TransformNormal(-Vector3.UnitZ,world)),Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY,world)));
     }
 
-    public Matrix4x4 GetProjectionMatrix(float aspectRatio) => Matrix4x4.CreatePerspectiveFieldOfView(
+    public Matrix4x4 GetProjectionMatrix(float aspectRatio) => Orthographic
+        ? Matrix4x4.CreateOrthographic(Math.Max(.01f,OrthographicWidth),Math.Max(.01f,OrthographicWidth)/Math.Max(.001f,aspectRatio),Math.Max(.001f,NearClip),Math.Max(FarClip,NearClip+.001f))
+        : Matrix4x4.CreatePerspectiveFieldOfView(
         Math.Clamp(FieldOfView, 1f, 179f) * MathF.PI / 180f, Math.Max(aspectRatio, .001f),
         Math.Max(NearClip, .001f), Math.Max(FarClip, NearClip + .001f));
 
@@ -36,6 +40,8 @@ public sealed class Camera3D : Component
     {
         float x = Math.Clamp(normalizedPoint.X, 0f, 1f) * 2f - 1f;
         float y = 1f - Math.Clamp(normalizedPoint.Y, 0f, 1f) * 2f;
+        if(Orthographic)
+            return (Transform.WorldPosition+Transform.Right*x*Math.Max(.01f,OrthographicWidth)/2+Transform.Up*y*Math.Max(.01f,OrthographicWidth)/Math.Max(.001f,aspectRatio)/2,Transform.Forward);
         float tangent = MathF.Tan(Math.Clamp(FieldOfView, 1f, 179f) * MathF.PI / 360f);
         Vector3 direction = Transform.Forward + Transform.Right * (x * Math.Max(aspectRatio, .001f) * tangent) +
             Transform.Up * (y * tangent);

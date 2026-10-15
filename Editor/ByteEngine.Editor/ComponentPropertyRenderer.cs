@@ -168,12 +168,12 @@ internal static class ComponentPropertyRenderer
         {
             nameof(UiWidget.ImageReference) => widget.Kind == UiWidgetKind.Image,
             nameof(UiWidget.FillColor) or nameof(UiWidget.Value) or
-                nameof(UiWidget.Maximum) => widget.Kind == UiWidgetKind.ProgressBar,
+                nameof(UiWidget.Maximum) => widget.Kind is UiWidgetKind.ProgressBar or UiWidgetKind.Slider,
             nameof(UiWidget.HoverColor) or nameof(UiWidget.PressedColor) or
                 nameof(UiWidget.DisabledColor) or nameof(UiWidget.Label) or
                 nameof(UiWidget.LabelKey) or
                 nameof(UiWidget.FontSize) or nameof(UiWidget.FontReference) or
-                nameof(UiWidget.Interactable) => widget.Kind == UiWidgetKind.Button,
+                nameof(UiWidget.Interactable) => widget.Kind is UiWidgetKind.Button or UiWidgetKind.Slider,
             _ => true
         };
 

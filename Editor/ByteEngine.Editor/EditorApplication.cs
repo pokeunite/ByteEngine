@@ -682,6 +682,7 @@ public sealed class EditorApplication
             if (ImGui.MenuItem("Image")) CreateUiWidget("Image", UiWidgetKind.Image);
             if (ImGui.MenuItem("Panel")) CreateUiWidget("Panel", UiWidgetKind.Panel);
             if (ImGui.MenuItem("Progress Bar")) CreateUiWidget("Progress Bar", UiWidgetKind.ProgressBar);
+            if (ImGui.MenuItem("Slider")) CreateUiWidget("Slider", UiWidgetKind.Slider);
             if (ImGui.MenuItem("Button")) CreateUiWidget("Button", UiWidgetKind.Button);
             ImGui.EndMenu();
         }
@@ -2370,7 +2371,7 @@ public sealed class EditorApplication
             }
             GameObject widget = EditorSceneCommands.CreateGameObject(_state, name, _log);
             widget.SetParent(canvas);
-            widget.AddComponent(new UiWidget { Kind = kind,
+            widget.AddComponent(new UiWidget { Kind = kind, Maximum = kind==UiWidgetKind.Slider?1:100, Value=kind==UiWidgetKind.Slider?0:100,
                 Color = kind == UiWidgetKind.Image ? Vector4.One : new Vector4(.12f, .15f, .2f, .9f) });
         });
     }

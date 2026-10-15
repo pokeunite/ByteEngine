@@ -5,7 +5,7 @@ using ByteEngine.Core.Scene;
 
 namespace ByteEngine.Core.Graphics;
 
-public enum UiWidgetKind { Panel, Image, ProgressBar, Button }
+public enum UiWidgetKind { Panel, Image, ProgressBar, Button, Slider }
 
 public sealed class UiWidget : Component
 {
@@ -26,10 +26,14 @@ public sealed class UiWidget : Component
     public string LabelKey { get; set; } = string.Empty;
     public int FontSize { get; set; } = 22;
     public AssetReference FontReference { get; set; } = AssetReference.Empty;
-    public float Value { get; set; } = 100f;
+    private float _value=100;
+    public float Value { get => _value; set => _value=Kind==UiWidgetKind.Slider?Math.Clamp(float.IsFinite(value)?value:0,0,Math.Max(.001f,Maximum)):value; }
     public float Maximum { get; set; } = 100f;
+    public float CornerRadius { get; set; }
+    private bool _dragging;
     public bool Visible { get; set; } = true;
     public bool Interactable { get; set; } = true;
+    public bool ActivateWithSpace { get; set; } = true;
     public int OrderInLayer { get; set; }
     public override int? RenderOrder => OrderInLayer;
 
@@ -55,7 +59,7 @@ public sealed class UiWidget : Component
     }
 
     public bool IsHovered =>
-        Enabled && GameObject.ActiveInHierarchy && Kind == UiWidgetKind.Button && Visible && Interactable &&
+        Enabled && GameObject.ActiveInHierarchy && Kind is UiWidgetKind.Button or UiWidgetKind.Slider && Visible && Interactable &&
         UiLayout.IsVisible(GameObject) &&
         Input.IsGameViewHovered &&
         Contains(Input.GameViewMousePosition, Input.GameViewSize);
@@ -65,10 +69,25 @@ public sealed class UiWidget : Component
     public bool WasClicked =>
         Enabled && GameObject.ActiveInHierarchy && Visible && Interactable && UiLayout.IsVisible(GameObject) && ((IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left)) ||
         (IsFocused && (Input.IsKeyPressed(Key.Enter) ||
-            Input.IsKeyPressed(Key.Space) || UiNavigation.SouthPressed)));
+            (ActivateWithSpace && Input.IsKeyPressed(Key.Space)) || UiNavigation.SouthPressed)));
 
     protected override void OnUpdate()
     {
+        if(Kind==UiWidgetKind.Slider)
+        {
+            Value=Value;
+            if(!Visible||!Interactable||!UiLayout.IsVisible(GameObject)||!Input.IsGameViewFocused) {_dragging=false;return;}
+            if(Input.IsMouseButtonPressedForUi(MouseButton.Left)&&IsHovered) _dragging=true;
+            if(!Input.IsMouseButtonDownForUi(MouseButton.Left)) _dragging=false;
+            if(_dragging)
+            {
+                var rect=UiLayout.Resolve(GameObject,Anchor,Offset,Size,Input.GameViewSize);
+                float inset=Math.Min(rect.Size.Y*.35f,8*rect.Scale);
+                Value=Math.Clamp((Input.GameViewMousePosition.X-rect.Position.X-inset)/Math.Max(1,rect.Size.X-inset*2),0,1)*Maximum;
+            }
+            if(IsHovered||_dragging) Input.NotifyGameViewPointerAim();
+            return;
+        }
         if (GameObject.Scene != null) UiNavigation.Update(GameObject.Scene);
         if (IsHovered) Input.NotifyGameViewPointerAim();
     }
@@ -90,8 +109,19 @@ public sealed class UiWidget : Component
         UiTheme? theme=Kind==UiWidgetKind.Button&&ThemeKey.Length>0?UiTheme.Find(GameObject):null;
         if(theme!=null)background=theme.Background(ThemeKey,Interactable,IsHovered||IsFocused,IsHovered&&Input.IsMouseButtonDownForUi(MouseButton.Left));
         background.W *= opacity;
+        if(Kind==UiWidgetKind.Slider)
+        {
+            float diameter=Math.Min(rect.Size.Y,16*rect.Scale),radius=diameter/2;
+            Vector2 trackPosition=rect.Position+new Vector2(radius,(rect.Size.Y-5*rect.Scale)/2);
+            Vector2 trackSize=new(Math.Max(1,rect.Size.X-diameter),5*rect.Scale);
+            float fraction=Maximum>0?Math.Clamp(Value/Maximum,0,1):0;
+            Rounded(context,trackPosition,trackSize,Color,2.5f*rect.Scale);
+            Rounded(context,trackPosition,new(trackSize.X*fraction,trackSize.Y),FillColor,2.5f*rect.Scale);
+            Rounded(context,new(trackPosition.X+trackSize.X*fraction-radius,rect.Position.Y+(rect.Size.Y-diameter)/2),new(diameter),FillColor,radius);
+            context.QueueUiClip(null);return;
+        }
         if (Kind != UiWidgetKind.Image || ImageReference.IsEmpty)
-            context.QueueUiQuad(rect.Position, rect.Size, background);
+            Rounded(context,rect.Position,rect.Size,background,CornerRadius*rect.Scale);
         if (Kind == UiWidgetKind.ProgressBar)
         {
             float fraction = Maximum > 0f ? Math.Clamp(Value / Maximum, 0f, 1f) : 0f;
@@ -120,5 +150,21 @@ public sealed class UiWidget : Component
                 rect.Position + rect.Size * .5f, (theme==null?Vector4.One:theme.TextColor(ThemeKey)) with {W=opacity}, rect.Size.X, UiAnchor.Center);
         }
         context.QueueUiClip(null);
+    }
+    private static void Rounded(RenderContext context,Vector2 position,Vector2 size,Vector4 color,float radius)
+    {
+        if(size.X<=0||size.Y<=0||color.W<=0)return;
+        radius=Math.Clamp(radius,0,Math.Min(size.X,size.Y)/2);
+        if(radius<.5f){context.QueueUiQuad(position,size,color);return;}
+        context.QueueUiQuad(position+new Vector2(0,radius),new(size.X,Math.Max(0,size.Y-radius*2)),color);
+        const int bands=10;
+        for(int i=0;i<bands;i++)
+        {
+            float y=radius*i/bands,h=radius/bands;
+            float inset=radius-MathF.Sqrt(Math.Max(0,radius*radius-MathF.Pow(radius-y-h/2,2)));
+            var strip=new Vector2(Math.Max(0,size.X-inset*2),h+.03f);
+            context.QueueUiQuad(position+new Vector2(inset,y),strip,color);
+            context.QueueUiQuad(position+new Vector2(inset,size.Y-y-h),strip,color);
+        }
     }
 }

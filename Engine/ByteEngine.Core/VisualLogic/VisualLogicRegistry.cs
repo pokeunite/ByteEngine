@@ -116,6 +116,7 @@ public sealed partial class VisualLogicRegistry
         RegisterMaterials(registry);
         RegisterVfx(registry);
         RegisterUi(registry);
+        RegisterAuthoring(registry);
         RegisterAudio(registry);
         RegisterAnimation(registry);
         RegisterAttachment(registry);

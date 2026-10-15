@@ -177,7 +177,8 @@ internal static class BlueprintInstanceSynchronizer
             }
 
             string latestSnapshot = SerializeObjects(Objects(latest!));
-            if (string.Equals(instance.SourceSnapshot, latestSnapshot, StringComparison.Ordinal))
+            if (string.Equals(instance.SourceSnapshot, latestSnapshot, StringComparison.Ordinal) ||
+                SnapshotsEqual(instance.SourceSnapshot, latestSnapshot))
             {
                 continue;
             }
@@ -432,6 +433,13 @@ internal static class BlueprintInstanceSynchronizer
         left.Guid != Guid.Empty && right.Guid != Guid.Empty ? left.Guid == right.Guid :
         !string.IsNullOrWhiteSpace(left.CachedProjectPath) &&
         string.Equals(left.CachedProjectPath, right.CachedProjectPath, StringComparison.OrdinalIgnoreCase);
+    private static bool SnapshotsEqual(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        try { return JsonNode.DeepEquals(JsonNode.Parse(left), JsonNode.Parse(right)); }
+        catch (JsonException) { return false; }
+    }
+
     private static List<GameObjectData> Objects(BlueprintDefinition blueprint) =>
         new[] { Clone(blueprint.Root) }.Concat(blueprint.Children.Select(Clone)).ToList();
     private static string SerializeObjects(IReadOnlyList<GameObjectData> objects) => JsonSerializer.Serialize(objects, JsonOptions);

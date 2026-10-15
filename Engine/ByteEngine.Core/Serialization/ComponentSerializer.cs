@@ -72,6 +72,8 @@ public sealed class ComponentSerializer
             return new ComponentData { Type = TypeName, Properties = new JsonObject
             {
                 ["themeKey"] = widget.ThemeKey,
+                ["cornerRadius"] = widget.CornerRadius,
+                ["activateWithSpace"] = widget.ActivateWithSpace,
                 ["autoFitLabel"] = widget.AutoFitLabel,
                 ["fitContent"] = widget.FitContent,
                 ["minimumSize"] = System.Text.Json.JsonSerializer.SerializeToNode(widget.MinimumSize,JsonSerialization.Options),
@@ -122,6 +124,8 @@ public sealed class ComponentSerializer
             return new UiWidget
             {
                 ThemeKey = data.Properties["themeKey"]?.GetValue<string>() ?? string.Empty,
+                CornerRadius = data.Properties["cornerRadius"]?.GetValue<float>() ?? 0,
+                ActivateWithSpace = data.Properties["activateWithSpace"]?.GetValue<bool>() ?? true,
                 AutoFitLabel = data.Properties["autoFitLabel"]?.GetValue<bool>() ?? false,
                 FitContent = data.Properties["fitContent"]?.GetValue<bool>() ?? false,
                 MinimumSize = data.Properties["minimumSize"]?.Deserialize<System.Numerics.Vector2>(JsonSerialization.Options) ?? System.Numerics.Vector2.Zero,
@@ -352,6 +356,11 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationAgent3D>("NavigationAgent3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<MeshLodGroup>("MeshLodGroup"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiTheme>("UiTheme"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiWorldAnchor>("UiWorldAnchor"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterCurrentPath3D>("WaterCurrentPath3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.BuoyantPulley3D>("BuoyantPulley3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsDrag3D>("PhysicsDrag3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsImpactSensor3D>("PhysicsImpactSensor3D"));
         Register(new MeshCollider3DCodec());
         Register(new UiCanvasCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
@@ -423,6 +432,10 @@ public sealed class ComponentSerializer
         Register(new HitscanEmitter3DCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D>("WaterBasin3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterGate3D>("WaterGate3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterNetwork3D>("WaterNetwork3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.BuoyantBody3D>("BuoyantBody3D"));
         Register(new HealthPickup3DCodec());
         Register(new SkeletalRagdoll3DCodec());
         Register(new LifetimeComponentCodec());
@@ -907,8 +920,9 @@ public sealed class ComponentSerializer
                 TypeName,
                 new JsonObject
                 {
-                    ["fieldOfView"] =
-                        camera.FieldOfView,
+                    ["orthographic"] = camera.Orthographic,
+                    ["orthographicWidth"] = camera.OrthographicWidth,
+                    ["fieldOfView"] = camera.FieldOfView,
 
                     ["nearClip"] =
                         camera.NearClip,
@@ -928,6 +942,8 @@ public sealed class ComponentSerializer
         {
             return new Camera3D
             {
+                Orthographic = data.Properties["orthographic"]?.GetValue<bool>() ?? false,
+                OrthographicWidth = Float(data,"orthographicWidth",40),
                 FieldOfView =
                     Float(
                         data,
