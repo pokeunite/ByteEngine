@@ -89,9 +89,19 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uView;
         uniform mat4 uProjection;
         uniform mat4 uNormalMatrix;
+        uniform vec4 uWaterStyle;
         uniform int uWaterSurface;
+        uniform int uWaterVolume;
+        uniform vec4 uWaterColumn;
+        uniform int uWaterDepthEnabled;
+        uniform sampler2D uWaterDepthTexture;
+        uniform vec4 uWaterDepthRect;
+        uniform vec4 uWaterDepthSettings;
+        uniform vec4 uWaterOceanWaves;
         uniform vec4 uWaterMotion;
         uniform vec4 uWaterWake;
+        uniform vec4 uWaterFlow;
+        uniform vec4 uWaterImpact;
         uniform vec2 uWaterSize;
         uniform int uUseHeightField;
         uniform sampler2D uHeightFieldTexture;
@@ -106,6 +116,14 @@ internal sealed class Shader3D : IDisposable
         out vec3 vWorldPosition;
         out vec2 vUV;
 
+        void oceanWave(inout vec3 displacement,inout vec3 tx,inout vec3 tz,vec2 q,vec2 d,float amplitude,float wavelength,float phase){
+            float k=6.2831853/max(.1,wavelength),a=clamp(amplitude,0.,.35/k);
+            float f=k*dot(d,q)-sqrt(9.81*k)*uWaterMotion.x+phase,s=sin(f),c=cos(f),steepness=clamp(uWaterFlow.z,0.,.8);
+            displacement+=vec3(d.x*a*steepness*c,a*s,d.y*a*steepness*c);
+            float slope=a*k*c,horizontal=a*k*steepness*s;
+            tx+=vec3(-d.x*d.x*horizontal,d.x*slope,-d.x*d.y*horizontal);
+            tz+=vec3(-d.x*d.y*horizontal,d.y*slope,-d.y*d.y*horizontal);
+        }
         void main()
         {
             vec3 position=aPosition;vec3 normal=aNormal;
@@ -133,6 +151,15 @@ internal sealed class Shader3D : IDisposable
             vWorldPosition=(model*vec4(position,1.0)).xyz;
             if(uWaterSurface==1){
                 float t=uWaterMotion.x;vec2 q=vWorldPosition.xz;
+                if(uWaterStyle.w>.5){
+                    float shoreAmplitude=1.;
+                    if(uWaterDepthEnabled==1){vec2 fieldUv=(q-uWaterDepthRect.xy)/uWaterDepthRect.zw;if(all(greaterThanEqual(fieldUv,vec2(0)))&&all(lessThanEqual(fieldUv,vec2(1)))){vec2 dim=vec2(textureSize(uWaterDepthTexture,0));vec2 texUv=(fieldUv*(dim-1.)+.5)/dim;vec2 packed=textureLod(uWaterDepthTexture,texUv,0.).rg;float bed=mix(uWaterDepthSettings.x,uWaterDepthSettings.y,dot(packed,vec2(65280.,255.))/65535.);shoreAmplitude=smoothstep(0.,max(.01,uWaterDepthSettings.w),uWaterDepthSettings.z-bed);}}
+                    vec2 d=length(uWaterOceanWaves.zw)>.001?normalize(uWaterOceanWaves.zw):vec2(1,0);vec3 disp=vec3(0),tx=vec3(1,0,0),tz=vec3(0,0,1);
+                    oceanWave(disp,tx,tz,q,d,uWaterOceanWaves.x*shoreAmplitude,uWaterOceanWaves.y,0.);
+                    oceanWave(disp,tx,tz,q,vec2(-d.y,d.x),uWaterOceanWaves.x*.52*shoreAmplitude,uWaterOceanWaves.y*.492,1.7);
+                    oceanWave(disp,tx,tz,q,normalize(vec2(d.x*.8+d.y*.6,d.y*.8-d.x*.6)),uWaterOceanWaves.x*.21*shoreAmplitude,uWaterOceanWaves.y*.1984,3.1);
+                    vWorldPosition+=disp;vNormal=normalize(cross(tz,tx));
+                }
                 float edge=smoothstep(0.0,0.07,min(min(aUV.x,1.0-aUV.x),min(aUV.y,1.0-aUV.y)));
                 float h=(sin(dot(q,vec2(2.6,1.1))-t*1.6)*0.65+sin(dot(q,vec2(-1.4,3.6))+t*1.1)*0.35)*uWaterMotion.z*edge;
                 if(abs(normal.y)>0.5)vWorldPosition.y+=h;else vWorldPosition.z+=h;
@@ -197,9 +224,24 @@ internal sealed class Shader3D : IDisposable
         uniform int uPackedMetallicChannel;
         uniform float uAoStrength;
         uniform float uNormalStrength;
+        uniform int uWaterRefraction;
+        uniform sampler2D uWaterSceneColor;
+        uniform sampler2D uWaterSceneDepth;
+        uniform mat4 uWaterInverseViewProjection;
+        uniform mat4 uWaterViewProjection;
+        uniform vec4 uWaterAbsorption;
+        uniform vec4 uWaterScattering;
+        uniform vec4 uWaterStyle;
+        uniform int uWaterReflections;
+        uniform int uWaterDetail;
+        uniform vec4 uWaterViewport;
         uniform int uWaterSurface;
+        uniform int uWaterVolume;
+        uniform vec4 uWaterColumn;
         uniform vec4 uWaterMotion;
         uniform vec4 uWaterWake;
+        uniform vec4 uWaterFlow;
+        uniform vec4 uWaterImpact;
         uniform vec2 uWaterSize;
         uniform int uUseHeightField;
         uniform sampler2D uHeightFieldTexture;
@@ -912,6 +954,24 @@ internal sealed class Shader3D : IDisposable
                 0.5;
         }
 
+        float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);vec4 h=fract(sin(vec4(dot(i,vec2(127.1,311.7)),dot(i+vec2(1,0),vec2(127.1,311.7)),dot(i+vec2(0,1),vec2(127.1,311.7)),dot(i+vec2(1),vec2(127.1,311.7))))*43758.5453);return mix(mix(h.x,h.y,f.x),mix(h.z,h.w,f.x),f.y);}
+        // Independent depth-weighted reconstruction: reject foreground neighbours instead
+        // of allowing bilinear colour to drag the wall or cargo into the water.
+        vec4 waterBackground(vec2 uv,out vec3 point){
+            // Smooth open sea needs no costly neighbourhood reconstruction. Keep the
+            // full foreground-aware filter at shores, rocks and every puzzle surface.
+            if(uWaterStyle.w>.5||uWaterDetail==0){float centerDepth=texture(uWaterSceneDepth,uv).r;vec4 centerWorld=uWaterInverseViewProjection*vec4(uv*2.-1.,centerDepth*2.-1.,1.);point=centerWorld.xyz/centerWorld.w;if((vWorldPosition.y-point.y>1.5||uWaterDetail==0)&&centerDepth>=gl_FragCoord.z-.000002)return vec4(texture(uWaterSceneColor,uv).rgb,1.);}
+            ivec2 size=textureSize(uWaterSceneDepth,0);vec2 pixel=clamp(uv*vec2(size)-.5,vec2(0),vec2(size)-1.001);ivec2 basePixel=ivec2(floor(pixel));vec2 f=fract(pixel);
+            vec3 color=vec3(0),position=vec3(0);float sum=0.;
+            float tolerance=max(.000002,max(abs(dFdx(gl_FragCoord.z)),abs(dFdy(gl_FragCoord.z)))*2.);
+            for(int y=0;y<2;y++)for(int x=0;x<2;x++){
+                ivec2 p=min(basePixel+ivec2(x,y),size-1);float d=texelFetch(uWaterSceneDepth,p,0).r;
+                float w=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);if(d+tolerance<gl_FragCoord.z)w=0.;
+                vec2 tc=(vec2(p)+.5)/vec2(size);vec4 wp=uWaterInverseViewProjection*vec4(tc*2.-1.,d*2.-1.,1.);
+                color+=texelFetch(uWaterSceneColor,p,0).rgb*w;position+=wp.xyz/wp.w*w;sum+=w;
+            }
+            point=sum>.00001?position/sum:vWorldPosition;return vec4(color/max(sum,.00001),sum);
+        }
         void main()
         {
             vec4 baseTexture=uUseTexture==1
@@ -928,6 +988,12 @@ internal sealed class Shader3D : IDisposable
                 discard;
             }
 
+            if(uWaterVolume==1){
+                float depth=max(0.0,uWaterColumn.x-vWorldPosition.y);
+                float absorption=1.0-exp(-depth*max(0.01,uWaterColumn.z));
+                base.rgb=mix(base.rgb*vec3(1.25,1.5,1.55),base.rgb*0.55,absorption);
+                base.a=clamp(uWaterColumn.w+(1.0-uWaterColumn.w)*absorption*0.4,0.0,0.98);
+            }
             vec4 packedPbrSample=vec4(1.0);
             if(uUsePackedPbrTexture==1)
                 packedPbrSample=sampleMaterialTexture(uPackedPbrTexture);
@@ -992,17 +1058,30 @@ internal sealed class Shader3D : IDisposable
                 }
             }
             if(uWaterSurface==1){
-                float t=uWaterMotion.x;float speed=clamp(abs(uWaterMotion.y)*0.15,0.0,2.5);
-                vec2 q=abs(n.y)>0.5?vWorldPosition.xz:vec2(vWorldPosition.x,-vWorldPosition.y*1.5);
-                float p=dot(q,vec2(6.2,2.8))-t*(1.4+speed);
-                float r=dot(q,vec2(-3.8,8.1))+t*1.1;
-                vec2 slope=vec2(cos(p)*0.18+cos(r)*0.08,cos(p)*0.08-cos(r)*0.16);
-                if(abs(n.y)>0.5)n=normalize(vec3(-slope.x,1.0,-slope.y));
-                else n=normalize(n+vec3(slope.x,slope.y,0.0));
-                uRoughness=0.11;uMetallic=0.08;
+                vec2 q=uWaterFlow.w>.5?vUV*uWaterSize:vWorldPosition.xz;
+                vec2 dir=uWaterFlow.w>.5?vec2(0,1):uWaterFlow.xy;
+                float time=uWaterMotion.x;vec2 adv=q-dir*time*uWaterFlow.z;
+                float p=dot(adv,vec2(3.1,1.7))+sin(q.y*1.4-time*.55)*.7;
+                float r=dot(adv,vec2(-2.3,4.7))+time*.8;
+                vec2 slope=vec2(cos(p)*.14-cos(r)*.095,cos(p)*.075+cos(r)*.17);
+                slope+=vec2(waterNoise(adv*7.0),waterNoise(adv*7.0+31.0))*.055-.0275;
+                vec3 ripple=vec3(-slope.x,0,-slope.y);
+                if(uWaterFlow.w>.5){
+                    // Path UVs are cross-channel / downstream. Perturb in that local
+                    // surface frame, not world X/Z (which reverses or skews inclined runs).
+                    vec2 direction=uWaterFlow.xy;
+                    vec3 along=normalize(vec3(direction.x,-dot(n.xz,direction)/max(.05,abs(n.y)),direction.y));
+                    vec3 across=normalize(cross(n,along));
+                    ripple=-across*slope.x-along*slope.y;
+                }
+                n=normalize(n+ripple*uWaterStyle.x);uRoughness=clamp(uWaterStyle.y,.045,1.);uMetallic=0.0;
             }
             vec3 v=normalize(uCameraPosition-vWorldPosition);
 
+            vec3 linearColor=vec3(0.0);
+            // Refractive water supplies its own optical lighting below. Do not evaluate
+            // opaque BRDF, shadow PCF and diffuse IBL only to overwrite their result.
+            if(uWaterSurface==0 || uWaterRefraction==0){
             vec3 direct=
                 vec3(0.0);
 
@@ -1236,31 +1315,84 @@ internal sealed class Shader3D : IDisposable
                         0.0);
             }
 
-            vec3 linearColor=
-                ambient*ao+
-                direct+
-                emission;
+            linearColor=ambient*ao+direct+emission;
+            }
 
             if(uWaterSurface==1){
-                float t=uWaterMotion.x;float speed=clamp(abs(uWaterMotion.y)*0.1,0.0,2.0);
-                vec2 q=abs(normalize(vNormal).y)>0.5?vWorldPosition.xz:vec2(vWorldPosition.x,-vWorldPosition.y*1.5);
-                float a=sin(q.x*4.5+sin(q.y*3.1-t)*1.3-t*(1.2+speed));
-                float b=sin(q.y*8.5+sin(q.x*2.8+t)*1.7+t*1.6);
-                float veins=pow(clamp(1.0-abs(a+b*0.58),0.0,1.0),15.0);
-                vec2 edgeDistance=min(vUV,vec2(1.0)-vUV)*uWaterSize;
-                float edge=1.0-smoothstep(0.015,0.14,min(edgeDistance.x,edgeDistance.y));
-                vec2 wakePoint=vWorldPosition.xz-uWaterWake.xy;
-                vec2 wakeRadius=vec2(max(0.1,uWaterWake.z*0.54),max(0.1,uWaterWake.z*0.19));
-                float wakeRing=(1.0-smoothstep(0.04,0.26,abs(length(wakePoint/wakeRadius)-1.0)))*uWaterWake.w;
-                float trail=(1.0-smoothstep(0.3,0.9,abs(wakePoint.y)))*smoothstep(-6.0,-2.0,wakePoint.x)*(1.0-smoothstep(-2.1,-1.8,wakePoint.x))*uWaterWake.w;
-                bool vertical=abs(normalize(vNormal).y)<0.5;
-                float foam=vertical?clamp((veins*(0.25+speed*0.2)+edge*0.25)*uWaterMotion.w,0.0,0.85):clamp((veins*0.01+edge*(0.3+0.3*max(0.0,a))+wakeRing*(0.4+veins*0.6)+trail*veins*0.8)*uWaterMotion.w,0.0,0.85);
-                float fresnel=pow(1.0-max(dot(n,v),0.0),4.0);
-                vec3 reflection=mix(vec3(0.04,0.16,0.2),vec3(0.2,0.43,0.48),clamp(n.y*0.5+0.5,0.0,1.0));
-                linearColor=mix(linearColor,reflection,0.05+fresnel*0.35);
-                linearColor+=vec3(0.13,0.32,0.31)*(veins*0.18);
-                linearColor=mix(linearColor,vec3(0.72,0.88,0.86),foam);
-                base.a=clamp(base.a+foam*0.2+fresnel*0.1,0.0,1.0);
+                // Depth absorption and Schlick Fresnel follow tuxalin/water-shader (MIT); see ThirdParty notices.
+                float time=uWaterMotion.x;bool channel=uWaterFlow.w>.5;
+                vec2 q=channel?vUV*uWaterSize:vWorldPosition.xz;
+                vec2 adv=q-(channel?vec2(0,1):uWaterFlow.xy)*time*uWaterFlow.z;
+                float noise=waterNoise(adv*3.2+waterNoise(adv*.8+time*.12));
+                float fine=waterNoise(adv*10.0+vec2(time*.15,-time*.11));
+                float depth=max(.04,uWaterColumn.x-uWaterColumn.y);vec3 refracted=vec3(0.);vec3 bedWorld=vWorldPosition-vec3(0,depth,0);bool useRefraction=uWaterRefraction==1;
+                vec2 screen=(gl_FragCoord.xy-uWaterViewport.xy)/max(uWaterViewport.zw,vec2(1.));
+                if(useRefraction){
+                    // The undistorted coordinate is already pixel-centred: no neighbourhood filter is needed here.
+                    float straightZ=texture(uWaterSceneDepth,screen).r;vec4 straightWorld=uWaterInverseViewProjection*vec4(screen*2.-1.,straightZ*2.-1.,1.);vec3 straightPoint=straightWorld.xyz/straightWorld.w;vec4 straight=vec4(texture(uWaterSceneColor,screen).rgb,1.);
+                    float straightDepth=clamp(vWorldPosition.y-straightPoint.y,0.,24.);
+                    vec2 offset=n.xz*.011*min(straightDepth,1.5)*smoothstep(0.,.15,straightDepth);
+                    vec3 distortedPoint;vec4 distorted=waterBackground(clamp(screen+offset,vec2(.001),vec2(.999)),distortedPoint);
+                    bool valid=distorted.a>.0001;refracted=valid?distorted.rgb:straight.rgb;bedWorld=valid?distortedPoint:straightPoint;
+                    depth=clamp(vWorldPosition.y-bedWorld.y,0.,24.);
+                }
+                // Coefficients are reciprocal metres. Both scattering and absorption
+                // remove light from the ray; their ratio controls the scattered fraction.
+                vec3 sigmaA=max(uWaterAbsorption.rgb,vec3(0)),sigmaS=max(uWaterScattering.rgb,vec3(0));
+                vec3 sigmaT=max(sigmaA+sigmaS,vec3(.000001));
+                vec3 intoWater=refract(-v,n,1./1.333);float pathLength=min(30.,depth/max(.2,abs(intoWater.y)));
+                vec3 transmittance=exp(-sigmaT*pathLength);
+                vec3 sunDirection=uDirectionalLightCount>0?normalize(-uDirectionalLightDirections[0]):vec3(0,1,0);
+                float g=clamp(uWaterScattering.w,-.8,.8),mu=dot(-intoWater,sunDirection);
+                float phase=(1.-g*g)/(12.56637*pow(max(.05,1.+g*g-2.*g*mu),1.5));
+                vec3 incident=vec3(.055,.075,.095);
+                if(uDirectionalLightCount>0)incident+=uDirectionalLightColors[0]*uDirectionalLightIntensities[0]*phase;
+                vec3 scattered=incident*clamp(sigmaS/sigmaT*(1.-transmittance),vec3(0),vec3(1));
+                vec3 bottomLight=exp(-sigmaT*depth/max(.35,sunDirection.y));
+                vec3 under=(useRefraction?refracted:linearColor*.18)*transmittance*bottomLight+scattered;
+                float absorption=1.-exp(-depth*.8);
+                // Caustics modulate the lit bottom; they are not white lines painted on the surface.
+                vec2 bed=bedWorld.xz+vec2(sin(time*.43+bedWorld.z)*.12,cos(time*.37+bedWorld.x)*.12);
+                float c1=sin(bed.x*5.1+sin(bed.y*3.7+time*.65));float c2=sin(bed.y*5.8+sin(bed.x*4.1-time*.53));
+                float caustic=pow(max(0.,1.-abs(c1+c2)*1.7),9.);
+                under+=refracted*transmittance*bottomLight*caustic*max(0.,uWaterAbsorption.w)*.5*exp(-depth*.6)*smoothstep(0.,.08,depth);
+                float fresnel=.02037+.97963*pow(1.0-clamp(dot(n,v),0.0,1.0),5.0);
+                vec3 reflectionRay=reflect(-v,n);float skyBand=smoothstep(-.15,.85,reflectionRay.y);
+                vec3 reflected=mix(vec3(.035,.09,.12),vec3(.42,.58,.63),skyBand);
+                if(uUseEnvironmentIbl==1)reflected=textureLod(uPrefilterMap,rotateEnvironmentDirection(reflectionRay),clamp(uWaterStyle.y*8.,.3,4.)).rgb*uEnvironmentIntensity;
+                // Bounded screen-space ray marching; off-screen rays retain the environment fallback.
+                if(useRefraction&&uWaterReflections==1&&uWaterDetail>0&&reflectionRay.y>0.){
+                    vec3 origin=vWorldPosition+n*.06;float previousGap=-1.;
+                    for(int step=0;step<20;step++){
+                        if(uWaterDetail==1&&step>=10)break;
+                        float distanceAlong=.10+float(step)*.26+float(step*step)*.018;
+                        vec3 ray=origin+reflectionRay*distanceAlong;vec4 clip=uWaterViewProjection*vec4(ray,1.);
+                        if(clip.w<=0.)break;vec2 uv=clip.xy/clip.w*.5+.5;
+                        if(any(lessThan(uv,vec2(.002)))||any(greaterThan(uv,vec2(.998))))break;
+                        float sampledDepth=texture(uWaterSceneDepth,uv).r;
+                        vec4 hit=uWaterInverseViewProjection*vec4(uv*2.-1.,sampledDepth*2.-1.,1.);hit/=hit.w;
+                        float gap=length(uCameraPosition-ray)-length(uCameraPosition-hit.xyz);
+                        if(sampledDepth<.99999&&gap>0.&&gap<.38&&previousGap<=0.){
+                            float edgeFade=smoothstep(0.,.09,min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)));
+                            reflected=mix(reflected,texture(uWaterSceneColor,uv).rgb,edgeFade*.8);break;
+                        }
+                        previousGap=gap;
+                    }
+                }
+                linearColor=mix(under,reflected,fresnel);
+
+                if(uDirectionalLightCount>0){float glitter=pow(max(0.,dot(reflectionRay,normalize(-uDirectionalLightDirections[0]))),mix(540.,60.,uWaterStyle.y));linearColor+=uDirectionalLightColors[0]*glitter*1.2;}
+                vec2 edgeDistance=min(vUV,vec2(1.)-vUV)*uWaterSize;
+                float bank=1.-smoothstep(.015,.11,channel?edgeDistance.x:min(edgeDistance.x,edgeDistance.y));
+                vec2 wp=vWorldPosition.xz-uWaterWake.xy;
+                float ring=(1.-smoothstep(.04,.22,abs(length(wp/vec2(max(.1,uWaterWake.z*.54),max(.1,uWaterWake.z*.3)))-1.)))*uWaterWake.w;
+                vec2 ip=vWorldPosition.xz-uWaterImpact.xy;
+                float impact=exp(-dot(ip,ip)/max(.01,uWaterImpact.z*uWaterImpact.z))*uWaterImpact.w;
+                float streak=channel?smoothstep(.42,.73,waterNoise(vec2(q.x*8.,q.y*2.1-time*uWaterFlow.z*2.1)))*clamp(abs(uWaterMotion.y)*.18,0.,.65):0.;
+                float wash=.5+.5*sin(time*1.4+waterNoise(q*.7)*9.);float shoreline=(1.-smoothstep(.01,max(.04,uWaterStyle.z)*(.5+wash*.5),depth))*smoothstep(.48,.83,fine)*wash*uWaterStyle.w;
+                float foam=clamp((shoreline+(useRefraction?(1.-smoothstep(.025,.17,depth))*.2*bank:0.)+bank*.15+ring*.7+impact*(.45+noise)+streak)*(fine*.7+.3)*uWaterMotion.w,0.,.85);
+                linearColor=mix(linearColor,vec3(.72,.84,.81),foam);
+                base.a=useRefraction?1.:clamp(.48+absorption*.35+fresnel*.2+foam*.4,.45,.97);
             }
             if(uFogEnabled==1)
             {

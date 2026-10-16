@@ -6,7 +6,7 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// Floating-point scene target used by standalone 3D runtime output.
 /// The completed HDR scene is presented to the window through PostProcess3D.
 /// </summary>
-internal sealed class RuntimePostProcessTarget3D
+public sealed class RuntimePostProcessTarget3D
     : IDisposable
 {
     private int _framebuffer;
@@ -46,11 +46,11 @@ internal sealed class RuntimePostProcessTarget3D
         int windowWidth,
         int windowHeight,
         bool smoothEdges = true,
-        System.Numerics.Matrix4x4? projection = null,GraphicsLook? look = null)
+        System.Numerics.Matrix4x4? projection = null,GraphicsLook? look = null,int targetFramebuffer=0)
     {
         _postProcess.Render(
             _colorTexture,
-            0,
+            targetFramebuffer,
             Math.Max(
                 windowWidth,
                 1),
@@ -65,7 +65,7 @@ internal sealed class RuntimePostProcessTarget3D
 
         GL.BindFramebuffer(
             FramebufferTarget.Framebuffer,
-            0);
+            targetFramebuffer);
 
         GL.Viewport(
             0,

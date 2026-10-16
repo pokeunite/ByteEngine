@@ -17,6 +17,9 @@ public sealed class RenderContext
     public int TargetWidth { get; }
 
     public int TargetHeight { get; }
+    public float RasterScale { get; set; } = 1;
+    public int RasterWidth => Math.Max(1,(int)MathF.Round(TargetWidth*RasterScale));
+    public int RasterHeight => Math.Max(1,(int)MathF.Round(TargetHeight*RasterScale));
 
     public Camera2D? Camera2D { get; }
 
@@ -196,8 +199,8 @@ public sealed class RenderContext
                 view,
                 projection,
                 cameraPosition,
-                TargetWidth,
-                TargetHeight);
+                RasterWidth,
+                RasterHeight);
     }
 
     public RenderEnvironment3D CaptureRenderEnvironment3D()

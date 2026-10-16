@@ -6,6 +6,9 @@ public sealed class CableRenderer3D : Component
 {
     public Vector3 Start {get;set;}
     public Vector3 End {get;set;}
+    public bool DrawEndHook {get;set;}=true;
+    public bool UseControlPoint {get;set;}
+    public Vector3 ControlPoint {get;set;}
     public float Length {get;set;}=1;
     public float Radius {get;set;}=.025f;
     public Vector4 Color {get;set;}=new(.18f,.16f,.12f,1);
@@ -22,8 +25,9 @@ public sealed class CableRenderer3D : Component
         if(_mesh==null){_vertices=new float[(Segments+1)*Sides*8];var indices=new uint[Segments*Sides*6];int n=0;for(int i=0;i<Segments;i++)for(int j=0;j<Sides;j++){uint a=(uint)(i*Sides+j),b=(uint)(i*Sides+(j+1)%Sides),c=a+Sides,d=b+Sides;foreach(var k in new[]{a,b,c,b,d,c})indices[n++]=k;}_mesh=new(_vertices,indices,true);}
         var forward=direction/distance;var side=Vector3.Normalize(Vector3.Cross(forward,Math.Abs(forward.Y)>.95f?Vector3.UnitX:Vector3.UnitY));var up=Vector3.Cross(side,forward);
         float slack=Math.Max(0,(float.IsFinite(Length)?Length:distance)-distance);float sag=Math.Min(distance*.3f,MathF.Sqrt(slack*Math.Max(distance,.1f))*.5f);
-        for(int i=0;i<=Segments;i++){float t=(float)i/Segments;var center=Vector3.Lerp(Start,End,t)-Vector3.UnitY*(4*sag*t*(1-t));for(int j=0;j<Sides;j++){float a=MathF.Tau*j/Sides;var normal=side*MathF.Cos(a)+up*MathF.Sin(a);var p=center+normal*Math.Clamp(Radius,.005f,.2f);int k=(i*Sides+j)*8;_vertices![k]=p.X;_vertices[k+1]=p.Y;_vertices[k+2]=p.Z;_vertices[k+3]=normal.X;_vertices[k+4]=normal.Y;_vertices[k+5]=normal.Z;_vertices[k+6]=t*distance;_vertices[k+7]=(float)j/Sides;}}
+        for(int i=0;i<=Segments;i++){float t=(float)i/Segments;var center=UseControlPoint?((1-t)*(1-t)*Start+2*(1-t)*t*ControlPoint+t*t*End):Vector3.Lerp(Start,End,t)-Vector3.UnitY*(4*sag*t*(1-t));for(int j=0;j<Sides;j++){float a=MathF.Tau*j/Sides;var normal=side*MathF.Cos(a)+up*MathF.Sin(a);var p=center+normal*Math.Clamp(Radius,.005f,.2f);int k=(i*Sides+j)*8;_vertices![k]=p.X;_vertices[k+1]=p.Y;_vertices[k+2]=p.Z;_vertices[k+3]=normal.X;_vertices[k+4]=normal.Y;_vertices[k+5]=normal.Z;_vertices[k+6]=t*distance;_vertices[k+7]=(float)j/Sides;}}
         _mesh.UpdateVertices(_vertices!);_material.BaseColor=Color;context.RenderWorld.Submit(_mesh,_material,Matrix4x4.Identity,RenderQueue3D.Opaque,true,true,true);
+        if(!DrawEndHook)return;
         _hook??=HookMesh();float dot=Vector3.Dot(Vector3.UnitZ,forward);var rotation=dot<-.999f?Quaternion.CreateFromAxisAngle(Vector3.UnitY,MathF.PI):Quaternion.Normalize(new Quaternion(Vector3.Cross(Vector3.UnitZ,forward),1+dot));context.RenderWorld.Submit(_hook,_hookMaterial,Matrix4x4.CreateFromQuaternion(rotation)*Matrix4x4.CreateTranslation(End),RenderQueue3D.Opaque,true,true,true);
     }
     protected override void OnDestroy(){_mesh?.Dispose();_hook?.Dispose();_mesh=_hook=null;}

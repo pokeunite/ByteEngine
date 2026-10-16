@@ -9,6 +9,8 @@ public enum LightingPreset { Custom, Daylight, Overcast, Interior, Night }
 /// <summary>Immutable, bounded settings captured once per view. Defaults preserve legacy scenes.</summary>
 public readonly record struct GraphicsLook(GraphicsQuality Quality,float Occlusion,float Radius,float Bloom,float Threshold,float Saturation,float Contrast,float Warmth,bool ProfileGpu)
 {
+    public float RenderScale { get; init; } = 1;
+    public int WaterDetail => Quality==GraphicsQuality.Fast ? 0 : Quality==GraphicsQuality.Balanced ? 1 : 2;
     public int AoSamples => Quality==GraphicsQuality.High ? 12 : 8;
     public int ShadowResolutionCap => Quality==GraphicsQuality.Fast ? 1024 : Quality==GraphicsQuality.Balanced ? 2048 : 4096;
     public int PointShadowLimit => Quality==GraphicsQuality.Fast ? 0 : Quality==GraphicsQuality.Balanced ? 1 : 2;
@@ -30,7 +32,10 @@ public sealed partial class SkyEnvironment
     public float Contrast { get=>_contrast; set=>_contrast=Safe(value,1,.5f,1.5f); }
     public float Warmth { get=>_warmth; set=>_warmth=Safe(value,0,-1,1); }
     public bool ProfileGraphicsGpu { get; set; }
-    public GraphicsLook CaptureLook() => new(Quality,AmbientOcclusion,OcclusionRadius,Bloom,BloomThreshold,Saturation,Contrast,Warmth,ProfileGraphicsGpu);
+    private float _renderScale=1;
+    /// <summary>3D raster resolution only. UI and pointer coordinates retain native resolution.</summary>
+    public float RenderScale { get=>_renderScale; set=>_renderScale=Safe(value,1,.5f,1); }
+    public GraphicsLook CaptureLook() => new(Quality,AmbientOcclusion,OcclusionRadius,Bloom,BloomThreshold,Saturation,Contrast,Warmth,ProfileGraphicsGpu){RenderScale=RenderScale};
     internal void RestorePresetLabels(GraphicsQuality quality,LightingPreset lighting) { _quality=Enum.IsDefined(quality)?quality:GraphicsQuality.Custom; _lightingPreset=Enum.IsDefined(lighting)?lighting:LightingPreset.Custom; }
     private static float Safe(float value,float fallback,float min,float max) => Math.Clamp(float.IsFinite(value)?value:fallback,min,max);
     private void ApplyQuality()
@@ -69,7 +74,7 @@ internal static class GraphicsLookSerialization
 {
     public static JsonObject Save(SkyEnvironment e) => new() {
         ["quality"]=e.Quality.ToString(),["lighting"]=e.Lighting.ToString(),["ao"]=e.AmbientOcclusion,["radius"]=e.OcclusionRadius,
-        ["bloom"]=e.Bloom,["threshold"]=e.BloomThreshold,["saturation"]=e.Saturation,["contrast"]=e.Contrast,["warmth"]=e.Warmth,["profileGpu"]=e.ProfileGraphicsGpu };
+        ["bloom"]=e.Bloom,["threshold"]=e.BloomThreshold,["saturation"]=e.Saturation,["contrast"]=e.Contrast,["warmth"]=e.Warmth,["profileGpu"]=e.ProfileGraphicsGpu,["renderScale"]=e.RenderScale };
     public static SkyEnvironment Load(SkyEnvironment e,JsonNode? node)
     {
         if(node==null) return e;
@@ -79,6 +84,6 @@ internal static class GraphicsLookSerialization
         e.AmbientOcclusion=node["ao"]?.GetValue<float>()??0; e.OcclusionRadius=node["radius"]?.GetValue<float>()??.5f;
         e.Bloom=node["bloom"]?.GetValue<float>()??0; e.BloomThreshold=node["threshold"]?.GetValue<float>()??1.2f;
         e.Saturation=node["saturation"]?.GetValue<float>()??1; e.Contrast=node["contrast"]?.GetValue<float>()??1; e.Warmth=node["warmth"]?.GetValue<float>()??0;
-        e.ProfileGraphicsGpu=node["profileGpu"]?.GetValue<bool>()??false; return e;
+        e.ProfileGraphicsGpu=node["profileGpu"]?.GetValue<bool>()??false; e.RenderScale=node["renderScale"]?.GetValue<float>()??1; return e;
     }
 }

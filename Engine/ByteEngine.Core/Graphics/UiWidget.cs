@@ -33,6 +33,9 @@ public sealed class UiWidget : Component
     private bool _dragging;
     public bool Visible { get; set; } = true;
     public bool Interactable { get; set; } = true;
+    public bool BlocksWorldPointer { get; set; }
+    /// <summary>Transient highlight supplied by a linked world-space interaction.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public bool ContextHighlighted { get; set; }
     public bool ActivateWithSpace { get; set; } = true;
     public int OrderInLayer { get; set; }
     public override int? RenderOrder => OrderInLayer;
@@ -105,9 +108,10 @@ public sealed class UiWidget : Component
         if (Kind == UiWidgetKind.Button)
             background = !Interactable ? DisabledColor :
                 IsHovered && Input.IsMouseButtonDownForUi(MouseButton.Left) ? PressedColor :
-                IsHovered || IsFocused ? HoverColor : Color;
+                IsHovered || (IsFocused && UiNavigation.UsingKeyboardNavigation) || ContextHighlighted ? HoverColor : Color;
         UiTheme? theme=Kind==UiWidgetKind.Button&&ThemeKey.Length>0?UiTheme.Find(GameObject):null;
-        if(theme!=null)background=theme.Background(ThemeKey,Interactable,IsHovered||IsFocused,IsHovered&&Input.IsMouseButtonDownForUi(MouseButton.Left));
+        if(theme!=null)background=theme.Background(ThemeKey,Interactable,IsHovered||(IsFocused&&UiNavigation.UsingKeyboardNavigation)||ContextHighlighted,IsHovered&&Input.IsMouseButtonDownForUi(MouseButton.Left));
+        if(ContextHighlighted&&theme!=null)background=Vector4.Lerp(background,theme.AccentColor,.18f);
         background.W *= opacity;
         if(Kind==UiWidgetKind.Slider)
         {
@@ -137,6 +141,7 @@ public sealed class UiWidget : Component
         }
         else if (Kind == UiWidgetKind.Button)
         {
+            if(ContextHighlighted)context.QueueUiQuad(rect.Position+new Vector2(0,CornerRadius*rect.Scale),new Vector2(4*rect.Scale,Math.Max(0,rect.Size.Y-2*CornerRadius*rect.Scale)),(theme?.AccentColor??FillColor) with{W=opacity});
             string label=UiLocalization.Translate(GameObject,LabelKey,Label);
             string? font=FontRuntime.ResolvePath(FontReference);
             int size=Math.Max(8,(int)(FontSize*rect.Scale));

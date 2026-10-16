@@ -106,6 +106,7 @@ public sealed class ComponentSerializer
                 ["maximum"] = widget.Maximum,
                 ["visible"] = widget.Visible,
                 ["interactable"] = widget.Interactable,
+                ["blocksWorldPointer"] = widget.BlocksWorldPointer,
                 ["orderInLayer"] = widget.OrderInLayer
             }};
         }
@@ -156,6 +157,7 @@ public sealed class ComponentSerializer
                 Maximum = properties["maximum"]?.GetValue<float>() ?? 100f,
                 Visible = properties["visible"]?.GetValue<bool>() ?? true,
                 Interactable = properties["interactable"]?.GetValue<bool>() ?? true,
+                BlocksWorldPointer = properties["blocksWorldPointer"]?.GetValue<bool>() ?? false,
                 OrderInLayer = properties["orderInLayer"]?.GetValue<int>() ?? 0
             };
         }
@@ -433,8 +435,22 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D>("WaterBasin3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterFlowAudio3D>("WaterFlowAudio3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Audio.AudioSettings>("AudioSettings"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DockingReceiver3D>("DockingReceiver3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerInteraction3D>("PointerInteraction3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.GraphicsSettings3D>("GraphicsSettings3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerTarget3D>("PointerTarget3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterFlowIndicator3D>("WaterFlowIndicator3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterDepthField3D>("WaterDepthField3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterOcean3D>("WaterOcean3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterSurface3D>("WaterSurface3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.FlowRotor3D>("FlowRotor3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.SluiceActuator3D>("SluiceActuator3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.RotaryValve3D>("RotaryValve3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterFlowPath3D>("WaterFlowPath3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterImpact3D>("WaterImpact3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterDynamics3D>("WaterDynamics3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterGate3D>("WaterGate3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterNetwork3D>("WaterNetwork3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.BuoyantBody3D>("BuoyantBody3D"));

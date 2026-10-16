@@ -31,9 +31,21 @@ public sealed class Material
     public float HeightFieldRange {get;set;} = 1;
     public float HeightFieldBias {get;set;} = -.5f;
     public Vector2 HeightFieldWorldSize {get;set;} = Vector2.One;
+    public Texture2D? WaterDepthTexture {get;set;}
+    public Vector4 WaterDepthRect {get;set;}
+    public Vector4 WaterDepthSettings {get;set;}
+    public Vector4 WaterOceanWaves {get;set;}
+    public Vector4 WaterAbsorption {get;set;} = new(.53f,.115f,.065f,.65f);
+    public Vector4 WaterScattering {get;set;} = new(.012f,.17f,.19f,.25f);
+    public Vector4 WaterStyle {get;set;} = new(1,.13f,.16f,0);
+    public bool WaterReflections {get;set;} = true;
     public bool WaterSurface {get;set;}
+    public bool WaterVolume {get;set;}
+    public Vector4 WaterColumn {get;set;}
     public Vector4 WaterMotion {get;set;}
     public Vector4 WaterWake {get;set;}
+    public Vector4 WaterFlow {get;set;}
+    public Vector4 WaterImpact {get;set;}
     public Vector2 WaterSize {get;set;} = Vector2.One;
     public bool SandSurface {get;set;}
     public Texture2D? SandImprintTexture {get;set;}
@@ -122,7 +134,7 @@ public sealed class Material
     public void CopyFrom(Material source)
     {
         BaseColor = source.BaseColor;
-        WaterSurface=source.WaterSurface;WaterMotion=source.WaterMotion;WaterWake=source.WaterWake;WaterSize=source.WaterSize;
+        WaterDepthTexture=source.WaterDepthTexture;WaterDepthRect=source.WaterDepthRect;WaterDepthSettings=source.WaterDepthSettings;WaterOceanWaves=source.WaterOceanWaves;WaterAbsorption=source.WaterAbsorption;WaterScattering=source.WaterScattering;WaterStyle=source.WaterStyle;WaterReflections=source.WaterReflections;WaterSurface=source.WaterSurface;WaterVolume=source.WaterVolume;WaterColumn=source.WaterColumn;WaterMotion=source.WaterMotion;WaterWake=source.WaterWake;WaterFlow=source.WaterFlow;WaterImpact=source.WaterImpact;WaterSize=source.WaterSize;
         MainTexture = source.MainTexture;
         NormalTexture = source.NormalTexture;
         NormalStrength = source.NormalStrength;
@@ -161,7 +173,7 @@ public sealed class Material
         return
             new Material
             {
-                WaterSurface=WaterSurface,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterSize=WaterSize,
+                WaterSurface=WaterSurface,WaterVolume=WaterVolume,WaterColumn=WaterColumn,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterFlow=WaterFlow,WaterImpact=WaterImpact,WaterSize=WaterSize,
                 BaseColor =
                     BaseColor,
 

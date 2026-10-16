@@ -318,11 +318,13 @@ public sealed class RenderWorld
         using var mainTiming=context.Renderer3D.ProfilePass(context,"Main geometry");
         var batches=_batchBuilder.Build(visible);
         context.Renderer3D.PrepareInstanceStream(batches);
+        bool waterBackgroundCaptured=false;bool hasWater=visible.Any(s=>s.Material.WaterSurface);context.Renderer3D.ResetWaterCapture();
         context.Renderer3D.BeginMainBatch();
         try {
         foreach (var batch in batches)
         {
             var submission=batch.First;
+            if(hasWater&&!waterBackgroundCaptured&&submission.Queue>=RenderQueue3D.Transparent){context.Renderer3D.CaptureOpaqueWaterBackground();waterBackgroundCaptured=true;}
             MainTriangles+=(long)submission.Mesh.IndexCount/3*batch.Instances.Count;
             if(batch.Instances.Count>1)InstancedObjects+=batch.Instances.Count;
             context.Renderer3D.Draw(

@@ -272,9 +272,10 @@ public class ByteEngineApplication : GameWindow
                 if (camera3D !=
                     null)
                 {
+                    float rasterScale=activeScene.Environments.FirstOrDefault(e=>e.Enabled&&e.GameObject.ActiveInHierarchy)?.RenderScale??1;
                     _runtimePostProcessTarget.Begin(
-                        WindowWidth,
-                        WindowHeight);
+                        Math.Max(1,(int)MathF.Round(WindowWidth*rasterScale)),
+                        Math.Max(1,(int)MathF.Round(WindowHeight*rasterScale)));
 
                     var context =
                         new RenderContext(
@@ -285,6 +286,7 @@ public class ByteEngineApplication : GameWindow
                             WindowHeight,
                             camera,
                             camera3D, renderWorld: _runtimeRenderWorld);
+                    context.RasterScale=rasterScale;
 
                     Scenes.RenderInternal(
                         context);

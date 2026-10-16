@@ -8,7 +8,7 @@ internal sealed class MaterialRenderStateComparer : IEqualityComparer<Material>
     {
         if(ReferenceEquals(x,y))return true;
         if(x is null || y is null)return false;
-        return x.WaterSurface==y.WaterSurface && x.WaterMotion==y.WaterMotion && x.WaterWake==y.WaterWake && x.WaterSize==y.WaterSize && x.BaseColor == y.BaseColor &&
+        return x.WaterDepthTexture==y.WaterDepthTexture && x.WaterDepthRect==y.WaterDepthRect && x.WaterDepthSettings==y.WaterDepthSettings && x.WaterOceanWaves==y.WaterOceanWaves && x.WaterAbsorption==y.WaterAbsorption && x.WaterScattering==y.WaterScattering && x.WaterStyle==y.WaterStyle && x.WaterReflections==y.WaterReflections && x.WaterFlow==y.WaterFlow && x.WaterImpact==y.WaterImpact && x.WaterSurface==y.WaterSurface && x.WaterVolume==y.WaterVolume && x.WaterColumn==y.WaterColumn && x.WaterMotion==y.WaterMotion && x.WaterWake==y.WaterWake && x.WaterSize==y.WaterSize && x.BaseColor == y.BaseColor &&
             x.MainTexture == y.MainTexture &&
             x.NormalTexture == y.NormalTexture &&
             x.HeightFieldTexture == y.HeightFieldTexture &&
@@ -51,7 +51,7 @@ internal sealed class MaterialRenderStateComparer : IEqualityComparer<Material>
     public int GetHashCode(Material value)
     {
         var hash=new HashCode();
-        hash.Add(value.WaterSurface);hash.Add(value.WaterMotion);hash.Add(value.WaterWake);hash.Add(value.WaterSize);
+        hash.Add(value.WaterDepthTexture);hash.Add(value.WaterDepthRect);hash.Add(value.WaterDepthSettings);hash.Add(value.WaterOceanWaves);hash.Add(value.WaterAbsorption);hash.Add(value.WaterScattering);hash.Add(value.WaterStyle);hash.Add(value.WaterReflections);hash.Add(value.WaterFlow);hash.Add(value.WaterImpact);hash.Add(value.WaterSurface);hash.Add(value.WaterVolume);hash.Add(value.WaterColumn);hash.Add(value.WaterMotion);hash.Add(value.WaterWake);hash.Add(value.WaterSize);
         hash.Add(value.BaseColor);
         hash.Add(value.MainTexture);
         hash.Add(value.NormalTexture);

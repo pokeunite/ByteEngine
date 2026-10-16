@@ -25,6 +25,7 @@ internal sealed class SceneFramebuffer
 
     private readonly PostProcess3D _postProcess =
         new();
+    private readonly RuntimePostProcessTarget3D _scaledGameTarget = new();
 
     private readonly EditorSkeletalPreviewCache _skeletalPreview =
         new();
@@ -300,6 +301,8 @@ internal sealed class SceneFramebuffer
         context.ViewportName=uiOnly?"UI preview":"Game";
         RenderEnvironment3D environment =
             context.CaptureRenderEnvironment3D();
+        bool scaledGame=camera3D!=null&&environment.Look.RenderScale<.999f;
+        if(scaledGame){context.RasterScale=environment.Look.RenderScale;_scaledGameTarget.Begin(context.RasterWidth,context.RasterHeight);}
 
         if (mode ==
             EditorMode.Edit)
@@ -315,7 +318,8 @@ internal sealed class SceneFramebuffer
             );
         }
 
-        using(renderer3D.ProfilePass(context,"Postprocessing / presentation")) _postProcess.Render(
+        if(scaledGame)_scaledGameTarget.Present(environment.Exposure,_width,_height,environment.SmoothEdges,context.GetProjectionMatrix3D(),environment.Look,_displayFramebuffer);
+        else using(renderer3D.ProfilePass(context,"Postprocessing / presentation")) _postProcess.Render(
             _colorTexture,
             _displayFramebuffer,
             _width,
@@ -927,5 +931,6 @@ internal sealed class SceneFramebuffer
         DestroyResources();
         _skeletalPreview.Dispose();
         _postProcess.Dispose();
+        _scaledGameTarget.Dispose();
     }
 }

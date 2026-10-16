@@ -26,6 +26,8 @@ public sealed class WaterBasin3D : Component
     public float Level { get; internal set; }
     public float Current { get; internal set; }
     internal float LeftFlux,RightFlux;
+    internal WaterDynamics3D? Dynamics;
+    public float SurfaceAt(float x,float z)=>Level+(Dynamics?.Sample(x,z)??0)*(Dynamics?.BuoyancyInfluence??0);
     public float CurrentAt(float x) => Math.Clamp(float.Lerp(LeftFlux,RightFlux,Math.Clamp((x-MinX)/Math.Max(.01f,MaxX-MinX),0,1))/Math.Max(.5f,Depth*(Level-Floor)),-3.5f,3.5f);
     public float Area => Math.Max(.01f, (MaxX - MinX) * Depth);
     internal float Displacement(float y, IEnumerable<BuoyantBody3D> bodies)
@@ -36,13 +38,15 @@ public sealed class WaterBasin3D : Component
             Vector3 p = b.Transform.WorldPosition, s = b.Size;
             float w = Math.Max(0, Math.Min(MaxX, p.X+s.X/2)-Math.Max(MinX,p.X-s.X/2));
             float d = Math.Max(0, Math.Min(CenterZ+Depth/2,p.Z+s.Z/2)-Math.Max(CenterZ-Depth/2,p.Z-s.Z/2));
-            float h = Math.Clamp(y-(p.Y-s.Y/2),0,s.Y);
+            if(w<=0||d<=0)continue;
+            float h = Math.Clamp(y+(Dynamics?.Sample(p.X,p.Z)??0)*(Dynamics?.BuoyancyInfluence??0)-(p.Y-s.Y/2),0,s.Y);
             result += w*d*h;
         }
         return result;
     }
     internal void Solve(IEnumerable<BuoyantBody3D> bodies)
     {
+        if(!bodies.Any(b=>b.Transform.WorldPosition.X+b.Size.X/2>MinX&&b.Transform.WorldPosition.X-b.Size.X/2<MaxX&&Math.Abs(b.Transform.WorldPosition.Z-CenterZ)<(Depth+b.Size.Z)/2)){Level=Math.Clamp(Floor+(float)(Volume/Area),Floor,Rim);return;}
         float lo=Floor, hi=Rim;
         for(int i=0;i<22;i++)
         {
@@ -61,11 +65,17 @@ public sealed class WaterGate3D : Component
     public bool IsPump { get; set; }
     public float Conductance { get; set; } = .6f;
     public float JetCurrentFactor { get; set; }
+    public string ApertureObject {get;set;} = "";
+    public string SecondaryApertureObject {get;set;} = "";
     public float Opening { get; set; }
     public string BladeName { get; set; } = "";
     public bool RetractBlade { get; set; }
     public float ClosedY { get; set; } = 3;
     public float LiftDistance { get; set; } = 6;
+    public string TransitPathName {get;set;}="";
+    public float FluxResponseSeconds {get;set;}
+    internal float MomentumFlux;
+    public float DeliveredFlow {get;internal set;}
     public float Flow { get; internal set; }
     public double TransferredVolume { get; private set; }
     internal void RecordTransfer(double amount)=>TransferredVolume+=Math.Abs(amount);
@@ -85,7 +95,8 @@ public sealed class WaterNetwork3D : Component
     public WaterCurrentPath3D[] CurrentPaths { get; private set; } = [];
     public double InitialVolume { get; private set; }
     public double ElapsedSeconds { get; private set; }
-    public double TotalVolume => Basins.Sum(b=>(double)b.Volume);
+    public WaterFlowPath3D[] Streams {get;private set;}=[];
+    public double TotalVolume => Basins.Sum(b=>(double)b.Volume)+Streams.Sum(s=>s.StoredVolume);
     public double RecoverableVolume => Basins.Where(b=>b.AvailableForRecovery).Sum(b=>b.Volume);
     readonly Dictionary<string,GameObject> visuals = new();
     protected override void OnStart()
@@ -98,6 +109,7 @@ public sealed class WaterNetwork3D : Component
         Bodies=objects.SelectMany(o=>o.Components).OfType<BuoyantBody3D>().ToArray();
         CurrentPaths=objects.SelectMany(o=>o.Components).OfType<WaterCurrentPath3D>().ToArray();
         foreach(var b in Basins) { b.Volume=Math.Max(0,(b.InitialLevel-b.Floor)*b.Area-b.Displacement(b.InitialLevel,Bodies)); b.Solve(Bodies); }
+        Streams=objects.SelectMany(o=>o.Components).OfType<WaterFlowPath3D>().Where(p=>p.ConserveVolume).ToArray();foreach(var stream in Streams)stream.EnsureHydraulicsInitialized();
         InitialVolume=TotalVolume;
         foreach(var body in Bodies) body.Network=this;
     }
@@ -110,31 +122,39 @@ public sealed class WaterNetwork3D : Component
         {
             gate.From=Basins.FirstOrDefault(b=>b.GameObject.Name==gate.Source);
             gate.To=Basins.FirstOrDefault(b=>b.GameObject.Name==gate.Destination);
-            gate.Flow=0;
+            gate.Flow=0;gate.DeliveredFlow=0;
+            var stream=Streams.FirstOrDefault(p=>p.GameObject.Name==gate.TransitPathName);
+            if(stream!=null&&gate.To is {} receiver){double free=Math.Max(0,(receiver.Rim-receiver.Floor)*receiver.Area-receiver.Displacement(receiver.Rim,Bodies)-receiver.Volume);double delivered=stream.Deliver(free);receiver.Volume+=delivered;gate.DeliveredFlow=(float)(delivered/dt);}
+
             if(!gate.Enabled || !gate.GameObject.ActiveInHierarchy) continue;
             if(gate.From is not {} a || gate.To is not {} b) continue;
             gate.Opening=Math.Clamp(gate.Opening,0,1);
             float head=a.Level-b.Level;
             if(gate.Overflow)head=Math.Max(0,a.Level-Math.Max(b.Level,gate.CrestHeight));
             if(gate.OneWay)head=Math.Max(0,head);
-            float q=gate.IsPump ? gate.Conductance*gate.Opening : gate.Conductance*gate.Opening*MathF.Sign(head)*MathF.Sqrt(19.62f*Math.Abs(head));
+            float aperture=1;
+            foreach(string name in new[]{gate.ApertureObject,gate.SecondaryApertureObject})if(name.Length>0&&GameObject.Scene!.FindGameObject(name)?.GetComponent<SluiceActuator3D>() is {} actuator)aperture*=actuator.Opening;
+            float q=gate.IsPump ? gate.Conductance*gate.Opening*aperture : gate.Conductance*gate.Opening*aperture*MathF.Sign(head)*MathF.Sqrt(19.62f*Math.Abs(head));
+            if(gate.FluxResponseSeconds>0&&gate.Opening*aperture>.00001f){gate.MomentumFlux+=(q-gate.MomentumFlux)*(1-MathF.Exp(-dt/gate.FluxResponseSeconds));q=gate.MomentumFlux;}else gate.MomentumFlux=q;
             var source=q>=0?a:b; var target=q>=0?b:a;
             double room=ReferenceEquals(source,target)?source.Volume:Math.Max(0,(target.Rim-target.Floor)*target.Area-target.Displacement(target.Rim,Bodies)-target.Volume);
+            if(stream!=null)room=Math.Max(0,room-stream.StoredVolume);
             double amount=Math.Min(Math.Abs(q)*dt,Math.Min(source.Volume,room));
             if(!gate.IsPump) amount=Math.Min(amount,Math.Abs(head)/(1/a.Area+1/b.Area)*.48f);
-            source.Volume-=amount; target.Volume+=amount;
+            source.Volume-=amount;if(stream!=null)stream.Receive(amount);else target.Volume+=amount;
             gate.RecordTransfer(amount);
             gate.Flow=(float)(MathF.Sign(q)*amount/Math.Max(.000001f,dt));
+            if(stream==null)gate.DeliveredFlow=gate.Flow;float incoming=gate.DeliveredFlow;
             if(!gate.IsPump)
             {
                 float direction=Math.Sign((b.MinX+b.MaxX)-(a.MinX+a.MaxX));
                 // Water supplied by a vertical lift pipe does not propel a boat sideways.
                 if(Math.Abs(a.MaxX-b.MinX)<.1f || Math.Abs(b.MaxX-a.MinX)<.1f)
                 {
-                    if(direction>0){a.RightFlux+=gate.Flow;b.LeftFlux+=gate.Flow;}
-                    else {a.LeftFlux-=gate.Flow;b.RightFlux-=gate.Flow;}
+                    if(direction>0){a.RightFlux+=gate.Flow;b.LeftFlux+=incoming;}
+                    else {a.LeftFlux-=gate.Flow;b.RightFlux-=incoming;}
                 }
-                else b.LeftFlux+=gate.Flow*gate.JetCurrentFactor;
+                else b.LeftFlux+=incoming*gate.JetCurrentFactor;
             }
             if(gate.BladeName.Length>0 && visuals.TryGetValue(gate.BladeName,out var blade))
             {
@@ -204,7 +224,7 @@ public sealed class BuoyantBody3D : Component
         {
             float width=Math.Max(0,Math.Min(b.MaxX,p.X+Size.X/2)-Math.Max(b.MinX,p.X-Size.X/2));
             float depth=Math.Max(0,Math.Min(b.CenterZ+b.Depth/2,p.Z+Size.Z/2)-Math.Max(b.CenterZ-b.Depth/2,p.Z-Size.Z/2));
-            float height=Math.Clamp(b.Level-(p.Y-Size.Y/2),0,Size.Y);
+            float height=Math.Clamp(b.SurfaceAt(p.X,p.Z)-(p.Y-Size.Y/2),0,Size.Y);
             float submerged=width*height*depth;
             float mid=(Math.Min(b.MaxX,p.X+Size.X/2)+Math.Max(b.MinX,p.X-Size.X/2))/2;
             Vector3 velocity=new(b.CurrentAt(mid),0,0);

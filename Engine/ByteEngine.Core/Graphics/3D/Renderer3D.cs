@@ -5,6 +5,22 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public sealed class Renderer3D : IDisposable
 {
+    private int _waterColor,_waterDepth,_waterWidth,_waterHeight;
+    private bool _waterReady;
+    private Vector4 _waterViewport;
+    internal void ResetWaterCapture()=>_waterReady=false;
+    internal void CaptureOpaqueWaterBackground()
+    {
+        int[] vp=new int[4];GL.GetInteger(GetPName.Viewport,vp);int w=vp[2],h=vp[3];if(w<=0||h<=0)return;
+        if(_waterColor==0){_waterColor=GL.GenTexture();_waterDepth=GL.GenTexture();}
+        bool resize=w!=_waterWidth||h!=_waterHeight;
+        foreach(var pair in new[]{(_waterColor,false),(_waterDepth,true)}){
+            GL.ActiveTexture(TextureUnit.Texture13);GL.BindTexture(TextureTarget.Texture2D,pair.Item1);GL.BindSampler(13,0);
+            if(resize){GL.TexImage2D(TextureTarget.Texture2D,0,pair.Item2?PixelInternalFormat.DepthComponent24:PixelInternalFormat.Rgba16f,w,h,0,pair.Item2?PixelFormat.DepthComponent:PixelFormat.Rgba,PixelType.Float,IntPtr.Zero);GL.TexParameter(TextureTarget.Texture2D,TextureParameterName.TextureMinFilter,(int)(pair.Item2?TextureMinFilter.Nearest:TextureMinFilter.Linear));GL.TexParameter(TextureTarget.Texture2D,TextureParameterName.TextureMagFilter,(int)(pair.Item2?TextureMagFilter.Nearest:TextureMagFilter.Linear));GL.TexParameter(TextureTarget.Texture2D,TextureParameterName.TextureWrapS,(int)TextureWrapMode.ClampToEdge);GL.TexParameter(TextureTarget.Texture2D,TextureParameterName.TextureWrapT,(int)TextureWrapMode.ClampToEdge);}
+            GL.CopyTexSubImage2D(TextureTarget.Texture2D,0,0,0,vp[0],vp[1],w,h);
+        }
+        _waterWidth=w;_waterHeight=h;_waterViewport=new(vp[0],vp[1],w,h);_waterReady=true;GL.ActiveTexture(TextureUnit.Texture0);
+    }
     private readonly Dictionary<PrimitiveMeshType, Mesh> _primitives =
         new();
 
@@ -33,7 +49,7 @@ public sealed class Renderer3D : IDisposable
         GL.BufferData(BufferTarget.ArrayBuffer,count*64,_instanceMatrices,BufferUsageHint.StreamDraw);
     }
     private readonly RenderPassProfiler _passes=new();
-    internal IDisposable ProfilePass(RenderContext context,string name)=>_passes.Begin(context.ViewportName,name,context.TargetWidth,context.TargetHeight,context.RenderWorld.Environment.Look.ProfileGpu);
+    internal IDisposable ProfilePass(RenderContext context,string name)=>_passes.Begin(context.ViewportName,name,name=="UI"?context.TargetWidth:context.RasterWidth,name=="UI"?context.TargetHeight:context.RasterHeight,context.RenderWorld.Environment.Look.ProfileGpu);
     private readonly GeometryGpuTimer _geometryTimer = new();
     internal void BeginGeometryProfile(bool enabled) => _geometryTimer.Begin(enabled);
     internal void EndGeometryProfile() => _geometryTimer.End();
@@ -689,6 +705,8 @@ public sealed class Renderer3D : IDisposable
                 "uProjection",
                 projection);
 
+            _shader.SetInt("uWaterRefraction",material.WaterSurface&&_waterReady?1:0);
+            if(material.WaterSurface&&_waterReady){Matrix4x4.Invert(view*projection,out var inverseVp);_shader.SetMatrix("uWaterInverseViewProjection",inverseVp);_shader.SetMatrix("uWaterViewProjection",view*projection);_shader.SetVector4("uWaterViewport",_waterViewport);GL.ActiveTexture(TextureUnit.Texture13);GL.BindTexture(TextureTarget.Texture2D,_waterColor);GL.BindSampler(13,0);GL.ActiveTexture(TextureUnit.Texture14);GL.BindTexture(TextureTarget.Texture2D,_waterDepth);GL.BindSampler(14,0);_shader.SetInt("uWaterSceneColor",13);_shader.SetInt("uWaterSceneDepth",14);GL.ActiveTexture(TextureUnit.Texture0);}
             _shader.SetVector4(
                 "uBaseColor",
                 material.BaseColor);
@@ -749,6 +767,7 @@ public sealed class Renderer3D : IDisposable
 
             UploadEnvironmentFog(
                 resolvedEnvironment);
+            _shader.SetInt("uWaterDetail",resolvedEnvironment.Look.WaterDetail);
 
             UploadEnvironmentLighting(
                 resolvedEnvironment);
@@ -844,7 +863,7 @@ public sealed class Renderer3D : IDisposable
         _shader.SetVector2("uUvOffset", material.UvOffset);
         _shader.SetFloat("uNormalStrength", material.NormalStrength);
         _shader.SetInt("uSandSurface", material.SandSurface ? 1 : 0);
-        _shader.SetInt("uWaterSurface",material.WaterSurface?1:0);_shader.SetVector4("uWaterMotion",material.WaterMotion);_shader.SetVector4("uWaterWake",material.WaterWake);_shader.SetVector2("uWaterSize",material.WaterSize);
+        _shader.SetInt("uWaterDepthEnabled",material.WaterDepthTexture!=null?1:0);if(material.WaterDepthTexture!=null){material.WaterDepthTexture.Bind(15);GL.BindSampler(15,0);_shader.SetInt("uWaterDepthTexture",15);_shader.SetVector4("uWaterDepthRect",material.WaterDepthRect);_shader.SetVector4("uWaterDepthSettings",material.WaterDepthSettings);}_shader.SetVector4("uWaterOceanWaves",material.WaterOceanWaves);_shader.SetVector4("uWaterAbsorption",material.WaterAbsorption);_shader.SetVector4("uWaterScattering",material.WaterScattering);_shader.SetVector4("uWaterStyle",material.WaterStyle);_shader.SetInt("uWaterReflections",material.WaterReflections?1:0);_shader.SetVector4("uWaterFlow",material.WaterFlow);_shader.SetVector4("uWaterImpact",material.WaterImpact);_shader.SetInt("uWaterSurface",material.WaterSurface?1:0);_shader.SetInt("uWaterVolume",material.WaterVolume?1:0);_shader.SetVector4("uWaterColumn",material.WaterColumn);_shader.SetVector4("uWaterMotion",material.WaterMotion);_shader.SetVector4("uWaterWake",material.WaterWake);_shader.SetVector2("uWaterSize",material.WaterSize);
         _shader.SetInt("uUseSandImprint",material.SandImprintTexture!=null?1:0);
         _shader.SetVector2("uSandImprintOrigin",material.SandImprintOrigin);
         if(material.SandImprintTexture!=null){material.SandImprintTexture.Bind(13);GL.BindSampler(13,0);_shader.SetInt("uSandImprintTexture",13);}
@@ -1681,6 +1700,7 @@ public sealed class Renderer3D : IDisposable
     public void Dispose()
     {
         if(_instanceBuffer!=0){GL.DeleteBuffer(_instanceBuffer);_instanceBuffer=0;}
+        if(_waterColor!=0)GL.DeleteTexture(_waterColor);if(_waterDepth!=0)GL.DeleteTexture(_waterDepth);_waterColor=_waterDepth=0;
         _passes.Dispose();
         _geometryTimer.Dispose();
         _materialSampling.Dispose();
