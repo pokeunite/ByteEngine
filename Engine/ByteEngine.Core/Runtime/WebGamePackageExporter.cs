@@ -7,11 +7,22 @@ using ByteEngine.Core.Serialization;
 
 namespace ByteEngine.Core.Runtime;
 
+public sealed record WebExportGraphics
+{
+ public string Quality {get;init;}="Balanced";
+ public string WorldResolution {get;init;}="Auto";
+ public int TextureLimit {get;init;}=2048;
+ public bool RequireVisualParity {get;init;}
+ public void Validate(){if(Quality is not ("High" or "Balanced" or "Fast")||WorldResolution is not ("Auto" or "720p" or "1080p" or "Native")||TextureLimit is not (512 or 1024 or 2048 or 4096))throw new ArgumentException("Invalid browser graphics settings.");}
+}
+
 public static class WebGamePackageExporter
 {
     public static GamePackageResult Export(string projectFile, string runtimeDirectory,
-        string outputParent, string startupScene, IProgress<string>? progress = null)
+        string outputParent, string startupScene, IProgress<string>? progress = null, WebExportGraphics? graphics = null)
     {
+        graphics ??= new();graphics.Validate();
+
         var project = new ProjectSerializer().Load(projectFile);
         GameSaveStorage.AssignExportIdentity(project);
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
@@ -23,11 +34,12 @@ public static class WebGamePackageExporter
         var unsupported = runtimePlugins.Where(p=>!supported.Contains(p.Id,StringComparer.OrdinalIgnoreCase)).ToArray();
         if(unsupported.Length>0)throw new InvalidOperationException("Browser runtime does not include these plugins: "+string.Join(", ",unsupported.Select(p=>p.Name))+". Refresh the browser runtime with matching statically linked plugins.");
         ValidatePluginBuilds(runtimeDirectory, runtimePlugins);
+        BrowserRenderContract.ValidateRuntime(runtimeDirectory);
         project.StartupScene = startupScene.Replace('\\', '/');
         if (!File.Exists(GamePackageExporter.ResolveInside(root, project.StartupScene)))
             throw new FileNotFoundException("Choose a saved startup scene.");
         runtimeDirectory = Path.GetFullPath(runtimeDirectory);
-        foreach (string file in new[] { "index.html", "main.js", "content.js", "renderer.js", "audio.js", "_framework/dotnet.js" })
+        foreach (string file in new[] { "index.html", "main.js", "content.js", "renderer.js", "water.js", "graphics.js", "audio.js", "_framework/dotnet.js" })
             if (!File.Exists(GamePackageExporter.ResolveInside(runtimeDirectory, file)))
                 throw new FileNotFoundException("Browser player runtime is missing: " + file);
         string parent = Path.GetFullPath(outputParent);
@@ -38,9 +50,9 @@ public static class WebGamePackageExporter
         if (GamePackageExporter.IsInside(runtimeDirectory, parent))
             throw new InvalidOperationException("Export outside the browser runtime.");
         using var database = new AssetDatabase(root, roots, readOnly: true);
-        // Reject known desktop-only render components instead of silently crashing at runtime.
-        foreach (var asset in database.Assets.Where(a => a.Type == AssetType.Scene || a.Type == AssetType.Blueprint))
-            ValidateComponents(asset.FullPath);
+        var compatibility=Analyze(database);
+        var blocked=compatibility.Where(i=>i.BlocksExport||graphics.RequireVisualParity).ToArray();
+        if(blocked.Length>0)throw new NotSupportedException("Web compatibility review failed:\n"+string.Join("\n",blocked.Select(i=>i.Asset+": "+i.Message)));
         string destination = Path.Combine(parent, GamePackageExporter.SafeName(project.Name) + "-Web-" +
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(destination);
@@ -51,6 +63,8 @@ public static class WebGamePackageExporter
         {
             string site = Path.Combine(destination, "site");
             GamePackageExporter.CopyTree(runtimeDirectory, site, false);
+            File.WriteAllText(Path.Combine(destination,"Web-Quality-Report.json"),JsonSerializer.Serialize(new{contract=BrowserRenderContract.Hash,graphics,compatibility},new JsonSerializerOptions{WriteIndented=true}));
+            File.WriteAllLines(Path.Combine(destination,"Web-Quality-Report.txt"),new[]{"BYTEENGINE WEB QUALITY REPORT",$"Profile: {graphics.Quality}; resolution: {graphics.WorldResolution}; material texture limit: {graphics.TextureLimit}","Ocean, finite water simulation and scene geometry are retained at every quality.","UI and referenced height fields retain their dimensions; material maps use role-aware filtering.","Declared visual differences:"}.Concat(compatibility.Select(i=>i.Asset+" / "+i.Message)));
             // Ship uncompressed runtime files: works on ordinary static hosts without custom encoding headers.
             foreach (string file in GamePackageExporter.WalkFiles(site).Where(f => f.EndsWith(".br") || f.EndsWith(".gz")))
                 File.Delete(file);
@@ -68,26 +82,28 @@ public static class WebGamePackageExporter
             foreach (var model in database.Assets.Where(a => a.Type == AssetType.Model3D))
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
-                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true);
+                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true,textureLimit:graphics.TextureLimit);
                 // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
                 File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
             }
             var dataTextures=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             void DataReferences(JsonElement element){
-                if(element.ValueKind==JsonValueKind.Object)foreach(var property in element.EnumerateObject()){
+                if(element.ValueKind==JsonValueKind.Object){
+                    if(element.TryGetProperty("type",out var kind)&&kind.ValueKind==JsonValueKind.String&&kind.GetString()!.StartsWith("Ui",StringComparison.Ordinal)&&element.TryGetProperty("properties",out var ui))foreach(var value in ui.EnumerateObject())if(value.Name.Contains("image",StringComparison.OrdinalIgnoreCase)&&value.Value.ValueKind==JsonValueKind.String){string token=value.Value.GetString()!;var asset=Guid.TryParse(token,out var id)?database.Assets.FirstOrDefault(a=>a.Guid==id):database.Assets.FirstOrDefault(a=>a.ProjectPath.Equals(token,StringComparison.OrdinalIgnoreCase));if(asset!=null)dataTextures.Add(asset.ProjectPath);}
+                    foreach(var property in element.EnumerateObject()){
                     if(property.Name.Contains("heightmap",StringComparison.OrdinalIgnoreCase)&&property.Value.ValueKind==JsonValueKind.String&&property.Value.GetString() is {Length:>0} path){
                         string full=Path.GetFullPath(Path.IsPathRooted(path)?path:Path.Combine(root,path));
                         if(GamePackageExporter.IsInside(root,full))dataTextures.Add(Path.GetRelativePath(root,full).Replace('\\','/'));
                     }
                     DataReferences(property.Value);
-                }else if(element.ValueKind==JsonValueKind.Array)foreach(var item in element.EnumerateArray())DataReferences(item);
+                }}else if(element.ValueKind==JsonValueKind.Array)foreach(var item in element.EnumerateArray())DataReferences(item);
             }
             foreach(var asset in database.Assets.Where(a=>a.Type==AssetType.Scene||a.Type==AssetType.Blueprint)){
                 using var document=JsonDocument.Parse(File.ReadAllText(asset.FullPath));DataReferences(document.RootElement);
             }
             foreach(string texture in GamePackageExporter.WalkFiles(content).Where(p=>new[]{".png",".jpg",".jpeg",".bmp",".tga"}.Contains(Path.GetExtension(p).ToLowerInvariant()))){
                 if(dataTextures.Contains(Path.GetRelativePath(content,texture).Replace('\\','/')))continue;
-                byte[] original=File.ReadAllBytes(texture),optimized=WebTextureCooker.Optimize(original);
+                byte[] original=File.ReadAllBytes(texture),optimized=WebTextureCooker.Optimize(original,graphics.TextureLimit,TextureRole(texture));
                 if(!ReferenceEquals(original,optimized))File.WriteAllBytes(texture,optimized);
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
@@ -113,7 +129,7 @@ public static class WebGamePackageExporter
                 sha256 = Hash(file)
             }).ToArray();
             File.WriteAllText(Path.Combine(site, "web-game.json"), JsonSerializer.Serialize(new {
-                formatVersion = 3, name = project.Name, packageSize, packageSha256 = packageHash, files = entries
+                formatVersion = 3, renderContract=BrowserRenderContract.Hash,engineSource=BrowserRenderContract.SourceFingerprint,name = project.Name,graphics=new {quality=graphics.Quality,worldResolution=graphics.WorldResolution,textureLimit=graphics.TextureLimit,requireVisualParity=graphics.RequireVisualParity}, packageSize, packageSha256 = packageHash, files = entries
             }));
             var siteFiles = GamePackageExporter.WalkFiles(site).ToArray();
             if (siteFiles.Length > 1000 || siteFiles.Sum(f => new FileInfo(f).Length) > 500L * 1024 * 1024 ||
@@ -125,7 +141,7 @@ public static class WebGamePackageExporter
             File.WriteAllText(Path.Combine(destination, "README.txt"),
                 "Upload the ZIP as an HTML game on itch.io. index.html is at the ZIP root.\n" +
                 "Desktop browser with WebGL 2 required. Click the game to activate audio/input. Escape releases mouse.\n" +
-                "Browser renderer uses reduced graphics: no desktop shadow/IBL/postprocessing parity.\n" +
+                "Browser: native water optics, ocean waves, sun shadows and edge smoothing. Desktop IBL/post effects may differ.\n" +
                 "Test privately before release. To test locally, serve the site directory over HTTP, not file://.\n");
             File.Delete(marker);
             return new GamePackageResult(destination, zip, contentCount, entries.Sum(e => e.size));
@@ -178,6 +194,9 @@ public static class WebGamePackageExporter
         using var stream = File.OpenRead(file);
         return Convert.ToHexString(SHA256.HashData(stream));
     }
+    static WebTextureRole TextureRole(string file){string path=file.Replace('\\','/').ToLowerInvariant();if(path.Contains("/ui/")||path.Contains("/fonts/")||path.Contains("/interface/"))return WebTextureRole.UserInterface;string name=Path.GetFileNameWithoutExtension(path);if(name.Contains("normal")||name.EndsWith("_n")||name.EndsWith("_nrm"))return WebTextureRole.Normal;if(name.Contains("rough")||name.Contains("metal")||name.Contains("height")||name.Contains("mask")||name.Contains("occlusion")||name.EndsWith("_orm"))return WebTextureRole.Data;return WebTextureRole.Color;}
+    public static IReadOnlyList<WebCompatibilityIssue> Analyze(string projectFile){var project=new ProjectSerializer().Load(projectFile);using var db=new AssetDatabase(Path.GetDirectoryName(Path.GetFullPath(projectFile))!,new[]{project.AssetDirectory,project.SceneDirectory},readOnly:true);return Analyze(db);}
+    static IReadOnlyList<WebCompatibilityIssue> Analyze(AssetDatabase database)=>database.Assets.Where(a=>a.Type is AssetType.Scene or AssetType.Blueprint or AssetType.Material).SelectMany(a=>PlatformCapabilities.Inspect(a.FullPath,RuntimePlatform.Browser).Select(i=>new WebCompatibilityIssue(a.ProjectPath,i.Component,i.Message,i.BlocksExport))).Distinct().ToArray();
     private static void ValidateComponents(string file)
     {
         var issues=PlatformCapabilities.Inspect(file,RuntimePlatform.Browser);
@@ -185,3 +204,6 @@ public static class WebGamePackageExporter
         if(blocked.Length>0)throw new NotSupportedException(string.Join("; ",blocked.Select(i=>i.Message)));
     }
 }
+
+
+

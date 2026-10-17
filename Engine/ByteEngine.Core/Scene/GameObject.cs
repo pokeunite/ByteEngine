@@ -8,6 +8,7 @@ public sealed class GameObject
 {
     private readonly List<Component> _components = new();
     private Component[]? _contactComponents;
+    private Component[]? _fixedUpdateComponents;
     private Component[] ContactComponents => _contactComponents ??= _components.ToArray();
     private readonly List<GameObject> _children = new();
     private readonly HashSet<Guid> _tags = new();
@@ -16,7 +17,12 @@ public sealed class GameObject
     private Scene? _scene;
 
     public Guid Id { get; private set; }
-    public string Name { get; set; }
+    private string _name = string.Empty;
+    public string Name
+    {
+        get => _name;
+        set { if (_name == value) return; _name = value; _scene?.InvalidateObjectLookup(); }
+    }
     public bool Active { get; set; } = true;
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
@@ -185,7 +191,7 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
-        _contactComponents=null;
+        _contactComponents=null;_fixedUpdateComponents=null;
         _scene?.InvalidateComponentRegistries();
 
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
@@ -216,7 +222,7 @@ public sealed class GameObject
     internal void ReorderComponents(IReadOnlyList<Component> ordered)
     {
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
-        _components.Clear();_contactComponents=null;
+        _components.Clear();_contactComponents=null;_fixedUpdateComponents=null;
         _scene?.InvalidateComponentRegistries();_components.AddRange(ordered);
     }
 
@@ -224,7 +230,7 @@ public sealed class GameObject
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
-        _contactComponents=null;
+        _contactComponents=null;_fixedUpdateComponents=null;
         _scene?.InvalidateComponentRegistries();
 
         CrashDebugLog.Write(
@@ -282,13 +288,14 @@ public sealed class GameObject
     {
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
-        int count = _components.Count;
+        var components = _fixedUpdateComponents ??= _components.Where(c=>c.ImplementsFixedUpdate).ToArray();
+        int count = components.Length;
         if (count == 0) return;
-        if (count == 1) { _components[0].FixedUpdateInternal(); return; }
+        if (count == 1) { components[0].FixedUpdateInternal(); return; }
         var snapshot = System.Buffers.ArrayPool<Component>.Shared.Rent(count);
         try
         {
-            _components.CopyTo(snapshot, 0);
+            components.CopyTo(snapshot, 0);
             for (int i = 1; i < count; i++)
             {
                 var value = snapshot[i]; int j = i - 1;
@@ -411,9 +418,10 @@ public sealed class GameObject
             component.DestroyInternal();
         }
 
-        _components.Clear();_contactComponents=null;
+        _components.Clear();_contactComponents=null;_fixedUpdateComponents=null;
         _scene?.InvalidateComponentRegistries();
         _started = false;
 
     }
 }
+

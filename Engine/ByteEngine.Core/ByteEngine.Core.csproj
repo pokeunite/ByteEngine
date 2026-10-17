@@ -28,4 +28,24 @@
     <None Include="$(PkgSilk_NET_OpenAL_Soft_Native)\runtimes\win-x64\native\soft_oal.dll" Link="soft_oal.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('$(PkgSilk_NET_OpenAL_Soft_Native)\runtimes\win-x64\native\soft_oal.dll')" />
   </ItemGroup>
 
+  <!-- Source identity survives Debug/Release and PDB differences while rejecting stale browser gameplay. -->
+  <Target Name="FingerprintEngineSources" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <_FingerprintSource Include="@(Compile)" Exclude="obj/**;bin/**;$(IntermediateOutputPath)**" />
+      <_FingerprintSource Include="$(MSBuildProjectFile)" />
+    </ItemGroup>
+    <GetFileHash Files="@(_FingerprintSource)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_FingerprintHash" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(IntermediateOutputPath)engine-source-fingerprint.txt" Lines="@(_FingerprintHash->'%(Filename)%(Extension)=%(FileHash)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <GetFileHash Files="$(IntermediateOutputPath)engine-source-fingerprint.txt" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_EngineSourceFingerprint" />
+    </GetFileHash>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ByteEngineSourceFingerprint</_Parameter1>
+        <_Parameter2>$(_EngineSourceFingerprint)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 </Project>

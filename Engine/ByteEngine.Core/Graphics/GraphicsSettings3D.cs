@@ -17,6 +17,7 @@ public sealed class GraphicsSettings3D : Component
     record Preferences(GraphicsQuality Quality,float RenderScale);
     protected override void OnStart()
     {
+        if(OperatingSystem.IsBrowser())Quality=BrowserPresentationSettings.Quality;
         sky=GameObject.Scene!.Environments.FirstOrDefault(e=>e.Enabled&&e.GameObject.ActiveInHierarchy);
         if(SettingsKey.Length>0){
             string key=new(SettingsKey.Where(c=>char.IsAsciiLetterOrDigit(c)||c is '-' or '_').ToArray());
@@ -32,8 +33,10 @@ public sealed class GraphicsSettings3D : Component
     {
         if(!Enum.IsDefined(Quality))Quality=GraphicsQuality.High;
         if(sky!=null){float ao=sky.AmbientOcclusion,bloom=sky.Bloom;sky.Quality=Quality;if(PreservePostEffects){sky.AmbientOcclusion=ao;sky.Bloom=bloom;}sky.RenderScale=RenderScale;}
+        if(OperatingSystem.IsBrowser()){BrowserPresentationSettings.Quality=Quality;if(RenderScale<.99f||(applied.HasValue&&appliedScale!=RenderScale))BrowserPresentationSettings.WorldResolution=RenderScale<.63f?"50%":RenderScale<.9f?"75%":"Auto";}
         applied=Quality;appliedScale=RenderScale;
         if(save&&path!=null)try{Directory.CreateDirectory(Path.GetDirectoryName(path)!);string temp=path+".tmp";File.WriteAllText(temp,JsonSerializer.Serialize(new Preferences(Quality,RenderScale)));File.Move(temp,path,true);LastError="";}
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){LastError=ex.Message;}
     }
 }
+

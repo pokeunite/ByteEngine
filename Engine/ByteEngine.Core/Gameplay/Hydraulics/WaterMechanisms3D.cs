@@ -45,13 +45,19 @@ public sealed class BuoyantPulley3D : Component
     public float MaximumTravel { get; set; } = 5;
     public bool LimitInputTravel {get;set;}
     public float Travel { get; private set; }
+    public float ReadyTravel {get;set;}=1.8f;
+    public float TravelSpeed {get;private set;}
+    public bool IsReady {get;private set;}
+    public int ReadySequence {get;private set;}
     protected override void OnFixedUpdate()
     {
         var scene=GameObject.Scene!;var input=scene.FindGameObject(FloatName);var load=scene.FindGameObject(LoadName);
         if(input?.GetComponent<Rigidbody3D>() is not {} body||load==null)return;
         body.AddForce(new(0,-Math.Max(0,LoadMass)*9.81f*Math.Abs(Ratio),0));
         if(LimitInputTravel&&Ratio>0&&input.Transform.WorldPosition.Y>RestHeight+MaximumTravel/Ratio){var stopped=input.Transform.WorldPosition;stopped.Y=RestHeight+MaximumTravel/Ratio;input.Transform.WorldPosition=stopped;var velocity=body.Velocity;velocity.Y=Math.Min(0,velocity.Y);body.Velocity=velocity;}
-        Travel=Math.Clamp((input.Transform.WorldPosition.Y-RestHeight)*Ratio,0,MaximumTravel);
+        float next=Math.Clamp((input.Transform.WorldPosition.Y-RestHeight)*Ratio,0,MaximumTravel);
+        TravelSpeed=(next-Travel)/Math.Max(.0001f,(float)Time.FixedDeltaTime);Travel=next;
+        bool ready=Travel>=ReadyTravel;if(ready&&!IsReady)ReadySequence++;IsReady=ready;
         var p=load.Transform.WorldPosition;p.Y=ClosedHeight+Travel;load.Transform.WorldPosition=p;
     }
 }

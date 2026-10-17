@@ -1,7 +1,8 @@
+import {renderContract} from './shared-render.js';
 import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
 import { BrowserRenderer } from './renderer.js';
-import { decodeUiPacket } from './frame-wire.js';
+import { decodeUiPacket, decodeDrawPacket } from './frame-wire.js';
 import { BrowserAudio } from './audio.js';
 import { createPerformanceCapture } from './performance.js';
 import { BrowserPresentation } from './graphics.js';
@@ -37,8 +38,9 @@ try{
     const [runtime,game,content]=await Promise.all([runtimeReady,gameReady,contentReady]);
     readManagedError=()=>game.LastFrameError();
     renderer.readBuffer=index=>game.ReadBuffer(index);
-    globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
-    const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();
+    globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());globalThis.byteEngineProfile=enabled=>game.ProfileEngine(!!enabled);globalThis.byteEngineTraceEvents=enabled=>game.TraceEvents(!!enabled);
+    const {manifest,audio:files}=content;if(game.RenderContract()!==renderContract||manifest.renderContract&&manifest.renderContract!==renderContract||manifest.engineSource&&game.EngineSourceFingerprint()!==manifest.engineSource)throw Error('The game package and browser renderer do not match. Export with a freshly published runtime.');byteEnginePerf.unpackEnd=performance.now();
+    const previewQuality=new URLSearchParams(location.search).get('previewQuality');const exportGraphics={...(manifest.graphics||{})};if(['High','Balanced','Fast'].includes(previewQuality))exportGraphics.quality=previewQuality;game.ConfigurePresentation(JSON.stringify(exportGraphics));
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
     status.setProgress(null,'Preparing audio…');
@@ -87,11 +89,11 @@ try{
         pointer=document.pointerLockElement===canvas?[.5,.5]:[(e.clientX-rect.left)/rect.width,(e.clientY-rect.top)/rect.height];
         delta[0]+=e.movementX;delta[1]+=e.movementY;
     });
-    const uiCommands=[];
+    const uiCommands=[],drawCommands=[];
     function frame(now){
         if(stopped){status.hidden=false;return;}
         try{
-            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_SIZE));
+            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.capabilities.maxTextureSize);
             const {width,height,worldWidth,worldHeight,uiWidth,uiHeight}=size;
             if(canvas.width!==worldWidth||canvas.height!==worldHeight){canvas.width=worldWidth;canvas.height=worldHeight;}
             if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
@@ -103,6 +105,7 @@ try{
             const wasmEnd=performance.now();const data=JSON.parse(payload);
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
             if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
+            if(data.drawBuffer>=0)data.draws=decodeDrawPacket(game.ReadBuffer(data.drawBuffer),drawCommands);
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};
@@ -129,3 +132,6 @@ try{
     // Initial capture is requested from the next click (browser user-gesture requirement).
     requestAnimationFrame(frame);
 }catch(error){fail(error);}
+
+
+

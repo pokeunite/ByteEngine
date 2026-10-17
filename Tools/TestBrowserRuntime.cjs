@@ -11,6 +11,7 @@ import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
 import { BrowserRenderer } from './renderer.js';
 import { BrowserAudio } from './audio.js';
+import { decodeUiPacket,decodeDrawPacket } from './frame-wire.js';
 try {
  const renderer=new BrowserRenderer(document.querySelector('#game'),document.querySelector('#ui'));
  const runtime=await dotnet.create(),config=runtime.getConfig();
@@ -18,10 +19,12 @@ try {
  const game=exports.BrowserGame;
  const {audio:files}=await loadContent(game,document.querySelector('#status'));
  const audio=new BrowserAudio(files,id=>game.AudioEnded(id));await audio.decode();await audio.activate();
- game.Start(false);
+ renderer.readBuffer=i=>game.ReadBuffer(i);game.Start(false);
  const frames=[];let sound=false;
  for(let i=0;i<20;i++){
   const data=JSON.parse(game.Frame(.05,640,480,'','',.5,.5,0,0,0,true,false,''));
+  if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount);
+  if(data.drawBuffer>=0)data.draws=decodeDrawPacket(game.ReadBuffer(data.drawBuffer));
   audio.commands(data.audio);renderer.draw(data,640,480);
   if(renderer.gl.getError()!==renderer.gl.NO_ERROR)throw new Error('WebGL error');
   if(data.audio.some(c=>c.kind==='play'))sound=true;
@@ -56,3 +59,4 @@ const server=http.createServer((req,res)=>{
  }catch(e){console.error(e);process.exitCode=1;}
  finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })();
+

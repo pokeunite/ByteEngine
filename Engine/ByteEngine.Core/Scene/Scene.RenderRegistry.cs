@@ -13,6 +13,7 @@ public sealed partial class Scene
     internal IReadOnlyList<PointLight> PointLights { get { RefreshRenderRegistry(); return _pointLights; } }
     internal void InvalidateComponentRegistries()
     {
+        InvalidateObjectLookup();
         InvalidatePhysicsRegistry();
         _renderRegistryDirty = true;
     }

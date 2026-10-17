@@ -293,7 +293,7 @@ public sealed class PostProcess3D
             float c = dot(sw, luma), d = dot(se, luma);
             float low = min(middle, min(min(a,b), min(c,d)));
             float high = max(middle, max(max(a,b), max(c,d)));
-            if (high - low < max(0.0312, high * 0.125)) return center;
+            if (high - low < max(0.0156, high * 0.0833)) return center;
             vec2 direction = vec2(-((a+b)-(c+d)), (a+c)-(b+d));
             float reduction = max((a+b+c+d) * 0.03125, 0.0078125);
             direction = clamp(direction / (min(abs(direction.x), abs(direction.y)) + reduction),
@@ -303,7 +303,14 @@ public sealed class PostProcess3D
             vec3 wide = narrow * 0.5 + 0.25 * (displaySample(uv - direction * 0.5) +
                 displaySample(uv + direction * 0.5));
             float wideLuma = dot(wide, luma);
-            return wideLuma < low || wideLuma > high ? narrow : wide;
+            vec3 filtered=wideLuma < low || wideLuma > high ? narrow : wide;
+            // The directional pass alone misses single-pixel foliage/rails when
+            // its diagonal gradient cancels. Add bounded subpixel coverage only
+            // on detected edges; native-resolution UI is rendered afterwards.
+            vec3 axial=displaySample(uv+vec2(pixel.x,0))+displaySample(uv-vec2(pixel.x,0))+
+                displaySample(uv+vec2(0,pixel.y))+displaySample(uv-vec2(0,pixel.y));
+            float subpixel=clamp(abs(dot(axial*.25,luma)-middle)/max(.001,high-low),0.,1.);
+            return mix(filtered,(center*4.+axial)*.125,subpixel*subpixel*.4);
         }
 
         float screenDither(

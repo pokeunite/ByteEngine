@@ -277,11 +277,16 @@ public sealed partial class Scene
         return DestroyGameObjectImmediate(gameObject);
     }
 
-    public GameObject? FindGameObject(string name) =>
-        _gameObjects.FirstOrDefault(item => item.Name == name);
+    public GameObject? FindGameObject(string name)
+    {
+        if(name is null)return _gameObjects.FirstOrDefault(item=>item.Name is null);
+        RefreshObjectLookup();return _firstObjectByName.GetValueOrDefault(name);
+    }
 
-    public GameObject? FindGameObject(Guid id) =>
-        _gameObjects.FirstOrDefault(item => item.Id == id);
+    public GameObject? FindGameObject(Guid id)
+    {
+        RefreshObjectLookup();return _objectById.GetValueOrDefault(id);
+    }
 
     public GameObject? FindFirstWithTag(Guid tagId) =>
         _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects.FirstOrDefault(item => item.ActiveInHierarchy) : null;
@@ -440,9 +445,11 @@ public sealed partial class Scene
     }
 
     internal bool LoadingScreenVisible,LoadingScreenPresented;
+    internal float LoadingProgress;
+    internal string LoadingTitle="LOADING";
     internal void RenderInternal(RenderContext context)
     {
-        if(LoadingScreenVisible){context.QueueUiQuad(System.Numerics.Vector2.Zero,new(context.TargetWidth,context.TargetHeight),new(.035f,.045f,.035f,1));context.QueueUiText("LOADING",FontRuntime.ResolvePath(_gameObjects.SelectMany(o=>o.Components).OfType<UiText>().FirstOrDefault(t=>!t.FontReference.IsEmpty)?.FontReference??ByteEngine.Core.Assets.AssetReference.Empty),24,new(context.TargetWidth*.5f,context.TargetHeight*.5f),new(.88f,.85f,.72f,1),400,UiAnchor.Center);context.QueueUiQuad(new(context.TargetWidth*.35f,context.TargetHeight*.5f+42),new(context.TargetWidth*.3f,2),new(.65f,.51f,.22f,1));context.FlushUi();LoadingScreenPresented=true;return;}
+        if(LoadingScreenVisible){(_gameObjects.SelectMany(o=>o.Components).OfType<LoadingScreenStyle>().FirstOrDefault(s=>s.Enabled)??new LoadingScreenStyle()).Draw(context,LoadingTitle,LoadingProgress);if(!context.Has3DCamera)context.FlushUi();LoadingScreenPresented=true;return;}
 
         if (!_loaded) return;
 

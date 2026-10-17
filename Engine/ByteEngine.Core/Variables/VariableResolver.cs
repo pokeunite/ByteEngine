@@ -164,16 +164,26 @@ public static class VariableResolver
         }
     }
 
-    private static string[] SplitPath(string path) =>
-        path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,string[]> Paths = new(StringComparer.Ordinal);
+    private static string[] SplitPath(string path)
+    {
+        // Bound arbitrary user-created names; clearing cached metadata does not change resolution.
+        if(Paths.Count>4096)Paths.Clear();
+        return Paths.GetOrAdd(path,static p=>p.Split('.',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries));
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type,System.Collections.Concurrent.ConcurrentDictionary<string,MemberInfo?>> Members = new();
 
     private static bool TryGetMember(
         Type type,
         string name,
         [NotNullWhen(true)] out MemberInfo? member)
     {
-        member = type.GetProperty(name, PublicInstanceIgnoreCase) ??
-                 (MemberInfo?)type.GetField(name, PublicInstanceIgnoreCase);
+        var members=Members.GetValue(type,static _=>new(StringComparer.OrdinalIgnoreCase));
+        if(!members.TryGetValue(name,out member)){
+            if(members.Count>4096)members.Clear();
+            member=type.GetProperty(name,PublicInstanceIgnoreCase)??(MemberInfo?)type.GetField(name,PublicInstanceIgnoreCase);
+            members.TryAdd(name,member);
+        }
         return member != null;
     }
 

@@ -22,6 +22,7 @@ internal static class Program
         using var writer = new DiagnosticWriter();
         Console.SetOut(writer);
         Console.SetError(writer);
+        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Enabled=args.Contains("--trace-events",StringComparer.OrdinalIgnoreCase);
         bool smokeTest=args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
         bool validate = args.Contains("--validate", StringComparer.OrdinalIgnoreCase);
         using var splash = smokeTest || validate ? null : new StartupSplash();
@@ -78,3 +79,4 @@ internal static class Program
         }
     }
 }
+

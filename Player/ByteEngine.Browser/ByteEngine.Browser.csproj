@@ -11,6 +11,14 @@
     <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
     <WasmEnableSIMD>true</WasmEnableSIMD>
     <WasmDedup>true</WasmDedup>
+    <!-- Runtime-wide compiler profiles are independent of in-game graphics quality. -->
+    <ByteBrowserCodeOptimization Condition="'$(ByteBrowserCodeOptimization)' == ''">Balanced</ByteBrowserCodeOptimization>
+    <EmccCompileOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Speed'">-O3</EmccCompileOptimizationFlag>
+    <WasmBitcodeCompileOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Speed'">-O3</WasmBitcodeCompileOptimizationFlag>
+    <EmccLinkOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Speed'">-O3</EmccLinkOptimizationFlag>
+    <EmccCompileOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Size'">-Oz</EmccCompileOptimizationFlag>
+    <WasmBitcodeCompileOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Size'">-Oz</WasmBitcodeCompileOptimizationFlag>
+    <EmccLinkOptimizationFlag Condition="'$(Configuration)' == 'Release' and '$(ByteBrowserCodeOptimization)' == 'Size'">-Oz</EmccLinkOptimizationFlag>
     <PublishTrimmed>true</PublishTrimmed>
     <!-- The static-host exporter ships plain files; CDN HTTP compression is handled by the host. -->
     <CompressionEnabled>false</CompressionEnabled>

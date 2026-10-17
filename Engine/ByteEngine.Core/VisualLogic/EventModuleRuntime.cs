@@ -17,6 +17,25 @@ public sealed class EventModuleRuntime
     private readonly Dictionary<string, TimerState> _timers =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Workspaces are leased, not shared per rule: conditions can synchronously
+    // dispatch another event, including the same module/rule. Rebuild the map
+    // from live instructions on every evaluation so hot edits remain visible.
+    private sealed class RuleWorkspace
+    {
+        public readonly Dictionary<Guid,VisualInstruction> Conditions = new();
+        public readonly List<Guid> Roots = new();
+        public readonly Dictionary<Guid,bool> Results = new();
+        public readonly HashSet<Guid> Evaluating = new(), Evaluated = new();
+        public readonly List<VisualInstruction> TriggerOnce = new();
+        public void Clear(){Conditions.Clear();Roots.Clear();Results.Clear();Evaluating.Clear();Evaluated.Clear();TriggerOnce.Clear();}
+    }
+    private readonly Stack<RuleWorkspace> _ruleWorkspaces = new();
+    private void ReturnWorkspace(RuleWorkspace workspace)
+    {
+        bool retain=workspace.Conditions.Count<=4096&&_ruleWorkspaces.Count<32;
+        workspace.Clear();if(retain)_ruleWorkspaces.Push(workspace);
+    }
+
     private sealed class TimerState
     {
         public double Remaining;
@@ -52,6 +71,7 @@ public sealed class EventModuleRuntime
 
     public void Reset()
     {
+        _ruleWorkspaces.Clear();
         foreach ((AnimationController controller, AnimationSubscription subscription) in _animationSubscriptions)
         {
             controller.AnimationEventFired -= subscription.EventFired;
@@ -262,128 +282,74 @@ public sealed class EventModuleRuntime
             return false;
         }
 
-        Dictionary<Guid, VisualInstruction> conditionMap =
-            rule.Conditions.ToDictionary(
-                condition =>
-                    condition.InstanceId);
-
-        IReadOnlyList<Guid> rootConditionIds =
-            GetActiveConditionIds(
-                rule);
-
-        Dictionary<Guid, bool> results =
-            new();
-
-        HashSet<Guid> evaluating =
-            new();
-
-        HashSet<Guid> evaluated =
-            new();
-
-        /*
-         * Once a rule has explicit ByteGraph condition wiring, zero root
-         * Conditions means "nothing is connected to the Event" and therefore
-         * the Event must NOT fire.
-         *
-         * Legacy rules without explicit wiring keep their previous behavior
-         * for backwards compatibility.
-         */
-        bool allPassed =
-            !rule.HasExplicitConditionFlow ||
-            rootConditionIds.Count >
-                0;
-
-        foreach (Guid conditionId
-                 in rootConditionIds)
+        var workspace=_ruleWorkspaces.Count>0?_ruleWorkspaces.Pop():new RuleWorkspace();
+        try
         {
-            bool passed =
-                EvaluateConditionNode(
-                    module,
-                    rule,
-                    conditionId,
-                    conditionMap,
-                    context,
-                    results,
-                    evaluating,
-                    evaluated);
+            var conditionMap=workspace.Conditions;
+            foreach(var condition in rule.Conditions)conditionMap.Add(condition.InstanceId,condition);
+            IReadOnlyList<Guid> rootConditionIds;
+            if(rule.HasExplicitConditionFlow)rootConditionIds=rule.ConnectedConditionIds;
+            else {foreach(var condition in rule.Conditions)workspace.Roots.Add(condition.InstanceId);rootConditionIds=workspace.Roots;}
+            var results=workspace.Results;
+            var evaluating=workspace.Evaluating;
+            var evaluated=workspace.Evaluated;
 
-            if (!passed)
-            {
-                allPassed =
-                    false;
-            }
-        }
-
-        List<VisualInstruction> triggerOnceConditions =
-            evaluated
-                .Select(
-                    id =>
-                        conditionMap.TryGetValue(
-                            id,
-                            out VisualInstruction? condition)
-                            ? condition
-                            : null)
-                .Where(
-                    condition =>
-                        condition != null &&
-                        condition.Id.Equals(
-                            "system.triggerOnce",
-                            StringComparison.OrdinalIgnoreCase))
-                .Cast<VisualInstruction>()
-                .ToList();
-
-        if (!allPassed)
-        {
             /*
-             * Any ordinary false condition resets Trigger Once, so the Event
-             * can fire again after the complete expression becomes true.
+             * Once a rule has explicit ByteGraph condition wiring, zero root
+             * Conditions means "nothing is connected to the Event" and therefore
+             * the Event must NOT fire.
+             *
+             * Legacy rules without explicit wiring keep their previous behavior
+             * for backwards compatibility.
              */
-            ResetLatchTree(
-                rule);
+            bool allPassed =
+                !rule.HasExplicitConditionFlow ||
+                rootConditionIds.Count >
+                    0;
 
-            foreach (VisualInstruction triggerOnce
-                     in triggerOnceConditions)
+            for(int rootIndex=0;rootIndex<rootConditionIds.Count;rootIndex++)
             {
-                VisualLogicDebugTrace.Mark(
-                    module.Id,
-                    triggerOnce.InstanceId,
-                    VisualLogicTraceState.ConditionTrue);
+                Guid conditionId=rootConditionIds[rootIndex];
+                bool passed =
+                    EvaluateConditionNode(
+                        module,
+                        rule,
+                        conditionId,
+                        conditionMap,
+                        context,
+                        results,
+                        evaluating,
+                        evaluated);
+
+                if (!passed)
+                {
+                    allPassed =
+                        false;
+                }
             }
 
-            VisualLogicDebugTrace.Mark(
-                module.Id,
-                rule.Id,
-                VisualLogicTraceState.EventBlocked);
+            var triggerOnceConditions=workspace.TriggerOnce;
+            foreach(var id in evaluated)
+                if(conditionMap.TryGetValue(id,out var condition)&&condition.Id.Equals("system.triggerOnce",StringComparison.OrdinalIgnoreCase))triggerOnceConditions.Add(condition);
 
-            MarkActionChainState(
-                module,
-                rule,
-                VisualLogicTraceState.ActionSkipped);
-
-            return false;
-        }
-
-        if (triggerOnceConditions.Count >
-            0)
-        {
-            bool triggerAllowed =
-                context.AnimationSignalKind != AnimationSignalKind.None ||
-                _triggerOnceLatched.Add(
-                    rule.Id);
-
-            foreach (VisualInstruction triggerOnce
-                     in triggerOnceConditions)
+            if (!allPassed)
             {
-                VisualLogicDebugTrace.Mark(
-                    module.Id,
-                    triggerOnce.InstanceId,
-                    triggerAllowed
-                        ? VisualLogicTraceState.ConditionTrue
-                        : VisualLogicTraceState.ConditionFalse);
-            }
+                /*
+                 * Any ordinary false condition resets Trigger Once, so the Event
+                 * can fire again after the complete expression becomes true.
+                 */
+                ResetLatchTree(
+                    rule);
 
-            if (!triggerAllowed)
-            {
+                foreach (VisualInstruction triggerOnce
+                         in triggerOnceConditions)
+                {
+                    VisualLogicDebugTrace.Mark(
+                        module.Id,
+                        triggerOnce.InstanceId,
+                        VisualLogicTraceState.ConditionTrue);
+                }
+
                 VisualLogicDebugTrace.Mark(
                     module.Id,
                     rule.Id,
@@ -396,28 +362,64 @@ public sealed class EventModuleRuntime
 
                 return false;
             }
-        }
 
-        VisualLogicDebugTrace.Mark(
-            module.Id,
-            rule.Id,
-            VisualLogicTraceState.EventTriggered);
+            if (triggerOnceConditions.Count >
+                0)
+            {
+                bool triggerAllowed =
+                    context.AnimationSignalKind != AnimationSignalKind.None ||
+                    _triggerOnceLatched.Add(
+                        rule.Id);
 
-        ExecuteActions(
-            module,
-            rule,
-            context);
+                foreach (VisualInstruction triggerOnce
+                         in triggerOnceConditions)
+                {
+                    VisualLogicDebugTrace.Mark(
+                        module.Id,
+                        triggerOnce.InstanceId,
+                        triggerAllowed
+                            ? VisualLogicTraceState.ConditionTrue
+                            : VisualLogicTraceState.ConditionFalse);
+                }
 
-        foreach (EventRuleDefinition child
-                 in rule.SubEvents)
-        {
-            EvaluateRule(
+                if (!triggerAllowed)
+                {
+                    VisualLogicDebugTrace.Mark(
+                        module.Id,
+                        rule.Id,
+                        VisualLogicTraceState.EventBlocked);
+
+                    MarkActionChainState(
+                        module,
+                        rule,
+                        VisualLogicTraceState.ActionSkipped);
+
+                    return false;
+                }
+            }
+
+            VisualLogicDebugTrace.Mark(
+                module.Id,
+                rule.Id,
+                VisualLogicTraceState.EventTriggered);
+
+            ExecuteActions(
                 module,
-                child,
+                rule,
                 context);
-        }
 
-        return true;
+            foreach (EventRuleDefinition child
+                     in rule.SubEvents)
+            {
+                EvaluateRule(
+                    module,
+                    child,
+                    context);
+            }
+
+            return true;
+        }
+        finally { ReturnWorkspace(workspace); }
     }
 
     private bool EvaluateConditionNode(

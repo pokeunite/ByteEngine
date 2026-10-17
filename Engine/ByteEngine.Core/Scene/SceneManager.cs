@@ -9,13 +9,20 @@ public sealed class SceneManager
         new();
 
     public Scene? ActiveScene { get; private set; }
+    public Action<Scene>? SceneLoaded { get; set; }
 
     /// <summary>Host-owned fresh scene factory used by Event Sheet scene.restart.</summary>
     public Func<Scene>? RestartSceneFactory { get; set; }
     public Func<string,Scene>? SceneFactory { get; set; }
     public Action? QuitHandler { get; set; }
     public bool ShowLoadingScreen {get;set;}
+    public Func<string,IEnumerable<SceneLoadStep>>? ProgressiveSceneFactory {get;set;}
     string? _pendingLoad;
+    IEnumerator<SceneLoadStep>? _loadSteps;
+    Scene? _preparedScene;
+    bool _finishPresented;
+    public bool IsLoading => _pendingLoad != null || _finishPresented;
+    public float LoadingProgress => ActiveScene?.LoadingProgress ?? 0;
 
     public bool HasActiveScene =>
         ActiveScene != null;
@@ -63,6 +70,7 @@ public sealed class SceneManager
 
         ActiveScene
             .LoadInternal();
+        SceneLoaded?.Invoke(scene);
 
         Console.WriteLine(
             $"Active scene: {scene.Name}");
@@ -70,6 +78,7 @@ public sealed class SceneManager
 
     public void UnloadScene()
     {
+        _loadSteps?.Dispose();_loadSteps=null;_preparedScene=null;_finishPresented=false;
         _pendingLoad=null;
         if (ActiveScene == null)
         {
@@ -119,14 +128,18 @@ public sealed class SceneManager
 
     internal void UpdateInternal()
     {
-        if(_pendingLoad is {} pending){if(ActiveScene?.LoadingScreenPresented!=true)return;_pendingLoad=null;var watch=System.Diagnostics.Stopwatch.StartNew();try{if(SceneFactory is {} factory)LoadScene(factory(pending));}catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){Console.WriteLine($"Could not load scene '{pending}': {e.Message}");}finally{if(ActiveScene!=null){ActiveScene.LoadingScreenVisible=false;ActiveScene.LoadingScreenPresented=false;}Console.WriteLine($"Scene transition: {watch.Elapsed.TotalMilliseconds:0} ms");}return;}
+        if(_finishPresented){if(ActiveScene?.LoadingScreenPresented!=true)return;_finishPresented=false;if(ActiveScene!=null){ActiveScene.LoadingScreenVisible=false;ActiveScene.LoadingScreenPresented=false;}return;}
+        if(_pendingLoad is {} pending){AdvanceLoading(pending);return;}
         ActiveScene?.UpdateInternal();
 
         if(ActiveScene?.QuitRequested==true){ActiveScene.ClearHostRequests();QuitHandler?.Invoke();return;}
         if(ActiveScene?.LoadRequested is { } path)
         {
             ActiveScene.ClearHostRequests();
-            if(ShowLoadingScreen&&SceneFactory!=null){_pendingLoad=path;ActiveScene.LoadingScreenVisible=true;ActiveScene.LoadingScreenPresented=false;return;}
+            if(ShowLoadingScreen&&(SceneFactory!=null||ProgressiveSceneFactory!=null)){
+                _pendingLoad=path;ActiveScene.LoadingScreenVisible=true;ActiveScene.LoadingScreenPresented=false;ActiveScene.LoadingProgress=0;
+                ActiveScene.LoadingTitle=(ActiveScene.GameObjects.SelectMany(o=>o.Components).OfType<LoadingScreenStyle>().FirstOrDefault(s=>s.Enabled)??new LoadingScreenStyle()).Title(path);return;
+            }
             try{if(SceneFactory is { } factory)LoadScene(factory(path));else Console.WriteLine("Scene load requested, but this host has no scene factory.");}
             catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){Console.WriteLine($"Could not load scene '{path}': {e.Message}");}
         }
@@ -149,6 +162,29 @@ public sealed class SceneManager
         {
             RuntimeDiagnostics.SampleTpsJitter(
                 ActiveScene);
+        }
+    }
+
+    private void AdvanceLoading(string path)
+    {
+        if(ActiveScene?.LoadingScreenPresented!=true)return;
+        try{
+            if(_preparedScene is {} ready){
+                string title=ActiveScene.LoadingTitle;LoadScene(ready);_preparedScene=null;_pendingLoad=null;
+                ActiveScene!.LoadingScreenVisible=true;ActiveScene.LoadingScreenPresented=false;ActiveScene.LoadingProgress=1;ActiveScene.LoadingTitle=title;_finishPresented=true;return;
+            }
+            if(ProgressiveSceneFactory is {} factory){
+                _loadSteps??=factory(path).GetEnumerator();var budget=System.Diagnostics.Stopwatch.StartNew();
+                do{
+                    if(!_loadSteps.MoveNext())throw new InvalidDataException("Progressive scene loader finished without a scene.");
+                    var step=_loadSteps.Current;if(float.IsFinite(step.Progress))ActiveScene.LoadingProgress=Math.Max(ActiveScene.LoadingProgress,Math.Clamp(step.Progress,0,.99f));
+                    if(step.Scene!=null){_preparedScene=step.Scene;_loadSteps.Dispose();_loadSteps=null;break;}
+                }while(budget.Elapsed.TotalMilliseconds<8);
+            }else if(SceneFactory is {} sync){_preparedScene=sync(path);ActiveScene.LoadingProgress=.96f;}
+            ActiveScene.LoadingScreenPresented=false;
+        }catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){
+            _loadSteps?.Dispose();_loadSteps=null;_preparedScene=null;_pendingLoad=null;
+            ActiveScene.LoadingScreenVisible=false;ActiveScene.LoadingScreenPresented=false;Console.WriteLine($"Could not load scene '{path}': {e.Message}");
         }
     }
 

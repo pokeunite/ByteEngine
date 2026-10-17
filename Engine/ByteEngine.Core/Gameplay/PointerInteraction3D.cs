@@ -19,6 +19,7 @@ public sealed class PointerTarget3D : Component
     public string ActionText { get; set; } = "";
     public string Description { get; set; } = "";
     public bool Interactable { get; set; } = true;
+    public bool PulseHint {get;set;}
     [JsonIgnore] public bool IsHovered { get; internal set; }
     [JsonIgnore] public bool IsSelected { get; internal set; }
     [JsonIgnore] public bool WasActivated { get; internal set; }
@@ -34,10 +35,10 @@ public sealed class PointerTarget3D : Component
             if(GameObject.Scene.FindGameObject(name) is {} root) Add(root);
         void Add(GameObject o){if(o.GetComponent<MeshRenderer>() is {} r&&!Renderers.Any(x=>x.renderer==r))Renderers.Add((r,r.MaterialOverrides.EmissionColor,r.MaterialOverrides.EmissionIntensity));foreach(var child in o.Children)Add(child);}
     }
-    internal void Highlight(bool on,Vector3 color)
+    internal void Highlight(bool on,Vector3 color,float strength=.14f)
     {
-        if(IsHighlighted==on)return;IsHighlighted=on;
-        foreach(var (r,c,i) in Renderers){r.MaterialOverrides.EmissionColor=on?color:c;r.MaterialOverrides.EmissionIntensity=on?.14f:i;}
+        if(IsHighlighted==on&&!on)return;IsHighlighted=on;
+        foreach(var (r,c,i) in Renderers){r.MaterialOverrides.EmissionColor=on?color:c;r.MaterialOverrides.EmissionIntensity=on?strength:i;}
         if(Button!=null)Button.ContextHighlighted=on;
     }
     public bool IntersectsRay(Vector3 origin,Vector3 direction,out float distance)
@@ -65,6 +66,7 @@ public sealed class PointerInteraction3D : Component
     public Vector2 PanelOffset { get; set; } = new(24,536);
     public float PanelWidth { get; set; } = 590;
     public bool ShowDescriptions { get; set; }
+    public bool ShowContextPanel { get; set; } = true;
     public bool AllowActivation { get; set; } = true;
     [JsonIgnore] public string SelectedTarget => selected?.GameObject.Name??"";
     PointerTarget3D[] targets=[];
@@ -102,11 +104,11 @@ public sealed class PointerInteraction3D : Component
         if(selected!=null&&(!selected.Enabled||!selected.GameObject.ActiveInHierarchy))selected=null;
         if(selected!=null)selected.IsSelected=true;
         active=hover??selected;
-        foreach(var t in targets)t.Highlight(t==active,HighlightColor);
+        foreach(var t in targets){bool focused=t==active;float pulse=.035f+.09f*(.5f+.5f*MathF.Sin((float)GameObject.Scene!.SimulationTime*3));t.Highlight(focused||t.PulseHint,focused?HighlightColor:new(1,.62f,.16f),focused?.14f:pulse);}
     }
     protected override void OnRender(RenderContext context)
     {
-        if(active==null||canvas?.GetComponent<UiCanvas>() is not {Enabled:true} ui)return;
+        if(!ShowContextPanel||active==null||canvas?.GetComponent<UiCanvas>() is not {Enabled:true} ui)return;
         var rect=UiLayout.ResolveCanvas(ui,new(context.TargetWidth,context.TargetHeight));float scale=rect.Scale;
         Vector2 p=rect.Origin+PanelOffset*scale;string? font=FontRuntime.ResolvePath(FontReference);
         float contentWidth=Math.Max(context.MeasureText(active.StatusText,font,(int)(24*scale)).X,context.MeasureText(active.ActionText,font,(int)(22*scale)).X)+28*scale;

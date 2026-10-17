@@ -1,4 +1,5 @@
-param([ValidateSet('Debug','Release')][string]$Configuration = 'Release')
+param([ValidateSet('Debug','Release')][string]$Configuration = 'Release',
+      [ValidateSet('Balanced','Speed','Size')][string]$CodeOptimization = 'Balanced')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 # Serialize the entire build and installation, including generated AOT inputs.
@@ -18,9 +19,12 @@ try {
         catch [Threading.AbandonedMutexException] { $publishLockHeld = $true }
         if (-not $publishLockHeld) { Write-Verbose 'Waiting for the active browser publish.' }
     }
-& dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration -m:1 -nodeReuse:false
+& dotnet run --project (Join-Path $repoRoot 'Tools/BrowserPlatform/BrowserPlatform.csproj') -c $Configuration -- shader (Join-Path $repoRoot 'Player/ByteEngine.Browser/wwwroot')
+if ($LASTEXITCODE -ne 0) { throw 'Shared browser shader generation failed.' }
+& dotnet publish (Join-Path $repoRoot 'Player/ByteEngine.Browser/ByteEngine.Browser.csproj') -c $Configuration -m:1 -nodeReuse:false "-p:ByteBrowserCodeOptimization=$CodeOptimization"
 if ($LASTEXITCODE -ne 0) { throw 'Browser player publish failed. See the build diagnostics above; ensure the .NET 9 wasm-tools workload is installed.' }
 $source = Join-Path $repoRoot "Player/ByteEngine.Browser/bin/$Configuration/net9.0/publish/wwwroot"
+[IO.File]::WriteAllText((Join-Path $source 'browser-build.json'),(@{ configuration=$Configuration;codeOptimization=$CodeOptimization;simd=$true;aot=($Configuration -eq 'Release') } | ConvertTo-Json))
 # Incremental publishes can leave old fingerprinted assemblies beside the current boot manifest.
 # Keep only current versions so future exports do not ship duplicate runtime binaries.
 $framework = Join-Path $source '_framework'
@@ -42,10 +46,15 @@ foreach ($pluginName in @('DesertTerrain','DuneCompany')) {
     $pluginBuilds[$manifest.id] = @{ version=$manifest.version; sha256=(Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash }
 }
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugin-builds.json'),($pluginBuilds | ConvertTo-Json -Depth 4))
-foreach ($file in @('index.html','main.js','renderer.js','graphics.js','frame-wire.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
+foreach ($file in @('index.html','main.js','renderer.js','water.js','graphics.js','frame-wire.js','audio.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
+foreach ($script in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Player/ByteEngine.Browser/wwwroot') -Filter '*.js') { Copy-Item -LiteralPath $script.FullName -Destination (Join-Path $source $script.Name) -Force }
+& dotnet run --project (Join-Path $repoRoot 'Tools/BrowserPlatform/BrowserPlatform.csproj') -c $Configuration -- prepare $source
+if ($LASTEXITCODE -ne 0) { throw 'Browser rendering contract preparation failed.' }
 foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),
+    (Join-Path $repoRoot 'Dist/ByteEngine-BuildDebug/BrowserRuntime'),
+    (Join-Path $repoRoot 'Editor/ByteEngine.Editor/bin/Release/net9.0-windows/win-x64/BrowserRuntime'),
     (Join-Path $repoRoot 'Editor/ByteEngine.Editor/bin/Debug/net9.0-windows/win-x64/BrowserRuntime'))) {
     $resolved = [IO.Path]::GetFullPath($target)
     if (!$resolved.StartsWith([IO.Path]::GetFullPath($repoRoot)+'\', [StringComparison]::OrdinalIgnoreCase) -or

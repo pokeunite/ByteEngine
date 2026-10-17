@@ -172,7 +172,8 @@ public sealed class Texture2D
         );
     }
 
-    static (int Width,int Height,byte[] Data) BrowserImage(int width,int height,byte[] pixels){if(!OperatingSystem.IsBrowser()||Math.Max(width,height)<=1024)return(width,height,pixels);float scale=1024f/Math.Max(width,height);int w=Math.Max(1,(int)(width*scale)),h=Math.Max(1,(int)(height*scale));var output=new byte[w*h*4];for(int y=0;y<h;y++)for(int x=0;x<w;x++)pixels.AsSpan(((y*height/h)*width+x*width/w)*4,4).CopyTo(output.AsSpan((y*w+x)*4,4));return(w,h,output);}
+    // Asset cooking owns resolution. Runtime resizing would corrupt font/image UVs and data textures.
+    static (int Width,int Height,byte[] Data) BrowserImage(int width,int height,byte[] pixels)=>(width,height,pixels);
 
     internal static Texture2D FromEncodedBytes(
         byte[] encodedData,
@@ -461,7 +462,7 @@ public sealed class Texture2D
         {
             // Keep radiance linear and unclipped for portable HDR rendering.
             int sourceWidth=Width,sourceHeight=Height;
-            if(Width>1024){Height=Math.Max(1,(int)Math.Round(Height*(1024.0/Width)));Width=1024;var reduced=new float[Width*Height*4];for(int y=0;y<Height;y++)for(int x=0;x<Width;x++)for(int c=0;c<4;c++)reduced[(y*Width+x)*4+c]=pixels[((y*sourceHeight/Height)*sourceWidth+x*sourceWidth/Width)*4+c];pixels=reduced;}
+
             _floatPixels=pixels;
             _pixels = null;
             return;

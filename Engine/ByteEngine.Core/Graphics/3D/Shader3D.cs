@@ -75,9 +75,10 @@ internal sealed class Shader3D : IDisposable
     public void Dispose() =>
         _shader.Dispose();
 
-    private const string VertexSource =
+    private static readonly string VertexSource =
         """
         #version 330 core
+        /*BYTE_WATER_SHARED*/
 
         layout(location=0) in vec3 aPosition;
         layout(location=1) in vec3 aNormal;
@@ -90,6 +91,7 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uProjection;
         uniform mat4 uNormalMatrix;
         uniform vec4 uWaterStyle;
+        uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;
         uniform int uWaterSurface;
         uniform int uWaterVolume;
         uniform vec4 uWaterColumn;
@@ -117,12 +119,7 @@ internal sealed class Shader3D : IDisposable
         out vec2 vUV;
 
         void oceanWave(inout vec3 displacement,inout vec3 tx,inout vec3 tz,vec2 q,vec2 d,float amplitude,float wavelength,float phase){
-            float k=6.2831853/max(.1,wavelength),a=clamp(amplitude,0.,.35/k);
-            float f=k*dot(d,q)-sqrt(9.81*k)*uWaterMotion.x+phase,s=sin(f),c=cos(f),steepness=clamp(uWaterFlow.z,0.,.8);
-            displacement+=vec3(d.x*a*steepness*c,a*s,d.y*a*steepness*c);
-            float slope=a*k*c,horizontal=a*k*steepness*s;
-            tx+=vec3(-d.x*d.x*horizontal,d.x*slope,-d.x*d.y*horizontal);
-            tz+=vec3(-d.x*d.y*horizontal,d.y*slope,-d.y*d.y*horizontal);
+            byteGravityWave(displacement,tx,tz,q,d,amplitude,wavelength,phase,uWaterMotion.x,uWaterFlow.z);
         }
         void main()
         {
@@ -167,11 +164,12 @@ internal sealed class Shader3D : IDisposable
             vUV=aUV;
             gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);
         }
-        """;
+        """.Replace("/*BYTE_WATER_SHARED*/",PortableWaterShader.Source);
 
-    private const string FragmentSource =
+    private static readonly string FragmentSource =
         """
         #version 330 core
+        /*BYTE_WATER_SHARED*/
 
         #define MAX_DIRECTIONAL_LIGHTS 4
         #define MAX_POINT_LIGHTS 8
@@ -232,6 +230,7 @@ internal sealed class Shader3D : IDisposable
         uniform vec4 uWaterAbsorption;
         uniform vec4 uWaterScattering;
         uniform vec4 uWaterStyle;
+        uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;
         uniform int uWaterReflections;
         uniform int uWaterDetail;
         uniform vec4 uWaterViewport;
@@ -954,7 +953,7 @@ internal sealed class Shader3D : IDisposable
                 0.5;
         }
 
-        float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);vec4 h=fract(sin(vec4(dot(i,vec2(127.1,311.7)),dot(i+vec2(1,0),vec2(127.1,311.7)),dot(i+vec2(0,1),vec2(127.1,311.7)),dot(i+vec2(1),vec2(127.1,311.7))))*43758.5453);return mix(mix(h.x,h.y,f.x),mix(h.z,h.w,f.x),f.y);}
+        float waterNoise(vec2 p){return byteWaterNoise(p);}
         // Independent depth-weighted reconstruction: reject foreground neighbours instead
         // of allowing bilinear colour to drag the wall or cargo into the water.
         vec4 waterBackground(vec2 uv,out vec3 point){
@@ -1028,6 +1027,16 @@ internal sealed class Shader3D : IDisposable
                 return;
             }
 
+            if(uWetLevels.w>0.0){
+                vec2 q=vWorldPosition.xz;
+                float a=step(uWetContact0.x,q.x)*step(q.x,uWetContact0.y)*step(uWetContact0.z,q.y)*step(q.y,uWetContact0.w);
+                float b=step(uWetContact1.x,q.x)*step(q.x,uWetContact1.y)*step(uWetContact1.z,q.y)*step(q.y,uWetContact1.w);
+                float c=step(uWetContact2.x,q.x)*step(q.x,uWetContact2.y)*step(uWetContact2.z,q.y)*step(q.y,uWetContact2.w);
+                float height=max(max(mix(-10000.,uWetLevels.x,a),mix(-10000.,uWetLevels.y,b)),mix(-10000.,uWetLevels.z,c));
+                float brokenLine=sin(q.x*13.+q.y*9.)*.015+sin(q.x*4.1-q.y*5.7)*.018;
+                float wet=(1.-smoothstep(height-.09,height+.16+brokenLine,vWorldPosition.y))*uWetLevels.w;
+                base.rgb*=1.-wet*.32;uRoughness=mix(uRoughness,max(.22,uRoughness*.58),wet);
+            }
             vec3 n=getNormal();
             if(uSandSurface==1){
                 vec4 sandImprint=vec4(0.5,0.5,0.0,0.0);
@@ -1341,10 +1350,10 @@ internal sealed class Shader3D : IDisposable
                 vec3 sigmaA=max(uWaterAbsorption.rgb,vec3(0)),sigmaS=max(uWaterScattering.rgb,vec3(0));
                 vec3 sigmaT=max(sigmaA+sigmaS,vec3(.000001));
                 vec3 intoWater=refract(-v,n,1./1.333);float pathLength=min(30.,depth/max(.2,abs(intoWater.y)));
-                vec3 transmittance=exp(-sigmaT*pathLength);
+                vec3 transmittance=byteWaterTransmittance(sigmaT,pathLength);
                 vec3 sunDirection=uDirectionalLightCount>0?normalize(-uDirectionalLightDirections[0]):vec3(0,1,0);
                 float g=clamp(uWaterScattering.w,-.8,.8),mu=dot(-intoWater,sunDirection);
-                float phase=(1.-g*g)/(12.56637*pow(max(.05,1.+g*g-2.*g*mu),1.5));
+                float phase=byteWaterPhase(g,mu);
                 vec3 incident=vec3(.055,.075,.095);
                 if(uDirectionalLightCount>0)incident+=uDirectionalLightColors[0]*uDirectionalLightIntensities[0]*phase;
                 vec3 scattered=incident*clamp(sigmaS/sigmaT*(1.-transmittance),vec3(0),vec3(1));
@@ -1354,7 +1363,7 @@ internal sealed class Shader3D : IDisposable
                 // Caustics modulate the lit bottom; they are not white lines painted on the surface.
                 vec2 bed=bedWorld.xz+vec2(sin(time*.43+bedWorld.z)*.12,cos(time*.37+bedWorld.x)*.12);
                 float c1=sin(bed.x*5.1+sin(bed.y*3.7+time*.65));float c2=sin(bed.y*5.8+sin(bed.x*4.1-time*.53));
-                float caustic=pow(max(0.,1.-abs(c1+c2)*1.7),9.);
+                float caustic=pow(max(0.,1.-abs(c1+c2)*1.7),9.)*(.65+.35*waterNoise(bed*.63));
                 under+=refracted*transmittance*bottomLight*caustic*max(0.,uWaterAbsorption.w)*.5*exp(-depth*.6)*smoothstep(0.,.08,depth);
                 float fresnel=.02037+.97963*pow(1.0-clamp(dot(n,v),0.0,1.0),5.0);
                 vec3 reflectionRay=reflect(-v,n);float skyBand=smoothstep(-.15,.85,reflectionRay.y);
@@ -1390,7 +1399,7 @@ internal sealed class Shader3D : IDisposable
                 float impact=exp(-dot(ip,ip)/max(.01,uWaterImpact.z*uWaterImpact.z))*uWaterImpact.w;
                 float streak=channel?smoothstep(.42,.73,waterNoise(vec2(q.x*8.,q.y*2.1-time*uWaterFlow.z*2.1)))*clamp(abs(uWaterMotion.y)*.18,0.,.65):0.;
                 float wash=.5+.5*sin(time*1.4+waterNoise(q*.7)*9.);float shoreline=(1.-smoothstep(.01,max(.04,uWaterStyle.z)*(.5+wash*.5),depth))*smoothstep(.48,.83,fine)*wash*uWaterStyle.w;
-                float foam=clamp((shoreline+(useRefraction?(1.-smoothstep(.025,.17,depth))*.2*bank:0.)+bank*.15+ring*.7+impact*(.45+noise)+streak)*(fine*.7+.3)*uWaterMotion.w,0.,.85);
+                float foam=clamp((shoreline+(useRefraction?(1.-smoothstep(.025,.17,depth))*.2*bank:0.)+bank*.10*clamp(abs(uWaterMotion.y)*.3,0.,1.)+ring*.7+impact*(.45+noise)+streak)*(fine*.7+.3)*uWaterMotion.w,0.,.85);
                 linearColor=mix(linearColor,vec3(.72,.84,.81),foam);
                 base.a=useRefraction?1.:clamp(.48+absorption*.35+fresnel*.2+foam*.4,.45,.97);
             }
@@ -1462,5 +1471,5 @@ internal sealed class Shader3D : IDisposable
                         vec3(0.0)),
                     base.a);
         }
-        """;
+        """.Replace("/*BYTE_WATER_SHARED*/",PortableWaterShader.Source);
 }

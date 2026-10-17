@@ -20,6 +20,11 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length==2&&args[0]=="--web-native"){using var capture=new WebPlatformNativeCapture(args[1]);capture.Run();return;}
+    if(args.Contains("--web-fixture")){WebPlatformFixture.Create();return;}
+    if(args.Length==2&&args[0]=="--browser-draw-packet"){BrowserDrawPacketTests.Run(args[1]);return;}
+    if(args.Contains("--web-cpu-regressions")){WebCpuRegressionTests.Run();EventWorkspaceRegressionTests.Run();FixedHookRegressionTests.Run();return;}
+    if(args.Contains("--web-platform")){WebPlatformTests.Run(root);return;}
     if(args.Contains("--engine-optimization")){EngineOptimizationTests.Run();return;}
     if(args.Contains("--drift-scoring")){DriftScoringTests.Run();return;}
     if(args.Contains("--browser-texture-lifecycle")){BrowserTextureTransferTests.Run();return;}
@@ -413,3 +418,7 @@ static void WriteTriangleGltf(string path)
     """.Replace("__DATA__", data);
     File.WriteAllText(path, json);
 }
+
+
+
+

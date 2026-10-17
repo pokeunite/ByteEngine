@@ -1,3 +1,4 @@
+using ByteEngine.Core.Graphics.ThreeD;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -14,6 +15,7 @@ internal sealed class BrowserFrame
     public float[] look { get; set; } = [1,1,0];
     public float[] fog { get; set; } = [0,0,0,0,1,0,0,0];
     public float[] vp { get; set; } = [];
+    public float[] inverseVp {get;set;}=[];
     public float[] eye { get; set; } = [];
     public float[] background { get; set; } = [];
     public BrowserLight[] lights { get; set; } = [];
@@ -21,6 +23,8 @@ internal sealed class BrowserFrame
     public List<BrowserMeshUpload> uploads { get; set; } = [];
     public List<BrowserTextureUpload> textures { get; set; } = [];
     public List<BrowserDrawCommand> draws { get; set; } = [];
+    public int drawBuffer { get; set; } = -1;
+    public int drawCount { get; set; }
     public List<BrowserDraw> materials { get; set; } = [];
     public int[] deadMaterials { get; set; } = [];
     public int uiBuffer { get; set; } = -1;
@@ -127,6 +131,8 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public BrowserWaterParameters? water {get;set;}
+    public float[] wet {get;set;}=[];
     public bool receiveShadows { get; set; }
     public float[] shadowInstances { get; set; } = [];
     public int id { get; set; }

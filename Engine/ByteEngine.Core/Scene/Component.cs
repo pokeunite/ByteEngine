@@ -5,6 +5,11 @@ namespace ByteEngine.Core.Scene;
 
 public abstract class Component
 {
+    private sealed record FixedHook(bool Implemented);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type,FixedHook> FixedHooks = new();
+    internal bool ImplementsFixedUpdate => FixedHooks.GetValue(GetType(),static type => new(
+        type.GetMethod("OnFixedUpdate",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,
+            null,Type.EmptyTypes,null)?.DeclaringType != typeof(Component))).Implemented;
     private GameObject? _gameObject;
 
     private bool _started;
@@ -69,6 +74,7 @@ public abstract class Component
 
         if(this is ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer && AttachedGameObject?.Scene is {} scene)
         {long start=System.Diagnostics.Stopwatch.GetTimestamp();try {OnUpdate();}finally{scene.AnimationMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;scene.AnimatedComponentCount++;}}
+        else if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Update"); OnUpdate(); }
         else OnUpdate();
     }
 
@@ -84,14 +90,14 @@ public abstract class Component
             StartInternal();
         }
 
-        OnLateUpdate();
+        if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"LateUpdate"); OnLateUpdate(); } else OnLateUpdate();
     }
 
     internal void FixedUpdateInternal()
     {
         if (!Enabled) return;
         if (!_started) StartInternal();
-        OnFixedUpdate();
+        if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"FixedUpdate"); OnFixedUpdate(); } else OnFixedUpdate();
     }
 
     /// <summary>Runs before each fixed physics tick in scenes that opt into fixed simulation.</summary>
@@ -110,7 +116,7 @@ public abstract class Component
             StartInternal();
         }
 
-        OnRender(context);
+        if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Render"); OnRender(context); } else OnRender(context);
     }
 
     internal void RenderEditorInternal(
@@ -121,7 +127,7 @@ public abstract class Component
             return;
         }
 
-        OnRender(context);
+        if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Render"); OnRender(context); } else OnRender(context);
     }
 
     internal void StopInternal()
@@ -267,3 +273,4 @@ public abstract class Component
     {
     }
 }
+

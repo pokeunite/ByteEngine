@@ -1,0 +1,23 @@
+const fs=require('fs'),assert=require('assert');
+(async()=>{
+ const source=fs.readFileSync('Player/ByteEngine.Browser/wwwroot/renderer.js','utf8');
+ const code=source.slice(source.indexOf('export class StaticShadowBatcher'),source.indexOf('export class BrowserRenderer'));
+ const {StaticShadowBatcher}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+ const vertices=new Float32Array([0,0,0,0,1,0,0,0, 1,0,0,0,1,0,1,0, 0,0,1,0,1,0,0,1]);
+ const mesh={cpuVertices:vertices,cpuIndices:new Uint32Array([0,1,2]),revision:1};
+ const meshes=new Map([[1,mesh]]),materials=new Map([[1,{cutoff:-1,heightField:0}]]);
+ const matrix=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,3,4,5,1]);
+ const draw={id:1,material:1,shadowInstances:matrix};const b=new StaticShadowBatcher();let result=b.update([draw],materials,meshes);
+ assert.equal(result.count,3);assert(result.included.has(0));assert.deepEqual(Array.from(result.vertices.slice(0,6)),[3,4,5,4,4,5]);
+ assert.equal(b.update([draw],materials,meshes).changed,false);
+ matrix[12]=4;result=b.update([draw],materials,meshes);assert.equal(result.count,0);assert.equal(result.included.size,0);assert(result.changed);
+ assert.equal(b.update([draw],materials,meshes).included.size,0);
+ const c=new StaticShadowBatcher();c.update([draw],materials,meshes);mesh.revision++;assert.equal(c.update([draw],materials,meshes).included.size,0);
+ const d=new StaticShadowBatcher();d.update([draw],materials,meshes);assert.equal(d.update([],materials,meshes).count,0);assert.equal(d.update([draw],materials,meshes).count,3);
+ materials.set(1,{cutoff:.5});assert.equal(new StaticShadowBatcher().update([draw],materials,meshes).count,0);
+ materials.set(1,{cutoff:-1,heightField:8});assert.equal(new StaticShadowBatcher().update([draw],materials,meshes).count,0);
+ materials.set(1,{cutoff:-1});matrix[15]=.5;assert.equal(new StaticShadowBatcher().update([draw],materials,meshes).count,0);matrix[15]=1;
+ const repeated={...draw,shadowInstances:new Float32Array([...matrix,...matrix])};assert.equal(new StaticShadowBatcher().update([repeated],materials,meshes).count,6);
+ const huge=new Map([[1,{cpuVertices:{length:250001*8},cpuIndices:new Uint32Array([0,1,2]),revision:1}]]);assert.equal(new StaticShadowBatcher().update([draw],materials,huge).count,0);
+ console.log('PASS Shadow batching: exact translation, reuse, moving and deforming casters, removal, cutouts, height fields, projective fallback, instances and memory budget.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

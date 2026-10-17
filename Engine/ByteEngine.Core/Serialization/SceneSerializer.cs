@@ -299,6 +299,18 @@ public sealed class SceneSerializer
 
     public RuntimeScene Deserialize(
         SceneData data)
+        => DeserializeSteps(data).Last().Scene!;
+
+    /// <summary>Cooperative main-thread loading; asset uploads retain the host graphics context.</summary>
+    public IEnumerable<SceneLoadStep> LoadSteps(string filePath)
+    {
+        var data = JsonSerializer.Deserialize<SceneData>(File.ReadAllText(filePath), JsonSerialization.Options)
+            ?? throw new InvalidDataException("The scene file did not contain scene data.");
+        yield return new(.03f);
+        foreach (var step in DeserializeSteps(data)) yield return step;
+    }
+
+    private IEnumerable<SceneLoadStep> DeserializeSteps(SceneData data)
     {
         if (data.SchemaVersion < 0 || data.SchemaVersion > SceneData.CurrentSchemaVersion)
             throw new InvalidDataException($"Unsupported scene schema {data.SchemaVersion}. Update ByteEngine before opening this scene.");
@@ -327,6 +339,7 @@ public sealed class SceneSerializer
             scene.Variables.Set(variable.Name, variable.Value.Clone());
 
         var created = new Dictionary<Guid, GameObject>();
+        int completedObjects = 0;
 
         foreach (GameObjectData gameObjectData
                  in data.GameObjects)
@@ -406,6 +419,7 @@ public sealed class SceneSerializer
             );
 
             created[gameObject.Id] = gameObject;
+            yield return new(.03f + .9f * ++completedObjects / Math.Max(1, data.GameObjects.Count));
         }
 
         foreach (GameObjectData gameObjectData in data.GameObjects)
@@ -432,7 +446,7 @@ public sealed class SceneSerializer
             }
         }
 
-        return scene;
+        yield return new(.96f, scene);
     }
 
     /// <summary>

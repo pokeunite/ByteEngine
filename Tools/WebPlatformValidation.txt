@@ -1,0 +1,92 @@
+BYTEENGINE BROWSER PLATFORM VALIDATION
+
+Changes to browser rendering must be verified against a cooked package, not a site
+that overlays newer source scripts onto an older WebAssembly build.
+
+1. Run: dotnet run --project Tests/ByteEngine.Tests -c Release -- --web-platform
+2. Run: dotnet run --project Tests/ByteEngine.Tests -c Release -- --export-lifecycle
+3. Run: dotnet run --project Tests/ByteEngine.Tests -c Release -- --web-fixture
+   The reusable project lives under Documents/ByteEngineWebValidation/WebValidation.
+4. Publish the complete editor/runtime with Tools/PublishEditor.ps1, or refresh an
+   existing matching editor's browser runtime with Tools/PublishBrowser.ps1.
+5. Export WebValidation.byteproject using the editor's web exporter, or:
+   dotnet run --project Tests/ByteEngine.Tests -c Release -- --export-web PROJECT RUNTIME OUTPUT
+6. Set BYTEENGINE_PLAYWRIGHT to the installed Playwright package if it is not on
+   Node's module path. Run:
+   node Tools/TestWebPlatform.cjs EXPORTED_SITE REVIEW_DIRECTORY
+7. Capture desktop baselines:
+   dotnet run --project Tests/ByteEngine.Tests -c Release -- --web-native initial
+   dotnet run --project Tests/ByteEngine.Tests -c Release -- --web-native flow
+8. Inspect native/browser initial and flow images together, and Web-small.png.
+   Confirm the water, raised gate, raft, ocean, coast, shadows and UI are present.
+   Browser-validation.json contains quality, water transfer/reset, audio and GPU
+   checks plus separately measured Fast/Balanced/High performance on that machine.
+
+Every public writable Material property must be classified in BrowserRenderContract.
+PortableWaterShader is shared math, not the entire desktop compositing pipeline.
+Changes to that math or quality profiles regenerate shared-render.js when publishing.
+Engine source fingerprints allow matching Debug/Release sources while rejecting
+out-of-date gameplay. Runtime script hashes reject mixed renderer installations.
+Never repair an exported site by copying individual newer files into it: republish
+the runtime and export again.
+
+The compatibility review explicitly reports unavailable/different features.
+Known differences include cubemap environment lighting, screen-space AO and bloom;
+wireframe and unsupported renderers block export. Strict review also blocks known
+visual differences. A clean report is not a promise of identical pixels on all GPUs.
+Fast/Balanced/High retain scene geometry and water simulation. Quality may reduce
+reflection work, sun-shadow cost, anisotropy and world resolution; UI resolution is
+independent. Source project textures are never modified by export cooking.
+
+CPU and draw-transport regressions:
+  dotnet run --project Tests/ByteEngine.Tests -c Release -- --web-cpu-regressions
+  dotnet run --project Tests/ByteEngine.Tests -c Release -- --browser-draw-packet tmp/browser-wire
+  node Tools/TestBrowserDrawPacket.cjs tmp/browser-wire/draw-packet.bin
+
+The water solver is checked against its previous implementation with changing
+depth, still water, forward and reverse flow, impulses and reflective boundaries.
+Keep the reference implementation as a numerical oracle, not production code.
+The tests also cover renamed/deleted/reordered objects and cached nested members.
+
+Profile a complete exported game, including normal browser input and startup:
+  node Tools/ProfileWebGame.cjs SITE OUTPUT ACTIONS_JSON 20
+ACTIONS_JSON is an array of {x,y,waitMs}, with x/y normalized to 1280x720.
+Measurements run with component profiling disabled; the later component samples
+are opt-in diagnostic attribution, not performance acceptance measurements.
+Do not benchmark while the compiler or another game/browser benchmark is running.
+
+Tools/PublishBrowser.ps1 -CodeOptimization Balanced|Speed|Size selects runtime
+compiler flags, separately from Fast/Balanced/High graphics quality. Balanced uses
+the SDK's normal release flags; Speed uses O3; Size uses Oz. Compare actual full-game
+results before choosing a default. browser-build.json records the published mode.
+Changing runtime compiler mode does not require changing authored scenes/assets.
+
+Draw protocol BWD1 carries model, wet-contact, water and instance data as float32
+buffers. Materials are sent on change, while mesh and UI data keep their existing
+binary paths. Browser instance buffers are reused when matrix contents match;
+moving geometry and shadow instances must still update immediately.
+
+Standalone players disable live editor event-graph tracing by default. Browser
+diagnostics can opt in after startup using byteEngineTraceEvents(true); Windows
+players accept --trace-events. This does not disable gameplay events or crash logs.
+Reentrant event evaluations lease separate reusable workspaces; never share one
+mutable result set between a parent rule and a synchronously dispatched child.
+
+Auto resolution has a fitted 720p clarity floor (native pixels for smaller windows).
+Manual Native/720p/1080p/scale choices remain explicit. A quality-only change must
+preserve a separately selected resolution. Web exports default to Balanced graphics.
+ProfileWebGame forces Native 1280x720 after its input sequence, then verifies the
+actual world dimensions. Never report its earlier Auto-window FPS as fixed-720p FPS.
+
+Shadow batching regression:
+  node Tools/TestShadowBatcher.cjs
+Stable opaque affine casters share one world-space shadow buffer, within fixed
+vertex/index budgets. Moving or deforming geometry, alpha cutouts and height fields
+retain the dynamic path. Verify gate/raft shadows after movement and scene reset.
+The default framebuffer uses no MSAA because world rendering already uses an
+offscreen target with post-process antialiasing; this avoids multisampling the
+fullscreen presentation copy. Check images as well as frame timing after changes.
+
+Components without a fixed-update override are omitted from fixed hook dispatch.
+Inherited overrides, runtime enable/disable, priorities and component mutations
+must retain their lifecycle behavior; see FixedHookRegressionTests.
