@@ -13,6 +13,7 @@
     <Compile Include="../../Player/ByteEngine.Browser/BrowserTextureTransfer.cs" Link="BrowserTextureTransfer.cs" />
     <Compile Include="../../Player/ByteEngine.Browser/BrowserFrame.cs" Link="BrowserFrame.cs" />
     <Compile Include="../../Player/ByteEngine.Browser/BrowserDrawPacket.cs" Link="BrowserDrawPacket.cs" />
+    <Compile Include="../../Player/ByteEngine.Browser/FrameArrayPool.cs" Link="FrameArrayPool.cs" />
     <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/GoblinScrapper/GoblinScrapper.Plugin.csproj" />
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />

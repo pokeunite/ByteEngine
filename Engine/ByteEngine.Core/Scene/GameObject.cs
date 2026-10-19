@@ -9,6 +9,10 @@ public sealed class GameObject
     private readonly List<Component> _components = new();
     private Component[]? _contactComponents;
     private Component[]? _fixedUpdateComponents;
+    private Component[]? _updateComponents,_lateUpdateComponents;
+    internal bool NeedsFixedUpdate => !_started || (_fixedUpdateComponents??=_components.Where(c=>c.ImplementsFixedUpdate).ToArray()).Length>0;
+    private readonly Dictionary<string,Component?> _namedComponents = new(StringComparer.OrdinalIgnoreCase);
+    private void InvalidateComponentCaches(){_contactComponents=null;_fixedUpdateComponents=null;_updateComponents=null;_lateUpdateComponents=null;_namedComponents.Clear();}
     private Component[] ContactComponents => _contactComponents ??= _components.ToArray();
     private readonly List<GameObject> _children = new();
     private readonly HashSet<Guid> _tags = new();
@@ -191,7 +195,7 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
-        _contactComponents=null;_fixedUpdateComponents=null;
+        InvalidateComponentCaches();
         _scene?.InvalidateComponentRegistries();
 
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
@@ -208,6 +212,15 @@ public sealed class GameObject
         return null;
     }
 
+    internal Component? FindComponentByName(string? name)
+    {
+        if(string.IsNullOrWhiteSpace(name))return null;
+        if(_namedComponents.TryGetValue(name,out var cached))return cached;
+        Component? found=null;
+        foreach(var component in _components){var type=component.GetType();if(type.Name.Equals(name,StringComparison.OrdinalIgnoreCase)||type.FullName?.Equals(name,StringComparison.OrdinalIgnoreCase)==true){found=component;break;}}
+        if(_namedComponents.Count>=128)_namedComponents.Clear();_namedComponents[name]=found;return found;
+    }
+
     public bool TryGetComponent<T>(out T? component)
         where T : Component
     {
@@ -222,7 +235,7 @@ public sealed class GameObject
     internal void ReorderComponents(IReadOnlyList<Component> ordered)
     {
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
-        _components.Clear();_contactComponents=null;_fixedUpdateComponents=null;
+        _components.Clear();InvalidateComponentCaches();
         _scene?.InvalidateComponentRegistries();_components.AddRange(ordered);
     }
 
@@ -230,7 +243,7 @@ public sealed class GameObject
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
-        _contactComponents=null;_fixedUpdateComponents=null;
+        InvalidateComponentCaches();
         _scene?.InvalidateComponentRegistries();
 
         CrashDebugLog.Write(
@@ -259,13 +272,14 @@ public sealed class GameObject
         if (!_started) StartInternal();
 
         // A single component needs no ordered enumeration or sort buffer.
-        if (_components.Count == 1)
+        var components=_updateComponents??=_components.Where(c=>c.ImplementsUpdate).ToArray();
+        if (components.Length == 1)
         {
-            _components[0].UpdateInternal();
+            components[0].UpdateInternal();
             return;
         }
-        if (_components.Count == 0) return;
-        RunOrderedComponents(late:false);
+        if (components.Length == 0) return;
+        RunOrderedComponents(components,late:false);
     }
 
     internal void LateUpdateInternal()
@@ -275,13 +289,14 @@ public sealed class GameObject
         if (!_started) StartInternal();
 
         // A single component needs no ordered enumeration or sort buffer.
-        if (_components.Count == 1)
+        var components=_lateUpdateComponents??=_components.Where(c=>c.ImplementsLateUpdate).ToArray();
+        if (components.Length == 1)
         {
-            _components[0].LateUpdateInternal();
+            components[0].LateUpdateInternal();
             return;
         }
-        if (_components.Count == 0) return;
-        RunOrderedComponents(late:true);
+        if (components.Length == 0) return;
+        RunOrderedComponents(components,late:true);
     }
 
     internal void FixedUpdateInternal()
@@ -308,13 +323,13 @@ public sealed class GameObject
         finally { System.Buffers.ArrayPool<Component>.Shared.Return(snapshot, clearArray: true); }
     }
 
-    private void RunOrderedComponents(bool late)
+    private void RunOrderedComponents(Component[] components,bool late)
     {
         // A snapshot retains mutation-during-update semantics, while pooled storage avoids
         // the two LINQ sort buffers previously allocated per object per frame.
-        int count=_components.Count;var snapshot=System.Buffers.ArrayPool<Component>.Shared.Rent(count);
+        int count=components.Length;var snapshot=System.Buffers.ArrayPool<Component>.Shared.Rent(count);
         try{
-            _components.CopyTo(snapshot,0);
+            components.CopyTo(snapshot,0);
             for(int i=1;i<count;i++){var value=snapshot[i];int j=i-1;while(j>=0&&snapshot[j].UpdateOrder>value.UpdateOrder){snapshot[j+1]=snapshot[j];j--;}snapshot[j+1]=value;}
             for(int i=0;i<count;i++){if(late)snapshot[i].LateUpdateInternal();else snapshot[i].UpdateInternal();}
         }
@@ -418,7 +433,7 @@ public sealed class GameObject
             component.DestroyInternal();
         }
 
-        _components.Clear();_contactComponents=null;_fixedUpdateComponents=null;
+        _components.Clear();InvalidateComponentCaches();
         _scene?.InvalidateComponentRegistries();
         _started = false;
 

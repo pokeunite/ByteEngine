@@ -206,7 +206,15 @@ public sealed partial class PhysicsWorld3D
         float length = movement.Length();
         if (length < .00001f) return;
         body.Transform.WorldPosition = before;
+        // Keep tangent motion after impact. Truncating the entire displacement made
+        // continuously swept bodies stick to slopes while their velocity kept rising.
+        for (int pass = 0; pass < 3 && movement.LengthSquared() > 1e-10f; pass++)
+        {
+        length = movement.Length();
         float allowed = length;
+        RaycastHit3D? nearest = null;
+        GameObject? sourceObject = null;
+        Collider3D? sourceCollider = null;
         foreach (var obj in scene.GameObjects)
             if (ReferenceEquals(FindBodyForCollider(obj), body))
                 foreach (var collider in obj.Components.OfType<Collider3D>())
@@ -222,14 +230,22 @@ public sealed partial class PhysicsWorld3D
                     if (GameplayQuery3D.CapsuleCast(scene, start,end, movement, radius, out var hit,
                         allowed, body.GameObject, source: obj, includeTriggers: false))
                     {
+                        // Initial touching contacts do not block motion away from or
+                        // parallel to their surface.
+                        if (Vector3.Dot(movement, hit.Normal) >= -1e-6f) continue;
                         allowed = Math.Max(0, hit.Distance - .001f);
-                        var pair = new PhysicsContactPair3D(obj, collider, hit.GameObject, hit.Collider, hit.Point, -hit.Normal, 0, false);
-                        _frameContacts[ContactKey.Create(pair)] = pair;
-                        float incoming = Vector3.Dot(body.Velocity, hit.Normal);
-                        if (incoming < 0) body.Velocity -= (1 + body.Restitution) * incoming * hit.Normal;
+                        nearest = hit; sourceObject = obj; sourceCollider = collider;
                     }
                 }
-        body.Transform.WorldPosition = before + movement * (allowed / length);
+        body.Transform.WorldPosition += movement * (allowed / length);
+        if (nearest is not {} contact) break;
+        var pair = new PhysicsContactPair3D(sourceObject!, sourceCollider!, contact.GameObject, contact.Collider, contact.Point, -contact.Normal, 0, false);
+        _frameContacts[ContactKey.Create(pair)] = pair;
+        float incoming = Vector3.Dot(body.Velocity, contact.Normal);
+        if (incoming < 0) body.Velocity -= (1 + body.Restitution) * incoming * contact.Normal;
+        movement *= 1 - allowed / length;
+        movement -= Math.Min(0, Vector3.Dot(movement, contact.Normal)) * contact.Normal;
+        }
     }
 
     public void Reset()

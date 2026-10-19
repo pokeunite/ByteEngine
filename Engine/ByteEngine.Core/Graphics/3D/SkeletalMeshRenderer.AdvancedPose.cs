@@ -38,6 +38,17 @@ public sealed partial class SkeletalMeshRenderer
     private readonly Dictionary<ImportedAnimation, ImportedAnimationChannel?[]> _poseChannels = new();
     private readonly Dictionary<string, (Vector3 Target, Vector3 Pole, float Weight)> _runtimeIkTargets =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (Quaternion Rotation, bool AnimatedPole)> _runtimeIkPoseTargets = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (Quaternion Rotation, float Weight)> _boneRotationOffsets = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Adds a model-space joint rotation before IK, for rider lean and contact reach.</summary>
+    public void SetBoneModelRotationOffset(string bone, Quaternion rotation, float weight = 1)
+    {
+        if(string.IsNullOrWhiteSpace(bone))return;
+        if(weight<=.001f){if(_boneRotationOffsets.Remove(bone))_poseDirty=true;return;}
+        if(!float.IsFinite(rotation.X+rotation.Y+rotation.Z+rotation.W)||rotation.LengthSquared()<1e-8f)return;
+        _boneRotationOffsets[bone]=(Quaternion.Normalize(rotation),Math.Clamp(weight,0,1));_poseDirty=true;
+    }
+    private readonly Dictionary<string, (float Clearance, float Range, float Weight, GameObject? Ignore)> _runtimeIkSurfaceTargets = new(StringComparer.OrdinalIgnoreCase);
     private GameObject?[] _ikTargetObjects = Array.Empty<GameObject?>();
     private readonly List<AnimationIkChainProfile> _effectiveIkChains = new();
     private (int Root, int Mid, int End)[] _ikJointIndices = Array.Empty<(int, int, int)>();
@@ -145,11 +156,37 @@ public sealed partial class SkeletalMeshRenderer
     {
         if (string.IsNullOrWhiteSpace(chain)) return;
         _runtimeIkTargets[chain] = (worldTarget, worldPole, Math.Clamp(weight, 0f, 1f));
+        _runtimeIkPoseTargets.Remove(chain);
+        _runtimeIkSurfaceTargets.Remove(chain);
+        _poseDirty = true;
+    }
+
+    /// <summary>Position and orientation constraint for planted feet or grips. The optional
+    /// animated pole retains the source limb's bend plane instead of imposing a fixed axis.</summary>
+    public void SetIkPoseTarget(string chain, Vector3 worldTarget, Vector3 worldPole,
+        Quaternion worldRotation, float weight = 1f, bool followAnimatedPole = true)
+    {
+        SetIkTarget(chain, worldTarget, worldPole, weight);
+        if (worldRotation.LengthSquared() > 1e-8f && float.IsFinite(worldRotation.X + worldRotation.Y + worldRotation.Z + worldRotation.W))
+            _runtimeIkPoseTargets[chain] = (Quaternion.Normalize(worldRotation), followAnimatedPole);
+    }
+
+    /// <summary>Constrain an animated foot to the surface beneath its current FK
+    /// position, retaining its authored horizontal stroke and knee bend.</summary>
+    public void SetIkSurfaceTarget(string chain, float ankleClearance, Quaternion worldRotation,
+        float weight = 1f, float rayDistance = 1.25f, GameObject? ignore = null)
+    {
+        ClearIkTarget(chain);
+        _runtimeIkSurfaceTargets[chain] = (Math.Max(0, ankleClearance), Math.Max(.1f, rayDistance), Math.Clamp(weight, 0, 1), ignore);
+        _runtimeIkPoseTargets[chain] = (Quaternion.Normalize(worldRotation), true);
         _poseDirty = true;
     }
 
     public void ClearIkTarget(string chain)
     {
+        _runtimeIkPoseTargets.Remove(chain);
+        _runtimeIkSurfaceTargets.Remove(chain);
+        _poseDirty = true;
         if (_runtimeIkTargets.Remove(chain)) _poseDirty = true;
     }
 
@@ -244,7 +281,7 @@ public sealed partial class SkeletalMeshRenderer
             _ikJointValid[i] = root >= 0 && mid >= 0 && end >= 0 &&
                 IsDescendantOf(mid, root) && IsDescendantOf(end, mid);
             int toe = end == leftFoot ? leftToe : end == rightFoot ? rightToe : -1;
-            if (chain.FootGrounding && toe >= 0 && IsDescendantOf(toe, end))
+            if (toe >= 0 && IsDescendantOf(toe, end))
                 _footToeIndices[i] = toe;
             if (!string.IsNullOrWhiteSpace(chain.TargetObject))
                 _ikTargetObjects[i] = GameObject.Scene?.FindGameObject(chain.TargetObject);
@@ -263,7 +300,8 @@ public sealed partial class SkeletalMeshRenderer
     private void AddMappedFootChain(string name, HumanoidBone root, HumanoidBone mid, HumanoidBone end)
     {
         if (_model == null || _effectiveIkChains.Any(chain =>
-            chain.FootGrounding && string.Equals(chain.Name, name, StringComparison.OrdinalIgnoreCase)))
+            string.Equals(chain.Name, name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(chain.EndBone, _model.HumanoidMapping.GetBoneName(end), StringComparison.OrdinalIgnoreCase)))
             return;
         string? rootName = _model.HumanoidMapping.GetBoneName(root);
         string? midName = _model.HumanoidMapping.GetBoneName(mid);
@@ -403,6 +441,7 @@ public sealed partial class SkeletalMeshRenderer
 
         _currentRootMotionCorrection = BuildModelSpaceRootMotionCorrection();
         ApplyAimAndLookAt(pose);
+        foreach(var offset in _boneRotationOffsets){int node=ResolveNode(offset.Key);if(node>=0)ApplyModelRotation(pose,PoseGlobals(pose),node,offset.Value.Rotation,offset.Value.Weight);}
         ApplyIk(pose);
         Matrix4x4[] locals = _localPoseMatrices.Length == pose.Count
             ? _localPoseMatrices : _localPoseMatrices = new Matrix4x4[pose.Count];
@@ -650,7 +689,17 @@ public sealed partial class SkeletalMeshRenderer
             Vector3 targetWorld, poleWorld;
             float weight = chain.Weight;
             bool groundAligned = false;
-            if (_runtimeIkTargets.TryGetValue(chain.Name, out var input))
+            if (_runtimeIkSurfaceTargets.TryGetValue(chain.Name, out var surface) && GameObject.Scene != null)
+            {
+                var animatedEnd = Vector3.Transform(globals[end].Translation, poseWorld);
+                targetWorld = animatedEnd; poleWorld = Vector3.Transform(globals[mid].Translation, poseWorld);
+                if (GameplayQuery3D.Raycast(GameObject.Scene, animatedEnd + Vector3.UnitY * .4f,
+                    -Vector3.UnitY, out var surfaceHit, surface.Range, surface.Ignore ?? GameObject, includeTriggers: false))
+                    targetWorld.Y = surfaceHit.Point.Y + surface.Clearance;
+                else weight = 0;
+                weight *= surface.Weight;
+            }
+            else if (_runtimeIkTargets.TryGetValue(chain.Name, out var input))
             {
                 targetWorld = input.Target;
                 poleWorld = input.Pole;
@@ -703,6 +752,31 @@ public sealed partial class SkeletalMeshRenderer
                         $"chain={chain.Name} skipped: no ground hit or IK target");
                 continue;
             }
+            if (_runtimeIkPoseTargets.TryGetValue(chain.Name, out var explicitPose) && explicitPose.AnimatedPole)
+            {
+                int toe = _footToeIndices[c];
+                Vector3 desiredToe = toe >= 0 ? globals[toe].Translation : globals[end].Translation;
+                if (toe >= 0)
+                {
+                    Matrix4x4.Decompose(Matrix4x4.CreateFromQuaternion(explicitPose.Rotation) * worldInverse, out _, out var goalRotation, out _);
+                    Matrix4x4.Decompose(globals[end], out _, out var animatedRotation, out _);
+                    desiredToe = globals[end].Translation + Vector3.Transform(globals[toe].Translation - globals[end].Translation,
+                        Quaternion.Normalize(goalRotation * Quaternion.Inverse(animatedRotation)));
+                }
+                Vector3 poleModel = toe >= 0 ? AnimationPoseMath.FootKneePole(globals[root].Translation,
+                    globals[mid].Translation, globals[end].Translation, desiredToe,
+                    Vector3.Transform(targetWorld, worldInverse)) : globals[mid].Translation;
+                Vector3 axis = Vector3.Transform(targetWorld, worldInverse) - globals[root].Translation;
+                Vector3 bend = poleModel - globals[root].Translation;
+                if (axis.LengthSquared() > 1e-8f) { axis = Vector3.Normalize(axis); bend -= axis * Vector3.Dot(bend, axis); }
+                if (bend.LengthSquared() > 1e-8f)
+                {
+                    bend = Vector3.Normalize(bend);
+                    if (_footPoleReady[c]) bend = AnimationPoseMath.SmoothDirection(_footPoleDirections[c], bend, (float)ByteEngine.Core.Time.DeltaTime, 16f);
+                    _footPoleDirections[c] = bend; _footPoleReady[c] = true;
+                    poleWorld = Vector3.Transform(globals[root].Translation + bend, poseWorld);
+                }
+            }
             if (weight <= .001f)
             {
                 if (traceFootIk && chain.FootGrounding)
@@ -732,6 +806,13 @@ public sealed partial class SkeletalMeshRenderer
             endAt = globals[end].Translation;
             Quaternion midDelta = AnimationPoseMath.FromTo(endAt - midAt, solvedEnd - solvedMid);
             ApplyModelRotation(pose, globals, mid, midDelta, weight);
+            if (_runtimeIkPoseTargets.TryGetValue(chain.Name, out var orientation))
+            {
+                globals = PoseGlobals(pose);
+                Matrix4x4.Decompose(Matrix4x4.CreateFromQuaternion(orientation.Rotation) * worldInverse, out _, out var desired, out _);
+                Matrix4x4.Decompose(globals[end], out _, out var current, out _);
+                ApplyModelRotation(pose, globals, end, Quaternion.Normalize(desired * Quaternion.Inverse(current)), weight);
+            }
             if (traceFootIk && chain.FootGrounding)
             {
                 Matrix4x4[] finalGlobals = PoseGlobals(pose);

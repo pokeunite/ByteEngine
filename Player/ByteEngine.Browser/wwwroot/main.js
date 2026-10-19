@@ -60,10 +60,11 @@ try{
     const startMs=performance.now();game.Start(!!manifest.demo);byteEnginePerf.startMs=performance.now()-startMs;capture.event('scene-start',{durationMs:byteEnginePerf.startMs});
     const persist=()=>{if(!saveKey)return;try{const data=game.SaveData();if(data!==lastSave){localStorage.setItem(saveKey,data);lastSave=data;}}catch(error){console.warn('Browser save persistence unavailable',error);}};
     setInterval(persist,5000);window.addEventListener('pagehide',persist);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)persist();});
     if(stopped)throw new Error("Startup failed; use Retry loading.");
     status.setProgress(null,'Preparing graphics…');
     const keys=new Set(),buttons=new Set(),keyPulses=new Set(),buttonPulses=new Set();
-    let pointer=[.5,.5],delta=[0,0],wheel=0,previous=performance.now(),graphicsReady=false,previousPending=-1;
+    let pointer=[.5,.5],delta=[0,0],wheel=0,previous=performance.now(),graphicsReady=false,previousPending=-1,sceneRevision=-1,readyFrames=0;
     const names={ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Space:'Space',
         ShiftLeft:'LeftShift',ShiftRight:'RightShift',ControlLeft:'LeftControl',ControlRight:'RightControl',
         AltLeft:'LeftAlt',AltRight:'RightAlt',Escape:'Escape',Enter:'Enter',Tab:'Tab',
@@ -90,6 +91,7 @@ try{
         delta[0]+=e.movementX;delta[1]+=e.movementY;
     });
     const uiCommands=[],drawCommands=[];
+    globalThis.byteEngineWaterDebug=()=>drawCommands.filter(c=>c.water?.surface).map(c=>({level:c.water.column[0],floor:c.water.column[1],flow:c.water.motion[1],channel:c.water.flow[3]>.5}));
     function frame(now){
         if(stopped){status.hidden=false;return;}
         try{
@@ -99,10 +101,11 @@ try{
             if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
             const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
-            const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
+            const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden||!graphicsReady?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad);
             const wasmEnd=performance.now();const data=JSON.parse(payload);
+            if(data.sceneRevision!==sceneRevision){sceneRevision=data.sceneRevision;graphicsReady=false;readyFrames=0;capture.event('scene-graphics-start',{sceneRevision});}
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
             if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
             if(data.drawBuffer>=0)data.draws=decodeDrawPacket(game.ReadBuffer(data.drawBuffer),drawCommands);
@@ -122,8 +125,9 @@ try{
             if(byteEnginePerf.frames.length>600)byteEnginePerf.frames.shift();
             capture.frame({frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,renderMs:renderEnd-audioEnd,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,draws:drawCount,uiCommands:uiCount,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
             if(data.pendingTextures!==previousPending){capture.event('graphics-queue',{pending:data.pendingTextures,reason:graphicsReady?'background asset uploads':'initial graphics'});previousPending=data.pendingTextures;}
-            if(!graphicsReady&&data.pendingTextures===0){graphicsReady=true;capture.event('first-ready-frame');}
-            // A background upload must not replace gameplay with the startup splash.
+            if(!graphicsReady){readyFrames=data.pendingTextures===0?readyFrames+1:0;if(readyFrames>=2){graphicsReady=true;canvas.style.visibility=overlay.style.visibility='visible';canvas.focus();capture.event('first-ready-frame',{sceneRevision});}}
+            canvas.style.visibility=overlay.style.visibility=graphicsReady?'visible':'hidden';
+            // Warm each new scene behind the loading cover; later dynamic uploads stay visible.
             status.hidden=graphicsReady;status.style.pointerEvents="none";
             if(!graphicsReady)status.textContent='Preparing graphics... '+data.pendingTextures+' uploads';
             requestAnimationFrame(frame);

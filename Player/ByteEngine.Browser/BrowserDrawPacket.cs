@@ -5,13 +5,21 @@ using System.Runtime.InteropServices;
 internal static class BrowserDrawPacket
 {
     public const int Magic = 0x31445742; // BWD1
-    public static byte[] Encode(IReadOnlyList<BrowserDrawCommand> commands)
+    public static int EncodedSize(IReadOnlyList<BrowserDrawCommand> commands)
     {
         int size = 8;
         foreach (var c in commands)
             size = checked(size + 148 + (c.water != null ? 188 : 0) + (c.instances.Length + c.shadowInstances.Length) * 4);
-        var result = new byte[size];
-        var w = new Writer(result);
+        return size;
+    }
+    public static byte[] Encode(IReadOnlyList<BrowserDrawCommand> commands)
+    {
+        var result = new byte[EncodedSize(commands)]; Encode(commands, result); return result;
+    }
+    public static void Encode(IReadOnlyList<BrowserDrawCommand> commands, Span<byte> destination)
+    {
+        if (destination.Length != EncodedSize(commands)) throw new ArgumentException("Invalid draw packet destination size.", nameof(destination));
+        var w = new Writer(destination);
         w.Int(Magic); w.Int(commands.Count);
         foreach (var c in commands)
         {
@@ -32,7 +40,6 @@ internal static class BrowserDrawPacket
             }
             w.Floats(c.shadowInstances, c.shadowInstances.Length); w.Floats(c.instances, c.instances.Length);
         }
-        return result;
     }
     private ref struct Writer(Span<byte> destination)
     {

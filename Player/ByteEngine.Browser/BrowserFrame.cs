@@ -10,6 +10,7 @@ internal sealed class BrowserFrame
     public BrowserShadow? shadow { get; set; }
     public float exposure { get; set; } = 1;
     public int pendingTextures { get; set; }
+    public int sceneRevision { get; set; }
     public double loopMs { get; set; }
     public float ambient { get; set; }
     public float[] look { get; set; } = [1,1,0];

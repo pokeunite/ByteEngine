@@ -20,6 +20,8 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Contains("--water-puzzle-mechanisms")){WaterPuzzleMechanismTests.Run();return;}
+    if(args.Contains("--timed-challenge-saves")){TimedChallengeSaveTests.Run(root);return;}
     if(args.Length==2&&args[0]=="--web-native"){using var capture=new WebPlatformNativeCapture(args[1]);capture.Run();return;}
     if(args.Contains("--web-fixture")){WebPlatformFixture.Create();return;}
     if(args.Length==2&&args[0]=="--browser-draw-packet"){BrowserDrawPacketTests.Run(args[1]);return;}

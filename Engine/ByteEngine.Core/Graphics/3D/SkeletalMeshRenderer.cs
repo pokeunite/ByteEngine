@@ -132,6 +132,9 @@ public sealed partial class SkeletalMeshRenderer : Component
     /// <summary>Runtime animation sampling interval; zero evaluates every frame.
     /// Playback time still advances normally. Physical poses and reactions remain immediate.</summary>
     public float AnimationUpdateInterval { get; set; }
+    /// <summary>Batch animation and post-physics IK changes into one pose evaluation.
+    /// Bone queries still resolve immediately; rendering always receives the completed pose.</summary>
+    public bool EvaluatePoseAfterPhysics { get; set; }
     private float _animationPoseElapsed;
 
     public float TransitionDuration { get; set; } = 0.15f;
@@ -281,6 +284,24 @@ public sealed partial class SkeletalMeshRenderer : Component
             modelMatrix *
             Transform.WorldMatrix;
 
+        return true;
+    }
+
+    /// <summary>Samples one bone's authored clip hierarchy without running IK,
+    /// skinning or uploading meshes. Use for contact probes before setting IK targets.
+    /// This deliberately excludes blend spaces, procedural layers and crossfades.</summary>
+    public bool TrySampleAnimationBoneWorldMatrix(string boneName, float phase, out Matrix4x4 matrix)
+    {
+        matrix = Matrix4x4.Identity;
+        if (!float.IsFinite(phase) || (!_resolved && !ResolveRuntimeResources()) || _currentAnimation == null) return false;
+        int node = ResolveNode(boneName);
+        if (node < 0) return false;
+        float time = Math.Clamp(phase, 0, 1) * _currentAnimation.Duration;
+        Matrix4x4 global = Matrix4x4.Identity;
+        for (int at = node; at >= 0; at = _parentIndices[at])
+            global *= PoseToMatrix(SampleNode(at, _currentAnimation, time));
+        Vector3 travel = CalculateClipRootTravel(_currentAnimation, time);
+        matrix = global * Matrix4x4.CreateTranslation(-travel.X, 0, -travel.Z) * Transform.WorldMatrix;
         return true;
     }
 
@@ -491,10 +512,15 @@ public sealed partial class SkeletalMeshRenderer : Component
             }
         }
 
-        if (_poseDirty)
+        if (_poseDirty && !EvaluatePoseAfterPhysics)
         {
             UpdatePoseAndMeshes();
         }
+    }
+
+    protected override void OnLateUpdate()
+    {
+        if (EvaluatePoseAfterPhysics && _poseDirty) UpdatePoseAndMeshes();
     }
 
     protected override void OnRender(RenderContext context)
@@ -1142,6 +1168,11 @@ public sealed partial class SkeletalMeshRenderer : Component
         SkeletalAttachmentService.UpdateForRenderer(this);
         DiagnosticPoseUpdates++;
         DiagnosticPoseTicks += System.Diagnostics.Stopwatch.GetTimestamp() - diagnosticStart;
+        if (GameObject.Scene is {} scene)
+        {
+            scene.AnimationMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(diagnosticStart).TotalMilliseconds;
+            scene.AnimatedComponentCount++;
+        }
     }
 
     private Matrix4x4[] BuildLocalPose()

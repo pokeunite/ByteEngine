@@ -5,11 +5,16 @@ namespace ByteEngine.Core.Scene;
 
 public abstract class Component
 {
-    private sealed record FixedHook(bool Implemented);
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type,FixedHook> FixedHooks = new();
-    internal bool ImplementsFixedUpdate => FixedHooks.GetValue(GetType(),static type => new(
-        type.GetMethod("OnFixedUpdate",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,
-            null,Type.EmptyTypes,null)?.DeclaringType != typeof(Component))).Implemented;
+    private sealed record Hooks(bool Update,bool Late,bool Fixed);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type,Hooks> HookTypes = new();
+    private Hooks ImplementedHooks => HookTypes.GetValue(GetType(),static type => {
+        bool Has(string name)=>type.GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,
+            null,Type.EmptyTypes,null)?.DeclaringType != typeof(Component);
+        return new(Has("OnUpdate"),Has("OnLateUpdate"),Has("OnFixedUpdate"));
+    });
+    internal bool ImplementsFixedUpdate => ImplementedHooks.Fixed;
+    internal bool ImplementsUpdate => ImplementedHooks.Update;
+    internal bool ImplementsLateUpdate => ImplementedHooks.Late;
     private GameObject? _gameObject;
 
     private bool _started;
@@ -72,9 +77,7 @@ public abstract class Component
             StartInternal();
         }
 
-        if(this is ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer && AttachedGameObject?.Scene is {} scene)
-        {long start=System.Diagnostics.Stopwatch.GetTimestamp();try {OnUpdate();}finally{scene.AnimationMilliseconds+=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;scene.AnimatedComponentCount++;}}
-        else if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Update"); OnUpdate(); }
+        if (ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled) { using var timing = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Update"); OnUpdate(); }
         else OnUpdate();
     }
 

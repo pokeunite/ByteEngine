@@ -73,8 +73,7 @@ public static class VariableResolver
         GameObject? target = ResolveObject(reference, context) ?? context.Self;
         return reference.ComponentType is "Transform"
             ? target?.Transform
-            : target?.Components.FirstOrDefault(
-                component => MatchesType(component.GetType(), reference.ComponentType));
+            : target?.FindComponentByName(reference.ComponentType);
     }
 
     private static GameObject? ResolveObject(

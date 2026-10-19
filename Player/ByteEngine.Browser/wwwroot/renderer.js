@@ -1,5 +1,54 @@
 import {qualityProfiles} from './shared-render.js';
 import {waterUniforms,waterVertex,waterFragment} from './water.js';
+export function normalMatrix(model,output=new Float32Array(9),at=0){
+    const a=model[at],b=model[at+1],c=model[at+2],d=model[at+4],e=model[at+5],f=model[at+6],g=model[at+8],h=model[at+9],i=model[at+10];
+    if(model[at+3]===0&&model[at+7]===0&&model[at+11]===0&&model[at+15]===1){
+        const x=e*i-f*h,y=f*g-d*i,z=d*h-e*g,det=a*x+b*y+c*z;
+        if(Math.abs(det)<1e-20){output.fill(0);return output;}
+        const inv=1/det;output[0]=x*inv;output[1]=y*inv;output[2]=z*inv;output[3]=(h*c-i*b)*inv;output[4]=(i*a-g*c)*inv;output[5]=(g*b-h*a)*inv;output[6]=(b*f-c*e)*inv;output[7]=(c*d-a*f)*inv;output[8]=(a*e-b*d)*inv;return output;
+    }
+    // Preserve the general projective-matrix path for custom render submissions.
+    const rows=Array.from({length:4},(_,r)=>Array.from({length:8},(_,c)=>c<4?model[at+c*4+r]:+(c-4===r)));
+    for(let c=0;c<4;c++){let p=c;for(let r=c+1;r<4;r++)if(Math.abs(rows[r][c])>Math.abs(rows[p][c]))p=r;[rows[c],rows[p]]=[rows[p],rows[c]];const v=rows[c][c];if(Math.abs(v)<1e-20){output.fill(0);return output;}for(let j=0;j<8;j++)rows[c][j]/=v;for(let r=0;r<4;r++)if(r!==c){const k=rows[r][c];for(let j=0;j<8;j++)rows[r][j]-=k*rows[c][j];}}
+    for(let c=0;c<3;c++)for(let r=0;r<3;r++)output[c*3+r]=rows[c][4+r];return output;
+}
+// Retain the complete depth map only while every shadow-producing input matches.
+export class ShadowFrameCache {
+    constructor(){this.signature=null;this.entries=[];}
+    unchanged(data,materials,meshes,textures){
+        const s=data.shadow;if(!s){this.signature=null;this.entries.length=0;return false;}
+        const signature=s.resolution+'|'+s.matrix.join(',');let same=this.signature===signature,index=0;
+        for(const c of data.draws){const models=c.shadowInstances;if(!models?.length)continue;
+            const m=meshes.get(c.id),d=c.material===undefined?c:materials.get(c.material);if(!m||!d)continue;
+            const stamp=[c.id,m.revision,d.heightField||0,textures.get(d.heightField)?.revision||0,...(d.heightUv||[]),d.heightRange,d.heightBias,d.cutoff,d.texture||0,textures.get(d.texture)?.revision||0,...(d.tiling||[]),...(d.offset||[])].join(',');
+            let e=this.entries[index];let equal=!!e&&e.stamp===stamp&&e.models.length===models.length;
+            for(let j=0;equal&&j<models.length;j++)if(e.models[j]!==models[j])equal=false;
+            if(!equal){same=false;e={stamp,models:new Float32Array(models)};this.entries[index]=e;}index++;
+        }
+        if(index!==this.entries.length)same=false;this.entries.length=index;this.signature=signature;return same;
+    }
+}
+export class StaticShadowLayerCache {
+    constructor(){this.entries=new Map();this.included=new Set();this.projection='';}
+    update(data,materials,meshes,textures){
+        const projection=data.shadow.resolution+'|'+data.shadow.matrix.join(',');let dirty=projection!==this.projection;this.projection=projection;
+        const next=new Set(),seen=new Set();
+        for(let i=0;i<data.draws.length;i++){
+            const c=data.draws[i],models=c.shadowInstances,m=meshes.get(c.id),d=c.material===undefined?c:materials.get(c.material);
+            if(!models?.length||!m||!d)continue;seen.add(i);
+            const stamp=[c.id,m.revision,d.heightField||0,textures.get(d.heightField)?.revision||0,...(d.heightUv||[]),d.heightRange,d.heightBias,d.cutoff,d.texture||0,textures.get(d.texture)?.revision||0,...(d.tiling||[]),...(d.offset||[])].join(',');
+            let e=this.entries.get(i),same=!!e&&e.stamp===stamp&&e.models.length===models.length;
+            for(let j=0;same&&j<models.length;j++)if(e.models[j]!==models[j])same=false;
+            if(!e){e={stamp,models:new Float32Array(models),stable:30};this.entries.set(i,e);}
+            else if(!same){e.stamp=stamp;e.models=new Float32Array(models);e.stable=0;}
+            else e.stable=Math.min(30,e.stable+1);
+            if(e.stable>=30)next.add(i);
+        }
+        for(const i of this.entries.keys())if(!seen.has(i))this.entries.delete(i);
+        if(next.size!==this.included.size)dirty=true;else for(const i of next)if(!this.included.has(i))dirty=true;
+        this.included=next;return {dirty,included:next};
+    }
+}
 // Conservative static shadow atlas. A changed caster immediately returns to the dynamic path.
 export class StaticShadowBatcher {
     constructor(){this.entries=new Map();this.signature='';this.included=new Set();this.frame=0;}
@@ -35,6 +84,12 @@ export class StaticShadowBatcher {
     }
 }
 export class BrowserRenderer {
+    gpuStage(stage){
+        if(!this.activeGpuQueries)return;const gl=this.gl;
+        if(stage&&stage!=='frame'&&!this.detailedGpuStages)return;
+        if(this.currentGpuQuery){gl.endQuery(this.gpuTimer.TIME_ELAPSED_EXT);this.activeGpuQueries.push(this.currentGpuQuery);this.currentGpuQuery=null;}
+        if(stage){const query=gl.createQuery();gl.beginQuery(this.gpuTimer.TIME_ELAPSED_EXT,query);this.currentGpuQuery={query,stage};}
+    }
     bindInstanceStream(key,values){
         const gl=this.gl;let stream=this.instanceStreams.get(key),same=!!stream&&stream.values.length===values.length;
         const typed=values instanceof Float32Array;
@@ -52,22 +107,26 @@ export class BrowserRenderer {
         if(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)<13)throw Error('This browser GPU does not meet ByteEngine material sampler requirements.');
         this.capabilities={backend:'WebGL2',hdr:!!gl.getExtension('EXT_color_buffer_float'),maxTextureSize:gl.getParameter(gl.MAX_TEXTURE_SIZE)};
         const sampler=(min)=>{const v=gl.createSampler();gl.samplerParameteri(v,gl.TEXTURE_MIN_FILTER,min);gl.samplerParameteri(v,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.samplerParameteri(v,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.samplerParameteri(v,gl.TEXTURE_WRAP_T,gl.REPEAT);return v;};this.materialSampler=sampler(gl.LINEAR_MIPMAP_LINEAR);this.materialLinearSampler=sampler(gl.LINEAR);
+        this.shadowSampler=gl.createSampler();for(const p of [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER])gl.samplerParameteri(this.shadowSampler,p,gl.LINEAR);for(const p of [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T])gl.samplerParameteri(this.shadowSampler,p,gl.CLAMP_TO_EDGE);gl.samplerParameteri(this.shadowSampler,gl.TEXTURE_COMPARE_MODE,gl.COMPARE_REF_TO_TEXTURE);gl.samplerParameteri(this.shadowSampler,gl.TEXTURE_COMPARE_FUNC,gl.LEQUAL);
         this.gpuTimer=gl.getExtension('EXT_disjoint_timer_query_webgl2');this.gpuQueries=[];this.profile={gpuMs:null,cpu3DMs:0,uiCpuMs:0,drawCalls:0};
-        this.ui=overlay.getContext('2d');this.meshes=new Map();this.textures=new Map();this.instanceStreams=new Map();this.renderFrame=0;this.staticShadows=new StaticShadowBatcher();
+        this.ui=overlay.getContext('2d');this.meshes=new Map();this.textures=new Map();this.instanceStreams=new Map();this.renderFrame=0;this.staticShadows=new StaticShadowBatcher();this.shadowCache=new ShadowFrameCache();this.shadowLayers=new StaticShadowLayerCache();
         this.anisotropy=gl.getExtension('EXT_texture_filter_anisotropic');this.maxAnisotropy=this.anisotropy?gl.getParameter(this.anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT):1;this.floatLinear=gl.getExtension('OES_texture_float_linear');
         this.tints=new Map();this.tintBytes=0;this.materials=new Map();
         const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);
             gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(shader));return shader;};
         const program=this.program=gl.createProgram();
-        gl.attachShader(program,compile(gl.VERTEX_SHADER,`#version 300 es
+        const vertexSource=`#version 300 es
         layout(location=0) in vec3 position;layout(location=1) in vec3 normal;layout(location=2) in vec2 uv;
-        layout(location=5) in mat4 instanceModel;uniform bool instanced;uniform mat4 vp,model;out vec3 n,world;out vec2 texcoord;
+        layout(location=5) in mat4 instanceModel;uniform mat3 modelNormal;uniform bool instanced;uniform mat4 vp,model;out vec3 n,world;out vec2 texcoord;
         ${waterUniforms}
         ${waterVertex}
         uniform sampler2D heightField;uniform bool hasHeight;uniform vec4 heightUv;uniform float heightRange,heightBias;uniform vec2 heightSize;
         float surfaceHeight(vec2 coord){vec2 rg=textureLod(heightField,clamp(coord,vec2(0.0),vec2(1.0)),0.0).rg;return dot(rg,vec2(65280.0,255.0))/65535.0*heightRange+heightBias;}
-        void main(){vec3 pos=position,N=normal;if(hasHeight){vec2 coord=uv*heightUv.xy+heightUv.zw;vec2 step=1.0/vec2(textureSize(heightField,0));pos.y+=surfaceHeight(coord);vec2 gradient=vec2(surfaceHeight(coord+vec2(step.x,0.0))-surfaceHeight(coord-vec2(step.x,0.0)),surfaceHeight(coord+vec2(0.0,step.y))-surfaceHeight(coord-vec2(0.0,step.y)))/(2.0*step*heightSize);N=normalize(vec3(-gradient.x,1.0,-gradient.y));}mat4 M=instanced?instanceModel:model;vec4 p=M*vec4(pos,1.0);world=p.xyz;n=mat3(transpose(inverse(M)))*N;displaceWater(world,n);p=vec4(world,1.0);
-        texcoord=uv;gl_Position=vp*p;gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`));
+        void main(){vec3 pos=position,N=normal;if(hasHeight){vec2 coord=uv*heightUv.xy+heightUv.zw;vec2 step=1.0/vec2(textureSize(heightField,0));pos.y+=surfaceHeight(coord);vec2 gradient=vec2(surfaceHeight(coord+vec2(step.x,0.0))-surfaceHeight(coord-vec2(step.x,0.0)),surfaceHeight(coord+vec2(0.0,step.y))-surfaceHeight(coord-vec2(0.0,step.y)))/(2.0*step*heightSize);N=normalize(vec3(-gradient.x,1.0,-gradient.y));}mat4 M=instanced?instanceModel:model;vec4 p=M*vec4(pos,1.0);world=p.xyz;n=(instanced?mat3(transpose(inverse(M))):modelNormal)*N;displaceWater(world,n);p=vec4(world,1.0);
+        texcoord=uv;gl_Position=vp*p;gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`;
+        const solidWaterUniforms=waterUniforms.replace('uniform bool waterSurface,','const bool waterSurface=false;uniform bool ');
+        if(solidWaterUniforms===waterUniforms)throw Error('The solid shader could not specialize the water declaration.');
+        gl.attachShader(program,compile(gl.VERTEX_SHADER,vertexSource.replace(waterUniforms,solidWaterUniforms)));
         gl.attachShader(program,compile(gl.FRAGMENT_SHADER,`#version 300 es
         precision highp float;
         in vec3 n,world;in vec2 texcoord;out vec4 fragment;
@@ -76,20 +135,22 @@ export class BrowserRenderer {
         uniform sampler2D sandImprint;uniform bool hasSandImprint;uniform vec2 sandOrigin;
         uniform bool has0,has1,has2,has3,has4,has5,has6,unlit,srgb,directX,packed;
         uniform float metallic,roughness,ao,normalStrength,cutoff,ambient,exposure;
-        uniform sampler2D shadowMap;uniform mat4 shadowMatrix;uniform bool receiveShadow;uniform int shadowLight;uniform float shadowBias,shadowStrength,shadowTexel;
+        uniform highp sampler2DShadow shadowMap;uniform mat4 shadowMatrix;uniform bool receiveShadow;uniform int shadowLight;uniform float shadowBias,shadowStrength,shadowTexel;
         uniform vec3 look,fogColor;uniform vec4 fogParams;uniform float fogMode;
         uniform ivec3 channels;uniform int lightCount,pointCount;
         uniform vec3 lightDirection[4],lightColor[4],pointPosition[8],pointColor[8];uniform float pointRange[8];
-        ${waterUniforms}
+        ${solidWaterUniforms}
         ${waterFragment}
         uniform vec4 wetContact[3];uniform vec4 wetLevels;
         const float PI=3.14159265359;
         float visibility(vec3 N,vec3 L){
             if(!receiveShadow)return 1.0;vec4 p=shadowMatrix*vec4(world,1.0);vec3 coord=p.xyz/p.w;coord.xy=coord.xy*.5+.5;
             if(any(lessThan(coord,vec3(0.0)))||any(greaterThan(coord,vec3(1.0))))return 1.0;
-            float bias=max(.00025,shadowBias)*(1.0+2.0*(1.0-max(dot(N,L),0.0))),blocked=0.0;
-            for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)blocked+=coord.z-bias>texture(shadowMap,coord.xy+vec2(x,y)*shadowTexel).r?1.0:0.0;
-            float edge=min(min(coord.x,1.0-coord.x),min(coord.y,1.0-coord.y));return 1.0-blocked/9.0*shadowStrength*smoothstep(0.0,.04,edge);
+            float bias=max(.00025,shadowBias)*(1.0+2.0*(1.0-max(dot(N,L),0.0))),reference=coord.z-bias;
+            // Two linear comparisons per axis cover the same three nearest texels, weighted 2:1.
+            vec2 a=floor(coord.xy/shadowTexel)*shadowTexel,b=a+1.5*shadowTexel;
+            float lit=(texture(shadowMap,vec3(a,reference))*4.+texture(shadowMap,vec3(b.x,a.y,reference))*2.+texture(shadowMap,vec3(a.x,b.y,reference))*2.+texture(shadowMap,vec3(b,reference)))/9.;
+            float edge=min(min(coord.x,1.0-coord.x),min(coord.y,1.0-coord.y));return 1.0-(1.-lit)*shadowStrength*smoothstep(0.0,.04,edge);
         }
         float channel(vec4 v,int i){return i<0?1.0:v[clamp(i,0,3)];}
         vec3 illuminate(vec3 base,vec3 N,vec3 V,vec3 L,vec3 radiance,float metal,float rough){
@@ -130,6 +191,18 @@ export class BrowserRenderer {
             fragment=vec4(max(outColor,vec3(0)),base.a);
         }`));
         gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+        // Separate water from the PBR material shader, retaining identical optical math.
+        this.waterProgram=gl.createProgram();
+        gl.attachShader(this.waterProgram,compile(gl.VERTEX_SHADER,vertexSource));
+        gl.attachShader(this.waterProgram,compile(gl.FRAGMENT_SHADER,`#version 300 es
+        precision highp float;in vec3 n,world;in vec2 texcoord;out vec4 fragment;
+        uniform vec3 eye;uniform int lightCount;uniform vec3 lightDirection[4],lightColor[4];
+        uniform vec4 color;uniform vec2 tiling,offset;uniform sampler2D tex0;uniform bool has0;uniform float cutoff;
+        ${waterUniforms}
+        ${waterFragment}
+        void main(){if(cutoff>=0.){float alpha=color.a*(has0?texture(tex0,texcoord*tiling+offset).a:1.);if(alpha<cutoff)discard;}fragment=vec4(max(opticalWater(normalize(n)),vec3(0)),1.);}`));
+        gl.linkProgram(this.waterProgram);if(!gl.getProgramParameter(this.waterProgram,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.waterProgram));
+        this.materialProgram=program;this.programLocations=new Map([[program,new Map()],[this.waterProgram,new Map()]]);
         const sky=this.skyProgram=gl.createProgram();this.skyVao=gl.createVertexArray();
         gl.attachShader(sky,compile(gl.VERTEX_SHADER,`#version 300 es
         out vec2 screen;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);screen=p*2.0-1.0;gl_Position=vec4(screen,1.0,1.0);}`));
@@ -153,7 +226,7 @@ export class BrowserRenderer {
         void main(){vec3 c=display(texture(image,uv).rgb);if(antialias){vec3 a=display(texture(image,uv+vec2(texel.x,0)).rgb),b=display(texture(image,uv-vec2(texel.x,0)).rgb),d=display(texture(image,uv+vec2(0,texel.y)).rgb),e=display(texture(image,uv-vec2(0,texel.y)).rgb);vec3 l=vec3(.299,.587,.114);float lc=dot(c,l),lo=min(lc,min(min(dot(a,l),dot(b,l)),min(dot(d,l),dot(e,l)))),hi=max(lc,max(max(dot(a,l),dot(b,l)),max(dot(d,l),dot(e,l))));float blend=smoothstep(.04,.24,hi-lo)*.42;c=mix(c,(a+b+d+e)*.25,blend);}c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,look.x);c=(c-.5)*look.y+.5+look.z*vec3(.12,.03,-.1);fragment=vec4(clamp(c,0.,1.),1);}`));
         gl.linkProgram(post);if(!gl.getProgramParameter(post,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(post));
         this.postLocations=Object.fromEntries(['image','texel','look','exposure','antialias'].map(n=>[n,gl.getUniformLocation(post,n)]));
-        this.locations=new Map();
+        this.locations=this.programLocations.get(program);
         const shadow=this.shadowProgram=gl.createProgram();
         gl.attachShader(shadow,compile(gl.VERTEX_SHADER,`#version 300 es
         layout(location=0) in vec3 position;layout(location=2) in vec2 uv;layout(location=5) in mat4 instanceModel;
@@ -184,8 +257,14 @@ export class BrowserRenderer {
     }
     renderShadow(data){
         const gl=this.gl,s=data.shadow;this.profile.shadowDrawCalls=0;this.profile.batchedStaticShadowCasters=0;
+        this.profile.reusedShadowMap=false;
+        const unchanged=this.shadowCache.unchanged(data,this.materials,this.meshes,this.textures);
         if(!s)return;
+        if(unchanged&&this.shadowTexture&&this.shadowSize===s.resolution){this.profile.reusedShadowMap=true;return;}
+        const layer=this.shadowLayers.update(data,this.materials,this.meshes,this.textures);
+        this.profile.cachedShadowCasters=layer.included.size;this.profile.reusedStaticShadows=!layer.dirty;
         if(this.shadowSize!==s.resolution){
+            if(this.staticShadowTexture)gl.deleteTexture(this.staticShadowTexture);if(this.staticShadowFramebuffer)gl.deleteFramebuffer(this.staticShadowFramebuffer);
             if(this.shadowTexture)gl.deleteTexture(this.shadowTexture);if(this.shadowFramebuffer)gl.deleteFramebuffer(this.shadowFramebuffer);
             this.shadowSize=s.resolution;this.shadowTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.shadowTexture);
             gl.texImage2D(gl.TEXTURE_2D,0,gl.DEPTH_COMPONENT24,s.resolution,s.resolution,0,gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,null);
@@ -193,19 +272,16 @@ export class BrowserRenderer {
             for(const name of [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T])gl.texParameteri(gl.TEXTURE_2D,name,gl.CLAMP_TO_EDGE);
             this.shadowFramebuffer=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,this.shadowTexture,0);gl.drawBuffers([gl.NONE]);gl.readBuffer(gl.NONE);
             if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw new Error('Browser shadow framebuffer unavailable');
+            this.staticShadowTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.staticShadowTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.DEPTH_COMPONENT24,s.resolution,s.resolution,0,gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,null);
+            for(const name of [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER])gl.texParameteri(gl.TEXTURE_2D,name,gl.NEAREST);
+            this.staticShadowFramebuffer=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,this.staticShadowFramebuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,this.staticShadowTexture,0);gl.drawBuffers([gl.NONE]);gl.readBuffer(gl.NONE);
+            if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Browser static shadow framebuffer unavailable');layer.dirty=true;
         }
-        gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.viewport(0,0,s.resolution,s.resolution);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.disable(gl.CULL_FACE);gl.clear(gl.DEPTH_BUFFER_BIT);gl.useProgram(this.shadowProgram);
+        gl.viewport(0,0,s.resolution,s.resolution);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);gl.disable(gl.CULL_FACE);gl.useProgram(this.shadowProgram);
         const u=this.shadowLocations;gl.uniformMatrix4fv(u.vp,false,s.matrix);
-        const batch=this.staticShadows.update(data.draws,this.materials,this.meshes);
-        if(batch.count){
-            const a=this.shadowAtlas??(this.shadowAtlas={vao:gl.createVertexArray(),vertices:gl.createBuffer(),indices:gl.createBuffer()});gl.bindVertexArray(a.vao);
-            if(batch.changed){gl.bindBuffer(gl.ARRAY_BUFFER,a.vertices);gl.bufferData(gl.ARRAY_BUFFER,batch.vertices,gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,12,0);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,a.indices);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,batch.indices,gl.STATIC_DRAW);}
-            gl.useProgram(this.staticShadowProgram);gl.uniformMatrix4fv(this.staticShadowVp,false,s.matrix);gl.drawElements(gl.TRIANGLES,batch.count,gl.UNSIGNED_INT,0);this.profile.shadowDrawCalls++;
-            gl.useProgram(this.shadowProgram);
-        }
-        this.profile.batchedStaticShadowCasters=batch.included.size;
+        const drawCasters=(staticPass,batch)=>{
         let drawIndex=0;for(const command of data.draws){const streamIndex=drawIndex++;
-            if(batch.included.has(streamIndex))continue;
+            if(layer.included.has(streamIndex)!==staticPass||batch?.has(streamIndex))continue;
             const count=(command.shadowInstances?.length||0)/16;if(!count)continue;const m=this.meshes.get(command.id),d=command.material===undefined?command:this.materials.get(command.material);if(!m||!d)continue;
             gl.bindVertexArray(m.vao);this.bindInstanceStream('shadow/'+streamIndex+'/'+command.id,command.shadowInstances);
             for(let column=0;column<4;column++){const loc=5+column;gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,4,gl.FLOAT,false,64,column*16);gl.vertexAttribDivisor(loc,1);}
@@ -213,7 +289,22 @@ export class BrowserRenderer {
             gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(d.texture)?.gpu||null);gl.uniform1i(u.albedo,0);gl.uniform1i(u.hasAlbedo,d.texture?1:0);gl.uniform1f(u.cutoff,d.cutoff);gl.uniform2fv(u.tiling,d.tiling);gl.uniform2fv(u.offset,d.offset);
             gl.drawElementsInstanced(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0,count);this.profile.shadowDrawCalls++;
             for(let loc=5;loc<9;loc++){gl.disableVertexAttribArray(loc);gl.vertexAttribDivisor(loc,0);}
+        }};
+        if(layer.dirty){
+        gl.bindFramebuffer(gl.FRAMEBUFFER,this.staticShadowFramebuffer);gl.clear(gl.DEPTH_BUFFER_BIT);
+        const batch=this.staticShadows.update(data.draws.map((c,i)=>layer.included.has(i)?c:{...c,shadowInstances:[]}),this.materials,this.meshes);
+        if(batch.count){
+            const a=this.shadowAtlas??(this.shadowAtlas={vao:gl.createVertexArray(),vertices:gl.createBuffer(),indices:gl.createBuffer()});gl.bindVertexArray(a.vao);
+            if(batch.changed){gl.bindBuffer(gl.ARRAY_BUFFER,a.vertices);gl.bufferData(gl.ARRAY_BUFFER,batch.vertices,gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,12,0);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,a.indices);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,batch.indices,gl.STATIC_DRAW);}
+            gl.useProgram(this.staticShadowProgram);gl.uniformMatrix4fv(this.staticShadowVp,false,s.matrix);gl.drawElements(gl.TRIANGLES,batch.count,gl.UNSIGNED_INT,0);this.profile.shadowDrawCalls++;
+            gl.useProgram(this.shadowProgram);
         }
+        this.profile.batchedStaticShadowCasters=batch.included.size;
+        drawCasters(true,batch.included);
+        }
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER,this.staticShadowFramebuffer);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,this.shadowFramebuffer);
+        gl.blitFramebuffer(0,0,s.resolution,s.resolution,0,0,s.resolution,s.resolution,gl.DEPTH_BUFFER_BIT,gl.NEAREST);
+        gl.bindFramebuffer(gl.FRAMEBUFFER,this.shadowFramebuffer);gl.useProgram(this.shadowProgram);drawCasters(false,null);
         gl.bindFramebuffer(gl.FRAMEBUFFER,null);
     }
     deleteTint(key){const c=this.tints.get(key);if(c){this.tintBytes-=c.width*c.height*4;this.tints.delete(key);}}
@@ -250,7 +341,7 @@ export class BrowserRenderer {
             gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
             const allocate=upload.allocate||t.width!==upload.width||t.height!==upload.height||t.hdr!==!!upload.hdr;
             if(allocate)gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,null);if(upload.partial)gl.texSubImage2D(gl.TEXTURE_2D,0,upload.x,upload.y,upload.w,upload.h,gl.RGBA,type,bytes);else gl.texImage2D(gl.TEXTURE_2D,0,format,upload.width,upload.height,0,gl.RGBA,type,bytes);
-            t.width=upload.width;t.height=upload.height;t.hdr=!!upload.hdr;
+            t.width=upload.width;t.height=upload.height;t.hdr=!!upload.hdr;t.revision=(t.revision||0)+1;
             t.filterable=!upload.hdr||!!this.floatLinear;
             if(t.filterable&&(!upload.partial||upload.y+upload.h>=upload.height)) {gl.generateMipmap(gl.TEXTURE_2D);t.mipmapped=true;}
             gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,upload.nearest||!t.filterable?gl.NEAREST:t.mipmapped?gl.LINEAR_MIPMAP_LINEAR:gl.LINEAR);
@@ -262,21 +353,24 @@ export class BrowserRenderer {
         }
         Object.assign(this.profile,{uploadMs:performance.now()-uploadStart,meshUploadBytes:meshBytes,textureUploadBytes:textureBytes,meshUploads:data.uploads.length,textureUploads:data.textures.length,residentMeshes:this.meshes.size,residentTextures:this.textures.size,tintBytes:this.tintBytes});
         if(this.filterQuality!==data.quality){this.filterQuality=data.quality;if(this.anisotropy)for(const t of this.textures.values()){gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.texParameterf(gl.TEXTURE_2D,this.anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,t.nearest?1:Math.min(this.maxAnisotropy,(qualityProfiles[data.quality]||qualityProfiles.Balanced).Anisotropy));}}
-        const geometryStart=performance.now();let gpuQuery=null;
+        const geometryStart=performance.now();this.activeGpuQueries=null;this.detailedGpuStages=globalThis.byteEngineGpuStageTiming===true;
         if(this.gpuTimer){
-            for(let i=this.gpuQueries.length-1;i>=0;i--){const query=this.gpuQueries[i];if(!gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE))continue;
-                this.profile.gpuMs=gl.getParameter(this.gpuTimer.GPU_DISJOINT_EXT)?null:gl.getQueryParameter(query,gl.QUERY_RESULT)/1e6;gl.deleteQuery(query);this.gpuQueries.splice(i,1);}
-            if(this.gpuQueries.length<3){gpuQuery=gl.createQuery();gl.beginQuery(this.gpuTimer.TIME_ELAPSED_EXT,gpuQuery);}
+            for(let i=0;i<this.gpuQueries.length;){const batch=this.gpuQueries[i];if(!batch.every(q=>gl.getQueryParameter(q.query,gl.QUERY_RESULT_AVAILABLE))){i++;continue;}
+                const disjoint=gl.getParameter(this.gpuTimer.GPU_DISJOINT_EXT),stages={};for(const q of batch){stages[q.stage]=disjoint?null:gl.getQueryParameter(q.query,gl.QUERY_RESULT)/1e6;gl.deleteQuery(q.query);}this.profile.gpuStages=stages;this.profile.gpuMs=disjoint?null:Object.values(stages).reduce((a,b)=>a+b,0);this.gpuQueries.splice(i,1);}
+            if(this.gpuQueries.length<3){this.activeGpuQueries=[];this.gpuStage(this.detailedGpuStages?'shadows':'frame');}
         }
         for(let unit=0;unit<13;unit++)gl.bindSampler(unit,null);
         if(this.anisotropy){const value=Math.min(this.maxAnisotropy,(qualityProfiles[data.quality]||qualityProfiles.Balanced).Anisotropy);gl.samplerParameterf(this.materialSampler,this.anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,value);gl.samplerParameterf(this.materialLinearSampler,this.anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,value);}
-        this.prepareTargets();this.renderShadow(data);gl.bindFramebuffer(gl.FRAMEBUFFER,this.worldTarget.framebuffer);
+        this.prepareTargets();this.renderShadow(data);this.gpuStage('opaque');gl.bindFramebuffer(gl.FRAMEBUFFER,this.worldTarget.framebuffer);
         gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);gl.depthMask(true);gl.clearColor(...data.background,1);
         gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
         if(data.sky){const sky=data.sky,u=this.skyLocations;gl.useProgram(this.skyProgram);gl.bindVertexArray(this.skyVao);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.uniformMatrix4fv(u.inverseVp,false,sky.inverseVp);gl.uniform3fv(u.eye,data.eye);
          for(const name of ['zenith','horizon','ground'])gl.uniform3fv(u[name],sky[name]);for(const name of ['rotation','intensity','sharpness'])gl.uniform1f(u[name],sky[name]);gl.uniform1f(u.exposure,data.exposure??1);gl.uniform1i(u.hdr,sky.hdr?1:0);gl.uniform1i(u.hasMap,sky.texture&&this.textures.has(sky.texture)?1:0);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(sky.texture)?.gpu||null);gl.uniform1i(u.environment,0);gl.drawArrays(gl.TRIANGLES,0,3);}
-        gl.useProgram(this.program);gl.uniform1f(this.location('exposure'),data.exposure??1);
+
+        const selectProgram=program=>{
+        this.program=program;this.locations=this.programLocations.get(program);gl.useProgram(program);gl.uniform1f(this.location('exposure'),data.exposure??1);
         gl.activeTexture(gl.TEXTURE9);gl.bindTexture(gl.TEXTURE_2D,this.shadowTexture||null);gl.uniform1i(this.location('shadowMap'),9);
+        gl.bindSampler(9,this.shadowSampler);
         gl.uniform1i(this.location('shadowLight'),data.shadow?.light??-1);gl.uniformMatrix4fv(this.location('shadowMatrix'),false,data.shadow?.matrix||data.vp);
         gl.uniform1f(this.location('shadowBias'),data.shadow?.bias??0);gl.uniform1f(this.location('shadowStrength'),data.shadow?.strength??0);gl.uniform1f(this.location('shadowTexel'),1/(data.shadow?.resolution||1));
         gl.uniformMatrix4fv(this.location('vp'),false,data.vp);gl.uniform3fv(this.location('eye'),data.eye);
@@ -288,10 +382,15 @@ export class BrowserRenderer {
         if(data.points.length){gl.uniform3fv(this.location('pointPosition[0]'),data.points.flatMap(l=>l.position));
             gl.uniform3fv(this.location('pointColor[0]'),data.points.flatMap(l=>l.color));gl.uniform1fv(this.location('pointRange[0]'),data.points.map(l=>l.range));}
         gl.uniformMatrix4fv(this.location('inverseVp'),false,data.inverseVp||data.vp);gl.uniform2f(this.location('viewport'),gl.drawingBufferWidth,gl.drawingBufferHeight);gl.uniform1i(this.location('waterDetail'),data.quality==='High'?2:data.quality==='Fast'?0:1);gl.uniform1i(this.location('waterReflectionSteps'),(qualityProfiles[data.quality]||qualityProfiles.Balanced).ReflectionSteps);
+
         gl.activeTexture(gl.TEXTURE10);gl.bindTexture(gl.TEXTURE_2D,this.waterTarget.color);gl.uniform1i(this.location('sceneColor'),10);gl.activeTexture(gl.TEXTURE11);gl.bindTexture(gl.TEXTURE_2D,this.waterTarget.depth);gl.uniform1i(this.location('sceneDepth'),11);
+        };
+        selectProgram(this.materialProgram);
         let previousMaterial=null,waterCaptured=false;
         let drawIndex=0;for(const command of data.draws){const streamIndex=drawIndex++;
-            if(command.water?.surface&&!waterCaptured){gl.bindFramebuffer(gl.READ_FRAMEBUFFER,this.worldTarget.framebuffer);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,this.waterTarget.framebuffer);gl.blitFramebuffer(0,0,this.targetWidth,this.targetHeight,0,0,this.targetWidth,this.targetHeight,gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT,gl.NEAREST);gl.bindFramebuffer(gl.FRAMEBUFFER,this.worldTarget.framebuffer);waterCaptured=true;}
+            const nextProgram=command.water?.surface?this.waterProgram:this.materialProgram;
+            if(this.program!==nextProgram){selectProgram(nextProgram);previousMaterial=null;}
+            if(command.water?.surface&&!waterCaptured){this.gpuStage('water');gl.bindFramebuffer(gl.READ_FRAMEBUFFER,this.worldTarget.framebuffer);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,this.waterTarget.framebuffer);gl.blitFramebuffer(0,0,this.targetWidth,this.targetHeight,0,0,this.targetWidth,this.targetHeight,gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT,gl.NEAREST);gl.bindFramebuffer(gl.FRAMEBUFFER,this.worldTarget.framebuffer);waterCaptured=true;}
             this.bindWater(command.water,data);const wet=command.wet||[];gl.uniform4fv(this.location('wetContact[0]'),wet.length===16?wet.slice(0,12):new Float32Array(12));gl.uniform4fv(this.location('wetLevels'),wet.length===16?wet.slice(12):[0,0,0,0]);
             const draw=command.material===undefined?command:this.materials.get(command.material);
             if(!draw)throw new Error('Missing browser material '+command.material);
@@ -303,6 +402,7 @@ export class BrowserRenderer {
                 this.bindInstanceStream('main/'+streamIndex+'/'+command.id,command.instances);
                 for(let column=0;column<4;column++){const location=5+column;gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,4,gl.FLOAT,false,64,column*16);gl.vertexAttribDivisor(location,1);}
             }
+            else{const normal=this.singleNormal??(this.singleNormal=new Float32Array(9));normalMatrix(command.model,normal);gl.uniformMatrix3fv(this.location('modelNormal'),false,normal);}
             gl.uniformMatrix4fv(this.location('model'),false,command.model);gl.uniform4fv(this.location('color'),draw.color);
             const material=command.material??[draw.metallic,draw.roughness,draw.ao,draw.normalStrength,draw.cutoff,draw.unlit,draw.srgb,draw.directX,draw.packed,draw.channels,draw.emission,draw.tiling,draw.offset,draw.heightField,draw.heightUv,draw.heightSize,draw.heightRange,draw.heightBias,draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture,draw.depth,draw.write,draw.blend,draw.cull,draw.front].join('|');
             if(material!==previousMaterial){previousMaterial=material;
@@ -327,8 +427,8 @@ export class BrowserRenderer {
             if(instanceCount>1){gl.drawElementsInstanced(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0,instanceCount);for(let location=5;location<9;location++){gl.disableVertexAttribArray(location);gl.vertexAttribDivisor(location,0);}}
             else gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
         }
-        gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.targetWidth,this.targetHeight);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.useProgram(this.postProgram);gl.bindSampler(0,null);gl.bindVertexArray(this.skyVao);const post=this.postLocations;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.worldTarget.color);gl.uniform1i(post.image,0);gl.uniform2f(post.texel,1/this.targetWidth,1/this.targetHeight);gl.uniform3fv(post.look,data.look||[1,1,0]);gl.uniform1f(post.exposure,data.exposure??1);gl.uniform1i(post.antialias,data.quality==='Fast'?0:1);gl.drawArrays(gl.TRIANGLES,0,3);
-        if(gpuQuery){gl.endQuery(this.gpuTimer.TIME_ELAPSED_EXT);this.gpuQueries.push(gpuQuery);}
+        this.gpuStage('post');gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.targetWidth,this.targetHeight);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.useProgram(this.postProgram);gl.bindSampler(0,null);gl.bindVertexArray(this.skyVao);const post=this.postLocations;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.worldTarget.color);gl.uniform1i(post.image,0);gl.uniform2f(post.texel,1/this.targetWidth,1/this.targetHeight);gl.uniform3fv(post.look,data.look||[1,1,0]);gl.uniform1f(post.exposure,data.exposure??1);gl.uniform1i(post.antialias,data.quality==='Fast'?0:1);gl.drawArrays(gl.TRIANGLES,0,3);
+        if(this.activeGpuQueries){this.gpuStage(null);this.gpuQueries.push(this.activeGpuQueries);this.activeGpuQueries=null;}
         this.profile.cpu3DMs=performance.now()-geometryStart;this.profile.drawCalls=data.draws.length;
         const uiStart=performance.now();
         const ui=this.ui;ui.setTransform(1,0,0,1,0,0);ui.clearRect(0,0,ui.canvas.width,ui.canvas.height);ui.setTransform(ui.canvas.width/width,0,0,ui.canvas.height/height,0,0);

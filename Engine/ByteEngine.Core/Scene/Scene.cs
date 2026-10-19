@@ -395,13 +395,14 @@ public sealed partial class Scene
             int ticks;
             if (FixedSimulation)
             {
+                _fixedDispatchVersion=unchecked(_componentRegistryVersion-1);
                 ticks = SimulationClock.Advance(Time.DeltaTime, delta =>
                 {
-                    foreach (var gameObject in frameObjects)
-                        if (gameObject.GetComponent<Rigidbody3D>() is { BodyType: not RigidbodyBodyType3D.Static }) gameObject.Transform.CaptureSimulationPose();
+                    RefreshFixedDispatch();
+                    foreach (var (gameObject,body) in _poseDispatch)
+                        if (body.BodyType!=RigidbodyBodyType3D.Static) gameObject.Transform.CaptureSimulationPose();
                     Time.FixedDeltaTime = delta;
-                    foreach (var gameObject in frameObjects)
-                        if (!_pendingDestroy.Contains(gameObject.Id)) gameObject.FixedUpdateInternal();
+                    DispatchFixedUpdate();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;
                 });

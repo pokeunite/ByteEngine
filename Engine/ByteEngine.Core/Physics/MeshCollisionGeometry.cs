@@ -45,18 +45,27 @@ internal sealed class MeshCollisionGeometry
  internal float SegmentDistance(Vector3 a,Vector3 b,out Vector3 onSegment,out Vector3 onMesh)
  {
   Vector3 segmentPoint=a,meshPoint=Bounds.Center;float best=float.PositiveInfinity;var segmentBounds=new BoundingBox3D(Vector3.Min(a,b),Vector3.Max(a,b));
+  float BoundDistance(Node? node){if(node==null)return float.PositiveInfinity;var gap=Vector3.Max(Vector3.Zero,Vector3.Max(node.Bounds.Minimum-segmentBounds.Maximum,segmentBounds.Minimum-node.Bounds.Maximum));return gap.LengthSquared();}
   void Visit(Node? node)
   {
    if(node==null)return;var gap=Vector3.Max(Vector3.Zero,Vector3.Max(node.Bounds.Minimum-segmentBounds.Maximum,segmentBounds.Minimum-node.Bounds.Maximum));if(gap.LengthSquared()>best)return;
-   if(node.Triangle<0){Visit(node.Left);Visit(node.Right);return;}var (x,y,z)=Triangle(node.Triangle);ClosestSegmentTriangle(a,b,x,y,z,out var p,out var q);float squared=Vector3.DistanceSquared(p,q);if(squared<best){best=squared;segmentPoint=p;meshPoint=q;}
+   if(node.Triangle<0){if(BoundDistance(node.Left)<=BoundDistance(node.Right)){Visit(node.Left);Visit(node.Right);}else{Visit(node.Right);Visit(node.Left);}return;}var (x,y,z)=Triangle(node.Triangle);ClosestSegmentTriangle(a,b,x,y,z,out var p,out var q);float squared=Vector3.DistanceSquared(p,q);if(squared<best){best=squared;segmentPoint=p;meshPoint=q;}
   }
   Visit(_tree);onSegment=segmentPoint;onMesh=meshPoint;return MathF.Sqrt(best);
  }
- internal bool Cast(Vector3 origin,Vector3 direction,float radius,out float distance,out Vector3 normal)
+ internal bool Cast(Vector3 origin,Vector3 direction,float radius,out float distance,out Vector3 normal,float maxDistance=float.PositiveInfinity)
  {
   distance=0;normal=-direction;if(direction.LengthSquared()<1e-12f||radius<0)return false;direction=Vector3.Normalize(direction);
-  Vector3 min=Bounds.Minimum-new Vector3(radius),max=Bounds.Maximum+new Vector3(radius);float enter=0,exit=float.PositiveInfinity;
+  Vector3 min=Bounds.Minimum-new Vector3(radius),max=Bounds.Maximum+new Vector3(radius);float enter=0,exit=maxDistance;
   for(int axis=0;axis<3;axis++){float o=axis==0?origin.X:axis==1?origin.Y:origin.Z,d=axis==0?direction.X:axis==1?direction.Y:direction.Z,low=axis==0?min.X:axis==1?min.Y:min.Z,high=axis==0?max.X:axis==1?max.Y:max.Z;if(Math.Abs(d)<1e-9f){if(o<low||o>high)return false;continue;}float a=(low-o)/d,b=(high-o)/d;if(a>b)(a,b)=(b,a);enter=Math.Max(enter,a);exit=Math.Min(exit,b);if(exit<enter)return false;}
+  // Point rays need the geometric triangle normal. Deriving it from two almost
+  // coincident points loses precision on world-space meshes and destabilizes
+  // ground alignment. Swept spheres retain conservative distance advancement.
+  if(radius<=1e-6f){
+   var start=origin+direction*enter;var end=origin+direction*exit;var query=new BoundingBox3D(Vector3.Min(start,end)-new Vector3(.0001f),Vector3.Max(start,end)+new Vector3(.0001f));bool found=false;float closest=exit+.0001f;
+   foreach(int triangle in Candidates(query)){var (a,b,c)=Triangle(triangle);var edge1=b-a;var edge2=c-a;var p=Vector3.Cross(direction,edge2);float determinant=Vector3.Dot(edge1,p);if(Math.Abs(determinant)<1e-8f)continue;float inverse=1/determinant;var offset=origin-a;float u=Vector3.Dot(offset,p)*inverse;if(u<-.00001f||u>1.00001f)continue;var q=Vector3.Cross(offset,edge1);float v=Vector3.Dot(direction,q)*inverse;if(v<-.00001f||u+v>1.00001f)continue;float at=Vector3.Dot(edge2,q)*inverse;if(at<0||at>closest||at>maxDistance)continue;closest=at;normal=Vector3.Normalize(Vector3.Cross(edge1,edge2));if(Vector3.Dot(normal,direction)>0)normal=-normal;found=true;}
+   distance=closest;return found;
+  }
   float t=enter;
   for(int step=0;step<128&&t<=exit+.0001f;step++)
   {

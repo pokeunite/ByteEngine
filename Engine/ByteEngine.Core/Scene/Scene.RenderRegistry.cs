@@ -5,6 +5,7 @@ namespace ByteEngine.Core.Scene;
 public sealed partial class Scene
 {
     private bool _renderRegistryDirty = true;
+    private int _componentRegistryVersion;
     private readonly List<SkyEnvironment> _environments = new();
     private readonly List<DirectionalLight> _directionalLights = new();
     private readonly List<PointLight> _pointLights = new();
@@ -13,6 +14,7 @@ public sealed partial class Scene
     internal IReadOnlyList<PointLight> PointLights { get { RefreshRenderRegistry(); return _pointLights; } }
     internal void InvalidateComponentRegistries()
     {
+        unchecked { _componentRegistryVersion++; }
         InvalidateObjectLookup();
         InvalidatePhysicsRegistry();
         _renderRegistryDirty = true;

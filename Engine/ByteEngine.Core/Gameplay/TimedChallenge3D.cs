@@ -1,5 +1,7 @@
 using ByteEngine.Core.Scene;
 using System.Text.Json;
+using ByteEngine.Core.Animation;
+using ByteEngine.Core.Runtime;
 namespace ByteEngine.Core.Gameplay;
 
 /// <summary>Fixed-time medal challenge. First start command latches the clock; scripted
@@ -17,18 +19,28 @@ public sealed class TimedChallenge3D:Component
  public bool NewRecord {get;private set;}
  public string LastError {get;private set;}="";
  string? recordPath;
+ GameSaveService? recordStore;
+ string? recordKey;
  public bool Started {get;private set;}
  public bool Finished {get;private set;}
  public double ElapsedSeconds {get;private set;}
  public double RevealSeconds {get;private set;}
  public int Stars=>ElapsedSeconds<=Math.Max(0,ThreeStarSeconds)?3:ElapsedSeconds<=Math.Max(ThreeStarSeconds,TwoStarSeconds)?2:1;
  public string DisplayTime=>TimeSpan.FromSeconds(Math.Max(0,ElapsedSeconds)).ToString(@"mm\:ss\.f");
- protected override void OnStart(){string key=new(RecordKey.Where(c=>char.IsAsciiLetterOrDigit(c)||c is '-' or '_').ToArray());if(key.Length==0)return;recordPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ByteEngine","Records",key+".json");try{if(File.Exists(recordPath)){double value=JsonSerializer.Deserialize<double>(File.ReadAllText(recordPath));if(double.IsFinite(value)&&value>0)BestTime=value;}}catch(Exception e)when(e is IOException or UnauthorizedAccessException or JsonException){LastError=e.Message;}}
+ protected override void OnStart(){
+  string key=new(RecordKey.Where(c=>char.IsAsciiLetterOrDigit(c)||c is '-' or '_').ToArray());if(key.Length==0)return;
+  recordPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"ByteEngine","Records",key+".json");
+  if(AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null){recordStore=new GameSaveService(assets.ProjectRoot);recordKey="Records/"+key+".json";}
+  try{
+   string? text=recordStore!=null&&recordStore.Exists(recordKey!)?recordStore.LoadText(recordKey!):File.Exists(recordPath)?File.ReadAllText(recordPath):null;
+   if(text!=null){double value=JsonSerializer.Deserialize<double>(text);if(double.IsFinite(value)&&value>0){BestTime=value;if(recordStore!=null&&!recordStore.Exists(recordKey!))recordStore.Save(recordKey!,value);}}
+  }catch(Exception e)when(e is IOException or UnauthorizedAccessException or JsonException){LastError=e.Message;}
+ }
  protected override void OnFixedUpdate(){
   var variables=GameObject.Scene!.Variables;
   if(!Started&&variables.TryGet(StartVariable,out var start)&&start!.Boolean)Started=true;
   if(!Started)return;
-  if(!Finished&&variables.TryGet(FinishVariable,out var finish)&&finish!.Boolean){Finished=true;NewRecord=BestTime<=0||ElapsedSeconds<BestTime;if(NewRecord){BestTime=ElapsedSeconds;if(recordPath!=null)try{Directory.CreateDirectory(Path.GetDirectoryName(recordPath)!);File.WriteAllText(recordPath+".tmp",JsonSerializer.Serialize(BestTime));File.Move(recordPath+".tmp",recordPath,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastError=e.Message;}}}
+  if(!Finished&&variables.TryGet(FinishVariable,out var finish)&&finish!.Boolean){Finished=true;NewRecord=BestTime<=0||ElapsedSeconds<BestTime;if(NewRecord){BestTime=ElapsedSeconds;if(recordPath!=null)try{if(recordStore!=null)recordStore.Save(recordKey!,BestTime);else{Directory.CreateDirectory(Path.GetDirectoryName(recordPath)!);File.WriteAllText(recordPath+".tmp",JsonSerializer.Serialize(BestTime));File.Move(recordPath+".tmp",recordPath,true);}}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastError=e.Message;}}}
   if(Finished)RevealSeconds+=Time.FixedDeltaTime;else ElapsedSeconds+=Time.FixedDeltaTime;
  }
 }

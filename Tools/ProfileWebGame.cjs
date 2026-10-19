@@ -13,17 +13,26 @@ const server=http.createServer((req,res)=>{
  res.setHeader('Content-Type',({'.js':'text/javascript','.wasm':'application/wasm','.json':'application/json','.html':'text/html'})[path.extname(file)]||'application/octet-stream');
  fs.readFile(file,(e,b)=>{res.statusCode=e?404:200;res.end(e?'Missing':b);});
 });
-function distribution(values){const a=values.filter(Number.isFinite).sort((x,y)=>x-y);return {mean:a.reduce((s,n)=>s+n,0)/a.length,p50:a[Math.floor(a.length*.5)],p95:a[Math.floor(a.length*.95)]};}
+function distribution(values){const a=values.filter(Number.isFinite).sort((x,y)=>x-y);return {mean:a.reduce((s,n)=>s+n,0)/a.length,p50:a[Math.floor(a.length*.5)],p95:a[Math.floor(a.length*.95)],p99:a[Math.floor(a.length*.99)],maximum:a.at(-1)};}
 (async()=>{let browser;try{
- await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await chromium.launch({channel:'msedge',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await chromium.launch({channel:'msedge',headless:process.env.BYTEENGINE_HEADED!=='1',args:['--autoplay-policy=no-user-gesture-required','--window-size=1300,820']});
  const page=await browser.newPage({viewport:{width:1280,height:720}}),errors=[];
+ if(process.env.BYTEENGINE_GPU_STAGES==='1')await page.addInitScript(()=>globalThis.byteEngineGpuStageTiming=true);
+ // Development-only A/B shader experiment. Final acceptance must use an unmodified export.
+ const rendererOverride=process.env.BYTEENGINE_RENDERER_SOURCE;
+ if(rendererOverride)await page.route('**/renderer.js',route=>route.fulfill({path:path.resolve(rendererOverride),contentType:'text/javascript'}));
+ const waterOverride=process.env.BYTEENGINE_WATER_SOURCE;
+ if(waterOverride)await page.route('**/water.js',route=>route.fulfill({path:path.resolve(waterOverride),contentType:'text/javascript'}));
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
  await page.goto('http://127.0.0.1:'+server.address().port+'/?previewQuality='+quality);
- await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Click to start'),null,{timeout:240000});
+ await page.waitForFunction(()=>{const s=document.querySelector('#status');return s.textContent.includes('Click to start')||s.dataset.failed;},null,{timeout:240000});
+ if(await page.locator('#status').getAttribute('data-failed'))throw Error(await page.locator('#status').innerText());
  await page.locator('#status').click();await page.waitForFunction(()=>window.byteEngineLastFrame?.pendingTextures===0,null,{timeout:180000});
- for(const action of actions){await page.mouse.click(action.x*1280,action.y*720);await page.waitForTimeout(action.waitMs??3000);}
+ for(const action of actions){await page.mouse.click(action.x*1280,action.y*720);if(action.waitScene)await page.waitForFunction(({scene,draws})=>byteEngineDebug().scene===scene&&byteEngineLastFrame.pendingTextures===0&&byteEngineLastFrame.draws>=draws,{scene:action.waitScene,draws:action.minimumDraws??1},{timeout:180000});await page.waitForTimeout(action.waitMs??3000);}
  await page.evaluate(async quality=>{const {dotnet}=await import('./_framework/dotnet.js');const rt=await dotnet.create();const game=(await rt.getAssemblyExports(rt.getConfig().mainAssemblyName)).BrowserGame;game.ConfigurePresentation(JSON.stringify({quality,worldResolution:'Native'}));},quality);
  await page.waitForTimeout(3000);
+ const startWater=await page.evaluate(()=>globalThis.byteEngineWaterDebug?.()??null);
+ if(process.argv.includes('--require-flow')&&!startWater?.some(w=>Math.abs(w.flow)>.001))throw Error('Benchmark input sequence did not start water flow.');
  await page.evaluate(()=>{window.byteEnginePerf.frames.length=0;window.__phaseSamples=[];window.__benchmarkFrames=[];window.__profileInterval=setInterval(()=>{__phaseSamples.push({...byteEngineDebug(),renderProfile:structuredClone(byteEngineRenderProfile)});__benchmarkFrames.push(...byteEnginePerf.frames.splice(0));},500);});
  await page.waitForTimeout(seconds*1000);
  const report=await page.evaluate(()=>{clearInterval(__profileInterval);return {diagnostics:byteEngineDebug(),phases:__phaseSamples,frames:[...__benchmarkFrames,...byteEnginePerf.frames.splice(0)],presentation:byteEnginePresentation,graphics:byteEngineGraphics(),renderProfile:byteEngineRenderProfile,lastFrame:byteEngineLastFrame};});
@@ -34,6 +43,10 @@ function distribution(values){const a=values.filter(Number.isFinite).sort((x,y)=
  await page.evaluate(()=>byteEngineProfile(true));report.componentSamples=[];
  for(let i=0;i<12;i++){await page.waitForTimeout(300);report.componentSamples.push(await page.evaluate(()=>byteEngineDebug()));}
  await page.evaluate(()=>byteEngineProfile(false));report.errors=errors;report.site=site;report.graphicsQuality=quality;report.actions=actions;report.requestedSeconds=seconds;report.runtimeBuild=fs.existsSync(path.join(site,"browser-build.json"))?JSON.parse(fs.readFileSync(path.join(site,"browser-build.json"))):{codeOptimization:"SDK default"};
+ report.rendererOverride=rendererOverride||null;
+ report.waterOverride=waterOverride||null;
+ report.startWater=startWater;
+ report.visibleBrowser=process.env.BYTEENGINE_HEADED==='1';
  fs.writeFileSync(path.join(output,'Profile.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify({scene:report.diagnostics.scene,performance:report.performance,graphics:report.graphics,errors},null,2));
  if(report.presentation.worldWidth!==1280||report.presentation.worldHeight!==720)throw Error('Benchmark did not retain 1280 x 720 world resolution');if(errors.length||report.graphics.error)throw Error('Browser errors were recorded');

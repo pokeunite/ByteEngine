@@ -90,3 +90,36 @@ fullscreen presentation copy. Check images as well as frame timing after changes
 Components without a fixed-update override are omitted from fixed hook dispatch.
 Inherited overrides, runtime enable/disable, priorities and component mutations
 must retain their lifecycle behavior; see FixedHookRegressionTests.
+
+Frame pacing checks:
+  node Tools/TestBrowserNormals.cjs
+  dotnet run --project Tests/ByteEngine.Tests -c Release -- --browser-draw-packet tmp/browser-wire
+Frame buffers retain exact lengths and remain valid until the next frame begins.
+Their retained memory is bounded. Repeated stable frames must allocate no new
+transfer buffers; do not add forced full collections or per-frame upload logging.
+Update/late hook inventories preserve startup, inherited callbacks, live priority
+and mutation snapshots. Component-name caches invalidate on attachment/removal/reorder.
+
+Solid and water shaders are separate variants. Solid variants compile water waves
+and optical shading out completely, rather than relying on a uniform false branch.
+Hardware shadow comparisons reproduce the existing three-by-three depth kernel.
+Unchanged shadow casters share a cached depth layer; a changed caster is removed
+immediately and waits 30 stable frames before rejoining, preventing cache churn at
+the end of eased animations. Moving gates/rafts always cast current-frame shadows.
+
+Set BYTEENGINE_GPU_STAGES=1 for asynchronous per-pass GPU attribution. Leave it off
+for acceptance timing. BYTEENGINE_HEADED=1 benchmarks a visible Edge window.
+ProfileWebGame records browser mode and any development shader overrides. Final
+acceptance runs must have rendererOverride/waterOverride null and verify actual
+worldWidth=1280, worldHeight=720. Keep baseline and current browser modes comparable.
+For a gameplay transition, put waitScene and minimumDraws on its click action;
+fixed sleeps alone can click a control while the loading screen still covers it.
+Use --require-flow for a flowing-water measurement. startWater records the actual
+surface-flow parameters at the start, via the on-demand byteEngineWaterDebug helper.
+Record idle/full-reservoir measurements separately from flowing/depleted states.
+
+Fixed simulation dispatch inventories are built from the frame's object snapshot.
+Only objects with fixed hooks are dispatched; body-pose capture uses its own list.
+Membership changes during a tick refresh the inventory and resume after the last
+visited scene index, preserving callbacks attached to later existing objects.
+Newly created objects enter the next frame, and activity/priority/body type stay live.

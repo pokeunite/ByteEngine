@@ -442,6 +442,9 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WetSurfaceContact3D>("WetSurfaceContact3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.PulleyCableRig3D>("PulleyCableRig3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DockingReceiver3D>("DockingReceiver3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.MechanicalLatch3D>("MechanicalLatch3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.PrimedSiphon3D>("PrimedSiphon3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterCounterweightBridge3D>("WaterCounterweightBridge3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.TimedChallenge3D>("TimedChallenge3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerInteraction3D>("PointerInteraction3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.GraphicsSettings3D>("GraphicsSettings3D"));
