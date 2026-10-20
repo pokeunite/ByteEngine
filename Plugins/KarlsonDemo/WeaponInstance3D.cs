@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core;
 using ByteEngine.Core.Vfx;
 using ByteEngine.Core.Animation;
@@ -59,6 +60,8 @@ public sealed class WeaponInstance3D : Component
     private float _cooldown, _reloadRemaining, _reloadDuration;
     private Random? _random;
     private VfxPlayer? _muzzleFlash;
+    private PointLight? _muzzleLight;
+    private float _flashRemaining;
 
     protected override void OnStart() { ClampAmmo(); _random = new Random(RandomSeed); }
     public void ClampAmmo()
@@ -96,6 +99,9 @@ public sealed class WeaponInstance3D : Component
     }
     internal void Tick(float dt)
     {
+        _flashRemaining=Math.Max(0,_flashRemaining-dt);
+        if(_muzzleLight!=null&&Definition is {} flashDefinition){_muzzleLight.Intensity=flashDefinition.MuzzleLightIntensity*Math.Clamp(_flashRemaining/.045f,0,1);}
+        if(_muzzleFlash?.IsPlaying==true&&TryGetMuzzleWorldPosition(out var socket))_muzzleFlash.Transform.WorldPosition=socket;
         FiredThisFrame = HitThisFrame = ReloadCompletedThisFrame = false;
         EquippedThisFrame=ReloadStartedThisFrame=ReloadCancelledThisFrame=false;
         _cooldown = Math.Max(0, _cooldown - dt);
@@ -154,12 +160,23 @@ public sealed class WeaponInstance3D : Component
                 launcher.FireCooldown = 0; launcher.ResetCooldown();
                 if (launcher.Fire(end - muzzle) is {} projectile)
                 {
-                    projectile.GetComponent<Projectile3D>()!.CollisionMask = mask;
+                    var flight=projectile.GetComponent<Projectile3D>()!;
+                    flight.CollisionMask = mask;
+                    if(d.ProjectileBlueprint.IsEmpty)flight.Radius = .035f;
+                    flight.Hit += impact => {
+                        HitCount++; HitThisFrame=true;_shotHits.Clear();_shotHits.Add(new(impact,shot));HitSequence++;Hit?.Invoke(impact);
+                        impact.GameObject.GetComponent<Rigidbody3D>()?.AddImpulseAtPosition(shot*WeaponDefinition3D.Bound(d.HitImpulse,3,0,1000),impact.Point);
+                    };
+                    if(d.ProjectileBlueprint.IsEmpty){
+                        projectile.Transform.LocalScale=new(.055f);
+                        if(projectile.GetComponent<MeshRenderer>() is {} visual){visual.Material.Shading=MaterialShadingMode.Unlit;visual.Material.BaseColor=new(1,.75f,.25f,1);visual.CastShadows=false;}
+                    }
+                    if(d.ShowShotTrace)projectile.AddComponent(new BulletTrail3D{Length=d.ProjectileTrailLength,Width=d.TraceWidth});
                     var lifetime = projectile.GetComponent<LifetimeComponent>() ?? projectile.AddComponent(new LifetimeComponent());
-                    lifetime.LifetimeSeconds = WeaponDefinition3D.Bound(d.ProjectileLifetime, 5, .1f, 30);
+                    lifetime.LifetimeSeconds = Math.Min(WeaponDefinition3D.Bound(d.ProjectileLifetime, 5, .1f, 30),range/launcher.ProjectileSpeed);
                 }
             }
-            if (d.ShowShotTrace)
+            if (d.ShowShotTrace && d.ShotMode == WeaponShotMode.Hitscan)
             {
                 // The camera ray determines hits; the muzzle tracer makes the shot readable in FPS view.
                 Vector3 visualStart = muzzlePosition;
@@ -182,6 +199,7 @@ public sealed class WeaponInstance3D : Component
             var emitter = scene.CreateGameObject("Weapon muzzle flash");
             emitter.SetParent(GameObject, false);
             _muzzleFlash = emitter.AddComponent(new VfxPlayer { PlayOnStart = false, Preset = VfxPreset.MuzzleFlash, DistanceQuality = false });
+            _muzzleLight=emitter.AddComponent(new PointLight{Color=new(1,.48f,.12f),Intensity=0,Range=d.MuzzleLightRange,CastShadows=false});
         }
         _muzzleFlash.Effect = d.MuzzleFlashEffect;
         _muzzleFlash.Size = WeaponDefinition3D.Bound(d.MuzzleFlashSize, .6f, .05f, 3);
@@ -193,6 +211,8 @@ public sealed class WeaponInstance3D : Component
             ? Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), MathF.Acos(dot))
             : dot > 0 ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI);
         _muzzleFlash.Play(restart: true);
+        _flashRemaining=.045f;
+        if(_muzzleLight!=null){_muzzleLight.Range=WeaponDefinition3D.Bound(d.MuzzleLightRange,3,.1f,10);_muzzleLight.Intensity=WeaponDefinition3D.Bound(d.MuzzleLightIntensity,2.5f,0,10);}
     }
     /// <summary>Uses editor-authored animation-workspace sockets, imported bones, or a local offset.</summary>
     public bool TryGetMuzzleWorldPosition(out Vector3 position)
@@ -209,7 +229,7 @@ public sealed class WeaponInstance3D : Component
         {
             if (SkeletalSocketResolver.TryResolveRenderer(GameObject, null, out var renderer) &&
                 renderer?.TryGetBoneWorldMatrix(d.MuzzleBone, out var matrix) == true)
-            { position = matrix.Translation; return IsFinite(position); }
+            { position = Vector3.Transform(d.MuzzleBoneOffset,matrix); return IsFinite(position); }
             if (d.MuzzleSource == WeaponMuzzleSource.ModelBone) return false;
         }
         position = Vector3.Transform(d.MuzzleLocalOffset, Transform.WorldMatrix);

@@ -95,6 +95,13 @@ public sealed class CharacterController3D
     public float AirControl { get; set; } =
         0.35f;
 
+    /// <summary>Opt-in arena movement: directional acceleration, ground friction and momentum-preserving air steering.</summary>
+    public bool ArenaMovement { get; set; }
+    public float GroundFriction { get; set; } = 10f;
+    public float StopSpeed { get; set; } = 3f;
+    public float AirAcceleration { get; set; } = 18f;
+    public float MaximumAirSpeed { get; set; } = 13f;
+
     public float JumpForce { get; set; } =
         7.0f;
 
@@ -372,6 +379,12 @@ public sealed class CharacterController3D
     private void UpdateHorizontalVelocity(
         float deltaTime)
     {
+        if (ArenaMovement)
+        {
+            Velocity = ArenaVelocity(Velocity, _moveInput, IsGrounded, MoveSpeed,
+                Acceleration, GroundFriction, StopSpeed, AirAcceleration, MaximumAirSpeed, deltaTime);
+            return;
+        }
         Vector3 target =
             _moveInput;
 
@@ -424,6 +437,30 @@ public sealed class CharacterController3D
                     rate *
                     control *
                     deltaTime));
+    }
+
+    /// <summary>Pure motor step, shared with deterministic controller checks. Air release preserves momentum.</summary>
+    public static Vector3 ArenaVelocity(Vector3 velocity, Vector3 input, bool grounded, float speed,
+        float acceleration, float friction, float stopSpeed, float airAcceleration, float airCap, float dt)
+    {
+        dt = Math.Clamp(float.IsFinite(dt) ? dt : 0, 0, .1f);
+        Vector3 horizontal = new(velocity.X, 0, velocity.Z);
+        Vector3 wish = new(input.X, 0, input.Z);
+        float magnitude = Math.Min(wish.Length(), 1);
+        if (wish.LengthSquared() > .000001f) wish = Vector3.Normalize(wish);
+        if (grounded)
+        {
+            float length = horizontal.Length();
+            float drop = Math.Max(length, Math.Max(0, stopSpeed)) * Math.Max(0, friction) * dt;
+            horizontal *= length > .000001f ? Math.Max(0, length - drop) / length : 0;
+        }
+        float wishSpeed = Math.Max(0, speed) * magnitude;
+        float missing = Math.Max(0, wishSpeed - Vector3.Dot(horizontal, wish));
+        horizontal += wish * Math.Min(missing, Math.Max(0, grounded ? acceleration : airAcceleration) * dt * magnitude);
+        float cap = Math.Max(speed, airCap);
+        if (!grounded && horizontal.LengthSquared() > cap * cap && cap > 0)
+            horizontal = Vector3.Normalize(horizontal) * cap;
+        return new(horizontal.X, velocity.Y, horizontal.Z);
     }
 
     private void MoveHorizontal(

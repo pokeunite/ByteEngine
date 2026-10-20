@@ -22,6 +22,10 @@ public static class Time
     {
         public void Dispose() { DeltaTime = prior; FixedDeltaTime = fixedPrior; }
     }
+    internal static DeltaScope EnterObjectScale(float scale)
+    {
+        var scope=new DeltaScope(DeltaTime,FixedDeltaTime);DeltaTime*=scale;FixedDeltaTime*=scale;return scope;
+    }
 
     internal static void Update(double deltaTime)
     {

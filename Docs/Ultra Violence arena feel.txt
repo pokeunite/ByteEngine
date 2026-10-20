@@ -1,0 +1,72 @@
+ULTRA VIOLENCE — MOVEMENT AND WEAPON FEEL PASS
+
+Installed into Documents/ultra violence, Combat Prototype scene. No game export performed.
+
+CONTROLS
+WASD move at 7 m/s; Shift sprint at 10.5 m/s; Space jump.
+Hold right mouse for Overdrive; E pickup; G drop; 1/2/3 equip; R reload.
+
+MOVEMENT
+An optional Arena Movement mode extends the existing native capsule motor.
+Ground acceleration 95, friction 8, stopping speed 4, air acceleration 22, maximum air speed 13.
+Jump speed 7.8, gravity 24, coyote time .12, jump buffer .13. Vertical camera FOV 72 degrees.
+Ground releases brake promptly. Air releases preserve horizontal momentum; steering is directional and bounded.
+No auto bunny hop, slide, wall run or dash is implied by this pass.
+
+Research reference: OpenKCC, Nicholas Maltbie (MIT):
+https://github.com/nicholas-maltbie/OpenKCC
+https://github.com/nicholas-maltbie/OpenKCC/blob/main/Documentation/manual/kcc-design/kcc-movement.md
+Reviewed its SimplifiedKCCWithJump sample, normalized camera-relative movement, capsule sweep/slide and grounding design.
+Unity-dependent source is not installed into ByteEngine. The new directional acceleration/friction implementation is native to ByteEngine.
+
+EDITING
+FPS Character > Character Movement: Arena Movement and jump settings.
+Assets/Events/Arena movement.byteevents: startup tuning action.
+Assets/Events/Weapon inventory.byteevents: editable base/sprint speed actions.
+FPS Camera > Field of View: camera setting.
+Each gun > Weapon Definition: Projectile mode/speed/lifetime/range, trail width/length, muzzle bone/offset, flash asset/size, light intensity/range.
+Weapons plugin actions: Set projectile speed and trail; Set muzzle light pulse.
+Assets/VFX: individual Pistol, Rifle and Shotgun layered muzzle assets. Edit with the native VFX editor.
+
+PHYSICAL SHOTS
+All three weapons now use sphere-swept projectiles, camera aiming with muzzle-origin travel, and finite range/lifetime.
+Short depth-tested streaks follow real projectile positions. Debug camera rays are disabled.
+Projectile impacts now feed the existing Weapon shot hit / Last Ray Hit event-sheet workflow and damage once.
+The fallback projectile visibility flag was fixed in the native launcher.
+Barrel origins were measured on the imported original poses, then attached to weapon bones so animation moves the effects.
+Flashes combine a hot core, short directional flame, sparse sparks, smoke and a brief shadow-free local light.
+
+AFTERIMAGE PLUGIN
+Reusable Afterimage v1.0.0. Added to the six animated enemy visual objects.
+Assets/Events/Afterimages.byteevents checks the player's Overdrive variable and explicitly controls emission.
+Use Enable afterimage emission / Configure afterimage trail / Clear afterimages in the event sheet.
+Inspector exposes tint, opacity, interval, minimum distance, lifetime and ghost limit.
+Installed settings: .075s interval, .38s fade, .045m minimum travel, four ghosts per source.
+Snapshots freeze the actual deformed mesh pose. They do not duplicate controllers, AI, colliders or animations.
+Real-time emission/fade stays smooth while enemy simulation runs at .25 speed.
+Ghosts respect depth, cast no shadows and release their mesh resources after fading or scene unload.
+This first-person setup shows trails on moving enemies. There is no third-person player body in the current rig.
+
+RECORDED WEAPON AUDIO
+The three active gunshot sound sources use genuine recordings from the CC0 Free Firearm Sound Library.
+https://opengameart.org/content/the-free-firearm-sound-library
+Creators: Ben Jaszczak, Brian Nelson, Kevin Heras, Matthew Nanney.
+Near-distance 1911 A_42P, AK-47 C_28P, Mossberg N_30P.
+Trimmed attacks, mono conversion, 48kHz PCM16, level matching and tail fades.
+Assets/Audio/SFX/Firearms contains active clips and source/license text.
+Sound library > SFX Pistol / Rifle / Shotgun controls clips and mix.
+Audio sheets are attached by weapon identity rather than slot number; user weapon ordering is retained.
+The previous synthetic gunshot files remain unused for easy comparison/recovery.
+
+VERIFICATION
+Six deterministic motor checks: speed, diagonal normalization, braking, reversal, air coast/steer, 30/60/144fps final speed.
+Seven native arena checks: grounding, displacement, live speed, stopping, jump, airborne coast and air steering.
+Native combat run: real player projectile kills, six animated enemies, local slow motion, drain/recharge/exhaustion, live HUD,
+afterimage emission/bounds/cleanup, OpenAL playback/overlap/voice caps, enemy projectiles/damage, victory and restart.
+Visual captures: Preview/arena-overdrive.png and Preview/arena-muzzle-flash.png.
+Automated playback confirms functioning audio, not a final subjective mix approval.
+
+AUTHORING TOOLS
+feel_author.py applies this targeted pass with scene/event backups. weapon_audio.py prepares source recordings offline.
+--muzzle-author calibrates imported weapon-tip points onto animated weapon bones (author-time tool only).
+Do not rerun the older full scene author.py or audio_author.py over later user changes.

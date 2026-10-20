@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"bytebard.afterimage","name":"Afterimage","version":"1.0.0","assembly":"Afterimage.Plugin.dll","entryPoint":"ByteEngine.Afterimage.AfterimagePlugin","editor":true,"runtime":true,"minimumEngineVersion":"0.7.1","dependencies":[]}

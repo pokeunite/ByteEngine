@@ -129,6 +129,7 @@ public sealed partial class VisualLogicRegistry
         RegisterAttachment(registry);
         RegisterCreatorData(registry);
         RegisterCreatorWorld(registry);
+        RegisterCombatPrototypeTools(registry);
         RegisterCreatorMotion(registry);
         RegisterCreatorInventory(registry);
         RegisterCreatorSaves(registry);

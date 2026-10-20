@@ -43,11 +43,15 @@ public sealed class WeaponDefinition3D : Component
     public WeaponMuzzleSource MuzzleSource { get; set; }
     public string MuzzleSocket { get; set; } = "WeaponMuzzle";
     public string MuzzleBone { get; set; } = "MuzzleSocket";
+    public System.Numerics.Vector3 MuzzleBoneOffset { get; set; }
     public System.Numerics.Vector3 MuzzleLocalOffset { get; set; }
     public bool ShowShotTrace { get; set; } = true;
     public bool ShowCameraAimRay { get; set; }
     public float TraceSeconds { get; set; } = .3f;
     public float TraceWidth { get; set; } = .012f;
+    public float ProjectileTrailLength { get; set; } = 1.4f;
+    public float MuzzleLightIntensity { get; set; } = 2.5f;
+    public float MuzzleLightRange { get; set; } = 3f;
 
     internal static float Bound(float value, float fallback, float min, float max) =>
         Math.Clamp(float.IsFinite(value) ? value : fallback, min, max);

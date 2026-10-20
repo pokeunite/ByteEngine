@@ -14,6 +14,7 @@ internal sealed partial class EventWorkspacePanel
     private float _sheetDetailsWidth = 300;
     private readonly HashSet<Guid> _collapsedSheetEvents = new();
     private readonly HashSet<Guid> _collapsedSheetLogic = new();
+    private Guid? _sheetOpenConditionPickerFor;
     private static readonly Vector4 SheetConditionColor = new(.34f, .68f, .96f, 1);
     private static readonly Vector4 SheetActionColor = new(1, .63f, .29f, 1);
 
@@ -124,7 +125,7 @@ internal sealed partial class EventWorkspacePanel
         float columnWidth = MathF.Max(80, (ImGui.GetContentRegionAvail().X - 44) * .5f);
         float RowsHeight(List<EventSheetProjection.Row> rows, bool condition) => rows.Count == 0 ? 34 : rows.Sum(row =>
             row.Instruction == null ? ImGui.GetTextLineHeightWithSpacing() :
-            MathF.Max(32, ImGui.CalcTextSize(GetSheetSentence(row.Instruction, condition, state) + (row.Note == null ? "" : " ("+row.Note+")"), false, MathF.Max(40,columnWidth - 24 - Math.Min(row.Depth,8)*14)).Y + 14) + ImGui.GetStyle().ItemSpacing.Y + (condition && row.Instruction != null && IsLogicGate(row.Instruction) && !_collapsedSheetLogic.Contains(row.Instruction.InstanceId) ? 32 : 0));
+            MathF.Max(32, ImGui.CalcTextSize(GetSheetSentence(row.Instruction, condition, state) + (row.Note == null ? "" : " ("+row.Note+")"), false, MathF.Max(40,columnWidth - 46 - Math.Min(row.Depth,8)*24)).Y + 14) + ImGui.GetStyle().ItemSpacing.Y);
         float height = collapsed ? 48 : MathF.Max(RowsHeight(conditions,true),RowsHeight(actions,false)) + 98;
         ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 7);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10));
@@ -164,7 +165,9 @@ internal sealed partial class EventWorkspacePanel
                     ImGui.SameLine();
                     if(ImGui.SmallButton("Outside block")) {_sheetConditionParentId=null;ImGui.OpenPopup("Add Condition");}
                 }
-                ImGui.PopStyleColor();DrawConditionPicker(rule,rule.Conditions);
+                ImGui.PopStyleColor();
+                if(_sheetOpenConditionPickerFor==rule.Id){ImGui.OpenPopup("Add Condition");_sheetOpenConditionPickerFor=null;}
+                DrawConditionPicker(rule,rule.Conditions);
                 ImGui.TableSetColumnIndex(1);
                 if (actions.Count == 0) ImGui.TextDisabled("No actions yet");
                 foreach(var row in actions) DrawSheetInstruction(row,false,state);
@@ -201,8 +204,10 @@ internal sealed partial class EventWorkspacePanel
         // The same instruction can legitimately appear on two branch paths.
         ImGui.PushID(item.InstanceId.ToString());
         ImGui.PushID(ImGui.GetCursorPosY().ToString(System.Globalization.CultureInfo.InvariantCulture));
-        float indent = Math.Min(row.Depth, 8) * 14;
-        if (indent > 0) ImGui.Indent(indent);
+        float startX=ImGui.GetCursorPosX();
+        float indent = Math.Min(row.Depth, 8) * 24;
+        ImGui.SetCursorPosX(startX+indent);
+        Vector2 gutter=ImGui.GetCursorScreenPos();
         if(condition && IsLogicGate(item))
         {
             bool folded=_collapsedSheetLogic.Contains(item.InstanceId);
@@ -211,6 +216,7 @@ internal sealed partial class EventWorkspacePanel
             if(ImGui.IsItemHovered())ImGui.SetTooltip(folded?"Expand logic block":"Collapse logic block");
             ImGui.SameLine();
         }
+        if(condition)ImGui.SetCursorScreenPos(gutter+new Vector2(22,0));
         float width = MathF.Max(40, ImGui.GetContentRegionAvail().X - 8);
         string text = GetSheetSentence(item, condition, state);
         if (row.Note != null) text += "  (" + row.Note + ")";
@@ -222,10 +228,16 @@ internal sealed partial class EventWorkspacePanel
         ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(color.X, color.Y, color.Z, .12f));
         if (ImGui.Selectable("##Sentence", _selectedGraphNodes.Contains(item.InstanceId), ImGuiSelectableFlags.None, new Vector2(width, height)))
             SelectSheetItem(item.InstanceId);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Click to edit in Details. Right-click for more options.");
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(condition?"Click to edit. Drag above/below another condition in this block.\nRight-click or Alt+Up/Down to reorder.":"Click to edit in Details. Right-click for more options.");
+        if(condition&&owner!=null)DrawSheetConditionDrag(owner,item,origin,width,height);
         if (ImGui.BeginPopupContextItem("SentenceMenu"))
         {
             if (ImGui.MenuItem("Edit settings")) SelectSheetItem(item.InstanceId);
+            if(condition&&owner!=null){
+                if(ImGui.MenuItem("Move up","Alt+Up",false,CanMoveSheetCondition(owner,item.InstanceId,-1)))MoveSheetCondition(owner,item.InstanceId,-1);
+                if(ImGui.MenuItem("Move down","Alt+Down",false,CanMoveSheetCondition(owner,item.InstanceId,1)))MoveSheetCondition(owner,item.InstanceId,1);
+                if(IsLogicGate(item)&&ImGui.MenuItem("Add condition inside block")){_sheetConditionParentId=item.InstanceId;_sheetOpenConditionPickerFor=owner.Id;}
+            }
             if (ImGui.MenuItem("Delete")) { SelectSheetItem(item.InstanceId); DeleteSelectedGraphNodes(); }
             ImGui.EndPopup();
         }
@@ -239,15 +251,12 @@ internal sealed partial class EventWorkspacePanel
             Vector2 dot = origin + new Vector2(width - 7, 9);
             draw.AddCircleFilled(dot, 3, ImGui.ColorConvertFloat4ToU32(GetTraceColor(trace)));
         }
-        if (row.Depth > 0)
-            draw.AddLine(origin-new Vector2(7,0),origin+new Vector2(-7,height),ImGui.ColorConvertFloat4ToU32(new Vector4(color.X,color.Y,color.Z,.5f)),1);
-        if(condition && owner!=null && IsLogicGate(item) && !_collapsedSheetLogic.Contains(item.InstanceId))
-        {
-            if(ImGui.SmallButton("+ Inside "+item.Id[6..].ToUpperInvariant()))
-            {_sheetConditionParentId=item.InstanceId;ImGui.OpenPopup("Add Condition");}
-            DrawConditionPicker(owner,owner.Conditions);
+        if(row.Depth>0){var guide=gutter-new Vector2(12,0);draw.AddLine(guide,guide+new Vector2(0,height+ImGui.GetStyle().ItemSpacing.Y),ImGui.ColorConvertFloat4ToU32(new Vector4(color.X,color.Y,color.Z,.5f)),1);draw.AddLine(guide+new Vector2(0,height*.5f),guide+new Vector2(10,height*.5f),ImGui.ColorConvertFloat4ToU32(color),1);}
+        if(condition&&owner!=null&&_selectedGraphNodes.Contains(item.InstanceId)&&ImGui.GetIO().KeyAlt&&!ImGui.GetIO().WantTextInput&&ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)){
+            if(ImGui.IsKeyPressed(ImGuiKey.UpArrow))MoveSheetCondition(owner,item.InstanceId,-1);
+            else if(ImGui.IsKeyPressed(ImGuiKey.DownArrow))MoveSheetCondition(owner,item.InstanceId,1);
         }
-        if (indent > 0) ImGui.Unindent(indent);
+        ImGui.SetCursorPosX(startX);
         ImGui.PopID(); ImGui.PopID();
     }
 

@@ -140,6 +140,16 @@ Check(Math.Abs(ByteEngine.Core.Audio.AudioMixer.GetVolume(ByteEngine.Core.Audio.
 var sharedMaterial=new ByteEngine.Core.Graphics.ThreeD.Material();var mesh=owner.AddComponent(new ByteEngine.Core.Graphics.ThreeD.MeshRenderer{Material=sharedMaterial});
 Action(I("renderer.setOpacity",("opacity",EventValue.Number(.5))));Check(mesh.MaterialOverrides.Opacity==.5f&&sharedMaterial.BaseColor.W==1,"Opacity overrides leave the shared material unchanged");
 Action(I("tween.opacity",("end",EventValue.Number(0)),("seconds",EventValue.Number(1))));services.Advance(1,[]);Check(mesh.MaterialOverrides.Opacity==0,"Opacity tween reaches the requested alpha");
+var domain=scene.CreateGameObject("Enemy domain");domain.AddComponent(new SimulationRate3D{Rate=.25f});var slowed=scene.CreateGameObject("Clock child");slowed.SetParent(domain,false);var slowProbe=slowed.AddComponent(new ClockProbe());var normal=owner.AddComponent(new ClockProbe());
+typeof(Time).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,[.2]);
+typeof(GameObject).GetMethod("UpdateInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(slowed,null);typeof(GameObject).GetMethod("UpdateInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(owner,null);
+Check(Math.Abs(slowProbe.Delta-.05)<.0001&&Math.Abs(normal.Delta-.2)<.0001,"Inherited enemy clock leaves the player clock and global delta unchanged");
+var bolt=scene.CreateGameObject("Shared clock bolt");bolt.AddComponent(new SimulationRate3D{SourceObjectId=domain.Id});var boltProbe=bolt.AddComponent(new ClockProbe());typeof(GameObject).GetMethod("UpdateInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(bolt,null);Check(Math.Abs(boltProbe.Delta-.05)<.0001,"Spawned projectile can follow the enemy's shared clock");
+domain.GetComponent<SimulationRate3D>()!.Rate=1;typeof(GameObject).GetMethod("UpdateInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(bolt,null);Check(Math.Abs(boltProbe.Delta-.2)<.0001,"Existing projectiles return to normal when the shared clock restores");
+var energy=owner.AddComponent(new ByteEngine.Core.Gameplay.ResourceMeter3D());energy.SetAmount(2);Action(I("resource.changePerSecond",("rate",EventValue.Number(-20)),("unscaled",EventValue.Boolean(true))));Check(energy.Current==0,"Continuous energy drain consumes the final partial amount without going negative");Action(I("resource.changePerSecond",("rate",EventValue.Number(10)),("unscaled",EventValue.Boolean(true))));Check(energy.Current==2,"Recharge uses real delta independently of enemy clocks");
+var meterObject=scene.CreateGameObject("Energy bar");var meter=meterObject.AddComponent(new UiWidget{Kind=UiWidgetKind.ProgressBar});Action(I("ui.setBarFromResource",("target",EventValue.String("Energy bar")),("source",EventValue.String("Self"))));Check(meter.Value==2&&meter.Maximum==100,"UI bar bindings expose resource value and capacity");
+var animation=owner.AddComponent(new ByteEngine.Core.Animation.AnimationController());Action(I("animation.setBaseClip",("clip",EventValue.String("Walk"))));Check(animation.ManualBaseClip=="Walk"&&!animation.DriveLocomotion,"Event sheets own enemy base animation selection");
+var victim=scene.CreateGameObject("Contact victim");var hp=victim.AddComponent(new ByteEngine.Core.Gameplay.HealthComponent());victim.Transform.WorldPosition=new(10,0,0);Action(I("combat.damageInRange",("other",EventValue.String("Contact victim")),("range",EventValue.Number(2)),("amount",EventValue.Number(25))));Check(hp.CurrentHealth==100,"Moving out of melee contact range avoids a delayed hit");victim.Transform.WorldPosition=owner.Transform.WorldPosition;Action(I("combat.damageInRange",("other",EventValue.String("Contact victim")),("range",EventValue.Number(2)),("amount",EventValue.Number(25))));Check(hp.CurrentHealth==75,"Melee contact applies the event-authored damage");
 services.Dispose();Console.WriteLine($"{count} checks passed");
 
 sealed class TestAudio : ByteEngine.Core.Audio.IPortableAudio
@@ -153,5 +163,6 @@ sealed class TestAudio : ByteEngine.Core.Audio.IPortableAudio
     public void Update(Guid id,ByteEngine.Core.Audio.AudioSource3D source){}
     public void Listener(Vector3 position,Vector3 forward,Vector3 up,float volume){}
 }
+sealed class ClockProbe:Component { public double Delta;protected override void OnUpdate()=>Delta=Time.DeltaTime; }
 
 

@@ -1,0 +1,20 @@
+ULTRA VIOLENCE — SOUND PASS
+
+Game assets: C:/Users/codex/Documents/ultra violence/Assets/Audio/SFX
+Audio event sheets: Assets/Events/Audio
+Scene mix objects: Sound library > SFX ...
+
+Sound objects hold the Audio Source clip, volume, pitch, spatial setting, distance attenuation and mixer bus. Event sheets hold every trigger. Weapon/ability/health logic remains independent from audio. Removing an audio sheet silences its cues without disabling gameplay.
+
+Covered cues: individual pistol/rifle/shotgun reports, equip, reload start/finish/cancel, empty trigger, confirmed hit, positional impact, successful pickup/drop, walking/running/jump/land, enemy steps/hit/death, melee swing, gunner bolt, player damage, Overdrive start/hum/stop, insufficient energy, full recharge, victory/defeat and quiet environmental machinery.
+Enemy attack launch cues are inserted into their existing attack sheets at the corresponding swing or projectile action.
+
+Native action: Audio / Playback > Play one-shot from sound object.
+Choose the sound object and emission-position object. Pitch variation and maximum overlapping voices are editable per action. One-shots copy the template settings, overlap instead of restarting a shared source, and clean themselves up after playback. There is a global cap of 64 transient sound objects. Looping ambience and Overdrive hum use ordinary Play/Stop actions on their sound objects.
+
+Sources: Kenney Sci-fi Sounds and Impact Sounds, CC0. Original licenses are included beside the converted assets. Selected effects were converted to mono PCM16 WAV and peak-normalized for native positional playback.
+https://kenney.nl/assets/sci-fi-sounds
+https://kenney.nl/assets/impact-sounds
+Designed/ contains original generated gunshot and energy-cue WAVs, without third-party samples.
+
+Validation: actual native OpenAL playback; two simultaneous gunshot voices; voice limit; gun, Overdrive, gunner, hit/death and result triggers; transient cleanup; normal combat and restart. No game export was created.

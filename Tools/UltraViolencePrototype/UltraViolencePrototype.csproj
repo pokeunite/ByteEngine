@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><UseWindowsForms>true</UseWindowsForms></PropertyGroup>
+ <ItemGroup><ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj"/></ItemGroup>
+ <Target Name="CopyAudio" AfterTargets="Build"><Copy SourceFiles="$(NuGetPackageRoot)silk.net.openal.soft.native/1.23.1/runtimes/win-x64/native/soft_oal.dll" DestinationFiles="$(TargetDir)openal32.dll" SkipUnchangedFiles="true"/></Target>
+</Project>

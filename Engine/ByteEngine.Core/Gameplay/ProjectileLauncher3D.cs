@@ -254,6 +254,7 @@ public sealed class ProjectileLauncher3D : Component
             root.AddComponent(
                 new MeshRenderer
                 {
+                    UsePrimitive = true,
                     Primitive =
                         PrimitiveMeshType.Sphere,
 

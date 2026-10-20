@@ -64,6 +64,7 @@ internal static class Program
    bmp.Save(Path.Combine(output,$"sheet-{size.X}x{size.Y}.png"));
    Console.WriteLine($"PASS native event-sheet render at {size.X}x{size.Y}");
   }
+  if(args.Contains("--render-only"))return;
   string oldKey=module.Rules[0].Conditions[0].Arguments["key"].Constant.String;
   Call(panel,"RecordHistory","Edit condition key");
   module.Rules[0].Conditions[0].Arguments["key"]=EventValue.String("D9");
@@ -135,6 +136,20 @@ internal static class Program
   var collectionAction=new VisualInstruction{Id="collection.append",Arguments=new(){["value"]=new EventValue{Constant=ByteEngine.Core.Variables.VariableJson.Parse("{\"item\":\"coin\"}")}}};functionRule.Actions.Add(collectionAction);selected.Clear();selected.Add(collectionAction.InstanceId);
   for(int frame=0;frame<3;frame++){Call(controller,"Update",1f/60);Call(panel,"Draw",log);Call(controller,"Render");}
   Console.WriteLine("PASS nested collection argument editor renders without changing its value");
+  var orderRule=new EventRuleDefinition{DisplayName="Condition order verification",HasExplicitConditionFlow=true};
+  var rootA=new VisualInstruction{Id="system.always"};var rootB=new VisualInstruction{Id="logic.not"};var childA=new VisualInstruction{Id="health.isDead"};var childB=new VisualInstruction{Id="system.always"};
+  rootB.ConditionInputIds=[childA.InstanceId,childB.InstanceId];orderRule.Conditions=[rootA,rootB,childA,childB];orderRule.ConnectedConditionIds=[rootA.InstanceId,rootB.InstanceId];current.Rules.Add(orderRule);
+  if(!(bool)Call(panel,"MoveSheetCondition",orderRule,rootB.InstanceId,-1)!||!orderRule.ConnectedConditionIds.SequenceEqual(new[]{rootB.InstanceId,rootA.InstanceId}))throw new Exception("Root move up failed");
+  if(!rootB.ConditionInputIds.SequenceEqual(new[]{childA.InstanceId,childB.InstanceId}))throw new Exception("Moving a gate rewired its children");
+  if(!(bool)Call(panel,"MoveSheetCondition",orderRule,childA.InstanceId,1)!||!rootB.ConditionInputIds.SequenceEqual(new[]{childB.InstanceId,childA.InstanceId}))throw new Exception("Nested move down failed");
+  if((bool)Call(panel,"ReorderSheetCondition",orderRule,childA.InstanceId,rootA.InstanceId,true)!)throw new Exception("Drag moved a condition outside its logic block");
+  if(!(bool)Call(panel,"ReorderSheetCondition",orderRule,rootB.InstanceId,rootA.InstanceId,false)!)throw new Exception("Drop below failed");
+  Console.WriteLine("PASS condition up/down and drag insertion preserve root and nested logic");
+  if(!(bool)Call(panel,"Undo")!)throw new Exception("Reorder undo failed");
+  var undoModule=(EventModuleDefinition)panel.GetType().GetField("_module",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(panel)!;
+  if(undoModule.Rules.Single(r=>r.Id==orderRule.Id).ConnectedConditionIds[0]!=rootB.InstanceId)throw new Exception("Undo did not restore condition order");
+  if(!(bool)Call(panel,"Redo")!)throw new Exception("Reorder redo failed");
+  Console.WriteLine("PASS condition reorder supports undo/redo");
   var inspectorScene=new ByteEngine.Core.Scene.Scene("Equipment inspector check");
   var inspectorOwner=inspectorScene.CreateGameObject("Player");
   var inspectorCamera=inspectorScene.CreateGameObject("FPS Camera");inspectorCamera.AddComponent(new ByteEngine.Core.Graphics.Camera3D());

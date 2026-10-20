@@ -437,6 +437,8 @@ public sealed class ComponentSerializer
         Register(new HitscanEmitter3DCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<SimulationRate3D>("SimulationRate3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ScreenOverlay>("ScreenOverlay"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D>("WaterBasin3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterFlowAudio3D>("WaterFlowAudio3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Audio.AudioSettings>("AudioSettings"));
@@ -1771,6 +1773,7 @@ public sealed class ComponentSerializer
                 ["attackRange"] = ai.AttackRange,
                 ["damage"] = ai.Damage,
                 ["attackCooldown"] = ai.AttackCooldown,
+                ["automaticDamage"] = ai.AutomaticDamage,
                 ["stopDistance"] = ai.StopDistance
             });
         }
@@ -1788,6 +1791,7 @@ public sealed class ComponentSerializer
                 AttackRange = Float(data, "attackRange", 1.5f),
                 Damage = Float(data, "damage", 10f),
                 AttackCooldown = Float(data, "attackCooldown", 1f),
+                AutomaticDamage = data.Properties["automaticDamage"]?.GetValue<bool>()??true,
                 StopDistance = Float(data, "stopDistance", 1f)
             };
         }
@@ -1930,6 +1934,11 @@ public sealed class ComponentSerializer
 
                     ["airControl"] =
                         controller.AirControl,
+                    ["arenaMovement"] = controller.ArenaMovement,
+                    ["groundFriction"] = controller.GroundFriction,
+                    ["stopSpeed"] = controller.StopSpeed,
+                    ["airAcceleration"] = controller.AirAcceleration,
+                    ["maximumAirSpeed"] = controller.MaximumAirSpeed,
 
                     ["jumpForce"] =
                         controller.JumpForce,
@@ -1965,6 +1974,11 @@ public sealed class ComponentSerializer
         {
             return new CharacterController3D
             {
+                ArenaMovement = data.Properties["arenaMovement"]?.GetValue<bool>() ?? false,
+                GroundFriction = Float(data, "groundFriction", 10),
+                StopSpeed = Float(data, "stopSpeed", 3),
+                AirAcceleration = Float(data, "airAcceleration", 18),
+                MaximumAirSpeed = Float(data, "maximumAirSpeed", 13),
                 MoveSpeed =
                     Float(
                         data,
@@ -2198,6 +2212,7 @@ public sealed class ComponentSerializer
 
                     ["driveLocomotion"] =
                         controller.DriveLocomotion,
+                    ["manualBaseClip"] = controller.ManualBaseClip,
 
                     ["transitionDuration"] =
                         controller.TransitionDuration,
@@ -2256,6 +2271,7 @@ public sealed class ComponentSerializer
                 Fall = Text(data, "fall", "Fall"),
                 Land = Text(data, "land", "Land"),
                 RunThreshold = Float(data, "runThreshold", 4.0f),
+                ManualBaseClip = Text(data,"manualBaseClip",string.Empty),
                 DriveLocomotion =
                     data.Properties["driveLocomotion"]?
                         .GetValue<bool>() ??

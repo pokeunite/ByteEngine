@@ -1,0 +1,44 @@
+ULTRA VIOLENCE â€” OVERDRIVE PROTOTYPE
+
+Project: C:/Users/codex/Documents/ultra violence
+Startup: Scenes/Combat Prototype.bytescene. Weapons Range remains available.
+No game-specific runtime script was added. The authoring tool writes native scene, animation-profile and event-sheet assets.
+
+PLAY
+WASD move, Shift run, mouse aim/fire, R reload, 1/2/3 select carried weapons.
+E collects a nearby pickup, G drops. Start with a pistol; carry limit is two.
+Hold right mouse for Overdrive: enemies, their animation, attacks and projectiles run at 25% speed. Player movement and weapons remain at normal speed.
+Activation needs 25 energy. Capacity is 100, drain is 22/second and recharge is 16/second. Release or exhaustion shuts it down. An exhausted ability requires another right-mouse press, preventing flicker while held. Health does not automatically regenerate.
+Defeat all six opponents. Enter retries after victory or defeat.
+
+EDIT GAMEPLAY
+Enemy Rusher.byteevents: chase/idle clip selection, Punch, windup and contact damage.
+Enemy Gunner.byteevents: movement/aim clips, Shoot, windup, line-of-sight condition and projectile action.
+Enemy Heavy.byteevents: movement/idle clips, Kick, longer windup and stronger contact damage.
+Overdrive and combat HUD.byteevents: activation, minimum energy, drain/recharge, clock scale, overlay, meter/text bindings, defeat, victory and retry.
+Combat weapon input.byteevents: existing weapon controls with a visible living-player condition.
+Weapon inventory.byteevents: pickup/drop and walk/run speed controls.
+Enemy Animation Profiles choose clips, priorities, speed and blending on the original imported rigs.
+UI Text and UI Widget objects own fonts, colors, sizes, anchors and placement. The screen-effect object owns tint and edge styling.
+
+REUSABLE NATIVE TOOLS ADDED
+Simulation Rate: inherited local clock for component Update, LateUpdate and FixedUpdate. Source Object can share a clock with independent spawned objects. It scales gameplay/animation/event deltas, not the scene's dynamic rigid-body solver or Time.TotalTime. The prototype uses kinematic enemy motion and query-based projectiles, so movement and projectile travel use the local clock.
+Object / Time > Set local simulation rate.
+Screen Overlay: editable fullscreen tint and soft edges behind the HUD; Screen Effects > Set screen overlay strength.
+Gameplay / Resources > Change resource per second and Resource is at least.
+UI > Set bar from resource. Health uses the existing Set bar from health action.
+Animation > Set event-driven base animation. Named attacks interrupt the base and return to it; clearing the base allows death clips to finish and remain stopped.
+Gameplay / Weapons > Fire projectile at object, including target, aim offset and optional shared projectile clock.
+Combat / Damage > Damage nearby target at contact. Checks range at the delayed hit and rejects attacks from a dead attacker.
+Object / Spatial > Has clear line of sight.
+Simple Enemy AI > Automatic Damage can be disabled. Attack timing still emits its existing attack condition, leaving projectiles and damage to the event sheet.
+
+ASSETS
+Quaternius Animated Mech Pack, George / Leela / Mike, original rigs and embedded clips; CC0 1.0. Pack: https://quaternius.com/packs/animatedmech.html
+Distribution mirror: https://github.com/agentkaerf/FreeModels/tree/main/Animated%20Mech%20Pack%20-%20March%202021
+Rajdhani SemiBold HUD font, SIL Open Font License; https://github.com/google/fonts/tree/main/ofl/rajdhani
+Licenses are included beside the assets. No purchased assets or retargeted animation files were used.
+
+PROTOTYPE LIMITS
+This is a combat test arena with six placed opponents, native simple chase AI and editable pickup proxies. Navigation around complex cover, advanced enemy tactics and finished environment art are future work.
+Native gameplay validation covers real weapon kills, melee damage, gunner projectiles, energy drain/recharge/exhaustion, clock restoration, death animation, result and restart. Screen captures are in the project's Preview folder. No game export was produced.

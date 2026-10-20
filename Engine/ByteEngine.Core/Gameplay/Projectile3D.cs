@@ -21,6 +21,7 @@ public sealed class Projectile3D : Component
     public bool DestroyOnHit { get; set; } = true;
     public Guid OwnerId { get; set; }
     public LayerMask CollisionMask { get; set; } = LayerMask.All;
+    public event Action<RaycastHit3D>? Hit;
 
     protected override void OnUpdate() { if (AttachedGameObject?.Scene?.FixedSimulation != true) Simulate((float)Time.DeltaTime); }
     protected override void OnFixedUpdate() { Simulate((float)Time.FixedDeltaTime); }
@@ -81,6 +82,7 @@ public sealed class Projectile3D : Component
             healthOwner?.GetComponent<SkeletalRagdoll3D>()?.ApplyImpact(direction,
                 Math.Clamp(Damage / 25f, .1f, 3f));
             healthOwner?.GetComponent<HealthComponent>()?.Damage(Damage);
+            Hit?.Invoke(hit);
             if (DestroyOnHit) scene.DestroyGameObject(projectile);
             else { Velocity = Vector3.Zero; _stopped = true; }
             return;

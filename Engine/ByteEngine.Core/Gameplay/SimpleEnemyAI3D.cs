@@ -22,7 +22,11 @@ public sealed class SimpleEnemyAI3D : Component
     public bool IsAttacking => State == SimpleEnemyAIState.Attack;
     public bool AttackFiredThisFrame { get; private set; }
 
+    [SceneObjectReference,System.ComponentModel.DisplayName("Target Object")]
     public Guid TargetId { get; set; }
+    /// <summary>Disable when attack event sheets apply damage or fire projectiles.</summary>
+    [System.ComponentModel.Description("Disable when attack events apply damage or launch projectiles. The attack signal and cooldown still run.")]
+    public bool AutomaticDamage {get;set;}=true;
     public Guid TargetTagId { get; set; }
     public string TargetName { get; set; } = string.Empty;
     public float MoveSpeed { get => _moveSpeed; set => _moveSpeed = Safe(value); }
@@ -70,8 +74,8 @@ public sealed class SimpleEnemyAI3D : Component
         if (State == SimpleEnemyAIState.Attack && targetHealth != null && _cooldownRemaining <= 0f)
         {
             float healthBefore = targetHealth.CurrentHealth;
-            targetHealth.Damage(Damage);
-            AttackFiredThisFrame = targetHealth.CurrentHealth < healthBefore;
+            if(AutomaticDamage)targetHealth.Damage(Damage);
+            AttackFiredThisFrame = !AutomaticDamage||targetHealth.CurrentHealth < healthBefore;
             _cooldownRemaining = AttackCooldown;
         }
     }

@@ -248,6 +248,7 @@ public sealed class GameObject
 
     internal void UpdateInternal()
     {
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
@@ -264,6 +265,7 @@ public sealed class GameObject
 
     internal void LateUpdateInternal()
     {
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
@@ -280,6 +282,7 @@ public sealed class GameObject
 
     internal void FixedUpdateInternal()
     {
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
         int count = _components.Count;

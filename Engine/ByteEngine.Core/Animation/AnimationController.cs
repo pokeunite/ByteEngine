@@ -134,6 +134,8 @@ public sealed partial class AnimationController : Component
     public float MaximumPlaybackRate { get; set; } = 1.40f;
 
     public bool DriveLocomotion { get; set; } = true;
+    /// <summary>Event-authored base pose used when automatic locomotion is disabled.</summary>
+    public string ManualBaseClip {get;set;}=string.Empty;
 
     public float TransitionDuration { get; set; } = 0.15f;
 
@@ -221,6 +223,7 @@ public sealed partial class AnimationController : Component
         }
 
         if (DriveLocomotion) ObserveLocomotion();
+        else if(!string.IsNullOrWhiteSpace(ManualBaseClip))_currentLocomotionClip=ManualBaseClip;
         UpdateAdvancedPoseControls();
         ApplyPlaybackRate();
         UpdateRootMotion();
@@ -239,11 +242,11 @@ public sealed partial class AnimationController : Component
                 if (StartNamedAction(queued)) return;
             }
 
-            if (DriveLocomotion || _poseGraph != null) ApplyObservedLocomotion(blendOut, true);
+            if (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip)) ApplyObservedLocomotion(blendOut, true);
             return;
         }
 
-        if (DriveLocomotion || _poseGraph != null) ApplyObservedLocomotion(TransitionDuration, false);
+        if (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip)) ApplyObservedLocomotion(TransitionDuration, false);
     }
     protected override void OnLateUpdate()
     {

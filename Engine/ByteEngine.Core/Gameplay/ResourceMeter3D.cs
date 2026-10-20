@@ -11,6 +11,7 @@ public sealed class ResourceMeter3D:Component
     public event Action<float>? Changed;
     protected override void OnStart()=>Reset();
     public void Reset()=>Set(InitialAmount);
+    public void SetAmount(float amount)=>Set(amount);
     public bool TrySpend(float amount){if(!float.IsFinite(amount)||amount<0||Current<amount)return false;Set(Current-amount);return true;}
     public void Restore(float amount){if(float.IsFinite(amount)&&amount>0)Set(Current+amount);}
     void Set(float amount){float next=Math.Clamp(float.IsFinite(amount)?amount:0,0,float.IsFinite(Capacity)?Math.Max(0,Capacity):0);if(next!=Current){Current=next;Changed?.Invoke(next);}}
