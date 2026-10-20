@@ -128,3 +128,41 @@ Action(I(Prefix+"setAmmo",("target",EventValue.String("Other weapon")),("current
 Check(otherWeapon.CurrentAmmo==3&&otherWeapon.ReserveAmmo==21&&weapon.CurrentAmmo==17,"Ammo actions affect the selected source object rather than another equipped weapon");
 var output=scene.CreateGameObject("HUD data owner");Action(I(Prefix+"readValue",("target",EventValue.String("Other weapon")),("field",EventValue.String("Magazine ammo")),("scope",EventValue.String("Object")),("destination",EventValue.String("HUD data owner")),("variable",EventValue.String("Ammo"))),Context());
 Check(output.Variables["Ammo"].Number==3,"Weapon data can be copied to a separately selected owner");
+
+foreach(string state in new[]{"Held","Pressed","Released"})Check(registry.TryGetCondition("input.mouse"+state,out var mouse)&&mouse!.Arguments.Any(a=>a.Name=="button"),"Mouse "+state+" is discoverable with editable button");
+{var inventoryScene=new Scene("Inventory regression");
+ var owner=inventoryScene.CreateGameObject("Carrier");var eye=inventoryScene.CreateGameObject("Inventory Camera");eye.SetParent(owner,false);eye.AddComponent(new Camera3D());
+ var inventory=owner.AddComponent(new FpsGunLab3D{CameraObjectId=eye.Id,InventoryRootId=eye.Id,StartWithNoWeapons=true,CarryLimit=1,UseBuiltInFireInput=false});
+ var firstRig=inventoryScene.CreateGameObject("First rig");firstRig.SetParent(eye,false);firstRig.AddComponent(new WeaponDefinition3D{Slot=0,EquipSeconds=0});var firstRigWeapon=firstRig.AddComponent(new WeaponInstance3D{CurrentAmmo=7});
+ var second=inventoryScene.CreateGameObject("Second rig");second.SetParent(eye,false);second.AddComponent(new WeaponDefinition3D{Slot=1});var secondWeapon=second.AddComponent(new WeaponInstance3D());
+ var pickupObject=inventoryScene.CreateGameObject("First pickup");var firstRigPickup=pickupObject.AddComponent(new WeaponPickup3D{WeaponObjectId=firstRig.Id});
+ var secondObject=inventoryScene.CreateGameObject("Second pickup");var secondPickup=secondObject.AddComponent(new WeaponPickup3D{WeaponObjectId=second.Id});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventoryScene,null);typeof(FpsGunLab3D).GetMethod("OnUpdate",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventory,null);
+ Check(inventory.WeaponCount==0&&!inventory.HasWeapon&&!firstRig.Active&&!second.Active,"Start empty hides all rigs and owns no weapons");inventory.Select(0);Check(!inventory.HasWeapon,"Slot selection cannot grant an unowned weapon");
+ pickupObject.Transform.WorldPosition=new(100,0,0);Check(!inventory.PickUp(firstRigPickup),"Pickup enforces interaction distance");pickupObject.Transform.WorldPosition=Vector3.Zero;
+ Check(inventory.PickUp(firstRigPickup)&&inventory.WeaponCount==1&&firstRigWeapon.Carried&&inventory.HasWeapon&&!pickupObject.Active,"Pickup grants and equips one weapon and hides its world object");
+ Check(inventory.InventoryFull&&!inventory.PickUp(secondPickup)&&!inventory.PickUp(firstRigPickup),"Carry limit and duplicate pickup are enforced");
+ firstRigWeapon.SetAmmo(4,17);Check(inventory.Drop()&&inventory.WeaponCount==0&&!inventory.HasWeapon&&pickupObject.Active&&!firstRigWeapon.Carried,"Drop clears ownership, unequips and restores a world pickup");
+ Check(inventory.PickUp(firstRigPickup)&&firstRigWeapon.CurrentAmmo==4&&firstRigWeapon.ReserveAmmo==17,"Re-pickup preserves magazine and reserve ammunition");
+ var inventoryContext=new EventExecutionContext{Scene=inventoryScene,Self=owner,Globals=new VariableStore()};Action(I(Prefix+"drop"),inventoryContext);Action(I(Prefix+"pickUp",("pickup",EventValue.String("Nearest"))),inventoryContext);
+ Check(inventory.WeaponCount==1,"Event-sheet pickup and drop actions use native equipment state");
+}
+
+
+{var movementScene=new Scene("Viewmodel locomotion regression");var actor=movementScene.CreateGameObject("Moving player");var motor=actor.AddComponent(new CharacterController3D());var eye=movementScene.CreateGameObject("Nested camera");eye.SetParent(actor,false);
+ typeof(CharacterController3D).GetProperty("IsGrounded")!.SetValue(motor,true);
+ foreach(string name in new[]{"Pistol","Shotgun","Rifle"}){
+  var rig=movementScene.CreateGameObject(name);rig.SetParent(eye,false);var animation=rig.AddComponent(new ByteEngine.Core.Animation.AnimationController{RunThreshold=4});
+  motor.SetVelocity(new(0,0,3));typeof(ByteEngine.Core.Animation.AnimationController).GetMethod("ObserveLocomotion",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(animation,null);
+  Check(animation.State==ByteEngine.Core.Animation.LocomotionState.Walk&&animation.LocomotionSpeed==3,name+" child rig observes parent movement as Walk");
+  motor.SetVelocity(new(0,0,6));typeof(ByteEngine.Core.Animation.AnimationController).GetMethod("ObserveLocomotion",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(animation,null);
+  Check(animation.State==ByteEngine.Core.Animation.LocomotionState.Run&&animation.LocomotionSpeed==6,name+" child rig observes parent movement as Run");
+ }
+ var movementContext=new EventExecutionContext{Scene=movementScene,Self=actor,Globals=new VariableStore()};Action(I("character.setMoveSpeed",("speed",EventValue.Number(3))),movementContext);Check(motor.MoveSpeed==3,"Native movement-speed action supports editable walk/run input rules");
+}
+foreach(bool emptyStart in new[]{false,true}){
+ var startScene=new Scene("Starting inventory");var actor=startScene.CreateGameObject("Starter");var eye=startScene.CreateGameObject("Root");eye.SetParent(actor,false);eye.AddComponent(new Camera3D());var inventory=actor.AddComponent(new FpsGunLab3D{InventoryRootId=eye.Id,StartingSlot=2,CarryLimit=1,StartWithNoWeapons=emptyStart,UseBuiltInFireInput=false});
+ for(int slot=0;slot<3;slot++){var item=startScene.CreateGameObject("Rig "+slot);item.SetParent(eye,false);item.AddComponent(new WeaponDefinition3D{Slot=slot});item.AddComponent(new WeaponInstance3D{StartInInventory=slot!=1});}
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(startScene,null);typeof(FpsGunLab3D).GetMethod("OnUpdate",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventory,null);
+ Check(emptyStart?inventory.WeaponCount==0:inventory.WeaponCount==1&&inventory.SelectedSlot==2,"Starting flags and carry limit respect the configured starting slot (empty="+emptyStart+")");
+}

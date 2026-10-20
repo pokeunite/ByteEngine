@@ -207,6 +207,18 @@ public sealed partial class VisualLogicRegistry
     private static void RegisterInput(
         VisualLogicRegistry registry)
     {
+        foreach (string state in new[] { "Held", "Pressed", "Released" })
+        {
+            string mouseState = state;
+            registry.RegisterCondition(new VisualConditionDefinition
+            {
+                Id = "input.mouse" + state, Category = "Input / Mouse", DisplayName = "Mouse Button " + state,
+                SentenceTemplate = "{button} mouse button " + state.ToLowerInvariant(),
+                Arguments = [new("button", "Mouse button", VariableValue.FromString("Left")) { Choices = ["Left", "Right", "Middle"] }],
+                Evaluate = (instruction, context) => Enum.TryParse<MouseButton>(EventValueResolver.GetString(instruction,"button",context,"Left"),true,out var button) &&
+                    (mouseState == "Held" ? Input.IsMouseButtonDown(button) : mouseState == "Pressed" ? Input.IsMouseButtonPressed(button) : Input.IsMouseButtonReleased(button))
+            });
+        }
         registry.RegisterCondition(
             new VisualConditionDefinition
             {
@@ -1378,6 +1390,11 @@ public sealed partial class VisualLogicRegistry
     private static void RegisterCharacter(
         VisualLogicRegistry registry)
     {
+        registry.RegisterAction(new VisualActionDefinition{
+            Id="character.setMoveSpeed",Category="Character Controller 3D",DisplayName="Set movement speed",TargetComponent=nameof(CharacterController3D),
+            Arguments=[new("speed","Movement speed",VariableValue.FromNumber(3))],
+            Execute=(i,c)=>{if(c.Self.GetComponent<CharacterController3D>() is {} character){float speed=(float)EventValueResolver.GetNumber(i,"speed",c,3);character.MoveSpeed=float.IsFinite(speed)?Math.Max(0,speed):0;}}
+        });
         registry.RegisterCondition(
             CreateCharacterCondition(
                 "character.isGrounded",

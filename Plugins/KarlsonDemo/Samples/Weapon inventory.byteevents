@@ -1,0 +1,185 @@
+{
+  "id": "9e50cff5-81fc-5047-a6b3-15207666eebc",
+  "version": 2,
+  "name": "Weapon inventory \u2014 editable pickup and drop",
+  "requiredComponents": [],
+  "rules": [
+    {
+      "id": "f7f6b726-24ed-5a4e-b8f1-1248dd907b9e",
+      "displayName": "E \u2014 pick up nearest available weapon",
+      "enabled": true,
+      "conditions": [
+        {
+          "id": "input.keyPressed",
+          "instanceId": "98d91dde-53e5-59e1-96dd-a4ada297cb5a",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "E"
+              }
+            }
+          }
+        },
+        {
+          "id": "bytebard.karlsondemo.inputActive",
+          "instanceId": "5801a778-00e5-5a89-a754-c4a2759f461f",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          }
+        },
+        {
+          "id": "bytebard.karlsondemo.canPickUp",
+          "instanceId": "5345d165-8f02-5182-9d21-be356aaa871f",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "nearest": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "boolean": true
+              }
+            },
+            "pickup": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Last Ray Hit"
+              }
+            }
+          }
+        }
+      ],
+      "actions": [
+        {
+          "id": "bytebard.karlsondemo.pickUp",
+          "instanceId": "936384a3-98a2-50a8-8c75-6eda525f5117",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "nearest": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "boolean": true
+              }
+            },
+            "pickup": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Last Ray Hit"
+              }
+            },
+            "equip": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "boolean": true
+              }
+            }
+          }
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "connectedConditionIds": [
+        "98d91dde-53e5-59e1-96dd-a4ada297cb5a",
+        "5801a778-00e5-5a89-a754-c4a2759f461f",
+        "5345d165-8f02-5182-9d21-be356aaa871f"
+      ],
+      "hasExplicitExecutionFlow": true,
+      "firstActionId": "936384a3-98a2-50a8-8c75-6eda525f5117",
+      "editorHeaderColor": "42A8B6"
+    },
+    {
+      "id": "9ea4264e-216c-501d-8bbc-1795d8717e5e",
+      "displayName": "G \u2014 drop equipped weapon",
+      "enabled": true,
+      "conditions": [
+        {
+          "id": "input.keyPressed",
+          "instanceId": "01d68477-433a-5fd1-8df4-2c9fb655f07f",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "G"
+              }
+            }
+          }
+        },
+        {
+          "id": "bytebard.karlsondemo.inputActive",
+          "instanceId": "784e63b5-07f4-572f-a735-5de8cfe94b6e",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          }
+        },
+        {
+          "id": "bytebard.karlsondemo.hasWeapon",
+          "instanceId": "daa740dc-7be5-5177-975b-3c8e8a17b755",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          }
+        }
+      ],
+      "actions": [
+        {
+          "id": "bytebard.karlsondemo.drop",
+          "instanceId": "05bdb9ac-fd77-524b-b8f6-e338f551a331",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          }
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "connectedConditionIds": [
+        "01d68477-433a-5fd1-8df4-2c9fb655f07f",
+        "784e63b5-07f4-572f-a735-5de8cfe94b6e",
+        "daa740dc-7be5-5177-975b-3c8e8a17b755"
+      ],
+      "hasExplicitExecutionFlow": true,
+      "firstActionId": "05bdb9ac-fd77-524b-b8f6-e338f551a331",
+      "editorHeaderColor": "42A8B6"
+    }
+  ]
+}

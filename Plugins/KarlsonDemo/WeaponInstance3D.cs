@@ -14,6 +14,10 @@ namespace KarlsonDemo.Plugin;
 /// <summary>Per-object ammunition and state; reused for every weapon archetype.</summary>
 public sealed class WeaponInstance3D : Component
 {
+    [System.ComponentModel.Category("Inventory"),System.ComponentModel.Description("Include this weapon when Play starts, unless equipment starts empty. Unowned rigs remain available for pickups.")]
+    public bool StartInInventory { get; set; } = true;
+    public bool Carried => InventoryOwner != null;
+    [System.ComponentModel.Browsable(false)] public FpsGunLab3D? InventoryOwner { get; internal set; }
     [System.ComponentModel.Category("Ammunition"),System.ComponentModel.DisplayName("Magazine Ammo")]
     public int CurrentAmmo { get; set; } = 12;
     [System.ComponentModel.Category("Ammunition")]

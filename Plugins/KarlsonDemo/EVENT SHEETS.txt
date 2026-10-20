@@ -36,3 +36,14 @@ Weapon Equipment exposes the selected weapon's name, slot, magazine ammo/capacit
 Weapon Definition remains the editable source for shot damage/rate/range/spread, magazine and reserve limits, ammo cost, shot/trigger/reload modes, reload timing, projectile settings and muzzle effects. Weapon Instance exposes current ammo and simulation state. Implementation sequence counters are hidden; use the named weapon event conditions instead.
 
 Set Ammo, Add Reserve, tuning and effect actions now respect an explicitly chosen weapon even when another weapon is equipped. Existing animation presentation sheets remain independent from the HUD sheet.
+
+VERSION 3.5 — INVENTORY AND PICKUPS
+Weapon Equipment > Start With No Weapons starts empty. Otherwise each Weapon Instance > Start In Inventory chooses starting ownership. Starting Slot selects the initial weapon; if missing, another owned weapon is selected. Carry Limit is a total weapon count; zero means unlimited. Starting inventory obeys the limit, prioritising Starting Slot. One weapon per definition slot is supported. Slots remain definition slots, not positions in the carried list.
+
+Place Weapon Pickup on a separate world mesh, outside the camera and weapon rig hierarchy. Pick its Weapon Rig from the Weapon Instance objects beneath Weapon Root. The world mesh is separate from first-person arms. Set Pickup Radius. Link one world pickup per rig, including starting weapons if they can be dropped. Pickups hide when carried; Drop equipped weapon restores the linked pickup in front of the player. Ammo survives dropping and collecting. Drop refuses with an event warning if no world pickup is linked. It does not silently delete the weapon. Dropping does not simulate throwing or floor physics.
+
+Copy Weapon inventory.byteevents to the project and attach to the equipment object. E collects one nearest eligible pickup; G drops. Edit keys and conditions normally. The pickup action enforces distance, capacity, existing ownership and slot conflicts. Tick Use nearest eligible pickup, or untick it and choose a world object or Last Ray Hit after your raycast. Can pick up weapon checks the same rules. Carries weapon, Has an equipped weapon and Weapon inventory is full support UI and gameplay. Set weapon carry limit changes future pickup capacity; lowering it does not delete existing weapons.
+
+Native mouse conditions are under Input / Mouse: Mouse Button Held, Pressed and Released. Choose Left, Right or Middle. Existing mouse event IDs are unchanged.
+
+First-person Animation Controller now observes the nearest parent Character Controller, so camera-child weapon rigs receive the player's real movement speed and grounded state. The range uses native character.setMoveSpeed event actions: speed 3 normally, speed 6 while Shift is held. The existing profile threshold 4 distinguishes Walk and Run. Fire, equip and reload actions still override locomotion through the presentation sheet.

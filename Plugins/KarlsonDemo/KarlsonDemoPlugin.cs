@@ -14,6 +14,8 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
         WeaponEvents.Register(context);
         WeaponReadoutEvents.Register(context);
+        WeaponInventoryEvents.Register(context);
+        context.RegisterSimpleComponent<WeaponPickup3D>("WeaponPickup3D",new("Weapon Pickup","Weapons","World weapon pickup linked to a first-person weapon rig. Event sheets control collection and dropping.","gun pickup drop inventory"));
     }
 }
 internal static class WeaponEvents

@@ -337,7 +337,9 @@ public sealed partial class AnimationController : Component
 
     private void ObserveLocomotion()
     {
-        CharacterController3D? controller = GameObject.GetComponent<CharacterController3D>();
+        CharacterController3D? controller = null;
+        for(var source=GameObject;source!=null;source=source.Parent)
+            if(source.GetComponent<CharacterController3D>() is {Enabled:true} candidate){controller=candidate;break;}
         float speed = controller?.Speed ?? 0.0f;
         LocomotionSpeed = speed;
         State = ResolveLocomotionStateStable(controller, State, _stateInitialized, MoveThreshold, RunThreshold, StateHysteresis);

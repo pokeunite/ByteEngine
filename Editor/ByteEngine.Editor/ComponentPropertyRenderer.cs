@@ -94,6 +94,9 @@ internal static class ComponentPropertyRenderer
                 })
                 .ToArray();
 
+        if(result.Any(d=>d.Property.IsDefined(typeof(CategoryAttribute))))
+            result=result.GroupBy(d=>d.Metadata.Category).OrderBy(g=>g.Key=="Live State"?1:0).SelectMany(g=>g).ToArray();
+
         Cache[type] =
             result;
 
