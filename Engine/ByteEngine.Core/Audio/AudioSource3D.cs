@@ -19,6 +19,17 @@ public sealed class AudioSource3D
     : Component
 {
     private readonly Guid _portableId = Guid.NewGuid();
+    private bool _playRequested;
+    public bool IsPaused=>PortableAudio.Backend is {} portable?portable.IsPaused(_portableId):_source!=0&&AudioEngine.IsAvailable&&(ALSourceState)AL.GetSource(_source,ALGetSourcei.SourceState)==ALSourceState.Paused;
+    public bool HasFinished=>_playRequested&&!Loop&&!IsPlaying&&!IsPaused;
+    public bool IsStopped=>!IsPlaying&&!IsPaused;
+    public double PlaybackPosition=>PortableAudio.Backend is {} portable?portable.Position(_portableId):_stream?.Position??(_source!=0&&AudioEngine.IsAvailable?AL.GetSource(_source,ALSourcef.SecOffset):0);
+    public void Seek(double seconds)
+    {
+        if(!double.IsFinite(seconds))throw new ArgumentOutOfRangeException(nameof(seconds));seconds=Math.Clamp(seconds,0,DurationSeconds);
+        if(PortableAudio.Backend is {} portable){portable.Seek(_portableId,seconds);return;}
+        if(!EnsureSource())return;if(_stream!=null)_stream.Seek(seconds,Loop);else AL.Source(_source,ALSourcef.SecOffset,(float)seconds);
+    }
     private AudioClip? _clip;
     private string? _streamPath;
     private NativeAudioStream? _stream;
@@ -29,6 +40,7 @@ public sealed class AudioSource3D
     public int StreamingBufferBytes=>_stream?.WorkingBufferBytes??0;
     public void SetStreamingClip(string path)
     {
+        _playRequested=false;
         using var reader=new StreamingPcmReader(path);
         DestroySource();_clip?.Dispose();_clip=null;_streamPath=Path.GetFullPath(path);_streamDuration=(float)reader.DurationSeconds;Streaming=true;
     }
@@ -180,6 +192,7 @@ public sealed class AudioSource3D
     public void SetClip(
         AudioClip? clip)
     {
+        _playRequested=false;
         if(_streamPath!=null){DestroySource();_streamPath=null;_streamDuration=0;}
         if (PortableAudio.Backend is { } portable)
         {
@@ -231,6 +244,7 @@ public sealed class AudioSource3D
     public void Play()
     {
         if(!ClipLoaded||!AudioMixer.AcquireVoice(this))return;
+        _playRequested=true;
         if(DucksMusic&&Bus!=AudioBus.Music)AudioMixer.Duck(AudioBus.Music,.35f,DurationSeconds);
         if (PortableAudio.Backend is { } portable)
         {
@@ -238,7 +252,7 @@ public sealed class AudioSource3D
             else if (_clip != null) portable.Play(_portableId, _clip, this);
             return;
         }
-        if (!EnsureSource()) { AudioMixer.ReleaseVoice(this); return; }
+        if (!EnsureSource()) { _playRequested=false;AudioMixer.ReleaseVoice(this); return; }
         ApplySettings();
         if(_stream!=null){_stream.Play(Loop);return;}
 
@@ -270,6 +284,7 @@ public sealed class AudioSource3D
 
     public void Stop()
     {
+        _playRequested=false;
         AudioMixer.ReleaseVoice(this);
         if(_stream!=null){_stream.Stop();return;}
         if (PortableAudio.Backend is { } portable) { portable.Stop(_portableId); return; }

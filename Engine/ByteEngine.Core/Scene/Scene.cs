@@ -8,6 +8,9 @@ namespace ByteEngine.Core.Scene;
 
 public sealed partial class Scene
 {
+    public string? ProjectRoot { get; internal set; }
+    internal Serialization.SceneSerializer? SerializationContext { get; set; }
+    internal (Scene Scene,Variables.VariableStore Globals)? PendingRestore {get;set;}
     public Runtime.FixedStepClock SimulationClock { get; } = new();
     /// <summary>Opt in after migrating force/timer logic to OnFixedUpdate. Legacy scenes keep frame simulation.</summary>
     public bool FixedSimulation { get; set; }
@@ -360,6 +363,7 @@ public sealed partial class Scene
 
         using var timeScope = Time.EnterSceneScale(SimulationTimeScale);
         SimulationTime += Time.DeltaTime;
+        VisualLogic.CreatorSceneServices.AdvanceIfPresent(this,Time.DeltaTime);
 
         _isUpdating = true;
 
@@ -481,6 +485,7 @@ public sealed partial class Scene
 
     internal void UnloadInternal()
     {
+        VisualLogic.CreatorSceneServices.Stop(this);
         ClearHostRequests();
         if (!_loaded) return;
 

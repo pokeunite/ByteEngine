@@ -1,0 +1,224 @@
+{
+  "id": "8a088859-2601-4af5-97c2-851a0ec26fac",
+  "version": 2,
+  "name": "Weapon HUD — editable text bindings",
+  "requiredComponents": [],
+  "rules": [
+    {
+      "id": "0243ccf2-b395-544c-8ab3-4eeced340f53",
+      "displayName": "Update weapon name, magazine and reserve",
+      "enabled": true,
+      "conditions": [
+        {
+          "id": "bytebard.karlsondemo.hudChanged",
+          "instanceId": "3de85765-dfcd-542b-b956-e63261a1af5e",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "actions": [
+        {
+          "id": "ui.setFormattedText",
+          "instanceId": "539440ac-cdd7-5023-984e-3e1e5e800ebc",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD Weapon Name"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "{0}"
+              }
+            },
+            "value0": {
+              "kind": "Reference",
+              "reference": {
+                "scope": "Component",
+                "componentType": "FpsGunLab3D",
+                "memberName": "WeaponName"
+              }
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": "5bccf629-34af-534c-bfc5-f994567520b3"
+        },
+        {
+          "id": "ui.setFormattedText",
+          "instanceId": "5bccf629-34af-534c-bfc5-f994567520b3",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD Magazine Ammo"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "{0:0} / {1:0}"
+              }
+            },
+            "value0": {
+              "kind": "Reference",
+              "reference": {
+                "scope": "Component",
+                "componentType": "FpsGunLab3D",
+                "memberName": "Ammo"
+              }
+            },
+            "value1": {
+              "kind": "Reference",
+              "reference": {
+                "scope": "Component",
+                "componentType": "FpsGunLab3D",
+                "memberName": "MagazineCapacity"
+              }
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": "e8304bff-dd4b-5f17-aaa6-5e5420bdd16c"
+        },
+        {
+          "id": "ui.setFormattedText",
+          "instanceId": "e8304bff-dd4b-5f17-aaa6-5e5420bdd16c",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD Reserve Ammo"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "RESERVE {0:0}"
+              }
+            },
+            "value0": {
+              "kind": "Reference",
+              "reference": {
+                "scope": "Component",
+                "componentType": "FpsGunLab3D",
+                "memberName": "ReserveAmmo"
+              }
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "connectedConditionIds": [
+        "3de85765-dfcd-542b-b956-e63261a1af5e"
+      ],
+      "hasExplicitExecutionFlow": true,
+      "firstActionId": "539440ac-cdd7-5023-984e-3e1e5e800ebc",
+      "editorHeaderColor": "42A8B6",
+      "editorLayoutInitialized": false
+    },
+    {
+      "id": "c417018e-a963-5b3d-b060-0739fe784d0a",
+      "displayName": "Reload — show message",
+      "enabled": true,
+      "conditions": [
+        {
+          "id": "bytebard.karlsondemo.reloading",
+          "instanceId": "68b25bec-e84a-5b84-b791-07f58c9c5c25",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "actions": [
+        {
+          "id": "ui.show",
+          "instanceId": "f4143403-8d59-5183-b59e-ce71f1a6ac43",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD Reload State"
+              }
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "connectedConditionIds": [
+        "68b25bec-e84a-5b84-b791-07f58c9c5c25"
+      ],
+      "hasExplicitExecutionFlow": true,
+      "firstActionId": "f4143403-8d59-5183-b59e-ce71f1a6ac43",
+      "editorHeaderColor": "42A8B6",
+      "editorLayoutInitialized": false
+    },
+    {
+      "id": "885cf43e-3c09-56cc-8272-3db3b41872f8",
+      "displayName": "Reload — hide when ready",
+      "enabled": true,
+      "conditions": [
+        {
+          "id": "logic.not",
+          "instanceId": "7f370587-a2ba-5a5a-bb74-e3c18953d172",
+          "arguments": {},
+          "conditionInputIds": [
+            "48a60d17-b557-5126-8070-6e55df4e6844"
+          ],
+          "nextActionId": null
+        },
+        {
+          "id": "bytebard.karlsondemo.reloading",
+          "instanceId": "48a60d17-b557-5126-8070-6e55df4e6844",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "actions": [
+        {
+          "id": "ui.hide",
+          "instanceId": "43c764c2-dd59-514e-af4b-e5a282a8d22d",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD Reload State"
+              }
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "connectedConditionIds": [
+        "7f370587-a2ba-5a5a-bb74-e3c18953d172"
+      ],
+      "hasExplicitExecutionFlow": true,
+      "firstActionId": "43c764c2-dd59-514e-af4b-e5a282a8d22d",
+      "editorHeaderColor": "42A8B6",
+      "editorLayoutInitialized": false
+    }
+  ],
+  "editorLooseActions": [],
+  "editorLooseConditions": [],
+  "editorGroups": [],
+  "editorNodeScale": 0.72
+}

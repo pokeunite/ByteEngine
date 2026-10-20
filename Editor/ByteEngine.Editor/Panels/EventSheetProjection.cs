@@ -7,20 +7,20 @@ internal static class EventSheetProjection
 {
     internal sealed record Row(VisualInstruction? Instruction, int Depth, string? Note = null, bool Connected = true);
 
-    internal static List<Row> Conditions(EventRuleDefinition rule)
+    internal static List<Row> Conditions(EventRuleDefinition rule, IReadOnlySet<Guid>? collapsed = null)
     {
         var rows = new List<Row>();
         var map = rule.Conditions.ToDictionary(i => i.InstanceId);
         var reached = new HashSet<Guid>();
         var path = new HashSet<Guid>();
-        void Visit(Guid id, int depth)
+        void Visit(Guid id, int depth, bool hidden = false)
         {
-            if (!map.TryGetValue(id, out var item)) { rows.Add(new(null, depth, "Missing condition")); return; }
-            if (!path.Add(id)) { rows.Add(new(item, depth, "Circular condition link")); return; }
+            if (!map.TryGetValue(id, out var item)) { if(!hidden) rows.Add(new(null, depth, "Missing condition")); return; }
+            if (!path.Add(id)) { if(!hidden) rows.Add(new(item, depth, "Circular condition link")); return; }
             reached.Add(id);
-            rows.Add(new(item, depth));
-            if (item.Id is "logic.and" or "logic.or")
-                foreach (var child in item.ConditionInputIds) Visit(child, depth + 1);
+            if(!hidden) rows.Add(new(item, depth));
+            if (item.Id is "logic.and" or "logic.or" or "logic.not")
+                foreach (var child in item.ConditionInputIds) Visit(child, depth + 1, hidden || collapsed?.Contains(id) == true);
             path.Remove(id);
         }
         foreach (var id in rule.HasExplicitConditionFlow ? rule.ConnectedConditionIds : rule.Conditions.Select(i => i.InstanceId))

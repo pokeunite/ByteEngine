@@ -13,6 +13,7 @@ internal sealed partial class EventWorkspacePanel
     private float _sheetOutlineWidth = 230;
     private float _sheetDetailsWidth = 300;
     private readonly HashSet<Guid> _collapsedSheetEvents = new();
+    private readonly HashSet<Guid> _collapsedSheetLogic = new();
     private static readonly Vector4 SheetConditionColor = new(.34f, .68f, .96f, 1);
     private static readonly Vector4 SheetActionColor = new(1, .63f, .29f, 1);
 
@@ -106,6 +107,7 @@ internal sealed partial class EventWorkspacePanel
             foreach (var item in _module.EditorLooseConditions.Concat(_module.EditorLooseActions).ToArray())
                 DrawSheetInstruction(new(item, 0, "Not connected", false), _module.EditorLooseConditions.Contains(item), state);
         }
+        DrawSheetRenamePopup();
         ImGui.SetWindowFontScale(1);
         ImGui.EndChild();
         ImGui.PopStyleVar();
@@ -117,12 +119,12 @@ internal sealed partial class EventWorkspacePanel
         bool collapsed = _collapsedSheetEvents.Contains(rule.Id);
         if (_requestFrameNodeId == rule.Id || rule.Conditions.Concat(rule.Actions).Any(i => i.InstanceId == _requestFrameNodeId))
         { ImGui.SetScrollFromPosY(ImGui.GetCursorPosY(),.15f); _sheetFlashId=rule.Id;_sheetFlashUntil=ImGui.GetTime()+2.2; _requestFrameNodeId = Guid.Empty; _collapsedSheetEvents.Remove(rule.Id); collapsed = false; }
-        var conditions = EventSheetProjection.Conditions(rule);
+        var conditions = EventSheetProjection.Conditions(rule,_collapsedSheetLogic);
         var actions = EventSheetProjection.Actions(rule);
         float columnWidth = MathF.Max(80, (ImGui.GetContentRegionAvail().X - 44) * .5f);
         float RowsHeight(List<EventSheetProjection.Row> rows, bool condition) => rows.Count == 0 ? 34 : rows.Sum(row =>
             row.Instruction == null ? ImGui.GetTextLineHeightWithSpacing() :
-            MathF.Max(32, ImGui.CalcTextSize(GetSheetSentence(row.Instruction, condition, state) + (row.Note == null ? "" : " ("+row.Note+")"), false, MathF.Max(40,columnWidth - 24 - Math.Min(row.Depth,8)*14)).Y + 14) + ImGui.GetStyle().ItemSpacing.Y + (condition && row.Instruction != null && IsLogicGate(row.Instruction) ? 32 : 0));
+            MathF.Max(32, ImGui.CalcTextSize(GetSheetSentence(row.Instruction, condition, state) + (row.Note == null ? "" : " ("+row.Note+")"), false, MathF.Max(40,columnWidth - 24 - Math.Min(row.Depth,8)*14)).Y + 14) + ImGui.GetStyle().ItemSpacing.Y + (condition && row.Instruction != null && IsLogicGate(row.Instruction) && !_collapsedSheetLogic.Contains(row.Instruction.InstanceId) ? 32 : 0));
         float height = collapsed ? 48 : MathF.Max(RowsHeight(conditions,true),RowsHeight(actions,false)) + 98;
         ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 7);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 10));
@@ -151,11 +153,11 @@ internal sealed partial class EventWorkspacePanel
             if (ImGui.BeginTable("##EventColumns",2,ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.BordersInnerV))
             {
                 ImGui.TableNextRow();ImGui.TableSetColumnIndex(0);
-                if (conditions.Count == 0) ImGui.TextDisabled("Every update (no conditions)");
+                if (conditions.Count == 0) ImGui.TextDisabled(rule.FunctionName.Length>0?"Function entry: "+rule.FunctionName:"Every update (no conditions)");
                 foreach(var row in conditions) DrawSheetInstruction(row,true,state,rule);
                 ImGui.PushStyleColor(ImGuiCol.Text,SheetConditionColor);
                 var parent=SheetConditionParent(rule);
-                string addLabel=parent==null?"+ Add condition":"+ Add inside "+(parent.Id=="logic.or"?"OR":"AND");
+                string addLabel=parent==null?"+ Add condition":"+ Add inside "+parent.Id[6..].ToUpperInvariant();
                 if(ImGui.Button(addLabel,new Vector2(0,28))) {_sheetConditionParentId=parent?.InstanceId;ImGui.OpenPopup("Add Condition");}
                 if(parent!=null)
                 {
@@ -201,6 +203,14 @@ internal sealed partial class EventWorkspacePanel
         ImGui.PushID(ImGui.GetCursorPosY().ToString(System.Globalization.CultureInfo.InvariantCulture));
         float indent = Math.Min(row.Depth, 8) * 14;
         if (indent > 0) ImGui.Indent(indent);
+        if(condition && IsLogicGate(item))
+        {
+            bool folded=_collapsedSheetLogic.Contains(item.InstanceId);
+            if(ImGui.SmallButton(folded?">":"v"))
+            {if(folded)_collapsedSheetLogic.Remove(item.InstanceId);else _collapsedSheetLogic.Add(item.InstanceId);}
+            if(ImGui.IsItemHovered())ImGui.SetTooltip(folded?"Expand logic block":"Collapse logic block");
+            ImGui.SameLine();
+        }
         float width = MathF.Max(40, ImGui.GetContentRegionAvail().X - 8);
         string text = GetSheetSentence(item, condition, state);
         if (row.Note != null) text += "  (" + row.Note + ")";
@@ -231,9 +241,9 @@ internal sealed partial class EventWorkspacePanel
         }
         if (row.Depth > 0)
             draw.AddLine(origin-new Vector2(7,0),origin+new Vector2(-7,height),ImGui.ColorConvertFloat4ToU32(new Vector4(color.X,color.Y,color.Z,.5f)),1);
-        if(condition && owner!=null && IsLogicGate(item))
+        if(condition && owner!=null && IsLogicGate(item) && !_collapsedSheetLogic.Contains(item.InstanceId))
         {
-            if(ImGui.SmallButton("+ Inside "+(item.Id=="logic.or"?"OR":"AND")))
+            if(ImGui.SmallButton("+ Inside "+item.Id[6..].ToUpperInvariant()))
             {_sheetConditionParentId=item.InstanceId;ImGui.OpenPopup("Add Condition");}
             DrawConditionPicker(owner,owner.Conditions);
         }
@@ -264,6 +274,7 @@ internal sealed partial class EventWorkspacePanel
             "input.mouseReleased" => $"{Value("button", "Left")} mouse button is released",
             "logic.and" => "All of these conditions are true:",
             "logic.or" => "At least one of these conditions is true:",
+            "logic.not" => "None of these conditions are true:",
             "object.destroy" => $"Destroy {Object()}",
             "system.always" => "Every update",
             "system.triggerOnce" => "Only once when these conditions become true",

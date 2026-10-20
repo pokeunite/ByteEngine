@@ -8,6 +8,7 @@ internal sealed class GameObjectReferencePicker
 {
     private string _search =
         string.Empty;
+    private string _selectionSet = "Selection";
 
     public bool DrawPopup(
         string popupId,
@@ -43,7 +44,7 @@ internal sealed class GameObjectReferencePicker
         {
             string selfLabel =
                 selfContext != null
-                    ? $"Self ({selfContext.Name})"
+                    ? $"Self (preview: {selfContext.Name})"
                     : "Self";
 
             if (ImGui.Selectable(
@@ -57,6 +58,15 @@ internal sealed class GameObjectReferencePicker
 
                 ImGui.CloseCurrentPopup();
             }
+        }
+
+        if (Matches("Picked selection " + _selectionSet))
+        {
+            ImGui.SeparatorText("Picked objects");
+            ImGui.SetNextItemWidth(280);
+            ImGui.InputTextWithHint("##SelectionSet","Selection set name",ref _selectionSet,128);
+            if(!string.IsNullOrWhiteSpace(_selectionSet)&&ImGui.Selectable("Use objects from this selection"))
+            {selectedToken=_selectionSet=="Selection"?"Picked":"Picked:"+_selectionSet;changed=true;ImGui.CloseCurrentPopup();}
         }
 
         if (Matches("Last Ray Hit Weapon Shot Raycast"))
@@ -125,7 +135,7 @@ internal sealed class GameObjectReferencePicker
                 StringComparison.OrdinalIgnoreCase))
         {
             return selfContext != null
-                ? $"Self ({selfContext.Name})"
+                ? $"Self (preview: {selfContext.Name})"
                 : "Self";
         }
 

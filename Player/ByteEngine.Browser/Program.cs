@@ -68,6 +68,8 @@ public static partial class BrowserGame
     [JSExport]
     public static void Start(bool demo)
     {
+        ByteEngine.Core.VisualLogic.CreatorHost.OpenUrl=Audio.OpenUrl;
+        ByteEngine.Core.Media.VideoHost.Create=path=>new ByteEngine.Browser.BrowserVideoPlayback(path,Audio.Enqueue);
         if (_started) return;
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.desertterrain", new DesertTerrain.DesertTerrainPlugin());
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.dunecompany", new DuneCompany.DuneCompanyPlugin());
@@ -114,6 +116,16 @@ public static partial class BrowserGame
     {
         if (Guid.TryParse(id, out var voiceId)) Audio.Ended(voiceId);
     }
+
+    [JSExport]
+    public static void Touch(int id,double x,double y,string phase)
+    {if(Enum.TryParse<TouchPhase>(phase,out var parsed))TouchInput.Feed(id,(float)x,(float)y,parsed);}
+    [JSExport]
+    public static void CancelTouches()=>TouchInput.CancelAll();
+    [JSExport]
+    public static void AudioPosition(string id,double seconds){if(Guid.TryParse(id,out var voice))Audio.SetPosition(voice,seconds);}
+    [JSExport]
+    public static void VideoState(string id,double seconds,bool paused,bool ended,string error)=>ByteEngine.Browser.BrowserVideoPlayback.Report(id,seconds,paused,ended,error);
 
     private static string _lastFrameError = "";
     [JSExport]
@@ -443,23 +455,32 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
 
 internal sealed class BrowserAudio : IPortableAudio
 {
+    public void Enqueue(object command)=>_commands.Add(command);
+    public void OpenUrl(string url)=>_commands.Add(new{kind="openUrl",url});
+    private readonly HashSet<Guid> _paused=new();
+    private readonly Dictionary<Guid,double> _positions=new();
+    public bool IsPaused(Guid id)=>_paused.Contains(id);
+    public double Position(Guid id)=>_positions.GetValueOrDefault(id);
+    public void SetPosition(Guid id,double seconds)=>_positions[id]=seconds;
+    public void Seek(Guid id,double seconds){_positions[id]=seconds;_commands.Add(new{kind="seek",id,seconds});}
     private readonly List<object> _commands = new();
     private readonly HashSet<Guid> _playing = new();
     public bool IsPlaying(Guid id) => _playing.Contains(id);
-    public void Ended(Guid id) => _playing.Remove(id);
+    public void Ended(Guid id) {_playing.Remove(id);_paused.Remove(id);}
     public object[] Drain() { var commands = _commands.ToArray(); _commands.Clear(); return commands; }
     public void PlayStream(Guid id,string path,AudioSource3D source)
     {
-        _playing.Add(id);_commands.Add(new{kind="play",id,path=path.Replace("/game/",""),loop=source.Loop,stream=true});Update(id,source);
+        _paused.Remove(id);_playing.Add(id);_commands.Add(new{kind="play",id,path=path.Replace("/game/",""),loop=source.Loop,stream=true});Update(id,source);
     }
     public void Play(Guid id, AudioClip clip, AudioSource3D source)
     {
         _playing.Add(id);
+        _paused.Remove(id);
         _commands.Add(new { kind = "play", id, path = clip.SourcePath.Replace("/game/", ""), loop = source.Loop });
         Update(id, source);
     }
-    public void Pause(Guid id) { _playing.Remove(id); _commands.Add(new { kind = "pause", id }); }
-    public void Stop(Guid id) { _playing.Remove(id); _commands.Add(new { kind = "stop", id }); }
+    public void Pause(Guid id) { _paused.Add(id);_playing.Remove(id); _commands.Add(new { kind = "pause", id }); }
+    public void Stop(Guid id) { _paused.Remove(id);_positions.Remove(id);_playing.Remove(id); _commands.Add(new { kind = "stop", id }); }
     public void Update(Guid id, AudioSource3D source)
     {
         if (!_playing.Contains(id)) return;

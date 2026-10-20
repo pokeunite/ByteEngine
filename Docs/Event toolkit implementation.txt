@@ -1,0 +1,118 @@
+BYTEENGINE - ADDED EVENT TOOLS
+20 October 2026
+
+01. Object selection sets
+Find: Object / Selection
+Pick all, nearest or random tagged objects. In the object picker, use Picked objects and enter the selection set name (Selection by default). Conditions filter the set; actions run for each remaining object.
+Limits: Native target-based actions support selections. Plugin actions with their own object resolution may require explicit targets.
+
+02. Arrays and structure variables
+Find: Variables / Collections
+Create arrays/structures; append, read, replace, remove, count, deep-copy and check children. Choose Array or Structure in variable settings; Edit opens a JSON editor with explicit Apply.
+Limits: Indices are zero based. Nested values are copied, not shared references.
+
+03. Persistent values
+Find: Storage / Values
+Save, load, check and delete values by key. Saved data uses the project/build save location.
+Limits: Desktop uses atomic JSON files; browser uses the existing browser save persistence. Check existence before loading an optional key.
+
+04. Non-blocking Wait
+Find: Flow / Timing
+Wait suspends the remaining action chain and resumes it later, including wired branch paths. Cancel pending waits cancels waits in this sheet instance.
+Limits: Wait uses game time and is cancelled on runtime reset/scene teardown. Do not put an unguarded Wait in an every-frame rule unless repeated delayed actions are intended. Limit: 1024 pending waits per sheet.
+
+05. General transform and value tweens
+Find: Tween
+Animate position, rotation, scale, number variables and camera FOV. Named tweens support easing, pause, resume, remove, running and completion tests.
+Limits: Starting the same named tween replaces it. Use Trigger once or an input event to start it rather than restarting it every update.
+
+06. Collision lifecycle
+Find: Physics / Contacts
+Collision and trigger enter/stay/exit expose ContactObjectId, ContactPoint and ContactNormal on Self.
+Limits: Uses the native physics contact snapshot. Trigger and solid collision states are kept separate.
+
+07. NOT condition blocks
+Find: Logic
+Add NOT and nest conditions inside it, like AND/OR. With an object selection, NOT keeps the complement.
+Limits: An empty block is false. OR evaluates branches independently and unions passing selections.
+
+08. Camera controls
+Find: Camera
+Activate a camera, change FOV or orthographic zoom, center on an object with offset, and clamp its position.
+Limits: Use a continuous rule for following. These controls operate on native Camera3D components.
+
+09. Timer pause and inspection
+Find: Time / Timers
+Pause/resume a named timer and read elapsed time or paused status.
+Limits: Timers belong to the event-sheet instance; paused timers do not advance.
+
+10. JSON data conversion
+Find: Variables / JSON
+Parse ordinary JSON into a variable and serialize collection data back to JSON text.
+Limits: Arrays, objects, strings, numbers, booleans and null are supported. Vectors serialize as numeric arrays.
+
+11. Object relationships
+Find: Object / Relationships
+Link/unlink objects, choose one-way or two-way links, clear relationships, check links and pick linked objects.
+Limits: Gameplay relationships do not change transform parenting. Links persist as object variables.
+
+12. General inventory
+Find: Inventory
+Add/remove/count items, set stack limits, test capacity, equip/unequip named slots and clear inventories.
+Limits: Inventory state is a structure variable in Self, Scene or Global scope. Equip requires an owned item. Removing the last item clears its equipment slots.
+
+13. Pathfinding commands
+Find: Navigation
+Move a native Navigation Agent to a destination, stop it and inspect idle/following/arrived/unreachable/missing-region status.
+Limits: Attach and configure a native Navigation Region and Agent. Dynamic rigidbodies remain controlled by physics.
+
+14. Dialogue and choices
+Find: Dialogue
+Load a dialogue tree, start/advance/stop, choose a branch, read the current line and inspect running/ended/awaiting-choice state.
+Limits: Dialogue drives state, not a fixed UI. Use your own labels and buttons. State lives in a variable and can be saved.
+
+15. Named save slots
+Find: Storage / Save Slots
+Save/restore/list/delete named scene snapshots, including scene/object variables and globals. Writes/loads expose pending, finished, succeeded and failed states and readable errors. Restores occur at a safe scene boundary.
+Limits: Scene capture/apply runs on the game thread; desktop disk work runs asynchronously. Browser virtual-file work completes through the same operation lifecycle. This is native serialized scene state, not a snapshot of pending waits, active HTTP requests or decoder state. Slot names: letters, digits, underscore or hyphen, up to 80 characters.
+
+16. Touch lifecycle and IDs
+Find: Input / Touch
+Test started/held/ended/cancelled touches and read stable IDs, normalized positions and active count.
+Limits: Browser pointer events feed touch/pen input; cancellation handles focus loss. Desktop hosts can feed TouchInput explicitly; native Windows touch-device integration is not added.
+
+17. Visibility and opacity
+Find: Renderer / Object Appearance
+Show/hide native renderers without disabling the object, and set sprite/mesh/skinned-material opacity.
+Limits: Opacity is a renderer-local override; it does not modify shared material assets. Choose a skinned material slot where needed.
+
+18. Audio seek and playback status
+Find: Audio / Playback and Mixer
+Seek, read playback position/duration and test paused/stopped/naturally-finished state. Route sources to Master/Music/Sfx/Ui buses; set/read bus volume, duck a bus or stop its scene sources.
+Limits: Native buffered and WAV/Ogg streaming paths support seeking; browser audio has matching adapters. Finished is a retained state until another play/stop, not a one-frame trigger.
+
+19. Object distance and direction
+Find: Object / Spatial
+Compare distance and copy distance or normalized direction between two objects.
+Limits: Direction is zero when both positions coincide.
+
+20. HTTP requests
+Find: Network / HTTP
+Send named GET/POST/PUT/PATCH/DELETE requests, cancel/remove them, test results and read a response structure.
+Limits: Asynchronous; response changes are published during scene update. Limits: 16 concurrent requests, 256 retained results, 4 MiB response, 30-second timeout. Browser CORS rules apply.
+
+21. External URL opening
+Find: Network
+Open an HTTP/HTTPS page in the system browser or a browser tab.
+Limits: Browser popup rules apply; invoke from a player interaction. Other URL schemes are rejected.
+
+22. Video controls
+Find: Video / Video Player component
+Attach Video Player, set a project-relative Source under Assets, and use play/pause/stop/seek/playing/paused/ended/error/position controls. Screen Position and Screen Size are normalized to the viewport.
+Limits: Windows uses bounded Media Foundation decoding, up to 3840 x 2160, and needs a separate Audio Source for sound (enable Use Companion Audio). Browser uses HTML video with embedded sound. Codec availability differs; errors are exposed to events. No embedded Windows audio decoding or texture/world-surface video is added.
+
+23. Reusable event functions
+Find: Flow / Functions
+Select an event header. Give it a Function name and apply parameter-default JSON in Details. It becomes callable and no longer runs each update. Call event function accepts named parameters; Read function parameter and Set function return value exchange data.
+Limits: Functions are synchronous, local to a sheet instance, and limited to 16 nested calls. Wait is rejected inside a function. Defaults define parameter types; null allows any type.
+

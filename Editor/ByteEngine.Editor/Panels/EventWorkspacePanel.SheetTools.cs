@@ -12,6 +12,45 @@ internal sealed partial class EventWorkspacePanel
     private Guid? _sheetColorEditId, _sheetGroupEditId;
     private double _sheetFlashUntil;
     private readonly Vector4[] _sheetPalette = [new(.26f,.57f,.82f,1),new(.54f,.42f,.78f,1),new(.20f,.64f,.56f,1),new(.80f,.50f,.24f,1),new(.72f,.38f,.50f,1),new(.42f,.58f,.35f,1)];
+    private sealed record InstructionMenuEntry(string Id,string DisplayName,string Category);
+    private IEnumerable<InstructionMenuEntry> InstructionMenuEntries(bool condition)
+    {
+        var entries=(condition
+            ? _registry.Conditions.Select(d=>new InstructionMenuEntry(d.Id,d.DisplayName,ByteEngine.Core.Plugins.ByteEnginePluginRegistry.GetVisualLogicMenuPath(d.Id,d.Category,d.TargetComponent,d.MenuGroup)))
+            : _registry.Actions.Select(d=>new InstructionMenuEntry(d.Id,d.DisplayName,ByteEngine.Core.Plugins.ByteEnginePluginRegistry.GetVisualLogicMenuPath(d.Id,d.Category,d.TargetComponent,d.MenuGroup)))).ToList();
+        InstructionMenuEntry[] special=condition
+            ? [new("logic.and","AND - all conditions","Logic"),new("logic.or","OR - any condition","Logic")]
+            : [new("flow.branch","If / Else","Flow"),new("object.spawnEmpty","Spawn Empty Object","Object"),new("object.spawnBlueprint","Spawn Blueprint","Object")];
+        foreach(var entry in special)if(!entries.Any(e=>e.Id==entry.Id))entries.Add(entry);
+        return entries;
+    }
+
+    private void AddPickedInstruction(EventRuleDefinition rule,bool condition,string id)
+    {
+        RecordHistory(condition?"Add Condition":"Add Action");
+        var before=rule.Conditions.Select(i=>i.InstanceId).ToHashSet();
+        var created=CreateInstruction(id);
+        if(condition){rule.Conditions.Add(created);ConnectCondition(rule,created.InstanceId);FixSheetConditionParent(rule,before);}
+        else {rule.Actions.Add(created);AppendActionToExecutionFlow(rule,created);}
+        _dirty=true;
+    }
+
+    private void DrawOrganizedInstructionMenu(EventRuleDefinition rule,bool condition)
+    {
+        var entries=InstructionMenuEntries(condition).Where(d=>!IsLegacyRaycastCreationDefinition(d.Id))
+            .Select(d=>(Entry:d,Path:d.Category.Split('/',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries))).ToArray();
+        void Draw(IEnumerable<(InstructionMenuEntry Entry,string[] Path)> nodes,int depth)
+        {
+            foreach(var node in nodes.Where(n=>n.Path.Length<=depth).OrderBy(n=>n.Entry.DisplayName))
+                if(ImGui.MenuItem(node.Entry.DisplayName+"##"+node.Entry.Id)){AddPickedInstruction(rule,condition,node.Entry.Id);ImGui.CloseCurrentPopup();}
+            foreach(var group in nodes.Where(n=>n.Path.Length>depth).GroupBy(n=>n.Path[depth]).OrderBy(g=>g.Key))
+            {
+                if(!ImGui.BeginMenu(group.Key))continue;
+                Draw(group,depth+1);ImGui.EndMenu();
+            }
+        }
+        Draw(entries,0);
+    }
 
     private bool DrawInstructionSearch(EventRuleDefinition rule, bool condition)
     {
@@ -22,9 +61,7 @@ internal sealed partial class EventWorkspacePanel
         ImGui.Separator();
         if (string.IsNullOrWhiteSpace(search)) return false;
         var words=search.Split(' ',StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var entries=condition
-            ? _registry.Conditions.Select(d=>(d.Id,d.DisplayName,d.Category))
-            : _registry.Actions.Select(d=>(d.Id,d.DisplayName,d.Category));
+        var entries=InstructionMenuEntries(condition);
         var matches=entries.Where(d=>!IsLegacyRaycastCreationDefinition(d.Id)&&words.All(w=>(d.DisplayName+" "+d.Category+" "+d.Id).Contains(w,StringComparison.OrdinalIgnoreCase)))
             .OrderBy(d=>d.DisplayName).ToArray();
         ImGui.BeginChild("##SearchResults",new Vector2(380,Math.Clamp(matches.Length*30,40,330)));
@@ -32,12 +69,7 @@ internal sealed partial class EventWorkspacePanel
         foreach(var entry in matches)
         {
             if(!ImGui.Selectable(entry.DisplayName+"  /  "+entry.Category+"##"+entry.Id)) continue;
-            RecordHistory(condition?"Add Condition":"Add Action");
-            var before=rule.Conditions.Select(i=>i.InstanceId).ToHashSet();
-            var created=CreateInstruction(entry.Id);
-            if(condition) {rule.Conditions.Add(created);ConnectCondition(rule,created.InstanceId);FixSheetConditionParent(rule,before);}
-            else {rule.Actions.Add(created);AppendActionToExecutionFlow(rule,created);}
-            _dirty=true;
+            AddPickedInstruction(rule,condition,entry.Id);
             ImGui.CloseCurrentPopup();
             break;
         }
@@ -130,6 +162,31 @@ internal sealed partial class EventWorkspacePanel
     }
 
     private readonly HashSet<Guid> _collapsedSheetGroups = new();
+    private Guid? _renameSheetGroupId;
+    private string _renameSheetGroupText="";
+    private bool _openSheetRename;
+
+    private void RequestSheetGroupRename(EventGraphGroupDefinition group)
+    {_renameSheetGroupId=group.Id;_renameSheetGroupText=group.Title;_openSheetRename=true;}
+
+    private void DrawSheetRenamePopup()
+    {
+        if(_openSheetRename){ImGui.OpenPopup("Rename group or comment");_openSheetRename=false;}
+        if(!ImGui.BeginPopup("Rename group or comment"))return;
+        if(ImGui.IsWindowAppearing())ImGui.SetKeyboardFocusHere();
+        ImGui.TextUnformatted("Name / comment");ImGui.SetNextItemWidth(360);
+        bool commit=ImGui.InputText("##RenameText",ref _renameSheetGroupText,512,ImGuiInputTextFlags.EnterReturnsTrue);
+        commit=ImGui.Button("Rename")||commit;ImGui.SameLine();
+        bool cancel=ImGui.Button("Cancel")||ImGui.IsKeyPressed(ImGuiKey.Escape);
+        if(commit && !string.IsNullOrWhiteSpace(_renameSheetGroupText))
+        {
+            var group=_module!.EditorGroups.FirstOrDefault(g=>g.Id==_renameSheetGroupId);
+            if(group!=null){RecordHistory("Rename Group / Comment");group.Title=_renameSheetGroupText.Trim();_dirty=true;}
+            ImGui.CloseCurrentPopup();
+        }
+        else if(cancel)ImGui.CloseCurrentPopup();
+        ImGui.EndPopup();
+    }
     private void CreateSheetGroup(bool group, EventRuleDefinition clicked)
     {
         var members=group?_module!.Rules.Where(r=>_selectedGraphNodes.Contains(r.Id)).ToArray():[clicked];
@@ -151,6 +208,8 @@ internal sealed partial class EventWorkspacePanel
             ImGui.SameLine();
         }
         ImGui.TextUnformatted((group.SheetGroup?"GROUP: ":"COMMENT: ")+group.Title);
+        if(ImGui.IsItemHovered())
+        {ImGui.SetTooltip("Double-click to rename. Right-click for more options.");if(ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))RequestSheetGroupRename(group);}
         if(ImGui.BeginPopupContextItem("GroupMenu"))
         {
             string title=group.Title;

@@ -131,6 +131,7 @@ public static class Input
     internal static void Update(KeyboardState keyboardState, MouseState mouseState,
         IReadOnlyList<JoystickState>? joystickStates = null)
     {
+        TouchInput.BeginFrame();
         _uiBlocksPrimaryMouse = false;
         if (!MouseButtonsDown.Contains(MouseButton.Left) &&
             !PreviousMouseButtonsDown.Contains(MouseButton.Left))
@@ -168,6 +169,7 @@ public static class Input
     /// <summary>Inject a host snapshot without GLFW. The snapshot is copied, never retained.</summary>
     internal static void UpdatePortable(RawInputSnapshot snapshot, bool captured)
     {
+        TouchInput.BeginFrame();
         if (IsGameInputCaptured != captured) SetGameInputCaptured(captured);
         _uiBlocksPrimaryMouse = false;
         if (!MouseButtonsDown.Contains(MouseButton.Left) &&

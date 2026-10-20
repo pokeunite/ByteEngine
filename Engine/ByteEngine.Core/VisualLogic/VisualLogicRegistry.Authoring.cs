@@ -23,8 +23,8 @@ public sealed partial class VisualLogicRegistry
         registry.RegisterAction(new VisualActionDefinition
         {
             Id="ui.setFormattedText",Category="UI",DisplayName="Set Formatted Text From Values",
-            Arguments=[new("target","Text object",VariableValue.FromString("Self")),new("format","Format ({0}, {1}, {2}, {3})",VariableValue.FromString("{0:0.00}")),
-                new("value0","Value 0",VariableValue.FromNumber()),new("value1","Value 1",VariableValue.FromNumber()),new("value2","Value 2",VariableValue.FromNumber()),new("value3","Value 3",VariableValue.FromNumber())],
+            Arguments=[new("target","Text object",VariableValue.FromString("Self")){IsObjectReference=true},new("format","Format ({0}, {1}, {2}, {3})",VariableValue.FromString("{0:0.00}")),
+                new("value0","Value 0",VariableValue.FromNumber()){AcceptsAnyValue=true},new("value1","Value 1",VariableValue.FromNumber()){AcceptsAnyValue=true},new("value2","Value 2",VariableValue.FromNumber()){AcceptsAnyValue=true},new("value3","Value 3",VariableValue.FromNumber()){AcceptsAnyValue=true}],
             Execute=(i,c)=>
             {
                 if(ResolveObjectTarget(i,c,false)?.GetComponent<UiText>() is not {} text)return;

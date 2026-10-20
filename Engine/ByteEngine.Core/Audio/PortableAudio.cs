@@ -6,6 +6,9 @@ namespace ByteEngine.Core.Audio;
 public interface IPortableAudio
 {
     bool IsPlaying(Guid id);
+    bool IsPaused(Guid id)=>false;
+    double Position(Guid id)=>0;
+    void Seek(Guid id,double seconds) { }
     void Play(Guid id, AudioClip clip, AudioSource3D source);
     void PlayStream(Guid id,string path,AudioSource3D source) { }
     void Pause(Guid id);

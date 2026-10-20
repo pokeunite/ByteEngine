@@ -74,6 +74,7 @@ public static class ByteEnginePluginRegistry
 {
     private sealed class PluginRegistration
     {
+        public string? DisplayName;
         public readonly List<ByteEnginePluginComponentRegistration> Components = new();
         public readonly List<VisualActionDefinition> Actions = new();
         public readonly List<VisualConditionDefinition> Conditions = new();
@@ -103,6 +104,23 @@ public static class ByteEnginePluginRegistry
                 ByPlugin.Values.SelectMany(p => p.Actions).Any(a => a.Id.Equals(action.Id, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("Plugin action must have a unique plugin-prefixed id.");
             ByPlugin[id].Actions.Add(action);
+        }
+    }
+    internal static void SetDisplayName(string id,string name)
+    {lock(Sync) {ByPlugin[id].DisplayName=name;System.Threading.Interlocked.Increment(ref _revision);}}
+
+    public static string GetVisualLogicMenuPath(string instructionId,string category,string? component,string? menuGroup)
+    {
+        lock(Sync)
+        {
+            foreach(var pair in ByPlugin)
+            {
+                var plugin=pair.Value;
+                if(!plugin.Actions.Any(a=>a.Id==instructionId)&&!plugin.Conditions.Any(c=>c.Id==instructionId))continue;
+                string? objectName=plugin.Components.FirstOrDefault(c=>c.Codec.TypeName==component || c.Codec.TypeName.EndsWith("."+component,StringComparison.Ordinal))?.Metadata.DisplayName;
+                return "Plugins / "+(plugin.DisplayName??pair.Key)+" / "+(menuGroup??objectName??category);
+            }
+            return category;
         }
     }
     internal static void RegisterCondition(string id, VisualConditionDefinition condition)
@@ -621,6 +639,7 @@ public static class ByteEnginePluginManager
                         $"Plugin entry point '{entryType.FullName}' could not be created.");
 
                 ByteEnginePluginRegistry.BeginPlugin(manifest.Id);
+                ByteEnginePluginRegistry.SetDisplayName(manifest.Id,manifest.Name);
 
                 try
                 {

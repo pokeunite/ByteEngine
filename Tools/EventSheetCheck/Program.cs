@@ -20,12 +20,20 @@ internal static class Program
   object? Call(object obj,string method,params object?[] values)=>obj.GetType().GetMethod(method,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)!.Invoke(obj,values);
   var registryType=typeof(ByteEnginePluginRegistry);
   registryType.GetMethod("BeginPlugin",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,["bytebard.karlsondemo"]);
+  registryType.GetMethod("SetDisplayName",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,["bytebard.karlsondemo","Modular Weapon Gameplay"]);
   var pluginContext=(ByteEnginePluginContext)Activator.CreateInstance(typeof(ByteEnginePluginContext),BindingFlags.Instance|BindingFlags.NonPublic,null,["bytebard.karlsondemo"],null)!;
   var plugin=Assembly.LoadFrom(Path.GetFullPath("Plugins/KarlsonDemo/bin/Release/net9.0/KarlsonDemo.Plugin.dll"));
   ((IByteEnginePlugin)Activator.CreateInstance(plugin.GetType("KarlsonDemo.Plugin.KarlsonDemoPlugin",true)!)!).Register(pluginContext);
   using var window=new GameWindow(GameWindowSettings.Default,new NativeWindowSettings{StartVisible=false,ClientSize=new(1600,900),APIVersion=new(3,3),Profile=ContextProfile.Core});
   window.Context.MakeCurrent();
   var output=Path.GetFullPath("artifacts/event-sheet-check");Directory.CreateDirectory(output);
+  var catalog=VisualLogicRegistry.CreateDefault();
+  File.WriteAllText(Path.Combine(output,"byteengine-events.json"),System.Text.Json.JsonSerializer.Serialize(new{
+   conditions=catalog.Conditions.Select(d=>new{d.Id,d.DisplayName,d.Category,menuPath=ByteEnginePluginRegistry.GetVisualLogicMenuPath(d.Id,d.Category,d.TargetComponent,d.MenuGroup)}),
+   actions=catalog.Actions.Select(d=>new{d.Id,d.DisplayName,d.Category,menuPath=ByteEnginePluginRegistry.GetVisualLogicMenuPath(d.Id,d.Category,d.TargetComponent,d.MenuGroup)})},new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
+  catalog.TryGetCondition("bytebard.karlsondemo.hit",out var weaponHit);
+  if(weaponHit==null||ByteEnginePluginRegistry.GetVisualLogicMenuPath(weaponHit.Id,weaponHit.Category,weaponHit.TargetComponent,weaponHit.MenuGroup)!="Plugins / Modular Weapon Gameplay / Weapon Instance")throw new Exception("Plugin conditions are not organized under the plugin and component");
+  Console.WriteLine("PASS plugin menu ownership and component hierarchy");
   using var controller=(IDisposable)Create("ImGuiController",window,Path.Combine(output,"layout.ini"));
   var docs=Create("EditorDocumentManager");var panel=Create("Panels.EventWorkspacePanel",docs);var log=Create("EditorLog");
   string source=args.Length>0?args[0]:"C:/Users/codex/Documents/ultra violence/Assets/Events/FPS controls.byteevents";
@@ -83,6 +91,10 @@ internal static class Program
   string flowBefore=System.Text.Json.JsonSerializer.Serialize(current.Rules.Select(r=>new{r.ConnectedConditionIds,r.FirstActionId}));
   Call(panel,"CreateSheetGroup",true,current.Rules[0]);
   var made=current.EditorGroups.Last();
+  Call(panel,"RequestSheetGroupRename",made);
+  if((string?)panel.GetType().GetField("_renameSheetGroupText",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(panel)!=made.Title)throw new Exception("Rename did not load existing group text");
+  panel.GetType().GetField("_openSheetRename",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(panel,false);
+  Console.WriteLine("PASS group/comment rename opens with the current name");
   if(!made.SheetGroup||!made.MemberIds.Contains(current.Rules[1].Id))throw new Exception("Multi-event group lost its members");
   if(flowBefore!=System.Text.Json.JsonSerializer.Serialize(current.Rules.Select(r=>new{r.ConnectedConditionIds,r.FirstActionId})))throw new Exception("Grouping altered runtime links");
   current.Rules[0].EditorHeaderColor="3A80CF";
@@ -115,5 +127,35 @@ internal static class Program
   panel.GetType().GetField("_showEventGraph",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(panel,true);
   for(int frame=0;frame<3;frame++){Call(controller,"Update",1f/60);Call(panel,"Draw",log);Call(controller,"Render");}
   Console.WriteLine("PASS original graph view still renders after switching from the sheet");
+  panel.GetType().GetField("_showEventGraph",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(panel,false);
+  var functionRule=new EventRuleDefinition{DisplayName="Reusable function",FunctionName="GiveReward",FunctionDefaults=ByteEngine.Core.Variables.VariableJson.Parse("{\"amount\":5}")};current.Rules.Add(functionRule);selected.Clear();selected.Add(functionRule.Id);
+  for(int frame=0;frame<3;frame++){Call(controller,"Update",1f/60);Call(panel,"Draw",log);Call(controller,"Render");}
+  if((EventValue)panel.GetType().GetMethod("CreateConstant",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,[ByteEngine.Core.Variables.VariableType.Array])! is not {Constant.Type:ByteEngine.Core.Variables.VariableType.Array})throw new Exception("Array authoring created a scalar");
+  Console.WriteLine("PASS callable event details and collection constant authoring");
+  var collectionAction=new VisualInstruction{Id="collection.append",Arguments=new(){["value"]=new EventValue{Constant=ByteEngine.Core.Variables.VariableJson.Parse("{\"item\":\"coin\"}")}}};functionRule.Actions.Add(collectionAction);selected.Clear();selected.Add(collectionAction.InstanceId);
+  for(int frame=0;frame<3;frame++){Call(controller,"Update",1f/60);Call(panel,"Draw",log);Call(controller,"Render");}
+  Console.WriteLine("PASS nested collection argument editor renders without changing its value");
+  var inspectorScene=new ByteEngine.Core.Scene.Scene("Equipment inspector check");
+  var inspectorOwner=inspectorScene.CreateGameObject("Player");
+  var inspectorCamera=inspectorScene.CreateGameObject("FPS Camera");inspectorCamera.AddComponent(new ByteEngine.Core.Graphics.Camera3D());
+  var equipmentType=plugin.GetType("KarlsonDemo.Plugin.FpsGunLab3D",true)!;
+  var equipment=(ByteEngine.Core.Scene.Component)Activator.CreateInstance(equipmentType)!;inspectorOwner.AddComponent(equipment);
+  equipmentType.GetProperty("CameraObjectId")!.SetValue(equipment,inspectorCamera.Id);
+  equipmentType.GetProperty("InventoryRootId")!.SetValue(equipment,inspectorCamera.Id);
+  var renderer=editor.GetType("ByteEngine.Editor.ComponentPropertyRenderer",true)!;
+  var propertyContext=Enum.Parse(editor.GetType("ByteEngine.Editor.PropertyEditorContext",true)!,"Scene");
+  var descriptors=(System.Collections.IEnumerable)renderer.GetMethod("Descriptors")!.Invoke(null,[equipmentType,propertyContext])!;
+  var properties=descriptors.Cast<object>().Select(d=>(PropertyInfo)d.GetType().GetProperty("Property")!.GetValue(d)!).ToArray();
+  if(properties.Any(p=>p.Name=="StatusTextObjectId")||!properties.Any(p=>p.Name=="WeaponName")||!properties.Any(p=>p.Name=="ReloadProgress"))throw new Exception("Weapon inspector exposes legacy HUD or lacks readable state");
+  for(int frame=0;frame<4;frame++){
+   Call(controller,"Update",1f/60);ImGui.SetNextWindowPos(Vector2.Zero,ImGuiCond.Always);ImGui.SetNextWindowSize(new Vector2(600,650),ImGuiCond.Always);ImGui.Begin("Weapon Equipment");
+   renderer.GetMethod("Draw")!.Invoke(null,[equipment,propertyContext,false,(Action)(()=>{}),(Action)(()=>{}),(Action)(()=>{}),null]);ImGui.End();
+   GL.Clear(ClearBufferMask.ColorBufferBit);Call(controller,"Render");GL.Finish();
+  }
+  var inspectorBytes=new byte[window.ClientSize.X*window.ClientSize.Y*4];GL.ReadPixels(0,0,window.ClientSize.X,window.ClientSize.Y,OpenTK.Graphics.OpenGL4.PixelFormat.Bgra,PixelType.UnsignedByte,inspectorBytes);
+  using(var image=new Bitmap(window.ClientSize.X,window.ClientSize.Y,System.Drawing.Imaging.PixelFormat.Format32bppArgb)){
+   var pixels=image.LockBits(new Rectangle(0,0,image.Width,image.Height),ImageLockMode.WriteOnly,image.PixelFormat);System.Runtime.InteropServices.Marshal.Copy(inspectorBytes,0,pixels.Scan0,inspectorBytes.Length);image.UnlockBits(pixels);image.RotateFlip(RotateFlipType.RotateNoneFlipY);image.Save(Path.Combine(output,"weapon-equipment.png"));
+  }
+  Console.WriteLine("PASS native weapon inspector: named object bindings, hidden legacy HUD and exposed live state");
  }
 }

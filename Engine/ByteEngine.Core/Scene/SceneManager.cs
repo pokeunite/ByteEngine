@@ -144,6 +144,11 @@ public sealed class SceneManager
             catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException){Console.WriteLine($"Could not load scene '{path}': {e.Message}");}
         }
 
+        if(ActiveScene?.PendingRestore is {} restore)
+        {
+            GlobalVariables.Clear();foreach(var pair in restore.Globals)GlobalVariables.Set(pair.Key,pair.Value.Clone());
+            ActiveScene.PendingRestore=null;LoadScene(restore.Scene);
+        }
         if (ActiveScene?.RestartRequested == true)
         {
             if (RestartSceneFactory is { } factory)

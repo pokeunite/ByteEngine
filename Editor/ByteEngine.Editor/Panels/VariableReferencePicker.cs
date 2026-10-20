@@ -862,8 +862,7 @@ internal sealed class VariableReferencePicker
                 objectId,
                 objectName,
                 componentType.Name,
-                PrettyName(
-                    member.Name),
+                member.GetCustomAttribute<System.ComponentModel.DisplayNameAttribute>()?.DisplayName ?? PrettyName(member.Name),
                 member.Name,
                 variableType,
                 writable,
@@ -1270,6 +1269,7 @@ internal sealed class VariableReferencePicker
                 fields)
             .Where(
                 member =>
+                    member.GetCustomAttribute<System.ComponentModel.BrowsableAttribute>()?.Browsable != false &&
                     !IsHiddenComponentMember(
                         member.Name))
             .OrderBy(

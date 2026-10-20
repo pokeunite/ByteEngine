@@ -35,7 +35,7 @@ export async function loadContent(game, status) {
             await mountPackage(await mountedGame, data, audio, status);
         } else {
             mountFile(await mountedGame,file.path,data);
-            if (/\.(wav|ogg)$/i.test(file.path)) audio.set(file.path, data.buffer);
+            if (/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(file.path)) audio.set(file.path, data.buffer);
         }
     }
     return { manifest, audio };
@@ -140,7 +140,7 @@ async function mountPackage(game, bytes, audio, status) {
         const actual=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
         if(actual.some((value,i)=>value!==expected[i]))throw new Error('Corrupted asset: '+path);
         mountFile(game,path,data);trace('asset-mounted',{path,bytes:data.length,compressedBytes:compressed.length,durationMs:performance.now()-unpackStart});
-        if(/\.(wav|ogg)$/i.test(path))audio.set(path,data.buffer);
+        if(/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(path))audio.set(path,data.buffer);
     }
     if(offset!==bytes.length)throw new Error('Unexpected package trailing data.');
 }

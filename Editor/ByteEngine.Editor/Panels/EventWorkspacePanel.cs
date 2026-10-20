@@ -688,6 +688,14 @@ internal sealed partial class EventWorkspacePanel
             {
                 ImGui.TextWrapped(GetRuleDisplayName(rule));
                 ImGui.TextDisabled($"{rule.Conditions.Count} conditions | {rule.Actions.Count} actions");
+                string functionName=rule.FunctionName;
+                if(ImGui.InputTextWithHint("Function name","Empty = normal event",ref functionName,128))
+                {RecordHistory("Edit Function Name");rule.FunctionName=functionName.Trim();_dirty=true;}
+                if(rule.FunctionName.Length>0)
+                {
+                    ImGui.TextWrapped("Called by Call event function. It does not run every update. Parameters use the types in these defaults.");
+                    DrawFunctionDefaults(rule);
+                }
                 ImGui.EndChild();
                 return;
             }
@@ -6386,7 +6394,7 @@ internal sealed partial class EventWorkspacePanel
     private static bool IsLogicGate(
         VisualInstruction instruction)
     {
-        return instruction.Id.Equals(
+        return instruction.Id.Equals("logic.not", StringComparison.OrdinalIgnoreCase) || instruction.Id.Equals(
                    "logic.and",
                    StringComparison.OrdinalIgnoreCase) ||
                instruction.Id.Equals(
@@ -7933,294 +7941,17 @@ internal sealed partial class EventWorkspacePanel
     // ADD CONDITION / ACTION
     // ========================================================
 
-    private void DrawConditionPicker(
-        EventRuleDefinition rule,
-        List<VisualInstruction> conditions)
+    private void DrawConditionPicker(EventRuleDefinition rule,List<VisualInstruction> conditions)
     {
-        if (!ImGui.BeginPopup(
-                "Add Condition"))
-        {
-            return;
-        }
-
-        var before = rule.Conditions.Select(i => i.InstanceId).ToHashSet();
-        if (DrawInstructionSearch(rule, true)) { ImGui.EndPopup(); return; }
-        ImGui.TextDisabled(
-            "ADD CONDITION");
-
-        ImGui.Separator();
-
-        if (ImGui.BeginMenu(
-                "Mouse"))
-        {
-            if (DrawMouseConditionPickerItems(
-                    rule,
-                    conditions))
-            {
-                ImGui.CloseCurrentPopup();
-            }
-
-            ImGui.EndMenu();
-        }
-
-        if (ImGui.BeginMenu(
-                "Logic"))
-        {
-            if (ImGui.MenuItem(
-                    "AND"))
-            {
-                RecordHistory(
-                    "Add AND");
-
-                VisualInstruction created =
-                    CreateInstruction(
-                        "logic.and");
-
-                conditions.Add(
-                    created);
-
-                ConnectCondition(
-                    rule,
-                    created.InstanceId);
-
-                _dirty =
-                    true;
-
-                ImGui.CloseCurrentPopup();
-            }
-
-            if (ImGui.MenuItem(
-                    "OR"))
-            {
-                RecordHistory(
-                    "Add OR");
-
-                VisualInstruction created =
-                    CreateInstruction(
-                        "logic.or");
-
-                conditions.Add(
-                    created);
-
-                ConnectCondition(
-                    rule,
-                    created.InstanceId);
-
-                _dirty =
-                    true;
-
-                ImGui.CloseCurrentPopup();
-            }
-
-            ImGui.EndMenu();
-        }
-
-        var groups =
-            _registry.Conditions
-                .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
-                .OrderBy(
-                    definition =>
-                        definition.Category)
-                .ThenBy(
-                    definition =>
-                        definition.DisplayName)
-                .GroupBy(
-                    definition =>
-                        definition.Category);
-
-        foreach (var group
-                 in groups)
-        {
-            if (!ImGui.BeginMenu(
-                    group.Key))
-            {
-                continue;
-            }
-
-            foreach (VisualConditionDefinition definition
-                     in group)
-            {
-                if (ImGui.MenuItem(
-                        definition.DisplayName))
-                {
-                    RecordHistory(
-                        "Add Condition");
-
-                    VisualInstruction created =
-                        CreateInstruction(
-                            definition.Id);
-
-                    conditions.Add(
-                        created);
-
-                    ConnectCondition(
-                        rule,
-                        created.InstanceId);
-
-                    _dirty =
-                        true;
-
-                    ImGui.CloseCurrentPopup();
-                }
-            }
-
-            ImGui.EndMenu();
-        }
-
-        FixSheetConditionParent(rule, before);
+        if(!ImGui.BeginPopup("Add Condition"))return;
+        if(!DrawInstructionSearch(rule,true)) DrawOrganizedInstructionMenu(rule,true);
         ImGui.EndPopup();
     }
 
-    private void DrawActionPicker(
-        EventRuleDefinition rule,
-        List<VisualInstruction> actions)
+    private void DrawActionPicker(EventRuleDefinition rule,List<VisualInstruction> actions)
     {
-        if (!ImGui.BeginPopup(
-                "Add Action"))
-        {
-            return;
-        }
-
-        if (DrawInstructionSearch(rule, false)) { ImGui.EndPopup(); return; }
-        ImGui.TextDisabled(
-            "ADD ACTION");
-
-        ImGui.Separator();
-
-        if (ImGui.BeginMenu(
-                "Flow"))
-        {
-            if (ImGui.MenuItem(
-                    "Branch"))
-            {
-                RecordHistory(
-                    "Add Branch");
-
-                VisualInstruction created =
-                    CreateInstruction(
-                        "flow.branch");
-
-                actions.Add(
-                    created);
-
-                AppendActionToExecutionFlow(
-                    rule,
-                    created);
-
-                _dirty =
-                    true;
-
-                ImGui.CloseCurrentPopup();
-            }
-
-            ImGui.EndMenu();
-        }
-
-        var actionGroups =
-            _registry.Actions
-                .Where(definition => !IsLegacyRaycastCreationDefinition(definition.Id))
-                .OrderBy(
-                    definition =>
-                        definition.Category)
-                .ThenBy(
-                    definition =>
-                        definition.DisplayName)
-                .GroupBy(
-                    definition =>
-                        definition.Category);
-
-        foreach (var group
-                 in actionGroups)
-        {
-            if (!ImGui.BeginMenu(
-                    group.Key))
-            {
-                continue;
-            }
-
-            if (group.Key.Equals(
-                    "Object",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                if (ImGui.MenuItem(
-                        "Spawn Empty Object"))
-                {
-                    RecordHistory(
-                        "Add Spawn Empty Object");
-
-                    VisualInstruction created =
-                        CreateInstruction(
-                            "object.spawnEmpty");
-
-                    actions.Add(
-                        created);
-
-                    AppendActionToExecutionFlow(
-                        rule,
-                        created);
-
-                    _dirty =
-                        true;
-
-                    ImGui.CloseCurrentPopup();
-                }
-
-                if (ImGui.MenuItem(
-                        "Spawn Blueprint"))
-                {
-                    RecordHistory(
-                        "Add Spawn Blueprint");
-
-                    VisualInstruction created =
-                        CreateInstruction(
-                            "object.spawnBlueprint");
-
-                    actions.Add(
-                        created);
-
-                    AppendActionToExecutionFlow(
-                        rule,
-                        created);
-
-                    _dirty =
-                        true;
-
-                    ImGui.CloseCurrentPopup();
-                }
-
-                ImGui.Separator();
-            }
-
-            foreach (VisualActionDefinition definition
-                     in group)
-            {
-                if (ImGui.MenuItem(
-                        definition.DisplayName))
-                {
-                    RecordHistory(
-                        "Add Action");
-
-                    VisualInstruction created =
-                        CreateInstruction(
-                            definition.Id);
-
-                    actions.Add(
-                        created);
-
-                    AppendActionToExecutionFlow(
-                        rule,
-                        created);
-
-                    _dirty =
-                        true;
-
-                    ImGui.CloseCurrentPopup();
-                }
-            }
-
-            ImGui.EndMenu();
-        }
-
+        if(!ImGui.BeginPopup("Add Action"))return;
+        if(!DrawInstructionSearch(rule,false)) DrawOrganizedInstructionMenu(rule,false);
         ImGui.EndPopup();
     }
 
@@ -8860,7 +8591,7 @@ internal sealed partial class EventWorkspacePanel
                     DrawObjectTargetArgument(instruction, argument.Name, argument.DisplayName, state);
                 else
                     DrawValueArgument(instruction, argument.Name, argument.DisplayName,
-                        argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+                        argument.AcceptsAnyValue?null:argument.DefaultValue.Type, argument.CreateDefault(), state, false,argument.Choices);
             }
             return;
         }
@@ -8872,7 +8603,7 @@ internal sealed partial class EventWorkspacePanel
                     DrawObjectTargetArgument(instruction, argument.Name, argument.DisplayName, state);
                 else
                     DrawValueArgument(instruction, argument.Name, argument.DisplayName,
-                        argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+                        argument.AcceptsAnyValue?null:argument.DefaultValue.Type, argument.CreateDefault(), state, false,argument.Choices);
             }
             return;
         }
@@ -11933,7 +11664,8 @@ internal sealed partial class EventWorkspacePanel
         VariableType? expectedType,
         EventValue fallback,
         EditorState? state,
-        bool writableReference)
+        bool writableReference,
+        IReadOnlyList<string>? choices = null)
     {
         if (!instruction.Arguments.TryGetValue(
                 argumentName,
@@ -12030,6 +11762,12 @@ internal sealed partial class EventWorkspacePanel
             return;
         }
 
+        if(choices is {Count:>0})
+        {
+            if(ImGui.BeginCombo("Value",value.Constant.String))
+            {foreach(var choice in choices)if(ImGui.Selectable(choice,value.Constant.String==choice)){instruction.Arguments[argumentName]=EventValue.String(choice);_dirty=true;}ImGui.EndCombo();}
+            ImGui.PopID();return;
+        }
         DrawConstantValue(
             instruction,
             argumentName,
@@ -12114,6 +11852,10 @@ internal sealed partial class EventWorkspacePanel
 
         switch (constant.Type)
         {
+            case VariableType.Array:
+            case VariableType.Structure:
+                DrawCollectionConstant(instruction,argumentName,constant);
+                break;
             case VariableType.Number:
             {
                 float number =
@@ -13459,6 +13201,7 @@ internal sealed partial class EventWorkspacePanel
     {
         return type switch
         {
+            VariableType.Array or VariableType.Structure or VariableType.Null => new EventValue { Constant=VariableValue.Default(type) },
             VariableType.String =>
                 EventValue.String(
                     string.Empty),

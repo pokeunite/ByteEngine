@@ -229,6 +229,11 @@ public static class VariableResolver
         {
             switch (variable.Type)
             {
+                case VariableType.Array when value is VariableValue{Type:VariableType.Array} array:
+                    variable.Items=array.Items.Select(v=>v.Clone()).ToList();break;
+                case VariableType.Structure when value is VariableValue{Type:VariableType.Structure} structure:
+                    variable.Children=structure.Children.ToDictionary(p=>p.Key,p=>p.Value.Clone(),StringComparer.Ordinal);break;
+                case VariableType.Null when value is null:break;
                 case VariableType.Number:
                     variable.Number = Convert.ToDouble(value);
                     break;

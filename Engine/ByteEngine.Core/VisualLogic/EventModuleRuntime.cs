@@ -7,7 +7,7 @@ using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.VisualLogic;
 
-public sealed class EventModuleRuntime
+public sealed partial class EventModuleRuntime
 {
     private readonly VisualLogicRegistry _registry;
 
@@ -20,6 +20,8 @@ public sealed class EventModuleRuntime
     private sealed class TimerState
     {
         public double Remaining;
+        public double Elapsed;
+        public bool Paused;
         public bool Running;
         public bool FinishedThisUpdate;
     }
@@ -63,6 +65,7 @@ public sealed class EventModuleRuntime
         _observedAnimationControllers.Clear();
         _triggerOnceLatched.Clear();
         _timers.Clear();
+        _continuations.Clear();
         _reportedWarnings.Clear();
         _activeModule = null;
         _activeGlobals = null;
@@ -96,6 +99,7 @@ public sealed class EventModuleRuntime
         _activeWarningSink = warningSink;
         _observedAnimationControllers.Clear();
         AdvanceTimers(Time.DeltaTime);
+        AdvanceContinuations(Time.DeltaTime);
         var context =
             new EventExecutionContext
             {
@@ -119,6 +123,8 @@ public sealed class EventModuleRuntime
         foreach (EventRuleDefinition rule
                  in module.Rules)
         {
+            if (!string.IsNullOrWhiteSpace(rule.FunctionName)) continue;
+            context.PickedSets.Clear();context.PickedObject=null;
             EvaluateRule(
                 module,
                 rule,
@@ -149,11 +155,15 @@ public sealed class EventModuleRuntime
 
     internal bool IsTimerRunning(string name) =>
         !string.IsNullOrWhiteSpace(name) &&
-        _timers.TryGetValue(name.Trim(), out TimerState? timer) && timer.Running;
+        _timers.TryGetValue(name.Trim(), out TimerState? timer) && timer.Running && !timer.Paused;
 
     internal bool IsTimerFinished(string name) =>
         !string.IsNullOrWhiteSpace(name) &&
         _timers.TryGetValue(name.Trim(), out TimerState? timer) && timer.FinishedThisUpdate;
+
+    internal void PauseTimer(string name,bool paused){if(_timers.TryGetValue(name,out var timer))timer.Paused=paused;}
+    internal bool TimerPaused(string name)=>_timers.TryGetValue(name,out var timer)&&timer.Paused;
+    internal double TimerElapsed(string name)=>_timers.TryGetValue(name,out var timer)?timer.Elapsed:0;
 
     private void AdvanceTimers(double deltaTime)
     {
@@ -161,7 +171,8 @@ public sealed class EventModuleRuntime
         foreach (TimerState timer in _timers.Values)
         {
             timer.FinishedThisUpdate = false;
-            if (!timer.Running) continue;
+            if (!timer.Running || timer.Paused) continue;
+            timer.Elapsed += Math.Min(elapsed,timer.Remaining);
             timer.Remaining = Math.Max(0, timer.Remaining - elapsed);
             if (timer.Remaining > 1e-9) continue;
             timer.Remaining = 0;
@@ -228,7 +239,7 @@ public sealed class EventModuleRuntime
         };
         foreach (EventRuleDefinition rule in _activeModule.Rules)
         {
-            if (RuleContainsActiveCondition(rule, conditionId)) EvaluateRule(_activeModule, rule, context);
+            if (string.IsNullOrWhiteSpace(rule.FunctionName)&&RuleContainsActiveCondition(rule, conditionId)) EvaluateRule(_activeModule, rule, context);
         }
     }
 
@@ -289,7 +300,7 @@ public sealed class EventModuleRuntime
          * for backwards compatibility.
          */
         bool allPassed =
-            !rule.HasExplicitConditionFlow ||
+            context.FunctionArguments!=null&&rule.Conditions.Count==0 || !rule.HasExplicitConditionFlow ||
             rootConditionIds.Count >
                 0;
 
@@ -411,10 +422,13 @@ public sealed class EventModuleRuntime
         foreach (EventRuleDefinition child
                  in rule.SubEvents)
         {
+            if(!string.IsNullOrWhiteSpace(child.FunctionName))continue;
+            var inherited=context.PickedSets.ToDictionary(p=>p.Key,p=>p.Value.ToList());
             EvaluateRule(
                 module,
                 child,
                 context);
+            context.PickedSets.Clear();foreach(var pair in inherited)context.PickedSets[pair.Key]=pair.Value;
         }
 
         return true;
@@ -508,29 +522,30 @@ public sealed class EventModuleRuntime
                      "logic.or",
                      StringComparison.OrdinalIgnoreCase))
         {
-            passed =
-                false;
-
-            foreach (Guid inputId
-                     in condition.ConditionInputIds)
+            passed=false;
+            var inherited=context.PickedSets.ToDictionary(p=>p.Key,p=>p.Value.ToList());
+            var union=new Dictionary<string,HashSet<Guid>>(StringComparer.OrdinalIgnoreCase);
+            foreach(Guid inputId in condition.ConditionInputIds)
             {
-                bool inputPassed =
-                    EvaluateConditionNode(
-                        module,
-                        rule,
-                        inputId,
-                        conditionMap,
-                        context,
-                        results,
-                        evaluating,
-                        evaluated);
-
-                if (inputPassed)
-                {
-                    passed =
-                        true;
-                }
+                context.PickedSets.Clear();foreach(var pair in inherited)context.PickedSets[pair.Key]=pair.Value.ToList();
+                if(!EvaluateConditionNode(module,rule,inputId,conditionMap,context,new(),evaluating,evaluated))continue;
+                passed=true;
+                foreach(var pair in context.PickedSets){if(!union.TryGetValue(pair.Key,out var ids))union[pair.Key]=ids=new();ids.UnionWith(pair.Value);}
             }
+            context.PickedSets.Clear();foreach(var pair in union)context.PickedSets[pair.Key]=pair.Value.ToList();
+        }
+        else if (condition.Id.Equals("logic.not",StringComparison.OrdinalIgnoreCase))
+        {
+            var inherited=context.PickedSets.ToDictionary(p=>p.Key,p=>p.Value.ToList());
+            var rejected=new Dictionary<string,HashSet<Guid>>(StringComparer.OrdinalIgnoreCase);bool anyTrue=false;
+            foreach(var input in condition.ConditionInputIds)
+            {
+                context.PickedSets.Clear();foreach(var pair in inherited)context.PickedSets[pair.Key]=pair.Value.ToList();
+                if(!EvaluateConditionNode(module,rule,input,conditionMap,context,new(),evaluating,evaluated))continue;
+                anyTrue=true;foreach(var pair in context.PickedSets){if(!rejected.TryGetValue(pair.Key,out var ids))rejected[pair.Key]=ids=new();ids.UnionWith(pair.Value);}
+            }
+            context.PickedSets.Clear();foreach(var pair in inherited)context.PickedSets[pair.Key]=pair.Value.Where(id=>!rejected.TryGetValue(pair.Key,out var ids)||!ids.Contains(id)).ToList();
+            passed=condition.ConditionInputIds.Count>0&&(!anyTrue||inherited.Count>0&&context.PickedSets.Values.Any(ids=>ids.Count>0));
         }
         else if (condition.Id.Equals(
                      "system.triggerOnce",
@@ -569,10 +584,16 @@ public sealed class EventModuleRuntime
         {
             try
             {
-                passed =
-                    definition.Evaluate(
-                        condition,
-                        context);
+                string targetToken=EventValueResolver.GetString(condition,"target",context,"Self");
+                if(context.PickedObject==null&&(targetToken.Equals("Picked",StringComparison.OrdinalIgnoreCase)||targetToken.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)))
+                {
+                    string set=targetToken.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)?targetToken[7..]:EventValueResolver.GetString(condition,"set",context,"Selection");
+                    var accepted=new List<Guid>();
+                    if(context.PickedSets.TryGetValue(set,out var ids))
+                    {try{foreach(var id in ids.ToArray())if(context.Scene.FindGameObject(id) is {} obj){context.PickedObject=obj;if(definition.Evaluate(condition,context))accepted.Add(id);}}finally{context.PickedObject=null;}}
+                    context.PickedSets[set]=accepted;passed=accepted.Count>0;
+                }
+                else passed=definition.Evaluate(condition,context);
             }
             catch (Exception exception)
             {
@@ -633,14 +654,7 @@ public sealed class EventModuleRuntime
          */
         if (!rule.HasExplicitExecutionFlow)
         {
-            foreach (VisualInstruction action
-                     in rule.Actions)
-            {
-                ExecuteAction(
-                    module,
-                    action,
-                    context);
-            }
+            ExecuteLegacyActions(module,rule,context,0);
 
             return;
         }
@@ -732,6 +746,7 @@ public sealed class EventModuleRuntime
                 continue;
             }
 
+            if(TrySuspendWait(module,rule,action,context,action.NextActionId,-1))return;
             ExecuteAction(
                 module,
                 action,
@@ -843,6 +858,15 @@ public sealed class EventModuleRuntime
         VisualInstruction action,
         EventExecutionContext context)
     {
+        string targetToken=EventValueResolver.GetString(action,"target",context,"Self");
+        if(context.PickedObject==null && (targetToken.Equals("Picked",StringComparison.OrdinalIgnoreCase)||targetToken.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)))
+        {
+            string set=targetToken.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)?targetToken[7..]:EventValueResolver.GetString(action,"set",context,"Selection");
+            if(!context.PickedSets.TryGetValue(set,out var picked))return;
+            try{foreach(var id in picked.ToArray())if(context.Scene.FindGameObject(id) is {} obj){context.PickedObject=obj;ExecuteAction(module,action,context);}}
+            finally{context.PickedObject=null;}
+            return;
+        }
         /*
          * Orange means execution reached this Action node.
          */

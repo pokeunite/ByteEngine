@@ -1,5 +1,7 @@
 using System.Numerics;
 using System.Reflection;
+using System.ComponentModel;
+using Component = ByteEngine.Core.Scene.Component;
 using System.Text.RegularExpressions;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Assets;
@@ -60,6 +62,7 @@ internal static class ComponentPropertyRenderer
                         property.DeclaringType != typeof(Component) &&
                         property.GetIndexParameters().Length == 0 &&
                         property.GetMethod?.IsPublic == true &&
+                        property.GetCustomAttribute<BrowsableAttribute>()?.Browsable != false &&
                         Supported(property.PropertyType) &&
                         property.Name is not ("UpdateOrder" or "RenderOrder") &&
                         (type != typeof(UiAnimator) || property.Name is not
@@ -74,13 +77,13 @@ internal static class ComponentPropertyRenderer
                                 type,
                                 property.Name)
                             ?? new PropertyMetadata(
-                                Regex.Replace(
+                                property.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName ?? Regex.Replace(
                                     property.Name,
                                     "(?<=[a-z])(?=[A-Z])",
                                     " "),
-                                type == typeof(WaveSpawner3D) && property.SetMethod?.IsPublic != true
-                                    ? "Runtime" : "Properties",
-                                property.Name)))
+                                property.GetCustomAttribute<CategoryAttribute>()?.Category ?? (property.SetMethod?.IsPublic != true
+                                    ? "Live State" : "Properties"),
+                                property.GetCustomAttribute<DescriptionAttribute>()?.Description ?? property.Name)))
                 .OrderBy(descriptor => type != typeof(SkyEnvironment) ? 0 : descriptor.Metadata.Category switch
                 {
                     "Quick Setup" => 0,
@@ -268,6 +271,8 @@ internal static class ComponentPropertyRenderer
                 project);
 
         string? waveCategory = null;
+        bool namedGroups=Descriptors(component.GetType(),context).Any(d=>d.Property.IsDefined(typeof(CategoryAttribute)));
+        bool groupOpen=true;
         foreach (ComponentPropertyDescriptor descriptor
                  in Descriptors(
                      component.GetType(),
@@ -296,6 +301,12 @@ internal static class ComponentPropertyRenderer
                 waveCategory = descriptor.Metadata.Category;
                 ImGui.SeparatorText(waveCategory);
             }
+            else if(namedGroups&&descriptor.Metadata.Category!=waveCategory)
+            {
+                waveCategory=descriptor.Metadata.Category;
+                groupOpen=ImGui.CollapsingHeader(waveCategory,waveCategory=="Live State"?ImGuiTreeNodeFlags.None:ImGuiTreeNodeFlags.DefaultOpen);
+            }
+            if(namedGroups&&!groupOpen)continue;
 
             if(component is ByteEngine.Core.AI.RoutePath3D && descriptor.Property.Name=="WaypointsJson")continue;
             object? before =
@@ -568,20 +579,26 @@ internal static class ComponentPropertyRenderer
                 after =
                     tag;
             }
-            else if (component is WaveSpawner3D &&
-                     descriptor.Property.Name == nameof(WaveSpawner3D.FailureTargetId) &&
-                     descriptor.Property.PropertyType == typeof(Guid))
+            else if (descriptor.Property.PropertyType == typeof(Guid) &&
+                     (descriptor.Property.IsDefined(typeof(SceneObjectReferenceAttribute)) ||
+                      descriptor.Property.Name.EndsWith("ObjectId",StringComparison.Ordinal) ||
+                      descriptor.Property.Name.EndsWith("RootId",StringComparison.Ordinal) ||
+                      component is WaveSpawner3D && descriptor.Property.Name == nameof(WaveSpawner3D.FailureTargetId)))
             {
                 Guid selectedId = before is Guid id ? id : Guid.Empty;
-                string preview = component.GameObject.Scene?.FindGameObject(selectedId)?.Name ?? "None";
+                string preview = component.GameObject.Scene?.FindGameObject(selectedId)?.Name ?? (selectedId==Guid.Empty?"None":"Missing object");
                 if (ImGui.BeginCombo(label, preview))
                 {
                     if (ImGui.Selectable("None", selectedId == Guid.Empty))
                     { after = Guid.Empty; edited = true; }
                     if (component.GameObject.Scene is { } scene)
                         foreach (GameObject candidate in scene.GameObjects)
+                        {
+                            var required=descriptor.Property.GetCustomAttribute<SceneObjectReferenceAttribute>()?.RequiredComponent;
+                            if(required!=null&&!candidate.Components.Any(c=>required.IsInstanceOfType(c)))continue;
                             if (ImGui.Selectable(candidate.Name + "##" + candidate.Id, candidate.Id == selectedId))
                             { after = candidate.Id; edited = true; }
+                        }
                     ImGui.EndCombo();
                 }
             }

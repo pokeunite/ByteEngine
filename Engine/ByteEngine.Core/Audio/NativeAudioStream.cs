@@ -8,6 +8,9 @@ internal sealed class NativeAudioStream : IDisposable
     private readonly int[] _buffers=new int[3];
     private readonly short[] _samples=new short[65536];
     private bool _playing,_paused;
+    private readonly Dictionary<int,double> _durations=new();
+    private double _position;
+    public double Position=>_position+AL.GetSource(_source,ALSourcef.SecOffset);
     private GCHandle _pin;
     public int WorkingBufferBytes=>_reader.WorkingBufferBytes+_samples.Length*sizeof(short)+_buffers.Length*_samples.Length*sizeof(short);
     public NativeAudioStream(int source,string path)
@@ -28,19 +31,27 @@ internal sealed class NativeAudioStream : IDisposable
         int count=_reader.Read(_samples);
         if(count==0&&loop){_reader.Rewind();count=_reader.Read(_samples);}
         if(count==0)return false;
+        _durations[buffer]=count/(double)(_reader.Channels*_reader.SampleRate);
         AL.BufferData(buffer,_reader.Channels==1?ALFormat.Mono16:ALFormat.Stereo16,_pin.AddrOfPinnedObject(),count*sizeof(short),_reader.SampleRate);return true;
     }
     public void Update(bool loop)
     {
         if(!_playing||_paused)return;
         int processed=AL.GetSource(_source,ALGetSourcei.BuffersProcessed);
-        for(int i=0;i<processed;i++){int buffer=AL.SourceUnqueueBuffer(_source);if(Fill(buffer,loop))AL.SourceQueueBuffer(_source,buffer);}
+        for(int i=0;i<processed;i++){int buffer=AL.SourceUnqueueBuffer(_source);_position+=_durations.GetValueOrDefault(buffer);if(loop&&_reader.DurationSeconds>0)_position%=_reader.DurationSeconds;if(Fill(buffer,loop))AL.SourceQueueBuffer(_source,buffer);}
         int queued=AL.GetSource(_source,ALGetSourcei.BuffersQueued);
         if(queued==0){_playing=false;return;}
         if((ALSourceState)AL.GetSource(_source,ALGetSourcei.SourceState)!=ALSourceState.Playing)AL.SourcePlay(_source);
     }
     public void Pause(){_paused=true;AL.SourcePause(_source);}
-    public void Stop(){_playing=false;_paused=false;AL.SourceStop(_source);int queued=AL.GetSource(_source,ALGetSourcei.BuffersQueued);for(int i=0;i<queued;i++)AL.SourceUnqueueBuffer(_source);}
+    public void Stop(){_playing=false;_paused=false;_position=0;AL.SourceStop(_source);int queued=AL.GetSource(_source,ALGetSourcei.BuffersQueued);for(int i=0;i<queued;i++)AL.SourceUnqueueBuffer(_source);}
+    public void Seek(double seconds,bool loop)
+    {
+        bool playing=_playing,paused=_paused;Stop();_reader.Seek(seconds);_position=Math.Clamp(seconds,0,_reader.DurationSeconds);
+        foreach(int buffer in _buffers)if(Fill(buffer,loop))AL.SourceQueueBuffer(_source,buffer);
+        _playing=playing;_paused=paused||!playing;
+        if(playing){AL.SourcePlay(_source);if(paused)AL.SourcePause(_source);}
+    }
     public void DisposeManaged(){_reader.Dispose();if(_pin.IsAllocated)_pin.Free();}
     public void Dispose(){try{Stop();foreach(int buffer in _buffers)if(buffer!=0)AL.DeleteBuffer(buffer);}finally{DisposeManaged();}}
 }

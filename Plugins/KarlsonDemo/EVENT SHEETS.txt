@@ -23,3 +23,16 @@ MIGRATION FROM VERSION 2
 Add the presentation sheet before using version 3: previous component animation-name fields no longer drive animations. Copy the sample rules into existing custom event sheets if desired. Existing built-in fire input remains available, but do not enable it alongside a sheet's fire-input rule.
 
 Weapon shot hit: tick Last Ray Hit - check object, then pick Self or a scene object in Hit object. The weapon/equipment picker selects the firing source. No separate Last Raycast Hit Object condition is needed. Unticked accepts any hit; shotguns match any pellet and publish that hit.
+
+Menu organization: Plugins > Modular Weapon Gameplay > Weapon Equipment or Weapon Instance. Self is the object executing this sheet; the picker preview is not a fixed weapon binding.
+
+VERSION 3.4 — EDITABLE WEAPON HUD
+Weapon Equipment no longer writes to a hidden status label. Camera and weapon-root bindings use scene-object pickers. The old statusTextObjectId is retained only for reading old scenes and has no effect.
+
+Attach the Weapon HUD sample sheet to the equipment/player alongside FPS controls. It updates separate native UI Text objects named HUD Weapon Name, HUD Magazine Ammo and HUD Reserve Ammo when weapon values change. HUD Reload State is shown while reloading. In a project, choose each target with the action's object picker. Edit the format and component references in Set Formatted Text. Select the individual UI Text objects to change font, size, colour, placement and other styling. The sheet changes content and visibility only.
+
+Weapon Equipment exposes the selected weapon's name, slot, magazine ammo/capacity, reserve ammo/capacity, ammo cost, infinite reserve, can-fire/can-reload, reload remaining/progress, cooldown, damage, RPM, range, spread, pellet count and modes. Use component references in actions or Read weapon value into variable. That action accepts either a specific Weapon Instance or an equipment object, and can write to Self, Scene, Global or a chosen object's variable.
+
+Weapon Definition remains the editable source for shot damage/rate/range/spread, magazine and reserve limits, ammo cost, shot/trigger/reload modes, reload timing, projectile settings and muzzle effects. Weapon Instance exposes current ammo and simulation state. Implementation sequence counters are hidden; use the named weapon event conditions instead.
+
+Set Ammo, Add Reserve, tuning and effect actions now respect an explicitly chosen weapon even when another weapon is equipped. Existing animation presentation sheets remain independent from the HUD sheet.

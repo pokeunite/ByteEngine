@@ -14,8 +14,11 @@ namespace KarlsonDemo.Plugin;
 /// <summary>Per-object ammunition and state; reused for every weapon archetype.</summary>
 public sealed class WeaponInstance3D : Component
 {
+    [System.ComponentModel.Category("Ammunition"),System.ComponentModel.DisplayName("Magazine Ammo")]
     public int CurrentAmmo { get; set; } = 12;
+    [System.ComponentModel.Category("Ammunition")]
     public int ReserveAmmo { get; set; } = 60;
+    [System.ComponentModel.Category("Simulation")]
     public int RandomSeed { get; set; } = 17;
     public WeaponDefinition3D? Definition => GameObject.GetComponent<WeaponDefinition3D>();
     public bool Reloading => _reloadRemaining > 0;
@@ -29,22 +32,27 @@ public sealed class WeaponInstance3D : Component
     public bool ReloadStartedThisFrame { get; private set; }
     public bool ReloadCancelledThisFrame { get; private set; }
     public bool ReloadWasEmpty { get; private set; }
-    public long EquipSequence { get; private set; }
-    public long ReloadStartSequence { get; private set; }
-    public long ReloadCancelSequence { get; private set; }
-    public long ReloadCompleteSequence { get; private set; }
-    public long HitSequence { get; private set; }
+    [System.ComponentModel.Browsable(false)] public long EquipSequence { get; private set; }
+    [System.ComponentModel.Browsable(false)] public long ReloadStartSequence { get; private set; }
+    [System.ComponentModel.Browsable(false)] public long ReloadCancelSequence { get; private set; }
+    [System.ComponentModel.Browsable(false)] public long ReloadCompleteSequence { get; private set; }
+    [System.ComponentModel.Browsable(false)] public long HitSequence { get; private set; }
     public bool LastShotWasHitscan { get; private set; }
     private readonly List<WeaponShotHit> _shotHits = [];
     /// <summary>Actual pellet hits from the last accepted shot, nearest first; a miss clears the list.</summary>
     public IReadOnlyList<WeaponShotHit> ShotHits => _shotHits;
     public float CooldownRemaining => _cooldown;
+    public bool CanReload => Equipped && !Reloading && Definition is {} d &&
+        Math.Clamp(CurrentAmmo,0,Math.Clamp(d.MagazineCapacity,1,10000))<Math.Clamp(d.MagazineCapacity,1,10000) && (d.InfiniteReserve||ReserveAmmo>0);
+    public float ReloadRemainingSeconds => _reloadRemaining;
+    public float ReloadDurationSeconds => Reloading ? _reloadDuration : 0;
+    public float ReloadProgress => Reloading && _reloadDuration>0 ? Math.Clamp(1-_reloadRemaining/_reloadDuration,0,1) : 0;
     public bool CanFire => Equipped && _cooldown <= 0 &&
         Definition is {} d && (!Reloading || (d.ReloadMode == WeaponReloadMode.PerRound && d.AllowReloadInterrupt)) && CurrentAmmo >= Math.Clamp(d.AmmoPerShot, 1, 10000);
     public event Action<WeaponInstance3D>? Fired;
     public event Action<WeaponInstance3D>? ReloadCompleted;
     public event Action<RaycastHit3D>? Hit;
-    private float _cooldown, _reloadRemaining;
+    private float _cooldown, _reloadRemaining, _reloadDuration;
     private Random? _random;
     private VfxPlayer? _muzzleFlash;
 
@@ -78,6 +86,7 @@ public sealed class WeaponInstance3D : Component
         bool empty = CurrentAmmo == 0;ReloadWasEmpty=empty;
         _reloadRemaining = WeaponDefinition3D.Bound(empty ? d.EmptyReloadSeconds : d.ReloadSeconds, 1.6f, .05f, 30)
             / WeaponDefinition3D.Bound(d.ReloadSpeedMultiplier, 1, .1f, 10);
+        _reloadDuration = _reloadRemaining;
         ReloadStartedThisFrame=true;ReloadStartSequence++;
         return true;
     }

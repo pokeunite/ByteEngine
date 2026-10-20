@@ -3,6 +3,7 @@ import { loadContent } from './content.js';
 import { BrowserRenderer } from './renderer.js';
 import { decodeUiPacket } from './frame-wire.js';
 import { BrowserAudio } from './audio.js';
+import { BrowserVideos } from './video.js';
 import { createPerformanceCapture } from './performance.js';
 import { BrowserPresentation } from './graphics.js';
 const capture=createPerformanceCapture();
@@ -42,6 +43,7 @@ try{
     const previewQuality=new URLSearchParams(location.search).get('previewQuality');const exportGraphics={...(manifest.graphics||{})};if(['High','Balanced','Fast'].includes(previewQuality))exportGraphics.quality=previewQuality;game.ConfigurePresentation(JSON.stringify(exportGraphics));
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
+    const videos=new BrowserVideos(files,overlay,(id,seconds,paused,ended,error)=>game.VideoState(id,seconds,paused,ended,error));audio.videos=videos;
     status.setProgress(null,'Preparing audio…');
     const decodeStart=performance.now();await audio.decode();capture.event('audio-ready',{durationMs:performance.now()-decodeStart});
     if(stopped)throw new Error("Startup was interrupted; use Retry loading.");
@@ -73,17 +75,22 @@ try{
         if(e.code==='Escape')document.exitPointerLock();
     });
     window.addEventListener('keyup',e=>{const k=keyName(e.code);if(k)keys.delete(k);});
-    function release(){keys.clear();buttons.clear();keyPulses.clear();buttonPulses.clear();delta=[0,0];wheel=0;previous=performance.now();}
+    function release(){game.CancelTouches();keys.clear();buttons.clear();keyPulses.clear();buttonPulses.clear();delta=[0,0];wheel=0;previous=performance.now();}
+    function touch(e,phase){const r=canvas.getBoundingClientRect();game.Touch(e.pointerId,(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height,phase);}
+    canvas.style.touchAction='none';
+    canvas.addEventListener('pointercancel',e=>{if(e.pointerType!=='mouse')touch(e,'Cancelled');});
     canvas.addEventListener('blur',release);document.addEventListener('visibilitychange',release);
     canvas.addEventListener('pointerdown',e=>{
         canvas.focus();audio.activate().catch(fail);
+        if(e.pointerType!=='mouse'){canvas.setPointerCapture(e.pointerId);touch(e,'Started');return;}
         const b=['Left','Middle','Right'][e.button];if(b){buttons.add(b);buttonPulses.add(b);}
         if(game.WantsPointerLock()&&document.pointerLockElement!==canvas)canvas.requestPointerLock()?.catch(()=>{});
     });
-    window.addEventListener('pointerup',e=>buttons.delete(['Left','Middle','Right'][e.button]));
+    window.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse'){touch(e,'Ended');return;}buttons.delete(['Left','Middle','Right'][e.button]);});
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('wheel',e=>{wheel-=Math.sign(e.deltaY);e.preventDefault();},{passive:false});
     canvas.addEventListener('pointermove',e=>{
+        if(e.pointerType!=='mouse'){if(e.pressure>0)touch(e,'Held');return;}
         const rect=canvas.getBoundingClientRect();
         pointer=document.pointerLockElement===canvas?[.5,.5]:[(e.clientX-rect.left)/rect.width,(e.clientY-rect.top)/rect.height];
         delta[0]+=e.movementX;delta[1]+=e.movementY;
@@ -108,6 +115,8 @@ try{
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};
             const audioStart=performance.now();audio.commands(data.audio);const audioEnd=performance.now();
+            videos.update();
+            for(const [id,state] of audio.sources){const seconds=state.media?state.media.currentTime:state.offset+(state.node?(audio.context.currentTime-state.started)*state.pitch:0);game.AudioPosition(id,seconds);}
             const drawCount=data.draws.length,uiCount=data.ui.length;
             if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi)data.ui=[];
             renderer.draw(data,width,height);

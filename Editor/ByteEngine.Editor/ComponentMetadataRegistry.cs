@@ -70,6 +70,7 @@ internal static class ComponentMetadataRegistry
         [typeof(UiCanvas)] = new("Canvas", "UI", "Screen-space root for HUDs and menus.", "ui overlay screen"),
         [typeof(ByteEngine.Core.Navigation.NavigationRegion3D)] = new("Navigation Region", "Navigation", "Bakes a static walkable grid with obstacle clearance.", "navigation bake path grid"),
         [typeof(ByteEngine.Core.Navigation.NavigationAgent3D)] = new("Navigation Agent", "Navigation", "Follows budgeted obstacle-aware paths to a destination.", "navigation agent path destination"),
+        [typeof(ByteEngine.Core.Media.VideoPlayer)] = new("Video Player", "Media", "Plays a project-local video in a screen rectangle.", "video movie media playback"),
         [typeof(HingeJoint3D)]=new("Hinge Joint","Physics","Local-anchor articulated joint with angular limits and a bounded motor.","hinge joint articulation limit motor"),
         [typeof(ByteEngine.Core.Physics.DistanceJoint3D)] = new("Distance Joint", "Physics", "Articulated local-anchor constraint with optional break force.", "joint rope constraint anchors"),
         [typeof(ByteEngine.Core.Physics.RopeWinch3D)] = new("Rope Winch", "Physics", "Reelable tension-only rope to a body or world anchor, with hook launch and round cable rendering.", "rope cable winch reel hook tension"),

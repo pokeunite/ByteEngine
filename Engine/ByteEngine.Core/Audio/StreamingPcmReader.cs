@@ -44,6 +44,13 @@ public sealed class StreamingPcmReader : IDisposable
         catch{_wave.Dispose();throw;}
     }
     public void Rewind(){if(_vorbis!=null)_vorbis.SamplePosition=0;else _wave!.Position=_start;}
+    public void Seek(double seconds)
+    {
+        if(!double.IsFinite(seconds))throw new ArgumentOutOfRangeException(nameof(seconds));
+        long frame=(long)(Math.Clamp(seconds,0,DurationSeconds)*SampleRate);
+        if(_vorbis!=null)_vorbis.SamplePosition=frame;
+        else _wave!.Position=Math.Min(_end,_start+frame*Channels*(_bits/8));
+    }
     public int Read(short[] samples)
     {
         int count=Math.Min(samples.Length,_floats.Length);count-=count%Channels;

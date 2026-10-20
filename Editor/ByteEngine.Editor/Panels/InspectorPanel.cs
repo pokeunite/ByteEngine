@@ -593,7 +593,7 @@ internal sealed class InspectorPanel
     {
         int type = (int)value.Type;
         ImGui.SetNextItemWidth(85f);
-        if (ImGui.Combo("##type", ref type, "Number\0String\0Boolean\0Vector2\0Vector3\0"))
+        if (ImGui.Combo("##type", ref type, "Number\0String\0Boolean\0Vector2\0Vector3\0Array\0Structure\0Null\0"))
         {
             VariableType nextType = (VariableType)type;
             ExecutePersistent(
@@ -608,6 +608,10 @@ internal sealed class InspectorPanel
         ImGui.SetNextItemWidth(110f);
         switch (value.Type)
         {
+            case VariableType.Array:
+            case VariableType.Structure:
+                DrawCollectionValue(value,state);
+                break;
             case VariableType.Number:
                 float number = (float)value.Number;
                 changed = ImGui.DragFloat("##value", ref number, .1f);
@@ -652,6 +656,28 @@ internal sealed class InspectorPanel
         target.Boolean = source.Boolean;
         target.Vector2 = source.Vector2;
         target.Vector3 = source.Vector3;
+        target.Items=source.Items.Select(v=>v.Clone()).ToList();
+        target.Children=source.Children.ToDictionary(p=>p.Key,p=>p.Value.Clone(),StringComparer.Ordinal);
+    }
+
+    private static readonly Dictionary<VariableValue,string> CollectionDrafts=new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+    private static string _collectionError="";
+    private static void DrawCollectionValue(VariableValue value,EditorState state)
+    {
+        if(ImGui.SmallButton(value.Type==VariableType.Array?$"Edit array ({value.Items.Count})":$"Edit structure ({value.Children.Count})"))
+        {CollectionDrafts.Clear();CollectionDrafts[value]=VariableJson.Write(value);_collectionError="";ImGui.OpenPopup("Collection JSON");}
+        if(ImGui.BeginPopup("Collection JSON"))
+        {
+            string text=CollectionDrafts.GetValueOrDefault(value,VariableJson.Write(value));
+            if(ImGui.InputTextMultiline("##json",ref text,65536,new Vector2(400,220)))CollectionDrafts[value]=text;
+            if(ImGui.Button("Apply"))
+            {
+                try {var parsed=VariableJson.Parse(text);if(parsed.Type!=value.Type)throw new FormatException("Keep the selected array or structure type.");ExecutePersistent(state,"Edit Collection",()=>CopyValue(value,parsed));ImGui.CloseCurrentPopup();}
+                catch(Exception error){_collectionError=error.Message;}
+            }
+            if(_collectionError.Length>0)ImGui.TextWrapped(_collectionError);
+            ImGui.EndPopup();
+        }
     }
 
     private static string UniqueName(IEnumerable<string> names, string baseName)

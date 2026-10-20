@@ -13,6 +13,8 @@ foreach ($required in @("ByteEngine.Launcher.exe", "ByteEngine.Player.exe", "Byt
 }
 $targets = @(
     (Join-Path $repositoryRoot "Dist\ByteEngine\PlayerRuntime"),
+    (Join-Path $repositoryRoot "Dist\ByteEngine-BuildDebug\PlayerRuntime"),
+    (Join-Path $repositoryRoot "Editor\ByteEngine.Editor\bin\Release\net9.0-windows\win-x64\PlayerRuntime"),
     (Join-Path $repositoryRoot "Editor\ByteEngine.Editor\bin\Debug\net9.0-windows\win-x64\PlayerRuntime")
 )
 foreach ($target in $targets) {
@@ -26,7 +28,7 @@ foreach ($target in $targets) {
         Copy-Item -LiteralPath $item.FullName -Destination $resolved -Recurse -Force
     }
 }
-Write-Host "Standalone Windows player bundled with editor distribution and Debug editor."
+Write-Host "Standalone Windows player bundled with editor distributions and Release/Debug editors."
 
 }
 finally {

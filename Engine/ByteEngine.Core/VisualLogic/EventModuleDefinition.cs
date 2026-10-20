@@ -86,6 +86,8 @@ public sealed class EventModuleDefinition
 
 public sealed class EventRuleDefinition
 {
+    public string FunctionName { get; set; } = string.Empty;
+    public ByteEngine.Core.Variables.VariableValue FunctionDefaults { get; set; } = ByteEngine.Core.Variables.VariableValue.FromStructure();
     public Guid Id { get; set; } =
         Guid.NewGuid();
 

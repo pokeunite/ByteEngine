@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {BrowserVideos} from '../../Player/ByteEngine.Browser/wwwroot/video.js';
+const created=[];
+globalThis.document={body:{append(){}},createElement(){const v={style:{},currentTime:0,readyState:1,paused:true,ended:false,play(){this.paused=false;return Promise.resolve();},pause(){this.paused=true;},load(){},remove(){this.removed=true;},removeAttribute(){},addEventListener(){}};created.push(v);return v;}};
+const reports=[];const videos=new BrowserVideos(new Map([['Content/Assets/test.mp4',new ArrayBuffer(4)]]),{getBoundingClientRect:()=>({left:10,top:20,width:1000,height:500})},(...args)=>reports.push(args));
+videos.command({kind:'videoLoad',id:'a',path:'Content/Assets/test.mp4'});videos.command({kind:'videoRect',id:'a',x:.1,y:.2,w:.8,h:.6});videos.command({kind:'videoPlay',id:'a'});videos.command({kind:'videoSeek',id:'a',seconds:3});videos.update();
+assert.equal(created[0].currentTime,3);assert.equal(created[0].style.left,'110px');assert.equal(created[0].style.top,'120px');assert.equal(created[0].style.width,'800px');assert.equal(reports.at(-1)[1],3);
+videos.command({kind:'videoPause',id:'a'});videos.update();assert.equal(reports.at(-1)[2],true);
+videos.command({kind:'videoStop',id:'a'});assert.equal(created[0].style.display,'none');assert.equal(created[0].currentTime,0);
+videos.command({kind:'videoDispose',id:'a'});assert.equal(created[0].removed,true);assert.equal(videos.items.size,0);
+videos.command({kind:'videoLoad',id:'missing',path:'missing.mp4'});assert.match(reports.at(-1)[4],/not packaged/);
+console.log('PASS browser video placement, play, pause, seek, stop, teardown and missing-file reporting');

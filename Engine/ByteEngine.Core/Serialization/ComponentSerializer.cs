@@ -321,6 +321,7 @@ public sealed class ComponentSerializer
     public IReadOnlyCollection<Type> RegisteredComponentTypes => _byRuntimeType.Keys;
 
     private readonly ComponentSerializationContext _context;
+    internal string ProjectRoot => _context.ProjectRoot;
 
     public ComponentSerializer(
         string projectRoot,
@@ -335,6 +336,8 @@ public sealed class ComponentSerializer
                 assets,
                 warningSink
             );
+
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Media.VideoPlayer>("VideoPlayer"));
 
         Register(
             new Camera2DCodec()

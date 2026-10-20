@@ -11,6 +11,11 @@ public sealed class VariableValue
     public bool Boolean { get; set; }
     public Vector2 Vector2 { get; set; }
     public Vector3 Vector3 { get; set; }
+    public List<VariableValue> Items { get; set; } = new();
+    public Dictionary<string,VariableValue> Children { get; set; } = new(StringComparer.Ordinal);
+    public static VariableValue FromNull()=>new(){Type=VariableType.Null};
+    public static VariableValue FromArray(IEnumerable<VariableValue>? values=null) => new(){Type=VariableType.Array,Items=values?.Select(v=>v.Clone()).ToList()??new()};
+    public static VariableValue FromStructure(IEnumerable<KeyValuePair<string,VariableValue>>? values=null) => new(){Type=VariableType.Structure,Children=values?.ToDictionary(p=>p.Key,p=>p.Value.Clone(),StringComparer.Ordinal)??new(StringComparer.Ordinal)};
 
     public static VariableValue FromNumber(double value = 0d) =>
         new() { Type = VariableType.Number, Number = value };
@@ -29,6 +34,9 @@ public sealed class VariableValue
 
     public static VariableValue Default(VariableType type) => type switch
     {
+        VariableType.Array => FromArray(),
+        VariableType.Structure => FromStructure(),
+        VariableType.Null => FromNull(),
         VariableType.String => FromString(),
         VariableType.Boolean => FromBoolean(),
         VariableType.Vector2 => FromVector2(default),
@@ -37,8 +45,10 @@ public sealed class VariableValue
     };
 
     [JsonIgnore]
-    public object BoxedValue => Type switch
+    public object? BoxedValue => Type switch
     {
+        VariableType.Null => null,
+        VariableType.Array or VariableType.Structure => this,
         VariableType.Number => Number,
         VariableType.String => String,
         VariableType.Boolean => Boolean,
@@ -54,6 +64,8 @@ public sealed class VariableValue
         String = String,
         Boolean = Boolean,
         Vector2 = Vector2,
-        Vector3 = Vector3
+        Vector3 = Vector3,
+        Items = Items.Select(v=>v.Clone()).ToList(),
+        Children = Children.ToDictionary(p=>p.Key,p=>p.Value.Clone(),StringComparer.Ordinal)
     };
 }

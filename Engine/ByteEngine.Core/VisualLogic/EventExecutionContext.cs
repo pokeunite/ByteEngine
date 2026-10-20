@@ -22,6 +22,10 @@ public sealed class EventExecutionContext
     public RaycastHit3D? LastRaycastHit { get; set; }
     public Vector3 LastRaycastDirection { get; set; }
     public bool RaycastPerformed { get; set; }
+    public Dictionary<string,List<Guid>> PickedSets { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public GameObject? PickedObject { get; set; }
+    public VariableValue? FunctionArguments { get; init; }
+    public VariableValue FunctionReturn { get; set; } = VariableValue.FromNull();
 
     public required ByteEngine.Core.Scene.Scene Scene { get; init; }
 

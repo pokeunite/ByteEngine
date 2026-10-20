@@ -19,6 +19,8 @@ public sealed class GameSaveService
     public bool Exists(string key) => File.Exists(Resolve(key));
     public string LoadText(string key) => File.ReadAllText(Resolve(key));
     public T? Load<T>(string key) => JsonSerializer.Deserialize<T>(LoadText(key));
+    public T? LoadNative<T>(string key)=>JsonSerializer.Deserialize<T>(LoadText(key),Serialization.JsonSerialization.Options);
+    public void SaveNative<T>(string key,T value)=>SaveText(key,JsonSerializer.Serialize(value,Serialization.JsonSerialization.Options));
     public void Save<T>(string key, T value) => SaveText(key, JsonSerializer.Serialize(value));
     public void SaveText(string key, string value)
     {
@@ -28,4 +30,10 @@ public sealed class GameSaveService
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
     public void Delete(string key) => File.Delete(Resolve(key));
+    public IReadOnlyList<string> List(string prefix)
+    {
+        string directory=Resolve(prefix.TrimEnd('/')+"/__probe");directory=Path.GetDirectoryName(directory)!;
+        if(!Directory.Exists(directory))return Array.Empty<string>();
+        return Directory.EnumerateFiles(directory,"*.json",SearchOption.TopDirectoryOnly).Select(Path.GetFileNameWithoutExtension).OfType<string>().OrderBy(s=>s,StringComparer.Ordinal).ToArray();
+    }
 }

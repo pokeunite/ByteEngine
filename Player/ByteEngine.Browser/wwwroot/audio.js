@@ -33,6 +33,8 @@ export class BrowserAudio {
     }
     commands(commands){
         for(const c of commands){
+            if(c.kind.startsWith('video')){this.videos?.command(c);continue;}
+            if(c.kind==='openUrl'){window.open(c.url,'_blank','noopener,noreferrer');continue;}
             if(c.kind==='listener'){
                 const l=this.context.listener,t=this.context.currentTime;
                 for(const [key,value]of Object.entries({positionX:c.position[0],positionY:c.position[1],positionZ:c.position[2],forwardX:c.forward[0],forwardY:c.forward[1],forwardZ:c.forward[2],upX:c.up[0],upY:c.up[1],upZ:c.up[2]}))l[key]?.setValueAtTime(value,t);
@@ -44,6 +46,10 @@ export class BrowserAudio {
                 if(state){state.wantsPlay=false;state.generation++;if(state.media)state.offset=state.media.currentTime;else if(state.node)state.offset+=(this.context.currentTime-state.started)*state.pitch;this.halt(state);}
             }else if(c.kind==='stop'){
                 if(state){state.wantsPlay=false;state.generation++;this.halt(state);state.gain.disconnect();state.panner.disconnect();this.sources.delete(c.id);}
+            }else if(c.kind==='seek'){
+                state=this.state(c.id);state.offset=Math.max(0,c.seconds);
+                if(state.media)state.media.currentTime=state.offset;
+                else if(state.node){const path=state.path,loop=state.loop;this.play({id:c.id,path,loop}).catch(console.error);}
             }else if(c.kind==='settings'&&state){
                 if(state.node&&state.pitch!==c.pitch){state.offset+=(this.context.currentTime-state.started)*state.pitch;state.started=this.context.currentTime;}
                 state.pitch=c.pitch;state.loop=c.loop;if(state.node){state.node.playbackRate.value=c.pitch;state.node.loop=c.loop;}if(state.media){state.media.playbackRate=c.pitch;state.media.loop=c.loop;}

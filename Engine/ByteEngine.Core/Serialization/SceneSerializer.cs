@@ -332,6 +332,8 @@ public sealed class SceneSerializer
                 _classification
             );
 
+        scene.ProjectRoot = _components.ProjectRoot;
+        scene.SerializationContext = this;
         scene.FixedSimulation = data.FixedSimulation;
         scene.SimulationClock.StepSeconds = double.IsFinite(data.FixedStepSeconds) ? Math.Clamp(data.FixedStepSeconds, .001, .1) : 1.0 / 60;
         scene.SimulationClock.MaximumCatchUpSteps = Math.Clamp(data.MaximumCatchUpSteps, 1, 64);

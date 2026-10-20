@@ -14,11 +14,14 @@ namespace ByteEngine.Core.VisualLogic;
 public sealed record VisualArgumentDefinition(string Name, string DisplayName, VariableValue DefaultValue)
 {
     public bool IsObjectReference { get; init; }
+    public bool AcceptsAnyValue { get; init; }
+    public IReadOnlyList<string> Choices { get; init; } = Array.Empty<string>();
     public EventValue CreateDefault() => new() { Constant = DefaultValue.Clone() };
 }
 
 public sealed class VisualConditionDefinition
 {
+    public string? MenuGroup { get; init; }
     public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
@@ -35,6 +38,7 @@ public sealed class VisualConditionDefinition
 
 public sealed class VisualActionDefinition
 {
+    public string? MenuGroup { get; init; }
     public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
@@ -123,6 +127,17 @@ public sealed partial class VisualLogicRegistry
         RegisterAudio(registry);
         RegisterAnimation(registry);
         RegisterAttachment(registry);
+        RegisterCreatorData(registry);
+        RegisterCreatorWorld(registry);
+        RegisterCreatorMotion(registry);
+        RegisterCreatorInventory(registry);
+        RegisterCreatorSaves(registry);
+        RegisterCreatorNetwork(registry);
+        RegisterCreatorDialogue(registry);
+        RegisterCreatorFunctions(registry);
+        RegisterCreatorTouch(registry);
+        RegisterCreatorAudio(registry);
+        RegisterCreatorVideo(registry);
 
         ByteEngine.Core.Plugins.ByteEnginePluginRegistry.ApplyVisualLogic(registry);
         return registry;
@@ -2014,6 +2029,7 @@ public sealed partial class VisualLogicRegistry
         string token = EventValueResolver.GetString(instruction, argumentName, context, SelfTarget);
         if (string.Equals(token, "Last Ray Hit", StringComparison.OrdinalIgnoreCase))
             return context.LastRaycastHit?.GameObject;
+        if (string.Equals(token,"Picked",StringComparison.OrdinalIgnoreCase)||token.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)) return context.PickedObject;
         if (string.IsNullOrWhiteSpace(token) || string.Equals(token, SelfTarget, StringComparison.OrdinalIgnoreCase)) return context.Self;
         GameObject? target = token.StartsWith("id:", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(token[3..], out Guid id)
             ? context.Scene.FindGameObject(id) : context.Scene.FindGameObject(token);
@@ -2034,6 +2050,7 @@ public sealed partial class VisualLogicRegistry
 
         if (string.Equals(token, "Last Ray Hit", StringComparison.OrdinalIgnoreCase))
             return context.LastRaycastHit?.GameObject;
+        if (string.Equals(token,"Picked",StringComparison.OrdinalIgnoreCase)||token.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase)) return context.PickedObject;
 
         if (string.IsNullOrWhiteSpace(
                 token) ||

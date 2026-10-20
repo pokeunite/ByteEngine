@@ -7,12 +7,13 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
 {
     public void Register(ByteEnginePluginContext context)
     {
-        context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Equip any number of independently configured weapon instances; optional input and HUD bindings.", "fps inventory guns"));
+        context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Choose the view camera and weapon root. Input, animations and HUD text are authored in Event Sheets. Live values are available as component references.", "fps inventory guns ammo hud"));
         context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Damage, ammo and timing. Equip/fire/reload animations are authored in Event Sheets.", "ammo hitscan projectile pistol spread"));
         context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Ammo state and weapon events. Use Weapon shot hit in an Event Sheet to access Last Ray Hit.", "ammo state reload raycast hit"));
         context.RegisterSimpleComponent<MilkDepotCourse3D>("MilkDepotCourse3D", new("Milk Depot Course", "Karlson", "Editable targets, milk goal, checkpoints and fall recovery.", "level objective checkpoint"));
         context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
         WeaponEvents.Register(context);
+        WeaponReadoutEvents.Register(context);
     }
 }
 internal static class WeaponEvents
@@ -44,33 +45,38 @@ internal static class WeaponEvents
             _ => null
         };
         void Action(string id, string name, Action<FpsGunLab3D, VisualInstruction, EventExecutionContext> run, params VisualArgumentDefinition[] args) =>
-            c.RegisterAction(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
+            c.RegisterAction(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), MenuGroup = "Weapon Equipment", TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
                 Execute = (i,e) => { if (Resolve(i,e) is {} equipment) run(equipment,i,e); } });
         void Condition(string id, string name, Func<FpsGunLab3D, VisualInstruction, EventExecutionContext, bool> test, params VisualArgumentDefinition[] args) =>
-            c.RegisterCondition(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
+            c.RegisterCondition(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), MenuGroup = "Weapon Equipment", TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
                 Evaluate = (i,e) => Resolve(i,e) is {} equipment && test(equipment,i,e) });
         void WeaponCondition(string id,string name,Func<WeaponInstance3D,VisualInstruction,EventExecutionContext,bool> test,params VisualArgumentDefinition[] args)=>
-            c.RegisterCondition(new(){Id=Prefix+id,Category="Weapons",DisplayName=name,SentenceTemplate=Sentence(id),Arguments=[target,..args],Evaluate=(i,e)=>ResolveWeapon(i,e) is {} weapon&&test(weapon,i,e)});
+            c.RegisterCondition(new(){Id=Prefix+id,Category="Weapons",DisplayName=name,SentenceTemplate=Sentence(id),MenuGroup="Weapon Instance",Arguments=[target,..args],Evaluate=(i,e)=>ResolveWeapon(i,e) is {} weapon&&test(weapon,i,e)});
+        void WeaponAction(string id,string name,Action<WeaponInstance3D,VisualInstruction,EventExecutionContext> run,params VisualArgumentDefinition[] args)=>
+            c.RegisterAction(new(){Id=Prefix+id,Category="Weapons",DisplayName=name,MenuGroup="Weapon Instance",Arguments=[target,..args],Execute=(i,e)=>{if(ResolveWeapon(i,e) is {} weapon)run(weapon,i,e);}});
         Action("equip", "Equip weapon slot", (w,i,e) => w.Select((int)Num(i,e,"slot")), slot);
         Action("fire", "Fire equipped weapon", (w,i,e) => {var weapon=w.SelectedWeapon;bool fired=w.Fire();WeaponEventBridge.Publish(e,weapon,accepted:fired);});
         Action("reload", "Reload equipped weapon", (w,i,e) => w.Reload());
         Action("cancelReload", "Cancel reload", (w,i,e) => w.CancelReload());
-        Action("setAmmo", "Set magazine and reserve ammo", (w,i,e) => w.SelectedWeapon?.SetAmmo((int)Num(i,e,"current"),(int)Num(i,e,"reserve")),
+        WeaponAction("setAmmo", "Set magazine and reserve ammo", (w,i,e) => w.SetAmmo((int)Num(i,e,"current"),(int)Num(i,e,"reserve")),
             Arg("current","Current magazine ammo",VariableValue.FromNumber(12)), Arg("reserve","Reserve ammo",VariableValue.FromNumber(60)));
-        Action("addReserve", "Add reserve ammo", (w,i,e) => w.SelectedWeapon?.AddReserve((int)Num(i,e,"amount")), Arg("amount","Ammo amount",VariableValue.FromNumber(12)));
-        Action("capacity", "Set magazine capacity", (w,i,e) => { if (w.SelectedWeapon?.Definition is {} d) { d.MagazineCapacity = Math.Clamp((int)Num(i,e,"capacity"),1,10000); w.SelectedWeapon.ClampAmmo(); } }, Arg("capacity","Magazine capacity",VariableValue.FromNumber(12)));
-        Action("shotMode", "Use projectile / hitscan mode", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) d.ShotMode = Bool(i,e,"projectile") ? WeaponShotMode.Projectile : WeaponShotMode.Hitscan; }, Arg("projectile","Projectile (off = hitscan)",VariableValue.FromBoolean(false)));
-        Action("trace", "Show shot traces", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.ShowShotTrace = Bool(i,e,"enabled"); d.TraceSeconds = Num(i,e,"seconds"); } }, enabled, Arg("seconds","Trace duration seconds",VariableValue.FromNumber(.3)));
+        WeaponAction("addReserve", "Add reserve ammo", (w,i,e) => w.AddReserve((int)Num(i,e,"amount")), Arg("amount","Ammo amount",VariableValue.FromNumber(12)));
+        WeaponAction("capacity", "Set magazine capacity", (w,i,e) => { if (w.Definition is {} d) { d.MagazineCapacity = Math.Clamp((int)Num(i,e,"capacity"),1,10000); w.ClampAmmo(); } }, Arg("capacity","Magazine capacity",VariableValue.FromNumber(12)));
+        WeaponAction("shotMode", "Use projectile / hitscan mode", (w,i,e) => { if(w.Definition is {} d) d.ShotMode = Bool(i,e,"projectile") ? WeaponShotMode.Projectile : WeaponShotMode.Hitscan; }, Arg("projectile","Projectile (off = hitscan)",VariableValue.FromBoolean(false)));
+        WeaponAction("trace", "Show shot traces", (w,i,e) => { if(w.Definition is {} d) { d.ShowShotTrace = Bool(i,e,"enabled"); d.TraceSeconds = Num(i,e,"seconds"); } }, enabled, Arg("seconds","Trace duration seconds",VariableValue.FromNumber(.3)));
         Action("input", "Use built-in fire input", (w,i,e) => w.UseBuiltInFireInput = Bool(i,e,"enabled"), enabled);
         Action("readAmmo", "Copy ammo to object variables", (w,i,e) => {
             w.GameObject.Variables.Set(Name(i,e,"currentVariable","Ammo"),VariableValue.FromNumber(w.Ammo));
             w.GameObject.Variables.Set(Name(i,e,"reserveVariable","Reserve"),VariableValue.FromNumber(w.ReserveAmmo));
         }, Arg("currentVariable","Magazine variable name",VariableValue.FromString("Ammo")), Arg("reserveVariable","Reserve variable name",VariableValue.FromString("Reserve")));
-        Action("tuneShot", "Set damage, fire rate and spread", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.DamagePerPellet=Num(i,e,"damage");d.RoundsPerMinute=Num(i,e,"rpm");d.SpreadDegrees=Num(i,e,"spread");d.PelletsPerShot=Math.Clamp((int)Num(i,e,"pellets"),1,32); } },
+        WeaponAction("tuneShot", "Set damage, fire rate and spread", (w,i,e) => { if(w.Definition is {} d) { d.DamagePerPellet=Num(i,e,"damage");d.RoundsPerMinute=Num(i,e,"rpm");d.SpreadDegrees=Num(i,e,"spread");d.PelletsPerShot=Math.Clamp((int)Num(i,e,"pellets"),1,32); } },
             Arg("damage","Damage per pellet",VariableValue.FromNumber(25)),Arg("rpm","Rounds per minute",VariableValue.FromNumber(270)),Arg("spread","Spread cone degrees",VariableValue.FromNumber(0)),Arg("pellets","Pellets per shot",VariableValue.FromNumber(1)));
-        Action("reloadTiming", "Set reload timing", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.ReloadSeconds=Num(i,e,"seconds"); d.EmptyReloadSeconds=Num(i,e,"emptySeconds"); d.ReloadSpeedMultiplier=Num(i,e,"speed"); d.AllowReloadInterrupt=Bool(i,e,"interrupt"); } },
+        WeaponAction("reloadTiming", "Set reload timing", (w,i,e) => { if(w.Definition is {} d) { d.ReloadSeconds=Num(i,e,"seconds"); d.EmptyReloadSeconds=Num(i,e,"emptySeconds"); d.ReloadSpeedMultiplier=Num(i,e,"speed"); d.AllowReloadInterrupt=Bool(i,e,"interrupt"); } },
             Arg("seconds","Reload seconds (per shell for shotgun)",VariableValue.FromNumber(1)), Arg("emptySeconds","Empty reload seconds",VariableValue.FromNumber(1.6)), Arg("speed","Reload speed multiplier",VariableValue.FromNumber(1)), Arg("interrupt","Allow per-shell reload interruption",VariableValue.FromBoolean(true)));
-        Action("muzzleFlash", "Set muzzle flash", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.MuzzleFlashEnabled=Bool(i,e,"enabled"); d.MuzzleFlashSize=Num(i,e,"size"); } }, enabled, Arg("size","Flash size",VariableValue.FromNumber(.6)));
+        WeaponAction("muzzleFlash", "Set muzzle flash", (w,i,e) => { if(w.Definition is {} d) { d.MuzzleFlashEnabled=Bool(i,e,"enabled"); d.MuzzleFlashSize=Num(i,e,"size"); } }, enabled, Arg("size","Flash size",VariableValue.FromNumber(.6)));
+        WeaponCondition("canReload","Weapon can reload",(w,i,e)=>w.CanReload);
+        WeaponCondition("magazineEmpty","Magazine is empty",(w,i,e)=>w.CurrentAmmo<=0);
+        WeaponCondition("reserveAtLeast","Reserve ammo is at least",(w,i,e)=>w.ReserveAmmo>=Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));
         WeaponCondition("fired", "Weapon fired", (w,i,e) => {bool fired=WeaponEventBridge.Pulse(i,e,w,"fired");if(fired)WeaponEventBridge.Publish(e,w);return fired;});
         WeaponCondition("hit", "Weapon shot hit", (w,i,e) =>
         {
@@ -99,7 +105,7 @@ internal static class WeaponEvents
         WeaponCondition("automatic", "Weapon uses automatic trigger", (w,i,e) => w.Definition?.TriggerMode==WeaponTriggerMode.Automatic);
         WeaponCondition("semiAutomatic", "Weapon uses single-shot trigger", (w,i,e) => w.Definition?.TriggerMode==WeaponTriggerMode.SemiAutomatic);
         WeaponCondition("ammoAtLeast", "Magazine ammo is at least", (w,i,e) => w.CurrentAmmo >= Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));
-        c.RegisterAction(new(){Id=Prefix+"useShotResult",Category="Weapons",DisplayName="Use weapon shot result as Last Ray Hit",Arguments=[target,Arg("hitIndex","Hit index (nearest first, zero based)",VariableValue.FromNumber(0))],Execute=(i,e)=>WeaponEventBridge.Publish(e,ResolveWeapon(i,e),(int)Num(i,e,"hitIndex"))});
+        c.RegisterAction(new(){Id=Prefix+"useShotResult",Category="Weapons",DisplayName="Use weapon shot result as Last Ray Hit",MenuGroup="Weapon Instance",Arguments=[target,Arg("hitIndex","Hit index (nearest first, zero based)",VariableValue.FromNumber(0))],Execute=(i,e)=>WeaponEventBridge.Publish(e,ResolveWeapon(i,e),(int)Num(i,e,"hitIndex"))});
         Condition("slot", "Weapon slot is equipped", (w,i,e) => w.SelectedSlot == (int)Num(i,e,"slot"),slot);
         Condition("inputActive", "Game input is captured", (w,i,e) => ByteEngine.Core.Input.IsGameInputCaptured);
         // Keep old serialized events loadable, without prescribing the number of new slots.
@@ -107,13 +113,15 @@ internal static class WeaponEvents
     }
     private static string Name(VisualInstruction i, EventExecutionContext e, string key, string fallback)
     { string value=EventValueResolver.GetString(i,key,e,fallback);return string.IsNullOrWhiteSpace(value)?fallback:value; }
-    private static GameObject? ResolveObject(VisualInstruction i,EventExecutionContext e,string key="target")
+    internal static GameObject? ResolveObject(VisualInstruction i,EventExecutionContext e,string key="target")
     {
         string token = EventValueResolver.GetString(i,key,e,"Self");
+        if(token.Equals("Last Ray Hit",StringComparison.OrdinalIgnoreCase))return e.LastRaycastHit?.GameObject;
+        if(token.Equals("Picked",StringComparison.OrdinalIgnoreCase)||token.StartsWith("Picked:",StringComparison.OrdinalIgnoreCase))return e.PickedObject;
         return string.IsNullOrWhiteSpace(token)||token.Equals("Self",StringComparison.OrdinalIgnoreCase) ? e.Self :
             token.StartsWith("id:") && Guid.TryParse(token[3..],out var id) ? e.Scene.FindGameObject(id) : e.Scene.FindGameObject(token);
     }
-    private static WeaponInstance3D? ResolveWeapon(VisualInstruction i,EventExecutionContext e)
+    internal static WeaponInstance3D? ResolveWeapon(VisualInstruction i,EventExecutionContext e)
     {
         var obj=ResolveObject(i,e);return obj?.GetComponent<WeaponInstance3D>()??FindEquipment(obj)?.SelectedWeapon;
     }
