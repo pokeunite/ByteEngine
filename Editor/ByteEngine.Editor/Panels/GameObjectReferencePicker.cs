@@ -59,9 +59,9 @@ internal sealed class GameObjectReferencePicker
             }
         }
 
-        if (Matches("Last Ray Hit"))
+        if (Matches("Last Ray Hit Weapon Shot Raycast"))
         {
-            if (ImGui.Selectable("Last Ray Hit (from Cast Ray or Ray Hits Anything)"))
+            if (ImGui.Selectable("Last Ray Hit (raycast or weapon shot)"))
             {
                 selectedToken = "Last Ray Hit";
                 changed = true;

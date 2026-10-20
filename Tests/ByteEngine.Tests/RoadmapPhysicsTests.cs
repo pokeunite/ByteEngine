@@ -58,6 +58,15 @@ internal static class RoadmapPhysicsTests
         for(int i=0;i<180;i++)slopeScene.Physics.Step(slopeScene,1f/60);
         var slid=slider.Transform.WorldPosition;
         Check(slid.X<-.5f&&slid.Y>=slid.X*.2f-.08f&&float.IsFinite(slid.X+slid.Y),"Slope contact does not slide or penetrates: "+slid);
+        var sweptSlope=new Scene("Continuous slope contact");
+        sweptSlope.CreateGameObject("road").AddComponent(new MeshCollider3D{Vertices=[new(-30,-6,-10),new(30,6,-10),new(30,6,10),new(-30,-6,10)],Triangles=[0,1,2,0,2,3]});
+        var wheel=sweptSlope.CreateGameObject("swept wheel");wheel.Transform.WorldPosition=new(0,.2f,0);wheel.AddComponent(new CapsuleCollider3D{Radius=.1f,Height=.2f,Center=Vector3.Zero});
+        wheel.AddComponent(new Rigidbody3D{ContinuousCollision=true,Friction=0,LinearDamping=0,AllowSleep=false,Velocity=new(-2,0,0)});
+        for(int i=0;i<360;i++)sweptSlope.Physics.Step(sweptSlope,1f/120);
+        var swept=wheel.Transform.WorldPosition;
+        Check(swept.X<-5&&swept.Y>=swept.X*.2f+.07f,"Continuous contact cancels downhill tangent movement or tunnels: "+swept);
+        Check(GameplayQuery3D.Raycast(sweptSlope,new(10,8,0),-Vector3.UnitY,out var slopeHit,10)&&Vector3.Dot(slopeHit.Normal,Vector3.Normalize(new Vector3(-.2f,1,0)))>.9999f,"Mesh point ray must report the stable geometric slope normal");
+        Check(!GameplayQuery3D.Raycast(sweptSlope,new(10,8,0),-Vector3.UnitY,out _,1),"Mesh point ray ignores its maximum distance");
         var platformScene=new Scene("Moving platform");var platform=platformScene.CreateGameObject("kinematic lift");platform.Transform.WorldPosition=new(0,-.5f,0);platform.AddComponent(new BoxCollider3D{Size=new(6,1,6)});platform.AddComponent(new Rigidbody3D{BodyType=RigidbodyBodyType3D.Kinematic,Velocity=new(0,.2f,0),UseGravity=false});
         var passenger=platformScene.CreateGameObject("passenger");passenger.Transform.WorldPosition=new(0,.5f,0);passenger.AddComponent(new BoxCollider3D());passenger.AddComponent(new Rigidbody3D());
         for(int i=0;i<240;i++){platform.Transform.WorldPosition+=new Vector3(0,.2f/60,0);platformScene.Physics.Step(platformScene,1f/60);}

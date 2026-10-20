@@ -9,6 +9,8 @@ export class BrowserPresentation {
         const budget=quality==='High'?[2560,1440]:quality==='Fast'?[1280,720]:[1920,1080];
         let scale=Math.min(uiScale,budget[0]/width,budget[1]/height);
         if(resolution==='Native')scale=uiScale;
+        else if(resolution==='1080p')scale=Math.min(uiScale,1920/width,1080/height);
+        else if(resolution==='720p')scale=Math.min(uiScale,1280/width,720/height);
         else if(resolution==='75%')scale=uiScale*.75;
         else if(resolution==='50%')scale=uiScale*.5;
         else scale*=this.factor;

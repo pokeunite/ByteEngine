@@ -8,6 +8,7 @@ internal sealed class MaterialRenderStateComparer : IEqualityComparer<Material>
     {
         if(ReferenceEquals(x,y))return true;
         if(x is null || y is null)return false;
+        if(x.WetContact0!=y.WetContact0||x.WetContact1!=y.WetContact1||x.WetContact2!=y.WetContact2||x.WetLevels!=y.WetLevels)return false;
         return x.WaterDepthTexture==y.WaterDepthTexture && x.WaterDepthRect==y.WaterDepthRect && x.WaterDepthSettings==y.WaterDepthSettings && x.WaterOceanWaves==y.WaterOceanWaves && x.WaterAbsorption==y.WaterAbsorption && x.WaterScattering==y.WaterScattering && x.WaterStyle==y.WaterStyle && x.WaterReflections==y.WaterReflections && x.WaterFlow==y.WaterFlow && x.WaterImpact==y.WaterImpact && x.WaterSurface==y.WaterSurface && x.WaterVolume==y.WaterVolume && x.WaterColumn==y.WaterColumn && x.WaterMotion==y.WaterMotion && x.WaterWake==y.WaterWake && x.WaterSize==y.WaterSize && x.BaseColor == y.BaseColor &&
             x.MainTexture == y.MainTexture &&
             x.NormalTexture == y.NormalTexture &&

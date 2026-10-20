@@ -80,6 +80,10 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private ImportedAnimation? _currentAnimation;
     private ImportedAnimation? _previousAnimation;
+    private PoseTransform[]? _transitionSourcePose;
+    /// <summary>Blend from the displayed pose instead of advancing the outgoing clip.
+    /// Keeps externally controlled actions continuous when a blend is interrupted.</summary>
+    public bool BlendFromCurrentPose { get; set; }
 
     private float _currentTime;
     private float _previousTime;
@@ -132,6 +136,9 @@ public sealed partial class SkeletalMeshRenderer : Component
     /// <summary>Runtime animation sampling interval; zero evaluates every frame.
     /// Playback time still advances normally. Physical poses and reactions remain immediate.</summary>
     public float AnimationUpdateInterval { get; set; }
+    /// <summary>Batch animation and post-physics IK changes into one pose evaluation.
+    /// Bone queries still resolve immediately; rendering always receives the completed pose.</summary>
+    public bool EvaluatePoseAfterPhysics { get; set; }
     private float _animationPoseElapsed;
 
     public float TransitionDuration { get; set; } = 0.15f;
@@ -281,6 +288,24 @@ public sealed partial class SkeletalMeshRenderer : Component
             modelMatrix *
             Transform.WorldMatrix;
 
+        return true;
+    }
+
+    /// <summary>Samples one bone's authored clip hierarchy without running IK,
+    /// skinning or uploading meshes. Use for contact probes before setting IK targets.
+    /// This deliberately excludes blend spaces, procedural layers and crossfades.</summary>
+    public bool TrySampleAnimationBoneWorldMatrix(string boneName, float phase, out Matrix4x4 matrix)
+    {
+        matrix = Matrix4x4.Identity;
+        if (!float.IsFinite(phase) || (!_resolved && !ResolveRuntimeResources()) || _currentAnimation == null) return false;
+        int node = ResolveNode(boneName);
+        if (node < 0) return false;
+        float time = Math.Clamp(phase, 0, 1) * _currentAnimation.Duration;
+        Matrix4x4 global = Matrix4x4.Identity;
+        for (int at = node; at >= 0; at = _parentIndices[at])
+            global *= PoseToMatrix(SampleNode(at, _currentAnimation, time));
+        Vector3 travel = CalculateClipRootTravel(_currentAnimation, time);
+        matrix = global * Matrix4x4.CreateTranslation(-travel.X, 0, -travel.Z) * Transform.WorldMatrix;
         return true;
     }
 
@@ -477,6 +502,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                     _transitionElapsed >= _activeTransitionDuration)
                 {
                     _previousAnimation = null;
+                    _transitionSourcePose = null;
                     _transitionElapsed = 0.0f;
                     _activeTransitionDuration = 0.0f;
                 }
@@ -491,10 +517,15 @@ public sealed partial class SkeletalMeshRenderer : Component
             }
         }
 
-        if (_poseDirty)
+        if (_poseDirty && !EvaluatePoseAfterPhysics)
         {
             UpdatePoseAndMeshes();
         }
+    }
+
+    protected override void OnLateUpdate()
+    {
+        if (EvaluatePoseAfterPhysics && _poseDirty) UpdatePoseAndMeshes();
     }
 
     protected override void OnRender(RenderContext context)
@@ -678,6 +709,18 @@ public sealed partial class SkeletalMeshRenderer : Component
         if (_currentAnimation != null &&
             blend > 0.000001f)
         {
+            if (BlendFromCurrentPose && !HasAdvancedPose)
+            {
+                // Capture before changing the active clip: this includes an in-progress blend.
+                var displayed = BuildLocalPose();
+                _transitionSourcePose = new PoseTransform[displayed.Length];
+                for (int i = 0; i < displayed.Length; i++)
+                {
+                    Matrix4x4.Decompose(displayed[i], out var scale, out var rotation, out var position);
+                    _transitionSourcePose[i] = new PoseTransform(position, rotation, scale);
+                }
+            }
+            else _transitionSourcePose = null;
             _previousAnimation = _currentAnimation;
             _previousTime = _currentTime;
             _previousLoop = _currentLoop;
@@ -687,6 +730,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         else
         {
             _previousAnimation = null;
+            _transitionSourcePose = null;
             _previousTime = 0.0f;
             _transitionElapsed = 0.0f;
             _activeTransitionDuration = 0.0f;
@@ -722,11 +766,36 @@ public sealed partial class SkeletalMeshRenderer : Component
                 Math.Max(_currentAnimation.Duration, 0.0f));
 
         _previousAnimation = null;
+        _transitionSourcePose = null;
         _previousTime = 0.0f;
         _transitionElapsed = 0.0f;
         _activeTransitionDuration = 0.0f;
         _poseDirty = true;
 
+        UpdatePoseAndMeshes();
+        return true;
+    }
+    /// <summary>Samples an externally clocked action while preserving and advancing
+    /// its crossfade. Unlike editor Seek, this does not discard transition state.</summary>
+    public bool SamplePlayback(float time, float transitionDeltaSeconds)
+    {
+        if (_currentAnimation == null || !float.IsFinite(time) || !float.IsFinite(transitionDeltaSeconds))
+            return false;
+        _currentTime = Math.Clamp(time, 0f, Math.Max(0f, _currentAnimation.Duration));
+        if (_previousAnimation != null)
+        {
+            float delta = Math.Max(0f, transitionDeltaSeconds);
+            _previousTime = AdvanceTime(_previousTime, delta, _previousAnimation.Duration, _previousLoop, out _);
+            _transitionElapsed += delta;
+            if (_activeTransitionDuration <= 0.000001f || _transitionElapsed >= _activeTransitionDuration)
+            {
+                _previousAnimation = null;
+                _transitionSourcePose = null;
+                _transitionElapsed = 0f;
+                _activeTransitionDuration = 0f;
+            }
+        }
+        _poseDirty = true;
         UpdatePoseAndMeshes();
         return true;
     }
@@ -748,6 +817,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         IsPlaying = false;
         _currentAnimation = null;
         _previousAnimation = null;
+        _transitionSourcePose = null;
         _currentTime = 0.0f;
         _previousTime = 0.0f;
         _transitionElapsed = 0.0f;
@@ -1142,6 +1212,11 @@ public sealed partial class SkeletalMeshRenderer : Component
         SkeletalAttachmentService.UpdateForRenderer(this);
         DiagnosticPoseUpdates++;
         DiagnosticPoseTicks += System.Diagnostics.Stopwatch.GetTimestamp() - diagnosticStart;
+        if (GameObject.Scene is {} scene)
+        {
+            scene.AnimationMilliseconds += System.Diagnostics.Stopwatch.GetElapsedTime(diagnosticStart).TotalMilliseconds;
+            scene.AnimatedComponentCount++;
+        }
     }
 
     private Matrix4x4[] BuildLocalPose()
@@ -1174,11 +1249,9 @@ public sealed partial class SkeletalMeshRenderer : Component
             if (_previousAnimation != null &&
                 blend < 1.0f)
             {
-                PoseTransform previous =
-                    SampleNode(
-                        nodeIndex,
-                        _previousAnimation,
-                        _previousTime);
+                PoseTransform previous = _transitionSourcePose is { } snapshot && nodeIndex < snapshot.Length
+                    ? snapshot[nodeIndex]
+                    : SampleNode(nodeIndex, _previousAnimation, _previousTime);
 
                 current =
                     PoseTransform.Lerp(
@@ -1874,3 +1947,4 @@ public sealed partial class SkeletalMeshRenderer : Component
                     amount));
     }
 }
+

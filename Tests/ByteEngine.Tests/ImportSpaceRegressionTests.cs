@@ -31,6 +31,7 @@ internal static class ImportSpaceRegressionTests
         TestFbxUnits(1800f, 0.1f, 1.8f);
         TestFbxUnits(1.8f, 100f, 1.8f);
         TestAlternateFront();
+        TestAssimpNormalizedFbxRoot();
         TestSkinnedBindAndSocketSpace();
         TestReimportCorrectionRefresh();
         TestLegacyRebasePreservesVisiblePose();
@@ -50,6 +51,26 @@ internal static class ImportSpaceRegressionTests
             -Vector3.UnitZ * (unitScaleFactor / 100f), "FBX source front maps to ByteEngine forward");
     }
 
+    private static void TestAssimpNormalizedFbxRoot()
+    {
+        var scene = new Assimp.Scene();
+        scene.Metadata.Add("UnitScaleFactor", new Metadata.Entry(MetaDataType.Double, 1d));
+        SetAxis(scene, "UpAxis", 2, 1);
+        SetAxis(scene, "FrontAxis", 1, -1);
+        Matrix4x4 rootFrame = Matrix4x4.CreateRotationX(-MathF.PI / 2);
+        scene.RootNode = new Node("RootNode") { Transform = Matrix4x4.Transpose(rootFrame) };
+        Matrix4x4 correction = ImportedModelSpace.FbxCorrection(scene, 1f);
+        AssertNear(Vector3.Transform(Vector3.Transform(Vector3.UnitZ * 180, rootFrame), correction),
+            Vector3.UnitY * 1.8f, "Assimp-normalized Z-up FBX is upright at metre scale");
+        AssertNear(Vector3.TransformNormal(Vector3.TransformNormal(-Vector3.UnitY, rootFrame), correction),
+            -Vector3.UnitZ * .01f, "Assimp root conversion preserves engine forward");
+        scene.RootNode.Transform = Matrix4x4.Identity;
+        Matrix4x4 sourceCorrection = ImportedModelSpace.FbxCorrection(scene, 1f);
+        AssertNear(Vector3.Transform(Vector3.UnitZ * 180, sourceCorrection), Vector3.UnitY * 1.8f,
+            "animation-only FBX without normalized root retains file-axis conversion");
+        AssertNear(Vector3.Transform(Vector3.UnitX, rootFrame * correction), Vector3.Transform(Vector3.UnitX, sourceCorrection),
+            "mesh-backed and animation-only source frames agree");
+    }
     private static void TestAlternateFront()
     {
         var scene = new Assimp.Scene();

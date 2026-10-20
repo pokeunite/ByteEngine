@@ -57,6 +57,15 @@ public static partial class BrowserGame
     public static string SaveData(){if(_project==null)return "{}";var root=_project.SaveDirectory;return JsonSerializer.Serialize(Directory.GetFiles(root,"*",SearchOption.AllDirectories).Where(p=>(p.EndsWith(".json")||p.EndsWith(".json.name")||Path.GetFileName(p)=="active-blueprint.txt")&&!p.Contains("/Diagnostics/")&&!p.Contains("/Backups/")).ToDictionary(p=>Path.GetRelativePath(root,p).Replace('\\','/'),File.ReadAllText));}
 
     [JSExport]
+    public static void ConfigurePresentation(string json)
+    {
+        using var doc=JsonDocument.Parse(json);var e=doc.RootElement;
+        if(e.TryGetProperty("quality",out var q)&&Enum.TryParse<GraphicsQuality>(q.GetString(),out var quality))BrowserPresentationSettings.Quality=quality;
+        if(e.TryGetProperty("worldResolution",out var res))BrowserPresentationSettings.WorldResolution=res.GetString()??"Auto";
+        if(e.TryGetProperty("textureLimit",out var size))BrowserPresentationSettings.TextureLimit=Math.Clamp(size.GetInt32(),256,8192);
+    }
+
+    [JSExport]
     public static void Start(bool demo)
     {
         if (_started) return;
@@ -68,6 +77,8 @@ public static partial class BrowserGame
             _project = new GameProjectRuntime("/game/Content/Game.byteproject", Console.Error.WriteLine);
             string currentPath=_project.Project.StartupScene;
             Loop.Scenes.SceneFactory=path=>{var fresh=_project.LoadScene(path);currentPath=path;return fresh;};
+            Loop.Scenes.ProgressiveSceneFactory=path=>{currentPath=path;return _project.Serializer.LoadSteps(GamePackageExporter.ResolveInside(_project.Root,path));};
+            Loop.Scenes.ShowLoadingScreen=true;
             Loop.Scenes.QuitHandler=()=>Loop.Scenes.UnloadScene();
             var scene = _project.LoadStartupScene();
             Loop.Scenes.RestartSceneFactory = () =>
@@ -207,6 +218,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     public byte[] ReadBuffer(int index) => _buffers[index];
     private int Buffer(ReadOnlySpan<byte> data) { int index=_buffers.Count; _buffers.Add(data.ToArray()); return index; }
     readonly Queue<(Texture2D Texture,int Id,int X,int Y,int W,int H,bool Allocate)> _pendingTextureUploads=new();
+    private float[] _inverseVp=[];
     private float[] _vp = new float[16], _eye = [0,0,0], _background = [.07f,.1f,.15f];
     private BrowserLight[] _lights = [], _points = [];
     private float _ambient = .25f, _exposure = 1;
@@ -241,7 +253,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         RenderEnvironment3D environment, IReadOnlyList<RenderSubmission> submissions)
     {
         if (view is not { } camera) return;
-        _vp = Matrix(camera.ViewProjectionMatrix);
+        _vp = Matrix(camera.ViewProjectionMatrix);Matrix4x4.Invert(camera.ViewProjectionMatrix,out var inverseWater);_inverseVp=Matrix(inverseWater);
         _eye = V3(camera.CameraPosition);
         _background = environment.DrawSky ? V3(environment.HorizonColor * environment.SkyIntensity) : [.07f,.1f,.15f];
         _ambient = lighting.AmbientIntensity;
@@ -262,7 +274,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             color = V3(l.Color * l.Intensity) }).ToArray();
         _points = lighting.PointLights.Select(l => new BrowserLight { position = V3(l.Position),
             color = V3(l.Color * l.Intensity), range = l.Range }).ToArray();
-        var visible=submissions.Where(s=>!s.FrustumCullingEnabled||camera.Frustum.Intersects(s.WorldBounds)).OrderBy(s=>s.Queue).ThenBy(s=>
+        var visible=submissions.Where(s=>!s.FrustumCullingEnabled||camera.Frustum.Intersects(s.WorldBounds)).OrderBy(s=>s.Material.WaterSurface?3500:(int)s.Queue).ThenBy(s=>
             s.Queue==RenderQueue3D.Transparent?-s.DistanceSquaredToCamera:s.SubmissionIndex).ToArray();
         foreach (var batch in RenderBatcher.Build(visible))
         {
@@ -306,6 +318,8 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
                 cull = m.CullMode.ToString(), front = m.FrontFace.ToString() });
             }
             _draws.Add(new BrowserDrawCommand { id = cached.Id, material = materialId, model = Matrix(draw.ModelMatrix),
+                water=m.WaterSurface||m.WaterVolume?new BrowserWater{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null,
+                wet=[..V4(m.WetContact0),..V4(m.WetContact1),..V4(m.WetContact2),..V4(m.WetLevels)],
                 receiveShadows=draw.ReceiveShadows,shadowInstances=batch.Instances.Where(s=>s.CastShadows&&s.Queue==RenderQueue3D.Opaque).SelectMany(s=>Matrix(s.ModelMatrix)).ToArray(),
                 instances = batch.Instances.Count > 1 ? batch.Instances.SelectMany(s => Matrix(s.ModelMatrix)).ToArray() : [] });
         }
@@ -415,7 +429,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             for (int j = 0; j < values.Length; j++) System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(bytes[(8+j*4)..], values[j]);
         }
         int uiBuffer = _buffers.Count; _buffers.Add(uiBytes);
-        return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp, eye = _eye, background = _background, ambient = _ambient,
+        return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,
             draws = _draws, materials = _materialUploads, deadMaterials = deadMaterials, uiBuffer = uiBuffer, uiCount = _ui.Count,
             deadMeshes=deadMeshes, deadTextures=deadTextures, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);
@@ -458,3 +472,4 @@ internal sealed class BrowserAudio : IPortableAudio
         _commands.Add(new { kind = "listener", position = new[] {position.X,position.Y,position.Z},
             forward = new[] {forward.X,forward.Y,forward.Z}, up = new[] {up.X,up.Y,up.Z}, volume });
 }
+

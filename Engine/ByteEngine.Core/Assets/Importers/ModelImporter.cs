@@ -55,6 +55,8 @@ public sealed class ModelImporterSettings
 
     public bool PreferEmbeddedMaterials { get; set; } =
         true;
+    /// <summary>Maximum imported embedded-texture dimension; zero preserves the source. Source files are never modified.</summary>
+    public int MaxTextureSize { get; set; }
 
     /// <summary>
     /// Imports embedded animation tracks from FBX/glTF sources.
@@ -99,6 +101,7 @@ public sealed class ModelImporterSettings
 
     public void Normalize()
     {
+        MaxTextureSize=MaxTextureSize<=0?0:Math.Clamp(MaxTextureSize,64,16384);
         ImportScale =
             float.IsFinite(
                 ImportScale) &&
@@ -125,6 +128,7 @@ public sealed class ModelImporterSettings
             new ModelImporterSettings
             {
                 GenerateLods=GenerateLods,
+                MaxTextureSize=MaxTextureSize,
                 ImportScale =
                     ImportScale,
 

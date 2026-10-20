@@ -25,6 +25,19 @@ public sealed class WeaponInstance3D : Component
     public bool FiredThisFrame { get; private set; }
     public bool HitThisFrame { get; private set; }
     public bool ReloadCompletedThisFrame { get; private set; }
+    public bool EquippedThisFrame { get; private set; }
+    public bool ReloadStartedThisFrame { get; private set; }
+    public bool ReloadCancelledThisFrame { get; private set; }
+    public bool ReloadWasEmpty { get; private set; }
+    public long EquipSequence { get; private set; }
+    public long ReloadStartSequence { get; private set; }
+    public long ReloadCancelSequence { get; private set; }
+    public long ReloadCompleteSequence { get; private set; }
+    public long HitSequence { get; private set; }
+    public bool LastShotWasHitscan { get; private set; }
+    private readonly List<WeaponShotHit> _shotHits = [];
+    /// <summary>Actual pellet hits from the last accepted shot, nearest first; a miss clears the list.</summary>
+    public IReadOnlyList<WeaponShotHit> ShotHits => _shotHits;
     public float CooldownRemaining => _cooldown;
     public bool CanFire => Equipped && _cooldown <= 0 &&
         Definition is {} d && (!Reloading || (d.ReloadMode == WeaponReloadMode.PerRound && d.AllowReloadInterrupt)) && CurrentAmmo >= Math.Clamp(d.AmmoPerShot, 1, 10000);
@@ -33,13 +46,7 @@ public sealed class WeaponInstance3D : Component
     public event Action<RaycastHit3D>? Hit;
     private float _cooldown, _reloadRemaining;
     private Random? _random;
-    private float? _reloadBasePlaybackSpeed;
     private VfxPlayer? _muzzleFlash;
-    private void RestoreReloadSpeed()
-    {
-        if (_reloadBasePlaybackSpeed is {} speed && GameObject.GetComponent<AnimationController>() is {} animation) animation.PlaybackSpeed = speed;
-        _reloadBasePlaybackSpeed = null;
-    }
 
     protected override void OnStart() { ClampAmmo(); _random = new Random(RandomSeed); }
     public void ClampAmmo()
@@ -56,12 +63,11 @@ public sealed class WeaponInstance3D : Component
     {
         Equipped = equipped; CancelReload();
         if (equipped && Definition is {} d)
-        { _cooldown = WeaponDefinition3D.Bound(d.EquipSeconds, .45f, 0, 10); Play(d.EquipAnimation); }
+        { _cooldown = WeaponDefinition3D.Bound(d.EquipSeconds, .45f, 0, 10); EquippedThisFrame=true;EquipSequence++; }
     }
     public void CancelReload()
     {
-        RestoreReloadSpeed();
-        if (Reloading) GameObject.GetComponent<AnimationController>()?.CancelCurrentAction();
+        if(Reloading){ReloadCancelledThisFrame=true;ReloadCancelSequence++;}
         _reloadRemaining = 0;
     }
     public bool Reload()
@@ -69,33 +75,26 @@ public sealed class WeaponInstance3D : Component
         if (!Equipped || Reloading || Definition is not {} d) return false;
         ClampAmmo();
         if (CurrentAmmo >= Math.Clamp(d.MagazineCapacity, 1, 10000) || (!d.InfiniteReserve && ReserveAmmo == 0)) return false;
-        bool empty = CurrentAmmo == 0;
+        bool empty = CurrentAmmo == 0;ReloadWasEmpty=empty;
         _reloadRemaining = WeaponDefinition3D.Bound(empty ? d.EmptyReloadSeconds : d.ReloadSeconds, 1.6f, .05f, 30)
             / WeaponDefinition3D.Bound(d.ReloadSpeedMultiplier, 1, .1f, 10);
-        Play(empty ? d.EmptyReloadAnimation : d.ReloadAnimation);
-        if (GameObject.GetComponent<AnimationController>() is {} animation &&
-            GameObject.GetComponent<SkeletalMeshRenderer>() is {} renderer && renderer.Duration > 0 && renderer.Speed > 0)
-        {
-            _reloadBasePlaybackSpeed = animation.PlaybackSpeed;
-            animation.PlaybackSpeed *= renderer.Duration / (_reloadRemaining * renderer.Speed);
-            renderer.Speed = renderer.Duration / _reloadRemaining;
-        }
+        ReloadStartedThisFrame=true;ReloadStartSequence++;
         return true;
     }
     internal void Tick(float dt)
     {
         FiredThisFrame = HitThisFrame = ReloadCompletedThisFrame = false;
+        EquippedThisFrame=ReloadStartedThisFrame=ReloadCancelledThisFrame=false;
         _cooldown = Math.Max(0, _cooldown - dt);
         if (!Reloading) return;
         _reloadRemaining = Math.Max(0, _reloadRemaining - dt);
         if (_reloadRemaining > 0 || Definition is not {} d) return;
-        RestoreReloadSpeed();
         int needed = Math.Max(0, Math.Clamp(d.MagazineCapacity, 1, 10000) - CurrentAmmo);
         int transfer = d.ReloadMode == WeaponReloadMode.PerRound ? Math.Min(1, needed) : needed;
         if (!d.InfiniteReserve) transfer = Math.Min(transfer, Math.Max(0, ReserveAmmo));
         CurrentAmmo += transfer;
         if (!d.InfiniteReserve) ReserveAmmo -= transfer;
-        ClampAmmo(); ReloadCompletedThisFrame = true; ReloadCompleted?.Invoke(this);
+        ClampAmmo(); ReloadCompletedThisFrame = true;ReloadCompleteSequence++; ReloadCompleted?.Invoke(this);
         if (d.ReloadMode == WeaponReloadMode.PerRound) Reload();
     }
     public bool Fire(Vector3 origin, Vector3 direction, GameObject owner)
@@ -110,6 +109,7 @@ public sealed class WeaponInstance3D : Component
                 o.GetComponent<Projectile3D>()?.OwnerId == owner.Id) + count > Math.Clamp(d.MaxActiveProjectiles, 1, 512))
             return false;
         if (Reloading) CancelReload();
+        _shotHits.Clear();HitThisFrame=false;LastShotWasHitscan=d.ShotMode==WeaponShotMode.Hitscan;
         Vector3 muzzlePosition = TryGetMuzzleWorldPosition(out var resolvedMuzzle) ? resolvedMuzzle : origin;
         float range = WeaponDefinition3D.Bound(d.Range, 80, .1f, 1000);
         var mask = LayerMask.FromLayers(Enumerable.Range(0, 32).Where(bit => (d.HitMaskBits & (1 << bit)) != 0).ToArray());
@@ -121,7 +121,7 @@ public sealed class WeaponInstance3D : Component
             {
                 if (GameplayQuery3D.Raycast(scene, origin, shot, out var hit, range, owner, mask, includeTriggers: false))
                 {
-                    end = hit.Point; HitCount++; HitThisFrame = true; Hit?.Invoke(hit);
+                    end = hit.Point; HitCount++; HitThisFrame = true;_shotHits.Add(new(hit,shot)); Hit?.Invoke(hit);
                     for (GameObject? target = hit.GameObject; target != null; target = target.Parent)
                         if (target.GetComponent<HealthComponent>() is {} health)
                         { health.Damage(WeaponDefinition3D.Bound(d.DamagePerPellet, 25, 0, 100000)); break; }
@@ -158,7 +158,8 @@ public sealed class WeaponInstance3D : Component
         }
         CurrentAmmo -= Math.Clamp(d.AmmoPerShot, 1, 10000);
         _cooldown = 60 / WeaponDefinition3D.Bound(d.RoundsPerMinute, 270, 1, 3000);
-        ShotsFired++; FiredThisFrame = true; Play(d.FireAnimation); Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
+        _shotHits.Sort((a,b)=>a.Hit.Distance.CompareTo(b.Hit.Distance));if(_shotHits.Count>0)HitSequence++;
+        ShotsFired++; FiredThisFrame = true; Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
     }
     private void Flash(Vector3 position, Vector3 direction)
     {
@@ -214,8 +215,9 @@ public sealed class WeaponInstance3D : Component
         float angle = (float)_random.NextDouble() * MathF.Tau;
         return Vector3.Normalize(forward + right * (r * MathF.Cos(angle)) + up * (r * MathF.Sin(angle)));
     }
-    private void Play(string clip) => GameObject.GetComponent<AnimationController>()?.PlayNamedAction(clip, retrigger: true, forceInterrupt: true);
 }
+
+public readonly record struct WeaponShotHit(RaycastHit3D Hit,Vector3 Direction);
 
 internal static class WeaponTrace
 {

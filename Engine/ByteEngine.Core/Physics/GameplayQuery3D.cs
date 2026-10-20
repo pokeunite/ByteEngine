@@ -437,6 +437,7 @@ public static class GameplayQuery3D
                         rayDirection,
                         radius,
                         collider,
+                        closest,
                         out float distance,
                         out Vector3 normal) ||
                     distance <
@@ -590,14 +591,15 @@ public static class GameplayQuery3D
         Vector3 direction,
         float radius,
         Collider3D collider,
+        float maxDistance,
         out float distance,
         out Vector3 normal)
     {
         distance=0;normal=-direction;
         return collider switch
         {
-            MeshCollider3D mesh => mesh.Geometry is {} geometry && geometry.Cast(origin,direction,radius,out distance,out normal),
-            HeightfieldCollider3D terrain => terrain.Cast(origin, direction, radius, float.PositiveInfinity, out distance, out normal),
+            MeshCollider3D mesh => mesh.Geometry is {} geometry && geometry.Cast(origin,direction,radius,out distance,out normal,maxDistance),
+            HeightfieldCollider3D terrain => terrain.Cast(origin, direction, radius, maxDistance, out distance, out normal),
             BoxCollider3D box =>
                 IntersectBox(
                     origin,

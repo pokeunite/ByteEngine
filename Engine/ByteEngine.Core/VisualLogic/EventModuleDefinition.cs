@@ -97,6 +97,7 @@ public sealed class EventRuleDefinition
 
     // Editor-only outline presentation; does not affect event execution.
     public bool EditorOutlineCollapsed { get; set; }
+    public string EditorHeaderColor { get; set; } = string.Empty;
 
     public bool Enabled { get; set; } =
         true;
@@ -203,6 +204,7 @@ public sealed class VisualInstruction
 
 public sealed class EventGraphGroupDefinition
 {
+    public bool SheetGroup { get; set; }
     public Guid Id { get; set; } =
         Guid.NewGuid();
 

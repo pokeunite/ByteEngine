@@ -7,11 +7,20 @@ using ByteEngine.Core.Serialization;
 
 namespace ByteEngine.Core.Runtime;
 
+public sealed record WebExportGraphics
+{
+ public string Quality {get;init;}="High";
+ public string WorldResolution {get;init;}="Auto";
+ public int TextureLimit {get;init;}=2048;
+ public void Validate(){if(Quality is not ("High" or "Balanced" or "Fast")||WorldResolution is not ("Auto" or "720p" or "1080p" or "Native")||TextureLimit is not (512 or 1024 or 2048 or 4096))throw new ArgumentException("Invalid browser graphics settings.");}
+}
+
 public static class WebGamePackageExporter
 {
     public static GamePackageResult Export(string projectFile, string runtimeDirectory,
-        string outputParent, string startupScene, IProgress<string>? progress = null)
+        string outputParent, string startupScene, IProgress<string>? progress = null, WebExportGraphics? graphics = null)
     {
+        graphics ??= new();graphics.Validate();
         var project = new ProjectSerializer().Load(projectFile);
         GameSaveStorage.AssignExportIdentity(project);
         string root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
@@ -27,7 +36,7 @@ public static class WebGamePackageExporter
         if (!File.Exists(GamePackageExporter.ResolveInside(root, project.StartupScene)))
             throw new FileNotFoundException("Choose a saved startup scene.");
         runtimeDirectory = Path.GetFullPath(runtimeDirectory);
-        foreach (string file in new[] { "index.html", "main.js", "content.js", "renderer.js", "audio.js", "_framework/dotnet.js" })
+        foreach (string file in new[] { "index.html", "main.js", "content.js", "renderer.js", "water.js", "graphics.js", "audio.js", "_framework/dotnet.js" })
             if (!File.Exists(GamePackageExporter.ResolveInside(runtimeDirectory, file)))
                 throw new FileNotFoundException("Browser player runtime is missing: " + file);
         string parent = Path.GetFullPath(outputParent);
@@ -68,7 +77,7 @@ public static class WebGamePackageExporter
             foreach (var model in database.Assets.Where(a => a.Type == AssetType.Model3D))
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
-                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true);
+                CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true,textureLimit:graphics.TextureLimit);
                 // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
                 File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
             }
@@ -87,7 +96,7 @@ public static class WebGamePackageExporter
             }
             foreach(string texture in GamePackageExporter.WalkFiles(content).Where(p=>new[]{".png",".jpg",".jpeg",".bmp",".tga"}.Contains(Path.GetExtension(p).ToLowerInvariant()))){
                 if(dataTextures.Contains(Path.GetRelativePath(content,texture).Replace('\\','/')))continue;
-                byte[] original=File.ReadAllBytes(texture),optimized=WebTextureCooker.Optimize(original);
+                byte[] original=File.ReadAllBytes(texture),optimized=WebTextureCooker.Optimize(original,graphics.TextureLimit);
                 if(!ReferenceEquals(original,optimized))File.WriteAllBytes(texture,optimized);
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
@@ -113,7 +122,7 @@ public static class WebGamePackageExporter
                 sha256 = Hash(file)
             }).ToArray();
             File.WriteAllText(Path.Combine(site, "web-game.json"), JsonSerializer.Serialize(new {
-                formatVersion = 3, name = project.Name, packageSize, packageSha256 = packageHash, files = entries
+                formatVersion = 3, name = project.Name,graphics=new {quality=graphics.Quality,worldResolution=graphics.WorldResolution,textureLimit=graphics.TextureLimit}, packageSize, packageSha256 = packageHash, files = entries
             }));
             var siteFiles = GamePackageExporter.WalkFiles(site).ToArray();
             if (siteFiles.Length > 1000 || siteFiles.Sum(f => new FileInfo(f).Length) > 500L * 1024 * 1024 ||
@@ -125,7 +134,7 @@ public static class WebGamePackageExporter
             File.WriteAllText(Path.Combine(destination, "README.txt"),
                 "Upload the ZIP as an HTML game on itch.io. index.html is at the ZIP root.\n" +
                 "Desktop browser with WebGL 2 required. Click the game to activate audio/input. Escape releases mouse.\n" +
-                "Browser renderer uses reduced graphics: no desktop shadow/IBL/postprocessing parity.\n" +
+                "Browser: native water optics, ocean waves, sun shadows and edge smoothing. Desktop IBL/post effects may differ.\n" +
                 "Test privately before release. To test locally, serve the site directory over HTTP, not file://.\n");
             File.Delete(marker);
             return new GamePackageResult(destination, zip, contentCount, entries.Sum(e => e.size));

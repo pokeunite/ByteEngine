@@ -12,16 +12,29 @@ public sealed class GltfModelImporter : ModelImporter
         AssetRecord source,
         ModelImporterSettings settings)
     {
-        ModelRoot model = ModelRoot.Load(source.FullPath);
+        ModelRoot model = ModelRoot.Load(source.FullPath,new ReadSettings { Validation=SharpGLTF.Validation.ValidationMode.TryFix });
+        // Names are animation lookup identities. Exporters may reuse names in
+        // independent arm/weapon rigs; distinguish logical nodes consistently.
+        var duplicateNames = model.LogicalNodes.GroupBy(n => NameOr(n.Name,"Node",n.LogicalIndex),StringComparer.Ordinal)
+            .Where(g => g.Count()>1).Select(g=>g.Key).ToHashSet(StringComparer.Ordinal);
+        string NodeName(Node n) { string name=NameOr(n.Name,"Node",n.LogicalIndex);return duplicateNames.Contains(name)?$"{name}__node{n.LogicalIndex}":name; }
+        var skinOffsets = new Dictionary<int,int>();
+        int boneCount=0;
+        foreach(var skin in model.LogicalSkins){skinOffsets[skin.LogicalIndex]=boneCount;boneCount+=skin.Joints.Count;}
 
         List<ImportedMaterial> materials =
             model.LogicalMaterials.Select(ReadMaterial).ToList();
 
         var meshes = new List<ImportedMesh>();
-        var meshKeys = new Dictionary<(int Mesh, int Primitive), string>();
+        var meshKeys = new Dictionary<(int Mesh, int Primitive, int Skin), string>();
 
         foreach (SharpGLTF.Schema2.Mesh mesh in model.LogicalMeshes)
         {
+            // A shared mesh can be instantiated against different skin palettes.
+            var owners=model.LogicalNodes.Where(n=>n.Mesh==mesh).Select(n=>n.Skin?.LogicalIndex??-1).Distinct().ToArray();
+            if(owners.Length==0)owners=[-1];
+            foreach(int skinIndex in owners)
+            {
             for (int primitiveIndex = 0;
                  primitiveIndex < mesh.Primitives.Count;
                  primitiveIndex++)
@@ -35,7 +48,8 @@ public sealed class GltfModelImporter : ModelImporter
                     mesh.LogicalIndex,
                     primitiveIndex);
 
-                meshKeys[(mesh.LogicalIndex, primitiveIndex)] = key;
+                if(owners.Length>1)key+=$":skin:{skinIndex}";
+                meshKeys[(mesh.LogicalIndex, primitiveIndex,skinIndex)] = key;
 
                 meshes.Add(
                     ReadMesh(
@@ -43,7 +57,8 @@ public sealed class GltfModelImporter : ModelImporter
                         primitive,
                         primitiveIndex,
                         key,
-                        settings));
+                        settings,skinIndex<0?0:skinOffsets[skinIndex]));
+            }
             }
         }
 
@@ -59,7 +74,7 @@ public sealed class GltfModelImporter : ModelImporter
                      index < node.Mesh.Primitives.Count;
                      index++)
                 {
-                    keys.Add(meshKeys[(node.Mesh.LogicalIndex, index)]);
+                    keys.Add(meshKeys[(node.Mesh.LogicalIndex, index,node.Skin?.LogicalIndex??-1)]);
                 }
             }
 
@@ -67,7 +82,7 @@ public sealed class GltfModelImporter : ModelImporter
                 new ImportedNode
                 {
                     Key = NodeKey(node),
-                    Name = NameOr(node.Name, "Node", node.LogicalIndex),
+                    Name = NodeName(node),
                     ParentKey =
                         node.VisualParent == null
                             ? null
@@ -79,12 +94,12 @@ public sealed class GltfModelImporter : ModelImporter
 
         SkeletonAsset? skeleton =
             model.LogicalSkins.Count > 0
-                ? ReadSkeleton(source.Guid, model.LogicalSkins[0])
+                ? ReadSkeleton(source.Guid, model.LogicalSkins,NodeName)
                 : null;
 
         List<ImportedAnimation> animations =
             model.LogicalAnimations
-                .Select(animation => ReadAnimation(source.Guid, animation))
+                .Select(animation => ReadAnimation(source.Guid, animation,NodeName))
                 .ToList();
 
         return ImportedModelSpace.Apply(new ImportedModel
@@ -105,7 +120,7 @@ public sealed class GltfModelImporter : ModelImporter
         MeshPrimitive primitive,
         int primitiveIndex,
         string key,
-        ModelImporterSettings settings)
+        ModelImporterSettings settings,int jointOffset)
     {
         IReadOnlyList<Vector3> positions =
             primitive.GetVertexAccessor("POSITION")?.AsVector3Array()
@@ -176,7 +191,7 @@ public sealed class GltfModelImporter : ModelImporter
                         ? null
                         : MaterialKey(primitive.Material),
                 JointIndices =
-                    joints?.AsVector4Array().ToArray()
+                    joints?.AsVector4Array().Select(j=>j+new Vector4(jointOffset)).ToArray()
                     ?? Array.Empty<Vector4>(),
                 JointWeights =
                     weights?.AsVector4Array().ToArray()
@@ -271,8 +286,12 @@ public sealed class GltfModelImporter : ModelImporter
 
     private static SkeletonAsset ReadSkeleton(
         Guid guid,
-        Skin skin)
+        IReadOnlyList<Skin> skins,Func<Node,string> nodeName)
     {
+        var bones = new List<Bone>();
+        foreach(Skin skin in skins)
+        {
+        int offset=bones.Count;
         IReadOnlyList<Node> joints = skin.Joints;
         IReadOnlyList<Matrix4x4> inverseBindMatrices =
             skin.InverseBindMatrices;
@@ -282,8 +301,6 @@ public sealed class GltfModelImporter : ModelImporter
                 .Select((node, index) => (node, index))
                 .ToDictionary(pair => pair.node, pair => pair.index);
 
-        var bones = new List<Bone>();
-
         for (int index = 0; index < joints.Count; index++)
         {
             Node joint = joints[index];
@@ -291,19 +308,20 @@ public sealed class GltfModelImporter : ModelImporter
             int parent =
                 joint.VisualParent != null &&
                 indices.TryGetValue(joint.VisualParent, out int parentIndex)
-                    ? parentIndex
+                    ? parentIndex+offset
                     : -1;
 
             bones.Add(
                 new Bone
                 {
-                    Name = NameOr(joint.Name, "Bone", index),
+                    Name = nodeName(joint),
                     ParentIndex = parent,
                     BindPose =
                         index < inverseBindMatrices.Count
                             ? inverseBindMatrices[index]
                             : Matrix4x4.Identity
                 });
+        }
         }
 
         return
@@ -313,20 +331,17 @@ public sealed class GltfModelImporter : ModelImporter
                     SubAssetKey(
                         guid,
                         "skeleton",
-                        skin.Name,
-                        skin.LogicalIndex),
+                        skins[0].Name,
+                        skins[0].LogicalIndex),
                 Name =
-                    NameOr(
-                        skin.Name,
-                        "Skeleton",
-                        skin.LogicalIndex),
+                    skins.Count>1?"Combined glTF skins":NameOr(skins[0].Name,"Skeleton",skins[0].LogicalIndex),
                 Bones = bones
             };
     }
 
     private static ImportedAnimation ReadAnimation(
         Guid guid,
-        SharpGLTF.Schema2.Animation animation)
+        SharpGLTF.Schema2.Animation animation,Func<Node,string> nodeName)
     {
         var channels =
             new Dictionary<int, MutableAnimationChannel>();
@@ -346,10 +361,7 @@ public sealed class GltfModelImporter : ModelImporter
             {
                 destination =
                     new MutableAnimationChannel(
-                        NameOr(
-                            node.Name,
-                            "Node",
-                            node.LogicalIndex));
+                        nodeName(node));
 
                 channels[node.LogicalIndex] = destination;
             }

@@ -17,13 +17,17 @@ public sealed class MaterialOverrideState
     private readonly Dictionary<MaterialTextureSlot, AssetReference> _textures = new();
 
     public Vector4? BaseColor { get; set; }
+    public Vector4? WetContact0 {get;set;}
+    public Vector4? WetContact1 {get;set;}
+    public Vector4? WetContact2 {get;set;}
+    public Vector4? WetLevels {get;set;}
     public float? Metallic { get; set; }
     public float? Roughness { get; set; }
     public Vector3? EmissionColor { get; set; }
     public float? EmissionIntensity { get; set; }
 
     public bool IsEmpty =>
-        BaseColor == null && Metallic == null && Roughness == null &&
+        WetLevels == null && WetContact0==null && WetContact1==null && WetContact2==null && BaseColor == null && Metallic == null && Roughness == null &&
         EmissionColor == null && EmissionIntensity == null && _textures.Count == 0;
 
     /// <summary>Empty reference deliberately clears a texture; ResetTexture inherits it.</summary>
@@ -35,6 +39,7 @@ public sealed class MaterialOverrideState
     public void Reset()
     {
         BaseColor = null;
+        WetContact0=WetContact1=WetContact2=WetLevels=null;
         Metallic = null;
         Roughness = null;
         EmissionColor = null;
@@ -45,6 +50,7 @@ public sealed class MaterialOverrideState
     public void Apply(Material source, Material destination, AssetManager? assets)
     {
         destination.CopyFrom(source);
+        if(WetContact0 is {} a)destination.WetContact0=a;if(WetContact1 is {} b)destination.WetContact1=b;if(WetContact2 is {} c)destination.WetContact2=c;if(WetLevels is {} d)destination.WetLevels=d;
         if (BaseColor is { } color) destination.BaseColor = color;
         if (Metallic is { } metallic) destination.Metallic = Math.Clamp(metallic, 0f, 1f);
         if (Roughness is { } roughness) destination.Roughness = Math.Clamp(roughness, .04f, 1f);

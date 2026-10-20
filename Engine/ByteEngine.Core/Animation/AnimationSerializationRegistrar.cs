@@ -54,6 +54,12 @@ public static class AnimationSerializationRegistrar
                                             key =>
                                                 (JsonNode?)JsonValue.Create(key))
                                         .ToArray()),
+                            ["materialAssetSlots"] = new JsonArray(
+                                renderer.MaterialAssetSlots.Select(reference => (JsonNode?)new JsonObject
+                                {
+                                    ["guid"] = reference.Guid.ToString(),
+                                    ["path"] = reference.CachedProjectPath
+                                }).ToArray()),
                             ["visible"] =
                                 renderer.Visible,
                             ["defaultAnimation"] =
@@ -109,6 +115,11 @@ public static class AnimationSerializationRegistrar
                         data.Properties["skeletonKey"]?
                             .GetValue<string>(),
                     MaterialKeys = materials,
+                    MaterialAssetSlots = data.Properties["materialAssetSlots"] is JsonArray slots
+                        ? slots.Select(slot => new AssetReference(
+                            Guid.TryParse(slot?["guid"]?.GetValue<string>(), out Guid id) ? id : Guid.Empty,
+                            slot?["path"]?.GetValue<string>())).ToList()
+                        : new(),
                     Visible =
                         data.Properties["visible"]?
                             .GetValue<bool>() ??

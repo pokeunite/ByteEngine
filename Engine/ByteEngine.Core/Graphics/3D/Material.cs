@@ -14,6 +14,10 @@ public sealed class Material
 
     public Vector4 BaseColor { get; set; } =
         Vector4.One;
+    public Vector4 WetContact0 {get;set;}
+    public Vector4 WetContact1 {get;set;}
+    public Vector4 WetContact2 {get;set;}
+    public Vector4 WetLevels {get;set;}
 
     /// <summary>
     /// Material textures deliberately use a 3D/PBR sampling profile instead of
@@ -134,6 +138,7 @@ public sealed class Material
     public void CopyFrom(Material source)
     {
         BaseColor = source.BaseColor;
+        WetContact0=source.WetContact0;WetContact1=source.WetContact1;WetContact2=source.WetContact2;WetLevels=source.WetLevels;
         WaterDepthTexture=source.WaterDepthTexture;WaterDepthRect=source.WaterDepthRect;WaterDepthSettings=source.WaterDepthSettings;WaterOceanWaves=source.WaterOceanWaves;WaterAbsorption=source.WaterAbsorption;WaterScattering=source.WaterScattering;WaterStyle=source.WaterStyle;WaterReflections=source.WaterReflections;WaterSurface=source.WaterSurface;WaterVolume=source.WaterVolume;WaterColumn=source.WaterColumn;WaterMotion=source.WaterMotion;WaterWake=source.WaterWake;WaterFlow=source.WaterFlow;WaterImpact=source.WaterImpact;WaterSize=source.WaterSize;
         MainTexture = source.MainTexture;
         NormalTexture = source.NormalTexture;
@@ -173,6 +178,7 @@ public sealed class Material
         return
             new Material
             {
+                WetContact0=WetContact0,WetContact1=WetContact1,WetContact2=WetContact2,WetLevels=WetLevels,
                 WaterSurface=WaterSurface,WaterVolume=WaterVolume,WaterColumn=WaterColumn,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterFlow=WaterFlow,WaterImpact=WaterImpact,WaterSize=WaterSize,
                 BaseColor =
                     BaseColor,

@@ -1,0 +1,530 @@
+{
+  "id": "63c7e459-43bc-4ab9-96d6-f949794b6942",
+  "version": 2,
+  "name": "FPS controls \u2014 editable weapon input",
+  "targetBlueprintGuid": null,
+  "targetBlueprintPath": null,
+  "requiredComponents": [],
+  "rules": [
+    {
+      "id": "a281b857-5ee5-48a8-920d-7a4821cc11a7",
+      "displayName": "Press 1 \u2014 equip weapon slot 0",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "fb66ba06-c8f6-4ad1-9c09-78f200e7ba80",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "D1",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "1dad286c-35e0-4ef1-aa9f-efda4609f055",
+          "id": "bytebard.karlsondemo.equip",
+          "arguments": {
+            "slot": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 0,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Press 1 \u2014 equip weapon slot 0",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "c1966eab-b60e-4ee9-a2b4-31b09fb9532d",
+      "displayName": "Press 2 \u2014 equip weapon slot 1",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "0e7df27b-2517-4d65-8917-0339691c81f6",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "D2",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "4fba219b-b674-455c-b96a-d63016680b0c",
+          "id": "bytebard.karlsondemo.equip",
+          "arguments": {
+            "slot": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 1,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Press 2 \u2014 equip weapon slot 1",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "4a9b3873-34e9-469f-939f-f3bf92aeb7c6",
+      "displayName": "Press 3 \u2014 equip weapon slot 2",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "a1872dfe-3203-4887-96c9-b425cae6794f",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "D3",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "f674354b-3a7e-4577-82cd-bada74955710",
+          "id": "bytebard.karlsondemo.equip",
+          "arguments": {
+            "slot": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 2,
+                "string": "",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Press 3 \u2014 equip weapon slot 2",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "888f443c-2151-4ecd-aba7-9c31ebee2fea",
+      "displayName": "Hold left mouse \u2014 automatic fire",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "93e5cb44-8c80-4608-aff7-f148367403dd",
+          "id": "bytebard.karlsondemo.inputActive",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "5975c7a5-5ae7-448c-898b-2535100e4883",
+          "id": "input.mouseHeld",
+          "arguments": {
+            "button": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Left",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "ab87d42e-0cb2-4784-a12a-bfb09e7a735d",
+          "id": "bytebard.karlsondemo.automatic",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "b6eeefcc-97f5-448e-a487-882aeaf09bb9",
+          "id": "bytebard.karlsondemo.canFire",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "19db85c8-2d36-4f81-b5ab-223bd8077082",
+          "id": "bytebard.karlsondemo.fire",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Hold left mouse \u2014 automatic fire",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "f1361c6a-4ba1-4897-b626-07abee3a5b42",
+      "displayName": "Press left mouse \u2014 single shot",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "a425a41c-bf60-492c-a641-7bae3f4f20ee",
+          "id": "bytebard.karlsondemo.inputActive",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "ce4b5ef1-14d0-44a6-8c41-af484127dff0",
+          "id": "input.mousePressed",
+          "arguments": {
+            "button": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Left",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "59ea2c63-e0c9-44cc-a559-8a5e58b67519",
+          "id": "bytebard.karlsondemo.semiAutomatic",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        },
+        {
+          "instanceId": "6fbd598c-fd0d-40d1-82bf-23f9738883a8",
+          "id": "bytebard.karlsondemo.canFire",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "9dbc4788-ba47-493e-a657-f60d5af953f3",
+          "id": "bytebard.karlsondemo.fire",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Press left mouse \u2014 single shot",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "3c231f1e-e202-4919-b37c-fd171eaa0167",
+      "displayName": "Press R \u2014 reload",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "26e39091-01c7-4c5d-bbb7-c0e01b91d27b",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "R",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "7ab68a18-d1e5-48d4-9257-1b0437e708f3",
+          "id": "bytebard.karlsondemo.reload",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Press R \u2014 reload",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    }
+  ],
+  "editorLooseConditions": [],
+  "editorLooseActions": [],
+  "editorNodeScale": 0.72,
+  "editorGroups": []
+}

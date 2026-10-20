@@ -53,6 +53,8 @@
     <Copy
       SourceFiles="$(MSBuildProjectDirectory)\plugin.json"
       DestinationFolder="$(BytePluginStage)" />
+    <Copy SourceFiles="@(BytePluginContent)" DestinationFolder="$(BytePluginStage)\Samples"
+          Condition="'@(BytePluginContent)' != ''" />
 
     <CreateBytePluginPackage
       SourceDirectory="$(BytePluginStage)"

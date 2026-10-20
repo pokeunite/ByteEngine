@@ -172,7 +172,7 @@ public sealed class Texture2D
         );
     }
 
-    static (int Width,int Height,byte[] Data) BrowserImage(int width,int height,byte[] pixels){if(!OperatingSystem.IsBrowser()||Math.Max(width,height)<=1024)return(width,height,pixels);float scale=1024f/Math.Max(width,height);int w=Math.Max(1,(int)(width*scale)),h=Math.Max(1,(int)(height*scale));var output=new byte[w*h*4];for(int y=0;y<h;y++)for(int x=0;x<w;x++)pixels.AsSpan(((y*height/h)*width+x*width/w)*4,4).CopyTo(output.AsSpan((y*w+x)*4,4));return(w,h,output);}
+    static (int Width,int Height,byte[] Data) BrowserImage(int width,int height,byte[] pixels){if(!OperatingSystem.IsBrowser()||Math.Max(width,height)<=BrowserPresentationSettings.TextureLimit)return(width,height,pixels);float scale=(float)BrowserPresentationSettings.TextureLimit/Math.Max(width,height);int w=Math.Max(1,(int)(width*scale)),h=Math.Max(1,(int)(height*scale));var output=new byte[w*h*4];for(int y=0;y<h;y++)for(int x=0;x<w;x++)pixels.AsSpan(((y*height/h)*width+x*width/w)*4,4).CopyTo(output.AsSpan((y*w+x)*4,4));return(w,h,output);}
 
     internal static Texture2D FromEncodedBytes(
         byte[] encodedData,

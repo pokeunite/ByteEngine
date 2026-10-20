@@ -90,6 +90,7 @@ internal sealed class Shader3D : IDisposable
         uniform mat4 uProjection;
         uniform mat4 uNormalMatrix;
         uniform vec4 uWaterStyle;
+        uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;
         uniform int uWaterSurface;
         uniform int uWaterVolume;
         uniform vec4 uWaterColumn;
@@ -232,6 +233,7 @@ internal sealed class Shader3D : IDisposable
         uniform vec4 uWaterAbsorption;
         uniform vec4 uWaterScattering;
         uniform vec4 uWaterStyle;
+        uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;
         uniform int uWaterReflections;
         uniform int uWaterDetail;
         uniform vec4 uWaterViewport;
@@ -1028,6 +1030,16 @@ internal sealed class Shader3D : IDisposable
                 return;
             }
 
+            if(uWetLevels.w>0.0){
+                vec2 q=vWorldPosition.xz;
+                float a=step(uWetContact0.x,q.x)*step(q.x,uWetContact0.y)*step(uWetContact0.z,q.y)*step(q.y,uWetContact0.w);
+                float b=step(uWetContact1.x,q.x)*step(q.x,uWetContact1.y)*step(uWetContact1.z,q.y)*step(q.y,uWetContact1.w);
+                float c=step(uWetContact2.x,q.x)*step(q.x,uWetContact2.y)*step(uWetContact2.z,q.y)*step(q.y,uWetContact2.w);
+                float height=max(max(mix(-10000.,uWetLevels.x,a),mix(-10000.,uWetLevels.y,b)),mix(-10000.,uWetLevels.z,c));
+                float brokenLine=sin(q.x*13.+q.y*9.)*.015+sin(q.x*4.1-q.y*5.7)*.018;
+                float wet=(1.-smoothstep(height-.09,height+.16+brokenLine,vWorldPosition.y))*uWetLevels.w;
+                base.rgb*=1.-wet*.32;uRoughness=mix(uRoughness,max(.22,uRoughness*.58),wet);
+            }
             vec3 n=getNormal();
             if(uSandSurface==1){
                 vec4 sandImprint=vec4(0.5,0.5,0.0,0.0);
@@ -1354,7 +1366,7 @@ internal sealed class Shader3D : IDisposable
                 // Caustics modulate the lit bottom; they are not white lines painted on the surface.
                 vec2 bed=bedWorld.xz+vec2(sin(time*.43+bedWorld.z)*.12,cos(time*.37+bedWorld.x)*.12);
                 float c1=sin(bed.x*5.1+sin(bed.y*3.7+time*.65));float c2=sin(bed.y*5.8+sin(bed.x*4.1-time*.53));
-                float caustic=pow(max(0.,1.-abs(c1+c2)*1.7),9.);
+                float caustic=pow(max(0.,1.-abs(c1+c2)*1.7),9.)*(.65+.35*waterNoise(bed*.63));
                 under+=refracted*transmittance*bottomLight*caustic*max(0.,uWaterAbsorption.w)*.5*exp(-depth*.6)*smoothstep(0.,.08,depth);
                 float fresnel=.02037+.97963*pow(1.0-clamp(dot(n,v),0.0,1.0),5.0);
                 vec3 reflectionRay=reflect(-v,n);float skyBand=smoothstep(-.15,.85,reflectionRay.y);
@@ -1390,7 +1402,7 @@ internal sealed class Shader3D : IDisposable
                 float impact=exp(-dot(ip,ip)/max(.01,uWaterImpact.z*uWaterImpact.z))*uWaterImpact.w;
                 float streak=channel?smoothstep(.42,.73,waterNoise(vec2(q.x*8.,q.y*2.1-time*uWaterFlow.z*2.1)))*clamp(abs(uWaterMotion.y)*.18,0.,.65):0.;
                 float wash=.5+.5*sin(time*1.4+waterNoise(q*.7)*9.);float shoreline=(1.-smoothstep(.01,max(.04,uWaterStyle.z)*(.5+wash*.5),depth))*smoothstep(.48,.83,fine)*wash*uWaterStyle.w;
-                float foam=clamp((shoreline+(useRefraction?(1.-smoothstep(.025,.17,depth))*.2*bank:0.)+bank*.15+ring*.7+impact*(.45+noise)+streak)*(fine*.7+.3)*uWaterMotion.w,0.,.85);
+                float foam=clamp((shoreline+(useRefraction?(1.-smoothstep(.025,.17,depth))*.2*bank:0.)+bank*.10*clamp(abs(uWaterMotion.y)*.3,0.,1.)+ring*.7+impact*(.45+noise)+streak)*(fine*.7+.3)*uWaterMotion.w,0.,.85);
                 linearColor=mix(linearColor,vec3(.72,.84,.81),foam);
                 base.a=useRefraction?1.:clamp(.48+absorption*.35+fresnel*.2+foam*.4,.45,.97);
             }

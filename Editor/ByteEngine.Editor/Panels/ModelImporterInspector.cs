@@ -355,6 +355,9 @@ internal sealed class ModelImporterInspector
         ImGui.TextDisabled("FBX units and axes are converted automatically; glTF uses metres. Import Scale is an advanced override for incorrectly authored files.");
         ImGui.BeginDisabled(
             !hasMeshes);
+        int textureSize=_draft.MaxTextureSize;
+        if(ImGui.InputInt("Max Texture Size (0 = source)",ref textureSize)){_draft.MaxTextureSize=textureSize<=0?0:Math.Clamp(textureSize,64,16384);MarkDirty();}
+        ImGui.TextDisabled("Caps embedded textures in imported data; keeps the original model file intact.");
 
         bool generateLods=_draft.GenerateLods;if(ImGui.Checkbox("Generate static LOD meshes",ref generateLods)){_draft.GenerateLods=generateLods;MarkDirty();}
         bool generateNormals =

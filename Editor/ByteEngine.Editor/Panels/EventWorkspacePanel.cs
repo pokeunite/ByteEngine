@@ -14,7 +14,7 @@ using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
 
-internal sealed class EventWorkspacePanel
+internal sealed partial class EventWorkspacePanel
 {
     private readonly EditorDocumentManager _documents;
 
@@ -442,9 +442,12 @@ internal sealed class EventWorkspacePanel
             new Vector2(EditorTheme.S, 4.0f));
 
         DrawDocumentToolbar(log);
-        DrawModuleSettings();
+        if (_showEventGraph || _sheetShowModuleSettings) DrawModuleSettings();
         DrawTraceLegend();
         DrawGraphWorkspace(state);
+        if (!_showEventGraph && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+            !ImGui.GetIO().WantTextInput && !ImGui.IsAnyItemActive() && !ImGui.IsPopupOpen("",ImGuiPopupFlags.AnyPopupId) && ImGui.IsKeyPressed(ImGuiKey.Delete))
+            DeleteSelectedGraphNodes();
 
         DrawEventNamePopup();
 
@@ -488,16 +491,38 @@ internal sealed class EventWorkspacePanel
 
     private void DrawGraphWorkspace(EditorState? state)
     {
-        DrawGraphTabs();
+        ImGui.PushStyleColor(ImGuiCol.Button, !_showEventGraph ? new Vector4(.16f,.30f,.42f,1) : new Vector4(.10f,.12f,.14f,1));
+        if (ImGui.Button("Event sheet")) _showEventGraph = false;
+        ImGui.PopStyleColor();
+        ImGui.SameLine();
+        ImGui.PushStyleColor(ImGuiCol.Button, _showEventGraph ? new Vector4(.16f,.30f,.42f,1) : new Vector4(.10f,.12f,.14f,1));
+        if (ImGui.Button("Graph")) _showEventGraph = true;
+        ImGui.PopStyleColor();
+        ImGui.SameLine();
+        if (ImGui.Button("View options")) ImGui.OpenPopup("SheetViewOptions");
+        if (ImGui.BeginPopup("SheetViewOptions"))
+        {
+            ImGui.Checkbox("Events list", ref _showSheetOutline);
+            ImGui.Checkbox("Details", ref _showSheetDetails);
+            ImGui.Checkbox("Module settings", ref _sheetShowModuleSettings);
+            bool live = VisualLogicDebugTrace.Enabled;
+            if (ImGui.Checkbox("Live feedback during play", ref live))
+            { VisualLogicDebugTrace.Enabled = live; if (!live) VisualLogicDebugTrace.Clear(); }
+            ImGui.EndPopup();
+        }
+        ImGui.Spacing();
+        if (_showEventGraph) DrawGraphTabs();
         float availableWidth = ImGui.GetContentRegionAvail().X;
-        float detailsWidth = MathF.Min(380.0f, MathF.Max(300.0f, availableWidth * 0.30f));
-        bool showDetails = availableWidth >= 720.0f;
-        bool showOutline = availableWidth >= 1050.0f;
-        float outlineWidth = showOutline ? 210.0f : 0.0f;
+        float detailsWidth = Math.Clamp(_sheetDetailsWidth, 240, MathF.Max(240, availableWidth * .35f));
+        bool showDetails = _showSheetDetails && availableWidth >= 720.0f;
+        bool showOutline = _showSheetOutline && availableWidth >= 950.0f;
+        float outlineWidth = showOutline ? Math.Clamp(_sheetOutlineWidth, 150, availableWidth * .25f) : 0.0f;
 
         if (showOutline)
         {
             DrawGraphOutline(outlineWidth);
+            ImGui.SameLine();
+            DrawSheetSplitter("##OutlineSplitter", ref _sheetOutlineWidth, 1);
             ImGui.SameLine();
         }
 
@@ -505,27 +530,30 @@ internal sealed class EventWorkspacePanel
         {
             ImGui.BeginChild("##EventGraphArea",
                 new Vector2(MathF.Max(320.0f, availableWidth - detailsWidth - outlineWidth -
-                    (showOutline ? 16.0f : 8.0f)), 0.0f),
+                    (showOutline ? 24.0f : 12.0f)), 0.0f),
                 ImGuiChildFlags.None,
                 ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         }
         else
         {
             ImGui.BeginChild("##EventGraphArea",
-                new Vector2(0.0f, MathF.Max(220.0f, ImGui.GetContentRegionAvail().Y * 0.60f)),
+                new Vector2(0.0f, _showSheetDetails ? MathF.Max(220.0f, ImGui.GetContentRegionAvail().Y * 0.60f) : 0),
                 ImGuiChildFlags.None,
                 ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         }
 
-        DrawGraphCanvas(state);
+        if (_showEventGraph) DrawGraphCanvas(state);
+        else DrawEventSheet(state);
         ImGui.EndChild();
 
         if (showDetails)
         {
             ImGui.SameLine();
+            DrawSheetSplitter("##DetailsSplitter", ref _sheetDetailsWidth, -1);
+            ImGui.SameLine();
             DrawSelectionDetails(state, detailsWidth);
         }
-        else
+        else if (_showSheetDetails)
         {
             DrawSelectionDetails(state, availableWidth);
         }
@@ -533,11 +561,12 @@ internal sealed class EventWorkspacePanel
 
     private void DrawGraphOutline(float width)
     {
+        if (!_showEventGraph) { DrawSheetOutline(width); return; }
         ImGui.BeginChild("##EventGraphOutline", new Vector2(width, 0.0f),
             ImGuiChildFlags.Borders);
         ImGui.SeparatorText("EVENTS");
         ImGui.SetNextItemWidth(-1.0f);
-        ImGui.InputTextWithHint("##OutlineSearch", "Find node...", ref _graphOutlineSearch, 96);
+        ImGui.InputTextWithHint("##OutlineSearch", "Find event...", ref _graphOutlineSearch, 96);
 
         if (_module != null)
         {
@@ -551,7 +580,7 @@ internal sealed class EventWorkspacePanel
             }
             foreach (EventRuleDefinition rule in _module.Rules)
             {
-                if (IsNodeHiddenByGroup(rule.Id) && !rule.Conditions.Concat(rule.Actions)
+                if (_showEventGraph && IsNodeHiddenByGroup(rule.Id) && !rule.Conditions.Concat(rule.Actions)
                     .Any(item => !IsNodeHiddenByGroup(item.InstanceId)))
                     continue;
                 string name = GetRuleDisplayName(rule);
@@ -568,7 +597,7 @@ internal sealed class EventWorkspacePanel
                     _dirty = true;
                 }
                 ImGui.SameLine();
-                if (!IsNodeHiddenByGroup(rule.Id))
+                if (!_showEventGraph || !IsNodeHiddenByGroup(rule.Id))
                     DrawOutlineEntry(rule.Id, name);
                 else
                     ImGui.TextDisabled(name);
@@ -577,15 +606,15 @@ internal sealed class EventWorkspacePanel
                     continue;
                 ImGui.Indent(12.0f);
                 foreach (VisualInstruction condition in rule.Conditions)
-                    if (!IsNodeHiddenByGroup(condition.InstanceId) &&
+                    if ((!_showEventGraph || !IsNodeHiddenByGroup(condition.InstanceId)) &&
                         MatchesOutlineSearch(GetOutlineInstructionName(condition)))
                         DrawOutlineEntry(condition.InstanceId,
-                            "? " + GetOutlineInstructionName(condition));
+                            (_showEventGraph ? "? " : "Condition: ") + GetOutlineInstructionName(condition));
                 foreach (VisualInstruction action in rule.Actions)
-                    if (!IsNodeHiddenByGroup(action.InstanceId) &&
+                    if ((!_showEventGraph || !IsNodeHiddenByGroup(action.InstanceId)) &&
                         MatchesOutlineSearch(GetOutlineInstructionName(action)))
                         DrawOutlineEntry(action.InstanceId,
-                            "> " + GetOutlineInstructionName(action));
+                            (_showEventGraph ? "> " : "Action: ") + GetOutlineInstructionName(action));
                 ImGui.Unindent(12.0f);
             }
 
@@ -647,13 +676,13 @@ internal sealed class EventWorkspacePanel
 
         if (_module == null || _selectedGraphNodes.Count != 1)
         {
-            EditorUi.EmptyState("Select a node", "Click a condition or action to edit its values.");
+            EditorUi.EmptyState("Select a condition or action", "Click a sentence in the sheet to edit its settings here.");
             ImGui.EndChild();
             return;
         }
 
         Guid selectedId = _selectedGraphNodes.First();
-        foreach (EventRuleDefinition rule in _module.Rules)
+        foreach (EventRuleDefinition rule in EnumerateSheetRules(_module.Rules))
         {
             if (rule.Id == selectedId)
             {
@@ -755,6 +784,16 @@ internal sealed class EventWorkspacePanel
         EditorUi.ToolbarSeparator();
         if (EditorUi.PrimaryButton("+ Event"))
             RequestAddEvent(GetDefaultRulePosition(_module!.Rules.Count));
+        if (!_showEventGraph)
+        {
+            ImGui.SameLine();
+            ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
+            if (EditorUi.ToolbarButton("Delete", "Delete selected condition, action or event"))
+                DeleteSelectedGraphNodes();
+            ImGui.EndDisabled();
+            EditorUi.EndToolbar();
+            return;
+        }
         ImGui.SameLine();
         ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
         if (EditorUi.ToolbarButton("+ Comment", "Create a comment around the selection"))
@@ -845,8 +884,12 @@ internal sealed class EventWorkspacePanel
         ImGui.TextColored(GetTraceColor(state), $"● {label}");
     }
 
-    private static void DrawTraceLegend()
+    private void DrawTraceLegend()
     {
+        if (!_showEventGraph)
+        {
+            return;
+        }
         bool compact = ImGui.GetContentRegionAvail().X < 760.0f;
         EditorUi.BeginToolbar("##EventTraceToolbar", compact ? 60.0f : EditorTheme.ToolbarHeight);
         ImGui.TextColored(EditorTheme.TextSecondary, "LIVE TRACE");
@@ -6277,7 +6320,7 @@ internal sealed class EventWorkspacePanel
             _ =>
                 condition
                     ? "Evaluates this condition and passes its TRUE/FALSE result into the event graph."
-                    : "Executes this action when the event reaches this node."
+                    : "Runs this action after the event's conditions are met."
         };
     }
 
@@ -7900,6 +7943,8 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        var before = rule.Conditions.Select(i => i.InstanceId).ToHashSet();
+        if (DrawInstructionSearch(rule, true)) { ImGui.EndPopup(); return; }
         ImGui.TextDisabled(
             "ADD CONDITION");
 
@@ -8022,6 +8067,7 @@ internal sealed class EventWorkspacePanel
             ImGui.EndMenu();
         }
 
+        FixSheetConditionParent(rule, before);
         ImGui.EndPopup();
     }
 
@@ -8035,6 +8081,7 @@ internal sealed class EventWorkspacePanel
             return;
         }
 
+        if (DrawInstructionSearch(rule, false)) { ImGui.EndPopup(); return; }
         ImGui.TextDisabled(
             "ADD ACTION");
 
@@ -8808,15 +8855,25 @@ internal sealed class EventWorkspacePanel
             }
             DrawObjectTargetArgument(instruction, "target", "VFX Object", state);
             foreach (var argument in pluginArguments)
-                DrawValueArgument(instruction, argument.Name, argument.DisplayName,
-                    argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            {
+                if (argument.IsObjectReference)
+                    DrawObjectTargetArgument(instruction, argument.Name, argument.DisplayName, state);
+                else
+                    DrawValueArgument(instruction, argument.Name, argument.DisplayName,
+                        argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            }
             return;
         }
         if (pluginArguments.Count > 0)
         {
             foreach (var argument in pluginArguments)
-                DrawValueArgument(instruction, argument.Name, argument.DisplayName,
-                    argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            {
+                if (argument.IsObjectReference)
+                    DrawObjectTargetArgument(instruction, argument.Name, argument.DisplayName, state);
+                else
+                    DrawValueArgument(instruction, argument.Name, argument.DisplayName,
+                        argument.DefaultValue.Type, argument.CreateDefault(), state, false);
+            }
             return;
         }
         switch (instruction.Id)

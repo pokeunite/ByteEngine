@@ -437,7 +437,12 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D>("WaterBasin3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterFlowAudio3D>("WaterFlowAudio3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Audio.AudioSettings>("AudioSettings"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Audio.UiInteractionAudio>("UiInteractionAudio"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.LoadingScreenStyle>("LoadingScreenStyle"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WetSurfaceContact3D>("WetSurfaceContact3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.PulleyCableRig3D>("PulleyCableRig3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DockingReceiver3D>("DockingReceiver3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.TimedChallenge3D>("TimedChallenge3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerInteraction3D>("PointerInteraction3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.GraphicsSettings3D>("GraphicsSettings3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerTarget3D>("PointerTarget3D"));

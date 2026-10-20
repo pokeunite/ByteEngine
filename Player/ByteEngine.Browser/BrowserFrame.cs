@@ -14,6 +14,7 @@ internal sealed class BrowserFrame
     public float[] look { get; set; } = [1,1,0];
     public float[] fog { get; set; } = [0,0,0,0,1,0,0,0];
     public float[] vp { get; set; } = [];
+    public float[] inverseVp {get;set;}=[];
     public float[] eye { get; set; } = [];
     public float[] background { get; set; } = [];
     public BrowserLight[] lights { get; set; } = [];
@@ -127,12 +128,33 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public BrowserWater? water {get;set;}
+    public float[] wet {get;set;}=[];
     public bool receiveShadows { get; set; }
     public float[] shadowInstances { get; set; } = [];
     public int id { get; set; }
     public int material { get; set; }
     public float[] model { get; set; } = [];
     public float[] instances { get; set; } = [];
+}
+
+internal sealed class BrowserWater
+{
+ public bool surface {get;set;}
+ public bool reflections {get;set;}
+ public int depthTexture {get;set;}
+ public float[] size {get;set;}=[];
+ public float[] column {get;set;}=[];
+ public float[] motion {get;set;}=[];
+ public float[] flow {get;set;}=[];
+ public float[] impact {get;set;}=[];
+ public float[] wake {get;set;}=[];
+ public float[] absorption {get;set;}=[];
+ public float[] scattering {get;set;}=[];
+ public float[] style {get;set;}=[];
+ public float[] waves {get;set;}=[];
+ public float[] depthRect {get;set;}=[];
+ public float[] depthSettings {get;set;}=[];
 }
 
 internal sealed class BrowserUi

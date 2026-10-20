@@ -13,11 +13,13 @@ namespace ByteEngine.Core.VisualLogic;
 
 public sealed record VisualArgumentDefinition(string Name, string DisplayName, VariableValue DefaultValue)
 {
+    public bool IsObjectReference { get; init; }
     public EventValue CreateDefault() => new() { Constant = DefaultValue.Clone() };
 }
 
 public sealed class VisualConditionDefinition
 {
+    public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
     public required string DisplayName { get; init; }
@@ -33,6 +35,7 @@ public sealed class VisualConditionDefinition
 
 public sealed class VisualActionDefinition
 {
+    public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
     public required string DisplayName { get; init; }

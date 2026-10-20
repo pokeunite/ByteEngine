@@ -2031,6 +2031,11 @@ public sealed class EditorApplication
             Scene fresh=_projectContext.Scenes.Load(full);runtimePath=path;
             _state.RuntimeScene=fresh;_state.SelectedObject=null;return fresh;
         };
+        Scenes.ProgressiveSceneFactory=path=>{
+            runtimePath=path;
+            return _projectContext.Scenes.LoadSteps(ByteEngine.Core.Runtime.GamePackageExporter.ResolveInside(_projectContext.ProjectRoot,path));
+        };
+        Scenes.SceneLoaded=fresh=>{_state.RuntimeScene=fresh;_state.SelectedObject=null;};
         Scenes.RestartSceneFactory = () =>
         {
             Scenes.GlobalVariables.Clear();
@@ -2098,6 +2103,8 @@ public sealed class EditorApplication
 
         Scenes.RestartSceneFactory = null;
         Scenes.SceneFactory = null;
+        Scenes.ProgressiveSceneFactory = null;
+        Scenes.SceneLoaded = null;
 
         Guid? selectedId =
             _state.SelectedObject?.Id;

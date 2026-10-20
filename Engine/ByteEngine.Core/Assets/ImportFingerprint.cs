@@ -5,7 +5,7 @@ namespace ByteEngine.Core.Assets;
 /// <summary>Versioned cache identity includes content, importer settings and dependencies.</summary>
 public static class ImportFingerprint
 {
- public const int Version=2;
+ public const int Version=4;
  public static string Create(string source,object settings,IEnumerable<string>? dependencies=null)
  {
   using var hash=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);

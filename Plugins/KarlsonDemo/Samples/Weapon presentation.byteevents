@@ -1,0 +1,492 @@
+{
+  "id": "8f58526e-9e73-4b45-9aaa-2a68eccab4c5",
+  "version": 2,
+  "name": "Weapon presentation \u2014 editable animation and shot-hit events",
+  "targetBlueprintGuid": null,
+  "targetBlueprintPath": null,
+  "requiredComponents": [],
+  "rules": [
+    {
+      "id": "3a336ab3-e00d-4819-93d3-ceff2ff81994",
+      "displayName": "Reload cancelled \u2014 stop reload animation",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "c04f0d37-b1b2-4ae1-991d-ac8120c55b13",
+          "id": "bytebard.karlsondemo.reloadCancelled",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "6cdae74a-80f6-4c14-b0a5-211faf48d087",
+          "id": "animation.cancelAction",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Reload cancelled \u2014 stop reload animation",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "cb451ab7-3b8d-4d09-bdcc-82f6945f3a11",
+      "displayName": "Weapon equipped \u2014 play Equip",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "408c183c-8d65-453f-b6e6-83cfdf56d119",
+          "id": "bytebard.karlsondemo.equipped",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "cad7a1b2-f93d-4a7c-8116-7704fb844aa5",
+          "id": "animation.playNamedAction",
+          "arguments": {
+            "action": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Equip",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "retrigger": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "forceInterrupt": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Weapon equipped \u2014 play Equip",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "5ad22e71-5775-4cdc-9e14-21bbdd861e5c",
+      "displayName": "Weapon fired \u2014 play Fire",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "c3dfecf7-862e-4376-bb8d-7d291486f1f5",
+          "id": "bytebard.karlsondemo.fired",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "9a2a034d-9eee-462e-8079-b5fe75006fda",
+          "id": "animation.playNamedAction",
+          "arguments": {
+            "action": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Fire",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "retrigger": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "forceInterrupt": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Weapon fired \u2014 play Fire",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "23bcb6a8-4d8a-475a-8f7d-b23e04cd36e4",
+      "displayName": "Reload started \u2014 play Reload",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "7c02fb89-3fc3-4468-8311-e16ba0eb7a78",
+          "id": "bytebard.karlsondemo.reloadStarted",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "60bce2b0-8135-4aac-9df0-524f7ca2a90e",
+          "id": "animation.playNamedAction",
+          "arguments": {
+            "action": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Reload",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "retrigger": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            },
+            "forceInterrupt": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "number": 0,
+                "string": "",
+                "boolean": true,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Reload started \u2014 play Reload",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "fb3a149b-9998-47e4-896a-152f3e58a979",
+      "displayName": "Shot hit \u2014 expose actual hit object, position and normal",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "10be0eb9-6665-4b6b-ab23-8599ca73b3c9",
+          "id": "bytebard.karlsondemo.hit",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "3365abdc-a4c3-4934-99c9-2cd8ea94e6de",
+          "id": "physics.saveRayHit",
+          "arguments": {
+            "prefix": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Shot",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Shot hit \u2014 expose actual hit object, position and normal",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    },
+    {
+      "id": "8f916af3-400c-4fe7-94ad-91b82467e1fa",
+      "displayName": "Shot missed \u2014 clear saved hit result",
+      "editorOutlineCollapsed": false,
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "4b0704ea-0833-49f9-a9fd-338bd21fe470",
+          "id": "bytebard.karlsondemo.missed",
+          "arguments": {},
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "1d7c4d27-dc39-4e16-9ceb-3fc66100bf55",
+          "id": "physics.saveRayHit",
+          "arguments": {
+            "prefix": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "number": 0,
+                "string": "Shot",
+                "boolean": false,
+                "vector2": {
+                  "x": 0,
+                  "y": 0
+                },
+                "vector3": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "reference": null
+            }
+          },
+          "conditionInputIds": [],
+          "nextActionId": null,
+          "trueActionId": null,
+          "falseActionId": null,
+          "editorLayoutInitialized": false,
+          "editorX": 0,
+          "editorY": 0
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "connectedConditionIds": [],
+      "hasExplicitExecutionFlow": false,
+      "firstActionId": null,
+      "editorTitle": "Shot missed \u2014 clear saved hit result",
+      "editorCollapsed": false,
+      "editorLayoutInitialized": false,
+      "editorX": 0,
+      "editorY": 0
+    }
+  ],
+  "editorLooseConditions": [],
+  "editorLooseActions": [],
+  "editorNodeScale": 0.72,
+  "editorGroups": []
+}

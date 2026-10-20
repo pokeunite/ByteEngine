@@ -56,7 +56,7 @@ internal static class CyberpunkImport
             if(obj.GetComponent<AnimationController>() is {} controller)controller.AnimationProfile=profiles[name];
             if(obj.GetComponent<WeaponDefinition3D>() is {} d)
             {
-                d.ReloadSeconds=durations[name]["Reload"];d.EmptyReloadSeconds=durations[name]["ReloadEmpty"];d.EmptyReloadAnimation="ReloadEmpty";d.EquipSeconds=durations[name]["Equip"];
+                d.ReloadSeconds=durations[name]["Reload"];d.EmptyReloadSeconds=durations[name]["ReloadEmpty"];d.EquipSeconds=durations[name]["Equip"];
                 d.MuzzleSource=WeaponMuzzleSource.AnimationSocket;d.MuzzleSocket="WeaponMuzzle";
                 obj.Transform.LocalPosition=name=="Pistol"?new(.14f,-.015f,-.50f):new(.18f,-.045f,-.72f);
                 obj.Transform.LocalRotation=Quaternion.CreateFromYawPitchRoll(MathF.PI+.08f,name=="Pistol"?-.085f:-.14f,0);

@@ -35,12 +35,18 @@ public sealed class WaterSurface3D:Component
  public float ImpactStrength {get;set;}
  public float ImpactRadius {get;set;}=1.2f;
  public float VolumeOpacity {get;set;}=.78f;
+ public float CalmNormalStrength {get;set;}=.55f;
+ public float FlowResponseSeconds {get;set;}=.35f;
+ public float FlowActivity {get;private set;}
+ float wakeActivity;
+ BuoyantBody3D[] bodies=[];
  public Vector4 VolumeTint {get;set;}=new(.01f,.21f,.27f,1);
  float[]? dynamicVertices;int gridX,gridZ;Vector3 gridSize;WaterDynamics3D? dynamics;WaterFlowPath3D? arrival;
  MeshRenderer? volumeRenderer;MeshRenderer? renderer;Mesh? ownedMesh,ownedVolume;WaterBasin3D? basin;WaterGate3D? gate;
  protected override void OnStart()
  {
   var s=GameObject.Scene!;renderer=s.FindGameObject(RendererName)?.GetComponent<MeshRenderer>();
+  bodies=s.GameObjects.SelectMany(o=>o.Components).OfType<BuoyantBody3D>().ToArray();
   basin=s.FindGameObject(BasinName)?.GetComponent<WaterBasin3D>();dynamics=basin?.GameObject.GetComponent<WaterDynamics3D>();arrival=s.FindGameObject(FlowPathName)?.GetComponent<WaterFlowPath3D>();gate=s.FindGameObject(FlowGate)?.GetComponent<WaterGate3D>();if(renderer==null)return;
   var size=renderer.Transform.LocalScale;if(SurfaceSize.LengthSquared()>.0001f)size=Vertical?new(SurfaceSize.X,SurfaceSize.Y,.02f):new(SurfaceSize.X,.02f,SurfaceSize.Y);else SurfaceSize=new(size.X,Vertical?size.Y:size.Z);int nx=Math.Clamp(Segments,4,96),nz=Math.Clamp((int)(nx*(Vertical?size.Y:size.Z)/Math.Max(.1f,size.X)),4,48);
   if(!Vertical&&MatchSimulationResolution&&dynamics!=null){nx=Math.Min(nx,Math.Clamp(dynamics.Columns,4,96));nz=Math.Min(nz,Math.Clamp(dynamics.Rows,4,48));}
@@ -70,16 +76,20 @@ public sealed class WaterSurface3D:Component
  {
   if(renderer==null)return;UpdateWetVisibility();if(!IsWet)return;UpdateSpatialSurface();float flow=arrival?.Outflow??gate?.Flow??basin?.Current??0;
   float depth=basin!=null?Math.Max(0,basin.Level-basin.Floor):1;
-  renderer.Material.WaterMotion=new((float)GameObject.Scene!.SimulationTime,flow,dynamics?.Grid!=null?0:Math.Min(WaveHeight,depth*.15f),FoamStrength);
+  float response=1-MathF.Exp(-(float)Time.DeltaTime/Math.Max(.01f,FlowResponseSeconds));
+  FlowActivity+=(Math.Clamp(Math.Abs(flow)*.45f,0,1)-FlowActivity)*response;
+  renderer.Material.WaterMotion=new((float)GameObject.Scene!.SimulationTime,flow,dynamics?.Grid!=null?0:Math.Min(WaveHeight,depth*.15f),FoamStrength*(.08f+.92f*FlowActivity));
   renderer.Material.WaterFlow=new(FlowDirection,Math.Min(MaximumFlowSpeed,Math.Abs(flow)*FlowSpeedScale/Math.Max(.3f,(basin?.Depth??2)*depth)),0);
   renderer.Material.WaterImpact=new(ImpactPosition.X,ImpactPosition.Z,ImpactRadius,Math.Clamp(Math.Abs(flow)*.4f,0,1)*ImpactStrength);
   renderer.Material.WaterColumn=new(basin?.Level??1,basin?.Floor??0,.8f,0);
-  renderer.Material.WaterAbsorption=new(Absorption,CausticStrength);renderer.Material.WaterScattering=new(Scattering,ScatteringAnisotropy);renderer.Material.WaterStyle=new(NormalStrength,Roughness,ShoreFoamWidth,0);renderer.Material.WaterReflections=ScreenSpaceReflections;
+  renderer.Material.WaterAbsorption=new(Absorption,CausticStrength*(.45f+.55f*FlowActivity));renderer.Material.WaterScattering=new(Scattering,ScatteringAnisotropy);renderer.Material.WaterStyle=new(NormalStrength*(CalmNormalStrength+(1-CalmNormalStrength)*FlowActivity),Roughness,ShoreFoamWidth,0);renderer.Material.WaterReflections=ScreenSpaceReflections;
   renderer.Material.WaterWake=Vector4.Zero;
   if(basin!=null&&volumeRenderer!=null)volumeRenderer.Material.WaterColumn=new(basin.Level,basin.Floor,.8f,Math.Clamp(VolumeOpacity,0,1));
   if(basin!=null){
-   var body=GameObject.Scene.GameObjects.SelectMany(o=>o.Components).OfType<BuoyantBody3D>().Where(b=>b.Transform.WorldPosition.X>basin.MinX&&b.Transform.WorldPosition.X<basin.MaxX&&Math.Abs(b.Transform.WorldPosition.Z-basin.CenterZ)<basin.Depth/2).OrderByDescending(b=>b.Size.X).FirstOrDefault();
-   if(body!=null){var p=body.Transform.WorldPosition;renderer.Material.WaterWake=new(p.X,p.Z,body.Size.X,Math.Clamp((body.GameObject.GetComponent<Rigidbody3D>()?.Velocity.Length()??0)*.7f,0,1));}
+   BuoyantBody3D? body=null;foreach(var candidate in bodies){var p=candidate.Transform.WorldPosition;if(candidate.Enabled&&candidate.GameObject.ActiveInHierarchy&&p.X>basin.MinX&&p.X<basin.MaxX&&Math.Abs(p.Z-basin.CenterZ)<basin.Depth/2&&(body==null||candidate.Size.X>body.Size.X))body=candidate;}
+   float target=body!=null?Math.Clamp((body.GameObject.GetComponent<Rigidbody3D>()?.Velocity.Length()??0)*.7f,0,1):0;
+   wakeActivity+=(target-wakeActivity)*(1-MathF.Exp(-(float)Time.DeltaTime*(target>wakeActivity?8:2.4f)));
+   if(body!=null){var p=body.Transform.WorldPosition;renderer.Material.WaterWake=new(p.X,p.Z,body.Size.X,wakeActivity);}
   }
  }
  void UpdateWetVisibility(){IsWet=basin==null||basin.Level-basin.Floor>DryDepth;if(renderer!=null)renderer.Visible=IsWet;if(volumeRenderer!=null)volumeRenderer.Visible=IsWet;}

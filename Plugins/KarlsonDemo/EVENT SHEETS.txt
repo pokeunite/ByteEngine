@@ -1,0 +1,25 @@
+MODULAR WEAPON GAMEPLAY 3 — EVENT-SHEET SETUP
+
+Version 3 removes automatic animation playback and animation-name fields from Weapon Definition. There is no hidden equip/fire/reload animation trigger or playback-speed change in Weapon Instance.
+
+Copy the two sample .byteevents assets into your project's Assets/Events folder.
+Attach FPS controls to the player/equipment object. Turn off Weapon Equipment > Use Built In Fire Input so the sheet owns input.
+Attach Weapon presentation to each weapon object, beside Weapon Instance and Animation Controller.
+Create named animation actions Equip, Fire and Reload in each weapon's Animation Profile. Their clip selections and blending remain native profile settings.
+
+Edit Weapon presentation to choose when animations play. The rules use the ordinary Animation > Play Named Action and Cancel Action actions. Removing/disabling a presentation rule stops that animation while the weapon still fires/reloads.
+
+HIT DATA
+Weapons > Weapon shot hit populates the current event context's Last Ray Hit. Target Self works on a weapon with Weapon Instance; you can also target an equipment object to read its equipped weapon.
+Use Last Ray Hit as the target of native object, damage or VFX actions. Physics > Save Raycast Result stores point, normal, distance, object ID and hit/miss status in your sheet owner's variables.
+The sample saves ShotHit, ShotObjectId, ShotPoint, ShotNormal and ShotDistance on the weapon. A miss clears the saved result.
+Weapons > Use weapon shot result as Last Ray Hit retrieves an existing result without another raycast. Hit index 0 is the nearest actual pellet hit; higher indices select other pellet collisions. Out-of-range indices return no hit.
+These are actual hitscan collisions, not the projectile camera-aim ray. Projectile impacts are not represented as hitscan results.
+
+Weapon events are independent per observing condition and object. An input sheet firing after a presentation sheet is observed on the following update rather than losing the event.
+Weapon Definition still controls damage, ammo, fire rate, trigger mode and reload duration. Match reload duration to the source clip, or explicitly control playback speed in the presentation sheet.
+
+MIGRATION FROM VERSION 2
+Add the presentation sheet before using version 3: previous component animation-name fields no longer drive animations. Copy the sample rules into existing custom event sheets if desired. Existing built-in fire input remains available, but do not enable it alongside a sheet's fire-input rule.
+
+Weapon shot hit: tick Last Ray Hit - check object, then pick Self or a scene object in Hit object. The weapon/equipment picker selects the firing source. No separate Last Raycast Hit Object condition is needed. Unticked accepts any hit; shotguns match any pellet and publish that hit.

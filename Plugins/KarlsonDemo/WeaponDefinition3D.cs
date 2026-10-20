@@ -44,14 +44,6 @@ public sealed class WeaponDefinition3D : Component
     public string MuzzleSocket { get; set; } = "WeaponMuzzle";
     public string MuzzleBone { get; set; } = "MuzzleSocket";
     public System.Numerics.Vector3 MuzzleLocalOffset { get; set; }
-    [AnimationActionPicker]
-    public string FireAnimation { get; set; } = "Fire";
-    [AnimationActionPicker]
-    public string ReloadAnimation { get; set; } = "Reload";
-    [AnimationActionPicker]
-    public string EmptyReloadAnimation { get; set; } = "Reload";
-    [AnimationActionPicker]
-    public string EquipAnimation { get; set; } = "Equip";
     public bool ShowShotTrace { get; set; } = true;
     public bool ShowCameraAimRay { get; set; }
     public float TraceSeconds { get; set; } = .3f;

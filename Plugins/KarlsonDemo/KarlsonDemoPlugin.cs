@@ -8,8 +8,8 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
     public void Register(ByteEnginePluginContext context)
     {
         context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Equip any number of independently configured weapon instances; optional input and HUD bindings.", "fps inventory guns"));
-        context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Editable tuning and presentation settings. Author variants as weapon Blueprints.", "ammo hitscan projectile pistol spread"));
-        context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Independent current and reserve ammo; shared behavior for every weapon definition.", "ammo state reload"));
+        context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Damage, ammo and timing. Equip/fire/reload animations are authored in Event Sheets.", "ammo hitscan projectile pistol spread"));
+        context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Ammo state and weapon events. Use Weapon shot hit in an Event Sheet to access Last Ray Hit.", "ammo state reload raycast hit"));
         context.RegisterSimpleComponent<MilkDepotCourse3D>("MilkDepotCourse3D", new("Milk Depot Course", "Karlson", "Editable targets, milk goal, checkpoints and fall recovery.", "level objective checkpoint"));
         context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
         WeaponEvents.Register(context);
@@ -21,19 +21,38 @@ internal static class WeaponEvents
     internal static void Register(ByteEnginePluginContext c)
     {
         VisualArgumentDefinition Arg(string key, string label, VariableValue value) => new(key, label, value);
-        var target = Arg("target", "Equipment object (Self, name or id:GUID)", VariableValue.FromString("Self"));
+        var target = Arg("target", "Weapon or equipment object", VariableValue.FromString("Self")) with { IsObjectReference = true };
         var slot = Arg("slot", "Slot (zero based)", VariableValue.FromNumber(0));
         var enabled = Arg("enabled", "Enabled", VariableValue.FromBoolean(true));
         float Num(VisualInstruction i, EventExecutionContext e, string key) => (float)EventValueResolver.GetNumber(i, key, e);
         bool Bool(VisualInstruction i, EventExecutionContext e, string key) => EventValueResolver.GetBoolean(i, key, e);
+        string? Sentence(string id) => id switch
+        {
+            "equip" => "{target}: equip weapon slot {slot}",
+            "fire" => "{target}: fire equipped weapon",
+            "reload" => "{target}: reload equipped weapon",
+            "cancelReload" => "{target}: cancel reload",
+            "inputActive" => "Game input is captured",
+            "automatic" => "Equipped weapon is automatic",
+            "semiAutomatic" => "Equipped weapon is single-shot",
+            "canFire" => "Equipped weapon can fire",
+            "fired" => "{target}: weapon fired",
+            "equipped" => "{target}: weapon equipped",
+            "reloading" => "{target}: weapon is reloading",
+            "reloadStarted" => "{target}: reload started",
+            "reloadComplete" => "{target}: reload completed",
+            _ => null
+        };
         void Action(string id, string name, Action<FpsGunLab3D, VisualInstruction, EventExecutionContext> run, params VisualArgumentDefinition[] args) =>
-            c.RegisterAction(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
+            c.RegisterAction(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
                 Execute = (i,e) => { if (Resolve(i,e) is {} equipment) run(equipment,i,e); } });
         void Condition(string id, string name, Func<FpsGunLab3D, VisualInstruction, EventExecutionContext, bool> test, params VisualArgumentDefinition[] args) =>
-            c.RegisterCondition(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
+            c.RegisterCondition(new() { Id = Prefix + id, Category = "Weapons", DisplayName = name, SentenceTemplate = Sentence(id), TargetComponent = "FpsGunLab3D", Arguments = [target, ..args],
                 Evaluate = (i,e) => Resolve(i,e) is {} equipment && test(equipment,i,e) });
+        void WeaponCondition(string id,string name,Func<WeaponInstance3D,VisualInstruction,EventExecutionContext,bool> test,params VisualArgumentDefinition[] args)=>
+            c.RegisterCondition(new(){Id=Prefix+id,Category="Weapons",DisplayName=name,SentenceTemplate=Sentence(id),Arguments=[target,..args],Evaluate=(i,e)=>ResolveWeapon(i,e) is {} weapon&&test(weapon,i,e)});
         Action("equip", "Equip weapon slot", (w,i,e) => w.Select((int)Num(i,e,"slot")), slot);
-        Action("fire", "Fire equipped weapon", (w,i,e) => w.Fire());
+        Action("fire", "Fire equipped weapon", (w,i,e) => {var weapon=w.SelectedWeapon;bool fired=w.Fire();WeaponEventBridge.Publish(e,weapon,accepted:fired);});
         Action("reload", "Reload equipped weapon", (w,i,e) => w.Reload());
         Action("cancelReload", "Cancel reload", (w,i,e) => w.CancelReload());
         Action("setAmmo", "Set magazine and reserve ammo", (w,i,e) => w.SelectedWeapon?.SetAmmo((int)Num(i,e,"current"),(int)Num(i,e,"reserve")),
@@ -52,24 +71,61 @@ internal static class WeaponEvents
         Action("reloadTiming", "Set reload timing", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.ReloadSeconds=Num(i,e,"seconds"); d.EmptyReloadSeconds=Num(i,e,"emptySeconds"); d.ReloadSpeedMultiplier=Num(i,e,"speed"); d.AllowReloadInterrupt=Bool(i,e,"interrupt"); } },
             Arg("seconds","Reload seconds (per shell for shotgun)",VariableValue.FromNumber(1)), Arg("emptySeconds","Empty reload seconds",VariableValue.FromNumber(1.6)), Arg("speed","Reload speed multiplier",VariableValue.FromNumber(1)), Arg("interrupt","Allow per-shell reload interruption",VariableValue.FromBoolean(true)));
         Action("muzzleFlash", "Set muzzle flash", (w,i,e) => { if(w.SelectedWeapon?.Definition is {} d) { d.MuzzleFlashEnabled=Bool(i,e,"enabled"); d.MuzzleFlashSize=Num(i,e,"size"); } }, enabled, Arg("size","Flash size",VariableValue.FromNumber(.6)));
-        Condition("fired", "Weapon fired this frame", (w,i,e) => w.SelectedWeapon?.FiredThisFrame==true);
-        Condition("hit", "Hitscan hit this frame", (w,i,e) => w.SelectedWeapon?.HitThisFrame==true);
-        Condition("reloadComplete", "Reload completed this frame", (w,i,e) => w.SelectedWeapon?.ReloadCompletedThisFrame==true);
-        Condition("canFire", "Equipped weapon can fire", (w,i,e) => w.CanFire);
-        Condition("reloading", "Equipped weapon is reloading", (w,i,e) => w.Reloading);
-        Condition("ammoAtLeast", "Magazine ammo is at least", (w,i,e) => w.Ammo >= Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));
+        WeaponCondition("fired", "Weapon fired", (w,i,e) => {bool fired=WeaponEventBridge.Pulse(i,e,w,"fired");if(fired)WeaponEventBridge.Publish(e,w);return fired;});
+        WeaponCondition("hit", "Weapon shot hit", (w,i,e) =>
+        {
+            if (!WeaponEventBridge.Pulse(i,e,w,"hit")) return false;
+            if (Bool(i,e,"checkLastRayHit"))
+            {
+                var selected = ResolveObject(i,e,"hitObject");
+                for (int index=0; index<w.ShotHits.Count; index++)
+                    if (selected != null && w.ShotHits[index].Hit.GameObject == selected)
+                    { WeaponEventBridge.Publish(e,w,index); return true; }
+                WeaponEventBridge.Publish(e,w,accepted:false);
+                return false;
+            }
+            WeaponEventBridge.Publish(e,w);
+            return e.LastRaycastHit.HasValue;
+        }, Arg("checkLastRayHit","Last Ray Hit - check object",VariableValue.FromBoolean(false)),
+           Arg("hitObject","Hit object",VariableValue.FromString("Self")) with { IsObjectReference = true });
+        WeaponCondition("missed", "Hitscan shot missed", (w,i,e) => {bool fired=WeaponEventBridge.Pulse(i,e,w,"fired");if(fired)WeaponEventBridge.Publish(e,w);return fired&&w.LastShotWasHitscan&&w.ShotHits.Count==0;});
+        WeaponCondition("equipped", "Weapon equipped", (w,i,e) => WeaponEventBridge.Pulse(i,e,w,"equipped"));
+        WeaponCondition("reloadStarted", "Reload started", (w,i,e) => WeaponEventBridge.Pulse(i,e,w,"reloadStarted"));
+        WeaponCondition("reloadCancelled", "Reload cancelled", (w,i,e) => WeaponEventBridge.Pulse(i,e,w,"reloadCancelled"));
+        WeaponCondition("reloadComplete", "Reload completed", (w,i,e) => WeaponEventBridge.Pulse(i,e,w,"reloadComplete"));
+        WeaponCondition("canFire", "Equipped weapon can fire", (w,i,e) => w.CanFire);
+        WeaponCondition("reloading", "Weapon is reloading", (w,i,e) => w.Reloading);
+        WeaponCondition("emptyReload", "Current reload started empty", (w,i,e) => w.Reloading&&w.ReloadWasEmpty);
+        WeaponCondition("automatic", "Weapon uses automatic trigger", (w,i,e) => w.Definition?.TriggerMode==WeaponTriggerMode.Automatic);
+        WeaponCondition("semiAutomatic", "Weapon uses single-shot trigger", (w,i,e) => w.Definition?.TriggerMode==WeaponTriggerMode.SemiAutomatic);
+        WeaponCondition("ammoAtLeast", "Magazine ammo is at least", (w,i,e) => w.CurrentAmmo >= Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));
+        c.RegisterAction(new(){Id=Prefix+"useShotResult",Category="Weapons",DisplayName="Use weapon shot result as Last Ray Hit",Arguments=[target,Arg("hitIndex","Hit index (nearest first, zero based)",VariableValue.FromNumber(0))],Execute=(i,e)=>WeaponEventBridge.Publish(e,ResolveWeapon(i,e),(int)Num(i,e,"hitIndex"))});
         Condition("slot", "Weapon slot is equipped", (w,i,e) => w.SelectedSlot == (int)Num(i,e,"slot"),slot);
+        Condition("inputActive", "Game input is captured", (w,i,e) => ByteEngine.Core.Input.IsGameInputCaptured);
         // Keep old serialized events loadable, without prescribing the number of new slots.
         for(int n=0;n<3;n++) { int captured=n; Action("select"+n,"Legacy select slot "+n,(w,i,e)=>w.Select(captured)); }
     }
     private static string Name(VisualInstruction i, EventExecutionContext e, string key, string fallback)
     { string value=EventValueResolver.GetString(i,key,e,fallback);return string.IsNullOrWhiteSpace(value)?fallback:value; }
+    private static GameObject? ResolveObject(VisualInstruction i,EventExecutionContext e,string key="target")
+    {
+        string token = EventValueResolver.GetString(i,key,e,"Self");
+        return string.IsNullOrWhiteSpace(token)||token.Equals("Self",StringComparison.OrdinalIgnoreCase) ? e.Self :
+            token.StartsWith("id:") && Guid.TryParse(token[3..],out var id) ? e.Scene.FindGameObject(id) : e.Scene.FindGameObject(token);
+    }
+    private static WeaponInstance3D? ResolveWeapon(VisualInstruction i,EventExecutionContext e)
+    {
+        var obj=ResolveObject(i,e);return obj?.GetComponent<WeaponInstance3D>()??FindEquipment(obj)?.SelectedWeapon;
+    }
+    private static FpsGunLab3D? FindEquipment(GameObject? obj)
+    {
+        for(var current=obj;current!=null;current=current.Parent)if(current.GetComponent<FpsGunLab3D>() is {} equipment)return equipment;
+        return null;
+    }
     private static FpsGunLab3D? Resolve(VisualInstruction i, EventExecutionContext e)
     {
-        string token = EventValueResolver.GetString(i,"target",e,"Self");
-        GameObject? obj = token.Equals("Self",StringComparison.OrdinalIgnoreCase) ? e.Self :
-            token.StartsWith("id:") && Guid.TryParse(token[3..],out var id) ? e.Scene.FindGameObject(id) : e.Scene.FindGameObject(token);
-        var result = obj?.GetComponent<FpsGunLab3D>();
+        var result=FindEquipment(ResolveObject(i,e));
+        string token=EventValueResolver.GetString(i,"target",e,"Self");
         if(result == null) e.WarningSink?.Invoke("Weapons: equipment target was not found: "+token);
         return result;
     }

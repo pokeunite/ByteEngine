@@ -39,6 +39,7 @@ try{
     renderer.readBuffer=index=>game.ReadBuffer(index);
     globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
     const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();
+    const previewQuality=new URLSearchParams(location.search).get('previewQuality');const exportGraphics={...(manifest.graphics||{})};if(['High','Balanced','Fast'].includes(previewQuality))exportGraphics.quality=previewQuality;game.ConfigurePresentation(JSON.stringify(exportGraphics));
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
     status.setProgress(null,'Preparing audio…');

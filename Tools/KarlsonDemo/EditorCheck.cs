@@ -34,8 +34,8 @@ internal static class EditorCheck
                     var names=(IReadOnlyList<string>)pickerMethod.Invoke(null,[definition,projectContext])!;
                     if(!new[]{"Fire","Reload","Equip"}.All(names.Contains))throw new Exception("Weapon picker missing profile actions");
                     foreach(var field in new[]{"FireAnimation","ReloadAnimation","EmptyReloadAnimation","EquipAnimation"})
-                        if(!definition.GetType().GetProperty(field)!.IsDefined(typeof(AnimationActionPickerAttribute),true))throw new Exception("Weapon field is not a picker: "+field);
-                    checks.Add("All animation fields use profile action pickers: "+obj.Name);
+                        if(definition.GetType().GetProperty(field)!=null)throw new Exception("Legacy automatic-animation field still exists: "+field);
+                    checks.Add("Animation actions remain in native profiles, outside Weapon Definition: "+obj.Name);
                 }
                 var gunlab=player.Components.Single(c=>c.GetType().Name=="FpsGunLab3D");
                 for(int slot=0;slot<4;slot++)

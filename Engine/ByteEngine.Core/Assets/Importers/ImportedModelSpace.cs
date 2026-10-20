@@ -68,6 +68,19 @@ internal static class ImportedModelSpace
                 back.X, back.Y, back.Z, 0,
                 0, 0, 0, 1);
             axes = Matrix4x4.Transpose(sourceBasis);
+            // Assimp may already normalize the FBX file axes through its synthetic
+            // scene root. Account for that root frame exactly once; keep units,
+            // authored child transforms and animation-only identity roots intact.
+            if (scene.RootNode is { Name: "RootNode" } root &&
+                MathF.Abs(Vector3.Dot(up, Vector3.UnitY)) < 0.001f &&
+                Matrix4x4.Decompose(Matrix4x4.Transpose(root.Transform),
+                    out _, out Quaternion rootRotation, out _))
+            {
+                Matrix4x4 rootFrame = Matrix4x4.CreateFromQuaternion(rootRotation);
+                Vector3 importedUp = Vector3.TransformNormal(up, rootFrame);
+                if (Vector3.Dot(Vector3.Normalize(importedUp), Vector3.UnitY) > 0.9999f)
+                    axes = Matrix4x4.Transpose(rootFrame) * axes;
+            }
         }
 
         return Matrix4x4.CreateScale(sourceUnitMetres * PositiveScale(userScale)) * axes;
