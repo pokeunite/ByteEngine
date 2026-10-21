@@ -7962,13 +7962,19 @@ internal sealed partial class EventWorkspacePanel
     private VisualInstruction CreateInstruction(
         string id)
     {
+        var instruction = CreateInstructionDefaults(id, _registry);
+        AddNodeToActiveGroup(instruction.InstanceId);
+        return instruction;
+    }
+
+    // Shared by the native picker and assistant so legacy built-in argument types stay identical.
+    internal static VisualInstruction CreateInstructionDefaults(string id, VisualLogicRegistry registry)
+    {
         var instruction =
             new VisualInstruction
             {
                 Id = id
             };
-        AddNodeToActiveGroup(instruction.InstanceId);
-
         switch (id)
         {
             case "time.startTimer":
@@ -8549,7 +8555,7 @@ internal sealed partial class EventWorkspacePanel
                 break;
         }
 
-        foreach (var argument in _registry.GetArguments(id))
+        foreach (var argument in registry.GetArguments(id))
             instruction.Arguments.TryAdd(argument.Name, argument.CreateDefault());
         return instruction;
     }

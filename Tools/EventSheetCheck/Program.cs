@@ -150,6 +150,53 @@ internal static class Program
   if(undoModule.Rules.Single(r=>r.Id==orderRule.Id).ConnectedConditionIds[0]!=rootB.InstanceId)throw new Exception("Undo did not restore condition order");
   if(!(bool)Call(panel,"Redo")!)throw new Exception("Reorder redo failed");
   Console.WriteLine("PASS condition reorder supports undo/redo");
+  // Action ordering must update runtime links, not just array/display order.
+  var actionModule=(EventModuleDefinition)panel.GetType().GetField("_module",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(panel)!;
+  var a=new VisualInstruction{Id="object.setActive"};var b=new VisualInstruction{Id="object.setActive"};var c=new VisualInstruction{Id="object.setActive"};
+  a.NextActionId=b.InstanceId;b.NextActionId=c.InstanceId;
+  var actionRule=new EventRuleDefinition{DisplayName="Action reorder verification",HasExplicitExecutionFlow=true,FirstActionId=a.InstanceId,Actions=[c,b,a]};actionModule.Rules.Add(actionRule);
+  if(!(bool)Call(panel,"MoveSheetAction",actionRule,b.InstanceId,-1)!||actionRule.FirstActionId!=b.InstanceId||b.NextActionId!=a.InstanceId||a.NextActionId!=c.InstanceId)throw new Exception("Move action up did not rewire execution");
+  if(!(bool)Call(panel,"MoveSheetAction",actionRule,b.InstanceId,1)!||actionRule.FirstActionId!=a.InstanceId)throw new Exception("Move action down failed");
+  if(!(bool)Call(panel,"ReorderSheetAction",actionRule,a.InstanceId,c.InstanceId,false)!||actionRule.FirstActionId!=b.InstanceId||b.NextActionId!=c.InstanceId||c.NextActionId!=a.InstanceId||a.NextActionId!=null)throw new Exception("Action drag insertion failed");
+  Console.WriteLine("PASS action up/down and drop insertion rewire actual execution order");
+  if(!(bool)Call(panel,"Undo")!)throw new Exception("Action order undo failed");
+  var actionUndo=(EventModuleDefinition)panel.GetType().GetField("_module",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(panel)!;
+  if(actionUndo.Rules.Single(r=>r.Id==actionRule.Id).FirstActionId!=a.InstanceId)throw new Exception("Action undo restored wrong entry point");
+  if(!(bool)Call(panel,"Redo")!)throw new Exception("Action order redo failed");
+  var actionRedo=(EventModuleDefinition)panel.GetType().GetField("_module",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(panel)!;
+  if(actionRedo.Rules.Single(r=>r.Id==actionRule.Id).FirstActionId!=b.InstanceId)throw new Exception("Action redo restored wrong order");
+  Console.WriteLine("PASS action reorder uses event-sheet undo/redo");
+  var branch=new VisualInstruction{Id="flow.branch"};var t1=new VisualInstruction{Id="object.setActive"};var t2=new VisualInstruction{Id="object.setActive"};var f1=new VisualInstruction{Id="object.setActive"};var lead=new VisualInstruction{Id="object.setActive"};
+  branch.TrueActionId=t1.InstanceId;branch.FalseActionId=f1.InstanceId;t1.NextActionId=t2.InstanceId;lead.NextActionId=branch.InstanceId;
+  var branchRule=new EventRuleDefinition{DisplayName="Branch reorder verification",HasExplicitExecutionFlow=true,FirstActionId=lead.InstanceId,Actions=[lead,branch,t1,t2,f1]};actionRedo.Rules.Add(branchRule);
+  if(!(bool)Call(panel,"MoveSheetAction",branchRule,t2.InstanceId,-1)!||branch.TrueActionId!=t2.InstanceId||t2.NextActionId!=t1.InstanceId||t1.NextActionId!=null||branch.FalseActionId!=f1.InstanceId)throw new Exception("Branch action reorder changed wrong arm");
+  if((bool)Call(panel,"ReorderSheetAction",branchRule,t1.InstanceId,f1.InstanceId,true)!||(bool)Call(panel,"MoveSheetAction",branchRule,lead.InstanceId,1)!||(bool)Call(panel,"MoveSheetAction",branchRule,branch.InstanceId,-1)!)throw new Exception("Action reorder crossed or moved a branch boundary");
+  var dangling=new VisualInstruction{Id="object.setActive"};branchRule.Actions.Add(dangling);
+  if((bool)Call(panel,"ReorderSheetAction",branchRule,dangling.InstanceId,t1.InstanceId,true)!)throw new Exception("Disconnected action was silently connected");
+  t1.NextActionId=f1.InstanceId;
+  if((bool)Call(panel,"MoveSheetAction",branchRule,t1.InstanceId,-1)!)throw new Exception("Shared tail was reordered ambiguously");
+  Console.WriteLine("PASS action reorder preserves branch arms and rejects shared/disconnected paths");
+  var legacy=new EventRuleDefinition{Actions=[a,b,c]};actionRedo.Rules.Add(legacy);
+  if(!(bool)Call(panel,"MoveSheetAction",legacy,c.InstanceId,-1)!||legacy.Actions[1]!=c||legacy.HasExplicitExecutionFlow)throw new Exception("Legacy implicit action order changed semantics");
+  Console.WriteLine("PASS legacy implicit action sequences reorder without enabling graph flow");
+  // Exercise the actual ImGui row drag handlers using synthetic input in this hidden test window.
+  var da=new VisualInstruction{Id="object.setActive"};var db=new VisualInstruction{Id="object.setActive"};var dc=new VisualInstruction{Id="object.setActive"};da.NextActionId=db.InstanceId;db.NextActionId=dc.InstanceId;
+  var dragRule=new EventRuleDefinition{DisplayName="Native drag verification",HasExplicitExecutionFlow=true,FirstActionId=da.InstanceId,Actions=[da,db,dc]};actionRedo.Rules.Add(dragRule);
+  var bounds=new Dictionary<Guid,(Vector2 Min,Vector2 Max)>();
+  void DragFrame(Vector2 mouse,bool? down=null)
+  {
+
+   var input=ImGui.GetIO();input.AddFocusEvent(true);input.AddMousePosEvent(mouse.X,mouse.Y);if(down.HasValue)input.AddMouseButtonEvent(0,down.Value);input.DeltaTime=1f/60;ImGui.NewFrame();
+   ImGui.SetNextWindowPos(new Vector2(10,10),ImGuiCond.Always);ImGui.SetNextWindowSize(new Vector2(700,350),ImGuiCond.Always);ImGui.Begin("Action drag test");
+   var ordered=new List<VisualInstruction>();Guid? next=dragRule.FirstActionId;while(next.HasValue){var node=dragRule.Actions.Single(x=>x.InstanceId==next.Value);ordered.Add(node);next=node.NextActionId;}
+   foreach(var item in ordered){var row=Create("Panels.EventSheetProjection+Row",item,0,null,true);Call(panel,"DrawSheetInstruction",row,false,null,dragRule);bounds[item.InstanceId]=(ImGui.GetItemRectMin(),ImGui.GetItemRectMax());}
+   ImGui.Dummy(Vector2.Zero);ImGui.End();Call(controller,"Render");
+  }
+  DragFrame(new(40,45),false);DragFrame(new(40,45));
+  Vector2 sourcePoint=(bounds[da.InstanceId].Min+bounds[da.InstanceId].Max)*.5f;Vector2 dropPoint=new(sourcePoint.X,bounds[dc.InstanceId].Max.Y-3);
+  DragFrame(sourcePoint);DragFrame(sourcePoint,true);DragFrame(sourcePoint);DragFrame(dropPoint);DragFrame(dropPoint);DragFrame(dropPoint,false);DragFrame(dropPoint);
+  if(dragRule.FirstActionId!=db.InstanceId||db.NextActionId!=dc.InstanceId||dc.NextActionId!=da.InstanceId)throw new Exception("Native mouse drag did not reorder actions");
+  Console.WriteLine("PASS native mouse drag/drop changes action execution order");
   var inspectorScene=new ByteEngine.Core.Scene.Scene("Equipment inspector check");
   var inspectorOwner=inspectorScene.CreateGameObject("Player");
   var inspectorCamera=inspectorScene.CreateGameObject("FPS Camera");inspectorCamera.AddComponent(new ByteEngine.Core.Graphics.Camera3D());

@@ -1,0 +1,175 @@
+BYTE ASSISTANT — FIRST LOCAL EDITOR VERSION
+
+OPEN IT
+Open a project in the updated ByteEngine editor, then Window > Byte Assistant.
+Click Connect Codex. The installed native codex.exe is detected automatically.
+Your existing ChatGPT sign-in is reused. If needed, click Sign in with ChatGPT and finish in your browser.
+The assistant intentionally requires ChatGPT authentication; it does not fall back to API-key billing.
+Choose a model available to your account and a reasoning level. Low is selected when supported.
+Select an object, type a request and press Send. Model requests are sent only when Send is pressed.
+
+TRY
+Inspect the selected object and explain its components.
+Create a cube named Door, add a box collider, and put it at [0, 1, 0].
+Add a Space-key event to the selected object that sets its position to [0, 2, 0].
+Add a PointLight and set its intensity to 3.
+
+WHAT WORKS
+Bounded scene inspection, selected-object properties/variables, and event-sheet summaries.
+Search available engine/plugin components, native conditions/actions and existing project assets.
+Create/rename objects, set local transforms, add components/dependencies and set editable properties/variables.
+Add flat AND event rules using registered conditions/actions and correctly typed native values.
+Native event-sheet parameter defaults are shared with the editor picker, including older built-in actions.
+Every rule has explicit condition and action wiring and remains editable in the normal event sheet.
+
+UNDO AND SAVE
+One edit batch per request, at most 20 operations. The scene change is one native Undo entry.
+Failed batches roll the scene back; no partial edits are retained.
+Edits remain unsaved until you save the scene normally.
+New event rules are saved as fresh assets under Assets/Events/Assistant and attached to their target.
+Undo removes their scene attachments; the generated assets remain in the project for recovery and Redo.
+Existing event modules are not overwritten by this version.
+Stop Play mode before editing. Switching scenes/projects invalidates in-flight edits.
+Allow scene edits can be switched off for read-only questions.
+
+USAGE AND PERFORMANCE
+Uses the same Codex subscription allowance/credits as your existing account. No separate allowance is created.
+Exact savings are not established yet; no percentage reduction is promised.
+Only the short task prompt, current scene/selection identity, and requested bounded tool results are supplied.
+No automatic screenshot stream or model inference runs on the laptop.
+The app-server starts on Connect and stops on Disconnect/editor exit. It is a child process; other Codex sessions are not stopped.
+Transport/model work is asynchronous. Native scene operations run on the editor thread.
+New task clears the active conversation; the assistant also starts fresh after five user requests.
+A 12-tool-call limit interrupts runaway turns. Stop cancels the active turn and keeps already-applied edits undoable.
+The panel shows model-reported task tokens and available account usage windows. Tokens are not a remaining-allowance percentage.
+No usage is spent on AI generation just by opening the panel or reading account/model/limit information.
+
+CURRENT LIMITS
+This first version cannot delete objects/components, replace existing sheets, author nested OR/NOT/branch graphs,
+import models, generate art or code, build/export games, or autonomously playtest.
+It can inspect registered plugin components; complex collection/custom inspector properties are not editable yet.
+The executable/model choices and conversation are session-local; ChatGPT credentials stay managed by Codex.
+The assistant is an integrated editor module in this version, not a standalone .byteplugin package.
+
+IMPLEMENTATION
+Editor/ByteEngine.Editor/Assistant contains the panel, stdio JSON-RPC connection and native tool backend.
+Uses Codex app-server's experimental dynamic-tool interface; future Codex protocol changes may require updates.
+The local integration disables shell/unified execution, apps, external MCP servers, extra plugins and host skill discovery.
+Thread environment access is disabled; no general-purpose code/file execution is exposed through the editor tools.
+No credentials are copied or written by ByteEngine. No request transcripts are written by this integration.
+This is a personal/local prototype. App-server authentication is not permitted for commercial or hosted services;
+commercial distribution requires a supported integration/authentication arrangement.
+Official documentation: https://learn.chatgpt.com/docs/app-server
+
+VERIFICATION
+Tools/AssistantCheck: native object/component edits, typed event arguments, actual event-action execution,
+single Undo/Redo, failure rollback, edit permission, Play-mode rejection and stale-scene rejection.
+--connect checks the installed app-server handshake, existing ChatGPT auth and model discovery without inference.
+One live subscription-backed request created a cube/collider and authored an event rule in a temporary scene;
+the edit batch successfully undid in one operation. Its vector-typing issue was reproduced and repaired locally,
+then verified by executing the generated native action, without spending another model request on that fix.
+--preview renders the actual native panel at 470px and 380px widths into artifacts/assistant-check.
+--live is an explicit test command that consumes normal Codex allowance and uses temporary test scenes only.
+
+
+SYSTEM GUIDANCE AND SESSION EXPORT (2026-10-21)
+- byte_help retrieves engine setup guides for third-person/camera, movement,
+  input, events, physics, assets/plugins and UI. Guides are retrieved on demand
+  rather than putting the entire engine source into each prompt.
+- Current project input actions/bindings are included in request context.
+- Component catalogue now includes property tooltips and enum choices;
+  object inspection also exposes bounded read-only values and event arguments.
+- Native input action references can be set by name. GUID properties can link
+  to $selected or @createdName inside an atomic batch.
+- Third-person playable setup uses PlayerController3D + CharacterController3D
+  + CapsuleCollider3D + CameraBoom3D on player; Camera3D on a child.
+  Simple ThirdPersonCamera3D follow is an alternative, not a second driver.
+- Export chat and activity opens a Save dialog for JSON. Records this editor
+  session's requests, context/model, replies, tools with arguments/results,
+  changes, errors and task boundaries. New task clears visible chat but does
+  not discard the session journal. Visible partial replies are also exported.
+- No raw transport/authentication messages or hidden reasoning are logged.
+  Logs contain project data and are only written when explicitly exported.
+  Earlier editor sessions cannot be reconstructed. Export before closing.
+- 26 local checks passed, including native camera rig resolution/placement,
+  input reference editing, one-step Undo and valid activity export.
+  No extra model generation or user project modifications were used for tests.
+
+
+NATIVE ASSET AUTHORING AND RETRIEVAL (2026-10-21)
+The first interface could configure VfxPlayer but not author VFX/Blueprint assets.
+The supplied interaction log exposed this missing capability; teaching names alone
+would not have made the requested fireball possible.
+
+New native operations:
+- create_vfx: versioned .bvfx, preset starting point or custom layers, colors,
+  shapes, local/world space, lifetimes, physics, curves and particle budgets.
+- create_material: native .bmat parameters, textures and emissive/unlit settings.
+- create_mesh: bounded vertex/triangle geometry with generated normals in OBJ.
+- save_blueprint: native snapshot of a scene object and its descendants.
+- instantiate_asset: uses existing editor Model3D/Blueprint import/placement.
+- set_parent, delete_object, add_component.properties and set_properties.
+- $asset:name aliases link new assets in the same transaction. inspect asset
+  reads native VFX/material/Blueprint/event data for follow-up work.
+All generated paths must be new files inside the project's Assets directory.
+Existing assets are never overwritten. Failed batches remove their own new files;
+scene Undo retains successful generated assets for recovery, as before. Asset-only
+operations do not claim a scene Undo entry. Failed transactions may be corrected
+once within the same request. Scene mutations remain unavailable in Play/read-only.
+
+Knowledge coverage:
+- The editor embeds read-only source references from the current Core build
+  (336 source files at this revision) and seven engine documents. byte_reference
+  searches snippets locally; source is not sent in bulk or executed as generated code.
+- byte_catalog systems lists live registered component/event categories, including
+  loaded plugins. Batched queries and exact multi-type searches avoid repeated calls.
+- Relevant setup recipes are selected locally before model invocation. This is
+  retrieval/tool expansion, not model fine-tuning or a claim of unlimited competence.
+- Custom meshes are bounded geometry, not a substitute for character sculpting,
+  texture/animation generation or arbitrary authoring of complex engine collections.
+
+Context/usage:
+- Compact JSON, concise input bindings and opt-in detailed inspection.
+- Fresh model thread per user request, retaining short visible conversation context
+  and the last applied asset/object summary instead of replaying tool dumps.
+- Export logs record context character count, native call count, result size,
+  request input/output and cached-input tokens. The model and effort are unchanged.
+- UTF-8 process I/O avoids mojibake in replies and exports.
+- Subscription usage cannot be inferred as a fixed cost per raw token. Official
+  integration reference: https://learn.chatgpt.com/docs/app-server
+
+Verification:
+- 48 deterministic local checks, including VFX layer emission, material round-trip,
+  mesh importer, native Blueprint spawn, J event action, moving projectile/VFX,
+  lifetime ownership, rollback, retry, read-only protection and path validation.
+- Four connection/schema checks without inference using installed Codex.
+- ONE live fireball evaluation with gpt-6.1-sol at low effort (same as user's log):
+  4 native calls; custom asset/Blueprint/event created; actual projectile simulation
+  checked. 58,039 reported total tokens, including 40,832 cached input tokens.
+  This is one sample, not a subscription-cost forecast or a general savings claim.
+- All evaluations used temporary projects. No edits to the user's Palclone project.
+
+
+ANIMATION PROFILE AUTHORING (2026-10-21)
+The 16:10 interaction exposed missing clip discovery/profile creation. Merely
+reading AnimationController source was insufficient for model-owned clip data.
+- byte_animations lists native model clips, durations, skeleton/skinned-mesh
+  availability and conservative locomotion recommendations; works from selected
+  character, a child mesh/bone, or an explicit model asset path.
+- create_animation_profile saves native .byteanim with rig reference, locomotion
+  and supported action/blend/layer/sync/graph/procedural data sections. Actual
+  model clip names are validated before saving; no retargeting is performed.
+- Assign AnimationController.AnimationProfile through existing native property
+  editing. Runtime controller creates skeletal playback for ModelHierarchyInstance;
+  a static MeshRenderer in Edit mode is not proof that the asset cannot animate.
+- Guide explicitly wires sprint speeds with editable native events; simply
+  assigning PlayerController3D.SprintAction does not implement sprint movement.
+- Inspect can read .byteanim files. Normal scene summaries hide imported
+  transform-only bones; search/includeBones retains access to those nodes.
+- Asset-path searches normalize Windows separators. Reference search weights
+  specific content terms and supports exact source/line reads beyond snippets.
+Verification: actual bundled Mannequin GLB, native clip discovery, profile/action
+round-trip, skeletal playback and skinning of AF_idle_loop, AF_walk_loop and
+AF_sprint_loop, idle/walk/run state selection, sprint event actions, Undo and invalid
+clip rejection. 69 local checks passed, without another model-generation request.
+All changes were verified in temporary projects; the user's scene is unchanged.

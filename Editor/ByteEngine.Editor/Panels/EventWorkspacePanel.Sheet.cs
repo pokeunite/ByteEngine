@@ -170,7 +170,7 @@ internal sealed partial class EventWorkspacePanel
                 DrawConditionPicker(rule,rule.Conditions);
                 ImGui.TableSetColumnIndex(1);
                 if (actions.Count == 0) ImGui.TextDisabled("No actions yet");
-                foreach(var row in actions) DrawSheetInstruction(row,false,state);
+                foreach(var row in actions) DrawSheetInstruction(row,false,state,rule);
                 ImGui.PushStyleColor(ImGuiCol.Text,SheetActionColor);
                 if(ImGui.Button("+ Add action",new Vector2(0,28))) ImGui.OpenPopup("Add Action");
                 ImGui.PopStyleColor();DrawActionPicker(rule,rule.Actions);
@@ -228,8 +228,8 @@ internal sealed partial class EventWorkspacePanel
         ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(color.X, color.Y, color.Z, .12f));
         if (ImGui.Selectable("##Sentence", _selectedGraphNodes.Contains(item.InstanceId), ImGuiSelectableFlags.None, new Vector2(width, height)))
             SelectSheetItem(item.InstanceId);
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(condition?"Click to edit. Drag above/below another condition in this block.\nRight-click or Alt+Up/Down to reorder.":"Click to edit in Details. Right-click for more options.");
-        if(condition&&owner!=null)DrawSheetConditionDrag(owner,item,origin,width,height);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(condition?"Click to edit. Drag above/below another condition in this block.\nRight-click or Alt+Up/Down to reorder.":"Click to edit. Drag above/below another action in this execution path.\nRight-click or Alt+Up/Down to reorder.");
+        if(owner!=null) { if(condition)DrawSheetConditionDrag(owner,item,origin,width,height); else DrawSheetActionDrag(owner,item,origin,width,height); }
         if (ImGui.BeginPopupContextItem("SentenceMenu"))
         {
             if (ImGui.MenuItem("Edit settings")) SelectSheetItem(item.InstanceId);
@@ -237,6 +237,10 @@ internal sealed partial class EventWorkspacePanel
                 if(ImGui.MenuItem("Move up","Alt+Up",false,CanMoveSheetCondition(owner,item.InstanceId,-1)))MoveSheetCondition(owner,item.InstanceId,-1);
                 if(ImGui.MenuItem("Move down","Alt+Down",false,CanMoveSheetCondition(owner,item.InstanceId,1)))MoveSheetCondition(owner,item.InstanceId,1);
                 if(IsLogicGate(item)&&ImGui.MenuItem("Add condition inside block")){_sheetConditionParentId=item.InstanceId;_sheetOpenConditionPickerFor=owner.Id;}
+            }
+            if(!condition&&owner!=null){
+                if(ImGui.MenuItem("Move up","Alt+Up",false,CanMoveSheetAction(owner,item.InstanceId,-1)))MoveSheetAction(owner,item.InstanceId,-1);
+                if(ImGui.MenuItem("Move down","Alt+Down",false,CanMoveSheetAction(owner,item.InstanceId,1)))MoveSheetAction(owner,item.InstanceId,1);
             }
             if (ImGui.MenuItem("Delete")) { SelectSheetItem(item.InstanceId); DeleteSelectedGraphNodes(); }
             ImGui.EndPopup();
@@ -252,9 +256,9 @@ internal sealed partial class EventWorkspacePanel
             draw.AddCircleFilled(dot, 3, ImGui.ColorConvertFloat4ToU32(GetTraceColor(trace)));
         }
         if(row.Depth>0){var guide=gutter-new Vector2(12,0);draw.AddLine(guide,guide+new Vector2(0,height+ImGui.GetStyle().ItemSpacing.Y),ImGui.ColorConvertFloat4ToU32(new Vector4(color.X,color.Y,color.Z,.5f)),1);draw.AddLine(guide+new Vector2(0,height*.5f),guide+new Vector2(10,height*.5f),ImGui.ColorConvertFloat4ToU32(color),1);}
-        if(condition&&owner!=null&&_selectedGraphNodes.Contains(item.InstanceId)&&ImGui.GetIO().KeyAlt&&!ImGui.GetIO().WantTextInput&&ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)){
-            if(ImGui.IsKeyPressed(ImGuiKey.UpArrow))MoveSheetCondition(owner,item.InstanceId,-1);
-            else if(ImGui.IsKeyPressed(ImGuiKey.DownArrow))MoveSheetCondition(owner,item.InstanceId,1);
+        if(owner!=null&&_selectedGraphNodes.Contains(item.InstanceId)&&ImGui.GetIO().KeyAlt&&!ImGui.GetIO().WantTextInput&&ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)){
+            if(ImGui.IsKeyPressed(ImGuiKey.UpArrow)) { if(condition)MoveSheetCondition(owner,item.InstanceId,-1);else MoveSheetAction(owner,item.InstanceId,-1); }
+            else if(ImGui.IsKeyPressed(ImGuiKey.DownArrow)) { if(condition)MoveSheetCondition(owner,item.InstanceId,1);else MoveSheetAction(owner,item.InstanceId,1); }
         }
         ImGui.SetCursorPosX(startX);
         ImGui.PopID(); ImGui.PopID();

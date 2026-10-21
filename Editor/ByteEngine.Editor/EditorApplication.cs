@@ -45,6 +45,8 @@ public sealed class EditorApplication
     private readonly ConsolePanel _console =
         new();
 
+    private readonly Assistant.AssistantPanel _assistant = new();
+
     private readonly UiAuthoringPanel _uiAuthoring = new();
     private readonly PerformancePanel _performance =
         new();
@@ -156,6 +158,7 @@ public sealed class EditorApplication
             )
         );
 
+        _assistant.Pump(_state, _projectContext);
         HandleShortcuts();
         DrawMainMenu();
         _layout.DrawDockSpace();
@@ -244,6 +247,7 @@ public sealed class EditorApplication
     {
         RuntimeDiagnostics.OutputSink = null;
         _inspector.Dispose();
+        _assistant.Dispose();
         _sceneView.Dispose();
         _gameView.Dispose();
         _uiAuthoring.Dispose();
@@ -349,6 +353,7 @@ public sealed class EditorApplication
 
         _uiAuthoring.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y);
         _projectSettings.Draw(_projectContext!);
+        _assistant.Draw(_state, _projectContext);
 
         if (_console.IsOpen)
         {
@@ -797,6 +802,9 @@ public sealed class EditorApplication
         {
             return;
         }
+
+        if (ImGui.MenuItem("Byte Assistant", string.Empty, _assistant.IsOpen)) _assistant.IsOpen = !_assistant.IsOpen;
+        ImGui.Separator();
 
         DrawPanelToggle(
             "Hierarchy",

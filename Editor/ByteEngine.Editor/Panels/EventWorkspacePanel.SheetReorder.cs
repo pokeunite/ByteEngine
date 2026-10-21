@@ -4,6 +4,109 @@ using ImGuiNET;
 namespace ByteEngine.Editor.Panels;
 internal sealed partial class EventWorkspacePanel
 {
+    private sealed record SheetActionSequence(Guid? Branch, bool FalseArm, List<Guid> Items);
+
+    private static SheetActionSequence? SheetActionOrder(EventRuleDefinition rule, Guid id)
+    {
+        if (!rule.Actions.Any(a => a.InstanceId == id)) return null;
+        if (!rule.HasExplicitExecutionFlow) return new(null, false, rule.Actions.Select(a => a.InstanceId).ToList());
+        var map = rule.Actions.ToDictionary(a => a.InstanceId);
+        var sequences = new List<SheetActionSequence>();
+        var visits = new Dictionary<Guid, int>();
+        var invalid = new HashSet<SheetActionSequence>();
+        void Walk(Guid? first, Guid? branch, bool falseArm, HashSet<Guid> path)
+        {
+            var sequence = new SheetActionSequence(branch, falseArm, []); sequences.Add(sequence);
+            while (first is {} next)
+            {
+                if (!map.TryGetValue(next, out var action) || !path.Add(next)) { invalid.Add(sequence); break; }
+                visits[next] = visits.GetValueOrDefault(next) + 1;
+                sequence.Items.Add(next);
+                if (action.Id == "flow.branch")
+                {
+                    Walk(action.TrueActionId, action.InstanceId, false, new(path));
+                    Walk(action.FalseActionId, action.InstanceId, true, new(path));
+                    break;
+                }
+                first = action.NextActionId;
+            }
+        }
+        Walk(rule.FirstActionId, null, false, []);
+        var matches = sequences.Where(s => s.Items.Contains(id)).ToArray();
+        return matches.Length == 1 && !invalid.Contains(matches[0]) && matches[0].Items.All(i => visits[i] == 1) ? matches[0] : null;
+    }
+
+    private static (SheetActionSequence Sequence, List<Guid> Order)? PlanSheetActionMove(EventRuleDefinition rule, Guid source, Guid destination, bool before)
+    {
+        if (source == destination || SheetActionOrder(rule, source) is not {} from || SheetActionOrder(rule, destination) is not {} to || from.Branch != to.Branch || from.FalseArm != to.FalseArm) return null;
+        // A branch terminates its sequence. Moving through it would change which arm executes.
+        if (rule.HasExplicitExecutionFlow && (rule.Actions.Single(a => a.InstanceId == source).Id == "flow.branch" || (!before && rule.Actions.Single(a => a.InstanceId == destination).Id == "flow.branch"))) return null;
+        var order = from.Items.ToList(); order.Remove(source);
+        int index = order.IndexOf(destination); if (index < 0) return null;
+        order.Insert(index + (before ? 0 : 1), source);
+        return order.SequenceEqual(from.Items) ? null : (from, order);
+    }
+
+    private bool CanMoveSheetAction(EventRuleDefinition rule, Guid id, int direction)
+    {
+        if (SheetActionOrder(rule, id) is not {} sequence) return false;
+        int index = sequence.Items.IndexOf(id) + direction;
+        return index >= 0 && index < sequence.Items.Count && PlanSheetActionMove(rule, id, sequence.Items[index], direction < 0) != null;
+    }
+
+    private bool MoveSheetAction(EventRuleDefinition rule, Guid id, int direction)
+    {
+        if (!CanMoveSheetAction(rule, id, direction) || SheetActionOrder(rule, id) is not {} sequence) return false;
+        return ReorderSheetAction(rule, id, sequence.Items[sequence.Items.IndexOf(id) + direction], direction < 0);
+    }
+
+    private bool ReorderSheetAction(EventRuleDefinition rule, Guid source, Guid destination, bool before)
+    {
+        if (PlanSheetActionMove(rule, source, destination, before) is not {} plan) return false;
+        RecordHistory("Reorder Action");
+        var map = rule.Actions.ToDictionary(a => a.InstanceId);
+        if (!rule.HasExplicitExecutionFlow) rule.Actions = plan.Order.Select(id => map[id]).ToList();
+        else
+        {
+            if (plan.Sequence.Branch is {} branch)
+            {
+                if (plan.Sequence.FalseArm) map[branch].FalseActionId = plan.Order[0];
+                else map[branch].TrueActionId = plan.Order[0];
+            }
+            else rule.FirstActionId = plan.Order[0];
+            for (int i = 0; i < plan.Order.Count; i++)
+                if (map[plan.Order[i]].Id != "flow.branch") map[plan.Order[i]].NextActionId = i + 1 < plan.Order.Count ? plan.Order[i + 1] : null;
+        }
+        SelectSheetItem(source); _dirty = true; return true;
+    }
+
+    private unsafe void DrawSheetActionDrag(EventRuleDefinition rule, VisualInstruction item, Vector2 origin, float width, float height)
+    {
+        const string payloadType = "BYTEENGINE_SHEET_ACTION";
+        if (ImGui.BeginDragDropSource())
+        {
+            Span<byte> bytes = stackalloc byte[32]; rule.Id.TryWriteBytes(bytes[..16]); item.InstanceId.TryWriteBytes(bytes[16..]);
+            fixed (byte* data = bytes) ImGui.SetDragDropPayload(payloadType, (nint)data, 32, ImGuiCond.Once);
+            ImGui.TextUnformatted("Move action: " + GetSheetSentence(item, false, EditorState.Active));
+            ImGui.TextDisabled("Drop above or below an action in the same execution path."); ImGui.EndDragDropSource();
+        }
+        if (ImGui.BeginDragDropTarget())
+        {
+            var payload = ImGui.AcceptDragDropPayload(payloadType, ImGuiDragDropFlags.AcceptBeforeDelivery | ImGuiDragDropFlags.AcceptNoDrawDefaultRect);
+            if (payload.NativePtr != null && payload.DataSize == 32 && payload.Data != IntPtr.Zero)
+            {
+                var bytes = new ReadOnlySpan<byte>((void*)payload.Data, 32); var ruleId = new Guid(bytes[..16]); var source = new Guid(bytes[16..]);
+                bool before = ImGui.GetMousePos().Y < origin.Y + height * .5f;
+                if (ruleId == rule.Id && PlanSheetActionMove(rule, source, item.InstanceId, before) != null)
+                {
+                    float y = before ? origin.Y : origin.Y + height;
+                    ImGui.GetWindowDrawList().AddLine(new(origin.X, y), new(origin.X + width, y), ImGui.ColorConvertFloat4ToU32(SheetActionColor), 3);
+                    if (payload.Delivery) ReorderSheetAction(rule, source, item.InstanceId, before);
+                }
+            }
+            ImGui.EndDragDropTarget();
+        }
+    }
     private (Guid Container,List<Guid> Items)? SheetConditionOrder(EventRuleDefinition rule,Guid id)
     {
         if(!rule.Conditions.Any(c=>c.InstanceId==id))return null;

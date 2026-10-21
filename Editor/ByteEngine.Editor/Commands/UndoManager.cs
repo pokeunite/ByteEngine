@@ -78,6 +78,24 @@ internal sealed class UndoManager
         }
     }
 
+    /// <summary>Editor-tool transaction: restore the original scene if any operation fails.</summary>
+    public void ExecuteAtomic(EditorState state, string name, Action action)
+    {
+        if (state.Mode != EditorMode.Edit) throw new InvalidOperationException("Stop Play mode before editing.");
+        if (_pending != null || _pendingTransforms != null || _pendingObjects != null)
+            throw new InvalidOperationException("Finish the current editor gesture first.");
+        BeginGesture(state, name);
+        PendingEdit before = _pending!;
+        try { action(); CommitGesture(state); }
+        catch
+        {
+            CancelGesture();
+            Restore(state, before.Scene, before.Globals, before.Selection);
+            UpdateDirty(state);
+            throw;
+        }
+    }
+
     public void BeginGesture(EditorState state, string name)
     {
         if (_pending != null || _pendingTransforms != null || _pendingObjects != null || state.Mode != EditorMode.Edit) return;
