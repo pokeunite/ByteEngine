@@ -44,6 +44,8 @@ internal static class ComponentMetadataRegistry
     {
         [typeof(CharacterController3D)] = new("Character Movement", "Character", "Controls grounded movement, jumping, slopes and air control.", "controller motor walking jump"),
         [typeof(PlayerController3D)] = new("Player Input", "Character", "Creates camera-relative movement intent and player control rotation.", "controls wasd mouse control yaw pitch", true, false, new[] { typeof(CharacterController3D) }),
+        [typeof(TopDownController3D)] = new("Top Down Controller", "Character", "Duckov-style movement and cursor facing. Uses Character Controller for collision. Disable Player Input when using this controller.", "duckov top down isometric cursor wasd strafe", true, false, new[] { typeof(CharacterController3D), typeof(CapsuleCollider3D) }),
+        [typeof(TopDownCamera3D)] = new("Top Down Camera", "Camera", "Duckov-style follow camera with cursor look-ahead, zoom, bounds and isometric framing. Put on a separate camera object and pick the player as Target.", "duckov top down isometric orthographic follow cursor", true, false, new[] { typeof(Camera3D) }),
         [typeof(AnimationController)] = new("Animation Controller", "Character", "Selects character animation states from movement.", "character animator"),
         [typeof(CameraBoom3D)] = new("Player Camera", "Camera", "Positions a child camera on a collision-aware third-person boom.", "spring arm orbit tps follow third person"),
         [typeof(FirstPersonCamera3D)] = new("First Person Camera", "Camera", "Direct controller-driven FPS view. Saved Camera position is the eye anchor; attach arms and weapons beneath Camera.", "fps first person mouse look view arms"),
@@ -165,6 +167,20 @@ internal static class ComponentMetadataRegistry
 
     private static readonly Dictionary<(Type, string), PropertyMetadata> Properties = new()
     {
+        [(typeof(TopDownController3D), nameof(TopDownController3D.CameraObjectId))] = new("View Camera", "Camera", "Camera used for movement axes and cursor aiming. None uses the active game camera."),
+        [(typeof(TopDownController3D), nameof(TopDownController3D.CameraRelativeMovement))] = new("Camera Relative Movement", "Movement", "Align WASD/stick direction to the view. Off uses world XZ axes."),
+        [(typeof(TopDownController3D), nameof(TopDownController3D.InputEnabled))] = new("Input Enabled", "Movement", "Enable player movement and facing. Can be changed from an event sheet."),
+        [(typeof(TopDownController3D), nameof(TopDownController3D.Facing))] = new("Facing", "Facing", "Turn toward Cursor, Movement direction, or keep Independent rotation."),
+        [(typeof(TopDownController3D), nameof(TopDownController3D.TurnSharpness))] = new("Turn Sharpness", "Facing", "Higher values turn faster. Zero snaps immediately."),
+        [(typeof(TopDownController3D), nameof(TopDownController3D.AimPlaneHeight))] = new("Aim Plane Height", "Facing", "Cursor ray intersects a horizontal plane this far above the player pivot.", "m"),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.TargetId))] = new("Target", "Follow", "Pick the player or object this camera follows."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.FollowSharpness))] = new("Follow Sharpness", "Follow", "Higher values follow faster; zero snaps. Camera updates after physics."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.CursorLookAhead))] = new("Cursor Look Ahead", "Look Ahead", "Shift the view toward the cursor to reveal more of the aimed direction."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.LookAheadDeadZone))] = new("Center Dead Zone", "Look Ahead", "Radius as a fraction of viewport width where camera shift is zero."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.LookAheadFullRadius))] = new("Full Shift Radius", "Look Ahead", "Radius as a fraction of viewport width where shift reaches its maximum."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.LookAheadDistance))] = new("Maximum Shift", "Look Ahead", "Maximum world distance the view shifts toward the cursor.", "m"),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.LookAheadSharpness))] = new("Shift Sharpness", "Look Ahead", "Higher values respond faster; zero snaps."),
+        [(typeof(TopDownCamera3D), nameof(TopDownCamera3D.UseBounds))] = new("Limit Focus To Bounds", "Bounds", "Constrain the camera focus to the XZ rectangle; does not constrain the entire visible view."),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.EnemyBlueprint))] = new("Enemy Blueprint", "Enemy", "Blueprint spawned for every wave enemy."),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.SpawnPointTagId))] = new("Spawn Point Tag", "Spawning", "Only active objects with this tag can be spawn points."),
         [(typeof(WaveSpawner3D), nameof(WaveSpawner3D.SpawnMode))] = new("Spawn Mode", "Spawning", "Round Robin cycles points; Random selects any active point."),
@@ -207,6 +223,8 @@ internal static class ComponentMetadataRegistry
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.RenderedParticles))] = new("Rendered Particles", "Diagnostics", "Particles submitted by the most recent camera render.", Advanced: true, ReadOnly: true),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.DestroyWhenFinished))] = new("Destroy Object on Finish", "Playback", "For disposable effect objects only. Spawn VFX at Position enables this automatically.", Advanced: true),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Seed))] = new("Random Seed", "VFX", "Same seed reproduces the same effect.", Advanced: true),
+        [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Tint))] = new("Tint", "VFX", "Color multiplier for the complete effect. White preserves the authored colors."),
+        [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Brightness))] = new("Brightness", "VFX", "Brightness multiplier for all layers. Values above 1 produce HDR color; visible bloom depends on scene post-processing."),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.Status))] = new("Status", "Diagnostics", "Effect loading status.", ReadOnly: true),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.ActiveParticles))] = new("Active Particles", "Diagnostics", "Current live particle count.", Advanced: true, ReadOnly: true),
         [(typeof(ByteEngine.Core.Vfx.VfxPlayer), nameof(ByteEngine.Core.Vfx.VfxPlayer.ParticleCapacity))] = new("Particle Capacity", "Diagnostics", "Bounded pool capacity.", Advanced: true, ReadOnly: true),

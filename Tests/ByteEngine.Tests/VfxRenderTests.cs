@@ -67,6 +67,15 @@ internal static class VfxRenderTests
             if(!ReferenceEquals(first.Texture,same.Texture) || ReferenceEquals(first.Texture,different.Texture)) throw new Exception("Atlas sharing must distinguish lifetime curves.");
         }
         if(GL.GetError()!=ErrorCode.NoError) throw new Exception("OpenGL error in quality, trail or beam tests.");
+        effect.Layers[0].RenderMode=VfxRenderMode.Horizontal;effect.Layers[0].Brightness=3;
+        player.SetDefinition(effect);player.Tint=new(.2f,.5f,1,.7f);player.Brightness=2;player.Play();
+        context.Begin3DFrame();player.RenderEditorInternal(context);
+        batches=(Array)typeof(VfxPlayer).GetField("_batches",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+        batch=batches.GetValue(0)!;var horizontalMesh=(Mesh)batch.GetType().GetField("Mesh")!.GetValue(batch)!;
+        var material=(Material)batch.GetType().GetField("Material")!.GetValue(batch)!;
+        if(Math.Abs(horizontalMesh.LocalBounds.Maximum.Y-horizontalMesh.LocalBounds.Minimum.Y)>.0001f)throw new Exception("Ground effect is not horizontal.");
+        if(Vector4.Distance(material.BaseColor,new(1.2f,3,6,.7f))>.001f)throw new Exception("HDR brightness or tint was not submitted to the renderer.");
+        context.Flush3D();player.Tint=Vector4.One;player.Brightness=1;
         // A desktop-loaded BMP exercises the one-time decode (PixelData is not retained on desktop).
         string path=Path.Combine(root,"Assets","vfx-sprite.bmp");
         byte[] bmp=new byte[70]; bmp[0]=66; bmp[1]=77;

@@ -4,6 +4,8 @@
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
     <!-- Read-only, version-matched assistant reference; never executed as generated code. -->
     <EmbeddedResource Include="../../Engine/ByteEngine.Core/**/*.cs" Exclude="../../Engine/ByteEngine.Core/obj/**;../../Engine/ByteEngine.Core/bin/**" LogicalName="ByteAssistant.Reference.Core.%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../Docs/Top-Down-Controller.md" LogicalName="ByteAssistant.Reference.Docs.Top-Down-Controller.md" />
+    <EmbeddedResource Include="../../Docs/VFX-Authoring.md" LogicalName="ByteAssistant.Reference.Docs.VFX-Authoring.md" />
     <EmbeddedResource Include="../../Docs/PLUGIN-AUTHORING.md;../../Docs/Reusable-Game-Systems.md;../../Docs/Native-Water-System.md;../../Docs/GRAPHICS-QUALITY.md;../../Docs/Blueprint-Camera-Authoring-Implementation.md;../../Docs/Event toolkit implementation.txt;../../Docs/First-Person-Camera.md" LogicalName="ByteAssistant.Reference.Docs.%(Filename)%(Extension)" />
     <Content Include="Resources\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Resources\Starters\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

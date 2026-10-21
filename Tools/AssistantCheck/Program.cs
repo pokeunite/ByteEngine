@@ -31,6 +31,8 @@ JsonElement Parse(string text) { using var doc = JsonDocument.Parse(text); retur
 object Call(AssistantTools tools, string tool, string args) => tools.Execute(tool, Parse(args));
 bool Throws(Action action) { try { action(); return false; } catch { return true; } }
 
+if (args.Contains("--topdown")) { TopDownChecks.Run(serializer); return; }
+
 if (args.Contains("--preview"))
 {
     string output = Path.GetFullPath("artifacts/assistant-check"); Directory.CreateDirectory(output);
@@ -396,9 +398,10 @@ using(var animationWindow=new GameWindow(GameWindowSettings.Default,new NativeWi
    Check(result!.ToString()==pair.Item2,"Native locomotion selects "+pair.Item2+" at speed "+pair.Item1);
   }
   var sprintSheets=state.SelectedObject.GetComponent<EventModuleComponent>()!.Modules.Select(r=>new EventModuleSerializer().Load(Path.Combine(root,r.ProjectPath))).ToArray();
+  Check(sprintSheets.Length==1 && sprintSheets[0].Rules.Count==2 && sprintSheets[0].Name=="Mannequin Events", "Walk/run rows share one descriptively named sheet");
   foreach(var pair in new[]{(0,6f),(1,2f)})
   {
-   var instruction=sprintSheets[pair.Item1].Rules[0].Actions[0];actionRegistry.TryGetAction(instruction.Id,out var speedAction);
+   var instruction=sprintSheets[0].Rules[pair.Item1].Actions[0];actionRegistry.TryGetAction(instruction.Id,out var speedAction);
    speedAction!.Execute(instruction,new EventExecutionContext{Scene=state.EditorScene,Self=state.SelectedObject,Globals=new VariableStore()});
    Check(motor.MoveSpeed==pair.Item2,"Editable sprint event sets movement speed "+pair.Item2);
   }
@@ -411,5 +414,34 @@ Check(state.EditorScene.FindGameObject("Mannequin")!.GetComponent<ByteEngine.Cor
 var invalidAnimation=new AssistantTools(state,root);
 Check(Throws(()=>Call(invalidAnimation,"byte_apply",JsonSerializer.Serialize(new{operations=new[]{new{kind="create_animation_profile",target="",data=new{name="Invalid",path="Assets/Animations/Invalid.byteanim",model=mannequinRelative,locomotion=new{Idle="Invented missing clip"}}}}}))) && !File.Exists(Path.Combine(root,"Assets/Animations/Invalid.byteanim")),"Profile authoring rejects nonexistent clips without leaving assets");
 Check(AssistantTools.Serialize(AssistantReference.Search("", "Core.Animation/AnimationController.cs", 265)).Contains("ApplyAnimationProfile"),"Engine reference can read the relevant method beyond initial search snippets");
+var sheetOwner = state.EditorScene.CreateGameObject("Sheet owner");
+state.Selection.Set([sheetOwner]);
+string EventBatch(string name, bool fail = false) => JsonSerializer.Serialize(new { operations =
+    new object[] { new { kind = "add_event_rule", target = "$selected", data = new { sheet = "Player Movement", name,
+        conditions = new[] { new { id = "input.keyPressed", arguments = new { key = "Space" } } },
+        actions = new[] { new { id = "object.setActive", arguments = new { active = true } } } } } }
+        .Concat(fail ? new object[] { new { kind = "invalid_operation", target = "$selected", data = new { } } } : []) });
+Call(new AssistantTools(state, root), "byte_apply", EventBatch("Jump pressed - jump"));
+string movementPath = Path.Combine(root, "Assets/Events/Assistant/Player Movement.byteevents");
+byte[] originalMovement = File.ReadAllBytes(movementPath);
+Call(new AssistantTools(state, root), "byte_apply", EventBatch("Sprint held - run"));
+Check(new EventModuleSerializer().Load(movementPath).Rules.Count == 2 && state.SelectedObject!.GetComponent<EventModuleComponent>()!.Modules.Count == 1,
+    "Follow-up request appends to the existing named sheet without another asset");
+Check(AssistantTools.Serialize(Call(new AssistantTools(state, root), "byte_inspect", """{"detail":true}""")).Contains("Player Movement"),
+    "Inspection exposes existing sheet names for reuse");
+state.Undo.Undo(state);
+Check(File.ReadAllBytes(movementPath).SequenceEqual(originalMovement), "Undo restores exact original event asset contents");
+state.Undo.Redo(state);
+Check(new EventModuleSerializer().Load(movementPath).Rules.Count == 2, "Redo restores appended event rows");
+byte[] updatedMovement = File.ReadAllBytes(movementPath);
+Check(Throws(() => Call(new AssistantTools(state, root), "byte_apply", EventBatch("Walk resumes", true))) && File.ReadAllBytes(movementPath).SequenceEqual(updatedMovement),
+    "Failed follow-up batch restores existing event file and scene");
+Check(Throws(() => Call(new AssistantTools(state, root), "byte_apply", EventBatch("Sprint held - run"))) && File.ReadAllBytes(movementPath).SequenceEqual(updatedMovement),
+    "Duplicate rule names are rejected without corrupting the existing sheet");
+Check(Throws(() => Call(new AssistantTools(state, root), "byte_apply", EventBatch("Traversal").Replace("Player Movement", "../Escape"))),
+    "Sheet names reject path traversal");
+var otherOwner = state.EditorScene.CreateGameObject("Other sheet owner"); state.Selection.Set([otherOwner]);
+Check(Throws(() => Call(new AssistantTools(state, root), "byte_apply", EventBatch("Unrelated rule"))) && File.ReadAllBytes(movementPath).SequenceEqual(updatedMovement),
+    "Unrelated objects cannot silently reuse or overwrite a named sheet");
 Console.WriteLine("Compact context characters: "+contextLength);
 Console.WriteLine(checks + " checks passed. Temporary scene: " + root);

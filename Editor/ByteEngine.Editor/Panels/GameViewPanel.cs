@@ -161,6 +161,7 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y <= imageMax.Y;
 
         bool pointerAim = Input.KeepGameViewPointerFree;
+        pointerAim |= state.DisplayedScene.ActiveCamera?.GameObject.GetComponent<TopDownCamera3D>()?.Enabled == true;
         for (var cameraObject = state.DisplayedScene.ActiveCamera?.GameObject;
              !pointerAim && cameraObject != null;
              cameraObject = cameraObject.Parent)

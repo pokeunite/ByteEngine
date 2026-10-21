@@ -14,6 +14,10 @@ public sealed class VfxPlayer : Component
     public VfxPreset Preset { get; set; } = VfxPreset.Sparks;
     public bool PlayOnStart { get; set; } = true;
     public int Seed { get; set; } = 1;
+    private Vector4 _tint=Vector4.One;
+    private float _brightness=1;
+    public Vector4 Tint { get=>_tint; set=>_tint=new(VfxEffect.Safe(value.X,1,0,1),VfxEffect.Safe(value.Y,1,0,1),VfxEffect.Safe(value.Z,1,0,1),VfxEffect.Safe(value.W,1,0,1)); }
+    public float Brightness { get=>_brightness; set=>_brightness=VfxEffect.Safe(value,1,0,16); }
     private float _size=1,_intensity=1,_speed=1,_distance=150;
     public float Size { get=>_size; set=>_size=VfxEffect.Safe(value,1,.01f,100); }
     public float Intensity { get=>_intensity; set=>_intensity=VfxEffect.Safe(value,1,0,8); }
@@ -54,7 +58,6 @@ public sealed class VfxPlayer : Component
         public readonly Material Material=new() { Shading=MaterialShadingMode.Unlit, CullMode=CullMode3D.None, DepthWriteMode=DepthWriteMode3D.Disabled };
         public VfxAtlas.Lease? Atlas;
         public int PreviousCount;
-        public int Frames=1;
         public Batch(int capacity)
         {
             Vertices=new float[capacity*32]; Depths=new float[capacity]; Order=new int[capacity];
@@ -133,12 +136,12 @@ public sealed class VfxPlayer : Component
                 {
                     if(!s.Texture.IsEmpty && AnimationRuntimeAssets.TryGet(out var assets) && assets!=null) texture=assets.LoadTexture(s.Texture);
                     b.Atlas=VfxAtlas.Acquire(s,texture);
-                    b.Frames=texture==null ? 1 : s.FlipbookColumns*s.FlipbookRows;
                 }
-                catch(Exception e) { Status="VFX sprite fallback: "+e.Message; b.Atlas=VfxAtlas.Acquire(s,null); b.Frames=1; }
+                catch(Exception e) { Status="VFX sprite fallback: "+e.Message; b.Atlas=VfxAtlas.Acquire(s,null); }
                 b.Material.MainTexture=b.Atlas.Texture;
                 b.Material.BlendMode=s.Additive ? BlendMode3D.Additive : BlendMode3D.AlphaBlend;
             }
+            b.Material.BaseColor=new Vector4(new Vector3(Tint.X,Tint.Y,Tint.Z)*(Brightness*s.Brightness),Tint.W);
             int drawCount=0;
             for(int i=0;i<layer.Count;i++)
             {
@@ -160,8 +163,13 @@ public sealed class VfxPlayer : Component
                 Vector3 center=p.Position, previous=p.PreviousPosition, velocity=p.Velocity;
                 if(s.LocalSpace) { center=Vector3.Transform(center,emitter); previous=Vector3.Transform(previous,emitter); velocity=Vector3.TransformNormal(velocity,emitter); }
                 Vector3 a=right*size*.5f,c=up*size*.5f;
-                if(s.RenderMode==VfxRenderMode.Billboard)
-                { float cos=MathF.Cos(p.Rotation),sin=MathF.Sin(p.Rotation); a=(right*cos+up*sin)*size*.5f; c=(-right*sin+up*cos)*size*.5f; }
+                if(s.RenderMode is VfxRenderMode.Billboard or VfxRenderMode.Horizontal or VfxRenderMode.EmitterPlane)
+                {
+                    var basisRight=right;var basisUp=up;
+                    if(s.RenderMode==VfxRenderMode.Horizontal){basisRight=Vector3.UnitX;basisUp=-Vector3.UnitZ;}
+                    else if(s.RenderMode==VfxRenderMode.EmitterPlane){basisRight=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitX,emitter));basisUp=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY,emitter));}
+                    float cos=MathF.Cos(p.Rotation),sin=MathF.Sin(p.Rotation);a=(basisRight*cos+basisUp*sin)*size*.5f;c=(-basisRight*sin+basisUp*cos)*size*.5f;
+                }
                 else if(s.RenderMode==VfxRenderMode.Stretched && velocity.LengthSquared()>.00001f)
                 { c=Vector3.Normalize(velocity)*(size+velocity.Length()*s.Stretch)*.5f; a=Side(c,center-camera,right)*size*.5f; }
                 else if(s.RenderMode is VfxRenderMode.Trail or VfxRenderMode.Beam)
@@ -171,11 +179,8 @@ public sealed class VfxPlayer : Component
                 }
                 Vector3 extent=Vector3.Abs(a)+Vector3.Abs(c);
                 minimum=Vector3.Min(minimum,center-extent); maximum=Vector3.Max(maximum,center+extent);
-                int frames=b.Frames;
-                int frame=Math.Min(frames-1,(int)(age*frames));
-                int row=Math.Min(VfxAtlas.Ages-1,(int)(age*(VfxAtlas.Ages-1)));
-                float u0=(frame+.5f/VfxAtlas.Tile)/frames,u1=(frame+1-.5f/VfxAtlas.Tile)/frames;
-                float v0=(row+.5f/VfxAtlas.Tile)/VfxAtlas.Ages,v1=(row+1-.5f/VfxAtlas.Tile)/VfxAtlas.Ages;
+                var uv=b.Atlas!.Layout.Uv(age);
+                float u0=uv.X,u1=uv.Z,v0=uv.Y,v1=uv.W;
                 Vertex(b.Vertices,i*32,center-a-c,u0,v0); Vertex(b.Vertices,i*32+8,center+a-c,u1,v0);
                 Vertex(b.Vertices,i*32+16,center+a+c,u1,v1); Vertex(b.Vertices,i*32+24,center-a+c,u0,v1);
             }

@@ -18,6 +18,8 @@ public sealed partial class VisualLogicRegistry
             => registry.RegisterAction(new VisualActionDefinition { Id=id, Category="VFX", DisplayName=name, TargetComponent=nameof(VfxPlayer), Arguments=args,
                 Execute=(i,c)=> { if(Player(i,c) is {} p) execute(i,c,p); } });
         Action("vfx.play","Play VFX",(i,c,p)=>p.Play());
+        Action("vfx.setBrightness","Set VFX Brightness",(i,c,p)=>p.Brightness=(float)EventValueResolver.GetNumber(i,"brightness",c,1),NumberArg("brightness","Brightness",1));
+        Action("vfx.setTint","Set VFX Tint",(i,c,p)=>p.Tint=new System.Numerics.Vector4(EventValueResolver.GetVector3(i,"color",c,System.Numerics.Vector3.One),(float)EventValueResolver.GetNumber(i,"alpha",c,1)),new VisualArgumentDefinition("color","Tint RGB",VariableValue.FromVector3(System.Numerics.Vector3.One)),NumberArg("alpha","Opacity",1));
         Action("vfx.stop","Stop VFX (Let Particles Finish)",(i,c,p)=>p.Stop());
         Action("vfx.clear","Stop and Clear VFX",(i,c,p)=>p.Stop(true));
         Action("vfx.pause","Pause VFX",(i,c,p)=>p.Paused=true);

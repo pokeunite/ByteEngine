@@ -46,11 +46,12 @@ internal static class VfxTests
         assets.ReloadVfxEffects();
         Check(!ReferenceEquals(first,assets.LoadVfxEffect(reference)),"explicit hot reload invalidates cache");
         var codec=new ComponentSerializer(root,db,assets);
-        var component=new VfxPlayer { Effect=reference, Preset=VfxPreset.Fire, Size=2, Intensity=.5f, Seed=123, PlayOnStart=false, DestroyWhenFinished=true,DistanceQuality=false,QualityDistance=12 };
+        var component=new VfxPlayer { Effect=reference, Preset=VfxPreset.Fire, Size=2, Intensity=.5f, Seed=123, PlayOnStart=false, DestroyWhenFinished=true,DistanceQuality=false,QualityDistance=12, Tint=new(.2f,.4f,.8f,.5f),Brightness=3 };
         var data=codec.Serialize(component)!;
         var restored=(VfxPlayer)codec.Deserialize(data)!;
         Check(restored.Effect==reference && restored.Size==2 && restored.Seed==123 && !restored.PlayOnStart && restored.DestroyWhenFinished,"component round trip");
         Check(!restored.DistanceQuality && restored.QualityDistance==12,"distance quality round trip");
+        Check(restored.Tint==component.Tint && restored.Brightness==3,"effect-wide tint and brightness survive scene serialization");
         Events();
         SpawnAndCleanup(assets,reference);
         PoolBudgets(reference);
@@ -101,12 +102,25 @@ internal static class VfxTests
     {
         var layer=new VfxLayer { StartColor=new(1,0,0,1), EndColor=new(0,0,1,0),Sprite=VfxSprite.SoftDisc };
         byte[] pixels=VfxAtlas.GeneratePixels(layer,null,out int width,out int height);
-        int start=(16*width+16)*4, end=((height-16)*width+16)*4;
+        var layout=VfxAtlas.GetLayout(layer);
+        int start=((layout.Tile/2)*width+layout.Tile/2)*4;
+        int end=(((layout.Frames-1)/layout.Columns*layout.Tile+layout.Tile/2)*width+(layout.Frames-1)%layout.Columns*layout.Tile+layout.Tile/2)*4;
         Check(pixels[start]>240 && pixels[start+3]>200 && pixels[end+2]>240 && pixels[end+3]==0,"baked lifetime color and fade");
         Check(pixels[3]==0,"soft sprite edge transparent");
         layer.OpacityOverLife=VfxCurve.Linear(0,0);
         pixels=VfxAtlas.GeneratePixels(layer,null,out _,out _);
         Check(pixels[start+3]==0,"opacity curve baked into atlas");
+        Check(layout.Tile==128 && (long)width*height*4<=8*1024*1024,"sharper default sprite detail with bounded atlas memory");
+        var manyFrames=VfxAtlas.GetLayout(new VfxLayer{SpriteResolution=256,FlipbookColumns=8,FlipbookRows=8});
+        Check(manyFrames.Tile==128 && (long)manyFrames.Width*manyFrames.Height*4<=8*1024*1024,"64-frame flipbook retains 128px frames within atlas budget");
+        var sharp=VfxAtlas.GetLayout(new VfxLayer{SpriteResolution=256});
+        Check(sharp.Tile==256,"single sprite supports 256px detail");
+        foreach(var sprite in Enum.GetValues<VfxSprite>())
+        {float alpha=VfxAtlas.SpriteAlpha(sprite,.4f,.6f,.3f);Check(float.IsFinite(alpha)&&alpha>=0&&alpha<=1,"finite procedural sprite "+sprite);}
+        var dissolved=new VfxLayer{Sprite=VfxSprite.Solid,StartColor=Vector4.One,EndColor=Vector4.One,Dissolve=1};
+        var dissolvedPixels=VfxAtlas.GeneratePixels(dissolved,null,out int dw,out _);var dl=VfxAtlas.GetLayout(dissolved);
+        int alphaAt(int frame,int x,int y)=>dissolvedPixels[(((frame/dl.Columns)*dl.Tile+y)*dw+(frame%dl.Columns)*dl.Tile+x)*4+3];
+        Check(alphaAt(0,dl.Tile/2,dl.Tile/2)>alphaAt(dl.Frames-1,dl.Tile/2,dl.Tile/2),"noise dissolve erodes sprite over lifetime");
         using var mesh=new Mesh(new float[8*8],new uint[]{0,1,2,0,2,3,4,5,6,4,6,7},true);
         mesh.SetDrawIndexCount(6);
         Check(mesh.IndexCount==6 && mesh.IndexData.Length==6,"active triangles honored on desktop and portable path");

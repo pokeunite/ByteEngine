@@ -60,6 +60,13 @@ internal sealed class VfxWorkspacePanel : IDisposable
         float available=ImGui.GetContentRegionAvail().X, left=180, right=Math.Clamp(available*.32f,300,430);
         ImGui.BeginChild("##VfxLayers",new(left,0),ImGuiChildFlags.Borders);
         ImGui.TextUnformatted("EFFECT LAYERS"); ImGui.TextDisabled("Up to 8 layers");
+        if(ImGui.BeginCombo("Template","Replace effect..."))
+        {
+            foreach(var preset in Enum.GetValues<VfxPreset>())
+                if(ImGui.Selectable(preset.ToString())) { _draft=VfxPresets.Create(preset);_selected=0;Changed(); }
+            ImGui.EndCombo();
+        }
+        if(ImGui.IsItemHovered())ImGui.SetTooltip("Replaces the draft with a complete editable effect. Undo restores your previous effect.");
         for(int i=0;i<_draft.Layers.Count;i++)
         {
             ImGui.PushID(i);
@@ -131,12 +138,24 @@ internal sealed class VfxWorkspacePanel : IDisposable
         {
             EnumEdit("Render as",p.RenderMode,v=>p.RenderMode=v); EnumEdit("Sprite shape",p.Sprite,v=>p.Sprite=v);
             Bool("Glow / additive",p.Additive,v=>p.Additive=v);
+            Float("Brightness",p.Brightness,0,16,v=>p.Brightness=v);
             Vector4 color=p.StartColor; if(ImGui.ColorEdit4("Start color",ref color)) { p.StartColor=color; Changed(); }
             color=p.EndColor; if(ImGui.ColorEdit4("End color / fade",ref color)) { p.EndColor=color; Changed(); }
             Float("Start size (m)",p.StartSize,.001f,100,v=>p.StartSize=v); Float("End size (m)",p.EndSize,0,100,v=>p.EndSize=v);
             Float("Size variation",p.SizeVariation,0,.95f,v=>p.SizeVariation=v);
+            Bool("Random starting rotation",p.RandomRotation,v=>p.RandomRotation=v);
             Texture(p); Int("Sprite sheet columns",p.FlipbookColumns,1,8,v=>p.FlipbookColumns=v); Int("Sprite sheet rows",p.FlipbookRows,1,8,v=>p.FlipbookRows=v);
             ImGui.TextWrapped("Optional PNG texture, including alpha. Sheet frames play once over each particle's life.");
+        }
+        if(ImGui.CollapsingHeader("Texture detail and dissolve"))
+        {
+            int[] resolutions=[32,64,128,256];
+            if(ImGui.BeginCombo("Texture detail",p.SpriteResolution+" px"))
+            {foreach(int resolution in resolutions)if(ImGui.Selectable(resolution+" px",resolution==p.SpriteResolution)){p.SpriteResolution=resolution;Changed();}ImGui.EndCombo();}
+            Float("Dissolve over life",p.Dissolve,0,1,v=>p.Dissolve=v);
+            Float("Texture breakup",p.PatternStrength,0,1,v=>p.PatternStrength=v);
+            Float("Pattern scale",p.PatternScale,1,32,v=>p.PatternScale=v);
+            ImGui.TextWrapped("Noise and dissolve are baked once and shared. Animated sheets use a compact timeline atlas capped at 8 MB per layer; detail may be reduced to fit.");
         }
         if(ImGui.CollapsingHeader("Emission",ImGuiTreeNodeFlags.DefaultOpen))
         {

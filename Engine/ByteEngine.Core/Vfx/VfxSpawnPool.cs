@@ -41,6 +41,7 @@ internal sealed class VfxSpawnPool
         player.GameObject.Active=true; player.GameObject.SetParent(null,false);
         player.Transform.WorldScale=Vector3.One; player.Transform.WorldPosition=VfxEffect.Finite(position,Vector3.Zero);
         player.Transform.WorldRotation=rotation; player.Size=size; player.Intensity=1; player.PlaybackSpeed=1;
+        player.Tint=Vector4.One;player.Brightness=1;
         player.ClearBeamTarget(); player.Play();
         return player;
     }

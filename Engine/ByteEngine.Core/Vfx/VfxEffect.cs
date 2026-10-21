@@ -5,10 +5,10 @@ using ByteEngine.Core.Assets;
 
 namespace ByteEngine.Core.Vfx;
 
-public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot }
+public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot, Fireball, WaterBolt, LightningStrike, ClawSlash, HealingPulse, PoisonCloud, IceBurst, Shield }
 public enum VfxShape { Point, Sphere, Box, Cone, Ring }
-public enum VfxRenderMode { Billboard, Stretched, Trail, Beam }
-public enum VfxSprite { SoftDisc, Spark, Ring, Solid }
+public enum VfxRenderMode { Billboard, Stretched, Trail, Beam, Horizontal, EmitterPlane }
+public enum VfxSprite { SoftDisc, Spark, Ring, Solid, Smoke, Flame, Star, Arc, Lightning, Ripple }
 
 /// <summary>Portable, versioned effect. Layers share a bounded per-instance budget.</summary>
 public sealed class VfxEffect
@@ -45,6 +45,12 @@ public sealed class VfxLayer
     public AssetReference Texture { get; set; } = AssetReference.Empty;
     public int FlipbookColumns { get; set; } = 1;
     public int FlipbookRows { get; set; } = 1;
+    public int SpriteResolution { get; set; } = 128;
+    public float Brightness { get; set; } = 1;
+    public float Dissolve { get; set; }
+    public float PatternStrength { get; set; }
+    public float PatternScale { get; set; } = 6;
+    public bool RandomRotation { get; set; } = true;
     public int MaxParticles { get; set; } = 256;
     public float Rate { get; set; } = 40;
     public int Burst { get; set; } = 30;
@@ -98,6 +104,9 @@ public sealed class VfxLayer
         Offset = VfxEffect.Finite(Offset, Vector3.Zero); Gravity = VfxEffect.Finite(Gravity, Vector3.Zero); BeamEnd = VfxEffect.Finite(BeamEnd, new(0,0,-5));
         StartColor = Color(StartColor); EndColor = Color(EndColor); Texture ??= AssetReference.Empty;
         FlipbookColumns = Math.Clamp(FlipbookColumns, 1, 8); FlipbookRows = Math.Clamp(FlipbookRows, 1, 8);
+        SpriteResolution = SpriteResolution <= 32 ? 32 : SpriteResolution <= 64 ? 64 : SpriteResolution <= 128 ? 128 : 256;
+        Brightness=VfxEffect.Safe(Brightness,1,0,16); Dissolve=VfxEffect.Safe(Dissolve,0,0,1);
+        PatternStrength=VfxEffect.Safe(PatternStrength,0,0,1); PatternScale=VfxEffect.Safe(PatternScale,6,1,32);
         SizeOverLife?.Validate(); OpacityOverLife?.Validate(1); SpeedOverLife?.Validate(); ColorBlendOverLife?.Validate(1);
         Wind=Vector3.Clamp(VfxEffect.Finite(Wind,Vector3.Zero),new(-1000),new(1000));
         Turbulence=VfxEffect.Safe(Turbulence,0,0,100); NoiseFrequency=VfxEffect.Safe(NoiseFrequency,1,.01f,100);
@@ -131,6 +140,7 @@ public static class VfxPresets
 {
     public static VfxEffect Create(VfxPreset preset)
     {
+        if (preset >= VfxPreset.Fireball) return VfxAttackPresets.Create(preset);
         var effect = new VfxEffect { Name = preset.ToString(), Loop = preset is VfxPreset.Fire or VfxPreset.Smoke or VfxPreset.Rain or VfxPreset.Snow or VfxPreset.Magic or VfxPreset.Trail or VfxPreset.Beam };
         var p = new VfxLayer { Name = preset.ToString() }; effect.Layers.Add(p);
         switch (preset)

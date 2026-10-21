@@ -166,7 +166,7 @@ public sealed class VfxSimulation
             {
                 Position=position, PreviousPosition=layer.HasLastSpawn && Vector3.DistanceSquared(position,layer.LastSpawn)<=s.TrailBreakDistance*s.TrailBreakDistance ? layer.LastSpawn : position, Velocity=velocity,
                 Lifetime=s.Lifetime*(1+(Rand()*2-1)*s.LifetimeVariation), SizeFactor=1+(Rand()*2-1)*s.SizeVariation,
-                Rotation=s.RenderMode==VfxRenderMode.Billboard ? Rand()*MathF.Tau : 0, Sequence=++_sequence
+                Rotation=s.RandomRotation && s.RenderMode is VfxRenderMode.Billboard or VfxRenderMode.Horizontal or VfxRenderMode.EmitterPlane ? Rand()*MathF.Tau : 0, Sequence=++_sequence
             };
             layer.LastSpawn=position; layer.HasLastSpawn=true; ActiveCount++;
         }

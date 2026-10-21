@@ -368,6 +368,8 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsImpactSensor3D>("PhysicsImpactSensor3D"));
         Register(new MeshCollider3DCodec());
         Register(new UiCanvasCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownController3D>("TopDownController3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownCamera3D>("TopDownCamera3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiContainer>("UiContainer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<Speedometer>("Speedometer"));

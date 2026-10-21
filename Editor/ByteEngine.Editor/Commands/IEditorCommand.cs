@@ -40,3 +40,10 @@ internal sealed record ObjectDeltaEditorCommand(string Name,
     Dictionary<Guid, GameObjectData?> BeforeObjects, Dictionary<Guid, GameObjectData?> AfterObjects,
     Guid[] BeforeSelection, Guid[] AfterSelection,
     int BeforeRevision, int AfterRevision) : IEditorHistoryEntry;
+
+internal sealed record AssetSnapshotEditorCommand(
+    string Name, SceneData Before, SceneData After,
+    List<VariableData> BeforeGlobals, List<VariableData> AfterGlobals,
+    Guid[] BeforeSelection, Guid[] AfterSelection,
+    int BeforeRevision, int AfterRevision,
+    Dictionary<string, byte[]> BeforeFiles, Dictionary<string, byte[]> AfterFiles) : IEditorCommand;

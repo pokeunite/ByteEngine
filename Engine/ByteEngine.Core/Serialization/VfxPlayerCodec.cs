@@ -18,12 +18,15 @@ internal sealed class VfxPlayerCodec : IComponentCodec
             ["preset"]=v.Preset.ToString(), ["playOnStart"]=v.PlayOnStart, ["seed"]=v.Seed,
             ["size"]=v.Size, ["intensity"]=v.Intensity, ["speed"]=v.PlaybackSpeed, ["distance"]=v.ViewDistance, ["destroyWhenFinished"]=v.DestroyWhenFinished,
             ["distanceQuality"]=v.DistanceQuality, ["qualityDistance"]=v.QualityDistance
+            ,["brightness"]=v.Brightness,["tint"]=new JsonArray(v.Tint.X,v.Tint.Y,v.Tint.Z,v.Tint.W)
         }};
     }
     public Component Deserialize(ComponentData data,ComponentSerializationContext context)
     {
         var p=data.Properties;
         return new VfxPlayer {
+            Brightness=p["brightness"]?.GetValue<float>()??1,
+            Tint=p["tint"] is JsonArray tint && tint.Count>=4 ? new(tint[0]!.GetValue<float>(),tint[1]!.GetValue<float>(),tint[2]!.GetValue<float>(),tint[3]!.GetValue<float>()) : System.Numerics.Vector4.One,
             Effect=new AssetReference(Guid.TryParse(p["effectGuid"]?.GetValue<string>(),out var id)?id:Guid.Empty,p["effectPath"]?.GetValue<string>()??""),
             Preset=Enum.TryParse<VfxPreset>(p["preset"]?.GetValue<string>(),out var preset)?preset:VfxPreset.Sparks,
             PlayOnStart=p["playOnStart"]?.GetValue<bool>()??true, Seed=p["seed"]?.GetValue<int>()??1,

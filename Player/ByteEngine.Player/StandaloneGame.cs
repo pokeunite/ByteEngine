@@ -56,8 +56,7 @@ internal sealed class StandaloneGame : ByteEngineApplication
             ByteEngine.Core.Diagnostics.CrashDebugLog.Write($"Package validation passed: {_project.Project.Name}; assets={_project.Database.Assets.Count}");
             Close();
         }
-        bool grab = scene.GameObjects.Any(item =>
-            item.GetComponent<PlayerController3D>() is { AcceptLookInput: true });
+        bool grab = WantsMouseLook(scene);
         CaptureGameInput(grab);
     }
 
@@ -65,11 +64,15 @@ internal sealed class StandaloneGame : ByteEngineApplication
     {
         if (!IsGameInputCaptured && Input.IsMouseButtonPressed(MouseButton.Left))
         {
-            bool grab = Scenes.ActiveScene?.GameObjects.Any(item =>
-                item.GetComponent<PlayerController3D>() is { AcceptLookInput: true }) == true;
+            bool grab = Scenes.ActiveScene is {} scene && WantsMouseLook(scene);
             CaptureGameInput(grab);
         }
     }
+
+    private static bool WantsMouseLook(Scene scene) =>
+        scene.ActiveCamera?.GameObject.GetComponent<TopDownCamera3D>()?.Enabled != true &&
+        scene.GameObjects.Any(item => item.ActiveInHierarchy &&
+            item.GetComponent<PlayerController3D>() is { Enabled: true, AcceptLookInput: true });
 
     protected override void OnEngineRender()
     {

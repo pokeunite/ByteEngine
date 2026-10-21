@@ -79,17 +79,33 @@ internal sealed class UndoManager
     }
 
     /// <summary>Editor-tool transaction: restore the original scene if any operation fails.</summary>
-    public void ExecuteAtomic(EditorState state, string name, Action action)
+    public void ExecuteAtomic(EditorState state, string name, Action action, Dictionary<string, byte[]>? changedFiles = null)
     {
         if (state.Mode != EditorMode.Edit) throw new InvalidOperationException("Stop Play mode before editing.");
         if (_pending != null || _pendingTransforms != null || _pendingObjects != null)
             throw new InvalidOperationException("Finish the current editor gesture first.");
         BeginGesture(state, name);
         PendingEdit before = _pending!;
-        try { action(); CommitGesture(state); }
+        try
+        {
+            action();
+            if (changedFiles is { Count: > 0 })
+            {
+                var afterFiles = changedFiles.Keys.ToDictionary(path => path, File.ReadAllBytes);
+                var afterScene = _serializer.Serialize(state.EditorScene);
+                int next = ++_nextRevision;
+                _undo.Push(new AssetSnapshotEditorCommand(name, before.Scene, afterScene,
+                    before.Globals, CloneGlobals(state.Project.GlobalVariables), before.Selection, SelectionIds(state),
+                    _currentRevision, next, new(changedFiles), afterFiles));
+                _redo.Clear(); _currentRevision = next; CancelGesture(); TrimHistory(); UpdateDirty(state);
+            }
+            else CommitGesture(state);
+        }
         catch
         {
             CancelGesture();
+            if (changedFiles != null)
+                foreach (var (path, bytes) in changedFiles) File.WriteAllBytes(path, bytes);
             Restore(state, before.Scene, before.Globals, before.Selection);
             UpdateDirty(state);
             throw;
@@ -192,6 +208,13 @@ internal sealed class UndoManager
 
     private void RestoreEntry(EditorState state, IEditorHistoryEntry entry, bool after)
     {
+        if (entry is AssetSnapshotEditorCommand assets)
+        {
+            var files = after ? assets.AfterFiles : assets.BeforeFiles;
+            Panels.EventWorkspacePanel.PrepareExternalEdits(files.Keys);
+            foreach (var (path, bytes) in files) File.WriteAllBytes(path, bytes);
+            Panels.EventWorkspacePanel.ReloadExternalEdits(files.Keys);
+        }
         if (entry is ObjectDeltaEditorCommand delta)
         {
             _serializer.ApplyObjectDelta(state.EditorScene, after ? delta.AfterObjects : delta.BeforeObjects);
@@ -216,8 +239,9 @@ internal sealed class UndoManager
 
     public void Undo(EditorState state)
     {
-        if (state.Mode != EditorMode.Edit || !_undo.TryPop(out var command)) return;
+        if (state.Mode != EditorMode.Edit || !_undo.TryPeek(out var command)) return;
         RestoreEntry(state, command, after: false);
+        _undo.Pop();
         _currentRevision = command.BeforeRevision;
         _redo.Push(command);
         UpdateDirty(state);
@@ -225,8 +249,9 @@ internal sealed class UndoManager
 
     public void Redo(EditorState state)
     {
-        if (state.Mode != EditorMode.Edit || !_redo.TryPop(out var command)) return;
+        if (state.Mode != EditorMode.Edit || !_redo.TryPeek(out var command)) return;
         RestoreEntry(state, command, after: true);
+        _redo.Pop();
         _currentRevision = command.AfterRevision;
         _undo.Push(command);
         UpdateDirty(state);

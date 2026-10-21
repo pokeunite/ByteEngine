@@ -20,6 +20,7 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length==2&&args[0]=="--fire-attack-benchmark"){FireAttackBenchmark.Run(args[1]);return;}
     if(args.Contains("--engine-optimization")){EngineOptimizationTests.Run();return;}
     if(args.Contains("--drift-scoring")){DriftScoringTests.Run();return;}
     if(args.Contains("--browser-texture-lifecycle")){BrowserTextureTransferTests.Run();return;}
@@ -70,6 +71,7 @@ try
     if(args.Length>=2&&args[0]=="--dune-physics"){DuneLandPhysicsTests.Run(args[1],args.Contains("--browser-physics")?40:0);return;}
     if(args.Contains("--vfx")) { VfxTests.Run(root); return; }
     if(args.Contains("--vfx-render")) { VfxRenderTests.Run(root); return; }
+    if(args.Contains("--vfx-gallery")) { VfxGallery.Run(); return; }
     if(args.Length>=3&&args[0]=="--vehicle-blueprints"){using var diagnostic=new DunePolishDiagnostic(args[1],false,false,args[2]);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--dune-hinge"){using var diagnostic=new DunePolishDiagnostic(args[1],false,true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--mission-world"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),slice:true,world:true);diagnostic.Run();return;}

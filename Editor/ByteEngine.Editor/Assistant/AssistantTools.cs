@@ -31,10 +31,10 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
         For character animation requests, FIRST call byte_animations on the character (or model asset) to obtain real clips and rig data. You CAN author and assign native .byteanim profiles with create_animation_profile; do not claim these tools are unavailable. Omitted locomotion clips can be discovered automatically. Reuse existing controllers/cameras rather than duplicate them.
         You CAN create custom layered .bvfx effects, .bmat materials, bounded .obj mesh geometry and .byteblueprint prefabs using byte_apply; query byte_catalog kind=asset_types for schemas. Do not tell the user to create assets you can author.
         Context contains relevant engine recipes. Follow those without redundantly looking up every familiar component. Use byte_catalog queries to batch unfamiliar API searches in ONE call. Use byte_reference for exact engine implementation when guides/catalogues are insufficient. Never guess APIs or repeatedly search synonyms after a missing result.
-        $selected is frozen at Send. Inspect relevant objects once, choose a complete approach, then apply a single batch (up to 40 operations). Failed batches roll back and can be corrected once. Successful batches have one scene Undo. New assets persist on Undo for recovery; existing assets are never overwritten.
+        $selected is frozen at Send. Inspect relevant objects once, choose a complete approach, then apply a single batch (up to 40 operations). Failed batches roll back and can be corrected once. Successful batches have one scene Undo. New assets persist on Undo for recovery; appends to existing event sheets are restored by Undo. Other existing asset types cannot be overwritten.
         add_component can include properties:{...}; set_properties sets several editable properties at once. Guid properties accept @createdObject or $selected. Asset references accept $asset:name for assets created earlier in the batch. add_event_rule arguments may also use $asset:name.
         create_vfx data:{name,path,preset?,properties?,layers?:[{...layer properties}]}; create_material:{name,path,properties}; save_blueprint target=scene object, data:{name,path}; set_parent:{parent,keepWorld?}; delete_object removes a requested object or your own temporary template. Asset paths must be new paths inside the project's asset directory.
-        add_event_rule creates a new editable event module; it does not replace existing sheets. Conditions are AND; actions run in order. system.always runs every frame. Nested logic and existing rule rewriting are unsupported.
+        add_event_rule data includes sheet (a descriptive sheet name, e.g. Player Movement) and name (a descriptive event row name, e.g. Sprint held - run). Related rows MUST use the SAME sheet name; they append to that attached sheet across requests. Default sheet is <object name> Events. Inspect existing sheets first and reuse their name. Different triggers such as sprint held/released need separate rows in ONE sheet; never AND mutually exclusive triggers together. Actions sharing the same conditions belong in one row, in execution order. Do not create one sheet per action or use generic Rule/GUID names. Conditions are AND; system.always runs every frame. Nested logic and existing rule rewriting are unsupported; duplicate row names are rejected.
         Use byte_inspect detail=true only when full property/event arguments are needed; default summaries are compact. Tool-call budget is 16. Keep replies concise and do not claim gameplay testing from property inspection.
         Native EventValue references are supported for live values. A custom VFX asset is configurable particle art, not a generated mesh or texture; explain that boundary honestly.
         """;
@@ -47,7 +47,7 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
             new { target = Str(), search = Str(), asset = Str(), includeBones = new { type = "boolean" }, detail = new { type = "boolean" } }),
         Spec("byte_catalog", "Discover loaded engine/plugin APIs or native asset schemas. kind=components|conditions|actions|assets|asset_types|systems. Batch up to8 {kind,search} queries in queries. Component search accepts multiple exact type names separated by spaces; otherwise all search words must match. Returns exact IDs, arguments and property types; use systems for the full category index.",
             new { kind = Str(), search = Str(), queries = new { type = "array", maxItems = 8, items = new { type = "object", properties = new { kind = Str(), search = Str() }, required = new[] { "kind", "search" }, additionalProperties = false } } }),
-        Spec("byte_apply", "Apply ONE atomic batch (max 40 operations) with one Undo. Each operation has kind,target,data. target=$selected, exact object GUID/name, or @name of an object created earlier in this batch. create_object data:{name,parent?,primitive?:Cube|Sphere|Plane}; rename_object:{name}; set_transform:{position?:[x,y,z],rotation?:[pitch,yaw,roll] degrees,scale?:[x,y,z]}; add_component:{component:exact type,properties?:{...}}; set_properties:{component,properties:{...}}; create_vfx:{name,path,preset?,properties?,layers?}; create_material:{name,path,properties}; create_mesh:{name,path,vertices,triangles}; create_animation_profile:{name,path,model,locomotion?,sections?}; instantiate_asset:{name,path,position?}; save_blueprint:{name,path}; set_parent:{parent,keepWorld?}; delete_object:{}; set_property:{component,property,value}; set_variable:{name,value}; add_event_rule:{name,conditions:[{id,arguments:{...}}],actions:[{id,arguments:{...}}]}. New event rules attach as a new generated module; existing sheets are unchanged. Guid properties accept $selected or @createdName to link objects in the same batch. InputActionReference properties accept a named action string. No arbitrary code; use native asset schemas from catalogue.",
+        Spec("byte_apply", "Apply ONE atomic batch (max 40 operations) with one Undo. Each operation has kind,target,data. target=$selected, exact object GUID/name, or @name of an object created earlier in this batch. create_object data:{name,parent?,primitive?:Cube|Sphere|Plane}; rename_object:{name}; set_transform:{position?:[x,y,z],rotation?:[pitch,yaw,roll] degrees,scale?:[x,y,z]}; add_component:{component:exact type,properties?:{...}}; set_properties:{component,properties:{...}}; create_vfx:{name,path,preset?,properties?,layers?}; create_material:{name,path,properties}; create_mesh:{name,path,vertices,triangles}; create_animation_profile:{name,path,model,locomotion?,sections?}; instantiate_asset:{name,path,position?}; save_blueprint:{name,path}; set_parent:{parent,keepWorld?}; delete_object:{}; set_property:{component,property,value}; set_variable:{name,value}; add_event_rule:{sheet?,name,conditions:[{id,arguments:{...}}],actions:[{id,arguments:{...}}]}. Related rules append to the SAME named attached sheet, preserving existing rules. Use descriptive sheet and row names. Appending existing sheets supports Undo; dirty open sheets must first be saved. Guid properties accept $selected or @createdName to link objects in the same batch. InputActionReference properties accept a named action string. No arbitrary code; use native asset schemas from catalogue.",
             new { label = Str(), operations = new { type = "array", maxItems = 40, items = new { type = "object", properties = new { kind = Str(), target = Str(), data = new { type = "object", additionalProperties = true } }, required = new[] { "kind", "target", "data" }, additionalProperties = false } } })
     ];
     private static object Str() => new { type = "string" };
@@ -107,7 +107,7 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
         try
         {
             string path = Inside(reference.ProjectPath); var module = new EventModuleSerializer().Load(path);
-            return new { path = reference.ProjectPath, rules = module.Rules.Take(12).Select(r => new { name = r.DisplayName, conditions = r.Conditions.Take(12).Select(c => new { id = c.Id, arguments = c.Arguments }), actions = r.Actions.Take(12).Select(a => new { id = a.Id, arguments = a.Arguments }) }).ToArray() };
+            return new { path = reference.ProjectPath, name = module.Name, rules = module.Rules.Take(12).Select(r => new { ruleId = r.Id, name = r.DisplayName, conditions = r.Conditions.Take(12).Select(c => new { id = c.Id, arguments = c.Arguments }), actions = r.Actions.Take(12).Select(a => new { id = a.Id, arguments = a.Arguments }) }).ToArray() };
         }
         catch { return new { path = reference.ProjectPath, error = "Could not read this event sheet." }; }
     }
@@ -148,6 +148,7 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
         if (operations.ValueKind != JsonValueKind.Array || operations.GetArrayLength() is < 1 or > 40) throw new InvalidOperationException("Provide 1 to 40 operations.");
         var created = new Dictionary<string, GameObject>(StringComparer.Ordinal);
         var files = new List<string>();
+        var changedFiles = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         try
         {
             state.Undo.ExecuteAtomic(state, "Assistant: " + Text(args, "label", "Edit scene")[..Math.Min(80, Text(args, "label", "Edit scene").Length)], () =>
@@ -194,24 +195,26 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
                             var property = Editable(component.GetType()).SingleOrDefault(p => p.Name.Equals(Name(data, "property"), StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("This property is not editable through the assistant.");
                             property.SetValue(component, property.PropertyType == typeof(Guid) && data.GetProperty("value").ValueKind == JsonValueKind.String && data.GetProperty("value").GetString() is {} refToken && (refToken.StartsWith("@") || refToken == "$selected") ? Resolve(refToken, created).Id : ConvertValue(data.GetProperty("value"), property.PropertyType)); break;
                         case "set_variable": target.Variables.Set(Name(data, "name"), VariableJson.Parse(data.GetProperty("value").GetRawText())); break;
-                        case "add_event_rule": AttachRule(target, data, files); break;
+                        case "add_event_rule": AttachRule(target, data, files, changedFiles); break;
                         default: throw new InvalidOperationException("Unsupported operation: " + kind);
                     }
                     Changes.Add(kind.Replace('_', ' ') + ": " + target.Name);
                 }
-            });
+            }, changedFiles);
         }
         catch
         {
             // These are fresh, uniquely named generated assets from this failed transaction only.
             foreach (var file in files) { try { File.Delete(file); } catch { } }
+            EventWorkspacePanel.ReloadExternalEdits(changedFiles.Keys);
             _scene = state.EditorScene; _assetAliases.Clear(); Changes.Clear(); throw;
         }
         _applied = true;
-        if (EditorProjectContext.Active is {} activeProject && Path.GetFullPath(activeProject.ProjectRoot) == Path.GetFullPath(projectRoot)) activeProject.AssetDatabase.RefreshPaths(files.Where(f => !f.EndsWith(".meta") && !f.EndsWith(".tmp")));
+        EventWorkspacePanel.ReloadExternalEdits(changedFiles.Keys);
+        if (EditorProjectContext.Active is {} activeProject && Path.GetFullPath(activeProject.ProjectRoot) == Path.GetFullPath(projectRoot)) activeProject.AssetDatabase.RefreshPaths(files.Concat(changedFiles.Keys).Where(f => !f.EndsWith(".meta") && !f.EndsWith(".tmp")));
         return new { applied = true, assets = _assetAliases, undo = operations.EnumerateArray().Any(o => Text(o, "kind") is not ("create_vfx" or "create_material" or "create_mesh" or "create_animation_profile" or "save_blueprint")) ? state.Undo.UndoName : null, assetsRemainOnUndo = true, changes = Changes.ToArray(), created = created.Select(p => new { alias = p.Key, id = p.Value.Id, name = p.Value.Name }).ToArray(), saveRequired = true };
     }
-    private void AttachRule(GameObject target, JsonElement data, List<string> files)
+    private void AttachRule(GameObject target, JsonElement data, List<string> files, Dictionary<string, byte[]> changedFiles)
     {
         var registry = VisualLogicRegistry.CreateDefault();
         var conditions = InstructionsFrom(data.GetProperty("conditions"), true, registry);
@@ -220,11 +223,41 @@ internal sealed partial class AssistantTools(EditorState state, string projectRo
         var rule = new EventRuleDefinition { DisplayName = Name(data, "name"), Conditions = conditions, Actions = actions,
             HasExplicitConditionFlow = true, ConnectedConditionIds = conditions.Select(c => c.InstanceId).ToList(), HasExplicitExecutionFlow = true, FirstActionId = actions[0].InstanceId };
         for (int n = 0; n < actions.Count - 1; n++) actions[n].NextActionId = actions[n + 1].InstanceId;
-        string relative = state.Project.AssetDirectory.TrimEnd('/', '\\') + "/Events/Assistant/Rule-" + Guid.NewGuid().ToString("N") + ".byteevents";
-        string path = Inside(relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!); files.Add(path); files.Add(path + ".meta");
-        new EventModuleSerializer().Save(new EventModuleDefinition { Name = rule.DisplayName, Rules = [rule] }, path);
-        Guid assetId = Guid.NewGuid(); File.WriteAllText(path + ".meta", JsonSerializer.Serialize(new { guid = assetId, type = "EventModule" }));
-        (target.GetComponent<EventModuleComponent>() ?? target.AddComponent(new EventModuleComponent())).AddModuleReference(new AssetReference(assetId, relative));
+        string sheetName = Text(data, "sheet", target.Name + " Events").Trim();
+        if (sheetName.Length is < 1 or > 100 || sheetName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || sheetName.EndsWith('.') ||
+            sheetName is "." or "..") throw new InvalidOperationException("Use a short descriptive sheet name without path characters.");
+        string relative = state.Project.AssetDirectory.TrimEnd('/', '\\') + "/Events/Assistant/" + sheetName + ".byteevents";
+        string path = Inside(relative);
+        for (var directory = new DirectoryInfo(Path.GetDirectoryName(path)!); directory != null && directory.FullName.StartsWith(Path.GetFullPath(projectRoot), StringComparison.OrdinalIgnoreCase); directory = directory.Parent)
+            if (directory.Exists && directory.Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException("Event assets cannot be edited through linked directories.");
+        var component = target.GetComponent<EventModuleComponent>();
+        bool exists = File.Exists(path);
+        if (exists && component?.Modules.Any(reference => string.Equals(reference.ProjectPath.Replace('\\', '/'), relative.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)) != true)
+            throw new InvalidOperationException("That sheet name already exists but is not attached to this object. Choose a distinct descriptive sheet name.");
+        if (exists && !files.Contains(path))
+        {
+            if (state.EditorScene.GameObjects.Where(obj => obj != target).Any(obj => obj.GetComponent<EventModuleComponent>()?.Modules.Any(reference => string.Equals(reference.ProjectPath.Replace('\\', '/'), relative.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)) == true))
+                throw new InvalidOperationException("This sheet is shared by other objects. Use a separate sheet name to avoid changing their behavior.");
+            EventWorkspacePanel.PrepareExternalEdits([path]);
+            changedFiles.TryAdd(path, File.ReadAllBytes(path));
+        }
+        var serializer = new EventModuleSerializer();
+        var module = exists ? serializer.Load(path) : new EventModuleDefinition { Name = sheetName };
+        if (module.Rules.Any(existing => existing.DisplayName.Equals(rule.DisplayName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("A rule with this name already exists in the sheet. Inspect existing rules and avoid duplicate behavior.");
+        module.Rules.Add(rule);
+        if (!exists)
+        {
+            if (File.Exists(path + ".meta")) throw new InvalidOperationException("An asset metadata file already exists at this path.");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!); files.Add(path); files.Add(path + ".meta");
+        }
+        serializer.Save(module, path);
+        if (!exists)
+        {
+            Guid assetId = Guid.NewGuid(); File.WriteAllText(path + ".meta", JsonSerializer.Serialize(new { guid = assetId, type = "EventModule" }));
+            (component ?? target.AddComponent(new EventModuleComponent())).AddModuleReference(new AssetReference(assetId, relative));
+        }
+        Changes.Add("Event sheet: " + sheetName + " / " + rule.DisplayName);
     }
     private List<VisualInstruction> InstructionsFrom(JsonElement list, bool condition, VisualLogicRegistry registry)
     {

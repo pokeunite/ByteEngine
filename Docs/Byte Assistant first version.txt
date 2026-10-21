@@ -26,9 +26,12 @@ UNDO AND SAVE
 One edit batch per request, at most 20 operations. The scene change is one native Undo entry.
 Failed batches roll the scene back; no partial edits are retained.
 Edits remain unsaved until you save the scene normally.
-New event rules are saved as fresh assets under Assets/Events/Assistant and attached to their target.
+Related event rows share one descriptively named sheet under Assets/Events/Assistant, attached to their target.
 Undo removes their scene attachments; the generated assets remain in the project for recovery and Redo.
-Existing event modules are not overwritten by this version.
+add_event_rule accepts sheet and name: sheet names the asset; name describes the event row. Default sheet is <object name> Events.
+Follow-up requests can append to an existing attached assistant sheet, preserving its rules and metadata. Existing-file edits participate in Undo/Redo and failed-batch rollback.
+Unsaved open sheets and sheets shared by other scene objects are protected. Other existing asset types cannot be overwritten.
+Keep different triggers in separate rows of the same sheet; put actions sharing conditions in one ordered row. Existing row rewriting and nested logic authoring remain unsupported.
 Stop Play mode before editing. Switching scenes/projects invalidates in-flight edits.
 Allow scene edits can be switched off for read-only questions.
 

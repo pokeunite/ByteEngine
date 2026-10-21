@@ -115,6 +115,7 @@ public sealed partial class VisualLogicRegistry
         RegisterInput(registry);
         RegisterObjects(registry);
         RegisterCharacter(registry);
+        RegisterTopDown(registry);
         RegisterTransform(registry);
         RegisterVariables(registry);
         RegisterGameplay(registry);

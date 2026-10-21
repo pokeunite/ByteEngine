@@ -21,6 +21,24 @@ internal sealed partial class EventWorkspacePanel
     public EventWorkspacePanel(EditorDocumentManager documents)
     {
         _documents = documents;
+        ExternalEditWorkspaces.Add(new(this));
+    }
+    private static readonly List<WeakReference<EventWorkspacePanel>> ExternalEditWorkspaces = [];
+    private static IEnumerable<EventWorkspacePanel> MatchingWorkspaces(IEnumerable<string> paths)
+    {
+        var files = paths.Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ExternalEditWorkspaces.RemoveAll(reference => !reference.TryGetTarget(out _));
+        return ExternalEditWorkspaces.Select(reference => reference.TryGetTarget(out var workspace) ? workspace : null)
+            .Where(workspace => workspace?._asset != null && files.Contains(Path.GetFullPath(workspace._asset.FullPath)))!;
+    }
+    internal static void PrepareExternalEdits(IEnumerable<string> paths)
+    {
+        if (MatchingWorkspaces(paths).Any(workspace => workspace._dirty))
+            throw new InvalidOperationException("Save the open event sheet before the assistant edits it or before Undo/Redo restores it.");
+    }
+    internal static void ReloadExternalEdits(IEnumerable<string> paths)
+    {
+        foreach (var workspace in MatchingWorkspaces(paths)) workspace.DiscardChanges();
     }
     private readonly EventModuleSerializer _serializer =
         new();

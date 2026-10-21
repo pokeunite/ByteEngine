@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.VisualLogic;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.Serialization;
@@ -378,6 +379,7 @@ public sealed class ReflectionPluginComponentCodec<T> : IComponentCodec
         type == typeof(Vector3) ||
         type == typeof(Vector4) ||
         type == typeof(AssetReference) ||
+        type == typeof(InputActionReference) ||
         type.IsEnum;
 
     private static JsonNode? WriteValue(object? value)
@@ -400,6 +402,7 @@ public sealed class ReflectionPluginComponentCodec<T> : IComponentCodec
                 ["path"] = reference.CachedProjectPath
             },
             Enum enumeration => JsonValue.Create(enumeration.ToString()),
+            InputActionReference action => new JsonObject { ["id"] = action.Id.ToString(), ["name"] = action.Name },
             _ => null
         };
     }
@@ -424,6 +427,11 @@ public sealed class ReflectionPluginComponentCodec<T> : IComponentCodec
                 if (!Guid.TryParse(node.GetValue<string>(), out Guid guid))
                     return false;
                 value = guid;
+            }
+            else if (type == typeof(InputActionReference) && node is JsonObject action)
+            {
+                Guid.TryParse(action["id"]?.GetValue<string>(), out Guid id);
+                value = new InputActionReference(id, action["name"]?.GetValue<string>() ?? string.Empty);
             }
             else if (type == typeof(Vector2) && node is JsonArray v2 && v2.Count >= 2)
                 value = new Vector2(v2[0]?.GetValue<float>() ?? 0, v2[1]?.GetValue<float>() ?? 0);

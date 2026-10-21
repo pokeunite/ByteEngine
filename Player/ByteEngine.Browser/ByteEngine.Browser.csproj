@@ -20,6 +20,7 @@
     <!-- Scene codecs and tuning use reflection: retain application metadata for AOT. -->
     <TrimmerRootAssembly Include="ByteEngine.Browser;ByteEngine.Core;DuneCompany.Plugin;DesertTerrain.Plugin;System.Numerics.Vectors" />
     <SupportedPlatform Include="browser" />
+    <Content Include="../../Engine/ByteEngine.Core/ThirdPartyNotices/*.txt" Link="wwwroot/ThirdPartyNotices/%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../../Plugins/DuneCompany/DuneCompany.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj" />
