@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>ByteEngine pixel-art WebGL verification</title>
+<style>body{background:#151b23;color:#eef2f7;font:18px sans-serif}canvas{width:536px;height:344px;image-rendering:pixelated}</style>
+<h1>Pixel-art WebGL check</h1><p id="result">Testing…</p><canvas id="world" width="67" height="43"></canvas><canvas id="overlay" hidden></canvas>
+<script type="module">
+import {BrowserRenderer} from '../../Player/ByteEngine.Browser/wwwroot/renderer.js';
+try {
+ const renderer=new BrowserRenderer(document.querySelector('#world'),document.querySelector('#overlay'));
+ const gl=renderer.gl,w=67,h=43,data=new Uint8Array(w*h*4);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){let n=(y*w+x)*4;data[n]=x*255/(w-1);data[n+1]=y*255/(h-1);data[n+2]=(x+y)*255/(w+h-2);data[n+3]=255;}
+ const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,w,h);gl.disable(gl.BLEND);gl.disable(gl.DEPTH_TEST);gl.useProgram(renderer.postProgram);gl.bindVertexArray(renderer.skyVao);
+ const p=renderer.postLocations;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(p.image,0);gl.uniform2f(p.texel,1/w,1/h);gl.uniform2f(p.outputSize,w,h);gl.uniform3f(p.look,1,1,0);gl.uniform1f(p.exposure,1);gl.uniform1i(p.antialias,1);
+ for(const dither of [0,1]){
+  gl.uniform4f(p.pixelArt,1,4,4,dither);gl.drawArrays(gl.TRIANGLES,0,3);const pixels=new Uint8Array(w*h*4);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)for(let c=0;c<3;c++){
+   const n=pixels[(y*w+x)*4+c],first=pixels[((Math.floor(y/4)*4)*w+Math.floor(x/4)*4)*4+c];
+   if(n!==first)throw Error(`Nonuniform block at ${x},${y}`);
+   if(![0,85,170,255].some(level=>Math.abs(level-n)<=1))throw Error('Unexpected colour level');
+  }
+ }
+ if(gl.getError()!==gl.NO_ERROR)throw Error('WebGL error');
+ document.querySelector('#result').textContent='PASS — production WebGL shader compiles; pixel blocks, colour levels, dithering and partial edge blocks verified.';
+}catch(error){document.querySelector('#result').textContent='FAIL — '+error.stack;}
+</script>

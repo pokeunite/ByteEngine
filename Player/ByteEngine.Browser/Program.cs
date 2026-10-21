@@ -234,6 +234,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     private float[] _vp = new float[16], _eye = [0,0,0], _background = [.07f,.1f,.15f];
     private BrowserLight[] _lights = [], _points = [];
     private float _ambient = .25f, _exposure = 1;
+    private float[] _pixelArt=[0,4,8,.35f];
     private float[] _look=[1,1,0],_fog=[0,0,0,0,1,0,0,0];
     private BrowserSky? _sky;
     private BrowserShadow? _shadow;
@@ -271,6 +272,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         _ambient = lighting.AmbientIntensity;
         _exposure=environment.Exposure;
         _look=[environment.Look.Saturation,environment.Look.Contrast,environment.Look.Warmth];
+        _pixelArt=[environment.Look.ShaderStyle==BuiltInSceneShader.PixelArt?1:0,environment.Look.PixelSize,environment.Look.PixelColorLevels,environment.Look.PixelDither];
         _fog=[environment.FogColor.X,environment.FogColor.Y,environment.FogColor.Z,environment.FogStartDistance,environment.FogEndDistance,environment.FogDensity,environment.FogEnabled?environment.FogMaxOpacity:0,(float)environment.FogMode];
         if(BrowserPresentationSettings.Quality!=GraphicsQuality.Fast){
             for(int i=0;i<lighting.DirectionalLights.Count;i++){
@@ -441,7 +443,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             for (int j = 0; j < values.Length; j++) System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(bytes[(8+j*4)..], values[j]);
         }
         int uiBuffer = _buffers.Count; _buffers.Add(uiBytes);
-        return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
+        return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,pixelArt=_pixelArt,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,
             draws = _draws, materials = _materialUploads, deadMaterials = deadMaterials, uiBuffer = uiBuffer, uiCount = _ui.Count,
             deadMeshes=deadMeshes, deadTextures=deadTextures, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);
@@ -493,4 +495,3 @@ internal sealed class BrowserAudio : IPortableAudio
         _commands.Add(new { kind = "listener", position = new[] {position.X,position.Y,position.Z},
             forward = new[] {forward.X,forward.Y,forward.Z}, up = new[] {up.X,up.Y,up.Z}, volume });
 }
-

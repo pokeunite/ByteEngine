@@ -12,6 +12,7 @@ internal sealed class BrowserFrame
     public double loopMs { get; set; }
     public float ambient { get; set; }
     public float[] look { get; set; } = [1,1,0];
+    public float[] pixelArt { get; set; } = [0,4,8,.35f];
     public float[] fog { get; set; } = [0,0,0,0,1,0,0,0];
     public float[] vp { get; set; } = [];
     public float[] inverseVp {get;set;}=[];

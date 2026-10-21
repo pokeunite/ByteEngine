@@ -40,6 +40,7 @@ public sealed class PostProcess3D
 
         EnsureResources();
         var settings=look??GraphicsLook.Default;
+        bool pixelArt=applyToneMapping && settings.ShaderStyle==BuiltInSceneShader.PixelArt;
         _effects.Begin(applyToneMapping && settings.ProfileGpu);
         try
         {
@@ -73,6 +74,11 @@ public sealed class PostProcess3D
             EnableCap.CullFace);
 
         _shader!.Use();
+        _shader.SetInt("uPixelArt",pixelArt?1:0);
+        _shader.SetInt("uPixelSize",Math.Clamp(settings.PixelSize,1,32));
+        _shader.SetInt("uPixelLevels",Math.Clamp(settings.PixelColorLevels,2,32));
+        _shader.SetFloat("uPixelDither",float.IsFinite(settings.PixelDither)?Math.Clamp(settings.PixelDither,0,1):.35f);
+        _shader.SetVector2("uOutputSize",new System.Numerics.Vector2(Math.Max(1,width),Math.Max(1,height)));
         GL.ActiveTexture(TextureUnit.Texture2); GL.BindTexture(TextureTarget.Texture2D,_effects.AoTexture);
         GL.ActiveTexture(TextureUnit.Texture3); GL.BindTexture(TextureTarget.Texture2D,_effects.BloomTexture);
         _shader.SetInt("uAo",2); _shader.SetInt("uBloom",3);
@@ -91,7 +97,7 @@ public sealed class PostProcess3D
             "uSceneTexture",
             0);
 
-        _shader.SetInt("uSmoothEdges", applyToneMapping && smoothEdges ? 1 : 0);
+        _shader.SetInt("uSmoothEdges", applyToneMapping && smoothEdges && !pixelArt ? 1 : 0);
         _shader.SetInt(
             "uApplyToneMapping",
             applyToneMapping
@@ -224,6 +230,9 @@ public sealed class PostProcess3D
         uniform int uSmoothEdges;
         uniform sampler2D uAo,uBloom;
         uniform float uAoStrength,uBloomStrength,uSaturation,uContrast,uWarmth;
+        uniform int uPixelArt,uPixelSize,uPixelLevels;
+        uniform float uPixelDither;
+        uniform vec2 uOutputSize;
 
         vec3 acesFilm(
             vec3 value)
@@ -269,7 +278,12 @@ public sealed class PostProcess3D
 
         vec3 displaySample(vec2 uv)
         {
-            vec3 hdr = max(texture(uSceneTexture, uv).rgb, vec3(0.0)) * max(uExposure, 0.0);
+            vec3 sampleColor;
+            if(uPixelArt==1){
+                ivec2 size=textureSize(uSceneTexture,0);
+                sampleColor=texelFetch(uSceneTexture,clamp(ivec2(uv*vec2(size)),ivec2(0),size-1),0).rgb;
+            }else sampleColor=texture(uSceneTexture,uv).rgb;
+            vec3 hdr = max(sampleColor, vec3(0.0)) * max(uExposure, 0.0);
             if(uAoStrength>0) hdr*=mix(1.0,texture(uAo,uv).r,uAoStrength);
             if(uBloomStrength>0) hdr+=texture(uBloom,uv).rgb*uBloomStrength*max(uExposure,0.0);
             hdr*=vec3(1+uWarmth*.12,1,1-uWarmth*.12);
@@ -363,6 +377,20 @@ public sealed class PostProcess3D
                         2.2));
 
             displayColor = uSmoothEdges == 1 ? smoothEdges(vUV) : displaySample(vUV);
+            if(uPixelArt==1){
+                // Anchor to output pixels, independent of 3D render scale. One
+                // source texel and one ordered threshold per complete block.
+                vec2 cell=floor(gl_FragCoord.xy/float(uPixelSize));
+                vec2 sampleUv=min((cell+.5)*float(uPixelSize),uOutputSize-.5)/uOutputSize;
+                displayColor=displaySample(sampleUv);
+                const int bayer[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5);
+                ivec2 b=ivec2(cell)%4;
+                float threshold=(float(bayer[b.y*4+b.x])+.5)/16.-.5;
+                float levels=float(uPixelLevels-1);
+                displayColor=floor(clamp(displayColor+threshold*uPixelDither/levels,0.,1.)*levels+.5)/levels;
+                FragColor=vec4(displayColor,source.a);
+                return;
+            }
             /*
              * This is now the only display dither in the 3D pipeline, directly
              * before writing into the final RGBA8 presentation texture.

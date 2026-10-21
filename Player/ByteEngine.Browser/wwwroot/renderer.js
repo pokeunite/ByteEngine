@@ -99,11 +99,25 @@ export class BrowserRenderer {
         gl.attachShader(post,compile(gl.VERTEX_SHADER,`#version 300 es
         out vec2 uv;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0,1);}`));
         gl.attachShader(post,compile(gl.FRAGMENT_SHADER,`#version 300 es
-        precision highp float;in vec2 uv;out vec4 fragment;uniform sampler2D image;uniform vec2 texel;uniform vec3 look;uniform float exposure;uniform bool antialias;
+        precision highp float;in vec2 uv;out vec4 fragment;uniform sampler2D image;uniform vec2 texel;uniform vec3 look;uniform float exposure;uniform bool antialias;uniform vec4 pixelArt;uniform vec2 outputSize;
         vec3 display(vec3 x){x=max(x,vec3(0))*exposure;x=clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);return pow(x,vec3(1./2.2));}
-        void main(){vec3 c=display(texture(image,uv).rgb);if(antialias){vec3 a=display(texture(image,uv+vec2(texel.x,0)).rgb),b=display(texture(image,uv-vec2(texel.x,0)).rgb),d=display(texture(image,uv+vec2(0,texel.y)).rgb),e=display(texture(image,uv-vec2(0,texel.y)).rgb);vec3 l=vec3(.299,.587,.114);float lc=dot(c,l),lo=min(lc,min(min(dot(a,l),dot(b,l)),min(dot(d,l),dot(e,l)))),hi=max(lc,max(max(dot(a,l),dot(b,l)),max(dot(d,l),dot(e,l))));float blend=smoothstep(.04,.24,hi-lo)*.42;c=mix(c,(a+b+d+e)*.25,blend);}c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,look.x);c=(c-.5)*look.y+.5+look.z*vec3(.12,.03,-.1);fragment=vec4(clamp(c,0.,1.),1);}`));
+        void main(){
+            vec2 cell=floor(gl_FragCoord.xy/max(1.,pixelArt.y));
+            vec2 sampleUv=uv;
+            vec3 source;
+            if(pixelArt.x>.5){
+                sampleUv=min((cell+.5)*pixelArt.y,outputSize-.5)/outputSize;
+                ivec2 size=textureSize(image,0);
+                source=texelFetch(image,clamp(ivec2(sampleUv*vec2(size)),ivec2(0),size-1),0).rgb;
+            }else source=texture(image,uv).rgb;
+            vec3 c=display(source);if(antialias&&pixelArt.x<.5){vec3 a=display(texture(image,uv+vec2(texel.x,0)).rgb),b=display(texture(image,uv-vec2(texel.x,0)).rgb),d=display(texture(image,uv+vec2(0,texel.y)).rgb),e=display(texture(image,uv-vec2(0,texel.y)).rgb);vec3 l=vec3(.299,.587,.114);float lc=dot(c,l),lo=min(lc,min(min(dot(a,l),dot(b,l)),min(dot(d,l),dot(e,l)))),hi=max(lc,max(max(dot(a,l),dot(b,l)),max(dot(d,l),dot(e,l))));float blend=smoothstep(.04,.24,hi-lo)*.42;c=mix(c,(a+b+d+e)*.25,blend);}c=mix(vec3(dot(c,vec3(.2126,.7152,.0722))),c,look.x);c=(c-.5)*look.y+.5+look.z*vec3(.12,.03,-.1);if(pixelArt.x>.5){
+                const int bayer[16]=int[16](0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5);
+                ivec2 b=ivec2(cell)%4;float threshold=(float(bayer[b.y*4+b.x])+.5)/16.-.5;
+                float levels=max(1.,pixelArt.z-1.);
+                c=floor(clamp(c+threshold*pixelArt.w/levels,0.,1.)*levels+.5)/levels;
+            }fragment=vec4(clamp(c,0.,1.),1);}`));
         gl.linkProgram(post);if(!gl.getProgramParameter(post,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(post));
-        this.postLocations=Object.fromEntries(['image','texel','look','exposure','antialias'].map(n=>[n,gl.getUniformLocation(post,n)]));
+        this.postLocations=Object.fromEntries(['image','texel','look','exposure','antialias','pixelArt','outputSize'].map(n=>[n,gl.getUniformLocation(post,n)]));
         this.locations=new Map();
         const shadow=this.shadowProgram=gl.createProgram();
         gl.attachShader(shadow,compile(gl.VERTEX_SHADER,`#version 300 es
@@ -257,7 +271,7 @@ export class BrowserRenderer {
             if(instanceCount>1){gl.drawElementsInstanced(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0,instanceCount);for(let location=5;location<9;location++){gl.disableVertexAttribArray(location);gl.vertexAttribDivisor(location,0);}}
             else gl.drawElements(gl.TRIANGLES,m.count,gl.UNSIGNED_INT,0);
         }
-        gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.targetWidth,this.targetHeight);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.useProgram(this.postProgram);gl.bindVertexArray(this.skyVao);const post=this.postLocations;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.worldTarget.color);gl.uniform1i(post.image,0);gl.uniform2f(post.texel,1/this.targetWidth,1/this.targetHeight);gl.uniform3fv(post.look,data.look||[1,1,0]);gl.uniform1f(post.exposure,data.exposure??1);gl.uniform1i(post.antialias,data.quality==='Fast'?0:1);gl.drawArrays(gl.TRIANGLES,0,3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,this.targetWidth,this.targetHeight);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.useProgram(this.postProgram);gl.bindVertexArray(this.skyVao);const post=this.postLocations;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.worldTarget.color);gl.uniform1i(post.image,0);gl.uniform4fv(post.pixelArt,data.pixelArt||[0,4,8,.35]);gl.uniform2f(post.outputSize,this.targetWidth,this.targetHeight);gl.uniform2f(post.texel,1/this.targetWidth,1/this.targetHeight);gl.uniform3fv(post.look,data.look||[1,1,0]);gl.uniform1f(post.exposure,data.exposure??1);gl.uniform1i(post.antialias,data.quality==='Fast'?0:1);gl.drawArrays(gl.TRIANGLES,0,3);
         if(gpuQuery){gl.endQuery(this.gpuTimer.TIME_ELAPSED_EXT);this.gpuQueries.push(gpuQuery);}
         this.profile.cpu3DMs=performance.now()-geometryStart;this.profile.drawCalls=data.draws.length;
         const uiStart=performance.now();

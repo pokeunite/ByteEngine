@@ -5,11 +5,16 @@ namespace ByteEngine.Core.Graphics;
 
 public enum GraphicsQuality { Custom, Fast, Balanced, High }
 public enum LightingPreset { Custom, Daylight, Overcast, Interior, Night }
+public enum BuiltInSceneShader { Standard, PixelArt }
 
 /// <summary>Immutable, bounded settings captured once per view. Defaults preserve legacy scenes.</summary>
 public readonly record struct GraphicsLook(GraphicsQuality Quality,float Occlusion,float Radius,float Bloom,float Threshold,float Saturation,float Contrast,float Warmth,bool ProfileGpu)
 {
     public float RenderScale { get; init; } = 1;
+    public BuiltInSceneShader ShaderStyle { get; init; }
+    public int PixelSize { get; init; } = 4;
+    public int PixelColorLevels { get; init; } = 8;
+    public float PixelDither { get; init; } = .35f;
     public int WaterDetail => Quality==GraphicsQuality.Fast ? 0 : Quality==GraphicsQuality.Balanced ? 1 : 2;
     public int AoSamples => Quality==GraphicsQuality.High ? 12 : 8;
     public int ShadowResolutionCap => Quality==GraphicsQuality.Fast ? 1024 : Quality==GraphicsQuality.Balanced ? 2048 : 4096;
@@ -35,7 +40,14 @@ public sealed partial class SkyEnvironment
     private float _renderScale=1;
     /// <summary>3D raster resolution only. UI and pointer coordinates retain native resolution.</summary>
     public float RenderScale { get=>_renderScale; set=>_renderScale=Safe(value,1,.5f,1); }
-    public GraphicsLook CaptureLook() => new(Quality,AmbientOcclusion,OcclusionRadius,Bloom,BloomThreshold,Saturation,Contrast,Warmth,ProfileGraphicsGpu){RenderScale=RenderScale};
+    private BuiltInSceneShader _shaderStyle;
+    private int _pixelSize=4,_pixelColorLevels=8;
+    private float _pixelDither=.35f;
+    public BuiltInSceneShader ShaderStyle { get=>_shaderStyle; set=>_shaderStyle=Enum.IsDefined(value)?value:BuiltInSceneShader.Standard; }
+    public int PixelSize { get=>_pixelSize; set=>_pixelSize=Math.Clamp(value,1,32); }
+    public int PixelColorLevels { get=>_pixelColorLevels; set=>_pixelColorLevels=Math.Clamp(value,2,32); }
+    public float PixelDither { get=>_pixelDither; set=>_pixelDither=Safe(value,.35f,0,1); }
+    public GraphicsLook CaptureLook() => new(Quality,AmbientOcclusion,OcclusionRadius,Bloom,BloomThreshold,Saturation,Contrast,Warmth,ProfileGraphicsGpu){RenderScale=RenderScale,ShaderStyle=ShaderStyle,PixelSize=PixelSize,PixelColorLevels=PixelColorLevels,PixelDither=PixelDither};
     internal void RestorePresetLabels(GraphicsQuality quality,LightingPreset lighting) { _quality=Enum.IsDefined(quality)?quality:GraphicsQuality.Custom; _lightingPreset=Enum.IsDefined(lighting)?lighting:LightingPreset.Custom; }
     private static float Safe(float value,float fallback,float min,float max) => Math.Clamp(float.IsFinite(value)?value:fallback,min,max);
     private void ApplyQuality()
@@ -74,7 +86,8 @@ internal static class GraphicsLookSerialization
 {
     public static JsonObject Save(SkyEnvironment e) => new() {
         ["quality"]=e.Quality.ToString(),["lighting"]=e.Lighting.ToString(),["ao"]=e.AmbientOcclusion,["radius"]=e.OcclusionRadius,
-        ["bloom"]=e.Bloom,["threshold"]=e.BloomThreshold,["saturation"]=e.Saturation,["contrast"]=e.Contrast,["warmth"]=e.Warmth,["profileGpu"]=e.ProfileGraphicsGpu,["renderScale"]=e.RenderScale };
+        ["bloom"]=e.Bloom,["threshold"]=e.BloomThreshold,["saturation"]=e.Saturation,["contrast"]=e.Contrast,["warmth"]=e.Warmth,["profileGpu"]=e.ProfileGraphicsGpu,["renderScale"]=e.RenderScale,
+        ["shaderStyle"]=e.ShaderStyle.ToString(),["pixelSize"]=e.PixelSize,["pixelColorLevels"]=e.PixelColorLevels,["pixelDither"]=e.PixelDither };
     public static SkyEnvironment Load(SkyEnvironment e,JsonNode? node)
     {
         if(node==null) return e;
@@ -84,6 +97,8 @@ internal static class GraphicsLookSerialization
         e.AmbientOcclusion=node["ao"]?.GetValue<float>()??0; e.OcclusionRadius=node["radius"]?.GetValue<float>()??.5f;
         e.Bloom=node["bloom"]?.GetValue<float>()??0; e.BloomThreshold=node["threshold"]?.GetValue<float>()??1.2f;
         e.Saturation=node["saturation"]?.GetValue<float>()??1; e.Contrast=node["contrast"]?.GetValue<float>()??1; e.Warmth=node["warmth"]?.GetValue<float>()??0;
-        e.ProfileGraphicsGpu=node["profileGpu"]?.GetValue<bool>()??false; e.RenderScale=node["renderScale"]?.GetValue<float>()??1; return e;
+        e.ProfileGraphicsGpu=node["profileGpu"]?.GetValue<bool>()??false; e.RenderScale=node["renderScale"]?.GetValue<float>()??1;
+        e.ShaderStyle=Enum.TryParse<BuiltInSceneShader>(node["shaderStyle"]?.GetValue<string>(),out var style)?style:BuiltInSceneShader.Standard;
+        e.PixelSize=node["pixelSize"]?.GetValue<int>()??4;e.PixelColorLevels=node["pixelColorLevels"]?.GetValue<int>()??8;e.PixelDither=node["pixelDither"]?.GetValue<float>()??.35f;return e;
     }
 }

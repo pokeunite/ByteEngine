@@ -123,6 +123,7 @@ public sealed partial class VisualLogicRegistry
         RegisterPhysicsAndCombat(registry);
         RegisterMaterials(registry);
         RegisterVfx(registry);
+        RegisterSceneShaders(registry);
         RegisterUi(registry);
         RegisterAuthoring(registry);
         RegisterAudio(registry);

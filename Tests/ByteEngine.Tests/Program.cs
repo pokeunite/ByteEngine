@@ -20,6 +20,7 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length==2&&args[0]=="--pixel-art-shader"){PixelArtShaderTests.Run(args[1]);return;}
     if(args.Length==2&&args[0]=="--fire-attack-benchmark"){FireAttackBenchmark.Run(args[1]);return;}
     if(args.Contains("--engine-optimization")){EngineOptimizationTests.Run();return;}
     if(args.Contains("--drift-scoring")){DriftScoringTests.Run();return;}
