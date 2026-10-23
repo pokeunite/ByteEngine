@@ -62,6 +62,9 @@ public sealed partial class AnimationController : Component
 
     private bool _stateInitialized;
     private bool _actionActive;
+    private bool _maskedActionActive;
+    private bool _maskedActionBlendingFromOverlay;
+    private float _maskedActionTime, _maskedActionDuration;
     private bool _actionPaused;
     private string _currentAction = string.Empty;
     private string _queuedAction = string.Empty;
@@ -226,11 +229,29 @@ public sealed partial class AnimationController : Component
         else if(!string.IsNullOrWhiteSpace(ManualBaseClip))_currentLocomotionClip=ManualBaseClip;
         UpdateAdvancedPoseControls();
         ApplyPlaybackRate();
+        bool turning = UpdateTurnInPlace();
         UpdateRootMotion();
 
         if (_actionActive)
         {
-            if (_actionPaused || _actionRenderers.Any(renderer => renderer.IsPlaying)) return;
+            if (_maskedActionActive)
+            {
+                if (!_actionPaused) _maskedActionTime += Math.Max((float)Time.DeltaTime * PlaybackSpeed * _actionPlaybackRate, 0);
+                if (_currentNamedAction is {} masked)
+                {
+                    // The renderer crossfades directly from the displayed upper-body pose
+                    // when replacing an overlay. Fading its weight in as well would mix
+                    // locomotion back into the arms on every automatic shot.
+                    float fadeIn = _maskedActionBlendingFromOverlay || masked.BlendIn <= 0 ? 1 : _maskedActionTime / masked.BlendIn;
+                    float remaining = _maskedActionDuration - _maskedActionTime;
+                    float fadeOut = masked.Loop || masked.BlendOut <= 0 ? 1 : remaining / masked.BlendOut;
+                    foreach (var renderer in _actionRenderers)
+                        renderer.SetActionOverlay(masked.Clip, masked.Mask, masked.Loop && _maskedActionDuration > 0 ? _maskedActionTime % _maskedActionDuration : _maskedActionTime, Math.Clamp(Math.Min(fadeIn, fadeOut), 0, 1), layerName: masked.Layer);
+                    if (!turning) ApplyObservedLocomotion(TransitionDuration, false);
+                    if (masked.Loop || _actionPaused || _maskedActionTime < _maskedActionDuration) return;
+                }
+            }
+            else if (_actionPaused || _actionRenderers.Any(renderer => renderer.IsPlaying)) return;
 
             float blendOut = _currentNamedAction?.BlendOut ?? TransitionDuration;
             FinishAction();
@@ -242,11 +263,11 @@ public sealed partial class AnimationController : Component
                 if (StartNamedAction(queued)) return;
             }
 
-            if (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip)) ApplyObservedLocomotion(blendOut, true);
+            if (!turning && (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip))) ApplyObservedLocomotion(blendOut, true);
             return;
         }
 
-        if (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip)) ApplyObservedLocomotion(TransitionDuration, false);
+        if (!turning && (DriveLocomotion || _poseGraph != null || !string.IsNullOrWhiteSpace(ManualBaseClip))) ApplyObservedLocomotion(TransitionDuration, false);
     }
     protected override void OnLateUpdate()
     {
@@ -376,7 +397,7 @@ public sealed partial class AnimationController : Component
 
     private void ApplyPlaybackRate()
     {
-        float multiplier = _actionActive ? _actionPlaybackRate :
+        float multiplier = _actionActive && !_maskedActionActive ? _actionPlaybackRate :
             _poseGraph?.Current?.PlaybackSpeed ?? LocomotionPlaybackRate;
         foreach (SkeletalMeshRenderer renderer in _renderers)
             renderer.Speed = Math.Max(PlaybackSpeed * multiplier * renderer.BlendPlaybackScale, 0.0f);
@@ -548,6 +569,10 @@ public sealed partial class AnimationController : Component
             return false;
         }
 
+        foreach (var renderer in _renderers) renderer.ClearActionOverlay();
+        _maskedActionActive = false;
+        _currentNamedAction = null;
+        _actionPlaybackRate = 1;
         _currentAction = clipName;
         _actionActive = true;
         _actionPaused = false;
@@ -560,6 +585,7 @@ public sealed partial class AnimationController : Component
     public bool PlayNamedAction(string actionName, bool retrigger = false, bool queueIfBlocked = false, bool forceInterrupt = false)
     {
         if (!_namedActions.TryGetValue(actionName ?? string.Empty, out AnimationActionProfile? requested)) return false;
+        if (!string.IsNullOrEmpty(requested.Layer) && FindAnimationLayerIndex(requested.Layer) < 0) return false;
 
         if (_actionActive)
         {
@@ -578,7 +604,8 @@ public sealed partial class AnimationController : Component
 
             if (decision == NamedActionRequestDecision.RestartSame)
             {
-                foreach (SkeletalMeshRenderer renderer in _actionRenderers) renderer.Stop();
+                if (!_maskedActionActive)
+                    foreach (SkeletalMeshRenderer renderer in _actionRenderers) renderer.Stop();
                 ResetAnimationEventTracking();
                 _activeAnimationWindows.Clear();
             }
@@ -654,9 +681,30 @@ public sealed partial class AnimationController : Component
     private bool StartNamedAction(string actionName)
     {
         if (!_namedActions.TryGetValue(actionName, out AnimationActionProfile? action) || string.IsNullOrWhiteSpace(action.Clip)) return false;
+        if (!string.IsNullOrEmpty(action.Layer) && FindAnimationLayerIndex(action.Layer) < 0) return false;
         _actionRenderers.Clear();
-        bool played = PlayInternal(action.Clip, action.Loop, _actionRenderers, action.BlendIn, action.PlaybackSpeed);
+        bool masked = !string.IsNullOrEmpty(action.Layer) || action.Mask.Kind != AnimationBoneMaskKind.FullBody;
+        bool replaceOverlay = masked && _maskedActionActive && _renderers.Any(r => r.HasActionOverlay);
+        bool played;
+        _maskedActionTime = _maskedActionDuration = 0;
+        if (masked)
+        {
+            foreach (var renderer in _renderers)
+                if (renderer.SetActionOverlay(action.Clip, action.Mask, 0, replaceOverlay || action.BlendIn <= 0 ? 1 : 0, action.BlendIn, action.Layer))
+                {
+                    _actionRenderers.Add(renderer);
+                    _maskedActionDuration = Math.Max(_maskedActionDuration, renderer.ResolvedModel?.Animations.FirstOrDefault(a => a.Name.Equals(action.Clip, StringComparison.OrdinalIgnoreCase))?.Duration ?? 0);
+                }
+            played = _actionRenderers.Count > 0;
+        }
+        else
+        {
+            played = PlayInternal(action.Clip, action.Loop, _actionRenderers, action.BlendIn, action.PlaybackSpeed);
+            if (played) foreach (var renderer in _renderers) renderer.ClearActionOverlay();
+        }
         if (!played) return false;
+        _maskedActionActive = masked;
+        _maskedActionBlendingFromOverlay = replaceOverlay;
         _currentNamedAction = action;
         _currentAction = action.Name;
         _actionPlaybackRate = action.PlaybackSpeed;
@@ -668,6 +716,8 @@ public sealed partial class AnimationController : Component
 
     private void FinishAction()
     {
+        foreach (var renderer in _renderers) renderer.ClearActionOverlay();
+        _maskedActionActive = false;
         _actionActive = false;
         _actionPaused = false;
         _currentAction = string.Empty;

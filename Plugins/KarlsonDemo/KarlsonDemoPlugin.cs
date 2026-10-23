@@ -15,7 +15,9 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         WeaponEvents.Register(context);
         WeaponReadoutEvents.Register(context);
         WeaponInventoryEvents.Register(context);
-        context.RegisterSimpleComponent<WeaponPickup3D>("WeaponPickup3D",new("Weapon Pickup","Weapons","World weapon pickup linked to a first-person weapon rig. Event sheets control collection and dropping.","gun pickup drop inventory"));
+        WeaponHudEvents.Register(context);
+        context.RegisterSimpleComponent<WeaponRecoilVisual3D>("WeaponRecoilVisual3D",new("Weapon Recoil Visual","Weapons","Editable model kick. Select a weapon model child; socket transforms stay untouched.","recoil kick accuracy"));
+        context.RegisterSimpleComponent<WeaponPickup3D>("WeaponPickup3D",new("Weapon Pickup","Weapons","World weapon pickup: use a linked scene rig anywhere, or put Weapon Definition and Weapon Instance on this object. Events control pickup and drop.","gun pickup drop inventory"));
     }
 }
 internal static class WeaponEvents
@@ -35,7 +37,7 @@ internal static class WeaponEvents
             "fire" => "{target}: fire equipped weapon",
             "reload" => "{target}: reload equipped weapon",
             "cancelReload" => "{target}: cancel reload",
-            "inputActive" => "Game input is captured",
+            "inputActive" => "Game input is active",
             "automatic" => "Equipped weapon is automatic",
             "semiAutomatic" => "Equipped weapon is single-shot",
             "canFire" => "Equipped weapon can fire",
@@ -112,7 +114,7 @@ internal static class WeaponEvents
         WeaponCondition("ammoAtLeast", "Magazine ammo is at least", (w,i,e) => w.CurrentAmmo >= Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));
         c.RegisterAction(new(){Id=Prefix+"useShotResult",Category="Weapons",DisplayName="Use weapon shot result as Last Ray Hit",MenuGroup="Weapon Instance",Arguments=[target,Arg("hitIndex","Hit index (nearest first, zero based)",VariableValue.FromNumber(0))],Execute=(i,e)=>WeaponEventBridge.Publish(e,ResolveWeapon(i,e),(int)Num(i,e,"hitIndex"))});
         Condition("slot", "Weapon slot is equipped", (w,i,e) => w.SelectedSlot == (int)Num(i,e,"slot"),slot);
-        Condition("inputActive", "Game input is captured", (w,i,e) => ByteEngine.Core.Input.IsGameInputCaptured);
+        Condition("inputActive", "Game input is active", (w,i,e) => ByteEngine.Core.InputSystem.InputActions.GameplayEnabled);
         // Keep old serialized events loadable, without prescribing the number of new slots.
         for(int n=0;n<3;n++) { int captured=n; Action("select"+n,"Legacy select slot "+n,(w,i,e)=>w.Select(captured)); }
     }

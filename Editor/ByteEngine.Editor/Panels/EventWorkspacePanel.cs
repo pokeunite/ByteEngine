@@ -463,13 +463,14 @@ internal sealed partial class EventWorkspacePanel
         if (_showEventGraph || _sheetShowModuleSettings) DrawModuleSettings();
         DrawTraceLegend();
         DrawGraphWorkspace(state);
-        if (!_showEventGraph && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
+        if (_listeningKeyInstruction is Guid listeningId && !_selectedGraphNodes.Contains(listeningId)) _listeningKeyInstruction = null;
+        if (!IsCapturingKey && !_showEventGraph && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             !ImGui.GetIO().WantTextInput && !ImGui.IsAnyItemActive() && !ImGui.IsPopupOpen("",ImGuiPopupFlags.AnyPopupId) && ImGui.IsKeyPressed(ImGuiKey.Delete))
             DeleteSelectedGraphNodes();
 
         DrawEventNamePopup();
 
-        if (!_eventNamePopup.IsOpen &&
+        if (!IsCapturingKey && !_eventNamePopup.IsOpen &&
             ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) &&
             ImGui.IsKeyPressed(ImGuiKey.F2))
         {
@@ -4626,6 +4627,7 @@ internal sealed partial class EventWorkspacePanel
 
     private void HandleGraphShortcuts()
     {
+        if (IsCapturingKey) return;
         if (_module ==
                 null ||
             _selectedGraphNodes.Count ==
@@ -13034,79 +13036,57 @@ internal sealed partial class EventWorkspacePanel
         ImGui.EndCombo();
     }
 
-    private void DrawKeyArgument(
-        VisualInstruction instruction,
-        string argumentName,
-        string label,
-        Key fallback)
+    private Guid? _listeningKeyInstruction;
+    private string _listeningKeyArgument = "";
+    private int _keyListenFrame = -1;
+    private bool IsCapturingKey => _listeningKeyInstruction != null || _keyListenFrame == ImGui.GetFrameCount();
+
+    private void DrawKeyArgument(VisualInstruction instruction, string argumentName, string label, Key fallback)
     {
-        if (!instruction.Arguments.TryGetValue(
-                argumentName,
-                out EventValue? value) ||
-            value == null)
+        if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value) || value == null)
+            instruction.Arguments[argumentName] = value = EventValue.String(fallback.ToString());
+        string current = value.Kind == EventValueKind.Constant && value.Constant.Type == VariableType.String
+            ? value.Constant.String : fallback.ToString();
+        bool listening = _listeningKeyInstruction == instruction.InstanceId && _listeningKeyArgument == argumentName;
+        ImGui.TextDisabled(label);
+        ImGui.SetNextItemWidth(Math.Max(80f, ImGui.GetContentRegionAvail().X - 100f));
+        if (ImGui.BeginCombo("##Key" + argumentName, current))
         {
-            value =
-                EventValue.String(
-                    fallback.ToString());
-
-            instruction.Arguments[argumentName] =
-                value;
-        }
-
-        string current =
-            value.Kind ==
-                EventValueKind.Constant &&
-            value.Constant.Type ==
-                VariableType.String
-                ? value.Constant.String
-                : fallback.ToString();
-
-        ImGui.TextDisabled(
-            label);
-
-        ImGui.SetNextItemWidth(
-            -1.0f);
-
-        if (!ImGui.BeginCombo(
-                "##Key",
-                current))
-        {
-            return;
-        }
-
-        foreach (Key key
-                 in Enum.GetValues<Key>())
-        {
-            string name =
-                key.ToString();
-
-            bool selected =
-                string.Equals(
-                    current,
-                    name,
-                    StringComparison.OrdinalIgnoreCase);
-
-            if (ImGui.Selectable(
-                    name,
-                    selected))
+            foreach (Key key in Enum.GetValues<Key>())
             {
-                instruction.Arguments[argumentName] =
-                    EventValue.String(
-                        name);
-
-                _dirty =
-                    true;
+                string name = key.ToString();
+                bool selected = string.Equals(current, name, StringComparison.OrdinalIgnoreCase);
+                if (ImGui.Selectable(name, selected))
+                {
+                    instruction.Arguments[argumentName] = EventValue.String(name);
+                    _listeningKeyInstruction = null; _dirty = true;
+                }
+                if (selected) ImGui.SetItemDefaultFocus();
             }
-
-            if (selected)
+            ImGui.EndCombo();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button((listening ? "Cancel" : "Listen") + "##Listen" + argumentName))
+        {
+            _listeningKeyInstruction = listening ? null : instruction.InstanceId;
+            _listeningKeyArgument = argumentName;
+            _keyListenFrame = ImGui.GetFrameCount();
+        }
+        if (listening)
+        {
+            ImGui.TextDisabled("Press a key. Escape cancels.");
+            if (ImGui.GetFrameCount() > _keyListenFrame && EditorKeyCapture.TryGetPressed(out Key pressed))
             {
-                ImGui.SetItemDefaultFocus();
+                if (pressed != Key.Escape)
+                {
+                    instruction.Arguments[argumentName] = EventValue.String(pressed.ToString());
+                    _dirty = true;
+                }
+                _listeningKeyInstruction = null;
+                _keyListenFrame = ImGui.GetFrameCount();
             }
         }
-
-        ImGui.EndCombo();
     }
-
     private void DrawInputActionArgument(VisualInstruction instruction, string argumentName, string label, string fallback)
     {
         if (!instruction.Arguments.TryGetValue(argumentName, out EventValue? value) || value == null)

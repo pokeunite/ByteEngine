@@ -92,6 +92,12 @@ public static class AnimationBlendWeights
             return;
         }
 
+        if (space.Blend2DMode == AnimationBlend2DMode.DirectionalSpeed)
+        {
+            EvaluateDirectionalSpeed(space, x, y, weights, count);
+            return;
+        }
+
         // Use only the local triangle containing the input. Inverse-distance
         // blending mixed opposite directions even between two forward samples.
         int exact = -1;
@@ -174,6 +180,59 @@ public static class AnimationBlendWeights
         else weights[exact] = 1f;
     }
 
+    // Local velocity has independent speed and angle. Cartesian triangles can
+    // put a diagonal walk outside the walk polygon and leak in a running take.
+    // Interpolate speed along each neighboring direction before blending angles.
+    private static void EvaluateDirectionalSpeed(AnimationBlendSpace space, float x, float y,
+        Span<float> weights, int count)
+    {
+        float speed = MathF.Sqrt(x * x + y * y);
+        int idle = -1, clockwise = -1, counterclockwise = -1;
+        float cwAngle = float.PositiveInfinity, ccwAngle = float.PositiveInfinity;
+        float angle = MathF.Atan2(y, x);
+        for (int i = 0; i < count; i++)
+        {
+            var sample = space.Samples[i];
+            if (sample.X * sample.X + sample.Y * sample.Y < 1e-8f)
+            { if (idle < 0) idle = i; continue; }
+            float delta = MathF.Atan2(sample.Y, sample.X) - angle;
+            float ccw = (delta % MathF.Tau + MathF.Tau) % MathF.Tau;
+            float cw = (-delta % MathF.Tau + MathF.Tau) % MathF.Tau;
+            if (ccw < ccwAngle) { ccwAngle = ccw; counterclockwise = i; }
+            if (cw < cwAngle) { cwAngle = cw; clockwise = i; }
+        }
+        if (clockwise < 0) { if (idle >= 0) weights[idle] = 1; return; }
+        if (speed < 1e-5f && idle >= 0) { weights[idle] = 1; return; }
+        if (cwAngle < 1e-5f || ccwAngle < 1e-5f || clockwise == counterclockwise)
+        { BlendSpoke(space, clockwise, speed, 1, idle, weights, count); return; }
+        float totalAngle = cwAngle + ccwAngle;
+        BlendSpoke(space, clockwise, speed, ccwAngle / totalAngle, idle, weights, count);
+        BlendSpoke(space, counterclockwise, speed, cwAngle / totalAngle, idle, weights, count);
+    }
+
+    private static void BlendSpoke(AnimationBlendSpace space, int direction, float speed,
+        float weight, int idle, Span<float> weights, int count)
+    {
+        var ray = space.Samples[direction];
+        float rayLength = MathF.Sqrt(ray.X * ray.X + ray.Y * ray.Y);
+        int below = idle, above = -1;
+        float belowSpeed = 0, aboveSpeed = float.PositiveInfinity;
+        for (int i = 0; i < count; i++)
+        {
+            var sample = space.Samples[i];
+            float length = MathF.Sqrt(sample.X * sample.X + sample.Y * sample.Y);
+            if (length < 1e-5f || (ray.X * sample.X + ray.Y * sample.Y) / (rayLength * length) < .99999f) continue;
+            if (length <= speed && (below < 0 || length > belowSpeed)) { below = i; belowSpeed = length; }
+            if (length >= speed && length < aboveSpeed) { above = i; aboveSpeed = length; }
+        }
+        if (above < 0) above = below;
+        if (below < 0) below = above;
+        if (below == above) { if (below >= 0) weights[below] += weight; return; }
+        float t = Math.Clamp((speed - belowSpeed) / (aboveSpeed - belowSpeed), 0, 1);
+        weights[below] += weight * (1 - t);
+        weights[above] += weight * t;
+    }
+
     public static float PlaybackScale(float baseDuration, ReadOnlySpan<float> weights,
         ReadOnlySpan<float> durations)
     {
@@ -188,7 +247,10 @@ public static class AnimationBlendWeights
             total += weights[i];
         }
         return total > 1e-6f && weightedDuration > 1e-6f
-            ? Math.Clamp(baseDuration * total / weightedDuration, .1f, 8f) : 1f;
+            // This compensates for the reference clip's duration; it is not an authored
+            // speed multiplier. Long idle takes may need ratios far above eight to
+            // preserve a short walk/run cycle's original timing.
+            ? Math.Clamp(baseDuration * total / weightedDuration, .0001f, 10000f) : 1f;
     }
 
     private static float Cross(float ax, float ay, float bx, float by) => ax * by - ay * bx;

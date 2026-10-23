@@ -42,6 +42,7 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
     private Guid _selectedSocketId;
     private string _selectedSocketBone = string.Empty;
     private List<SkeletalSocketDefinition> _socketDrafts = new();
+    private string _socketSearch = string.Empty;
     private bool _openUnsavedPopup;
     private EditorDocumentId? _registeredDocumentId;
     private AssetRecord? _pendingOpenAsset;
@@ -478,19 +479,35 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
             return;
         }
 
-        ImGui.Columns(
-            3,
-            "SocketAuthoringColumns",
-            true);
-
-        ImGui.SetColumnWidth(
-            0,
-            285.0f);
+        if (_selectedSocketId == Guid.Empty && _socketDrafts.Count > 0)
+        {
+            _selectedSocketId = _socketDrafts[0].Id;
+            _selectedSocketBone = _socketDrafts[0].BoneName;
+        }
+        ImGui.SeparatorText("SOCKET EDITOR");
+        ImGui.SetNextItemWidth(330f);
+        var activeSocket = _socketDrafts.FirstOrDefault(s => s.Id == _selectedSocketId);
+        if (ImGui.BeginCombo("Editing socket", activeSocket?.Name ?? "Choose socket"))
+        {
+            foreach (var socket in _socketDrafts)
+                if (ImGui.Selectable(socket.Name + "##" + socket.Id, socket.Id == _selectedSocketId))
+                { _selectedSocketId = socket.Id; _selectedSocketBone = socket.BoneName; }
+            ImGui.EndCombo();
+        }
+        ImGui.SameLine();
+        ImGui.TextDisabled("Changes apply only to the selected socket.");
+        if (!ImGui.BeginTable("SocketAuthoringColumns", 3,
+                ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp)) return;
+        ImGui.TableSetupColumn("Socket navigation", ImGuiTableColumnFlags.WidthFixed, 285f);
+        ImGui.TableSetupColumn("Preview", ImGuiTableColumnFlags.WidthStretch, 1.25f);
+        ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch, 1f);
+        ImGui.TableNextRow();
+        ImGui.TableSetColumnIndex(0);
 
         DrawSocketSkeletonColumn(
             model);
 
-        ImGui.NextColumn();
+        ImGui.TableSetColumnIndex(1);
 
         ImGui.SeparatorText(
             "3D PREVIEW");
@@ -519,18 +536,27 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
                 viewportSelected.BoneName;
         }
 
-        ImGui.NextColumn();
+        ImGui.TableSetColumnIndex(2);
 
         DrawSocketDetailsColumn(
             model);
 
-        ImGui.Columns(
-            1);
+        ImGui.EndTable();
     }
 
     private void DrawSocketSkeletonColumn(
         ModelAsset model)
     {
+        ImGui.SeparatorText("SOCKETS");
+        ImGui.SetNextItemWidth(-1f);
+        ImGui.InputTextWithHint("##FindSocket", "Find socket...", ref _socketSearch, 128);
+        if (ImGui.BeginChild("##SocketList", new Vector2(0, 160), ImGuiChildFlags.Borders))
+        {
+            foreach (var socket in _socketDrafts.Where(s => s.Name.Contains(_socketSearch, StringComparison.OrdinalIgnoreCase)))
+                if (ImGui.Selectable(socket.Name + "##" + socket.Id, socket.Id == _selectedSocketId))
+                { _selectedSocketId = socket.Id; _selectedSocketBone = socket.BoneName; }
+        }
+        ImGui.EndChild();
         ImGui.SeparatorText(
             "SKELETON");
 
@@ -826,6 +852,7 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
             return;
         }
 
+        ImGui.PushID(selected.Id.ToString());
         bool changed =
             false;
 
@@ -1065,6 +1092,7 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
             PersistSockets(
                 model);
         }
+        ImGui.PopID();
     }
 
     private void AddSocketToBone(
@@ -1367,6 +1395,7 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
             GetAnimationClipNames();
 
         changed |= DrawLocomotionSource();
+        changed |= DrawTurning();
 
         string idle =
             locomotion.Idle;
@@ -1695,6 +1724,28 @@ internal sealed partial class AnimationProfileWorkspacePanel : IDisposable
                 }
 
                 ImGui.SeparatorText("PLAYBACK");
+                if (ImGui.BeginCombo("Animation Layer", string.IsNullOrEmpty(action.Layer) ? "Use action body mask" : action.Layer))
+                {
+                    if (ImGui.Selectable("Use action body mask", string.IsNullOrEmpty(action.Layer))) { action.Layer = ""; changed = true; }
+                    foreach (var layer in _profile!.Layers)
+                        if (ImGui.Selectable(layer.Name, action.Layer == layer.Name)) { action.Layer = layer.Name; changed = true; }
+                    ImGui.EndCombo();
+                }
+                if (!string.IsNullOrEmpty(action.Layer))
+                    ImGui.TextWrapped("Uses the mask, blend mode and torso stabilization from Layers > " + action.Layer + ". Playback follows this action's own clock.");
+                else
+                {
+                int actionMask = (int)action.Mask.Kind;
+                if (ImGui.Combo("Body Mask", ref actionMask, Enum.GetNames<AnimationBoneMaskKind>(), Enum.GetNames<AnimationBoneMaskKind>().Length))
+                { action.Mask.Kind = (AnimationBoneMaskKind)actionMask; changed = true; }
+                if (action.Mask.Kind != AnimationBoneMaskKind.FullBody)
+                {
+                    string root = action.Mask.RootBone;
+                    if (ImGui.InputText("Mask Root Bone", ref root, 128) || Picker("Choose Mask Root", GetBoneNames(), ref root))
+                    { action.Mask.RootBone = root; changed = true; }
+                    ImGui.TextDisabled("Unmasked bones keep locomotion during this action.");
+                }
+                }
                 float actionSpeed = action.PlaybackSpeed;
                 if (ImGui.DragFloat("Playback Speed", ref actionSpeed, 0.01f, 0.0f, 10.0f)) { action.PlaybackSpeed = Math.Max(actionSpeed, 0.0f); changed = true; }
                 bool loop =

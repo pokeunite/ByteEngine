@@ -12,8 +12,31 @@ using ByteEngine.Core.Variables;
 using ByteEngine.Core.VisualLogic;
 using KarlsonDemo.Plugin;
 using ByteEngine.Editor.Panels;
+using ByteEngine.Core.Animation;
 
 const string Prefix="bytebard.karlsondemo.";
+{
+ var filled=UiWidget.ResolveFill(new(10,20),new(200,30),.25f,UiFillDirection.RightToLeft);
+ if(filled.Position!=new Vector2(160,20)||filled.Size!=new Vector2(50,30))throw new Exception("Reversed progress geometry is incorrect");
+ var vertical=UiWidget.ResolveFill(Vector2.Zero,new(40,60),.5f,UiFillDirection.BottomToTop);
+ if(vertical.Position.Y!=30||vertical.Size.Y!=30)throw new Exception("Cooldown fill geometry is incorrect");
+ Console.WriteLine("PASS mirrored health and vertical cooldown fills crop without stretching");
+}
+Check(Math.Abs(AnimationBlendWeights.PlaybackScale(52.083334f,new float[]{0,1},new float[]{52.083334f,.625f})-83.333336f)<.001f,"Long idle references preserve short run-cycle timing instead of clamping to slow motion");
+{
+ var directional=new AnimationBlendSpace { TwoDimensional=true, Blend2DMode=AnimationBlend2DMode.DirectionalSpeed,
+ Samples=[new(){Clip="idle"},new(){Clip="forward",Y=2},new(){Clip="right",X=2},new(){Clip="back",Y=-2},new(){Clip="left",X=-2},new(){Clip="run",Y=6}] };
+ var weights=new float[6];
+ for(int angle=0;angle<360;angle++)
+ {
+  float r=angle*MathF.PI/180;AnimationBlendWeights.Evaluate(directional,2*MathF.Sin(r),2*MathF.Cos(r),weights);
+  CheckBlend(weights,angle);
+ }
+ void CheckBlend(float[] w,int angle) {if(w[0]>.0001f||w[5]>.0001f||Math.Abs(w.Sum()-1)>.0001f||w.Any(v=>!float.IsFinite(v)||v<0))throw new Exception("Walking blend leaks idle/run at angle "+angle);}
+ Check(true,"Every walking angle blends walking clips only, without idle/run leaking into diagonals");
+ AnimationBlendWeights.Evaluate(directional,0,4,weights);Check(Math.Abs(weights[1]-.5f)<.0001f&&Math.Abs(weights[5]-.5f)<.0001f,"Forward speed interpolates walk to run independently of direction");
+ AnimationBlendWeights.Evaluate(directional,0,0,weights);Check(weights[0]==1,"Directional blending preserves idle at zero speed");
+}
 typeof(ByteEnginePluginRegistry).GetMethod("BeginPlugin",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,["bytebard.karlsondemo"]);
 var pluginContext=(ByteEnginePluginContext)Activator.CreateInstance(typeof(ByteEnginePluginContext),BindingFlags.Instance|BindingFlags.NonPublic,null,["bytebard.karlsondemo"],null)!;new KarlsonDemoPlugin().Register(pluginContext);
 var registry=VisualLogicRegistry.CreateDefault();
@@ -142,7 +165,10 @@ foreach(string state in new[]{"Held","Pressed","Released"})Check(registry.TryGet
  pickupObject.Transform.WorldPosition=new(100,0,0);Check(!inventory.PickUp(firstRigPickup),"Pickup enforces interaction distance");pickupObject.Transform.WorldPosition=Vector3.Zero;
  Check(inventory.PickUp(firstRigPickup)&&inventory.WeaponCount==1&&firstRigWeapon.Carried&&inventory.HasWeapon&&!pickupObject.Active,"Pickup grants and equips one weapon and hides its world object");
  Check(inventory.InventoryFull&&!inventory.PickUp(secondPickup)&&!inventory.PickUp(firstRigPickup),"Carry limit and duplicate pickup are enforced");
+ var dropFloor=inventoryScene.CreateGameObject("Drop floor");dropFloor.Transform.WorldPosition=new(0,-.025f,0);dropFloor.AddComponent(new BoxCollider3D{Size=new(20,.05f,20)});
+ eye.Transform.LocalRotation=Quaternion.CreateFromAxisAngle(Vector3.UnitX,-1f);inventory.AimMode=WeaponAimMode.TopDownCursor;
  firstRigWeapon.SetAmmo(4,17);Check(inventory.Drop()&&inventory.WeaponCount==0&&!inventory.HasWeapon&&pickupObject.Active&&!firstRigWeapon.Carried,"Drop clears ownership, unequips and restores a world pickup");
+ Check(Math.Abs(pickupObject.Transform.WorldPosition.Y-firstRigPickup.DropGroundClearance)<.001f&&pickupObject.Transform.WorldPosition.Z<-1,"Top-down drop ignores downward camera pitch and places pickup above ground in front of player");
  Check(inventory.PickUp(firstRigPickup)&&firstRigWeapon.CurrentAmmo==4&&firstRigWeapon.ReserveAmmo==17,"Re-pickup preserves magazine and reserve ammunition");
  var inventoryContext=new EventExecutionContext{Scene=inventoryScene,Self=owner,Globals=new VariableStore()};Action(I(Prefix+"drop"),inventoryContext);Action(I(Prefix+"pickUp",("pickup",EventValue.String("Nearest"))),inventoryContext);
  Check(inventory.WeaponCount==1,"Event-sheet pickup and drop actions use native equipment state");
@@ -165,4 +191,245 @@ foreach(bool emptyStart in new[]{false,true}){
  for(int slot=0;slot<3;slot++){var item=startScene.CreateGameObject("Rig "+slot);item.SetParent(eye,false);item.AddComponent(new WeaponDefinition3D{Slot=slot});item.AddComponent(new WeaponInstance3D{StartInInventory=slot!=1});}
  typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(startScene,null);typeof(FpsGunLab3D).GetMethod("OnUpdate",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventory,null);
  Check(emptyStart?inventory.WeaponCount==0:inventory.WeaponCount==1&&inventory.SelectedSlot==2,"Starting flags and carry limit respect the configured starting slot (empty="+emptyStart+")");
+}
+
+// Equipment must change the character's base stance, never a shared profile asset.
+{
+ var stanceScene=new Scene("Weapon character stance");var actor=stanceScene.CreateGameObject("Character");
+ var controller=actor.AddComponent(new AnimationController());var root=stanceScene.CreateGameObject("Hand weapons");root.SetParent(actor,false);
+ var inventory=actor.AddComponent(new FpsGunLab3D{InventoryRootId=root.Id,UseBuiltInFireInput=false,StartWithNoWeapons=true});
+ var profile=new AnimationProfile();
+ foreach(string name in new[]{"Unarmed","One Hand","Two Hand"})profile.BlendSpaces.Add(new AnimationBlendSpace{Name=name,Samples=[new AnimationBlendSample{Clip=name+" Idle"}]});
+ profile.Locomotion.BlendSpace="Unarmed";
+ var weapons=new List<WeaponInstance3D>();var pickups=new List<WeaponPickup3D>();
+ for(int slot=0;slot<2;slot++){var rig=stanceScene.CreateGameObject("Gun "+slot);rig.SetParent(root,false);rig.AddComponent(new WeaponDefinition3D{Slot=slot,LocomotionBlendSpace=slot==0?"One Hand":"Two Hand"});weapons.Add(rig.AddComponent(new WeaponInstance3D()));var item=stanceScene.CreateGameObject("Pickup "+slot);pickups.Add(item.AddComponent(new WeaponPickup3D{WeaponObjectId=rig.Id}));}
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(stanceScene,null);
+ typeof(AnimationController).GetMethod("ConfigureAdvancedProfile",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(controller,[profile]);
+ void Pose()=>typeof(AnimationController).GetMethod("UpdateAdvancedPoseControls",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(controller,null);
+ Check(inventory.PickUp(pickups[0]),"One-hand pickup succeeds");Pose();Check(controller.CurrentBlendSpace=="One Hand","Pickup selects one-hand character blendspace");
+ Check(inventory.PickUp(pickups[1],false),"Two-hand inventory-only pickup succeeds");Pose();Check(controller.CurrentBlendSpace=="One Hand","Storing a gun does not change the equipped stance");
+ inventory.Select(1);Pose();Check(controller.CurrentBlendSpace=="Two Hand","Equip switches to two-hand stance");
+ Check(profile.Locomotion.BlendSpace=="Unarmed","Weapon switching leaves the shared animation profile unchanged");
+ weapons[1].Definition!.LocomotionBlendSpace="Missing";Check(!inventory.RefreshWeaponLocomotion()&&inventory.LocomotionBindingError.Length>0,"Invalid weapon blendspace reports a binding error");Pose();Check(controller.CurrentBlendSpace=="Unarmed","Invalid binding clears stale previous weapon stance");
+ weapons[1].Definition!.LocomotionBlendSpace="Two Hand";inventory.RefreshWeaponLocomotion();inventory.Drop();Pose();Check(controller.CurrentBlendSpace=="One Hand","Dropping current gun selects the remaining gun stance");
+ inventory.Drop();Pose();Check(controller.CurrentBlendSpace=="Unarmed","Dropping final gun restores unarmed profile locomotion");
+ Check(!controller.SetLocomotionBlendSpace("Missing")&&controller.SetLocomotionBlendSpace(" two hand "),"Blendspace names validate and match without case or whitespace sensitivity");
+ typeof(AnimationController).GetField("_actionActive",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(controller,true);Pose();Check(controller.CurrentBlendSpace=="","Named actions suppress weapon locomotion");
+ typeof(AnimationController).GetField("_actionActive",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(controller,false);Pose();Check(controller.CurrentBlendSpace=="Two Hand","Weapon stance resumes after an action");
+ var stanceContext=new EventExecutionContext{Scene=stanceScene,Self=actor,Globals=new VariableStore()};
+ Action(I("animation.setLocomotionBlendSpace",("blendSpace",EventValue.String("One Hand"))),stanceContext);Pose();Check(controller.CurrentBlendSpace=="One Hand","Native event action selects character locomotion");
+ typeof(AnimationController).GetProperty("State")!.SetValue(controller,LocomotionState.Fall);Pose();Check(controller.CurrentBlendSpace=="","Weapon stance does not replace airborne animation");
+ typeof(AnimationController).GetProperty("State")!.SetValue(controller,LocomotionState.Idle);
+ var another=stanceScene.CreateGameObject("Separate character");var otherController=another.AddComponent(new AnimationController());
+ typeof(AnimationController).GetMethod("ConfigureAdvancedProfile",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(otherController,[profile]);
+ inventory.AnimationControllerObjectId=another.Id;inventory.UnarmedBlendSpace="Two Hand";Check(inventory.RefreshWeaponLocomotion()&&otherController.LocomotionBlendSpaceOverride=="Two Hand"&&controller.LocomotionBlendSpaceOverride=="","Explicit controller binding switches target and clears old character stance");
+}
+
+{
+ var s=new Scene("Top-down weapon aim");var actor=s.CreateGameObject("Top-down player");var root=s.CreateGameObject("Weapons");root.SetParent(actor,false);var topGun=s.CreateGameObject("topGun");topGun.SetParent(root,false);
+ topGun.AddComponent(new WeaponDefinition3D{EquipSeconds=0,SpreadDegrees=0,MuzzleFlashEnabled=false,ShowShotTrace=false});var w=topGun.AddComponent(new WeaponInstance3D());
+ var e=actor.AddComponent(new FpsGunLab3D{InventoryRootId=root.Id,AimMode=WeaponAimMode.TopDownCursor,UseBuiltInFireInput=false});
+ var aimTarget=s.CreateGameObject("Forward aimTarget");aimTarget.Transform.WorldPosition=new(0,0,-5);aimTarget.AddComponent(new BoxCollider3D{Size=new(2)});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(s,null);e.Select(0);s.Physics.Step(s,1f/60);
+ Check(e.Fire()&&w.ShotHits.Count==1&&w.ShotHits[0].Hit.GameObject==aimTarget,"Top-down guns fire forward from the muzzle without a first-person camera");
+}
+
+{
+ var path=Path.Combine(Path.GetTempPath(),"byteengine-masked-action-"+Guid.NewGuid()+".byteanim");
+ try{var profile=new AnimationProfile{Actions=[new AnimationActionProfile{Name="Reload",Clip="ReloadClip",Mask=new AnimationBoneMask{Kind=AnimationBoneMaskKind.UpperBody,RootBone="Spine_01"}}]};AnimationProfileSerializer.Save(path,profile);var saved=AnimationProfileSerializer.Load(path);Check(saved.Actions[0].Mask.Kind==AnimationBoneMaskKind.UpperBody&&saved.Actions[0].Mask.RootBone=="Spine_01","Named action body mask round-trips through the native profile serializer");Check(new AnimationActionProfile().Mask.Kind==AnimationBoneMaskKind.FullBody,"Existing animation actions keep full-body behaviour by default");}finally{File.Delete(path);}
+}
+
+{
+ var path=Path.Combine(Path.GetTempPath(),"byteengine-authored-layer-"+Guid.NewGuid()+".byteanim");
+ try
+ {
+  var profile=new AnimationProfile
+  {
+   Layers=[new AnimationLayerProfile{Name="Weapon Actions",Clip="",PlaybackMode=AnimationLayerPlaybackMode.Independent,
+    BlendSpaceFilter="One Hand, Two Hand",StabilizeRootRotation=true,Mask=new AnimationBoneMask{Kind=AnimationBoneMaskKind.UpperBody,RootBone="Spine_01"}}],
+   Actions=[new AnimationActionProfile{Name="Fire",Clip="Shoot",Layer="Weapon Actions"}]
+  };
+  AnimationProfileSerializer.Save(path,profile);var saved=AnimationProfileSerializer.Load(path);
+  Check(saved.Actions[0].Layer=="Weapon Actions"&&saved.Layers[0].Mask.RootBone=="Spine_01"&&saved.Layers[0].StabilizeRootRotation,
+   "Action binding and stabilized upper-body layer round-trip through the native profile serializer");
+  Check(saved.Layers[0].PlaybackMode==AnimationLayerPlaybackMode.Independent&&saved.Layers[0].BlendSpaceFilter=="One Hand, Two Hand",
+   "Independent layer playback and blendspace activation are retained");
+  Check(new AnimationLayerProfile().PlaybackMode==AnimationLayerPlaybackMode.LocomotionPhase&&string.IsNullOrEmpty(new AnimationActionProfile().Layer),
+   "Existing profiles retain synchronized layers and legacy action behavior");
+ }finally{File.Delete(path);}
+}
+
+{
+ var controller=new AnimationController();
+ var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+ var actions=(Dictionary<string,AnimationActionProfile>)typeof(AnimationController).GetField("_namedActions",flags)!.GetValue(controller)!;
+ actions.Add("Broken",new AnimationActionProfile{Name="Broken",Clip="Fire",Layer="Missing Layer"});
+ typeof(AnimationController).GetField("_actionActive",flags)!.SetValue(controller,true);
+ typeof(AnimationController).GetField("_currentAction",flags)!.SetValue(controller,"Existing");
+ Check(!controller.PlayNamedAction("Broken",true,false,true)&&controller.CurrentAction=="Existing",
+  "Missing animation layer rejects a request without interrupting the current action");
+}
+
+{
+ var s=new Scene("Independent world weapon pickups");var actor=s.CreateGameObject("Collector");
+ var inventory=actor.AddComponent(new FpsGunLab3D{StartWithNoWeapons=true,UseBuiltInFireInput=false,CarryLimit=1});
+ var item=s.CreateGameObject("Self-contained world pistol");item.Transform.LocalScale=new(1.5f);
+ item.AddComponent(new WeaponDefinition3D{Slot=0,EquipSeconds=0});var instance=item.AddComponent(new WeaponInstance3D{CurrentAmmo=7});
+ var collider=item.AddComponent(new BoxCollider3D());var worldBody=item.AddComponent(new Rigidbody3D());
+ var pickup=item.AddComponent(new WeaponPickup3D());
+ var separate=s.CreateGameObject("Independent rifle rig");separate.AddComponent(new WeaponDefinition3D{Slot=1});var rifle=separate.AddComponent(new WeaponInstance3D());
+ var world=s.CreateGameObject("Rifle pickup");var linked=world.AddComponent(new WeaponPickup3D{WeaponObjectId=separate.Id});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(s,null);
+ Check(inventory.PickUp(pickup)&&inventory.Owns(instance)&&item.ActiveInHierarchy,"Root-level self-contained world gun can be picked up without inventory parenting");
+ typeof(WeaponPickup3D).GetMethod("OnUpdate",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(pickup,null);
+ Check(!collider.Enabled&&!worldBody.Enabled,"Self-contained weapon suspends world physics while carried");
+ Check(item.ActiveInHierarchy&&!inventory.CanPickUp(rifle),"Equipped self-pickup stays visible and carry limit rejects a second world gun");
+ Check(inventory.Drop()&&pickup.Available&&item.Parent==null&&instance.CurrentAmmo==7&&item.Transform.WorldScale==new Vector3(1.5f),"Self-contained gun drops visibly, retains ammo/scale, and becomes collectible again");
+ Check(collider.Enabled&&worldBody.Enabled,"Dropped world gun restores its original collider and body state");
+ actor.Transform.WorldPosition=world.Transform.WorldPosition;
+ Check(inventory.PickUp(linked)&&inventory.Owns(rifle),"Linked rig outside Weapon Root can be picked up");
+ var foreign=new Scene("Other scene");var foreignWeapon=foreign.CreateGameObject("Foreign");foreignWeapon.AddComponent(new WeaponDefinition3D());
+ Check(!inventory.CanPickUp(foreignWeapon.AddComponent(new WeaponInstance3D())),"Pickup rejects a weapon from another scene");
+}
+{
+ Check(CharacterMotionDebugHud3D.DirectionName(-Vector3.UnitZ,-Vector3.UnitZ,Vector3.UnitX)=="Forward"&&
+       CharacterMotionDebugHud3D.DirectionName(Vector3.UnitX,-Vector3.UnitZ,Vector3.UnitX)=="Right"&&
+       CharacterMotionDebugHud3D.DirectionName(Vector3.UnitZ,-Vector3.UnitZ,Vector3.UnitX)=="Backward",
+       "Movement HUD labels actual velocity relative to character facing");
+ var path=Path.Combine(Path.GetTempPath(),"byte-turn-profile-"+Guid.NewGuid()+".byteanim");
+ try
+ {
+  var profile=new AnimationProfile();profile.Locomotion.Turning.Enabled=true;
+  profile.Locomotion.Turning.Sets.Add(new AnimationTurnSet{BlendSpace="Two Hand",Left90="Left",Right90="Right",Around180="Back"});
+  AnimationProfileSerializer.Save(path,profile);var loaded=AnimationProfileSerializer.Load(path);
+  Check(loaded.Locomotion.Turning.Enabled&&loaded.Locomotion.Turning.Sets[0].Around180=="Back","Turn-in-place stance clips persist in the native Animation Profile");
+ }finally{File.Delete(path);}
+ Check(registry.TryGetCondition("animation.isTurning",out _)&&registry.TryGetAction("animation.setTurnInPlace",out _)&&registry.TryGetAction("characterDebug.setVisible",out _),"Turning and diagnostic HUD controls are exposed in event sheets");
+}
+
+{
+ var type=typeof(ByteEngine.Core.Serialization.ComponentSerializer).GetNestedType("AnimationControllerCodec",BindingFlags.NonPublic)!;
+ var codec=(ByteEngine.Core.Serialization.IComponentCodec)Activator.CreateInstance(type,true)!;
+ var data=codec.Serialize(new AnimationController{TurnInPlaceEnabled=false},null!);
+ var restored=(AnimationController)codec.Deserialize(data,null!);
+ Check(!restored.TurnInPlaceEnabled,"Per-character turn animation enable setting persists in scene serialization");
+ data.Properties.Remove("turnInPlaceEnabled");
+ Check(((AnimationController)codec.Deserialize(data,null!)).TurnInPlaceEnabled,"Older scenes retain compatible turn animation defaults");
+}
+
+{
+ var s=new Scene("Pickup key flow and horizontal radius");var actor=s.CreateGameObject("Collector");
+ var inventory=actor.AddComponent(new FpsGunLab3D{StartWithNoWeapons=true,UseBuiltInFireInput=false});
+ var gunObject=s.CreateGameObject("World gun");gunObject.Transform.WorldPosition=new(2.49f,.7f,0);
+ gunObject.AddComponent(new WeaponDefinition3D{Slot=0});gunObject.AddComponent(new WeaponInstance3D());
+ var pickup=gunObject.AddComponent(new WeaponPickup3D());
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(s,null);
+ Check(pickup.CanCollect(inventory)&&pickup.GetCollectionStatus(inventory)=="Ready","Horizontal pickup radius is not reduced by the model origin height");
+ gunObject.Transform.WorldPosition=new(2,3,0);
+ Check(!pickup.CanCollect(inventory)&&pickup.GetCollectionStatus(inventory).Contains("above"),"Separate pickup height limit prevents grabbing weapons through floors");
+ gunObject.Transform.WorldPosition=new(2.49f,.7f,0);
+ var key=I("input.keyPressed",("key",EventValue.String("E")));var gate=I(Prefix+"inputActive");var allowed=I(Prefix+"canPickUp",("nearest",EventValue.Boolean(true)));
+ var collect=I(Prefix+"pickUp",("nearest",EventValue.Boolean(true)),("equip",EventValue.Boolean(true)));
+ var pickupKeyModule=new EventModuleDefinition{Rules=[new EventRuleDefinition{HasExplicitConditionFlow=true,ConnectedConditionIds=[key.InstanceId,gate.InstanceId,allowed.InstanceId],Conditions=[key,gate,allowed],Actions=[collect]}]};
+ var flags=BindingFlags.NonPublic|BindingFlags.Static;var inject=typeof(Input).GetMethod("UpdatePortable",flags)!;
+ inject.Invoke(null,[new ByteEngine.Core.InputSystem.RawInputSnapshot(),false]);
+ var raw=new ByteEngine.Core.InputSystem.RawInputSnapshot();raw.KeysDown.Add(Key.E);inject.Invoke(null,[raw,false]);
+ ByteEngine.Core.InputSystem.InputActions.Update(raw,false);
+ new EventModuleRuntime(registry).Update(pickupKeyModule,new VariableStore(),s,actor);
+ Check(!inventory.HasWeapon,"Inactive gameplay input cannot pick up a weapon from editor keyboard input");
+ ByteEngine.Core.InputSystem.InputActions.Update(raw,true);
+ new EventModuleRuntime(registry).Update(pickupKeyModule,new VariableStore(),s,actor);
+ Check(inventory.HasWeapon&&inventory.WeaponCount==1&&!Input.IsGameInputCaptured,"E-key pickup works with active gameplay and a free, uncaptured cursor");
+ Check(!inventory.PickUp(null)&&inventory.LastPickupResult.Contains("not found"),"Missing explicit pickup reports its own failure instead of a stale success message");
+ var broken=s.CreateGameObject("Broken pickup").AddComponent(new WeaponPickup3D{WeaponObjectId=Guid.NewGuid()});
+ Check(broken.BindingError.Length>0&&inventory.GetCharacterDebugText().Contains("missing"),"Broken pickup links expose an actionable diagnostic instead of silently failing");
+ inject.Invoke(null,[new ByteEngine.Core.InputSystem.RawInputSnapshot(),false]);
+}
+
+{
+ var s=new Scene("Hybrid cursor facing");var actor=s.CreateGameObject("Walker");actor.AddComponent(new CharacterController3D());
+ var cam=s.CreateGameObject("Aim camera");cam.Transform.WorldPosition=new(0,10,10);cam.Transform.WorldRotation=Quaternion.CreateFromAxisAngle(Vector3.UnitX,-MathF.PI/4);cam.AddComponent(new Camera3D());
+ var control=actor.AddComponent(new TopDownController3D{Facing=TopDownFacing.MovementUntilAiming,CameraObjectId=cam.Id,CameraRelativeMovement=false,TurnSharpness=0,AimReleaseDelay=.25f});
+ var map=ByteEngine.Core.InputSystem.InputMap.CreateDefault();map.Add("Aim",ByteEngine.Core.InputSystem.InputActionType.Button).Bindings.Add(ByteEngine.Core.InputSystem.InputBinding.MouseButtonBinding(MouseButton.Right));
+ ByteEngine.Core.InputSystem.InputActions.Configure(map);
+ var raw=new ByteEngine.Core.InputSystem.RawInputSnapshot();raw.KeysDown.Add(Key.D);
+ Input.SetGameViewPointer(new(.5f,.2f),new(1000,700),true);
+ var update=typeof(TopDownController3D).GetMethod("OnUpdate",BindingFlags.NonPublic|BindingFlags.Instance)!;
+ var time=typeof(Time).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Static)!;double prior=Time.DeltaTime;
+ try
+ {
+  time.Invoke(null,[.1d]);ByteEngine.Core.InputSystem.InputActions.Update(raw,true);update.Invoke(control,null);
+  Check(!control.IsFacingCursor&&Vector3.Dot(actor.Transform.Forward,Vector3.UnitX)>.999f,"Hybrid mode faces walking direction without aim input");
+  raw.MouseButtonsDown.Add(MouseButton.Right);ByteEngine.Core.InputSystem.InputActions.Update(raw,true);update.Invoke(control,null);
+  Check(control.IsFacingCursor&&control.HasCursorAim&&Vector3.Dot(actor.Transform.Forward,Vector3.Normalize(new Vector3(control.AimWorldPoint.X,0,control.AimWorldPoint.Z)))>.999f&&control.MoveDirection.X>.99f,"Holding configurable Aim turns toward cursor while preserving world-right movement");
+  raw.MouseButtonsDown.Clear();ByteEngine.Core.InputSystem.InputActions.Update(raw,true);update.Invoke(control,null);
+  Check(control.IsFacingCursor,"Aim release delay prevents facing flicker between shots");
+  for(int i=0;i<3;i++)update.Invoke(control,null);
+  Check(!control.IsFacingCursor&&actor.Transform.Forward.X>.999f,"Releasing aim returns to facing travel after the delay");
+  raw.MouseButtonsDown.Add(MouseButton.Left);ByteEngine.Core.InputSystem.InputActions.Update(raw,true);update.Invoke(control,null);
+  Check(control.IsFacingCursor,"Firing can request cursor facing without a weapon dependency");
+  ByteEngine.Core.InputSystem.InputActions.Update(raw,false);update.Invoke(control,null);Check(!control.IsFacingCursor,"Inactive gameplay clears temporary aim requests");
+  control.Facing=TopDownFacing.Cursor;raw.MouseButtonsDown.Clear();ByteEngine.Core.InputSystem.InputActions.Update(raw,true);update.Invoke(control,null);
+  Check(control.IsFacingCursor,"Always-cursor mode remains independent of aim/fire buttons");
+ }finally{time.Invoke(null,[prior]);ByteEngine.Core.InputSystem.InputActions.Configure(null);}
+ var codec=new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownController3D>("TopDownController3D");
+ control.Facing=TopDownFacing.MovementUntilAiming;control.AimReleaseDelay=.4f;
+ var restored=(TopDownController3D)codec.Deserialize(codec.Serialize(control,null!),null!);
+ Check(restored.Facing==TopDownFacing.MovementUntilAiming&&restored.AimAction.Name=="Aim"&&restored.AimReleaseDelay==.4f,"Facing mode and configurable aim controls survive scene serialization");
+ Check(registry.TryGetCondition("topDown.isFacingCursor",out _)&&registry.TryGetAction("topDown.setAiming",out _),"Hybrid aiming is exposed in Event Sheets");
+}
+
+{
+ var s=new Scene("Gradual stationary turning");var actor=s.CreateGameObject("Turn tester");
+ var controller=actor.AddComponent(new AnimationController());var control=actor.AddComponent(new TopDownController3D());
+ var flags=BindingFlags.Instance|BindingFlags.NonPublic;
+ var profile=new AnimationProfile();profile.Locomotion.Turning.Enabled=true;profile.Locomotion.Turning.MinimumAngle=15;
+ typeof(AnimationController).GetMethod("ConfigureAdvancedProfile",flags)!.Invoke(controller,[profile]);
+ typeof(TopDownController3D).GetProperty("HasCursorAim")!.SetValue(control,true);
+ typeof(TopDownController3D).GetProperty("IsFacingCursor")!.SetValue(control,true);
+ typeof(TopDownController3D).GetProperty("SignedAimAngleDegrees")!.SetValue(control,2f);
+ typeof(TopDownController3D).GetProperty("YawSpeedDegrees")!.SetValue(control,30f);
+ var updateTime=typeof(Time).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Static)!;double prior=Time.DeltaTime;
+ try
+ {
+  updateTime.Invoke(null,[1d/60]);
+  for(int i=0;i<40;i++)typeof(AnimationController).GetMethod("UpdateTurnInPlace",flags)!.Invoke(controller,null);
+  Check(controller.PendingTurnAngle>19,"Gradual cursor turning accumulates rotation even when instantaneous aim error stays below threshold");
+  typeof(AnimationController).GetProperty("State")!.SetValue(controller,LocomotionState.Walk);
+  typeof(AnimationController).GetMethod("UpdateTurnInPlace",flags)!.Invoke(controller,null);
+  Check(controller.PendingTurnAngle==0,"Walking clears idle turn accumulation");
+ }finally{updateTime.Invoke(null,[prior]);}
+}
+
+{
+ var s=new Scene("Collision-safe dash");var floor=s.CreateGameObject("Floor");floor.Transform.WorldPosition=new(0,-.5f,0);floor.AddComponent(new BoxCollider3D{Size=new(30,1,30)});
+ var wall=s.CreateGameObject("Wall");wall.Transform.WorldPosition=new(0,1,-2);wall.AddComponent(new BoxCollider3D{Size=new(6,3,.2f)});
+ var actor=s.CreateGameObject("Dasher");actor.AddComponent(new CapsuleCollider3D{Radius=.3f,Height=1.8f,Center=new(0,.9f,0)});
+ var motor=actor.AddComponent(new CharacterController3D());var meter=actor.AddComponent(new ResourceMeter3D());var health=actor.AddComponent(new HealthComponent());
+ var dash=actor.AddComponent(new DashAbility3D{RequireGrounded=false,Distance=5,Duration=.2f,EnergyCost=25,Cooldown=1});
+ var flags=BindingFlags.NonPublic|BindingFlags.Instance;typeof(Scene).GetMethod("LoadInternal",flags)!.Invoke(s,null);
+ Check(dash.TryDash()&&meter.Current==75,"Dash spends energy exactly once");Check(!dash.TryDash()&&meter.Current==75,"Active dash cannot double-spend energy");
+ var clock=typeof(Time).GetMethod("Update",BindingFlags.Static|BindingFlags.NonPublic)!;double old=Time.DeltaTime;
+ try{clock.Invoke(null,[1d/60]);for(int i=0;i<20;i++)typeof(Scene).GetMethod("UpdateInternal",flags)!.Invoke(s,null);
+ Check(actor.Transform.WorldPosition.Z > -1.8f&&actor.Transform.WorldPosition.Z < -.5f,"Dash sweeps into a wall without passing through it");
+ Check(!dash.IsDashing&&motor.Speed<.01f,"Dash ends without carrying burst velocity into normal locomotion");
+ Check(!dash.TryDash(),"Dash cooldown blocks early reuse");
+ for(int i=0;i<60;i++)typeof(Scene).GetMethod("UpdateInternal",flags)!.Invoke(s,null);
+ Check(dash.CanDash&&dash.CanRegenerateEnergy,"Cooldown and regeneration delay recover independently");
+ meter.SetAmount(10);Check(!dash.TryDash()&&meter.Current==10,"Insufficient energy never starts a dash");meter.SetAmount(100);health.Kill();Check(!dash.TryDash(),"Dead characters cannot dash");
+ }finally{clock.Invoke(null,[old]);typeof(Scene).GetMethod("UnloadInternal",flags)?.Invoke(s,null);}
+ Check(registry.TryGetAction("dash.activate",out _)&&registry.TryGetAction("dash.updateHud",out _),"Dash activation and HUD bindings are exposed to Event Sheets");
+}
+
+{
+ var s=new Scene("Recoil and accuracy");var shooter=s.CreateGameObject("Shooter");var rig=s.CreateGameObject("Test weapon");
+ var def=rig.AddComponent(new WeaponDefinition3D{EquipSeconds=0,RoundsPerMinute=600,RecoilPitchPerShot=2,MaximumRecoilDegrees=3,RecoilRecoveryDegreesPerSecond=0,MuzzleFlashEnabled=false,ShowShotTrace=false});
+ var w=rig.AddComponent(new WeaponInstance3D());var board=s.CreateGameObject("Target");board.Transform.WorldPosition=new(0,0,-10);board.AddComponent(new BoxCollider3D{Size=new(30,30,1)});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(s,null);w.Equip(true);var tick=typeof(WeaponInstance3D).GetMethod("Tick",BindingFlags.Instance|BindingFlags.NonPublic)!;
+ Check(w.Fire(Vector3.Zero,-Vector3.UnitZ,shooter)&&w.RecoilAngles.X==2,"A successful shot accumulates editable recoil");
+ Check(!w.Fire(Vector3.Zero,-Vector3.UnitZ,shooter)&&w.RecoilAngles.X==2,"Rejected shots do not add recoil");
+ tick.Invoke(w,[.11f]);Check(w.Fire(Vector3.Zero,-Vector3.UnitZ,shooter)&&w.RecoilAngles.X==3&&w.ShotHits.First().Direction.Y>.02f,"Follow-up shots climb with bounded ballistic recoil");
+ def.RecoilRecoveryDegreesPerSecond=10;def.BloomPerShotDegrees=.5f;tick.Invoke(w,[.11f]);w.Fire(Vector3.Zero,-Vector3.UnitZ,shooter);Check(w.AccuracyBloom==.5f,"Accuracy bloom accumulates per successful shot");
+ tick.Invoke(w,[1f]);Check(w.RecoilAngles==Vector2.Zero&&w.AccuracyBloom==0,"Recoil and accuracy recover over time");
+ Check(registry.TryGetAction(Prefix+"tuneAccuracy",out _)&&registry.TryGetAction(Prefix+"writeHudText",out _),"Accuracy tuning and formatted weapon HUD text are exposed to Event Sheets");
 }

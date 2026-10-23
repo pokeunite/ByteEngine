@@ -729,6 +729,24 @@ public sealed partial class VisualLogicRegistry
         registry.RegisterAction(
             new VisualActionDefinition
             {
+                Id = "animation.setLocomotionBlendSpace",
+                Category = "Animation",
+                DisplayName = "Set Locomotion Blendspace",
+                TargetComponent = nameof(AnimationController),
+                Arguments = [new("target", "Character object", VariableValue.FromString("Self")) { IsObjectReference = true },
+                    new("blendSpace", "Blendspace name (empty = profile default)", VariableValue.FromString(""))],
+                Execute = (instruction, context) =>
+                {
+                    var controller = ResolveAnimationController(instruction, context);
+                    string name = EventValueResolver.GetString(instruction, "blendSpace", context, "");
+                    if (controller != null && !controller.SetLocomotionBlendSpace(name))
+                        context.WarningSink?.Invoke($"Locomotion blendspace '{name}' is missing or empty in the character's Animation Profile.");
+                }
+            });
+
+        registry.RegisterAction(
+            new VisualActionDefinition
+            {
                 Id = "animation.setLayerWeight",
                 Category = "Animation",
                 DisplayName = "Set Layer Weight",

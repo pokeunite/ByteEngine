@@ -441,6 +441,15 @@ internal static class ComponentPropertyRenderer
                     Enum.GetValues(
                         descriptor.Property.PropertyType);
 
+                if (descriptor.Property.PropertyType == typeof(TopDownFacing))
+                    names = values.Cast<TopDownFacing>().Select(mode => mode switch
+                    {
+                        TopDownFacing.Cursor => "Always face cursor",
+                        TopDownFacing.MovementUntilAiming => "Face movement until aiming / firing",
+                        TopDownFacing.Movement => "Always face movement",
+                        _ => "Independent rotation"
+                    }).ToArray();
+
                 int index =
                     Array.IndexOf(
                         values.Cast<object>().ToArray(),
@@ -604,6 +613,20 @@ internal static class ComponentPropertyRenderer
                         }
                     ImGui.EndCombo();
                 }
+            }
+            else if (descriptor.Property.PropertyType == typeof(string) &&
+                     descriptor.Property.IsDefined(typeof(AnimationSocketPickerAttribute), true))
+            {
+                string socketName = before?.ToString() ?? string.Empty;
+                edited = DrawAnimationSocketSelector(component, project, label, ref socketName);
+                after = socketName;
+            }
+            else if (descriptor.Property.PropertyType == typeof(string) &&
+                     descriptor.Property.GetCustomAttribute<AnimationBlendSpacePickerAttribute>() is {} blendPicker)
+            {
+                string blendName = before?.ToString() ?? string.Empty;
+                edited = DrawAnimationBlendSpaceSelector(component, project, label, blendPicker, ref blendName);
+                after = blendName;
             }
             else if (descriptor.Property.PropertyType == typeof(string) &&
                      descriptor.Property.IsDefined(typeof(AnimationActionPickerAttribute), inherit: true))
@@ -1352,6 +1375,83 @@ internal static class ComponentPropertyRenderer
 
             _ => "None"
         };
+    }
+
+    private static bool DrawAnimationSocketSelector(Component component, EditorProjectContext? project, string label, ref string value)
+    {
+        AnimationController? controller = null;
+        for (var item = component.GameObject; item != null && controller == null; item = item.Parent)
+            foreach (var binding in item.Components)
+                if (binding.GetType().GetProperty("AnimationControllerObjectId")?.GetValue(binding) is Guid id)
+                {
+                    controller = (id == Guid.Empty ? item : item.Scene?.FindGameObject(id))?.GetComponent<AnimationController>();
+                    break;
+                }
+        controller ??= AnimationController.FindForObject(component.GameObject);
+        if (controller == null)
+        {
+            var candidates = component.GameObject.Scene?.GameObjects.Select(o => o.GetComponent<AnimationController>()).OfType<AnimationController>().Take(2).ToArray();
+            if (candidates?.Length == 1) controller = candidates[0];
+        }
+        string[] names = [];
+        try
+        {
+            if (project != null && controller != null && !controller.AnimationProfile.IsEmpty)
+            {
+                var profile = project.Assets.LoadAnimationProfile(controller.AnimationProfile);
+                names = project.Assets.LoadModel(profile.Rig.ReferenceModel).Sockets.Select(s => s.Name).OrderBy(s => s).ToArray();
+            }
+        }
+        catch { /* Keep existing bindings while an asset is importing. */ }
+        string current = value;
+        if (!ImGui.BeginCombo(label, string.IsNullOrWhiteSpace(current) ? "None / keep parenting" : current)) return false;
+        bool changed = false;
+        if (ImGui.Selectable("None / keep parenting", string.IsNullOrWhiteSpace(current))) { value = ""; changed = true; }
+        foreach (string name in names)
+            if (ImGui.Selectable(name, name.Equals(current, StringComparison.OrdinalIgnoreCase))) { value = name; changed = true; }
+        if (names.Length == 0) ImGui.TextDisabled("Add sockets to the character model in Socket Preview.");
+        ImGui.EndCombo();
+        return changed;
+    }
+
+    private static bool DrawAnimationBlendSpaceSelector(Component component, EditorProjectContext? project,
+        string label, AnimationBlendSpacePickerAttribute picker, ref string value)
+    {
+        AnimationController? controller = null;
+        bool bindingFound = false;
+        for (var item = component.GameObject; item != null && !bindingFound; item = item.Parent)
+            foreach (var binding in item.Components)
+                if (binding.GetType().GetProperty(picker.ControllerObjectProperty)?.GetValue(binding) is Guid id)
+                {
+                    controller = (id == Guid.Empty ? item : item.Scene?.FindGameObject(id))?.GetComponent<AnimationController>();
+                    bindingFound = true;
+                    break;
+                }
+        if (!bindingFound) controller = AnimationController.FindForObject(component.GameObject);
+        if (controller == null)
+        {
+            var candidates = component.GameObject.Scene?.GameObjects.Select(o => o.GetComponent<AnimationController>()).OfType<AnimationController>().Take(2).ToArray();
+            if (candidates?.Length == 1) controller = candidates[0];
+        }
+        string[] names = [];
+        if (controller != null && project != null && !controller.AnimationProfile.IsEmpty)
+        {
+            try { names = project.Assets.LoadAnimationProfile(controller.AnimationProfile).BlendSpaces
+                .Where(s => s.Samples.Count > 0 && !string.IsNullOrWhiteSpace(s.Name)).Select(s => s.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray(); }
+            catch { /* Asset may be mid-import. Keep the saved selection. */ }
+        }
+        string current = value;
+        string preview = string.IsNullOrWhiteSpace(current) ? "Profile default / unarmed" :
+            names.Contains(current, StringComparer.OrdinalIgnoreCase) ? current : current + " (missing or empty)";
+        if (!ImGui.BeginCombo(label, preview)) return false;
+        bool changed = false;
+        if (ImGui.Selectable("Profile default / unarmed", string.IsNullOrWhiteSpace(current))) { value = ""; changed = true; }
+        foreach (string name in names)
+            if (ImGui.Selectable(name, string.Equals(name, current, StringComparison.OrdinalIgnoreCase))) { value = name; changed = true; }
+        if (names.Length == 0) ImGui.TextDisabled("Choose the player's controller and add populated blendspaces to its profile.");
+        ImGui.EndCombo();
+        return changed;
     }
 
     internal static IReadOnlyList<string> GetAnimationActionNames(Component component, EditorProjectContext? project)

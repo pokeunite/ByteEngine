@@ -430,6 +430,8 @@ public sealed partial class SkeletalMeshRenderer : Component
             ResolveRuntimeResources();
         }
 
+        AdvanceLayerClocks((float)ByteEngine.Core.Time.DeltaTime);
+
         if (_lightRagdollActive)
         {
             AdvanceLightRagdoll((float)ByteEngine.Core.Time.DeltaTime);

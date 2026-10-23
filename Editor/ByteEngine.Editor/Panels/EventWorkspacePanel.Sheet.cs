@@ -256,7 +256,7 @@ internal sealed partial class EventWorkspacePanel
             draw.AddCircleFilled(dot, 3, ImGui.ColorConvertFloat4ToU32(GetTraceColor(trace)));
         }
         if(row.Depth>0){var guide=gutter-new Vector2(12,0);draw.AddLine(guide,guide+new Vector2(0,height+ImGui.GetStyle().ItemSpacing.Y),ImGui.ColorConvertFloat4ToU32(new Vector4(color.X,color.Y,color.Z,.5f)),1);draw.AddLine(guide+new Vector2(0,height*.5f),guide+new Vector2(10,height*.5f),ImGui.ColorConvertFloat4ToU32(color),1);}
-        if(owner!=null&&_selectedGraphNodes.Contains(item.InstanceId)&&ImGui.GetIO().KeyAlt&&!ImGui.GetIO().WantTextInput&&ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)){
+        if(!IsCapturingKey&&owner!=null&&_selectedGraphNodes.Contains(item.InstanceId)&&ImGui.GetIO().KeyAlt&&!ImGui.GetIO().WantTextInput&&ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)){
             if(ImGui.IsKeyPressed(ImGuiKey.UpArrow)) { if(condition)MoveSheetCondition(owner,item.InstanceId,-1);else MoveSheetAction(owner,item.InstanceId,-1); }
             else if(ImGui.IsKeyPressed(ImGuiKey.DownArrow)) { if(condition)MoveSheetCondition(owner,item.InstanceId,1);else MoveSheetAction(owner,item.InstanceId,1); }
         }
@@ -317,4 +317,3 @@ internal sealed partial class EventWorkspacePanel
         return values.Count == 0 ? name : name + " - " + string.Join("; ", values);
     }
 }
-

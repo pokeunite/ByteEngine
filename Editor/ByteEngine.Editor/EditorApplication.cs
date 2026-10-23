@@ -86,7 +86,8 @@ public sealed class EditorApplication
         EditorMode.Play;
 
     protected override bool GameplayInputActionsEnabled =>
-        _state?.Mode == EditorMode.Play;
+        _state?.Mode == EditorMode.Play && IsFocused &&
+        (Input.IsGameInputCaptured || Input.IsGameViewFocused);
 
     protected override bool ShouldRenderSceneToWindow =>
         false;

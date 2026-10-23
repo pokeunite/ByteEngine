@@ -12,6 +12,19 @@ public enum WeaponMuzzleSource { Automatic, AnimationSocket, ModelBone, LocalOff
 /// <summary>Author on a weapon Blueprint. Contains tuning, never remaining ammunition.</summary>
 public sealed class WeaponDefinition3D : Component
 {
+    [System.ComponentModel.Category("Character Animation"), System.ComponentModel.DisplayName("Preview Character"),
+     System.ComponentModel.Description("Optional character for the socket and blendspace pickers when authoring a world weapon. Equipping still uses the collecting player's Character Animation Controller.")]
+    [SceneObjectReference(typeof(AnimationController))]
+    public Guid AnimationControllerObjectId { get; set; }
+
+    [System.ComponentModel.Category("Character Animation"),
+     System.ComponentModel.Description("Character model socket for this weapon, for example PistolGrip, RifleGrip or ShotgunGrip. Runtime snaps the model root directly to this socket, matching Socket Preview. Empty keeps legacy parenting.")]
+    [AnimationSocketPicker]
+    public string GripSocket { get; set; } = string.Empty;
+    [System.ComponentModel.Category("Character Animation"),
+     System.ComponentModel.Description("Named blendspace in the player's Animation Profile (for example One Hand or Two Hand). Empty uses unarmed/profile locomotion. Applied only when equipped, not when stored in inventory.")]
+    [AnimationBlendSpacePicker]
+    public string LocomotionBlendSpace { get; set; } = string.Empty;
     public string DisplayName { get; set; } = "Pistol";
     public int Slot { get; set; }
     public WeaponShotMode ShotMode { get; set; }
@@ -25,6 +38,19 @@ public sealed class WeaponDefinition3D : Component
     public float DamagePerPellet { get; set; } = 25;
     public int PelletsPerShot { get; set; } = 1;
     public float SpreadDegrees { get; set; }
+    [System.ComponentModel.Category("Accuracy"),System.ComponentModel.DisplayName("Base Inaccuracy (degrees)")]
+    public float AccuracyDegrees { get; set; }
+    [System.ComponentModel.Category("Accuracy")] public float MovingInaccuracyDegrees { get; set; }
+    [System.ComponentModel.Category("Accuracy")] public float BloomPerShotDegrees { get; set; }
+    [System.ComponentModel.Category("Accuracy")] public float MaximumBloomDegrees { get; set; } = 4;
+    [System.ComponentModel.Category("Accuracy")] public float AccuracyRecoveryDegreesPerSecond { get; set; } = 8;
+    [System.ComponentModel.Category("Accuracy")] public float AccuracyRecoveryDelay { get; set; } = .12f;
+    [System.ComponentModel.Category("Recoil")] public float RecoilPitchPerShot { get; set; }
+    [System.ComponentModel.Category("Recoil")] public float RecoilYawPerShot { get; set; }
+    [System.ComponentModel.Category("Recoil")] public float MaximumRecoilDegrees { get; set; } = 6;
+    [System.ComponentModel.Category("Recoil")] public float RecoilRecoveryDegreesPerSecond { get; set; } = 12;
+    [System.ComponentModel.Category("Recoil")] public float RecoilRecoveryDelay { get; set; } = .12f;
+    [System.ComponentModel.Category("HUD")] public AssetReference HudIcon { get; set; } = AssetReference.Empty;
     public float Range { get; set; } = 80;
     public int HitMaskBits { get; set; } = -1;
     public float HitImpulse { get; set; } = 3;

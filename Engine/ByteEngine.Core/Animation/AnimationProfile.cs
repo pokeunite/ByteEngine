@@ -126,6 +126,7 @@ public sealed class AnimationRigProfile
 /// </summary>
 public sealed class AnimationLocomotionProfile
 {
+    public AnimationTurningProfile Turning { get; set; } = new();
     public bool Enabled { get; set; } = true;
 
     public bool DriveFromCharacterController { get; set; } = true;
@@ -175,6 +176,8 @@ public sealed class AnimationLocomotionProfile
 
     internal void Normalize()
     {
+        Turning ??= new();
+        Turning.Normalize();
         Idle ??= string.Empty;
         Walk ??= string.Empty;
         Run ??= string.Empty;
@@ -226,6 +229,10 @@ public sealed class AnimationLocomotionProfile
 /// </summary>
 public sealed class AnimationActionProfile
 {
+    /// <summary>Optional authored layer. Its mask and blend mode control this action.</summary>
+    public string Layer { get; set; } = string.Empty;
+    /// <summary>Full body preserves legacy overrides. Masked actions leave locomotion running on unmasked bones.</summary>
+    public AnimationBoneMask Mask { get; set; } = new();
     public string Name { get; set; } =
         "New Action";
 
@@ -252,6 +259,9 @@ public sealed class AnimationActionProfile
 
     internal void Normalize()
     {
+        Layer = Layer?.Trim() ?? string.Empty;
+        Mask ??= new();
+        Mask.Normalize();
         Name =
             string.IsNullOrWhiteSpace(Name)
                 ? "New Action"

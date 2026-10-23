@@ -73,6 +73,7 @@ public sealed class ComponentSerializer
             {
                 ["themeKey"] = widget.ThemeKey,
                 ["cornerRadius"] = widget.CornerRadius,
+                ["fillDirection"] = widget.FillDirection.ToString(),
                 ["activateWithSpace"] = widget.ActivateWithSpace,
                 ["autoFitLabel"] = widget.AutoFitLabel,
                 ["fitContent"] = widget.FitContent,
@@ -134,6 +135,7 @@ public sealed class ComponentSerializer
                 ContentPadding = data.Properties["contentPadding"]?.Deserialize<System.Numerics.Vector2>(JsonSerialization.Options) ?? new System.Numerics.Vector2(16,8),
                 MinimumFontSize = data.Properties["minimumFontSize"]?.GetValue<int>() ?? 12,
                 Kind = kind,
+                FillDirection = Enum.TryParse(properties["fillDirection"]?.GetValue<string>(), true, out UiFillDirection fillDirection) ? fillDirection : UiFillDirection.LeftToRight,
                 Anchor = anchor,
                 Offset = offset is { Count: >= 2 }
                     ? new Vector2(offset[0]?.GetValue<float>() ?? 24f,
@@ -368,6 +370,7 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsImpactSensor3D>("PhysicsImpactSensor3D"));
         Register(new MeshCollider3DCodec());
         Register(new UiCanvasCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<CharacterMotionDebugHud3D>("CharacterMotionDebugHud3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownController3D>("TopDownController3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownCamera3D>("TopDownCamera3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
@@ -439,6 +442,7 @@ public sealed class ComponentSerializer
         Register(new HitscanEmitter3DCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<DashAbility3D>("DashAbility3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<SimulationRate3D>("SimulationRate3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ScreenOverlay>("ScreenOverlay"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterBasin3D>("WaterBasin3D"));
@@ -2214,6 +2218,7 @@ public sealed class ComponentSerializer
 
                     ["driveLocomotion"] =
                         controller.DriveLocomotion,
+                    ["turnInPlaceEnabled"] = controller.TurnInPlaceEnabled,
                     ["manualBaseClip"] = controller.ManualBaseClip,
 
                     ["transitionDuration"] =
@@ -2273,6 +2278,7 @@ public sealed class ComponentSerializer
                 Fall = Text(data, "fall", "Fall"),
                 Land = Text(data, "land", "Land"),
                 RunThreshold = Float(data, "runThreshold", 4.0f),
+                TurnInPlaceEnabled = data.Properties["turnInPlaceEnabled"]?.GetValue<bool>() ?? true,
                 ManualBaseClip = Text(data,"manualBaseClip",string.Empty),
                 DriveLocomotion =
                     data.Properties["driveLocomotion"]?

@@ -69,6 +69,22 @@ public sealed class RenderContext
         else _uiCommands.Add(renderer => renderer.DrawQuad(position + size * .5f, size, color));
     }
 
+    internal void QueueUiLine(Vector2 from, Vector2 to, float thickness, Vector4 color)
+    {
+        float length = Vector2.Distance(from,to);
+        if (FrameSink == null)
+        {
+            var center = (from+to)*.5f; var size = new Vector2(length,thickness);
+            float rotation = MathF.Atan2(to.Y-from.Y,to.X-from.X) * 180 / MathF.PI;
+            _uiCommands.Add(renderer => renderer.DrawQuad(center,size,color,rotation));
+        }
+        else
+        {
+            int steps = Math.Clamp((int)(length/Math.Max(thickness,1)),1,512);
+            for(int i=0;i<=steps;i++) FrameSink.DrawQuad(Vector2.Lerp(from,to,i/(float)steps)-new Vector2(thickness*.5f),new(thickness),color);
+        }
+    }
+
     internal void QueueUiImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color)
     {
         if (FrameSink != null) FrameSink.DrawImage(texture, position, size, color);

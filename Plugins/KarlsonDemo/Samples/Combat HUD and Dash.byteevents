@@ -1,0 +1,634 @@
+{
+  "id": "1a80d57a-b592-53c5-9fe1-ba1a3c8105ee",
+  "version": 2,
+  "name": "Combat HUD and Dash",
+  "requiredComponents": [],
+  "rules": [
+    {
+      "id": "65f78a71-56c4-5f24-a4d5-85b28c92f713",
+      "displayName": "HUD - health and energy values",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "fac243ce-64b6-4e3b-be7d-2a6f98bf3359",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "9a83f6b8-86fe-4ffb-a666-1d0e6171a20d",
+          "id": "ui.setBarFromHealth",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD health-fill"
+              }
+            },
+            "source": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "e4d2496a-d83e-43b3-8c2f-522f6718896a",
+          "id": "ui.setBarFromResource",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD energy-fill"
+              }
+            },
+            "source": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "422e64bf-d4db-4e17-abb4-d6abf936edfc",
+          "id": "ui.setTextFromHealth",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD hp-value"
+              }
+            },
+            "source": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "6d1f2734-4bc9-4fd8-b729-4d8c48e056d4",
+          "id": "ui.setTextFromResource",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD energy-value"
+              }
+            },
+            "source": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "ab467555-d082-49dc-bf2c-75820c559d39",
+          "id": "dash.updateHud",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "bar": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD dash-cooldown"
+              }
+            },
+            "text": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD dash-status"
+              }
+            },
+            "ready": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "READY"
+              }
+            },
+            "blocked": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "ENERGY"
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "267A8C"
+    },
+    {
+      "id": "68f1778f-f31d-551a-af09-f2bf81c85588",
+      "displayName": "HUD - equipped weapon name, ammo and reload state",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "3712c82c-0caa-4764-8731-b5afcc86769c",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "d2d469f1-cd93-4dfc-b620-0080f9cb0d43",
+          "id": "bytebard.karlsondemo.writeHudText",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "text": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD ammo"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "{ammo} / {reserve}"
+              }
+            },
+            "empty": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "-- / --"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "fde42245-a88c-4ca8-8f7d-7ab3f1f9bd63",
+          "id": "bytebard.karlsondemo.writeHudText",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "text": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD weapon-name"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "{name}"
+              }
+            },
+            "empty": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "UNARMED"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "02a5d870-dde3-46e8-8ab9-37d468a84f4d",
+          "id": "bytebard.karlsondemo.writeHudText",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "text": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD reload-state"
+              }
+            },
+            "format": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "{state}"
+              }
+            },
+            "empty": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": ""
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "A87933"
+    },
+    {
+      "id": "0dc36c2f-7172-52fb-a459-9f460c1d43dd",
+      "displayName": "HUD - Pistol slot ownership and selection",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "5d00d834-cb32-4f08-8238-4b2abe629288",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "ebb739a5-368a-47d0-a531-cc78f3d4100d",
+          "id": "bytebard.karlsondemo.updateSlotHud",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "weapon": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Pistol pickup"
+              }
+            },
+            "image": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD weapon-card-0"
+              }
+            },
+            "selectedColor": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Vector3",
+                "vector3": {
+                  "x": 1,
+                  "y": 0.76,
+                  "z": 0.4
+                }
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "A87933"
+    },
+    {
+      "id": "eabd699a-4b1c-51e1-8cee-fbd6a6aed136",
+      "displayName": "HUD - SCAR slot ownership and selection",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "a846f7c4-cb88-42d8-9c40-bc2e241d2a80",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "4305a0f4-2965-494f-9afb-6a766bc75b93",
+          "id": "bytebard.karlsondemo.updateSlotHud",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "weapon": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "SCAR pickup"
+              }
+            },
+            "image": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD weapon-card-1"
+              }
+            },
+            "selectedColor": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Vector3",
+                "vector3": {
+                  "x": 1,
+                  "y": 0.76,
+                  "z": 0.4
+                }
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "A87933"
+    },
+    {
+      "id": "e9951fd8-626a-5a4e-98a9-4210915c7fe4",
+      "displayName": "HUD - Shotgun slot ownership and selection",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "6e8a77b9-05c7-4a81-accb-fe6af5b3addf",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "adabb6fb-e8eb-4a89-81a6-57c48cf9e85f",
+          "id": "bytebard.karlsondemo.updateSlotHud",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Self"
+              }
+            },
+            "weapon": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Shotgun pickup"
+              }
+            },
+            "image": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD weapon-card-2"
+              }
+            },
+            "selectedColor": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Vector3",
+                "vector3": {
+                  "x": 1,
+                  "y": 0.76,
+                  "z": 0.4
+                }
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "A87933"
+    },
+    {
+      "id": "73205216-2462-5d5e-b9c9-dd9166023c6d",
+      "displayName": "SPACE - dash (energy and cooldown checked)",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "bb35d696-3b33-4e3d-980b-ccbff05d2e3d",
+          "id": "input.keyPressed",
+          "arguments": {
+            "key": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "Space"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "46757198-6334-43a1-b5f2-b9670efe0451",
+          "id": "bytebard.karlsondemo.inputActive",
+          "arguments": {},
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "1f717215-d0d0-446d-b7e8-b7ea0a2a94d4",
+          "id": "dash.canDash",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "eaf6e469-8b18-46a3-bbaf-3e13f947eb42",
+          "id": "dash.activate",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "268B9B"
+    },
+    {
+      "id": "461564ca-3128-5414-9d35-cc00b09477bd",
+      "displayName": "Energy - regenerate 14 per second after dash recovery",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "6a3b560e-78b7-4cab-bf0a-817d22fd70df",
+          "id": "dash.canRegenerate",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "0e0b3cda-a599-461d-bcc5-f8223851c413",
+          "id": "resource.changePerSecond",
+          "arguments": {
+            "rate": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Number",
+                "number": 14
+              }
+            },
+            "unscaled": {
+              "kind": "Constant",
+              "constant": {
+                "type": "Boolean",
+                "boolean": false
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "268B9B"
+    },
+    {
+      "id": "6b49f0e7-a806-5bbc-9c57-65f9d54c5e90",
+      "displayName": "Dash started - show cyan slipstream",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "f340b70b-96c5-4c77-a1c7-e2e0bc4519de",
+          "id": "dash.isDashing",
+          "arguments": {},
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "638a0d76-c137-4d4d-b91b-492ded77f684",
+          "id": "system.triggerOnce",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "4b3dfa5c-2ebe-4b4f-aa32-897835bac31f",
+          "id": "vfx.play",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD dash-fx"
+              }
+            }
+          },
+          "conditionInputIds": []
+        },
+        {
+          "instanceId": "9ae3a74b-3c67-4dd6-bc82-ae65038055d2",
+          "id": "ui.playAnimation",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD ability-0"
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": false,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "268B9B"
+    },
+    {
+      "id": "900da0c8-95e2-5ccc-84a9-277cb886e805",
+      "displayName": "Dash ended - let slipstream fade",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "59786d7b-429a-4d34-bc4d-0095836c0056",
+          "id": "logic.not",
+          "arguments": {},
+          "conditionInputIds": [
+            "5b09912c-1a34-4514-b597-4e2b652060d4"
+          ]
+        },
+        {
+          "instanceId": "5b09912c-1a34-4514-b597-4e2b652060d4",
+          "id": "dash.isDashing",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "33f90d01-b24a-4285-bb08-53b1cc57964d",
+          "id": "vfx.stop",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD dash-fx"
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ],
+      "subEvents": [],
+      "hasExplicitConditionFlow": true,
+      "hasExplicitExecutionFlow": false,
+      "editorHeaderColor": "268B9B",
+      "connectedConditionIds": [
+        "59786d7b-429a-4d34-bc4d-0095836c0056"
+      ]
+    }
+  ],
+  "editorGroups": []
+}

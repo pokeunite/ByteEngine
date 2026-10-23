@@ -15,11 +15,36 @@ public sealed partial class AnimationController
         new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<SkeletalMeshRenderer> AnimationRenderers => _renderers;
+    public string BlendSamplesSummary => _selectedBlendSpace == null || _renderers.Count == 0 ? "(single clip)" :
+        string.Join(" | ", _selectedBlendSpace.Samples.Select((sample, index) =>
+            (sample.Clip, Weight: index < _renderers[0].ActiveBlendWeights.Count ? _renderers[0].ActiveBlendWeights[index] : 0))
+            .Where(s => s.Weight > .01f).Select(s => $"{s.Clip} {s.Weight:P0}"));
+    public string LayersSummary => _loadedPoseProfile == null || _renderers.Count == 0 ? "(none)" :
+        string.Join(" | ", _loadedPoseProfile.Layers.Select((layer, index) =>
+            (layer.Name, Weight: index < _renderers[0].ActiveLayerWeights.Count ? _renderers[0].ActiveLayerWeights[index] : 0))
+            .Where(l => l.Weight > .01f).Select(l => $"{l.Name} {l.Weight:P0}"));
     public string CurrentSyncGroup => _loadedPoseProfile?.Locomotion.SyncGroup ?? string.Empty;
     public float CurrentSyncPhase => _renderers.Count > 0 ? _renderers[0].NormalizedPlaybackPhase : 0f;
     public string CurrentGraphState => _poseGraph?.CurrentState ?? string.Empty;
     public float GraphTransitionWeight => _poseGraph?.BlendAlpha ?? 1f;
     public string CurrentBlendSpace => _selectedBlendSpace?.Name ?? string.Empty;
+    [System.ComponentModel.Browsable(false)]
+    public string LocomotionBlendSpaceOverride { get; private set; } = string.Empty;
+
+    /// <summary>Select a profile blendspace without modifying the shared profile asset.
+    /// Empty restores the profile/graph default. Invalid names leave the current choice intact.</summary>
+    public bool SetLocomotionBlendSpace(string name)
+    {
+        name = name?.Trim() ?? string.Empty;
+        if (name.Length != 0)
+        {
+            if (_loadedPoseProfile == null && !ApplyAnimationProfile()) return false;
+            if (!_blendSpaceByName.TryGetValue(name, out var space) || space.Samples.Count == 0) return false;
+            name = space.Name;
+        }
+        LocomotionBlendSpaceOverride = name;
+        return true;
+    }
     public bool SetAnimationFloat(string name, float value) => _poseGraph?.SetFloat(name, value) ?? false;
     public bool SetAnimationBool(string name, bool value) => _poseGraph?.SetBool(name, value) ?? false;
     public bool FireAnimationTrigger(string name) => _poseGraph?.Trigger(name) ?? false;
@@ -112,7 +137,7 @@ public sealed partial class AnimationController
             float phase = _renderers.Count != 0 ? _renderers[0].NormalizedPlaybackPhase : 0f;
             _poseGraph.Step((float)ByteEngine.Core.Time.DeltaTime, phase);
             AnimationGraphState? graphState = _poseGraph.Current;
-            if (graphState != null && !_actionActive)
+            if (graphState != null && (!_actionActive || _maskedActionActive))
             {
                 _selectedBlendSpace = graphState.SourceKind == AnimationPoseSourceKind.Clip
                     ? null : _blendSpaceByName.GetValueOrDefault(graphState.Source);
@@ -124,7 +149,7 @@ public sealed partial class AnimationController
         else
         {
             string selected = _loadedPoseProfile.Locomotion.BlendSpace;
-            _selectedBlendSpace = !_actionActive &&
+            _selectedBlendSpace = (!_actionActive || _maskedActionActive) &&
                 (State is LocomotionState.Idle or LocomotionState.Walk or LocomotionState.Run) &&
                 _blendSpaceByName.TryGetValue(selected, out AnimationBlendSpace? space)
                     ? space : null;
@@ -132,7 +157,13 @@ public sealed partial class AnimationController
                 _currentLocomotionClip = _selectedBlendSpace.Samples.Count > 0
                     ? _selectedBlendSpace.Samples[0].Clip : string.Empty;
         }
-        if (_actionActive) _selectedBlendSpace = null;
+        if ((!_actionActive || _maskedActionActive) && (State is LocomotionState.Idle or LocomotionState.Walk or LocomotionState.Run) &&
+            _blendSpaceByName.TryGetValue(LocomotionBlendSpaceOverride, out var overridden) && overridden.Samples.Count > 0)
+        {
+            _selectedBlendSpace = overridden;
+            _currentLocomotionClip = overridden.Samples[0].Clip;
+        }
+        if (_actionActive && !_maskedActionActive) _selectedBlendSpace = null;
         Vector3 velocity = motor?.Velocity ?? Vector3.Zero;
         float forward = Vector3.Dot(velocity, Transform.Forward);
         float right = Vector3.Dot(velocity, Transform.Right);
@@ -142,7 +173,7 @@ public sealed partial class AnimationController
             ? ResolveBlendParameter(_selectedBlendSpace.ParameterY, motor, right, forward) : 0f;
         foreach (SkeletalMeshRenderer renderer in _renderers)
         {
-            renderer.SetBlendSpace(_selectedBlendSpace, x, y,
+            renderer.SetBlendSpace(_turnActive ? null : _selectedBlendSpace, x, y,
                 _poseGraph?.TransitionDuration ?? TransitionDuration);
             for (int i = 0; i < _loadedPoseProfile.Layers.Count; i++)
             {
@@ -162,6 +193,10 @@ public sealed partial class AnimationController
                 {
                     weight = layer.Enabled ? 1f : 0f;
                 }
+
+                if (!string.IsNullOrWhiteSpace(layer.BlendSpaceFilter) &&
+                    !layer.BlendSpaceFilter.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                        .Contains(_selectedBlendSpace?.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)) weight = 0;
 
                 renderer.SetLayerParameterWeight(i, weight);
             }

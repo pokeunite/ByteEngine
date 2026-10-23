@@ -12,7 +12,7 @@ internal static class WeaponReadoutEvents
     private sealed record Readout(Guid Weapon,string Name,int Ammo,int Capacity,int Reserve,int Slot,bool Reloading,bool InfiniteReserve);
     private sealed class Observer {public Readout? Last;public EventExecutionContext? Context;public bool Changed;}
     private static readonly ConditionalWeakTable<VisualInstruction,ConditionalWeakTable<GameObject,Observer>> Observers=new();
-    private static readonly string[] Fields=["Weapon name","Magazine ammo","Magazine capacity","Reserve ammo","Reserve capacity","Ammo per shot","Equipped slot","Reloading","Can fire","Can reload","Reload seconds remaining","Reload progress","Cooldown seconds remaining","Damage per pellet","Rounds per minute","Range","Spread degrees","Pellets per shot","Infinite reserve","Shot mode","Trigger mode","Reload mode","Weapon shots fired","Weapon hits"];
+    private static readonly string[] Fields=["Weapon name","Magazine ammo","Magazine capacity","Reserve ammo","Reserve capacity","Ammo per shot","Equipped slot","Reloading","Can fire","Can reload","Reload seconds remaining","Reload progress","Cooldown seconds remaining","Damage per pellet","Rounds per minute","Range","Spread degrees","Pellets per shot","Infinite reserve","Shot mode","Trigger mode","Reload mode","Weapon shots fired","Weapon hits","Base inaccuracy degrees","Current inaccuracy degrees","Accuracy bloom","Recoil pitch","Recoil yaw"];
     internal static void Register(ByteEnginePluginContext context)
     {
         var target=new VisualArgumentDefinition("target","Weapon or equipment object",VariableValue.FromString("Self")){IsObjectReference=true};
@@ -47,6 +47,7 @@ internal static class WeaponReadoutEvents
             "Reload seconds remaining"=>weapon.ReloadRemainingSeconds,"Reload progress"=>weapon.ReloadProgress,"Cooldown seconds remaining"=>weapon.CooldownRemaining,
             "Damage per pellet"=>d.DamagePerPellet,"Rounds per minute"=>d.RoundsPerMinute,"Range"=>d.Range,"Spread degrees"=>d.SpreadDegrees,
             "Pellets per shot"=>d.PelletsPerShot,"Infinite reserve"=>d.InfiniteReserve,"Shot mode"=>d.ShotMode.ToString(),
+            "Base inaccuracy degrees"=>d.AccuracyDegrees,"Current inaccuracy degrees"=>weapon.CurrentInaccuracyDegrees,"Accuracy bloom"=>weapon.AccuracyBloom,"Recoil pitch"=>weapon.RecoilAngles.X,"Recoil yaw"=>weapon.RecoilAngles.Y,
             "Trigger mode"=>d.TriggerMode.ToString(),"Reload mode"=>d.ReloadMode.ToString(),"Weapon shots fired"=>weapon.ShotsFired,"Weapon hits"=>weapon.HitCount,
             _=>throw new ArgumentException("Unknown weapon value: "+field)
         };

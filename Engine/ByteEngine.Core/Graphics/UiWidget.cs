@@ -6,6 +6,7 @@ using ByteEngine.Core.Scene;
 namespace ByteEngine.Core.Graphics;
 
 public enum UiWidgetKind { Panel, Image, ProgressBar, Button, Slider }
+public enum UiFillDirection { LeftToRight, RightToLeft, BottomToTop, TopToBottom }
 
 public sealed class UiWidget : Component
 {
@@ -29,6 +30,7 @@ public sealed class UiWidget : Component
     private float _value=100;
     public float Value { get => _value; set => _value=Kind==UiWidgetKind.Slider?Math.Clamp(float.IsFinite(value)?value:0,0,Math.Max(.001f,Maximum)):value; }
     public float Maximum { get; set; } = 100f;
+    public UiFillDirection FillDirection { get; set; }
     public float CornerRadius { get; set; }
     private bool _dragging;
     public bool Visible { get; set; } = true;
@@ -130,8 +132,22 @@ public sealed class UiWidget : Component
         {
             float fraction = Maximum > 0f ? Math.Clamp(Value / Maximum, 0f, 1f) : 0f;
             if (fraction > 0f)
-                context.QueueUiQuad(rect.Position, new Vector2(rect.Size.X * fraction,
-                    rect.Size.Y), FillColor with { W = FillColor.W * opacity });
+            {
+                var fill = ResolveFill(rect.Position,rect.Size,fraction,FillDirection);
+                if (!ImageReference.IsEmpty && AnimationRuntimeAssets.TryGet(out AssetManager? fillAssets) && fillAssets != null)
+                {
+                    var clip = new Vector4(fill.Position.X,fill.Position.Y,fill.Size.X,fill.Size.Y);
+                    if (UiLayout.ResolveClip(GameObject,new(context.TargetWidth,context.TargetHeight)) is {} parent)
+                    {
+                        float left=Math.Max(clip.X,parent.X), top=Math.Max(clip.Y,parent.Y);
+                        clip = new(left,top,Math.Max(0,Math.Min(clip.X+clip.Z,parent.X+parent.Z)-left),Math.Max(0,Math.Min(clip.Y+clip.W,parent.Y+parent.W)-top));
+                    }
+                    context.QueueUiClip(clip);
+                    context.QueueUiImage(fillAssets.LoadTexture(ImageReference),rect.Position,rect.Size,FillColor with {W=FillColor.W*opacity});
+                    context.QueueUiClip(UiLayout.ResolveClip(GameObject,new(context.TargetWidth,context.TargetHeight)));
+                }
+                else context.QueueUiQuad(fill.Position,fill.Size,FillColor with {W=FillColor.W*opacity});
+            }
         }
         else if (Kind == UiWidgetKind.Image && !ImageReference.IsEmpty &&
             AnimationRuntimeAssets.TryGet(out AssetManager? assets) && assets != null)
@@ -155,6 +171,15 @@ public sealed class UiWidget : Component
                 rect.Position + rect.Size * .5f, (theme==null?Vector4.One:theme.TextColor(ThemeKey)) with {W=opacity}, rect.Size.X, UiAnchor.Center);
         }
         context.QueueUiClip(null);
+    }
+    public static (Vector2 Position,Vector2 Size) ResolveFill(Vector2 position,Vector2 size,float fraction,UiFillDirection direction)
+    {
+        fraction=Math.Clamp(float.IsFinite(fraction)?fraction:0,0,1);
+        return direction switch {
+            UiFillDirection.RightToLeft => (position+new Vector2(size.X*(1-fraction),0),new(size.X*fraction,size.Y)),
+            UiFillDirection.BottomToTop => (position+new Vector2(0,size.Y*(1-fraction)),new(size.X,size.Y*fraction)),
+            UiFillDirection.TopToBottom => (position,new(size.X,size.Y*fraction)),
+            _ => (position,new(size.X*fraction,size.Y)) };
     }
     private static void Rounded(RenderContext context,Vector2 position,Vector2 size,Vector4 color,float radius)
     {

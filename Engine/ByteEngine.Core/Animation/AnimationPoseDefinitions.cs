@@ -3,10 +3,12 @@ using System.Numerics;
 namespace ByteEngine.Core.Animation;
 
 public enum AnimationLayerBlendMode { Override, Additive }
+public enum AnimationLayerPlaybackMode { LocomotionPhase, Independent, FixedPose }
 public enum AnimationBoneMaskKind { FullBody, UpperBody, LowerBody, Custom }
 public enum AnimationParameterKind { Float, Bool, Trigger }
 public enum AnimationComparison { Greater, GreaterOrEqual, Less, LessOrEqual, Equal, NotEqual }
 public enum AnimationPoseSourceKind { Clip, BlendSpace1D, BlendSpace2D }
+public enum AnimationBlend2DMode { Cartesian, DirectionalSpeed }
 
 public sealed class AnimationBlendSample
 {
@@ -19,6 +21,7 @@ public sealed class AnimationBlendSpace
 {
     public string Name { get; set; } = string.Empty;
     public bool TwoDimensional { get; set; }
+    public AnimationBlend2DMode Blend2DMode { get; set; }
     public string ParameterX { get; set; } = "Speed";
     public string ParameterY { get; set; } = "Direction";
     public float MinX { get; set; }
@@ -69,6 +72,11 @@ public sealed class AnimationLayerProfile
     public float BlendIn { get; set; } = .15f;
     public float BlendOut { get; set; } = .15f;
     public AnimationLayerBlendMode BlendMode { get; set; }
+    public AnimationLayerPlaybackMode PlaybackMode { get; set; }
+    public float PlaybackSpeed { get; set; } = 1f;
+    public float PoseTime { get; set; }
+    public string BlendSpaceFilter { get; set; } = string.Empty;
+    public bool StabilizeRootRotation { get; set; }
     public AnimationBoneMask Mask { get; set; } = new();
 
     public void Normalize()
@@ -76,6 +84,9 @@ public sealed class AnimationLayerProfile
         Name = string.IsNullOrWhiteSpace(Name) ? "Layer" : Name.Trim();
         Clip ??= string.Empty;
         WeightParameter ??= string.Empty;
+        BlendSpaceFilter ??= string.Empty;
+        PlaybackSpeed = Math.Max(float.IsFinite(PlaybackSpeed) ? PlaybackSpeed : 1f, 0f);
+        PoseTime = Math.Max(float.IsFinite(PoseTime) ? PoseTime : 0f, 0f);
         Weight = Math.Clamp(float.IsFinite(Weight) ? Weight : 0f, 0f, 1f);
         BlendIn = Math.Max(float.IsFinite(BlendIn) ? BlendIn : 0f, 0f);
         BlendOut = Math.Max(float.IsFinite(BlendOut) ? BlendOut : 0f, 0f);

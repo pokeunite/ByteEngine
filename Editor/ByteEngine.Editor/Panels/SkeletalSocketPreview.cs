@@ -18,7 +18,9 @@ internal sealed class SkeletalSocketPreview : IDisposable
     private readonly SceneFramebuffer _framebuffer = new();
     private readonly EditorCamera _camera2D = new();
     private readonly EditorCamera3D _camera = new();
-    private readonly BlueprintTransformGizmo3D _gizmo = new();
+    private BlueprintTransformGizmo3D _gizmo = new();
+    private Guid _gizmoSocketId;
+    private bool _showOtherSockets;
 
     private Scene? _scene;
     private SkeletalMeshRenderer? _renderer;
@@ -32,6 +34,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
     private float _modelFrameDistance = 2.5f;
     private bool _paused = true;
     private string _previewAnimationName = string.Empty;
+    private string _animationSearch = string.Empty;
     private string? _error;
 
     public bool Draw(
@@ -47,6 +50,13 @@ internal sealed class SkeletalSocketPreview : IDisposable
         Action persist)
     {
         Ensure(project, reference, model);
+        if (_gizmoSocketId != selectedId)
+        {
+            var mode = _gizmo.Mode;
+            _gizmo = new BlueprintTransformGizmo3D();
+            _gizmo.SetMode(mode);
+            _gizmoSocketId = selectedId;
+        }
 
         if (_scene == null ||
             _renderer == null ||
@@ -119,6 +129,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
         }
 
         EditorUi.EndToolbar();
+        ImGui.Checkbox("Show other socket handles", ref _showOtherSockets);
 
         Vector2 available =
             ImGui.GetContentRegionAvail();
@@ -202,7 +213,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
         bool changed =
             false;
 
-        if (selected != null &&
+        if (selected != null && selected.Id == selectedId &&
             SkeletalSocketResolver.TryGetSocketWorldTransform(
                 _renderer,
                 selected.Name,
@@ -250,6 +261,8 @@ internal sealed class SkeletalSocketPreview : IDisposable
                 "##SocketPreviewPose",
                 preview))
         {
+            ImGui.SetNextItemWidth(360f);
+            ImGui.InputTextWithHint("##SocketAnimationSearch", "Search animations (SH, DH, walk...)", ref _animationSearch, 256);
             bool restSelected =
                 string.IsNullOrWhiteSpace(_previewAnimationName);
 
@@ -275,7 +288,8 @@ internal sealed class SkeletalSocketPreview : IDisposable
             foreach (ImportedAnimation animation
                      in model.Animations)
             {
-                if (string.IsNullOrWhiteSpace(animation.Name))
+                if (string.IsNullOrWhiteSpace(animation.Name) ||
+                    !animation.Name.Contains(_animationSearch, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -741,6 +755,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
         foreach (SkeletalSocketDefinition socket
                  in sockets)
         {
+            if (!_showOtherSockets && socket.Id != selected) continue;
             if (!SkeletalSocketResolver.TryGetSocketWorldTransform(
                     _renderer,
                     socket.Name,
@@ -800,7 +815,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
                 color,
                 socket.Name);
 
-            if (clicked &&
+            if (clicked && !_gizmo.OwnsMouse && socket.Id != selected &&
                 Vector2.Distance(
                     mouse,
                     position) <

@@ -26,6 +26,10 @@ public sealed class WeaponInstance3D : Component
     [System.ComponentModel.Category("Simulation")]
     public int RandomSeed { get; set; } = 17;
     public WeaponDefinition3D? Definition => GameObject.GetComponent<WeaponDefinition3D>();
+    public Vector2 RecoilAngles { get; private set; }
+    public float AccuracyBloom { get; private set; }
+    public float CurrentInaccuracyDegrees { get; private set; }
+    private float _sinceShot = 1000;
     public bool Reloading => _reloadRemaining > 0;
     public bool Equipped { get; private set; }
     public int ShotsFired { get; private set; }
@@ -77,6 +81,13 @@ public sealed class WeaponInstance3D : Component
     public void Equip(bool equipped)
     {
         Equipped = equipped; CancelReload();
+        if (!equipped)
+        {
+            RecoilAngles=Vector2.Zero;AccuracyBloom=0;CurrentInaccuracyDegrees=0;
+            _flashRemaining = 0;
+            _muzzleFlash?.Stop(true);
+            if (_muzzleLight != null) _muzzleLight.Intensity = 0;
+        }
         if (equipped && Definition is {} d)
         { _cooldown = WeaponDefinition3D.Bound(d.EquipSeconds, .45f, 0, 10); EquippedThisFrame=true;EquipSequence++; }
     }
@@ -99,6 +110,16 @@ public sealed class WeaponInstance3D : Component
     }
     internal void Tick(float dt)
     {
+        dt=float.IsFinite(dt)?Math.Max(0,dt):0;
+        if(Definition is {} recovery){
+            float recoveryTime(float delay)=>Math.Max(0,dt-Math.Max(0,WeaponDefinition3D.Bound(delay,.12f,0,5)-_sinceShot));
+            float amount=WeaponDefinition3D.Bound(recovery.RecoilRecoveryDegreesPerSecond,12,0,180)*recoveryTime(recovery.RecoilRecoveryDelay);
+            RecoilAngles=new(ApproachZero(RecoilAngles.X,amount),ApproachZero(RecoilAngles.Y,amount));
+            AccuracyBloom=Math.Max(0,AccuracyBloom-WeaponDefinition3D.Bound(recovery.AccuracyRecoveryDegreesPerSecond,8,0,180)*recoveryTime(recovery.AccuracyRecoveryDelay));
+            float movement=InventoryOwner?.GameObject.GetComponent<ByteEngine.Core.Characters.CharacterController3D>()?.Speed??0;
+            CurrentInaccuracyDegrees=WeaponDefinition3D.Bound(recovery.AccuracyDegrees,0,0,45)+AccuracyBloom+WeaponDefinition3D.Bound(recovery.MovingInaccuracyDegrees,0,0,45)*Math.Clamp(movement/2,0,1);
+        }
+        _sinceShot=Math.Min(1000,_sinceShot+dt);
         _flashRemaining=Math.Max(0,_flashRemaining-dt);
         if(_muzzleLight!=null&&Definition is {} flashDefinition){_muzzleLight.Intensity=flashDefinition.MuzzleLightIntensity*Math.Clamp(_flashRemaining/.045f,0,1);}
         if(_muzzleFlash?.IsPlaying==true&&TryGetMuzzleWorldPosition(out var socket))_muzzleFlash.Transform.WorldPosition=socket;
@@ -122,6 +143,12 @@ public sealed class WeaponInstance3D : Component
         if (!CanFire || Definition is not {} d || GameObject.Scene is not {} scene ||
             !float.IsFinite(direction.LengthSquared()) || direction.LengthSquared() < 1e-6f) return false;
         direction = Vector3.Normalize(direction);
+        var right=Vector3.Cross(direction,Vector3.UnitY);if(right.LengthSquared()<.0001f)right=Vector3.UnitX;else right=Vector3.Normalize(right);
+        var up=Vector3.Normalize(Vector3.Cross(right,direction));
+        direction=Vector3.Normalize(direction+up*MathF.Tan(RecoilAngles.X*MathF.PI/180)+right*MathF.Tan(RecoilAngles.Y*MathF.PI/180));
+        float moving=owner.GetComponent<ByteEngine.Core.Characters.CharacterController3D>()?.Speed??0;
+        CurrentInaccuracyDegrees=WeaponDefinition3D.Bound(d.AccuracyDegrees,0,0,45)+AccuracyBloom+
+            WeaponDefinition3D.Bound(d.MovingInaccuracyDegrees,0,0,45)*Math.Clamp(moving/2,0,1);
         _random ??= new Random(RandomSeed);
         int count = Math.Clamp(d.PelletsPerShot, 1, 32);
         if (d.ShotMode == WeaponShotMode.Projectile && scene.GameObjects.Count(o =>
@@ -134,7 +161,7 @@ public sealed class WeaponInstance3D : Component
         var mask = LayerMask.FromLayers(Enumerable.Range(0, 32).Where(bit => (d.HitMaskBits & (1 << bit)) != 0).ToArray());
         for (int n = 0; n < count; n++)
         {
-            Vector3 shot = Spread(direction, d.SpreadDegrees);
+            Vector3 shot = Spread(direction, d.SpreadDegrees+CurrentInaccuracyDegrees);
             Vector3 end = origin + shot * range;
             if (d.ShotMode == WeaponShotMode.Hitscan)
             {
@@ -189,8 +216,15 @@ public sealed class WeaponInstance3D : Component
         CurrentAmmo -= Math.Clamp(d.AmmoPerShot, 1, 10000);
         _cooldown = 60 / WeaponDefinition3D.Bound(d.RoundsPerMinute, 270, 1, 3000);
         _shotHits.Sort((a,b)=>a.Hit.Distance.CompareTo(b.Hit.Distance));if(_shotHits.Count>0)HitSequence++;
+        float recoilLimit=WeaponDefinition3D.Bound(d.MaximumRecoilDegrees,6,0,45);
+        float yaw=WeaponDefinition3D.Bound(d.RecoilYawPerShot,0,0,15);
+        RecoilAngles=new(Math.Clamp(RecoilAngles.X+WeaponDefinition3D.Bound(d.RecoilPitchPerShot,0,0,15),0,recoilLimit),
+            Math.Clamp(RecoilAngles.Y+(yaw>0?((float)_random.NextDouble()*2-1)*yaw:0),-recoilLimit,recoilLimit));
+        AccuracyBloom=Math.Min(WeaponDefinition3D.Bound(d.MaximumBloomDegrees,4,0,45),AccuracyBloom+WeaponDefinition3D.Bound(d.BloomPerShotDegrees,0,0,15));
+        _sinceShot=0;
         ShotsFired++; FiredThisFrame = true; Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
     }
+    private static float ApproachZero(float value,float amount)=>Math.Sign(value)*Math.Max(0,Math.Abs(value)-amount);
     private void Flash(Vector3 position, Vector3 direction)
     {
         if (Definition is not { MuzzleFlashEnabled: true } d || GameObject.Scene is not {} scene) return;

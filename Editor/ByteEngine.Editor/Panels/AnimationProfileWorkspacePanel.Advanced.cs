@@ -7,6 +7,53 @@ namespace ByteEngine.Editor.Panels;
 
 internal sealed partial class AnimationProfileWorkspacePanel
 {
+    private bool DrawTurning()
+    {
+        if (_profile == null) return false;
+        bool changed = false;
+        var turning = _profile.Locomotion.Turning;
+        if (!ImGui.CollapsingHeader("TURN IN PLACE")) return false;
+        bool enabled = turning.Enabled;
+        if (ImGui.Checkbox("Enable Turn Animations", ref enabled)) { turning.Enabled = enabled; changed = true; }
+        ImGui.TextWrapped("When stationary, cursor-facing turns use the matching stance clips. Movement cancels turning immediately. Clip timing follows actual rotation; authored root yaw is removed to avoid rotating twice.");
+        float minimum = turning.MinimumAngle, around = turning.AroundAngle, speed = turning.MaximumMoveSpeed;
+        if (ImGui.DragFloat("Minimum Turn Angle", ref minimum, 1, 5, 180)) { turning.MinimumAngle = minimum; changed = true; }
+        if (ImGui.DragFloat("Use 180 Clip Above", ref around, 1, 5, 180)) { turning.AroundAngle = around; changed = true; }
+        if (ImGui.DragFloat("Maximum Movement Speed", ref speed, .01f, 0, 2)) { turning.MaximumMoveSpeed = speed; changed = true; }
+        ImGui.TextWrapped("The trigger includes accumulated body rotation, so gradual mouse turns play clips too.");
+        float minimumRate = turning.MinimumPlaybackSpeed, maximumRate = turning.MaximumPlaybackSpeed;
+        if (ImGui.DragFloat("Minimum Turn Playback Speed", ref minimumRate, .05f, .05f, 24)) { turning.MinimumPlaybackSpeed = minimumRate; changed = true; }
+        if (ImGui.DragFloat("Maximum Turn Playback Speed", ref maximumRate, .05f, .05f, 24)) { turning.MaximumPlaybackSpeed = maximumRate; changed = true; }
+        float fadeIn = turning.BlendIn, fadeOut = turning.BlendOut;
+        if (ImGui.DragFloat("Turn Blend In", ref fadeIn, .01f, 0, 2)) { turning.BlendIn = fadeIn; changed = true; }
+        if (ImGui.DragFloat("Turn Blend Out", ref fadeOut, .01f, 0, 2)) { turning.BlendOut = fadeOut; changed = true; }
+        if (ImGui.Button("Add Turning Set")) { turning.Sets.Add(new AnimationTurnSet()); changed = true; }
+        int remove = -1;
+        for (int i = 0; i < turning.Sets.Count; i++)
+        {
+            ImGui.PushID("TurnSet"+i); var set = turning.Sets[i];
+            if (ImGui.TreeNode(string.IsNullOrEmpty(set.BlendSpace) ? "Default turn clips" : set.BlendSpace))
+            {
+                if (ImGui.BeginCombo("For Blendspace", string.IsNullOrEmpty(set.BlendSpace) ? "Default" : set.BlendSpace))
+                {
+                    if (ImGui.Selectable("Default")) { set.BlendSpace = ""; changed = true; }
+                    foreach (var space in _profile.BlendSpaces)
+                        if (ImGui.Selectable(space.Name, set.BlendSpace == space.Name)) { set.BlendSpace = space.Name; changed = true; }
+                    ImGui.EndCombo();
+                }
+                string left = set.Left90, right = set.Right90, back = set.Around180;
+                if (DrawClipPicker("Left 90", GetAnimationClipNames(), ref left)) { set.Left90 = left; changed = true; }
+                if (DrawClipPicker("Right 90", GetAnimationClipNames(), ref right)) { set.Right90 = right; changed = true; }
+                if (DrawClipPicker("Around 180", GetAnimationClipNames(), ref back)) { set.Around180 = back; changed = true; }
+                if (ImGui.SmallButton("Remove Turning Set")) remove = i;
+                ImGui.TreePop();
+            }
+            ImGui.PopID();
+        }
+        if (remove >= 0) { turning.Sets.RemoveAt(remove); changed = true; }
+        return changed;
+    }
+
     private bool DrawLocomotionSource()
     {
         if (_profile == null) return false;
@@ -110,6 +157,14 @@ internal sealed partial class AnimationProfileWorkspacePanel
                     }
                     changed = true;
                 }
+                if (twoD)
+                {
+                    int mode = (int)space.Blend2DMode;
+                    if (ImGui.Combo("2D blending", ref mode, "Cartesian\0Direction and speed\0"))
+                    { space.Blend2DMode = (AnimationBlend2DMode)mode; changed = true; }
+                    if (space.Blend2DMode == AnimationBlend2DMode.DirectionalSpeed)
+                        ImGui.TextDisabled("X/Y are local velocity. Blend direction first, then walk/run speed.");
+                }
                 string px = space.ParameterX, py = space.ParameterY;
                 if (ImGui.InputText("X Parameter", ref px, 128)) { space.ParameterX = px; changed = true; }
                 if (twoD && ImGui.InputText("Y Parameter", ref py, 128)) { space.ParameterY = py; changed = true; }
@@ -154,6 +209,7 @@ internal sealed partial class AnimationProfileWorkspacePanel
         if (_profile == null) return false;
         bool changed = false;
         ImGui.SeparatorText("ANIMATION LAYERS");
+        ImGui.TextWrapped("Locomotion is the base pose. These layers are applied from top to bottom; actions can play on a selected layer without stopping the legs.");
         if (ImGui.Button("Add Layer"))
         { _profile.Layers.Add(new AnimationLayerProfile()); changed = true; }
         int remove = -1;
@@ -164,7 +220,11 @@ internal sealed partial class AnimationProfileWorkspacePanel
             if (ImGui.CollapsingHeader(layer.Name + "###Layer"))
             {
                 string name = layer.Name, clip = layer.Clip;
-                if (ImGui.InputText("Name", ref name, 128)) { layer.Name = name; changed = true; }
+                if (ImGui.InputText("Name", ref name, 128))
+                {
+                    foreach (var action in _profile.Actions.Where(a => a.Layer.Equals(layer.Name, StringComparison.OrdinalIgnoreCase))) action.Layer = name;
+                    layer.Name = name; changed = true;
+                }
                 bool enabled = layer.Enabled;
                 if (ImGui.Checkbox("Enabled", ref enabled)) { layer.Enabled = enabled; changed = true; }
                 if (DrawClipPicker("Clip", GetAnimationClipNames(), ref clip)) { layer.Clip = clip; changed = true; }
@@ -178,6 +238,35 @@ internal sealed partial class AnimationProfileWorkspacePanel
                 int mode = (int)layer.BlendMode;
                 if (ImGui.Combo("Mode", ref mode, Enum.GetNames<AnimationLayerBlendMode>(), 2))
                 { layer.BlendMode = (AnimationLayerBlendMode)mode; changed = true; }
+                int playback = (int)layer.PlaybackMode;
+                var playbackModes = Enum.GetNames<AnimationLayerPlaybackMode>();
+                if (ImGui.Combo("Playback", ref playback, playbackModes, playbackModes.Length))
+                { layer.PlaybackMode = (AnimationLayerPlaybackMode)playback; changed = true; }
+                if (layer.PlaybackMode == AnimationLayerPlaybackMode.Independent)
+                {
+                    float speed = layer.PlaybackSpeed;
+                    if (ImGui.DragFloat("Layer Speed", ref speed, .01f, 0, 10)) { layer.PlaybackSpeed = speed; changed = true; }
+                }
+                if (layer.PlaybackMode == AnimationLayerPlaybackMode.FixedPose)
+                {
+                    float time = layer.PoseTime;
+                    if (ImGui.DragFloat("Pose Time (seconds)", ref time, .01f, 0, 3600)) { layer.PoseTime = time; changed = true; }
+                }
+                var filters = layer.BlendSpaceFilter.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (ImGui.BeginCombo("Active In Blendspaces", filters.Count == 0 ? "All" : string.Join(", ", filters)))
+                {
+                    if (ImGui.Selectable("All", filters.Count == 0)) { filters.Clear(); changed = true; }
+                    foreach (var space in _profile.BlendSpaces)
+                        if (ImGui.Selectable(space.Name, filters.Contains(space.Name), ImGuiSelectableFlags.None))
+                        { if (!filters.Add(space.Name)) filters.Remove(space.Name); changed = true; }
+                    layer.BlendSpaceFilter = string.Join(", ", filters);
+                    ImGui.EndCombo();
+                }
+                bool stabilize = layer.StabilizeRootRotation;
+                if (ImGui.Checkbox("Stabilize Torso Rotation", ref stabilize)) { layer.StabilizeRootRotation = stabilize; changed = true; }
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip("Keeps the masked root's authored facing while the walking hips rotate underneath it. Use an upper-body root such as Spine_01.");
+                var boundActions = _profile.Actions.Where(a => a.Layer.Equals(layer.Name, StringComparison.OrdinalIgnoreCase)).Select(a => a.Name).ToArray();
+                if (boundActions.Length > 0) ImGui.TextWrapped("Actions on this layer: " + string.Join(", ", boundActions));
                 int kind = (int)layer.Mask.Kind;
                 if (ImGui.Combo("Mask", ref kind, Enum.GetNames<AnimationBoneMaskKind>(), 4))
                 { layer.Mask.Kind = (AnimationBoneMaskKind)kind; changed = true; }

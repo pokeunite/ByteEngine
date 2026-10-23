@@ -123,15 +123,39 @@ internal sealed partial class EventWorkspacePanel
         if(!CanMoveSheetCondition(rule,id,direction)||SheetConditionOrder(rule,id) is not {} order)return false;
         int index=order.Items.IndexOf(id);return ReorderSheetCondition(rule,id,order.Items[index+direction],direction<0);
     }
-    private bool ReorderSheetCondition(EventRuleDefinition rule,Guid source,Guid destination,bool before)
+    private bool CanPlaceSheetCondition(EventRuleDefinition rule, Guid source, Guid destination, bool inside)
     {
-        if(source==destination||SheetConditionOrder(rule,source) is not {} from||SheetConditionOrder(rule,destination) is not {} to||from.Container!=to.Container)return false;
-        var ordered=from.Items.ToList();ordered.Remove(source);int index=ordered.IndexOf(destination);if(index<0)return false;ordered.Insert(index+(before?0:1),source);
-        if(ordered.SequenceEqual(from.Items))return false;
-        RecordHistory("Reorder Condition");
-        if(from.Container==Guid.Empty){rule.HasExplicitConditionFlow=true;rule.ConnectedConditionIds=ordered;}
-        else{from.Items.Clear();from.Items.AddRange(ordered);}
-        SelectSheetItem(source);_dirty=true;return true;
+        if (source == destination || SheetConditionOrder(rule, source) == null || SheetConditionOrder(rule, destination) == null) return false;
+        var map = rule.Conditions.ToDictionary(c => c.InstanceId);
+        if (inside && !IsLogicGate(map[destination])) return false;
+        Guid container = inside ? destination : SheetConditionOrder(rule, destination)!.Value.Container;
+        var visited = new HashSet<Guid>();
+        bool Contains(Guid id)
+        {
+            if (id == container) return true;
+            return visited.Add(id) && map.TryGetValue(id, out var node) && IsLogicGate(node) && node.ConditionInputIds.Any(Contains);
+        }
+        return container == Guid.Empty || !Contains(source);
+    }
+    private bool ReorderSheetCondition(EventRuleDefinition rule, Guid source, Guid destination, bool before, bool inside = false)
+    {
+        if (!CanPlaceSheetCondition(rule, source, destination, inside)) return false;
+        var from = SheetConditionOrder(rule, source)!.Value;
+        var to = SheetConditionOrder(rule, destination)!.Value;
+        Guid container = inside ? destination : to.Container;
+        RecordHistory("Move Condition");
+        if (!rule.HasExplicitConditionFlow)
+        {
+            rule.ConnectedConditionIds = rule.Conditions.Select(c => c.InstanceId).ToList();
+            rule.HasExplicitConditionFlow = true;
+        }
+        var sourceItems = from.Container == Guid.Empty ? rule.ConnectedConditionIds : from.Items;
+        sourceItems.Remove(source);
+        var targetItems = container == Guid.Empty ? rule.ConnectedConditionIds : rule.Conditions.Single(c => c.InstanceId == container).ConditionInputIds;
+        int index = inside ? targetItems.Count : targetItems.IndexOf(destination) + (before ? 0 : 1);
+        targetItems.Insert(index, source);
+        _collapsedSheetLogic.Remove(container);
+        SelectSheetItem(source); _dirty = true; return true;
     }
     private unsafe void DrawSheetConditionDrag(EventRuleDefinition rule,VisualInstruction item,Vector2 origin,float width,float height)
     {
@@ -139,15 +163,25 @@ internal sealed partial class EventWorkspacePanel
         if(ImGui.BeginDragDropSource()){
             Span<byte> bytes=stackalloc byte[32];rule.Id.TryWriteBytes(bytes[..16]);item.InstanceId.TryWriteBytes(bytes[16..]);
             fixed(byte* data=bytes)ImGui.SetDragDropPayload(payloadType,(nint)data,32,ImGuiCond.Once);
-            ImGui.TextUnformatted("Move condition: "+GetSheetSentence(item,true,EditorState.Active));ImGui.TextDisabled("Drop above or below a condition in the same block.");ImGui.EndDragDropSource();
+            ImGui.TextUnformatted("Move condition: "+GetSheetSentence(item,true,EditorState.Active));ImGui.TextDisabled("Drop on the center of a logic block to put the condition inside. Drop at an edge to reorder.");ImGui.EndDragDropSource();
         }
         if(ImGui.BeginDragDropTarget()){
             var payload=ImGui.AcceptDragDropPayload(payloadType,ImGuiDragDropFlags.AcceptBeforeDelivery|ImGuiDragDropFlags.AcceptNoDrawDefaultRect);
             if(payload.NativePtr!=null&&payload.DataSize==32&&payload.Data!=IntPtr.Zero){
                 var bytes=new ReadOnlySpan<byte>((void*)payload.Data,32);var ruleId=new Guid(bytes[..16]);var source=new Guid(bytes[16..]);
-                bool allowed=ruleId==rule.Id&&source!=item.InstanceId&&SheetConditionOrder(rule,source) is {} from&&SheetConditionOrder(rule,item.InstanceId) is {} to&&from.Container==to.Container;
-                bool before=ImGui.GetMousePos().Y<origin.Y+height*.5f;
-                if(allowed){float y=before?origin.Y:origin.Y+height;ImGui.GetWindowDrawList().AddLine(new(origin.X,y),new(origin.X+width,y),ImGui.ColorConvertFloat4ToU32(SheetConditionColor),3);if(payload.Delivery)ReorderSheetCondition(rule,source,item.InstanceId,before);}
+                float fraction = (ImGui.GetMousePos().Y - origin.Y) / height;
+                bool inside = IsLogicGate(item) && fraction >= .25f && fraction <= .75f;
+                bool before = fraction < .5f;
+                bool allowed = ruleId == rule.Id && CanPlaceSheetCondition(rule, source, item.InstanceId, inside);
+                if (allowed)
+                {
+                    var draw = ImGui.GetWindowDrawList();
+                    uint color = ImGui.ColorConvertFloat4ToU32(SheetConditionColor);
+                    if (inside) draw.AddRect(origin, origin + new Vector2(width, height), color, 3, ImDrawFlags.None, 2);
+                    else { float y = before ? origin.Y : origin.Y + height; draw.AddLine(new(origin.X, y), new(origin.X + width, y), color, 3); }
+                    ImGui.SetTooltip(inside ? "Move inside logic block" : before ? "Move before condition" : "Move after condition");
+                    if (payload.Delivery) ReorderSheetCondition(rule, source, item.InstanceId, before, inside);
+                }
             }
             ImGui.EndDragDropTarget();
         }

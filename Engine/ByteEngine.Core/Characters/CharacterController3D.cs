@@ -136,6 +136,7 @@ public sealed class CharacterController3D
 
     protected override void OnStop()
     {
+        CancelBurstMotion();
         if (_attachedRigidbody !=
                 null &&
             _overrodeBodyType)
@@ -233,6 +234,23 @@ public sealed class CharacterController3D
         Velocity +=
             Finite(
                 impulse);
+    }
+
+    private Vector3 _burstVelocity;
+    private float _burstRemaining;
+    private bool _hadBurstMotion;
+    public bool HasBurstMotion => _burstRemaining > 0;
+    /// <summary>Collision-swept horizontal burst. Gravity and normal motor collision remain active.</summary>
+    public void BeginBurstMotion(Vector3 velocity, float seconds)
+    {
+        _burstVelocity = Finite(velocity); _burstVelocity.Y = 0;
+        _burstRemaining = float.IsFinite(seconds) ? Math.Clamp(seconds, 0, 5) : 0;
+        _hadBurstMotion = _burstRemaining > 0;
+    }
+    public void CancelBurstMotion()
+    {
+        if (_burstRemaining > 0 || _hadBurstMotion) Velocity = new(0,Velocity.Y,0);
+        _burstRemaining = 0; _hadBurstMotion = false;
     }
 
     private Vector3 _fixedMoveInput;
@@ -379,6 +397,22 @@ public sealed class CharacterController3D
     private void UpdateHorizontalVelocity(
         float deltaTime)
     {
+        if (_burstRemaining > 0)
+        {
+            // Integrate the final partial step instead of extending the dash by a full frame.
+            float portion = Math.Min(1, _burstRemaining / Math.Max(deltaTime, .00001f));
+            Velocity = new(_burstVelocity.X * portion, Velocity.Y, _burstVelocity.Z * portion);
+            _burstRemaining = Math.Max(0, _burstRemaining - deltaTime);
+            return;
+        }
+        if (_hadBurstMotion)
+        {
+            _hadBurstMotion = false;
+            Vector3 resumed = _moveInput; resumed.Y = 0;
+            if (resumed.LengthSquared() > 1) resumed = Vector3.Normalize(resumed);
+            resumed *= Math.Max(0,MoveSpeed);
+            Velocity = new(resumed.X,Velocity.Y,resumed.Z);
+        }
         if (ArenaMovement)
         {
             Velocity = ArenaVelocity(Velocity, _moveInput, IsGrounded, MoveSpeed,

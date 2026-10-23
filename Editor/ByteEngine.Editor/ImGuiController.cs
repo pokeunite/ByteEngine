@@ -39,41 +39,7 @@ internal sealed class ImGuiController
 
     private float _settingsSaveElapsed;
 
-    private static readonly (
-        Keys OpenTk,
-        ImGuiKey ImGui)[] KeyMappings =
-    {
-        (Keys.Tab, ImGuiKey.Tab),
-        (Keys.Left, ImGuiKey.LeftArrow),
-        (Keys.Right, ImGuiKey.RightArrow),
-        (Keys.Up, ImGuiKey.UpArrow),
-        (Keys.Down, ImGuiKey.DownArrow),
-        (Keys.PageUp, ImGuiKey.PageUp),
-        (Keys.PageDown, ImGuiKey.PageDown),
-        (Keys.Home, ImGuiKey.Home),
-        (Keys.End, ImGuiKey.End),
-        (Keys.Insert, ImGuiKey.Insert),
-        (Keys.Delete, ImGuiKey.Delete),
-        (Keys.Backspace, ImGuiKey.Backspace),
-        (Keys.Space, ImGuiKey.Space),
-        (Keys.Enter, ImGuiKey.Enter),
-        (Keys.Escape, ImGuiKey.Escape),
-        (Keys.A, ImGuiKey.A),
-        (Keys.C, ImGuiKey.C),
-        (Keys.D, ImGuiKey.D),
-        (Keys.Q, ImGuiKey.Q),
-        (Keys.F, ImGuiKey.F),
-        (Keys.W, ImGuiKey.W),
-        (Keys.E, ImGuiKey.E),
-        (Keys.R, ImGuiKey.R),
-        (Keys.F2, ImGuiKey.F2),
-        (Keys.N, ImGuiKey.N),
-        (Keys.S, ImGuiKey.S),
-        (Keys.V, ImGuiKey.V),
-        (Keys.X, ImGuiKey.X),
-        (Keys.Y, ImGuiKey.Y),
-        (Keys.Z, ImGuiKey.Z)
-    };
+    private static readonly (Keys OpenTk, ImGuiKey ImGui)[] KeyMappings = EditorKeyCapture.Mappings;
 
     public unsafe ImGuiController(
         GameWindow window,
@@ -921,4 +887,3 @@ internal sealed class ImGuiController
         }
         """;
 }
-

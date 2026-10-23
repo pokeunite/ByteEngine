@@ -10,6 +10,74 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public sealed partial class SkeletalMeshRenderer
 {
+    private bool _removeTurnYaw;
+    private AnimationPose? _turnReferencePose;
+    public void SetTurnYawRemoval(bool enabled) { _removeTurnYaw = enabled; _poseDirty = true; }
+
+    private void RemoveAuthoredTurnYaw(AnimationPose pose)
+    {
+        if (!_removeTurnYaw || _currentAnimation == null || _rootMotionNodeIndex < 0) return;
+        if (_turnReferencePose?.Count != pose.Count) _turnReferencePose = new AnimationPose(pose.Count);
+        SamplePose(_currentAnimation, 0, _turnReferencePose);
+        Matrix4x4.Decompose(PoseGlobals(_turnReferencePose)[_rootMotionNodeIndex], out _, out var first, out _);
+        var globals = PoseGlobals(pose);
+        Matrix4x4.Decompose(globals[_rootMotionNodeIndex], out _, out var current, out _);
+        var forward = Vector3.Transform(-Vector3.UnitZ, current);
+        var initial = Vector3.Transform(-Vector3.UnitZ, first);
+        float delta = MathF.Atan2(-forward.X, -forward.Z) - MathF.Atan2(-initial.X, -initial.Z);
+        ApplyModelRotation(pose, globals, _rootMotionNodeIndex, Quaternion.CreateFromAxisAngle(Vector3.UnitY, -delta), 1);
+    }
+
+    private ImportedAnimation? _actionOverlayClip;
+    private AnimationBoneMask? _actionOverlayDefinition;
+    private float[] _actionOverlayMask = [];
+    private float _actionOverlayTime, _actionOverlayWeight;
+    private AnimationPose? _lastActionOverlayPose, _actionRestartPose;
+    private float _actionRestartDuration;
+    private int _actionOverlayLayerIndex = -1;
+    private AnimationPose? _actionReferencePose;
+    public bool HasActionOverlay => _actionOverlayClip != null;
+    public bool SetActionOverlay(string clipName, AnimationBoneMask mask, float seconds, float weight, float restartBlendSeconds = 0, string layerName = "")
+    {
+        if (!_resolved && !ResolveRuntimeResources()) return false;
+        var clip = FindAnimation(clipName);
+        if (clip == null) return false;
+        int layerIndex = string.IsNullOrWhiteSpace(layerName) ? -1 :
+            _poseProfile?.Layers.FindIndex(l => l.Name.Equals(layerName, StringComparison.OrdinalIgnoreCase)) ?? -1;
+        if (!string.IsNullOrWhiteSpace(layerName) && layerIndex < 0) return false;
+        if (layerIndex >= 0) mask = _poseProfile!.Layers[layerIndex].Mask;
+        _actionOverlayLayerIndex = layerIndex;
+        if (_actionOverlayDefinition != mask || _actionOverlayMask.Length != _nodes.Length)
+        {
+            if (_poseNodeIndices.Count == 0) RebindAdvancedPose();
+            _actionOverlayMask = new float[_nodes.Length];
+            BuildMask(mask, _actionOverlayMask);
+            if (!_actionOverlayMask.Any(w => w > 0)) return false;
+            _actionOverlayDefinition = mask;
+        }
+        if (restartBlendSeconds > 0 && _actionOverlayClip != null && _lastActionOverlayPose?.Count == _nodes.Length)
+        {
+            _actionRestartPose ??= new AnimationPose(_nodes.Length);
+            if (_actionRestartPose.Count != _nodes.Length) _actionRestartPose = new AnimationPose(_nodes.Length);
+            _actionRestartPose.CopyFrom(_lastActionOverlayPose);
+            _actionRestartDuration = restartBlendSeconds;
+        }
+        _actionOverlayClip = clip;
+        _actionOverlayTime = Math.Max(0, seconds);
+        _actionOverlayWeight = Math.Clamp(weight, 0, 1);
+        _poseDirty = true;
+        return true;
+    }
+    public void ClearActionOverlay()
+    {
+        if (_actionOverlayClip == null) return;
+        _actionOverlayClip = null;
+        _actionOverlayLayerIndex = -1;
+        _actionRestartPose = null;
+        _lastActionOverlayPose = null;
+        _actionRestartDuration = 0;
+        _poseDirty = true;
+    }
     private AnimationProfile? _poseProfile;
     private AnimationBlendSpace? _activeBlendSpace;
     private AnimationPose? _workingPose;
@@ -29,6 +97,7 @@ public sealed partial class SkeletalMeshRenderer
     private byte[] _globalPoseStates = Array.Empty<byte>();
     private float[] _blendWeights = Array.Empty<float>();
     private float[] _layerWeights = Array.Empty<float>();
+    private float[] _layerTimes = Array.Empty<float>();
     private float[] _layerTargetWeights = Array.Empty<float>();
     private float[][] _layerMasks = Array.Empty<float[]>();
     private ImportedAnimation?[] _layerClips = Array.Empty<ImportedAnimation?>();
@@ -191,7 +260,7 @@ public sealed partial class SkeletalMeshRenderer
     }
 
     private bool HasAdvancedPose => _poseProfile != null &&
-        (_activeBlendSpace != null || _sourceTransitionActive || _poseProfile.Layers.Count != 0 ||
+        (_actionOverlayClip != null || _activeBlendSpace != null || _sourceTransitionActive || _poseProfile.Layers.Count != 0 ||
          _poseProfile.Procedural.AimEnabled || _poseProfile.Procedural.LookAtEnabled ||
          _poseProfile.Procedural.HandIkEnabled || _poseProfile.Procedural.FootIkEnabled);
 
@@ -208,6 +277,7 @@ public sealed partial class SkeletalMeshRenderer
 
     private void RebindAdvancedPose()
     {
+        _actionOverlayDefinition = null;
         if (_model == null || _nodes.Length == 0) return;
         int count = _nodes.Length;
         _workingPose = new AnimationPose(count);
@@ -235,6 +305,7 @@ public sealed partial class SkeletalMeshRenderer
         }
         int layerCount = _poseProfile?.Layers.Count ?? 0;
         _layerWeights = new float[layerCount];
+        _layerTimes = new float[layerCount];
         _layerTargetWeights = new float[layerCount];
         _layerMasks = new float[layerCount][];
         _layerClips = new ImportedAnimation?[layerCount];
@@ -419,12 +490,19 @@ public sealed partial class SkeletalMeshRenderer
             pose.CopyFrom(_transitionWorkPose);
             if (alpha >= 1f) _sourceTransitionActive = false;
         }
+        RemoveAuthoredTurnYaw(pose);
         _lastBasePose?.CopyFrom(pose);
         _hasEvaluatedBasePose = true;
 
         for (int i = 0; i < _layerClips.Length; i++)
         {
             AnimationLayerProfile layer = _poseProfile!.Layers[i];
+            if (_actionOverlayClip != null && _actionOverlayLayerIndex == i)
+            {
+                _layerWeights[i] = _actionOverlayWeight * layer.Weight * _layerTargetWeights[i];
+                ApplyActionLayer(pose, sample, layer, _layerWeights[i]);
+                continue;
+            }
             ImportedAnimation? clip = _layerClips[i];
             float goal = clip != null ? layer.Weight * _layerTargetWeights[i] : 0f;
             float seconds = goal > _layerWeights[i] ? layer.BlendIn : layer.BlendOut;
@@ -432,13 +510,22 @@ public sealed partial class SkeletalMeshRenderer
                 Math.Clamp((float)ByteEngine.Core.Time.DeltaTime / seconds, 0f, 1f);
             _layerWeights[i] += (goal - _layerWeights[i]) * step;
             if (clip == null || _layerWeights[i] <= 1e-6f) continue;
-            SamplePose(clip, phase * clip.Duration, sample);
+            float time = layer.PlaybackMode switch
+            {
+                AnimationLayerPlaybackMode.Independent => clip.Duration > 0 ? _layerTimes[i] % clip.Duration : 0,
+                AnimationLayerPlaybackMode.FixedPose => Math.Min(layer.PoseTime, clip.Duration),
+                _ => phase * clip.Duration
+            };
+            SamplePose(clip, time, sample);
+            if (layer.StabilizeRootRotation && layer.BlendMode == AnimationLayerBlendMode.Override)
+                StabilizeLayerRoot(pose, sample, layer.Mask);
             if (layer.BlendMode == AnimationLayerBlendMode.Additive)
                 pose.Additive(sample, referencePose, _layerWeights[i], _layerMasks[i]);
             else
                 pose.Blend(sample, _layerWeights[i], _layerMasks[i]);
         }
-
+        if (_actionOverlayClip != null && _actionOverlayLayerIndex < 0)
+            ApplyActionLayer(pose, sample, null, _actionOverlayWeight);
         _currentRootMotionCorrection = BuildModelSpaceRootMotionCorrection();
         ApplyAimAndLookAt(pose);
         foreach(var offset in _boneRotationOffsets){int node=ResolveNode(offset.Key);if(node>=0)ApplyModelRotation(pose,PoseGlobals(pose),node,offset.Value.Rotation,offset.Value.Weight);}
@@ -453,6 +540,52 @@ public sealed partial class SkeletalMeshRenderer
                 Matrix4x4.CreateTranslation(bone.Position);
         }
         return locals;
+    }
+
+    private void AdvanceLayerClocks(float delta)
+    {
+        if (_poseProfile == null || !IsPlaying) return;
+        for (int i = 0; i < _layerTimes.Length; i++)
+            _layerTimes[i] += Math.Max(delta, 0) * _poseProfile.Layers[i].PlaybackSpeed;
+    }
+
+    private void ApplyActionLayer(AnimationPose pose, AnimationPose sample, AnimationLayerProfile? layer, float weight)
+    {
+        if (_actionOverlayClip == null || _actionOverlayMask.Length != pose.Count) return;
+        SamplePose(_actionOverlayClip, _actionOverlayTime, sample);
+        if (layer?.BlendMode == AnimationLayerBlendMode.Additive)
+        {
+            if (_actionReferencePose?.Count != pose.Count) _actionReferencePose = new AnimationPose(pose.Count);
+            SamplePose(_actionOverlayClip, 0, _actionReferencePose);
+            pose.Additive(sample, _actionReferencePose, weight, _actionOverlayMask);
+        }
+        else
+        {
+            if (layer?.StabilizeRootRotation == true) StabilizeLayerRoot(pose, sample, layer.Mask);
+            pose.Blend(sample, weight, _actionOverlayMask);
+        }
+        if (_actionRestartPose?.Count == pose.Count && _actionRestartDuration > 0)
+        {
+            pose.Blend(_actionRestartPose, (1 - Math.Clamp(_actionOverlayTime / _actionRestartDuration, 0, 1)) *
+                (layer == null ? 1 : layer.Weight * _layerTargetWeights[_actionOverlayLayerIndex]), _actionOverlayMask);
+            if (_actionOverlayTime >= _actionRestartDuration) _actionRestartDuration = 0;
+        }
+        if (_lastActionOverlayPose?.Count != pose.Count) _lastActionOverlayPose = new AnimationPose(pose.Count);
+        _lastActionOverlayPose.CopyFrom(pose);
+    }
+
+    private void StabilizeLayerRoot(AnimationPose basis, AnimationPose sample, AnimationBoneMask mask)
+    {
+        int root = ResolveNode(mask.RootBone);
+        if (root < 0) root = ResolveNode(_model?.HumanoidMapping.GetBoneName(HumanoidBone.Spine));
+        if (root < 0 || _parentIndices[root] < 0) return;
+        // Preserve the authored torso orientation in model space while allowing
+        // locomotion to animate the pelvis and legs independently.
+        Matrix4x4.Decompose(PoseGlobals(basis)[_parentIndices[root]], out _, out var parentRotation, out _);
+        Matrix4x4.Decompose(PoseGlobals(sample)[root], out _, out var sourceRotation, out _);
+        var localRotation = Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(
+            Matrix4x4.CreateFromQuaternion(sourceRotation) * Matrix4x4.Transpose(Matrix4x4.CreateFromQuaternion(parentRotation))));
+        sample[root] = sample[root] with { Rotation = localRotation };
     }
 
     private void SamplePose(ImportedAnimation clip, float time, AnimationPose destination)
