@@ -2,6 +2,7 @@ using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.VisualLogic;
 
@@ -13,7 +14,15 @@ public sealed partial class VisualLogicRegistry
             Action<VisualInstruction, EventExecutionContext> execute) =>
             registry.RegisterAction(new VisualActionDefinition
             {
-                Id = id, Category = "UI", DisplayName = label, Execute = execute
+                Id = id, Category = "UI", DisplayName = label, Execute = execute,
+                SentenceTemplate=id switch {"ui.setBarFromHealth"=>"Show {source}'s health on {target}","ui.setTextFromHealth"=>"Show {source}'s health as text in {target}",_=>null},
+                Arguments = id is "ui.setBarFromHealth" or "ui.setTextFromHealth"
+                    ? [new("target","UI object",VariableValue.FromString("Self")){IsObjectReference=true},
+                       .. (id == "ui.setTextFromHealth" ? new VisualArgumentDefinition[] {
+                           new("prefix","Prefix",VariableValue.FromString("HP ")),
+                           new("prefixKey","Localized prefix key",VariableValue.FromString("")) } : []),
+                       new("source","Health owner",VariableValue.FromString("Self")){IsObjectReference=true}]
+                    : []
             });
         void Condition(string id, string label,
             Func<VisualInstruction, EventExecutionContext, bool> evaluate) =>

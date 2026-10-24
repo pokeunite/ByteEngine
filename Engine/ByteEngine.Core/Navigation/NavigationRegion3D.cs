@@ -11,8 +11,26 @@ public sealed class NavigationRegion3D : Component
     public Guid SurfaceObject {get;set;}
     public NavigationMesh? Mesh {get;private set;}
     public bool Ready=>Grid!=null||Mesh!=null;
-    public IReadOnlyList<Vector3> FindPath(Vector3 start,Vector3 end,int maximumVisited=10000)=>Mesh?.FindPath(start,end,maximumVisited)??Grid?.FindPath(start,end,maximumVisited)??Array.Empty<Vector3>();
+    public float EndpointSearchRadius {get;set;}=1.5f;
+    public IReadOnlyList<Vector3> FindPath(Vector3 start,Vector3 end,int maximumVisited=10000)
+    {
+        if(Mesh!=null)return Mesh.FindPath(start,end,maximumVisited);
+        if(Grid is not {} grid)return Array.Empty<Vector3>();
+        bool Snap(Vector3 point,out Vector3 result)
+        {
+            result=point;
+            int x=(int)MathF.Floor((point.X-grid.Origin.X)/grid.CellSize),z=(int)MathF.Floor((point.Z-grid.Origin.Y)/grid.CellSize);
+            if(grid.IsWalkable(x,z))return true;
+            float radius=float.IsFinite(EndpointSearchRadius)?Math.Clamp(EndpointSearchRadius,0,5):1.5f;
+            int cells=(int)MathF.Ceiling(radius/grid.CellSize);float best=radius*radius;bool found=false;
+            for(int j=z-cells;j<=z+cells;j++)for(int i=x-cells;i<=x+cells;i++)if(grid.IsWalkable(i,j))
+            {var p=new Vector3(grid.Origin.X+(i+.5f)*grid.CellSize,grid.HeightAt(i,j,point.Y),grid.Origin.Y+(j+.5f)*grid.CellSize);float d=Vector2.DistanceSquared(new(p.X,p.Z),new(point.X,point.Z));if(d<=best){best=d;result=p;found=true;}}
+            return found;
+        }
+        return Snap(start,out var from)&&Snap(end,out var to)?grid.FindPath(from,to,maximumVisited):Array.Empty<Vector3>();
+    }
     public bool SampleTerrain {get;set;}
+    public bool ExcludeDynamicActors {get;set;}
     public float MaximumSlope {get;set;}=45;
     public float MaximumStepHeight {get;set;}=.4f;
     public bool ShowDebug {get;set;}
@@ -42,6 +60,12 @@ public sealed class NavigationRegion3D : Component
         context.RenderWorld.Submit(_debugMesh,NavigationDebugGeometry.Surface,Matrix4x4.Identity,ByteEngine.Core.Graphics.ThreeD.RenderQueue3D.Transparent,true,false,false);
     }
     protected override void OnDestroy(){_debugMesh?.Dispose();_debugMesh=null;}
+    private static bool IsActor(GameObject obj)
+    {
+        for(var owner=obj;owner!=null;owner=owner.Parent)
+            if(owner.GetComponent<ByteEngine.Core.Gameplay.HealthComponent>()!=null || owner.GetComponent<CharacterController3D>()!=null || owner.GetComponent<NavigationAgent3D>()!=null || owner.GetComponent<Rigidbody3D>() is {BodyType:RigidbodyBodyType3D.Dynamic})return true;
+        return false;
+    }
     public void Bake()
     {
         var scene = GameObject.Scene;
@@ -54,7 +78,7 @@ public sealed class NavigationRegion3D : Component
         float agentHeight = float.IsFinite(AgentHeight) ? Math.Max(.1f,AgentHeight) : 1.8f;
         var obstacles = new List<(Vector3 Minimum,Vector3 Maximum)>();
         foreach (var obj in scene.GameObjects)
-            if (obj.ActiveInHierarchy && (ObstacleLayerMask & (1 << obj.Layer)) != 0)
+            if (obj.ActiveInHierarchy && (ObstacleLayerMask & (1 << obj.Layer)) != 0 && (!ExcludeDynamicActors || !IsActor(obj)))
                 foreach (var collider in obj.Components.OfType<Collider3D>())
                 {
                     if (!collider.Enabled || collider.IsTrigger || collider is HeightfieldCollider3D || (BakeMode==NavigationBakeMode.MeshSurface&&obj.Id==SurfaceObject)) continue;

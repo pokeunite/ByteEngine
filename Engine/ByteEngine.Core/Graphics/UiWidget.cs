@@ -5,7 +5,7 @@ using ByteEngine.Core.Scene;
 
 namespace ByteEngine.Core.Graphics;
 
-public enum UiWidgetKind { Panel, Image, ProgressBar, Button, Slider }
+public enum UiWidgetKind { Panel, Image, ProgressBar, Button, Slider, SegmentedBar }
 public enum UiFillDirection { LeftToRight, RightToLeft, BottomToTop, TopToBottom }
 
 public sealed class UiWidget : Component
@@ -31,6 +31,11 @@ public sealed class UiWidget : Component
     public float Value { get => _value; set => _value=Kind==UiWidgetKind.Slider?Math.Clamp(float.IsFinite(value)?value:0,0,Math.Max(.001f,Maximum)):value; }
     public float Maximum { get; set; } = 100f;
     public UiFillDirection FillDirection { get; set; }
+    public int SegmentCount { get; set; }
+    public float SegmentAngleDegrees { get; set; }
+    public float SegmentThickness { get; set; } = 3;
+    public float SegmentLength { get; set; } = 7;
+    public Vector4 SegmentEmptyColor { get; set; } = new(.13f,.17f,.19f,.8f);
     public float CornerRadius { get; set; }
     private bool _dragging;
     public bool Visible { get; set; } = true;
@@ -128,7 +133,26 @@ public sealed class UiWidget : Component
         }
         if (Kind != UiWidgetKind.Image || ImageReference.IsEmpty)
             Rounded(context,rect.Position,rect.Size,background,CornerRadius*rect.Scale);
-        if (Kind == UiWidgetKind.ProgressBar)
+        if (Kind == UiWidgetKind.SegmentedBar)
+        {
+            int count=Math.Clamp(SegmentCount>0?SegmentCount:(int)MathF.Ceiling(float.IsFinite(Maximum)?Math.Clamp(Maximum,1,64):1),1,64);
+            float amount=Maximum>0&&float.IsFinite(Value)&&float.IsFinite(Maximum)?Math.Clamp(Value/Maximum,0,1)*count:0;
+            float radians=(float.IsFinite(SegmentAngleDegrees)?SegmentAngleDegrees:0)*MathF.PI/180;
+            var axis=new Vector2(MathF.Cos(radians),MathF.Sin(radians));var normal=new Vector2(-axis.Y,axis.X);
+            float thickness=Math.Clamp(float.IsFinite(SegmentThickness)?SegmentThickness:3,1,30)*rect.Scale;
+            float length=Math.Clamp(float.IsFinite(SegmentLength)?SegmentLength:7,1,60)*rect.Scale;
+            float inset=Math.Max(length,thickness);
+            float span=Math.Min(Math.Max(0,rect.Size.X-inset)/Math.Max(.0001f,Math.Abs(axis.X)),Math.Max(0,rect.Size.Y-inset)/Math.Max(.0001f,Math.Abs(axis.Y)));
+            for(int n=0;n<count;n++)
+            {
+                var center=rect.Position+rect.Size*.5f+axis*span*(count==1?0:n/(float)(count-1)-.5f);
+                var from=center-normal*length*.5f;var to=center+normal*length*.5f;
+                context.QueueUiLine(from,to,thickness,SegmentEmptyColor with {W=SegmentEmptyColor.W*opacity});
+                float partial=Math.Clamp(amount-n,0,1);
+                if(partial>0)context.QueueUiLine(to,Vector2.Lerp(to,from,partial),thickness,FillColor with {W=FillColor.W*opacity});
+            }
+        }
+        else if (Kind == UiWidgetKind.ProgressBar)
         {
             float fraction = Maximum > 0f ? Math.Clamp(Value / Maximum, 0f, 1f) : 0f;
             if (fraction > 0f)

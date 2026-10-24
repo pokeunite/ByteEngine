@@ -126,7 +126,11 @@ public sealed class WeaponInstance3D : Component
         FiredThisFrame = HitThisFrame = ReloadCompletedThisFrame = false;
         EquippedThisFrame=ReloadStartedThisFrame=ReloadCancelledThisFrame=false;
         _cooldown = Math.Max(0, _cooldown - dt);
-        if (!Reloading) return;
+        if (!Reloading)
+        {
+            if(Equipped && _cooldown<=0 && Definition is {AutoReload:true} auto && CurrentAmmo<Math.Clamp(auto.AmmoPerShot,1,10000) && CanReload) Reload();
+            return;
+        }
         _reloadRemaining = Math.Max(0, _reloadRemaining - dt);
         if (_reloadRemaining > 0 || Definition is not {} d) return;
         int needed = Math.Max(0, Math.Clamp(d.MagazineCapacity, 1, 10000) - CurrentAmmo);
@@ -168,9 +172,10 @@ public sealed class WeaponInstance3D : Component
                 if (GameplayQuery3D.Raycast(scene, origin, shot, out var hit, range, owner, mask, includeTriggers: false))
                 {
                     end = hit.Point; HitCount++; HitThisFrame = true;_shotHits.Add(new(hit,shot)); Hit?.Invoke(hit);
-                    for (GameObject? target = hit.GameObject; target != null; target = target.Parent)
+                    if(hit.GameObject.GetComponent<DamageRegion3D>() is {} region)region.ApplyDamage(WeaponDefinition3D.Bound(d.DamagePerPellet,25,0,100000),shot);
+                    else for (GameObject? target = hit.GameObject; target != null; target = target.Parent)
                         if (target.GetComponent<HealthComponent>() is {} health)
-                        { health.Damage(WeaponDefinition3D.Bound(d.DamagePerPellet, 25, 0, 100000)); break; }
+                        { health.Damage(WeaponDefinition3D.Bound(d.DamagePerPellet, 25, 0, 100000), shot); break; }
                     hit.GameObject.GetComponent<Rigidbody3D>()?.AddImpulseAtPosition(shot * WeaponDefinition3D.Bound(d.HitImpulse, 3, 0, 1000), end);
                 }
             }
@@ -189,18 +194,30 @@ public sealed class WeaponInstance3D : Component
                 {
                     var flight=projectile.GetComponent<Projectile3D>()!;
                     flight.CollisionMask = mask;
-                    if(d.ProjectileBlueprint.IsEmpty)flight.Radius = .035f;
+                    if(d.ProjectileBlueprint.IsEmpty)flight.Radius = WeaponDefinition3D.Bound(d.ProjectileRadius,.025f,.005f,.2f);
+                    BulletTrail3D? trail=null;
                     flight.Hit += impact => {
-                        HitCount++; HitThisFrame=true;_shotHits.Clear();_shotHits.Add(new(impact,shot));HitSequence++;Hit?.Invoke(impact);
+                        var impactDirection=flight.Velocity.LengthSquared()>.000001f?Vector3.Normalize(flight.Velocity):shot;
+                        HitCount++; HitThisFrame=true;_shotHits.Clear();_shotHits.Add(new(impact,impactDirection));HitSequence++;Hit?.Invoke(impact);
+                        if(d.ProjectileBlueprint.IsEmpty&&trail!=null&&d.TrailImpactFadeSeconds>0)
+                        {
+                            trail.Finish(impactDirection,d.TrailImpactFadeSeconds);
+                            if(projectile.GetComponent<MeshRenderer>() is {} head)head.Enabled=false;
+                            projectile.GetComponent<LifetimeComponent>()?.Restart(WeaponDefinition3D.Bound(d.TrailImpactFadeSeconds,.07f,.01f,.2f));
+                        }
                         impact.GameObject.GetComponent<Rigidbody3D>()?.AddImpulseAtPosition(shot*WeaponDefinition3D.Bound(d.HitImpulse,3,0,1000),impact.Point);
                     };
                     if(d.ProjectileBlueprint.IsEmpty){
-                        projectile.Transform.LocalScale=new(.055f);
-                        if(projectile.GetComponent<MeshRenderer>() is {} visual){visual.Material.Shading=MaterialShadingMode.Unlit;visual.Material.BaseColor=new(1,.75f,.25f,1);visual.CastShadows=false;}
+                        projectile.Transform.LocalScale=new(WeaponDefinition3D.Bound(d.ProjectileVisualSize,.06f,.01f,.2f));
+                        if(projectile.GetComponent<MeshRenderer>() is {} visual){visual.Material.Shading=MaterialShadingMode.Unlit;visual.Material.BaseColor=d.TrailCoreColor;visual.CastShadows=false;}
                     }
-                    if(d.ShowShotTrace)projectile.AddComponent(new BulletTrail3D{Length=d.ProjectileTrailLength,Width=d.TraceWidth});
+                    if(d.ShowShotTrace)
+                    {
+                        trail=projectile.AddComponent(new BulletTrail3D{Length=d.ProjectileTrailLength,Width=d.TraceWidth,CoreColor=d.TrailCoreColor,GlowColor=d.TrailGlowColor,GlowScale=d.TrailGlowScale,Brightness=d.TrailBrightness});
+                        if(d.ProjectileBlueprint.IsEmpty&&d.TrailImpactFadeSeconds>0)flight.DestroyOnHit=false;
+                    }
                     var lifetime = projectile.GetComponent<LifetimeComponent>() ?? projectile.AddComponent(new LifetimeComponent());
-                    lifetime.LifetimeSeconds = Math.Min(WeaponDefinition3D.Bound(d.ProjectileLifetime, 5, .1f, 30),range/launcher.ProjectileSpeed);
+                    lifetime.Restart(Math.Min(WeaponDefinition3D.Bound(d.ProjectileLifetime, 5, .1f, 30),range/launcher.ProjectileSpeed));
                 }
             }
             if (d.ShowShotTrace && d.ShotMode == WeaponShotMode.Hitscan)
@@ -222,6 +239,7 @@ public sealed class WeaponInstance3D : Component
             Math.Clamp(RecoilAngles.Y+(yaw>0?((float)_random.NextDouble()*2-1)*yaw:0),-recoilLimit,recoilLimit));
         AccuracyBloom=Math.Min(WeaponDefinition3D.Bound(d.MaximumBloomDegrees,4,0,45),AccuracyBloom+WeaponDefinition3D.Bound(d.BloomPerShotDegrees,0,0,15));
         _sinceShot=0;
+        ByteEngine.Core.AI.AIWorld.ReportNoise(scene,muzzlePosition,WeaponDefinition3D.Bound(d.NoiseRadius,24,0,1000),owner.Id,"Gunshot");
         ShotsFired++; FiredThisFrame = true; Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
     }
     private static float ApproachZero(float value,float amount)=>Math.Sign(value)*Math.Max(0,Math.Abs(value)-amount);
@@ -253,11 +271,14 @@ public sealed class WeaponInstance3D : Component
     {
         position = default;
         if (Definition is not {} d) return false;
-        if (d.MuzzleSource is WeaponMuzzleSource.Automatic or WeaponMuzzleSource.AnimationSocket)
+        if(d.MuzzleObjectId!=Guid.Empty&&GameObject.Scene?.FindGameObject(d.MuzzleObjectId) is {} muzzleObject)
+        {position=muzzleObject.Transform.WorldPosition;return IsFinite(position);}
+        if(d.MuzzleSource==WeaponMuzzleSource.SceneObject)return false;
+        if (d.MuzzleSource is WeaponMuzzleSource.Automatic or WeaponMuzzleSource.AnimationSocket or WeaponMuzzleSource.NamedModelPoint)
         {
             if (SkeletalSocketResolver.TryGetSocketWorldPosition(GameObject, d.MuzzleSocket, out position))
                 return IsFinite(position);
-            if (d.MuzzleSource == WeaponMuzzleSource.AnimationSocket) return false;
+            if (d.MuzzleSource is WeaponMuzzleSource.AnimationSocket or WeaponMuzzleSource.NamedModelPoint) return false;
         }
         if (d.MuzzleSource is WeaponMuzzleSource.Automatic or WeaponMuzzleSource.ModelBone)
         {

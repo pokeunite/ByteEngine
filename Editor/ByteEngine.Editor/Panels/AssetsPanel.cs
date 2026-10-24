@@ -311,6 +311,7 @@ internal sealed class AssetsPanel : IDisposable
             }
             if (ImGui.MenuItem("Material")) CreateMaterial(log, null, null);
             if (ImGui.MenuItem("UI Theme")) CreateUiTheme(log);
+            if (ImGui.MenuItem("AI Behaviour")) CreateAIBehavior(log);
             ImGui.Separator();
             DrawVfxCreationMenu(log);
             DrawModelImportMenu(log);
@@ -929,10 +930,7 @@ internal sealed class AssetsPanel : IDisposable
 
             if (clickedModelFooter)
             {
-                _expandedModelPath =
-                    modelExpanded
-                        ? null
-                        : file;
+                _expandedModelPath=modelExpanded?null:file;
             }
             else
             {
@@ -950,10 +948,7 @@ internal sealed class AssetsPanel : IDisposable
         {
             if (asset?.Type == AssetType.Model3D)
             {
-                _expandedModelPath =
-                    modelExpanded
-                        ? null
-                        : file;
+                _documentWindows.OpenModel(asset,_project);
             }
             else if (asset != null)
             {
@@ -1933,6 +1928,8 @@ state.SelectedObject =
         AssetRecord asset,
         EditorLog log)
     {
+        if(asset.Type==AssetType.AIBehavior){try{_documentWindows.OpenAIBehavior(asset,_project);}catch(Exception e){log.Error("Could not open AI behaviour: "+e.Message);}return;}
+        if(asset.Type==AssetType.Model3D){_documentWindows.OpenModel(asset,_project);return;}
         if (asset.Type == AssetType.VfxEffect)
         {
             try { _documentWindows.OpenVfx(asset, _project, log); }
@@ -3025,6 +3022,23 @@ state.SelectedObject =
             log.Info("Created UI theme. Assign it to a UI Theme component; widgets inherit its palette.");
         }
         catch(Exception exception){log.Error("Could not create UI theme: "+exception.Message);}
+    }
+
+    private void CreateAIBehavior(EditorLog log)
+    {
+        try
+        {
+            string directory = GetAssetCreationDirectory();
+            string path = GetUniqueAssetPath(directory, "New AI Behaviour", ".byteai");
+            var tree = ByteEngine.Core.AI.BehaviorTreeDefinition.CreateExample();
+            tree.Name = Path.GetFileNameWithoutExtension(path);
+            ByteEngine.Core.AI.BehaviorTreeSerializer.Save(path, tree);
+            SelectDirectory(directory); RefreshAfterFileOperation();
+            if (_project.AssetDatabase.TryGetAsset(ToProjectPath(path), out AssetRecord? created) && created != null)
+                _documentWindows.OpenAIBehavior(created,_project);
+            log.Info("Created AI Behaviour '" + Path.GetFileName(path) + "'.");
+        }
+        catch (Exception e) { log.Error("Could not create AI behaviour: " + e.Message); }
     }
 
     private void CreateMaterial(EditorLog log, AssetRecord? parent,

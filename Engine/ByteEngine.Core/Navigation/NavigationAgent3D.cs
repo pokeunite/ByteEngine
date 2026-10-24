@@ -7,8 +7,11 @@ public enum NavigationAgentStatus { Idle, Following, Arrived, Unreachable, Missi
 public sealed class NavigationAgent3D : Component
 {
     public bool ShowDebug {get;set;}
+    public bool ExternallyDriven {get;set;}
+    public bool CollisionAvoidance {get;set;}
+    public float CollisionRadius {get;set;}=.35f;
     private ByteEngine.Core.Graphics.ThreeD.Mesh? _debugMesh;
-    public Guid RegionObject { get; set; }
+    [SceneObjectReference] public Guid RegionObject { get; set; }
     public Vector3 Destination { get; set; }
     public bool Moving { get; set; }
     public float Speed { get; set; } = 3;
@@ -24,8 +27,8 @@ public sealed class NavigationAgent3D : Component
     private Vector3 _lastDestination;
     public void SetDestination(Vector3 destination) { Destination=destination;Moving=true;_timer=0;_path=Array.Empty<Vector3>();_debugMesh?.Dispose();_debugMesh=null; }
     public void Stop() { Moving=false;Status=NavigationAgentStatus.Idle; }
-    protected override void OnUpdate() { if(GameObject.Scene is not {FixedSimulation:true}) Tick((float)Time.DeltaTime); }
-    protected override void OnFixedUpdate() => Tick((float)Time.FixedDeltaTime);
+    protected override void OnUpdate() { if(!ExternallyDriven && GameObject.Scene is not {FixedSimulation:true}) Tick((float)Time.DeltaTime); }
+    protected override void OnFixedUpdate() {if(!ExternallyDriven)Tick((float)Time.FixedDeltaTime);}
     protected override void OnRender(ByteEngine.Core.Graphics.RenderContext context)
     {
         if(!ShowDebug||_path.Count<2||!context.Has3DCamera)return;
@@ -69,7 +72,11 @@ public sealed class NavigationAgent3D : Component
             Vector3 point=_path[_index];
             Vector3 direction=point-Transform.WorldPosition;float distance=direction.Length();
             if(distance<=Math.Max(.001f,ArrivalDistance)){_index++;continue;}
-            float step=Math.Min(remaining,distance);Transform.WorldPosition+=direction*(step/distance);remaining-=step;
+            float step=Math.Min(remaining,distance);
+            var travel=direction/distance;
+            if(CollisionAvoidance && step>0 && ByteEngine.Core.Physics.GameplayQuery3D.SphereCast(scene!,Transform.WorldPosition+Vector3.UnitY*Math.Max(.8f,CollisionRadius+.1f),travel,Math.Max(.05f,CollisionRadius),out _,step+.015f,GameObject,includeTriggers:false))
+            { _timer=Math.Max(.1f,RepathInterval);_path=Array.Empty<Vector3>();return; }
+            Transform.WorldPosition+=travel*step;remaining-=step;
             if(remaining<=0)break;
         }
         if(_index>=_path.Count){Status=NavigationAgentStatus.Arrived;Moving=false;}

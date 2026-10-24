@@ -12,7 +12,7 @@ public enum SimpleEnemyAIState
     Attack
 }
 
-public sealed class SimpleEnemyAI3D : Component
+public sealed partial class SimpleEnemyAI3D : Component
 {
     private float _moveSpeed = 3f, _detectionRange = 20f, _attackRange = 1.5f;
     private float _damage = 10f, _attackCooldown = 1f, _stopDistance = 1f, _cooldownRemaining;
@@ -36,10 +36,17 @@ public sealed class SimpleEnemyAI3D : Component
     public float AttackCooldown { get => _attackCooldown; set => _attackCooldown = Safe(value); }
     public float StopDistance { get => _stopDistance; set => _stopDistance = Safe(value); }
 
+    [System.ComponentModel.Category("Behaviour"), System.ComponentModel.Description("AI Behaviour drives this combat executor. Its normal autonomous update is disabled; existing attack, dodge, cover and boss settings are retained.")]
+    public bool BehaviorControlled { get; set; }
+    public void TickBehaviorCombat(float delta)
+    {
+        if (BehaviorControlled && Enabled) Simulate(delta);
+    }
     public void ResetCombatState() => _cooldownRemaining = 0f;
 
-    protected override void OnUpdate(){if(AttachedGameObject?.Scene?.FixedSimulation!=true)Simulate((float)Time.DeltaTime);}
-    protected override void OnFixedUpdate()=>Simulate((float)Time.FixedDeltaTime);
+    protected override void OnStart(){ObserveTacticHealth();PrewarmAttackEffects();}
+    protected override void OnUpdate(){if(AttachedGameObject?.Scene?.FixedSimulation!=true){if(!BehaviorControlled)Simulate((float)Time.DeltaTime);}}
+    protected override void OnFixedUpdate(){if(!BehaviorControlled)Simulate((float)Time.FixedDeltaTime);}
     private void Simulate(float stepDelta)
     {
         State = SimpleEnemyAIState.Idle;
@@ -48,10 +55,12 @@ public sealed class SimpleEnemyAI3D : Component
         _cooldownRemaining = Math.Max(0f, _cooldownRemaining - stepDelta);
         GameObject? enemy = AttachedGameObject;
         RuntimeScene? scene = enemy?.Scene;
-        if (enemy == null || scene == null || enemy.GetComponent<HealthComponent>()?.IsDead == true) return;
+        if (enemy == null || scene == null) return;
+        if (enemy.GetComponent<HealthComponent>()?.IsDead == true) { ClearWarning(); return; }
         GameObject? target = ResolveTarget(scene, enemy);
         HealthComponent? targetHealth = target?.GetComponent<HealthComponent>();
-        if (target == null || targetHealth?.IsDead == true) return;
+        if (target == null || targetHealth?.IsDead == true) { ClearWarning(); return; }
+        if (AttackStyle != EnemyAttackStyle.Contact) { SimulatePattern(target, stepDelta); return; }
         Vector3 delta = target.Transform.WorldPosition - enemy.Transform.WorldPosition;
         delta.Y = 0f;
         float distance = delta.Length();
@@ -66,7 +75,8 @@ public sealed class SimpleEnemyAI3D : Component
             {
                 float movement = Math.Min(MoveSpeed * stepDelta, distance - StopDistance);
                 IsMoving = movement > 0f;
-                enemy.Transform.WorldPosition += direction * Math.Max(0f, movement);
+                if(UseNavigation)Navigate(target.Transform.WorldPosition,stepDelta);
+                else enemy.Transform.WorldPosition += direction * Math.Max(0f, movement);
                 distance -= Math.Max(0f, movement);
             }
         }
@@ -82,6 +92,8 @@ public sealed class SimpleEnemyAI3D : Component
 
     protected override void OnStop()
     {
+        ResetAttackPattern();
+        UnsubscribeTactics();
         State = SimpleEnemyAIState.Idle;
         IsMoving = false;
         AttackFiredThisFrame = false;

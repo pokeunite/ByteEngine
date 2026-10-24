@@ -149,7 +149,11 @@ internal static class ComponentMetadataRegistry
         [typeof(PlayerShooter3D)] = new("Player Shooter", "Gameplay", "Maps player fire input to a projectile launcher.", "weapon input"),
         [typeof(ArenaGameManager)] = new("Arena Game Manager", "Gameplay", "Tracks arena match state.", "game rules manager", false, true),
         [typeof(WaveSpawner3D)] = new("Wave Spawner 3D", "Gameplay", "Spawns Blueprint enemies in timed waves and tracks their Health.", "wave horde enemy spawn"),
-        [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Chases and attacks a nearby player without navigation.", "enemy chase attack"),
+        [typeof(CombatArmour3D)] = new("Armour and Weak Point", "Combat", "Armoured body hits and a separately exposed weak-point target, with readable status and hit feedback.", "armour weak point boss"),
+        [typeof(DamageRegion3D)] = new("Damage Region", "Combat", "Routes a collider hit to its health owner as a weak-point hit. Armour decides whether that region is exposed.", "hitbox weak point"),
+        [typeof(CombatFeedback3D)] = new("Combat Hit Feedback", "Combat", "Scene-level floating damage numbers and collision-aware hit knockback. All display and force settings are editable.", "damage popup knockback"),
+        [typeof(ByteEngine.Core.AI.AIBehavior3D)] = new("AI Behaviour", "AI", "Reusable decision tree, per-enemy blackboard and interruptible tasks. Disable Simple Enemy AI when using this component.", "behavior behaviour tree blackboard decisions"),
+        [typeof(SimpleEnemyAI3D)] = new("Simple Enemy AI", "AI", "Editable contact, rush, projectile, ground-strike and charge attacks with windup and recovery.", "enemy chase attack"),
 
         [typeof(AudioSource3D)] = new(
             "Audio Source 3D",

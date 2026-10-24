@@ -171,6 +171,12 @@ public sealed partial class AnimationController
             ResolveBlendParameter(_selectedBlendSpace.ParameterX, motor, right, forward);
         float y = _selectedBlendSpace?.TwoDimensional == true
             ? ResolveBlendParameter(_selectedBlendSpace.ParameterY, motor, right, forward) : 0f;
+        if (MatchPlaybackToSpeed && motor != null && !_turnActive &&
+            _selectedBlendSpace is {TwoDimensional:true,Blend2DMode:AnimationBlend2DMode.DirectionalSpeed} &&
+            _selectedBlendSpace.ParameterX.Equals("Right",StringComparison.OrdinalIgnoreCase) &&
+            _selectedBlendSpace.ParameterY.Equals("Forward",StringComparison.OrdinalIgnoreCase))
+            LocomotionPlaybackRate=Math.Clamp(AnimationBlendWeights.DirectionalPlaybackRate(_selectedBlendSpace,x,y),
+                Math.Max(0,MinimumPlaybackRate),Math.Max(MinimumPlaybackRate,MaximumPlaybackRate));
         foreach (SkeletalMeshRenderer renderer in _renderers)
         {
             renderer.SetBlendSpace(_turnActive ? null : _selectedBlendSpace, x, y,

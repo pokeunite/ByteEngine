@@ -44,7 +44,7 @@ internal static class WeaponEventBridge
     internal static void Publish(EventExecutionContext context,WeaponInstance3D? weapon,int hitIndex=0,bool accepted=true)
     {
         context.LastRaycastHit=null;context.LastRaycastDirection=default;
-        context.RaycastPerformed=accepted&&weapon?.LastShotWasHitscan==true;
+        context.RaycastPerformed=accepted&&weapon!=null&&(weapon.LastShotWasHitscan||weapon.ShotHits.Count>0);
         if(!context.RaycastPerformed||weapon==null||hitIndex<0||hitIndex>=weapon.ShotHits.Count)return;
         var result=weapon.ShotHits[hitIndex];context.LastRaycastHit=result.Hit;context.LastRaycastDirection=result.Direction;
     }

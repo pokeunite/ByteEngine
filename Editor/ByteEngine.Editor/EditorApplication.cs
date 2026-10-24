@@ -688,6 +688,7 @@ public sealed class EditorApplication
             if (ImGui.MenuItem("Image")) CreateUiWidget("Image", UiWidgetKind.Image);
             if (ImGui.MenuItem("Panel")) CreateUiWidget("Panel", UiWidgetKind.Panel);
             if (ImGui.MenuItem("Progress Bar")) CreateUiWidget("Progress Bar", UiWidgetKind.ProgressBar);
+            if (ImGui.MenuItem("Segmented Bar")) CreateUiWidget("Segmented Bar", UiWidgetKind.SegmentedBar);
             if (ImGui.MenuItem("Slider")) CreateUiWidget("Slider", UiWidgetKind.Slider);
             if (ImGui.MenuItem("Button")) CreateUiWidget("Button", UiWidgetKind.Button);
             ImGui.EndMenu();
@@ -1803,9 +1804,7 @@ public sealed class EditorApplication
             }
             else if (asset.Type == AssetType.Model3D && _state != null)
             {
-                _state.SelectedObject = null;
-                _state.SelectedAssetId = asset.Guid;
-                _state.SelectedAssetPath = asset.ProjectPath;
+                _documentWindows.OpenModel(asset,_projectContext);
             }
         }
         catch (Exception exception)

@@ -91,6 +91,18 @@ public sealed class VfxPlayer : Component
         }
         catch(Exception e) { Status="VFX: "+e.Message; return false; }
     }
+    /// <summary>Builds GPU batches and sprite atlases before combat. Retain this player to reuse them.</summary>
+    public void Prewarm()
+    {
+        if(!Ensure())return;
+        for(int i=0;i<_batches.Length;i++)
+        {
+            var b=_batches[i];var s=_simulation!.Layers[i].Settings;if(!s.Enabled||b.Atlas!=null)continue;
+            Texture2D? texture=null;
+            if(!s.Texture.IsEmpty&&AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)texture=assets.LoadTexture(s.Texture);
+            b.Atlas=VfxAtlas.Acquire(s,texture);b.Material.MainTexture=b.Atlas.Texture;b.Material.BlendMode=s.Additive?BlendMode3D.Additive:BlendMode3D.AlphaBlend;
+        }
+    }
     public void Play(bool restart=true)
     { if(Ensure()) { _startedPlayback=true; Paused=false; _simulation!.Play(Emitter,restart,Intensity); } }
     public void Stop(bool clear=false) => _simulation?.Stop(clear);
@@ -108,7 +120,7 @@ public sealed class VfxPlayer : Component
     }
     protected override void OnStart() { if(PlayOnStart) Play(); }
     protected override void OnUpdate() => Advance((float)Time.DeltaTime);
-    protected override void OnStop() { Stop(true); if(ReturnToPool!=null) Release(); }
+    protected override void OnStop() { Stop(true); Release(); }
     protected override void OnDestroy() => Release();
     private void Release()
     { foreach(var batch in _batches) batch.Dispose(); _batches=Array.Empty<Batch>(); _simulation=null; }

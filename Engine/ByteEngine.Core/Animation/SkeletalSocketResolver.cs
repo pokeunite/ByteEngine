@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core.Assets;
 
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -76,11 +77,9 @@ public static class SkeletalSocketResolver
         ArgumentNullException.ThrowIfNull(renderer);
         ArgumentNullException.ThrowIfNull(socket);
 
-        if (string.IsNullOrWhiteSpace(
-                socket.BoneName) ||
-            !renderer.TryGetBoneModelMatrix(
-                socket.BoneName,
-                out Matrix4x4 boneModel) ||
+        Matrix4x4 boneModel=Matrix4x4.Identity;
+        if ((!string.IsNullOrWhiteSpace(socket.BoneName) &&
+            !renderer.TryGetBoneModelMatrix(socket.BoneName,out boneModel)) ||
             !TryExtractStableBoneFrame(
                 boneModel,
                 out Vector3 bonePosition,
@@ -164,16 +163,29 @@ public static class SkeletalSocketResolver
     {
         transform = default;
 
-        return
-            TryResolveRenderer(
-                target,
-                socketName,
-                out SkeletalMeshRenderer? renderer) &&
-            renderer != null &&
-            TryGetSocketWorldTransform(
-                renderer,
-                socketName,
-                out transform);
+        if(TryResolveRenderer(target,socketName,out SkeletalMeshRenderer? renderer) && renderer!=null &&
+            TryGetSocketWorldTransform(renderer,socketName,out transform))return true;
+        return TryGetStaticPoint(target,socketName,out transform);
+    }
+
+    private static bool TryGetStaticPoint(GameObject target,string name,out SkeletalSocketTransform transform)
+    {
+        transform=default;
+        if(target.GetComponent<ModelHierarchyInstance>() is {} instance &&
+            AnimationRuntimeAssets.TryGet(out AssetManager? assets)&&assets!=null)
+        {
+            SkeletalSocketDefinition? socket;
+            try{socket=assets.LoadModel(instance.Model).FindSocket(name);}catch{socket=null;}
+            if(socket!=null&&string.IsNullOrWhiteSpace(socket.BoneName))
+            {
+                var rotation=Quaternion.CreateFromYawPitchRoll(socket.RotationOffsetDegrees.Y*MathF.PI/180,socket.RotationOffsetDegrees.X*MathF.PI/180,socket.RotationOffsetDegrees.Z*MathF.PI/180);
+                var matrix=Matrix4x4.CreateScale(socket.Scale)*Matrix4x4.CreateFromQuaternion(rotation)*Matrix4x4.CreateTranslation(socket.PositionOffset)*target.Transform.WorldMatrix;
+                if(Matrix4x4.Decompose(matrix,out var scale,out var worldRotation,out var position))
+                {transform=new(position,worldRotation,scale);return true;}
+            }
+        }
+        foreach(var child in target.Children)if(TryGetStaticPoint(child,name,out transform))return true;
+        return false;
     }
 
     public static bool TryGetSocketWorldPosition(

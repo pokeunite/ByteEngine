@@ -33,7 +33,7 @@ public sealed class LifetimeComponent : Component
     private void Simulate(float delta)
     {
         if (_expired) return;
-        RemainingSeconds = Math.Max(0f, RemainingSeconds - (float)Time.DeltaTime);
+        RemainingSeconds = Math.Max(0f, RemainingSeconds - (float.IsFinite(delta)?Math.Max(0,delta):0));
         Expire();
     }
 

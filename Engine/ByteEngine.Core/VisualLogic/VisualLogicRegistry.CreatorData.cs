@@ -22,7 +22,7 @@ public sealed partial class VisualLogicRegistry
     private static VariableValue Collection(VisualInstruction i,EventExecutionContext c)
     {var store=Store(i,c);string name=S(i,c,"name","Items");return store.TryGet(name,out var value)?value!:throw new InvalidOperationException("Collection variable does not exist: "+name);}
     private static void Output(VisualInstruction i,EventExecutionContext c,VariableValue value)=>Store(i,c).Set(S(i,c,"output","Result"),value.Clone());
-    private static void Add(VisualLogicRegistry r,string id,string category,string name,Action<VisualInstruction,EventExecutionContext> action,params VisualArgumentDefinition[] args)=>r.RegisterAction(new(){Id=id,Category=category,DisplayName=name,Arguments=args,Execute=action});
+    private static void Add(VisualLogicRegistry r,string id,string category,string name,Action<VisualInstruction,EventExecutionContext> action,params VisualArgumentDefinition[] args)=>r.RegisterAction(new(){Id=id,Category=category,DisplayName=name,Arguments=args,SentenceTemplate=id switch {"ui.setBarFromResource"=>"Show {source}'s energy on {target}","ui.setTextFromResource"=>"Show {source}'s energy as text in {target}","dash.updateHud"=>"Show dash cooldown on {bar} and readiness in {text}",_=>null},Execute=action});
     private static void Test(VisualLogicRegistry r,string id,string category,string name,Func<VisualInstruction,EventExecutionContext,bool> test,params VisualArgumentDefinition[] args)=>r.RegisterCondition(new(){Id=id,Category=category,DisplayName=name,Arguments=args,Evaluate=test});
 
     private static void RegisterCreatorData(VisualLogicRegistry r)

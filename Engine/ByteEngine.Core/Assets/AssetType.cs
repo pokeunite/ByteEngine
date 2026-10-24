@@ -14,5 +14,6 @@ public enum AssetType
     Material,
     Font,
     VfxEffect,
-    UiTheme
+    UiTheme,
+    AIBehavior
 }

@@ -10,6 +10,21 @@ public sealed partial class VisualLogicRegistry
     private static void RegisterCombatPrototypeTools(VisualLogicRegistry r)
     {
         var target=ObjectArg();
+        Test(r,"combat.coreExposed","Combat / Armour","Weak point is exposed",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<CombatArmour3D>()?.IsExposed==true,target);
+        Add(r,"combat.exposeCore","Combat / Armour","Set weak point exposure",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<CombatArmour3D>()?.SetExposed(B(i,c,"enabled",true)),target,BoolArg("enabled","Exposed",true));
+        Add(r,"enemyAI.dodge","AI / Tactics","Request enemy dodge",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<SimpleEnemyAI3D>()?.RequestDodge(),target);
+        Test(r,"enemyAI.adapted","AI / Tactics","Boss has learned from evaded attacks",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<SimpleEnemyAI3D>() is {} ai&&ai.EvadedCharges+ai.EvadedSlams>=N(i,c,"count",1),target,NumberArg("count","Evaded attacks",1));
+        Add(r,"navigation.rebuild","Navigation","Rebuild navigation around current obstacles",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<ByteEngine.Core.Navigation.NavigationRegion3D>()?.Bake(),target);
+        Add(r,"combat.configureFeedback","Combat / Feedback","Configure damage numbers and hit knockback",(i,c)=>{if(ResolveObjectTarget(i,c)?.GetComponent<CombatFeedback3D>() is {} feedback){feedback.DamageNumbers=B(i,c,"numbers",true);feedback.Knockback=B(i,c,"knockback",true);feedback.KnockbackSpeed=(float)Math.Clamp(N(i,c,"speed",4),0,20);}},target,BoolArg("numbers","Show damage numbers",true),BoolArg("knockback","Enable knockback",true),NumberArg("speed","Knockback speed",4));
+        Add(r,"character.stopMotor","Character Controller 3D","Stop character velocity",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<ByteEngine.Core.Characters.CharacterController3D>()?.SetVelocity(Vector3.Zero),target);
+        Test(r,"enemyAI.phase","AI / Attacks","Enemy attack phase is",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<SimpleEnemyAI3D>()?.AttackPhase==S(i,c,"phase","Windup"),target,TextArg("phase","Phase (Ready, Windup, Charge, Recover)","Windup"));
+        Add(r,"enemyAI.resetAttack","AI / Attacks","Reset enemy attack",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<SimpleEnemyAI3D>()?.ResetAttackPattern(),target);
+        Test(r,"combat.groupDefeated","Combat / Encounters","All enemies in group are defeated",(i,c)=>{
+            var root=ResolveObjectTarget(i,c);if(root==null)return false;
+            var enemies=c.Scene.GameObjects.Where(o=>{for(var p=o;p!=null;p=p.Parent)if(p==root)return true;return false;}).Select(o=>o.GetComponent<HealthComponent>()).Where(h=>h!=null).ToArray();
+            return enemies.Length>0&&enemies.All(h=>h!.IsDead);
+        },target);
+
         Add(r,"character.configureArenaMovement","Character Controller 3D","Configure arena movement",(i,c)=>{
             if(ResolveObjectTarget(i,c)?.GetComponent<ByteEngine.Core.Characters.CharacterController3D>() is {} motor){
                 motor.ArenaMovement=B(i,c,"enabled",true);motor.Acceleration=(float)Math.Clamp(N(i,c,"acceleration",95),0,500);

@@ -25,3 +25,18 @@ Event Sheets expose Set Weapon Accuracy And Recoil, formatted weapon HUD text, s
 ## UI enhancements
 
 Progress bars accept an Image Reference and crop the texture as values change, preserving bevels and artwork proportions. Fill Direction supports left/right and up/down depletion. Existing rectangular bars remain compatible. Widget image, colors, size, order and anchors remain editable. The HUD scales with a 1280x720 reference canvas and safe-area insets.
+
+
+## Carried inventory HUD (weapon plugin 3.12)
+
+The palclone canvas uses **Weapon Inventory HUD**. Its three template pickers point to inactive native UI objects: **HUD weapon-card-template**, **HUD weapon-key-template**, and **HUD reserve-template**. Edit their size, position, fonts and colors in the normal UI inspector. The canvas component exposes stack offset, selected/stored tint and comma-separated hotkey labels. The Event Sheet **Combat HUD and Dash → HUD - carried weapons and reserve magazines** calls **Refresh carried weapon HUD** every update. This binding creates native cards only for owned weapons and removes cards after drops. The selected weapon appears nearest the ammo readout. Each gun's **Weapon Definition → Hud Icon** supplies its card artwork. This works for new guns without adding named-gun HUD rules.
+
+Number keys use **Equip carried weapon by inventory position** (zero based), so the label follows current carried order, not a particular gun type. If you add more keys, update Weapon Controls and the HUD component's Hotkey Labels together. Empty inventory displays no cards or weapon/ammo text.
+
+The ammo label format is **{ammo} / {capacity}**. Reserve markers show reserve ammunition in magazine equivalents: one lit marker is one magazine, with partial reserve magazines partly filled. Empty markers show remaining reserve capacity. Per-round reload weapons also use magazine equivalents. Infinite reserve lights all markers. The native **SegmentedBar** widget exposes marker count (0 = automatic), angle, length, thickness, filled and empty colors. Automatic marker count is capped at 64 for rendering cost. The separate **Update reserve magazine markers** action can bind another native UI bar to the equipped or chosen gun. **Write formatted weapon HUD text** also supports **{reserve}** (rounds) and **{reserveClips}** (fractional magazines).
+
+### Default starting weapon
+
+On the player, open **Weapon Equipment → Starting Equipment**. Turn **Start With No Weapons** off and select any scene gun in **Default Starting Weapon**. The gun need not be a child of inventory or within pickup range. Carry Limit still applies. Default selection takes precedence over legacy Starting Slot. To start empty, turn Start With No Weapons on; the chosen gun stays available in the world. To use the older child inventory loadout, leave the default picker empty and use each rig's Start In Inventory flag.
+
+For a fully event-authored loadout, keep Start With No Weapons on and use **Give starting or reward weapon** with **On start**. The action accepts a scene gun picker and Equip Now, bypasses pickup distance, and respects ownership, carry limits and unique definition slots. Use **Pick up weapon** for proximity-based collection, **Drop equipped weapon** for drops, and **Set weapon carry limit** to change capacity. Default and granted world guns restore their world scale and suspended pickup physics when dropped.

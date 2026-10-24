@@ -8,6 +8,8 @@
     <EmbeddedResource Include="../../Docs/VFX-Authoring.md" LogicalName="ByteAssistant.Reference.Docs.VFX-Authoring.md" />
     <EmbeddedResource Include="../../Docs/Built-in-Scene-Shaders.md" LogicalName="ByteAssistant.Reference.Docs.Built-in-Scene-Shaders.md" />
     <EmbeddedResource Include="../../Docs/PLUGIN-AUTHORING.md;../../Docs/Reusable-Game-Systems.md;../../Docs/Native-Water-System.md;../../Docs/GRAPHICS-QUALITY.md;../../Docs/Blueprint-Camera-Authoring-Implementation.md;../../Docs/Event toolkit implementation.txt;../../Docs/First-Person-Camera.md" LogicalName="ByteAssistant.Reference.Docs.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../Docs/AI-Perception-Tactics-and-Combat.md;../../Docs/AI-Behaviour-Workshop.md;../../Docs/Gun-Projectiles-and-Trails.md;../../Docs/Model-Attachment-Points.md;../../Docs/Weapon-Setup-Tutorial.md;../../Docs/Weapon-Locomotion.md;../../Docs/Combat-Feedback-and-Audio.md;../../Docs/Crownback-Openings.md;../../Docs/Navigation-and-Fireball.md" LogicalName="ByteAssistant.Reference.Docs.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../Plugins/KarlsonDemo/*.cs" LogicalName="ByteAssistant.Reference.Plugins.KarlsonDemo.%(Filename)%(Extension)" />
     <Content Include="Resources\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Resources\Starters\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Resources\Characters\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

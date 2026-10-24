@@ -233,6 +233,18 @@ public static class AnimationBlendWeights
         weights[above] += weight * t;
     }
 
+    public static float DirectionalPlaybackRate(AnimationBlendSpace space, float x, float y)
+    {
+        if (!space.TwoDimensional || space.Blend2DMode != AnimationBlend2DMode.DirectionalSpeed || space.Samples.Count == 0) return 1;
+        Span<float> weights = space.Samples.Count <= 128 ? stackalloc float[space.Samples.Count] : new float[space.Samples.Count];
+        Evaluate(space,x,y,weights);
+        float representedSpeed=0;
+        for(int i=0;i<weights.Length;i++)
+            representedSpeed+=weights[i]*MathF.Sqrt(space.Samples[i].X*space.Samples[i].X+space.Samples[i].Y*space.Samples[i].Y);
+        float speed=MathF.Sqrt(x*x+y*y);
+        return representedSpeed>1e-5f&&float.IsFinite(speed)?speed/representedSpeed:1;
+    }
+
     public static float PlaybackScale(float baseDuration, ReadOnlySpan<float> weights,
         ReadOnlySpan<float> durations)
     {

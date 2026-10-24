@@ -21,6 +21,9 @@ internal sealed class SkeletalSocketPreview : IDisposable
     private BlueprintTransformGizmo3D _gizmo = new();
     private Guid _gizmoSocketId;
     private bool _showOtherSockets;
+    private bool _neutralStaticShading=true;
+    private readonly Material _neutralStaticMaterial=new(){BaseColor=new(.55f,.6f,.65f,1)};
+    private readonly Dictionary<MeshRenderer,Material> _staticMaterials=[];
 
     private Scene? _scene;
     private SkeletalMeshRenderer? _renderer;
@@ -80,6 +83,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
             _scene.UpdateInternal();
         }
 
+        foreach(var pair in _staticMaterials)pair.Key.Material=_neutralStaticShading?_neutralStaticMaterial:pair.Value;
         Guid selectedGuid = selectedId;
         SkeletalSocketDefinition? selected =
             sockets.FirstOrDefault(socket => socket.Id == selectedGuid);
@@ -130,6 +134,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
 
         EditorUi.EndToolbar();
         ImGui.Checkbox("Show other socket handles", ref _showOtherSockets);
+        if(_staticMaterials.Count>0){ImGui.SameLine();ImGui.Checkbox("Neutral shading",ref _neutralStaticShading);}
 
         Vector2 available =
             ImGui.GetContentRegionAvail();
@@ -417,6 +422,22 @@ internal sealed class SkeletalSocketPreview : IDisposable
                         TransitionDuration = 0.0f
                     });
 
+            if(model.Skeleton==null)
+            {
+                var nodes=model.Nodes.ToDictionary(n=>n.Key,n=>_scene.CreateGameObject(n.Name));
+                foreach(var node in model.Nodes)
+                {
+                    var o=nodes[node.Key];o.SetParent(node.ParentKey!=null&&nodes.TryGetValue(node.ParentKey,out var parent)?parent:root,false);
+                    if(Matrix4x4.Decompose(node.LocalTransform,out var scale,out var rotation,out var position)){o.Transform.LocalScale=scale;o.Transform.LocalRotation=rotation;o.Transform.LocalPosition=position;}
+                    foreach(var meshKey in node.MeshKeys)
+                    {
+                        var mesh=model.Meshes.First(m=>m.Key==meshKey);
+                        var meshRenderer=o.AddComponent(new MeshRenderer{MeshReference=new ModelMeshReference(reference,meshKey),Mesh=project.Assets.GetModelMesh(reference,meshKey),Material=mesh.MaterialKey==null?new Material():project.Assets.GetModelMaterial(reference,mesh.MaterialKey),MaterialReference=mesh.MaterialKey==null?null:new ModelMaterialReference(reference,mesh.MaterialKey)});
+                        _staticMaterials.Add(meshRenderer,meshRenderer.Material);
+                    }
+                }
+            }
+
             GameObject keyLight =
                 _scene.CreateGameObject(
                     "Socket Preview Key Light");
@@ -682,11 +703,10 @@ internal sealed class SkeletalSocketPreview : IDisposable
     private bool ApplyProxy(
         SkeletalSocketDefinition socket)
     {
+        Matrix4x4 boneWorld=_renderer?.Transform.WorldMatrix??Matrix4x4.Identity;
         if (_renderer == null ||
             _gizmoProxy == null ||
-            !_renderer.TryGetBoneWorldMatrix(
-                socket.BoneName,
-                out Matrix4x4 boneWorld) ||
+            (!string.IsNullOrWhiteSpace(socket.BoneName)&&!_renderer.TryGetBoneWorldMatrix(socket.BoneName,out boneWorld)) ||
             !SkeletalSocketResolver.TryExtractStableBoneFrame(
                 boneWorld,
                 out Vector3 bonePosition,
@@ -869,11 +889,8 @@ internal sealed class SkeletalSocketPreview : IDisposable
                 out BoundingBox3D bounds) ||
             !bounds.IsValid)
         {
-            minimum =
-                new Vector3(-0.5f, 0.0f, -0.5f);
-
-            maximum =
-                new Vector3(0.5f, 1.8f, 0.5f);
+            if(_renderer.ResolvedModel is {} model&&ModelImportScaleUtility.TryCalculateHierarchyBounds(model,out var min,out var max)){minimum=min;maximum=max;}
+            else {minimum=new(-.5f,0,-.5f);maximum=new(.5f,1.8f,.5f);}
         }
         else
         {
@@ -954,7 +971,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
                 Math.Max(
                     horizontalDistance,
                     verticalDistance) *
-                0.95f,
+                (_renderer.ResolvedModel?.Skeleton==null?1.35f:.95f),
                 0.20f);
 
         _modelFrameDistance =
@@ -1127,6 +1144,7 @@ internal sealed class SkeletalSocketPreview : IDisposable
 
     private void DestroyPreviewScene()
     {
+        _staticMaterials.Clear();
         if (_scene !=
             null)
         {

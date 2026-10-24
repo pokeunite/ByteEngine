@@ -23,7 +23,7 @@ Native event-sheet parameter defaults are shared with the editor picker, includi
 Every rule has explicit condition and action wiring and remains editable in the normal event sheet.
 
 UNDO AND SAVE
-One edit batch per request, at most 20 operations. The scene change is one native Undo entry.
+One edit batch per request, at most 40 operations. The scene change is one native Undo entry.
 Failed batches roll the scene back; no partial edits are retained.
 Edits remain unsaved until you save the scene normally.
 Related event rows share one descriptively named sheet under Assets/Events/Assistant, attached to their target.
@@ -176,3 +176,7 @@ round-trip, skeletal playback and skinning of AF_idle_loop, AF_walk_loop and
 AF_sprint_loop, idle/walk/run state selection, sprint event actions, Undo and invalid
 clip rejection. 69 local checks passed, without another model-generation request.
 All changes were verified in temporary projects; the user's scene is unchanged.
+
+
+AI AND WEAPON SYSTEM UPDATE (24 October 2026)
+See ByteAssistant-AI-System-Support.md for validated AI asset authoring, perception, staged combat, tactical positions, services, sub-behaviours, weapon projectiles/trails and setup recipes. Use byte_help and byte_catalog for the current supported APIs.

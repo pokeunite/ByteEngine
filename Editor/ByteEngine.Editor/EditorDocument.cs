@@ -8,7 +8,9 @@ internal enum EditorDocumentType
     EventSheet,
     AnimationProfile,
     Material,
-    Vfx
+    Vfx,
+    Model,
+    AIBehavior
 }
 
 internal readonly record struct EditorDocumentId(EditorDocumentType Type, string Key)

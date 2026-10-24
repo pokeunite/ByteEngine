@@ -31,6 +31,7 @@ JsonElement Parse(string text) { using var doc = JsonDocument.Parse(text); retur
 object Call(AssistantTools tools, string tool, string args) => tools.Execute(tool, Parse(args));
 bool Throws(Action action) { try { action(); return false; } catch { return true; } }
 
+if (args.Contains("--ai-support")) { try { AIBehaviorAssistantChecks.Run(state,root); } catch(Exception e) { Console.Error.WriteLine(e); Environment.Exit(1); } return; }
 if (args.Contains("--topdown")) { TopDownChecks.Run(serializer); return; }
 
 if (args.Contains("--preview"))

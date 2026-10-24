@@ -14,6 +14,16 @@ using KarlsonDemo.Plugin;
 using ByteEngine.Editor.Panels;
 using ByteEngine.Core.Animation;
 
+HuntCombatTests.Run();
+CombatPolishTests.Run();
+NavigationFireballTests.Run();
+EnemyTacticsTests.Run();
+BossOpeningTests.Run();
+GunProjectileTests.Run();
+AIBehaviorTests.Run();
+AICombatRoleTests.Run();
+try { AIAdvancedTests.Run(); } catch(Exception e) { Console.Error.WriteLine(e); Environment.Exit(1); }
+
 const string Prefix="bytebard.karlsondemo.";
 {
  var filled=UiWidget.ResolveFill(new(10,20),new(200,30),.25f,UiFillDirection.RightToLeft);
@@ -432,4 +442,69 @@ foreach(bool emptyStart in new[]{false,true}){
  def.RecoilRecoveryDegreesPerSecond=10;def.BloomPerShotDegrees=.5f;tick.Invoke(w,[.11f]);w.Fire(Vector3.Zero,-Vector3.UnitZ,shooter);Check(w.AccuracyBloom==.5f,"Accuracy bloom accumulates per successful shot");
  tick.Invoke(w,[1f]);Check(w.RecoilAngles==Vector2.Zero&&w.AccuracyBloom==0,"Recoil and accuracy recover over time");
  Check(registry.TryGetAction(Prefix+"tuneAccuracy",out _)&&registry.TryGetAction(Prefix+"writeHudText",out _),"Accuracy tuning and formatted weapon HUD text are exposed to Event Sheets");
+}
+
+// Inventory-driven HUD and independent default world weapon.
+{
+ var s=new Scene("Dynamic inventory HUD");var actor=s.CreateGameObject("Owner");
+ var inventory=actor.AddComponent(new FpsGunLab3D{StartWithNoWeapons=true,CarryLimit=2,UseBuiltInFireInput=false});
+ WeaponInstance3D Gun(int slot){var o=s.CreateGameObject("Gun "+slot);o.AddComponent(new WeaponDefinition3D{Slot=slot,MagazineCapacity=12,ReserveCapacity=60});var w=o.AddComponent(new WeaponInstance3D{StartInInventory=false, ReserveAmmo=30});o.AddComponent(new WeaponPickup3D());return w;}
+ var hudGunA=Gun(0);var hudGunB=Gun(1);var third=Gun(2);var canvas=s.CreateGameObject("Canvas");canvas.AddComponent(new UiCanvas());
+ var card=s.CreateGameObject("Card template");card.Active=false;card.AddComponent(new UiWidget{Kind=UiWidgetKind.Image,Size=new(140,90),Offset=new(-14,-83)});
+ var key=s.CreateGameObject("Key template");key.Active=false;key.AddComponent(new UiText{FontSize=23,Offset=new(-6,-137)});
+ var reserve=s.CreateGameObject("Reserve template");reserve.Active=false;reserve.AddComponent(new UiWidget{Kind=UiWidgetKind.SegmentedBar,SegmentAngleDegrees=-28,SegmentLength=7,Color=Vector4.Zero});
+ var hud=canvas.AddComponent(new WeaponInventoryHud3D{EquipmentObjectId=actor.Id,CardTemplateId=card.Id,KeyTemplateId=key.Id,ReserveTemplateId=reserve.Id});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(s,null);
+ typeof(FpsGunLab3D).GetMethod("OnUpdate",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventory,null);
+ hud.Refresh();Check(hud.DisplayedWeaponCount==0,"Unarmed inventory creates no weapon cards");
+ Check(inventory.GiveWeapon(hudGunB)&&inventory.GiveWeapon(hudGunA)&&!inventory.GiveWeapon(third),"Event grants respect carry limits without parenting or pickup distance");
+ hud.Refresh();Check(hud.DisplayedWeaponCount==2,"HUD creates exactly one native card per carried weapon");
+ var bars=s.GameObjects.Where(o=>o.Name.StartsWith("HUD carried")&&o.Name.EndsWith(" reserve")).Select(o=>o.GetComponent<UiWidget>()!).ToArray();
+ Check(bars.All(w=>w.Maximum==5&&w.Value==2.5f&&w.SegmentAngleDegrees==-28),"Reserve markers represent full and fractional magazines and preserve template styling");
+ inventory.SelectInventoryIndex(0);Check(inventory.SelectedWeapon==hudGunB,"Hotkeys select carried position independently of definition slot");
+ Check(s.GameObjects.Where(o=>o.Name.StartsWith("HUD carried")&&o.Name.EndsWith(" key")).All(o=>o.GetComponent<UiText>()!.FontSize==23),"Generated cards preserve authored UI text styling");
+ inventory.Drop();hud.Refresh();Check(hud.DisplayedWeaponCount==1,"Dropping removes a card and compacts inventory");
+ inventory.Drop();hud.Refresh();Check(hud.DisplayedWeaponCount==0,"Dropping last weapon clears the inventory HUD");
+ Check(registry.TryGetAction(Prefix+"refreshInventoryHud",out _)&&registry.TryGetAction(Prefix+"updateReserveHud",out _)&&registry.TryGetAction(Prefix+"giveWeapon",out _)&&registry.TryGetAction(Prefix+"equipInventoryIndex",out _),"HUD, reserve markers, grants and carried selection are exposed to Event Sheets");
+}
+foreach(bool empty in new[]{false,true})
+{
+ var s=new Scene("Direct default weapon");var actor=s.CreateGameObject("Owner");var defaultGun=s.CreateGameObject("Distant world default");defaultGun.Transform.WorldPosition=new(100,0,100);defaultGun.Transform.WorldScale=new(2);
+ defaultGun.AddComponent(new WeaponDefinition3D{Slot=7});var w=defaultGun.AddComponent(new WeaponInstance3D{StartInInventory=false, ReserveAmmo=30});defaultGun.AddComponent(new WeaponPickup3D());var collider=defaultGun.AddComponent(new BoxCollider3D());
+ var inventory=actor.AddComponent(new FpsGunLab3D{DefaultWeaponObjectId=defaultGun.Id,StartWithNoWeapons=empty,UseBuiltInFireInput=false});
+ typeof(Scene).GetMethod("LoadInternal",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(s,null);typeof(FpsGunLab3D).GetMethod("OnUpdate",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(inventory,null);
+ Check(empty?inventory.WeaponCount==0:inventory.SelectedWeapon==w,"Direct default respects Start With No Weapons ("+empty+")");
+ if(empty)Check(defaultGun.Active&&collider.Enabled,"Start empty keeps the default gun available as a world pickup");
+ if(!empty){Check(!collider.Enabled,"Default world gun suspends pickup physics");Check(inventory.Drop()&&collider.Enabled&&defaultGun.Transform.WorldScale==new Vector3(2),"Dropping a default restores world scale and physics");}
+}
+{
+ var type=typeof(ByteEngine.Core.Serialization.ComponentSerializer).GetNestedType("UiWidgetCodec",BindingFlags.NonPublic)!;
+ var codec=(ByteEngine.Core.Serialization.IComponentCodec)Activator.CreateInstance(type,true)!;
+ var widget=new UiWidget{Kind=UiWidgetKind.SegmentedBar,SegmentCount=8,SegmentAngleDegrees=-28,SegmentThickness=4,SegmentLength=9,SegmentEmptyColor=new(.1f,.2f,.3f,.4f),Value=2.5f,Maximum=8};
+ var restored=(UiWidget)codec.Deserialize(codec.Serialize(widget,null!),null!);
+ Check(restored.Kind==widget.Kind&&restored.Value==2.5f&&restored.Maximum==8&&restored.SegmentCount==8&&restored.SegmentAngleDegrees==-28&&restored.SegmentThickness==4&&restored.SegmentLength==9&&restored.SegmentEmptyColor==widget.SegmentEmptyColor,"Native reserve marker appearance and fractional fill survive save/load");
+}
+
+{
+ var blend=new AnimationBlendSpace{TwoDimensional=true,Blend2DMode=AnimationBlend2DMode.DirectionalSpeed,Samples=[new(){Clip="idle"},new(){Clip="walk",Y=2},new(){Clip="strafe",X=2},new(){Clip="back",Y=-2},new(){Clip="left",X=-2},new(){Clip="run",Y=6}]};
+ Check(Math.Abs(AnimationBlendWeights.DirectionalPlaybackRate(blend,6,0)-3)<.001f,"Missing sprint strafe plays the walk cycle three times faster at 6 versus 2 m/s");
+ Check(AnimationBlendWeights.DirectionalPlaybackRate(blend,0,6)==1,"Dedicated forward sprint clip retains normal playback");
+ Check(AnimationBlendWeights.DirectionalPlaybackRate(blend,2,0)==1&&AnimationBlendWeights.DirectionalPlaybackRate(blend,0,0)==1,"Walking and idle playback remain normal");
+ Check(registry.GetArguments("ui.setBarFromHealth").Any(a=>a.Name=="source"&&a.IsObjectReference)&&registry.GetArguments("ui.setTextFromHealth").Any(a=>a.Name=="source"&&a.IsObjectReference),"Health HUD owners use scene object pickers and readable names in Event Sheets");
+}
+
+{
+ var checkScene=new Scene("Empty muzzle authoredPoint");var muzzleRig=checkScene.CreateGameObject("Gun");muzzleRig.Transform.WorldPosition=new(3,2,1);muzzleRig.Transform.WorldScale=new(2);
+ var muzzleDefinition=muzzleRig.AddComponent(new WeaponDefinition3D{MuzzleSource=WeaponMuzzleSource.SceneObject});var instance=muzzleRig.AddComponent(new WeaponInstance3D());
+ var empty=checkScene.CreateGameObject("Barrel tip");empty.SetParent(muzzleRig,false);empty.Transform.LocalPosition=new(0,0,-.5f);muzzleDefinition.MuzzleObjectId=empty.Id;
+ Check(instance.TryGetMuzzleWorldPosition(out var muzzle)&&muzzle==empty.Transform.WorldPosition,"Scene empty muzzle follows parent scale without any skeleton");
+ muzzleRig.Transform.EulerAngles=new(0,90,0);Check(instance.TryGetMuzzleWorldPosition(out muzzle)&&muzzle==empty.Transform.WorldPosition,"Scene muzzle follows rotating weapon");
+ muzzleDefinition.MuzzleObjectId=Guid.Empty;Check(!instance.TryGetMuzzleWorldPosition(out _),"Missing explicit scene muzzle is reported rather than resolving a wrong authoredPoint");
+ var imported=new ByteEngine.Core.Assets.Importers.ImportedModel{Guid=Guid.NewGuid(),Name="Static test gun"};
+ var model=(ByteEngine.Core.Assets.ModelAsset)Activator.CreateInstance(typeof(ByteEngine.Core.Assets.ModelAsset),BindingFlags.Instance|BindingFlags.NonPublic,null,[imported],null)!;
+ var authoredPoint=new SkeletalSocketDefinition{Name="Muzzle",PositionOffset=new(.1f,.2f,-.5f)};model.ReplaceSockets([authoredPoint]);
+ var renderer=muzzleRig.AddComponent(new ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer());
+ typeof(ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer).GetField("_model",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(renderer,model);
+ Check(SkeletalSocketResolver.TryGetSocketModelTransform(renderer,authoredPoint,out var rootPoint)&&rootPoint.Position==authoredPoint.PositionOffset,"Model-root attachment points resolve without a skeleton or bone");
+ Check(SkeletalSocketResolver.TryGetSocketWorldTransform(renderer,"Muzzle",out var worldPoint)&&Vector3.Distance(worldPoint.Position,Vector3.Transform(authoredPoint.PositionOffset,muzzleRig.Transform.WorldMatrix))<.001f,"Model authoredPoint matches transformed preview position");
 }

@@ -28,15 +28,24 @@ public sealed class HealthComponent : Component
     }
 
     public bool Invulnerable { get; set; }
+    public float IncomingDamageMultiplier { get; set; } = 1f;
     public bool DestroyOnDeath { get; set; }
     public bool IsDead => CurrentHealth <= 0f;
     public float HealthPercent => MaxHealth <= 0f ? 0f : CurrentHealth / MaxHealth;
 
-    public void Damage(float amount)
+    [System.ComponentModel.Browsable(false)] public System.Numerics.Vector3 LastDamageDirection { get; private set; }
+    public float KnockbackMultiplier { get; set; } = 1;
+    [System.ComponentModel.Browsable(false)] public CombatHitKind LastHitKind {get;private set;}
+    public void Damage(float amount) => Damage(amount, System.Numerics.Vector3.Zero);
+    public void Damage(float amount, System.Numerics.Vector3 direction) => DamageHit(amount,direction,false);
+    public void DamageHit(float amount,System.Numerics.Vector3 direction,bool weakPoint)
     {
         if (Invulnerable || IsDead || !float.IsFinite(amount) || amount <= 0f) return;
+        LastDamageDirection = direction;
+        LastHitKind=CombatHitKind.Normal;
+        if(AttachedGameObject?.GetComponent<CombatArmour3D>() is {Enabled:true} armour){amount=armour.ResolveDamage(amount,weakPoint,out var kind);LastHitKind=kind;}
         float before = CurrentHealth;
-        CurrentHealth -= amount;
+        CurrentHealth -= amount * (float.IsFinite(IncomingDamageMultiplier) ? Math.Max(0, IncomingDamageMultiplier) : 1);
         Damaged?.Invoke(this, before - CurrentHealth);
         TriggerDeath();
     }

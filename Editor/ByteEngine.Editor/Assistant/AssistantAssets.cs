@@ -20,12 +20,13 @@ internal sealed partial class AssistantTools
         if (!File.Exists(path) || new FileInfo(path).Length > 512 * 1024) throw new InvalidOperationException("Asset is missing or exceeds the 512 KB inspection limit.");
         object content = Path.GetExtension(path).ToLowerInvariant() switch
         {
+            ".byteai" => ByteEngine.Core.AI.BehaviorTreeSerializer.Load(path),
             ".bvfx" => VfxEffectSerializer.Load(path),
             ".bmat" => MaterialAssetSerializer.Load(path),
             ".byteblueprint" => new BlueprintSerializer(EditorProjectContext.Active?.AssetDatabase).Load(path),
             ".byteevents" => new ByteEngine.Core.VisualLogic.EventModuleSerializer().Load(path),
             ".byteanim" => ByteEngine.Core.Animation.AnimationProfileSerializer.Load(path),
-            _ => throw new InvalidOperationException("Inspect supports native VFX, materials, Blueprints, animation profiles and event sheets; use catalogue for model metadata.")
+            _ => throw new InvalidOperationException("Inspect supports AI behaviours, native VFX, materials, Blueprints, animation profiles and event sheets; use catalogue for model metadata.")
         };
         string json = Serialize(content);
         if (json.Length > 24000) return new { path = relative, note = "Asset exceeds response budget. Inspect relevant attached components and use schema/reference lookup instead." };
@@ -57,6 +58,7 @@ internal sealed partial class AssistantTools
         if (Matches("mesh geometry model obj asset")) list.Add(new { kind = "create_mesh", extension = ".obj", data = "{name,path,vertices:[[x,y,z],...],triangles:[[a,b,c],...]}. 3..4096 vertices, up to8192 triangles, zero-based indices, counterclockwise winding, flat normals generated. Native OBJ importer reads this asset. instantiate_asset:{name,path,position?} places a project Model3D/Blueprint using the native editor importer; @name references its root afterward." });
         if (Matches("animation profile locomotion idle walk run rig character")) list.Add(new { kind = "create_animation_profile", extension = ".byteanim", data = "{name,path,model,locomotion?:{Idle,Walk,Run,Jump,Fall,Land,RunThreshold,MoveThreshold,RootMotionMode,...},sections?:{Actions,BlendSpaces,Layers,SyncGroups,StateGraph,Procedural}}. byte_animations lists exact model-owned clips, durations and recommended slots. Omitted locomotion clips are discovered; unsupported names are rejected. Assign AnimationController.AnimationProfile=$asset:name on character root. Native controller handles skeletal playback, do not add a second renderer manually.", locomotion = Schema(typeof(ByteEngine.Core.Animation.AnimationLocomotionProfile)), sections = Schema(typeof(ByteEngine.Core.Animation.AnimationProfile)), action = Schema(typeof(ByteEngine.Core.Animation.AnimationActionProfile)) });
         if (Matches("blueprint prefab projectile asset object")) list.Add(new { kind = "save_blueprint", extension = ".byteblueprint", data = "target=scene object; data:{name,path}. Captures target and descendants through native serializers; root position becomes zero. Existing scene object remains; delete your temporary template afterward with delete_object. Reference the asset using $asset:name in components/event arguments. All paths must be NEW paths inside the project's asset directory." });
+        if (Matches("ai behavior behaviour enemy perception hearing blackboard squad tactical subtree services")) list.Add(AIAssetSchema());
         return list;
     }
 
@@ -87,6 +89,7 @@ internal sealed partial class AssistantTools
 
     private void CreateAsset(string kind, JsonElement data, List<string> files)
     {
+        if (kind == "create_ai_behavior") { CreateAIBehavior(data, files); return; }
         if (kind == "create_animation_profile") { CreateAnimationProfile(data, files); return; }
         if (kind == "create_vfx")
         {

@@ -150,6 +150,35 @@
       "editorHeaderColor": "267A8C"
     },
     {
+      "id": "37d8ced2-479c-43ab-9408-74da5dbef47e",
+      "displayName": "HUD - carried weapons and reserve magazines",
+      "enabled": true,
+      "conditions": [
+        {
+          "instanceId": "3bcf3be4-00c4-4770-90aa-3f3bfb800ac2",
+          "id": "system.always",
+          "arguments": {},
+          "conditionInputIds": []
+        }
+      ],
+      "actions": [
+        {
+          "instanceId": "5b78694f-8f65-47b5-abc6-c1d0033ac4f0",
+          "id": "bytebard.karlsondemo.refreshInventoryHud",
+          "arguments": {
+            "target": {
+              "kind": "Constant",
+              "constant": {
+                "type": "String",
+                "string": "HUD canvas"
+              }
+            }
+          },
+          "conditionInputIds": []
+        }
+      ]
+    },
+    {
       "id": "68f1778f-f31d-551a-af09-f2bf81c85588",
       "displayName": "HUD - equipped weapon name, ammo and reload state",
       "enabled": true,
@@ -184,14 +213,14 @@
               "kind": "Constant",
               "constant": {
                 "type": "String",
-                "string": "{ammo} / {reserve}"
+                "string": "{ammo} / {capacity}"
               }
             },
             "empty": {
               "kind": "Constant",
               "constant": {
                 "type": "String",
-                "string": "-- / --"
+                "string": ""
               }
             }
           },
@@ -226,7 +255,7 @@
               "kind": "Constant",
               "constant": {
                 "type": "String",
-                "string": "UNARMED"
+                "string": ""
               }
             }
           },
@@ -262,180 +291,6 @@
               "constant": {
                 "type": "String",
                 "string": ""
-              }
-            }
-          },
-          "conditionInputIds": []
-        }
-      ],
-      "subEvents": [],
-      "hasExplicitConditionFlow": false,
-      "hasExplicitExecutionFlow": false,
-      "editorHeaderColor": "A87933"
-    },
-    {
-      "id": "0dc36c2f-7172-52fb-a459-9f460c1d43dd",
-      "displayName": "HUD - Pistol slot ownership and selection",
-      "enabled": true,
-      "conditions": [
-        {
-          "instanceId": "5d00d834-cb32-4f08-8238-4b2abe629288",
-          "id": "system.always",
-          "arguments": {},
-          "conditionInputIds": []
-        }
-      ],
-      "actions": [
-        {
-          "instanceId": "ebb739a5-368a-47d0-a531-cc78f3d4100d",
-          "id": "bytebard.karlsondemo.updateSlotHud",
-          "arguments": {
-            "target": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "Self"
-              }
-            },
-            "weapon": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "Pistol pickup"
-              }
-            },
-            "image": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "HUD weapon-card-0"
-              }
-            },
-            "selectedColor": {
-              "kind": "Constant",
-              "constant": {
-                "type": "Vector3",
-                "vector3": {
-                  "x": 1,
-                  "y": 0.76,
-                  "z": 0.4
-                }
-              }
-            }
-          },
-          "conditionInputIds": []
-        }
-      ],
-      "subEvents": [],
-      "hasExplicitConditionFlow": false,
-      "hasExplicitExecutionFlow": false,
-      "editorHeaderColor": "A87933"
-    },
-    {
-      "id": "eabd699a-4b1c-51e1-8cee-fbd6a6aed136",
-      "displayName": "HUD - SCAR slot ownership and selection",
-      "enabled": true,
-      "conditions": [
-        {
-          "instanceId": "a846f7c4-cb88-42d8-9c40-bc2e241d2a80",
-          "id": "system.always",
-          "arguments": {},
-          "conditionInputIds": []
-        }
-      ],
-      "actions": [
-        {
-          "instanceId": "4305a0f4-2965-494f-9afb-6a766bc75b93",
-          "id": "bytebard.karlsondemo.updateSlotHud",
-          "arguments": {
-            "target": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "Self"
-              }
-            },
-            "weapon": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "SCAR pickup"
-              }
-            },
-            "image": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "HUD weapon-card-1"
-              }
-            },
-            "selectedColor": {
-              "kind": "Constant",
-              "constant": {
-                "type": "Vector3",
-                "vector3": {
-                  "x": 1,
-                  "y": 0.76,
-                  "z": 0.4
-                }
-              }
-            }
-          },
-          "conditionInputIds": []
-        }
-      ],
-      "subEvents": [],
-      "hasExplicitConditionFlow": false,
-      "hasExplicitExecutionFlow": false,
-      "editorHeaderColor": "A87933"
-    },
-    {
-      "id": "e9951fd8-626a-5a4e-98a9-4210915c7fe4",
-      "displayName": "HUD - Shotgun slot ownership and selection",
-      "enabled": true,
-      "conditions": [
-        {
-          "instanceId": "6e8a77b9-05c7-4a81-accb-fe6af5b3addf",
-          "id": "system.always",
-          "arguments": {},
-          "conditionInputIds": []
-        }
-      ],
-      "actions": [
-        {
-          "instanceId": "adabb6fb-e8eb-4a89-81a6-57c48cf9e85f",
-          "id": "bytebard.karlsondemo.updateSlotHud",
-          "arguments": {
-            "target": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "Self"
-              }
-            },
-            "weapon": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "Shotgun pickup"
-              }
-            },
-            "image": {
-              "kind": "Constant",
-              "constant": {
-                "type": "String",
-                "string": "HUD weapon-card-2"
-              }
-            },
-            "selectedColor": {
-              "kind": "Constant",
-              "constant": {
-                "type": "Vector3",
-                "vector3": {
-                  "x": 1,
-                  "y": 0.76,
-                  "z": 0.4
-                }
               }
             }
           },

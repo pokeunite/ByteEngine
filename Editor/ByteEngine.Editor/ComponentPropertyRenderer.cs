@@ -174,7 +174,10 @@ internal static class ComponentPropertyRenderer
         {
             nameof(UiWidget.ImageReference) => widget.Kind == UiWidgetKind.Image,
             nameof(UiWidget.FillColor) or nameof(UiWidget.Value) or
-                nameof(UiWidget.Maximum) => widget.Kind is UiWidgetKind.ProgressBar or UiWidgetKind.Slider,
+                nameof(UiWidget.Maximum) => widget.Kind is UiWidgetKind.ProgressBar or UiWidgetKind.Slider or UiWidgetKind.SegmentedBar,
+            nameof(UiWidget.SegmentCount) or nameof(UiWidget.SegmentAngleDegrees) or
+                nameof(UiWidget.SegmentThickness) or nameof(UiWidget.SegmentLength) or
+                nameof(UiWidget.SegmentEmptyColor) => widget.Kind == UiWidgetKind.SegmentedBar,
             nameof(UiWidget.HoverColor) or nameof(UiWidget.PressedColor) or
                 nameof(UiWidget.DisabledColor) or nameof(UiWidget.Label) or
                 nameof(UiWidget.LabelKey) or
@@ -613,6 +616,10 @@ internal static class ComponentPropertyRenderer
                         }
                     ImGui.EndCombo();
                 }
+            }
+            else if(descriptor.Property.PropertyType==typeof(string)&&descriptor.Property.IsDefined(typeof(ModelAttachmentPointPickerAttribute),true))
+            {
+                string point=before?.ToString()??"";edited=DrawModelPointSelector(component,project,label,ref point);after=point;
             }
             else if (descriptor.Property.PropertyType == typeof(string) &&
                      descriptor.Property.IsDefined(typeof(AnimationSocketPickerAttribute), true))
@@ -1212,6 +1219,7 @@ internal static class ComponentPropertyRenderer
         Component component,
         string propertyName)
     {
+        if (component is ByteEngine.Core.AI.AIBehavior3D && propertyName == nameof(ByteEngine.Core.AI.AIBehavior3D.Behavior)) return AssetType.AIBehavior;
         if (component is ByteEngine.Core.Vfx.VfxPlayer && propertyName == nameof(ByteEngine.Core.Vfx.VfxPlayer.Effect))
             return AssetType.VfxEffect;
         if (component is WaveSpawner3D && propertyName == nameof(WaveSpawner3D.EnemyBlueprint))
@@ -1375,6 +1383,17 @@ internal static class ComponentPropertyRenderer
 
             _ => "None"
         };
+    }
+
+    private static bool DrawModelPointSelector(Component component,EditorProjectContext? project,string label,ref string value)
+    {
+        IEnumerable<GameObject> Walk(GameObject o){yield return o;foreach(var child in o.Children)foreach(var nested in Walk(child))yield return nested;}
+        string[] names=[];
+        try{var model=Walk(component.GameObject).Select(o=>o.GetComponent<ModelHierarchyInstance>()).FirstOrDefault(m=>m!=null);if(project!=null&&model!=null)names=project.Assets.LoadModel(model.Model).Sockets.Select(p=>p.Name).ToArray();}catch{}
+        if(!ImGui.BeginCombo(label,string.IsNullOrEmpty(value)?"Choose model point":value))return false;
+        bool changed=false;foreach(var name in names)if(ImGui.Selectable(name,name==value)){value=name;changed=true;}
+        if(names.Length==0)ImGui.TextDisabled("Double-click the model asset and add an empty point.");
+        ImGui.EndCombo();return changed;
     }
 
     private static bool DrawAnimationSocketSelector(Component component, EditorProjectContext? project, string label, ref string value)

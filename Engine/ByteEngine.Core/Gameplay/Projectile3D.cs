@@ -31,6 +31,7 @@ public sealed class Projectile3D : Component
         GameObject? projectile = AttachedGameObject;
         RuntimeScene? scene = projectile?.Scene;
         if (projectile == null || scene == null) return;
+        if(projectile.GetComponent<LifetimeComponent>() is {RemainingSeconds:>0} life)delta=Math.Min(delta,life.RemainingSeconds);
         Vector3 displacement = Velocity * delta;
         float distance = displacement.Length();
         if (distance <= .000001f) return;
@@ -81,7 +82,8 @@ public sealed class Projectile3D : Component
             projectile.Transform.WorldPosition = hit.Point;
             healthOwner?.GetComponent<SkeletalRagdoll3D>()?.ApplyImpact(direction,
                 Math.Clamp(Damage / 25f, .1f, 3f));
-            healthOwner?.GetComponent<HealthComponent>()?.Damage(Damage);
+            if(hit.GameObject.GetComponent<DamageRegion3D>() is {} region)region.ApplyDamage(Damage,Velocity);
+            else healthOwner?.GetComponent<HealthComponent>()?.Damage(Damage, Velocity);
             Hit?.Invoke(hit);
             if (DestroyOnHit) scene.DestroyGameObject(projectile);
             else { Velocity = Vector3.Zero; _stopped = true; }

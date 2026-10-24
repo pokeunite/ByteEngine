@@ -166,6 +166,25 @@ internal sealed class EditorDocumentWindowManager : IDisposable
         }
     }
 
+    public void OpenAIBehavior(AssetRecord asset, EditorProjectContext? project=null)
+    {
+        var id = new EditorDocumentId(EditorDocumentType.AIBehavior, asset.Guid.ToString("N"));
+        if (TryFocus(id)) return;
+        var panel = new AIBehaviorWorkspacePanel(_documents, asset, () => (_owner as ByteEngine.Core.ByteEngineApplication)?.Scenes.ActiveScene) { Project=project };
+        try { Add(id, $"{Path.GetFileNameWithoutExtension(asset.ProjectPath)} - AI Behaviour - ByteEngine", "###AIBehaviorWorkspace", null,
+            (renderer, renderer3D, width, height) => panel.Draw(), panel.Dispose); }
+        catch { panel.Dispose(); throw; }
+    }
+
+    public void OpenModel(AssetRecord asset,EditorProjectContext project)
+    {
+        var id=new EditorDocumentId(EditorDocumentType.Model,asset.Guid.ToString("N"));if(TryFocus(id))return;
+        var panel=new ModelWorkspacePanel(_documents,project,asset);
+        try{Add(id,$"{Path.GetFileNameWithoutExtension(asset.ProjectPath)} - Model - ByteEngine","###ModelWorkspace",null,
+            (renderer,renderer3D,width,height)=>panel.Draw(renderer,renderer3D,width,height),panel.Dispose);}
+        catch{panel.Dispose();throw;}
+    }
+
     public void OpenVfx(AssetRecord asset, EditorProjectContext project, EditorLog log)
     {
         EditorDocumentId id = new(EditorDocumentType.Vfx, asset.Guid.ToString("N"));

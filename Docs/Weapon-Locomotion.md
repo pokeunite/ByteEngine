@@ -75,3 +75,18 @@ Palclone's three world guns now each own their Weapon Definition, Weapon Instanc
 Pickup Radius measures horizontal distance; Maximum Height Difference independently prevents collecting through floors. Weapon Pickup exposes Binding Error and collection-status diagnostics. The movement HUD also reports input capture, the configured interaction key (E by default, with a brief press indicator), current inventory and nearest pickup name/distance/status. `Ready`, `Out of range`, `Carry limit reached`, and missing bindings are visible. Gameplay still goes through the editable E/G event sheets; the HUD never performs a pickup.
 
 Plugin components can contribute diagnostic text by implementing the native `ICharacterDebugSource` interface. The core HUD does not depend on weapon plugin types.
+
+
+## Missing sprint strafe clips
+
+For Directional Speed blendspaces using Right/Forward velocity axes, **Match Playback To Speed** now uses the weighted speeds of the actual contributing samples. When a direction only has a 2 m/s walk clip, moving at 6 m/s plays that cycle at 3x. Forward movement with a dedicated 6 m/s run sample remains at 1x, and walk/run interpolation does not get an extra speed multiplier. Idle remains 1x. Playback remains bounded by the profile's Minimum/Maximum Playback Rate. Duration synchronization still applies independently to keep clips in phase. Full-body actions and turning retain their authored playback controls.
+
+Palclone's SyntyDirectionalLocomotion profile enables Match Playback To Speed and allows a maximum rate of 3. These settings remain editable in the Animation Profile. This is a fallback for missing clips; replace the samples with proper sprint strafes later if desired.
+
+## Kit-based muzzle effects
+
+Palclone's **Assets/VFX/Gun Shooting Kit** contains **Pistol Muzzle**, **SCAR Muzzle**, and **Shotgun Muzzle** native VFX assets, using four-frame texture sheets with additional hot powder sparks and brief smoke. Open each .bvfx in the VFX editor to adjust layers, timing, size and colour. Each gun's Weapon Definition exposes Muzzle Flash Effect, Muzzle Flash Size, Muzzle Light Intensity and Range, and its muzzle socket/bone/local-offset settings. The shooting system uses these existing bindings, without weapon-name logic or extra gameplay input code. Native VFX Event Sheet actions can also play these assets independently.
+
+Artwork attribution: Raphael Hatencia, RagnaPixel Studio, Creative Commons Attribution 4.0. The project Documentation folder includes the original license and a distribution credit. The user-supplied artwork is kept in the game project rather than bundled into the reusable engine repository.
+
+Health-to-UI action arguments now mark the health owner as an object reference. Event Sheet summaries display the scene object name while stable GUID references remain internal, preserving rename safety.

@@ -12,10 +12,12 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Ammo state and weapon events. Use Weapon shot hit in an Event Sheet to access Last Ray Hit.", "ammo state reload raycast hit"));
         context.RegisterSimpleComponent<MilkDepotCourse3D>("MilkDepotCourse3D", new("Milk Depot Course", "Karlson", "Editable targets, milk goal, checkpoints and fall recovery.", "level objective checkpoint"));
         context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
+        context.RegisterSimpleComponent<BulletTrail3D>("BulletTrail3D",new("Bullet Trail","Weapons","Tapered additive bullet streak with editable core/glow colours and depth testing.","projectile tracer trail"));
         WeaponEvents.Register(context);
         WeaponReadoutEvents.Register(context);
         WeaponInventoryEvents.Register(context);
         WeaponHudEvents.Register(context);
+        context.RegisterSimpleComponent<WeaponInventoryHud3D>("WeaponInventoryHud3D",new("Weapon Inventory HUD","Weapons","Native UI templates driven by the Refresh carried weapon HUD Event Sheet action. Shows only carried weapons and magazine reserve markers.","inventory hud clips"));
         context.RegisterSimpleComponent<WeaponRecoilVisual3D>("WeaponRecoilVisual3D",new("Weapon Recoil Visual","Weapons","Editable model kick. Select a weapon model child; socket transforms stay untouched.","recoil kick accuracy"));
         context.RegisterSimpleComponent<WeaponPickup3D>("WeaponPickup3D",new("Weapon Pickup","Weapons","World weapon pickup: use a linked scene rig anywhere, or put Weapon Definition and Weapon Instance on this object. Events control pickup and drop.","gun pickup drop inventory"));
     }
@@ -62,6 +64,7 @@ internal static class WeaponEvents
         Action("fire", "Fire equipped weapon", (w,i,e) => {var weapon=w.SelectedWeapon;bool fired=w.Fire();WeaponEventBridge.Publish(e,weapon,accepted:fired);});
         Action("reload", "Reload equipped weapon", (w,i,e) => w.Reload());
         Action("cancelReload", "Cancel reload", (w,i,e) => w.CancelReload());
+        WeaponAction("autoReload", "Automatically reload when empty", (w,i,e)=>{if(w.Definition is {} d)d.AutoReload=Bool(i,e,"enabled");},enabled);
         WeaponAction("setAmmo", "Set magazine and reserve ammo", (w,i,e) => w.SetAmmo((int)Num(i,e,"current"),(int)Num(i,e,"reserve")),
             Arg("current","Current magazine ammo",VariableValue.FromNumber(12)), Arg("reserve","Reserve ammo",VariableValue.FromNumber(60)));
         WeaponAction("addReserve", "Add reserve ammo", (w,i,e) => w.AddReserve((int)Num(i,e,"amount")), Arg("amount","Ammo amount",VariableValue.FromNumber(12)));
@@ -81,6 +84,8 @@ internal static class WeaponEvents
         WeaponAction("projectileTuning", "Set projectile speed and trail", (w,i,e)=>{if(w.Definition is {} d){d.ProjectileSpeed=Num(i,e,"speed");d.ProjectileTrailLength=Num(i,e,"length");d.TraceWidth=Num(i,e,"width");d.ShowShotTrace=Bool(i,e,"enabled");}},
             Arg("speed","Projectile speed",VariableValue.FromNumber(140)),Arg("length","Trail length",VariableValue.FromNumber(1.4)),Arg("width","Trail width",VariableValue.FromNumber(.018)),enabled);
         WeaponAction("muzzleLight", "Set muzzle light pulse", (w,i,e)=>{if(w.Definition is {} d){d.MuzzleLightIntensity=Num(i,e,"intensity");d.MuzzleLightRange=Num(i,e,"range");}},Arg("intensity","Light intensity",VariableValue.FromNumber(2.5)),Arg("range","Light range",VariableValue.FromNumber(3)));
+        WeaponAction("trailAppearance", "Set bullet trail appearance", (w,i,e)=>{if(w.Definition is {} d){var color=EventValueResolver.GetVector3(i,"color",e,new(1,.55f,.12f));d.TrailGlowColor=new(color,Math.Clamp(Num(i,e,"opacity"),0,1));d.TrailGlowScale=Num(i,e,"glow");d.TrailImpactFadeSeconds=Num(i,e,"fade");}},
+            Arg("color","Glow RGB",VariableValue.FromVector3(new(1,.55f,.12f))),Arg("opacity","Glow opacity",VariableValue.FromNumber(.55)),Arg("glow","Glow width multiplier",VariableValue.FromNumber(3)),Arg("fade","Impact fade seconds",VariableValue.FromNumber(.07)));
         WeaponCondition("canReload","Weapon can reload",(w,i,e)=>w.CanReload);
         WeaponCondition("magazineEmpty","Magazine is empty",(w,i,e)=>w.CurrentAmmo<=0);
         WeaponCondition("reserveAtLeast","Reserve ammo is at least",(w,i,e)=>w.ReserveAmmo>=Num(i,e,"amount"),Arg("amount","Ammo amount",VariableValue.FromNumber(1)));

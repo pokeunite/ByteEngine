@@ -109,6 +109,8 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     public int StartingSlot { get; set; }
     [Category("Starting Equipment"),Description("Start unarmed and acquire weapons through event-sheet pickup actions.")]
     public bool StartWithNoWeapons { get; set; }
+    [Category("Starting Equipment"),DisplayName("Default Starting Weapon"),SceneObjectReference(typeof(WeaponInstance3D)),Description("Choose any scene gun, regardless of parenting or pickup range. Turn Start With No Weapons off. This gun is carried and equipped at startup; drop restores its world scale and physics.")]
+    public Guid DefaultWeaponObjectId { get; set; }
     [Category("Inventory"),Description("Maximum carried weapons. Zero means unlimited. Starting weapons also obey this limit.")]
     public int CarryLimit { get; set; }
     [Category("Inventory"), Description("Horizontal distance in front of the player when dropping a weapon. Top-down drops use the character's facing, not the downward camera angle.")]
@@ -124,6 +126,8 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     public bool CanFire => SelectedWeapon?.CanFire == true;
     public bool HasWeapon => SelectedWeapon != null;
     public int WeaponCount => _weapons.Length;
+    [Browsable(false)] public IReadOnlyList<WeaponInstance3D> CarriedWeapons => _weapons;
+    public int SelectedInventoryIndex => Array.IndexOf(_weapons,SelectedWeapon);
     public bool InventoryFull => CarryLimit > 0 && WeaponCount >= CarryLimit;
     public string WeaponName => SelectedWeapon?.Definition?.DisplayName ?? "";
     public int MagazineCapacity => SelectedWeapon?.Definition?.MagazineCapacity ?? 0;
@@ -157,11 +161,13 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     {
         _eye = GameObject.Scene?.FindGameObject(CameraObjectId);
         var root = GameObject.Scene?.FindGameObject(InventoryRootId) ?? _eye;
-        _available = root == null ? [] : Descendants(root).Select(o => o.GetComponent<WeaponInstance3D>())
-            .OfType<WeaponInstance3D>().Where(w => w.Definition != null).ToArray();
-        var starting = StartWithNoWeapons ? [] : _available.Where(w=>w.StartInInventory).OrderBy(w=>w.Definition!.Slot==StartingSlot?0:1).ThenBy(w=>w.Definition!.Slot).GroupBy(w=>w.Definition!.Slot).Select(g=>g.First()).ToArray();
+        var defaultWeapon=GameObject.Scene?.FindGameObject(DefaultWeaponObjectId)?.GetComponent<WeaponInstance3D>();
+        _available = (root == null ? Enumerable.Empty<WeaponInstance3D>() : Descendants(root).Select(o=>o.GetComponent<WeaponInstance3D>()).OfType<WeaponInstance3D>())
+            .Concat(defaultWeapon==null?[]:new[]{defaultWeapon}).Where(w=>w.Definition!=null&&w.InventoryOwner==null).Distinct().ToArray();
+        var starting = StartWithNoWeapons ? [] : _available.Where(w=>w.InventoryOwner==null&&(w==defaultWeapon||w.StartInInventory)).OrderBy(w=>w==defaultWeapon?0:w.Definition!.Slot==StartingSlot?1:2).ThenBy(w=>w.Definition!.Slot).GroupBy(w=>w.Definition!.Slot).Select(g=>g.First()).ToArray();
         _weapons = (CarryLimit>0 ? starting.Take(CarryLimit) : starting).ToArray();
         foreach(var weapon in _available)weapon.InventoryOwner=_weapons.Contains(weapon)?this:null;
+        foreach(var weapon in _weapons)PrepareWorldWeaponForCarry(weapon);
         // Let every rig initialize before hiding unequipped presentation on the first update.
         foreach (var weapon in _available) weapon.GameObject.Active = true;
     }
@@ -181,13 +187,31 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
         RefreshWeaponAttachment();
     }
     public bool Owns(WeaponInstance3D weapon) => _weapons.Contains(weapon);
+    public void SelectInventoryIndex(int index) { if(index>=0&&index<_weapons.Length)Select(_weapons[index].Definition!.Slot); }
     public bool CanPickUp(WeaponInstance3D weapon) => weapon.GameObject.Scene == GameObject.Scene && weapon.Definition != null && weapon.InventoryOwner==null && !InventoryFull && !_weapons.Any(w=>w.Definition?.Slot==weapon.Definition?.Slot);
     public bool PickUp(WeaponPickup3D? pickup,bool equip=true)
     {
         if(pickup==null){LastPickupResult="Selected world pickup was not found";return false;}
         if(!pickup.CanCollect(this)||pickup.Weapon is not {} weapon)
         { LastPickupResult = pickup.GetCollectionStatus(this); return false; }
-        if(pickup.GameObject==weapon.GameObject)
+        return GiveWeapon(weapon,equip);
+    }
+    /// <summary>Event-driven starting/loadout grants; intentionally bypasses pickup distance, never carry limits or ownership.</summary>
+    public bool GiveWeapon(WeaponInstance3D? weapon,bool equip=true)
+    {
+        if(weapon==null||!CanPickUp(weapon)){LastPickupResult="Cannot give weapon: check ownership, carry limit and unique weapon slot";return false;}
+        PrepareWorldWeaponForCarry(weapon);
+        var pickup=GameObject.Scene?.GameObjects.Select(o=>o.GetComponent<WeaponPickup3D>()).FirstOrDefault(p=>p?.Weapon==weapon);
+        _weapons=[.._weapons,weapon];weapon.InventoryOwner=this;
+        if(pickup!=null&&pickup.GameObject!=weapon.GameObject)pickup.GameObject.Active=false;
+        if(equip||SelectedWeapon==null)Select(weapon.Definition!.Slot);else weapon.GameObject.Active=false;
+        LastPickupResult = "Picked up " + weapon.Definition!.DisplayName;
+        return true;
+    }
+    private void PrepareWorldWeaponForCarry(WeaponInstance3D weapon)
+    {
+        var pickup=GameObject.Scene?.GameObjects.Select(o=>o.GetComponent<WeaponPickup3D>()).FirstOrDefault(p=>p?.Weapon==weapon);
+        if(pickup!=null&&pickup.GameObject==weapon.GameObject)
         {
             _worldPickupTransforms[weapon]=(weapon.Transform.WorldScale,weapon.Transform.WorldRotation);
             if(pickup.SuspendPhysicsWhenCarried)
@@ -198,11 +222,6 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
                 foreach(var state in states)state.Component.Enabled=false;
             }
         }
-        _weapons=[.._weapons,weapon];weapon.InventoryOwner=this;
-        if(pickup.GameObject!=weapon.GameObject)pickup.GameObject.Active=false;
-        if(equip||SelectedWeapon==null)Select(weapon.Definition!.Slot);else weapon.GameObject.Active=false;
-        LastPickupResult = "Picked up " + weapon.Definition!.DisplayName;
-        return true;
     }
     public bool Drop(WeaponInstance3D? weapon=null)
     {
@@ -276,7 +295,7 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     {
         float dt = (float)Time.DeltaTime;
         foreach (var weapon in _weapons) weapon.Tick(dt);
-        if (!_ready) { foreach(var weapon in _available)weapon.GameObject.Active=false;Select(_weapons.Any(w=>w.Definition?.Slot==StartingSlot)?StartingSlot:_weapons.FirstOrDefault()?.Definition?.Slot??-1); RefreshWeaponLocomotion(); _ready = true; }
+        if (!_ready) { foreach(var weapon in _available)if(Owns(weapon)||weapon.GameObject.GetComponent<WeaponPickup3D>()==null)weapon.GameObject.Active=false;var preferred=_weapons.FirstOrDefault(w=>w.GameObject.Id==DefaultWeaponObjectId);Select(preferred?.Definition?.Slot??(_weapons.Any(w=>w.Definition?.Slot==StartingSlot)?StartingSlot:_weapons.FirstOrDefault()?.Definition?.Slot??-1)); RefreshWeaponLocomotion(); _ready = true; }
         if (UseBuiltInFireInput && Input.IsGameInputCaptured && Input.IsMouseButtonDown(MouseButton.Left) &&
             (SelectedWeapon?.Definition?.TriggerMode == WeaponTriggerMode.Automatic || Input.IsMouseButtonPressed(MouseButton.Left))) Fire();
     }

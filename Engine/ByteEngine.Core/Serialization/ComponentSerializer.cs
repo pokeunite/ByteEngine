@@ -74,6 +74,11 @@ public sealed class ComponentSerializer
                 ["themeKey"] = widget.ThemeKey,
                 ["cornerRadius"] = widget.CornerRadius,
                 ["fillDirection"] = widget.FillDirection.ToString(),
+                ["segmentCount"] = widget.SegmentCount,
+                ["segmentAngleDegrees"] = widget.SegmentAngleDegrees,
+                ["segmentThickness"] = widget.SegmentThickness,
+                ["segmentLength"] = widget.SegmentLength,
+                ["segmentEmptyColor"] = new JsonArray(widget.SegmentEmptyColor.X,widget.SegmentEmptyColor.Y,widget.SegmentEmptyColor.Z,widget.SegmentEmptyColor.W),
                 ["activateWithSpace"] = widget.ActivateWithSpace,
                 ["autoFitLabel"] = widget.AutoFitLabel,
                 ["fitContent"] = widget.FitContent,
@@ -136,6 +141,11 @@ public sealed class ComponentSerializer
                 MinimumFontSize = data.Properties["minimumFontSize"]?.GetValue<int>() ?? 12,
                 Kind = kind,
                 FillDirection = Enum.TryParse(properties["fillDirection"]?.GetValue<string>(), true, out UiFillDirection fillDirection) ? fillDirection : UiFillDirection.LeftToRight,
+                SegmentCount = properties["segmentCount"]?.GetValue<int>() ?? 0,
+                SegmentAngleDegrees = properties["segmentAngleDegrees"]?.GetValue<float>() ?? 0,
+                SegmentThickness = properties["segmentThickness"]?.GetValue<float>() ?? 3,
+                SegmentLength = properties["segmentLength"]?.GetValue<float>() ?? 7,
+                SegmentEmptyColor = ReadColor(properties["segmentEmptyColor"] as JsonArray,new(.13f,.17f,.19f,.8f)),
                 Anchor = anchor,
                 Offset = offset is { Count: >= 2 }
                     ? new Vector2(offset[0]?.GetValue<float>() ?? 24f,
@@ -439,6 +449,10 @@ public sealed class ComponentSerializer
         );
 
         Register(new HealthComponentCodec());
+        Register(new AIBehaviorCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<CombatArmour3D>("CombatArmour3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<DamageRegion3D>("DamageRegion3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<CombatFeedback3D>("CombatFeedback3D"));
         Register(new HitscanEmitter3DCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<LaunchVolume3D>("LaunchVolume3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ResourceMeter3D>("ResourceMeter3D"));
@@ -1448,6 +1462,7 @@ public sealed class ComponentSerializer
             {
                 TargetId = targetId,
                 TargetName = Text(data, "targetName", string.Empty),
+
                 LookAction = new InputActionReference(
                     Guid.TryParse(Text(data, "lookActionId", string.Empty), out Guid lookActionId) ? lookActionId : Guid.Empty,
                     Text(data, "lookActionName", "Look")),
@@ -1619,7 +1634,8 @@ public sealed class ComponentSerializer
                 ["maxHealth"] = health.MaxHealth,
                 ["currentHealth"] = health.CurrentHealth,
                 ["invulnerable"] = health.Invulnerable,
-                ["destroyOnDeath"] = health.DestroyOnDeath
+                ["destroyOnDeath"] = health.DestroyOnDeath,
+                ["knockbackMultiplier"] = health.KnockbackMultiplier
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context) => new HealthComponent
@@ -1627,7 +1643,8 @@ public sealed class ComponentSerializer
             MaxHealth = Float(data, "maxHealth", 100f),
             CurrentHealth = Float(data, "currentHealth", 100f),
             Invulnerable = data.Properties["invulnerable"]?.GetValue<bool>() ?? false,
-            DestroyOnDeath = data.Properties["destroyOnDeath"]?.GetValue<bool>() ?? false
+            DestroyOnDeath = data.Properties["destroyOnDeath"]?.GetValue<bool>() ?? false,
+            KnockbackMultiplier = Float(data,"knockbackMultiplier",1)
         };
     }
 
@@ -1762,6 +1779,11 @@ public sealed class ComponentSerializer
         }
     }
 
+    private static AssetReference ReadAssetReference(JsonNode? node)
+    {
+        var path=node?["path"]?.GetValue<string>()??"";
+        return Guid.TryParse(node?["guid"]?.GetValue<string>(),out var id)&&id!=Guid.Empty?new AssetReference(id,path):string.IsNullOrWhiteSpace(path)?AssetReference.Empty:new AssetReference(path);
+    }
     private sealed class SimpleEnemyAI3DCodec : IComponentCodec
     {
         public string TypeName => "SimpleEnemyAI3D";
@@ -1771,6 +1793,7 @@ public sealed class ComponentSerializer
             var ai = (SimpleEnemyAI3D)component;
             return Data(TypeName, new JsonObject
             {
+                ["behaviorControlled"] = ai.BehaviorControlled,
                 ["targetId"] = ai.TargetId.ToString(),
                 ["targetTagId"] = ai.TargetTagId.ToString(),
                 ["targetName"] = ai.TargetName,
@@ -1780,7 +1803,40 @@ public sealed class ComponentSerializer
                 ["damage"] = ai.Damage,
                 ["attackCooldown"] = ai.AttackCooldown,
                 ["automaticDamage"] = ai.AutomaticDamage,
-                ["stopDistance"] = ai.StopDistance
+                ["stopDistance"] = ai.StopDistance,
+                ["attackStyle"] = ai.AttackStyle.ToString(),
+                ["useNavigation"] = ai.UseNavigation,
+                ["showChargePath"] = ai.ShowChargePath,
+                ["fallingFireball"] = ai.FallingFireball,
+                ["fireballHeight"] = ai.FireballHeight,
+                ["fireballSize"] = ai.FireballSize,
+                ["fireballEffect"] = new JsonObject{["guid"]=ai.FireballEffect.Guid.ToString(),["path"]=ai.FireballEffect.CachedProjectPath},
+                ["impactEffect"] = new JsonObject{["guid"]=ai.ImpactEffect.Guid.ToString(),["path"]=ai.ImpactEffect.CachedProjectPath},
+                ["windupSeconds"] = ai.WindupSeconds,
+                ["recoverySeconds"] = ai.RecoverySeconds,
+                ["chargeSpeed"] = ai.ChargeSpeed,
+                ["chargeDistance"] = ai.ChargeDistance,
+                ["hazardRadius"] = ai.HazardRadius,
+                ["collisionRadius"] = ai.CollisionRadius,
+                ["recoveryDamageMultiplier"] = ai.RecoveryDamageMultiplier,
+                ["dodgeEnabled"] = ai.DodgeEnabled,
+                ["dodgeCooldown"] = ai.DodgeCooldown,
+                ["dodgeSpeed"] = ai.DodgeSpeed,
+                ["dodgeSeconds"] = ai.DodgeSeconds,
+                ["retreatEnabled"] = ai.RetreatEnabled,
+                ["seekCover"] = ai.SeekCover,
+                ["preferredRange"] = ai.PreferredRange,
+                ["coverSearchRadius"] = ai.CoverSearchRadius,
+                ["coverHoldSeconds"] = ai.CoverHoldSeconds,
+                ["coverInterval"] = ai.CoverInterval,
+                ["adaptiveBoss"] = ai.AdaptiveBoss,
+                ["jumpHeight"] = ai.JumpHeight,
+                ["jumpSeconds"] = ai.JumpSeconds,
+                ["slamWarningSeconds"] = ai.SlamWarningSeconds,
+                ["slamRadius"] = ai.SlamRadius,
+                ["slamDamage"] = ai.SlamDamage,
+                ["feintDistance"] = ai.FeintDistance,
+                ["feintWarningSeconds"] = ai.FeintWarningSeconds
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -1790,15 +1846,49 @@ public sealed class ComponentSerializer
             return new SimpleEnemyAI3D
             {
                 TargetId = targetId,
+                BehaviorControlled = data.Properties["behaviorControlled"]?.GetValue<bool>()??false,
                 TargetTagId = targetTagId,
                 TargetName = Text(data, "targetName", string.Empty),
+                UseNavigation = data.Properties["useNavigation"]?.GetValue<bool>()??false,
+                ShowChargePath = data.Properties["showChargePath"]?.GetValue<bool>()??false,
+                FallingFireball = data.Properties["fallingFireball"]?.GetValue<bool>()??false,
+                FireballHeight = Float(data,"fireballHeight",12),
+                FireballSize = Float(data,"fireballSize",1.3f),
+                FireballEffect = ReadAssetReference(data.Properties["fireballEffect"]),
+                ImpactEffect = ReadAssetReference(data.Properties["impactEffect"]),
                 MoveSpeed = Float(data, "moveSpeed", 3f),
                 DetectionRange = Float(data, "detectionRange", 20f),
                 AttackRange = Float(data, "attackRange", 1.5f),
                 Damage = Float(data, "damage", 10f),
                 AttackCooldown = Float(data, "attackCooldown", 1f),
                 AutomaticDamage = data.Properties["automaticDamage"]?.GetValue<bool>()??true,
-                StopDistance = Float(data, "stopDistance", 1f)
+                StopDistance = Float(data, "stopDistance", 1f),
+                AttackStyle = Enum.TryParse<EnemyAttackStyle>(Text(data,"attackStyle","Contact"),out var style)?style:EnemyAttackStyle.Contact,
+                WindupSeconds = Float(data,"windupSeconds",.8f),
+                RecoverySeconds = Float(data,"recoverySeconds",1.2f),
+                ChargeSpeed = Float(data,"chargeSpeed",10f),
+                ChargeDistance = Float(data,"chargeDistance",8f),
+                HazardRadius = Float(data,"hazardRadius",2f),
+                CollisionRadius = Float(data,"collisionRadius",.35f),
+                RecoveryDamageMultiplier = Float(data,"recoveryDamageMultiplier",2f),
+                DodgeEnabled = data.Properties["dodgeEnabled"]?.GetValue<bool>()??false,
+                DodgeCooldown = Float(data,"dodgeCooldown",3.5f),
+                DodgeSpeed = Float(data,"dodgeSpeed",7f),
+                DodgeSeconds = Float(data,"dodgeSeconds",.22f),
+                RetreatEnabled = data.Properties["retreatEnabled"]?.GetValue<bool>()??false,
+                SeekCover = data.Properties["seekCover"]?.GetValue<bool>()??false,
+                PreferredRange = Float(data,"preferredRange",8f),
+                CoverSearchRadius = Float(data,"coverSearchRadius",6f),
+                CoverHoldSeconds = Float(data,"coverHoldSeconds",1.1f),
+                CoverInterval = Float(data,"coverInterval",3.5f),
+                AdaptiveBoss = data.Properties["adaptiveBoss"]?.GetValue<bool>()??false,
+                JumpHeight = Float(data,"jumpHeight",5f),
+                JumpSeconds = Float(data,"jumpSeconds",.85f),
+                SlamWarningSeconds = Float(data,"slamWarningSeconds",.55f),
+                SlamRadius = Float(data,"slamRadius",3.2f),
+                SlamDamage = Float(data,"slamDamage",22f),
+                FeintDistance = Float(data,"feintDistance",2.5f),
+                FeintWarningSeconds = Float(data,"feintWarningSeconds",.45f)
             };
         }
     }
