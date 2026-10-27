@@ -21,6 +21,7 @@ public sealed partial class AIBehavior3D
     private readonly Dictionary<Guid,(Vector3 Point,double Next)> _searchPoints=[];
     private Guid? _attackOwner;
     private SimpleEnemyAI3D? _stagedCombat;
+    private ByteEngine.Core.Scene.GameObject? _attackTarget;
     private bool _attackCommitted,_phaseFinished;
     private BehaviorNodeKind? _stagedPhase;
     private AIPositionKind? _positionKind;
@@ -44,7 +45,7 @@ public sealed partial class AIBehavior3D
     private void CancelAdvanced(string reason)
     {
         if(_stagedCombat!=null){_stagedCombat.ResetAttackPattern();_stagedCombat=null;Record(_attackOwner??Guid.Empty,"Attack cancelled",reason);}
-        _attackOwner=null;_stagedPhase=null;_attackCommitted=false;_phaseFinished=false;
+        _attackTarget=null;_attackOwner=null;_stagedPhase=null;_attackCommitted=false;_phaseFinished=false;
         if(AttachedGameObject?.Scene is {} scene){var world=AIWorld.For(scene);world.ReleaseAttack(this);world.ReleasePosition(this);}
     }
     private void CleanupAdvanced()
@@ -87,6 +88,24 @@ public sealed partial class AIBehavior3D
                 Record(node.Id,"Waiting","Squad attack slots are occupied");return node.Timeout>0&&elapsed>=node.Timeout?BehaviorStatus.Failure:BehaviorStatus.Running;
             case BehaviorNodeKind.ReleaseAttack:world.ReleaseAttack(this);Blackboard.Set("AttackReserved",VariableValue.FromBoolean(false));return BehaviorStatus.Success;
             case BehaviorNodeKind.ReleasePosition:world.ReleasePosition(this);return BehaviorStatus.Success;
+            case BehaviorNodeKind.Wander:
+                var regionForWander=GetRegion();
+                if(regionForWander?.Ready!=true){LastError="Wandering needs a baked navigation region.";return BehaviorStatus.Failure;}
+                if(!_searchPoints.TryGetValue(node.Id,out var wander)||wander.Next<=_clock)
+                {
+                    Vector3 home=_wanderHome??Transform.WorldPosition;Vector3 chosen=home;
+                    // Stable per-instance phase; only a few local path queries when choosing a destination.
+                    float phase=(GameObject.Id.GetHashCode()&0xffff)*.001f+(float)_clock;
+                    for(int attempt=0;attempt<3;attempt++)
+                    {
+                        float angle=phase+attempt*2.4f;var candidate=home+new Vector3(MathF.Cos(angle),0,MathF.Sin(angle))*Math.Max(.5f,node.SearchRadius);
+                        var route=regionForWander.FindPath(Transform.WorldPosition,candidate,3000);
+                        if(route.Count>0&&Vector3.Distance(route[^1],candidate)<1){chosen=route[^1];break;}
+                    }
+                    _searchPoints[node.Id]=(chosen,_clock+Math.Max(2,node.Duration));Blackboard.Set(node.Key,VariableValue.FromVector3(chosen));
+                }
+                if(Blackboard.TryGet(node.Key,out var wanderValue)&&FlatDistance(wanderValue!.Vector3)<.3f){CancelMovement();return BehaviorStatus.Running;}
+                return MoveAdvanced(node,node.Key,Math.Max(.1f,node.Speed),.3f);
             case BehaviorNodeKind.Search:
                 if(ReadBool("HasLineOfSight"))return BehaviorStatus.Success;
                 if(!HasInterest||elapsed>=Math.Max(.1f,node.Duration)){CancelMovement();return BehaviorStatus.Success;}
@@ -105,21 +124,22 @@ public sealed partial class AIBehavior3D
                 if(combat is not {Enabled:true,BehaviorControlled:true}){LastError="Staged attacks require the enemy combat component in Behaviour Controlled mode.";return BehaviorStatus.Failure;}
                 if(FlatDistance(Target.Transform.WorldPosition)>combat.AttackRange||(PerceptionMemory&&!ReadBool("HasLineOfSight"))){world.ReleaseAttack(this);Record(node.Id,"Attack denied","Target moved outside attack reach or sight");return BehaviorStatus.Failure;}
                 if(!world.OwnsAttack(this)){Record(node.Id,"Attack denied","Reserve a squad attack slot before choosing an attack");return BehaviorStatus.Failure;}
+                if(combat.PredatoryRush && !combat.CanBeginRush(Target)){world.ReleaseAttack(this);Record(node.Id,"Attack denied","Rush needs clear sight, cooldown and minimum/maximum range");return BehaviorStatus.Failure;}
                 combat.TargetId=Target.Id;
-                CancelMovement();CancelCombat();_stagedCombat=combat;_attackOwner=node.Id;_attackCommitted=false;
+                CancelMovement();CancelCombat();_stagedCombat=combat;_attackTarget=Target;_attackOwner=node.Id;_attackCommitted=false;
                 if(!combat.SelectBehaviorAttack(Target,node.AttackOption)){_stagedCombat=null;_attackOwner=null;world.ReleaseAttack(this);Record(node.Id,"Attack unavailable",combat.BehaviorAttackError);return BehaviorStatus.Failure;}Blackboard.Set("ChosenAttack",VariableValue.FromString(combat.SelectedBehaviorAttack));EmitSignal("AttackChosen");return BehaviorStatus.Success;
             case BehaviorNodeKind.Telegraph:
-                if(_stagedCombat==null||Target==null)return BehaviorStatus.Failure;
+                if(_stagedCombat==null||_attackTarget==null)return BehaviorStatus.Failure;
                 _attackOwner=node.Id;
-                if(first){CancelMovement();_stagedCombat.BeginBehaviorTelegraph(Target);_stagedPhase=node.Kind;_phaseFinished=false;EmitSignal("AttackTelegraph");Record(node.Id,"Telegraph",_stagedCombat.SelectedBehaviorAttack);}
+                if(first){CancelMovement();_stagedCombat.BeginBehaviorTelegraph(_attackTarget);_stagedPhase=node.Kind;_phaseFinished=false;EmitSignal("AttackTelegraph");Record(node.Id,"Telegraph",_stagedCombat.SelectedBehaviorAttack);}
                 return _phaseFinished?BehaviorStatus.Success:BehaviorStatus.Running;
             case BehaviorNodeKind.CommitAttack:
                 if(_stagedCombat==null||!world.OwnsAttack(this))return BehaviorStatus.Failure;
                 _attackOwner=node.Id;_attackCommitted=true;EmitSignal("AttackCommitted");Record(node.Id,"Committed","Aim is locked; the attack will not track the target");return BehaviorStatus.Success;
             case BehaviorNodeKind.Strike:
-                if(_stagedCombat==null||!_attackCommitted||Target==null)return BehaviorStatus.Failure;
+                if(_stagedCombat==null||!_attackCommitted||_attackTarget==null)return BehaviorStatus.Failure;
                 _attackOwner=node.Id;
-                if(first){_stagedCombat.BeginBehaviorStrike(Target);_stagedPhase=node.Kind;_phaseFinished=false;EmitSignal("AttackStrike");}
+                if(first){_stagedCombat.BeginBehaviorStrike(_attackTarget);_stagedPhase=node.Kind;_phaseFinished=false;EmitSignal("AttackStrike");}
                 return _phaseFinished?BehaviorStatus.Success:BehaviorStatus.Running;
             case BehaviorNodeKind.Recover:
                 if(_stagedCombat==null)return BehaviorStatus.Failure;_attackOwner=node.Id;
@@ -131,19 +151,19 @@ public sealed partial class AIBehavior3D
     }
     private void TickStagedCombat(float delta)
     {
-        if(_stagedCombat==null||Target==null||_phaseFinished)return;
+        if(_stagedCombat==null||_attackTarget==null||_phaseFinished)return;
         if(_attackCommitted&&!AIWorld.For(GameObject.Scene!).OwnsAttack(this)){CancelAdvanced("Attack reservation expired");return;}
         if(_stagedPhase==BehaviorNodeKind.Telegraph)_phaseFinished=_stagedCombat.TickBehaviorTelegraph(delta);
-        if(_stagedPhase==BehaviorNodeKind.Strike)_phaseFinished=_stagedCombat.TickBehaviorStrike(Target,delta);
-        if(_stagedPhase==BehaviorNodeKind.Recover)_phaseFinished=_stagedCombat.TickBehaviorRecovery(Target,delta);
+        if(_stagedPhase==BehaviorNodeKind.Strike)_phaseFinished=_stagedCombat.TickBehaviorStrike(_attackTarget,delta);
+        if(_stagedPhase==BehaviorNodeKind.Recover)_phaseFinished=_stagedCombat.TickBehaviorRecovery(_attackTarget,delta);
     }
     private BehaviorStatus MoveAdvanced(BehaviorNode node,string key,float speed,float distance)
     {
         if(!Blackboard.TryGet(key,out var value)||value!.Type!=VariableType.Vector3)return BehaviorStatus.Failure;
         var agent=GameObject.GetComponent<NavigationAgent3D>();if(agent is not {Enabled:true}){LastError="Search needs Navigation Agent.";return BehaviorStatus.Failure;}
-        _movementOwner=node.Id;_ownedAgent=agent;agent.ExternallyDriven=true;agent.Destination=value.Vector3;agent.Speed=speed;agent.Moving=true;Face(value.Vector3);return BehaviorStatus.Running;
+        _movementOwner=node.Id;_ownedAgent=agent;agent.ExternallyDriven=true;agent.Destination=value.Vector3;agent.Speed=speed*SafeMovementMultiplier;agent.Moving=true;Face(value.Vector3);return BehaviorStatus.Running;
     }
-    private NavigationRegion3D? GetRegion(){var agent=GameObject.GetComponent<NavigationAgent3D>();return agent==null?null:GameObject.Scene?.FindGameObject(agent.RegionObject)?.GetComponent<NavigationRegion3D>();}
+    private NavigationRegion3D? GetRegion(){var agent=GameObject.GetComponent<NavigationAgent3D>();return agent==null?null:agent.RegionObject==Guid.Empty?GameObject.Scene?.GameObjects.Select(o=>o.GetComponent<NavigationRegion3D>()).FirstOrDefault(r=>r is {Enabled:true}):GameObject.Scene?.FindGameObject(agent.RegionObject)?.GetComponent<NavigationRegion3D>();}
     private BehaviorStatus RunSubtree(BehaviorNode node)
     {
         string identity=node.SubBehavior.Guid!=Guid.Empty?node.SubBehavior.Guid.ToString():node.SubBehavior.ProjectPath;
@@ -157,9 +177,7 @@ public sealed partial class AIBehavior3D
                 else {using var db=new AssetDatabase(GameObject.Scene!.ProjectRoot!,["Assets","Scenes"],readOnly:true);var asset=db.Resolve(node.SubBehavior)??throw new FileNotFoundException("Sub-behaviour missing.");original=BehaviorTreeSerializer.Load(asset.FullPath);}
                 if(original.Validate().Count>0)throw new InvalidDataException("Invalid sub-behaviour.");
                 definition=JsonSerializer.Deserialize<BehaviorTreeDefinition>(JsonSerializer.Serialize(original,BehaviorTreeSerializer.Options),BehaviorTreeSerializer.Options)!;
-                void Scope(BehaviorNode n){var a=n.Id.ToByteArray();var b=node.Id.ToByteArray();int candidates=Math.Clamp(PositionCandidates,8,24);
-        for(int i=0;i<candidates;i++)a[i]^=b[i];n.Id=new Guid(a);foreach(var c in n.Children)Scope(c);}Scope(definition.Root);foreach(var service in definition.Services){var bytes=service.Id.ToByteArray();var salt=node.Id.ToByteArray();int candidates=Math.Clamp(PositionCandidates,8,24);
-        for(int i=0;i<candidates;i++)bytes[i]^=salt[i];service.Id=new Guid(bytes);}
+                void Scope(BehaviorNode n){var a=n.Id.ToByteArray();var b=node.Id.ToByteArray();for(int i=0;i<a.Length;i++)a[i]^=b[i];n.Id=new Guid(a);foreach(var c in n.Children)Scope(c);}Scope(definition.Root);foreach(var service in definition.Services){var bytes=service.Id.ToByteArray();var salt=node.Id.ToByteArray();for(int i=0;i<bytes.Length;i++)bytes[i]^=salt[i];service.Id=new Guid(bytes);}
                 foreach(var key in definition.Blackboard)if(!Blackboard.Contains(key.Name))Blackboard.Set(key.Name,key.Value.Clone());_subtrees[node.Id]=definition;
             }
             RunServicesFor(definition);

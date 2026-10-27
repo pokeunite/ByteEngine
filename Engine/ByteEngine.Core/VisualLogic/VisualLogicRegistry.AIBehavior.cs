@@ -11,11 +11,14 @@ public sealed partial class VisualLogicRegistry
         var target=ObjectArg();
         AIBehavior3D? AI(VisualInstruction i,EventExecutionContext c)=>ResolveObjectTarget(i,c)?.GetComponent<AIBehavior3D>();
         var key=TextArg("key","Memory key","Ready");
+        Add(r,"ai.bakeNavigation",category,"Rebuild navigation after opening a passage",(i,c)=>ResolveObjectTarget(i,c)?.GetComponent<ByteEngine.Core.Navigation.NavigationRegion3D>()?.Bake(),target);
         Add(r,"ai.pause",category,"Pause or resume AI behaviour",(i,c)=>AI(i,c)?.SetPaused(B(i,c,"paused",true)),target,BoolArg("paused","Paused",true));
         Add(r,"ai.noise",category,"Report AI hearing noise",(i,c)=>{var source=ResolveObjectTarget(i,c);if(source!=null)AIWorld.ReportNoise(c.Scene,source.Transform.WorldPosition,(float)N(i,c,"radius",15),source.Id,S(i,c,"kind","Noise"));},target,NumberArg("radius","Audible radius",15),TextArg("kind","Noise kind","Noise"));
         Add(r,"ai.forget",category,"Forget AI target and last known position",(i,c)=>AI(i,c)?.ForgetTarget(),target);
         Test(r,"ai.awareness",category,"AI awareness is",(i,c)=>AI(i,c)?.Awareness==S(i,c,"state","Visible"),target,TextArg("state","Awareness","Visible"));
         Add(r,"ai.release",category,"Release AI squad reservations",(i,c)=>{if(AI(i,c) is {} ai){AIWorld.For(c.Scene).ReleaseAttack(ai);AIWorld.For(c.Scene).ReleasePosition(ai);}},target);
+        Add(r,"ai.stagger",category,"Stagger enemy and interrupt its attack",(i,c)=>ResolveObjectArgument(i,"target",c,false)?.GetComponent<ByteEngine.Core.Gameplay.SimpleEnemyAI3D>()?.Stagger((float)N(i,c,"seconds")),target,NumberArg("seconds","Stagger seconds",.5));
+        Test(r,"ai.rushOutcome",category,"Enemy charge outcome is",(i,c)=>ResolveObjectArgument(i,"target",c,false)?.GetComponent<ByteEngine.Core.Gameplay.SimpleEnemyAI3D>()?.LastRushOutcome.ToString().Equals(S(i,c,"outcome","WallCrash"),StringComparison.OrdinalIgnoreCase)==true,target,TextArg("outcome","Outcome (PlayerHit, Miss, WallCrash, Interrupted)","WallCrash"));
         Add(r,"ai.clearHistory",category,"Clear AI decision history",(i,c)=>AI(i,c)?.ClearDecisionHistory(),target);
         Add(r,"ai.restart",category,"Restart AI behaviour and reset memory",(i,c)=>AI(i,c)?.Restart(),target);
         Add(r,"ai.target",category,"Set AI target",(i,c)=>{if(AI(i,c) is {} ai)ai.TargetObjectId=ResolveObjectArgument(i,"object",c,false)?.Id??Guid.Empty;},target,ObjectArg("object","Target object"));

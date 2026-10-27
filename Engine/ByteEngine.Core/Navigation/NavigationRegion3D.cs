@@ -29,6 +29,11 @@ public sealed class NavigationRegion3D : Component
         }
         return Snap(start,out var from)&&Snap(end,out var to)?grid.FindPath(from,to,maximumVisited):Array.Empty<Vector3>();
     }
+    [System.ComponentModel.Description("Sample authored box floor colliders for height and reject cells without a floor. Use a dedicated floor layer mask.")]
+    public bool SampleColliderFloors {get;set;}
+    public int FloorLayerMask {get;set;} = -1;
+    public float FloorProbeHeight {get;set;} = 3;
+    public float FloorProbeDepth {get;set;} = 8;
     public bool SampleTerrain {get;set;}
     public bool ExcludeDynamicActors {get;set;}
     public float MaximumSlope {get;set;}=45;
@@ -63,7 +68,7 @@ public sealed class NavigationRegion3D : Component
     private static bool IsActor(GameObject obj)
     {
         for(var owner=obj;owner!=null;owner=owner.Parent)
-            if(owner.GetComponent<ByteEngine.Core.Gameplay.HealthComponent>()!=null || owner.GetComponent<CharacterController3D>()!=null || owner.GetComponent<NavigationAgent3D>()!=null || owner.GetComponent<Rigidbody3D>() is {BodyType:RigidbodyBodyType3D.Dynamic})return true;
+            if(owner.GetComponent<ByteEngine.Core.Gameplay.SimpleEnemyAI3D>()!=null || owner.GetComponent<ByteEngine.Core.AI.AIBehavior3D>()!=null || owner.GetComponent<CharacterController3D>()!=null || owner.GetComponent<NavigationAgent3D>()!=null || owner.GetComponent<Rigidbody3D>() is {BodyType:RigidbodyBodyType3D.Dynamic})return true;
         return false;
     }
     public void Bake()
@@ -113,6 +118,37 @@ public sealed class NavigationRegion3D : Component
         grid.MaximumStepHeight=float.IsFinite(MaximumStepHeight)?Math.Max(0,MaximumStepHeight):.4f;
         var terrains=SampleTerrain?scene.GameObjects.Where(o=>o.ActiveInHierarchy).SelectMany(o=>o.Components.OfType<HeightfieldCollider3D>()).Where(c=>c.Enabled&&!c.IsTrigger).ToArray():Array.Empty<HeightfieldCollider3D>();
         float minimumUp=MathF.Cos(Math.Clamp(float.IsFinite(MaximumSlope)?MaximumSlope:45,0,89)*MathF.PI/180);
+        // Cache slab transforms once; floor baking must not perform thousands of scene-wide raycasts.
+        var floors=new List<(Matrix4x4 Inverse,Matrix4x4 Normal,Vector3 Half,Vector3 Center,Vector3 Min,Vector3 Max)>();
+        if(SampleColliderFloors)foreach(var owner in scene.GameObjects.Where(o=>o.ActiveInHierarchy&&(FloorLayerMask&(1<<o.Layer))!=0&&(!ExcludeDynamicActors||!IsActor(o))))
+            foreach(var box in owner.Components.OfType<BoxCollider3D>().Where(b=>b.Enabled&&!b.IsTrigger))
+            {
+                var world=owner.Transform.WorldMatrix;if(!Matrix4x4.Invert(world,out var inverse))continue;
+                Vector3 half=Vector3.Abs(box.Size)*.5f,center=Vector3.Transform(box.Center,world);
+                Vector3 extent=Vector3.Abs(new(world.M11,world.M12,world.M13))*half.X+Vector3.Abs(new(world.M21,world.M22,world.M23))*half.Y+Vector3.Abs(new(world.M31,world.M32,world.M33))*half.Z;
+                floors.Add((inverse,Matrix4x4.Transpose(inverse),half,box.Center,center-extent,center+extent));
+            }
+        bool SampleFloor(Vector3 probe,out float surface,out float normalUp)
+        {
+            surface=float.NegativeInfinity;normalUp=0;float distance=Math.Max(.2f,FloorProbeDepth);
+            foreach(var floor in floors)
+            {
+                if(probe.X<floor.Min.X||probe.X>floor.Max.X||probe.Z<floor.Min.Z||probe.Z>floor.Max.Z)continue;
+                var local=Vector3.Transform(probe,floor.Inverse)-floor.Center;var direction=Vector3.TransformNormal(-Vector3.UnitY,floor.Inverse);
+                float near=0,far=distance;Vector3 normal=Vector3.Zero;bool hit=true;
+                for(int axis=0;axis<3;axis++)
+                {
+                    float p=axis==0?local.X:axis==1?local.Y:local.Z,d=axis==0?direction.X:axis==1?direction.Y:direction.Z,h=axis==0?floor.Half.X:axis==1?floor.Half.Y:floor.Half.Z;
+                    if(Math.Abs(d)<.000001f){if(p< -h||p>h){hit=false;break;}continue;}
+                    float a=(-h-p)/d,b=(h-p)/d;if(a>b)(a,b)=(b,a);
+                    if(a>near){near=a;normal=(axis==0?Vector3.UnitX:axis==1?Vector3.UnitY:Vector3.UnitZ)*(d>0?-1:1);}
+                    far=Math.Min(far,b);if(near>far){hit=false;break;}
+                }
+                if(!hit||near<0||near>distance)continue;float y=probe.Y-near;if(y<=surface)continue;
+                surface=y;var n=Vector3.TransformNormal(normal,floor.Normal);normalUp=n.LengthSquared()>.000001f?Vector3.Normalize(n).Y:0;
+            }
+            return float.IsFinite(surface);
+        }
         int walkable = 0;
         for(int z=0;z<height;z++) for(int x=0;x<width;x++)
         {
@@ -121,6 +157,13 @@ public sealed class NavigationRegion3D : Component
             float heightValue=origin.Y;
             foreach(var terrain in terrains)
                 if(terrain.TrySampleWorld(new(minX+cell*.5f,origin.Y,minZ+cell*.5f),out var surface,out var normal)){heightValue=surface.Y;if(normal.Y<minimumUp)blocked=true;break;}
+            if(SampleColliderFloors&&!blocked)
+            {
+                var probe=new Vector3(minX+cell*.5f,origin.Y+Math.Max(.1f,FloorProbeHeight),minZ+cell*.5f);
+                if(SampleFloor(probe,out var floorHeight,out var floorUp))
+                {heightValue=floorHeight;if(floorUp<minimumUp)blocked=true;}
+                else blocked=true;
+            }
             grid.SetHeight(x,z,heightValue);
             grid.SetCell(x,z,blocked); if(!blocked) walkable++;
         }

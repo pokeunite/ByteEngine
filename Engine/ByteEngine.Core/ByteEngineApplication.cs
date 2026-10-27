@@ -36,7 +36,7 @@ public class ByteEngineApplication : GameWindow
 
     public void CaptureGameInput(bool grabCursor = true)
     {
-        if (Input.IsGameInputCaptured) return;
+        if (Input.IsGameInputCaptured) { CursorState = grabCursor&&!Input.IsUiPointerRequested ? CursorState.Grabbed : CursorState.Normal; return; }
         CursorState = grabCursor ? CursorState.Grabbed : CursorState.Normal;
         Input.SetGameInputCaptured(true);
     }
@@ -184,13 +184,14 @@ public class ByteEngineApplication : GameWindow
             GameplayInputActionsEnabled
         );
 
-        if (Input.IsGameInputCaptured && Input.IsKeyPressed(Key.Escape))
+        bool menuOwnsEscape=Input.IsUiPointerRequested||Input.HasGameplayEscapeHandler;
+        if (!menuOwnsEscape && Input.IsGameInputCaptured && Input.IsKeyPressed(Key.Escape))
         {
             ReleaseGameInput();
             return;
         }
 
-        if (CloseOnEscape &&
+        if (!menuOwnsEscape && CloseOnEscape &&
             Input.IsKeyDown(
                 Key.Escape))
         {
@@ -205,7 +206,14 @@ public class ByteEngineApplication : GameWindow
         {
             Scenes.UpdateInternal();
         }
+        if(UseWholeWindowForUiInput&&Input.IsGameInputCaptured)
+        {
+            if(Input.IsUiPointerRequested){if(!_menuReleasedCursor)_menuCursorWasGrabbed=CursorState==CursorState.Grabbed;CursorState=CursorState.Normal;_menuReleasedCursor=true;}
+            else if(_menuReleasedCursor){CursorState=_menuCursorWasGrabbed?CursorState.Grabbed:CursorState.Normal;_menuReleasedCursor=false;}
+        }
     }
+    private bool _menuReleasedCursor;
+    private bool _menuCursorWasGrabbed;
 
     protected virtual bool GameplayInputActionsEnabled => true;
 

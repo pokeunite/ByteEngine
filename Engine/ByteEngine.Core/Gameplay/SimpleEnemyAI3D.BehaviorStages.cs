@@ -21,12 +21,14 @@ public sealed partial class SimpleEnemyAI3D
     public bool TickBehaviorBackground(float delta)
     {
         AttackFiredThisFrame=false;IsMoving=false;if(AttackPhase=="Ready")State=SimpleEnemyAIState.Idle;
-        _cooldownRemaining=Math.Max(0,_cooldownRemaining-delta);
+        if(!PredatoryRush || AttackPhase=="Ready")_cooldownRemaining=Math.Max(0,_cooldownRemaining-delta);
+        UpdateRushVelocity(delta);
         return AttackPhase=="Ready"&&GameObject.Scene?.FindGameObject(TargetId) is {} target&&SimulateTactics(target,delta);
     }
     public void SetBehaviorMovement(bool moving){IsMoving=moving;if(AttackPhase=="Ready")State=moving?SimpleEnemyAIState.Chase:SimpleEnemyAIState.Idle;}
     public void BeginBehaviorTelegraph(GameObject target)
     {
+        if(PredatoryRush){BeginRush(target);return;}
         if(AdaptiveBoss&&SelectedBehaviorAttack=="Slam"){BeginSlam(target,false);return;}
         var d=target.Transform.WorldPosition-Transform.WorldPosition;d.Y=0;
         if(d.LengthSquared()<.001f)d=-Vector3.UnitZ;
@@ -34,6 +36,7 @@ public sealed partial class SimpleEnemyAI3D
     }
     public bool TickBehaviorTelegraph(float delta)
     {
+        if(PredatoryRush){TickRushWindup(delta);return _phaseTime<=0;}
         State=SimpleEnemyAIState.Attack;IsMoving=false;AttackFiredThisFrame=false;_phaseTime=Math.Max(0,_phaseTime-delta);
         if(_fireball is {Active:true})
         {
@@ -44,11 +47,13 @@ public sealed partial class SimpleEnemyAI3D
     }
     public void BeginBehaviorStrike(GameObject target)
     {
+        if(PredatoryRush){LaunchRush();return;}
         if(AttackPhase=="SlamWindup"){AttackPhase="Leap";_jumpTime=0;_jumpOrigin=Transform.WorldPosition;return;}
         _phaseTime=0;SimulatePattern(target,0);
     }
     public bool TickBehaviorStrike(GameObject target,float delta)
     {
+        if(PredatoryRush){TickRushCharge(target,delta);return AttackPhase=="Recover";}
         if(AttackPhase=="Recover")return true;
         SimulatePattern(target,delta);return AttackPhase=="Recover";
     }
@@ -61,6 +66,7 @@ public sealed partial class SimpleEnemyAI3D
     }
     public bool TickBehaviorRecovery(GameObject target,float delta)
     {
+        if(PredatoryRush){TickRushRecovery(delta);return AttackPhase=="Ready";}
         if(AttackPhase=="Ready")return true;
         if(AttackPhase!="Recover")return false;
         SimulatePattern(target,delta);if(AttackPhase=="Ready")_behaviorStaged=false;return AttackPhase=="Ready";

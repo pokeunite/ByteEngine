@@ -1,0 +1,1229 @@
+[
+  {
+    "Id": "research-37a33fc0925bc989",
+    "Name": "Bore tuning",
+    "Description": "Pistol damage +5 per rank.",
+    "Stat": "PistolDamageFlat",
+    "Branch": "Pistol",
+    "Amount": 5.0,
+    "Cost": 19,
+    "MaxRank": 2,
+    "RankCosts": [
+      19,
+      28
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 0,
+    "Y": 5
+  },
+  {
+    "Id": "research-5f8b23b136433c3f",
+    "Name": "Field bandolier",
+    "Description": "Reserve capacity +3 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 3,
+    "Cost": 23,
+    "MaxRank": 3,
+    "RankCosts": [
+      23,
+      28,
+      32
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 1,
+    "Y": 5
+  },
+  {
+    "Id": "research-0f217e430c9ccc2b",
+    "Name": "Broker margin",
+    "Description": "Sale price +0.1 credits per unit per rank.",
+    "Stat": "OilPriceFloor",
+    "Branch": "Market",
+    "Amount": 0.10000000149011612,
+    "Cost": 23,
+    "MaxRank": 3,
+    "RankCosts": [
+      23,
+      28,
+      32
+    ],
+    "Prerequisites": [
+      "research-5f8b23b136433c3f"
+    ],
+    "X": 2,
+    "Y": 5
+  },
+  {
+    "Id": "research-a85790d56c45bf41",
+    "Name": "Hazard permit",
+    "Description": "Each rank adds 2 enemies and +15% extraction.",
+    "Stat": "SirenLevel",
+    "Branch": "Base",
+    "Amount": 1.0,
+    "Cost": 67,
+    "MaxRank": 1,
+    "RankCosts": [
+      67
+    ],
+    "Prerequisites": [
+      "research-b422213eede182ae"
+    ],
+    "X": 3,
+    "Y": 5
+  },
+  {
+    "Id": "research-efbb6bcd57f34085",
+    "Name": "Rig reinforcement",
+    "Description": "Drill health +10% per rank.",
+    "Stat": "BunkerHealthPct",
+    "Branch": "Base",
+    "Amount": 10.0,
+    "Cost": 19,
+    "MaxRank": 2,
+    "RankCosts": [
+      19,
+      23
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 3,
+    "Y": 6
+  },
+  {
+    "Id": "research-f06b456ea0de8b66",
+    "Name": "Sentry payload",
+    "Description": "Sentry damage +25 per rank.",
+    "Stat": "AutogunDamageFlat",
+    "Branch": "Defence",
+    "Amount": 25.0,
+    "Cost": 50,
+    "MaxRank": 2,
+    "RankCosts": [
+      50,
+      67
+    ],
+    "Prerequisites": [
+      "research-c6a982d9b49138e8"
+    ],
+    "X": 6,
+    "Y": 5
+  },
+  {
+    "Id": "research-c6a982d9b49138e8",
+    "Name": "Sentry drive",
+    "Description": "Sentry shots per second +0.5 per rank.",
+    "Stat": "AutogunFireRateFlat",
+    "Branch": "Defence",
+    "Amount": 0.5,
+    "Cost": 30,
+    "MaxRank": 3,
+    "RankCosts": [
+      30,
+      38,
+      45
+    ],
+    "Prerequisites": [
+      "research-dd386231e7598e68"
+    ],
+    "X": 6,
+    "Y": 6
+  },
+  {
+    "Id": "research-b422213eede182ae",
+    "Name": "Transfer pump",
+    "Description": "Shipment speed +1 ore per second per rank.",
+    "Stat": "OilSellRate",
+    "Branch": "Market",
+    "Amount": 1.0,
+    "Cost": 23,
+    "MaxRank": 3,
+    "RankCosts": [
+      23,
+      28,
+      32
+    ],
+    "Prerequisites": [
+      "research-97b98318f18ba7fa"
+    ],
+    "X": 2,
+    "Y": 6
+  },
+  {
+    "Id": "research-97b98318f18ba7fa",
+    "Name": "Cargo expansion",
+    "Description": "Cargo storage +15 units per rank.",
+    "Stat": "OilTankCapacity",
+    "Branch": "Market",
+    "Amount": 15.0,
+    "Cost": 23,
+    "MaxRank": 4,
+    "RankCosts": [
+      23,
+      28,
+      28,
+      28
+    ],
+    "Prerequisites": [
+      "research-1f327e2412afd8e8"
+    ],
+    "X": 2,
+    "Y": 7
+  },
+  {
+    "Id": "research-2074068bf78dc14c",
+    "Name": "Premium contracts",
+    "Description": "Market upper price limit +5% per rank.",
+    "Stat": "MarketPeakPct",
+    "Branch": "Market",
+    "Amount": 5.0,
+    "Cost": 35,
+    "MaxRank": 2,
+    "RankCosts": [
+      35,
+      46
+    ],
+    "Prerequisites": [
+      "research-e8dc96e6640a8181"
+    ],
+    "X": 2,
+    "Y": 8
+  },
+  {
+    "Id": "research-40af9c18ee875f37",
+    "Name": "Field bandolier 2",
+    "Description": "Reserve capacity +6 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 6,
+    "Cost": 38,
+    "MaxRank": 3,
+    "RankCosts": [
+      38,
+      45,
+      50
+    ],
+    "Prerequisites": [
+      "research-37a33fc0925bc989"
+    ],
+    "X": 1,
+    "Y": 6
+  },
+  {
+    "Id": "research-1c9ccbf797a9db96",
+    "Name": "Watchpost licence",
+    "Description": "Allows 1 additional deployed sentry per rank.",
+    "Stat": "AutogunGrant",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-37a33fc0925bc989"
+    ],
+    "X": 6,
+    "Y": 7
+  },
+  {
+    "Id": "research-688a5aa7a053606c",
+    "Name": "Cycle regulator",
+    "Description": "Pistol fire rate +10% per rank.",
+    "Stat": "PistolFireRatePct",
+    "Branch": "Pistol",
+    "Amount": 10.0,
+    "Cost": 50,
+    "MaxRank": 2,
+    "RankCosts": [
+      50,
+      67
+    ],
+    "Prerequisites": [
+      "research-2074068bf78dc14c"
+    ],
+    "X": 0,
+    "Y": 6
+  },
+  {
+    "Id": "research-a925c51a298d6072",
+    "Name": "Rotary licence",
+    "Description": "Unlock one deployable rotary emplacement.",
+    "Stat": "UnlockMachineGun",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 229,
+    "MaxRank": 1,
+    "RankCosts": [
+      229
+    ],
+    "Prerequisites": [
+      "research-a85790d56c45bf41"
+    ],
+    "X": 6,
+    "Y": 8
+  },
+  {
+    "Id": "research-59580d0f512d20b3",
+    "Name": "Rotary penetrator",
+    "Description": "Rotary rounds pierce 1 extra target per rank.",
+    "Stat": "MachineGunPierce",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 229,
+    "MaxRank": 5,
+    "RankCosts": [
+      229,
+      320,
+      389,
+      547,
+      769
+    ],
+    "Prerequisites": [
+      "research-10a1e2617ba992db"
+    ],
+    "X": 6,
+    "Y": 9
+  },
+  {
+    "Id": "research-819710fbc7ba3398",
+    "Name": "Sentry penetrator",
+    "Description": "Sentry rounds pierce 1 extra target per rank.",
+    "Stat": "AutogunPierce",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 79,
+    "MaxRank": 1,
+    "RankCosts": [
+      79
+    ],
+    "Prerequisites": [
+      "research-f06b456ea0de8b66"
+    ],
+    "X": 6,
+    "Y": 10
+  },
+  {
+    "Id": "research-e8dc96e6640a8181",
+    "Name": "Emergency freight",
+    "Description": "Unlock one supply crate delivery per operation; restores 24 reserve ammo and 15 health.",
+    "Stat": "UnlockAirdrop",
+    "Branch": "Base",
+    "Amount": 1.0,
+    "Cost": 38,
+    "MaxRank": 1,
+    "RankCosts": [
+      38
+    ],
+    "Prerequisites": [
+      "research-0f217e430c9ccc2b"
+    ],
+    "X": 3,
+    "Y": 7
+  },
+  {
+    "Id": "research-eb14b94a0d861da1",
+    "Name": "Rotary payload",
+    "Description": "Rotary damage +50 per rank.",
+    "Stat": "MachineGunDamageFlat",
+    "Branch": "Defence",
+    "Amount": 50.0,
+    "Cost": 189,
+    "MaxRank": 1,
+    "RankCosts": [
+      189
+    ],
+    "Prerequisites": [
+      "research-6e1c77d7338054ab",
+      "research-10a1e2617ba992db"
+    ],
+    "X": 6,
+    "Y": 11
+  },
+  {
+    "Id": "research-6e1c77d7338054ab",
+    "Name": "Rotary drive",
+    "Description": "Rotary shots per second +1 per rank.",
+    "Stat": "MachineGunFireRateFlat",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 136,
+    "MaxRank": 6,
+    "RankCosts": [
+      136,
+      165,
+      189,
+      210,
+      229,
+      247
+    ],
+    "Prerequisites": [
+      "research-a925c51a298d6072"
+    ],
+    "X": 6,
+    "Y": 12
+  },
+  {
+    "Id": "research-b4c459810da67010",
+    "Name": "Broker margin 2",
+    "Description": "Sale price +1 credits per unit per rank.",
+    "Stat": "OilPriceFloor",
+    "Branch": "Market",
+    "Amount": 1.0,
+    "Cost": 50,
+    "MaxRank": 1,
+    "RankCosts": [
+      50
+    ],
+    "Prerequisites": [
+      "research-74b2451e5838ae20"
+    ],
+    "X": 2,
+    "Y": 9
+  },
+  {
+    "Id": "research-10a1e2617ba992db",
+    "Name": "Field bandolier 3",
+    "Description": "Reserve capacity +20 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 20,
+    "Cost": 136,
+    "MaxRank": 4,
+    "RankCosts": [
+      136,
+      165,
+      189,
+      210
+    ],
+    "Prerequisites": [
+      "research-a925c51a298d6072"
+    ],
+    "X": 1,
+    "Y": 7
+  },
+  {
+    "Id": "research-66182ecde5dd0f49",
+    "Name": "Lobber salvo",
+    "Description": "Mortar fires 1 additional shell per salvo per rank (max 8).",
+    "Stat": "MortarShells",
+    "Branch": "Artillery",
+    "Amount": 1.0,
+    "Cost": 50,
+    "MaxRank": 3,
+    "RankCosts": [
+      50,
+      67,
+      79
+    ],
+    "Prerequisites": [
+      "research-40d0771c7f4ebc5b"
+    ],
+    "X": 8,
+    "Y": 5
+  },
+  {
+    "Id": "research-8873a3b358db25e0",
+    "Name": "Charge packing",
+    "Description": "Mine damage +100 per rank.",
+    "Stat": "LandMineDamageFlat",
+    "Branch": "Mines",
+    "Amount": 100.0,
+    "Cost": 45,
+    "MaxRank": 3,
+    "RankCosts": [
+      45,
+      50,
+      55
+    ],
+    "Prerequisites": [
+      "research-e24a1a6583f8434b"
+    ],
+    "X": 7,
+    "Y": 5
+  },
+  {
+    "Id": "research-e24a1a6583f8434b",
+    "Name": "Blast lens",
+    "Description": "Mine radius +1 metres per rank.",
+    "Stat": "LandMineBlastRadius",
+    "Branch": "Mines",
+    "Amount": 1.0,
+    "Cost": 45,
+    "MaxRank": 3,
+    "RankCosts": [
+      45,
+      50,
+      55
+    ],
+    "Prerequisites": [
+      "research-74b2451e5838ae20"
+    ],
+    "X": 7,
+    "Y": 6
+  },
+  {
+    "Id": "research-65b119775ab7ef1a",
+    "Name": "Lobber payload",
+    "Description": "Mortar impact damage +100 per rank.",
+    "Stat": "MortarStrikeDamageFlat",
+    "Branch": "Artillery",
+    "Amount": 100.0,
+    "Cost": 50,
+    "MaxRank": 3,
+    "RankCosts": [
+      50,
+      67,
+      79
+    ],
+    "Prerequisites": [
+      "research-40d0771c7f4ebc5b"
+    ],
+    "X": 8,
+    "Y": 6
+  },
+  {
+    "Id": "research-74b2451e5838ae20",
+    "Name": "Seismic charges",
+    "Description": "Allows 1 additional proximity mine per operation per rank.",
+    "Stat": "LandMineGrant",
+    "Branch": "Mines",
+    "Amount": 1.0,
+    "Cost": 38,
+    "MaxRank": 1,
+    "RankCosts": [
+      38
+    ],
+    "Prerequisites": [
+      "research-97b98318f18ba7fa"
+    ],
+    "X": 7,
+    "Y": 7
+  },
+  {
+    "Id": "research-50f822728257bbe0",
+    "Name": "Broker margin 3",
+    "Description": "Sale price +0.5 credits per unit per rank.",
+    "Stat": "OilPriceFloor",
+    "Branch": "Market",
+    "Amount": 0.5,
+    "Cost": 38,
+    "MaxRank": 1,
+    "RankCosts": [
+      38
+    ],
+    "Prerequisites": [
+      "research-97b98318f18ba7fa"
+    ],
+    "X": 2,
+    "Y": 10
+  },
+  {
+    "Id": "research-1f327e2412afd8e8",
+    "Name": "Broker margin 4",
+    "Description": "Sale price +0.1 credits per unit per rank.",
+    "Stat": "OilPriceFloor",
+    "Branch": "Market",
+    "Amount": 0.10000000149011612,
+    "Cost": 23,
+    "MaxRank": 2,
+    "RankCosts": [
+      23,
+      28
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 2,
+    "Y": 11
+  },
+  {
+    "Id": "research-312c131d011f1739",
+    "Name": "Operator plating",
+    "Description": "Maximum health +30 per rank.",
+    "Stat": "PlayerMaxHealth",
+    "Branch": "Health",
+    "Amount": 30,
+    "Cost": 38,
+    "MaxRank": 1,
+    "RankCosts": [
+      38
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 5,
+    "Y": 5
+  },
+  {
+    "Id": "research-25e8a8af1255891b",
+    "Name": "Servo soles",
+    "Description": "Movement speed +3% per rank.",
+    "Stat": "MoveSpeedPct",
+    "Branch": "Health",
+    "Amount": 3.0,
+    "Cost": 38,
+    "MaxRank": 3,
+    "RankCosts": [
+      38,
+      45,
+      50
+    ],
+    "Prerequisites": [
+      "research-312c131d011f1739"
+    ],
+    "X": 5,
+    "Y": 6
+  },
+  {
+    "Id": "research-133130eec42be09b",
+    "Name": "Operator plating 2",
+    "Description": "Maximum health +20 per rank.",
+    "Stat": "PlayerMaxHealth",
+    "Branch": "Health",
+    "Amount": 20,
+    "Cost": 38,
+    "MaxRank": 3,
+    "RankCosts": [
+      38,
+      45,
+      50
+    ],
+    "Prerequisites": [
+      "research-312c131d011f1739",
+      "research-25e8a8af1255891b"
+    ],
+    "X": 5,
+    "Y": 7
+  },
+  {
+    "Id": "research-7c9a30cdf71c95ed",
+    "Name": "Seismic charges 2",
+    "Description": "Allows 1 additional proximity mine per operation per rank.",
+    "Stat": "LandMineGrant",
+    "Branch": "Mines",
+    "Amount": 1.0,
+    "Cost": 50,
+    "MaxRank": 2,
+    "RankCosts": [
+      50,
+      67
+    ],
+    "Prerequisites": [
+      "research-8873a3b358db25e0"
+    ],
+    "X": 7,
+    "Y": 8
+  },
+  {
+    "Id": "research-a08ef1c42637747d",
+    "Name": "Cargo expansion 2",
+    "Description": "Cargo storage +50 units per rank.",
+    "Stat": "OilTankCapacity",
+    "Branch": "Market",
+    "Amount": 50.0,
+    "Cost": 38,
+    "MaxRank": 3,
+    "RankCosts": [
+      38,
+      50,
+      59
+    ],
+    "Prerequisites": [
+      "research-50f822728257bbe0"
+    ],
+    "X": 2,
+    "Y": 12
+  },
+  {
+    "Id": "research-e2985211ec275ac5",
+    "Name": "Transfer pump 2",
+    "Description": "Shipment speed +2 ore per second per rank.",
+    "Stat": "OilSellRate",
+    "Branch": "Market",
+    "Amount": 2.0,
+    "Cost": 38,
+    "MaxRank": 3,
+    "RankCosts": [
+      38,
+      50,
+      59
+    ],
+    "Prerequisites": [
+      "research-a08ef1c42637747d"
+    ],
+    "X": 2,
+    "Y": 13
+  },
+  {
+    "Id": "research-013cb963cbd8f661",
+    "Name": "Transfer pump 3",
+    "Description": "Shipment speed +5 ore per second per rank.",
+    "Stat": "OilSellRate",
+    "Branch": "Market",
+    "Amount": 5.0,
+    "Cost": 79,
+    "MaxRank": 6,
+    "RankCosts": [
+      79,
+      90,
+      99,
+      108,
+      116,
+      123
+    ],
+    "Prerequisites": [
+      "research-e2985211ec275ac5"
+    ],
+    "X": 2,
+    "Y": 14
+  },
+  {
+    "Id": "research-8ae800b8fd0d6e3b",
+    "Name": "Cargo expansion 3",
+    "Description": "Cargo storage +200 units per rank.",
+    "Stat": "OilTankCapacity",
+    "Branch": "Market",
+    "Amount": 200.0,
+    "Cost": 79,
+    "MaxRank": 6,
+    "RankCosts": [
+      79,
+      90,
+      99,
+      108,
+      116,
+      123
+    ],
+    "Prerequisites": [
+      "research-013cb963cbd8f661"
+    ],
+    "X": 2,
+    "Y": 15
+  },
+  {
+    "Id": "research-a208b266e25aaba4",
+    "Name": "Lobber autoloader",
+    "Description": "Mortar interval changes by -1 seconds per rank (min 0.8s).",
+    "Stat": "MortarStrikeInterval",
+    "Branch": "Artillery",
+    "Amount": -1.0,
+    "Cost": 99,
+    "MaxRank": 3,
+    "RankCosts": [
+      99,
+      120,
+      136
+    ],
+    "Prerequisites": [
+      "research-66182ecde5dd0f49"
+    ],
+    "X": 8,
+    "Y": 7
+  },
+  {
+    "Id": "research-8ac978cef6cfb093",
+    "Name": "Watchpost licence 2",
+    "Description": "Allows 1 additional deployed sentry per rank.",
+    "Stat": "AutogunGrant",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 140,
+    "MaxRank": 1,
+    "RankCosts": [
+      140
+    ],
+    "Prerequisites": [
+      "research-1c9ccbf797a9db96"
+    ],
+    "X": 6,
+    "Y": 13
+  },
+  {
+    "Id": "research-3adf6255f24b641e",
+    "Name": "Lobber licence",
+    "Description": "Allows 1 additional mortar emplacement per rank.",
+    "Stat": "MortarStrikeGrant",
+    "Branch": "Artillery",
+    "Amount": 1.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-66182ecde5dd0f49"
+    ],
+    "X": 8,
+    "Y": 8
+  },
+  {
+    "Id": "research-d400c8f04825b631",
+    "Name": "Seismic charges 3",
+    "Description": "Allows 3 additional proximity mine per operation per rank.",
+    "Stat": "LandMineGrant",
+    "Branch": "Mines",
+    "Amount": 3.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-7c9a30cdf71c95ed"
+    ],
+    "X": 7,
+    "Y": 9
+  },
+  {
+    "Id": "research-e9db1e5be166ff1e",
+    "Name": "Bore tuning 2",
+    "Description": "Pistol damage +70 per rank.",
+    "Stat": "PistolDamageFlat",
+    "Branch": "Pistol",
+    "Amount": 70.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-0f217e430c9ccc2b"
+    ],
+    "X": 0,
+    "Y": 7
+  },
+  {
+    "Id": "research-2deb73d96ded4d10",
+    "Name": "Servo soles 2",
+    "Description": "Movement speed +7% per rank.",
+    "Stat": "MoveSpeedPct",
+    "Branch": "Health",
+    "Amount": 7.0,
+    "Cost": 120,
+    "MaxRank": 2,
+    "RankCosts": [
+      120,
+      185
+    ],
+    "Prerequisites": [
+      "research-133130eec42be09b"
+    ],
+    "X": 5,
+    "Y": 8
+  },
+  {
+    "Id": "research-36cfcb8c9a96e460",
+    "Name": "Field bandolier 4",
+    "Description": "Reserve capacity +24 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 24,
+    "Cost": 120,
+    "MaxRank": 4,
+    "RankCosts": [
+      120,
+      185,
+      250,
+      315
+    ],
+    "Prerequisites": [
+      "research-eb14b94a0d861da1"
+    ],
+    "X": 1,
+    "Y": 8
+  },
+  {
+    "Id": "research-51ab29bf00ac5a4e",
+    "Name": "Rotary penetrator 2",
+    "Description": "Rotary rounds pierce 1 extra target per rank.",
+    "Stat": "MachineGunPierce",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 120,
+    "MaxRank": 2,
+    "RankCosts": [
+      120,
+      185
+    ],
+    "Prerequisites": [
+      "research-59580d0f512d20b3"
+    ],
+    "X": 6,
+    "Y": 14
+  },
+  {
+    "Id": "research-5b75de8c2645985d",
+    "Name": "Field bandolier 5",
+    "Description": "Reserve capacity +20 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 20,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-0f217e430c9ccc2b"
+    ],
+    "X": 1,
+    "Y": 9
+  },
+  {
+    "Id": "research-eebbd5a8d2c49ec6",
+    "Name": "Rig reinforcement 2",
+    "Description": "Drill health +30% per rank.",
+    "Stat": "BunkerHealthPct",
+    "Branch": "Base",
+    "Amount": 30.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-efbb6bcd57f34085"
+    ],
+    "X": 3,
+    "Y": 8
+  },
+  {
+    "Id": "research-a0329da1537650ce",
+    "Name": "Servo soles 3",
+    "Description": "Movement speed +3% per rank.",
+    "Stat": "MoveSpeedPct",
+    "Branch": "Health",
+    "Amount": 3.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-2074068bf78dc14c"
+    ],
+    "X": 5,
+    "Y": 9
+  },
+  {
+    "Id": "research-f1a079901b8904eb",
+    "Name": "Sentry drive 2",
+    "Description": "Sentry shots per second +1.5 per rank.",
+    "Stat": "AutogunFireRateFlat",
+    "Branch": "Defence",
+    "Amount": 1.5,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-c6a982d9b49138e8"
+    ],
+    "X": 6,
+    "Y": 15
+  },
+  {
+    "Id": "research-3d4a7a54b62c0ce9",
+    "Name": "Cargo expansion 4",
+    "Description": "Cargo storage +1000 units per rank.",
+    "Stat": "OilTankCapacity",
+    "Branch": "Market",
+    "Amount": 1000.0,
+    "Cost": 189,
+    "MaxRank": 3,
+    "RankCosts": [
+      189,
+      263,
+      368
+    ],
+    "Prerequisites": [
+      "research-8ae800b8fd0d6e3b"
+    ],
+    "X": 2,
+    "Y": 16
+  },
+  {
+    "Id": "research-8664867517b2418f",
+    "Name": "Transfer pump 4",
+    "Description": "Shipment speed +30 ore per second per rank.",
+    "Stat": "OilSellRate",
+    "Branch": "Market",
+    "Amount": 30.0,
+    "Cost": 189,
+    "MaxRank": 3,
+    "RankCosts": [
+      189,
+      263,
+      368
+    ],
+    "Prerequisites": [
+      "research-3d4a7a54b62c0ce9"
+    ],
+    "X": 2,
+    "Y": 17
+  },
+  {
+    "Id": "research-54a1c1918561e1f4",
+    "Name": "Hazard permit 2",
+    "Description": "Each rank adds 2 enemies and +15% extraction.",
+    "Stat": "SirenLevel",
+    "Branch": "Base",
+    "Amount": 1.0,
+    "Cost": 293,
+    "MaxRank": 1,
+    "RankCosts": [
+      293
+    ],
+    "Prerequisites": [
+      "research-a85790d56c45bf41"
+    ],
+    "X": 3,
+    "Y": 9
+  },
+  {
+    "Id": "research-40d0771c7f4ebc5b",
+    "Name": "Lobber licence 2",
+    "Description": "Allows 1 additional mortar emplacement per rank.",
+    "Stat": "MortarStrikeGrant",
+    "Branch": "Artillery",
+    "Amount": 1.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-74b2451e5838ae20"
+    ],
+    "X": 8,
+    "Y": 9
+  },
+  {
+    "Id": "research-dd386231e7598e68",
+    "Name": "Watchpost licence 3",
+    "Description": "Allows 1 additional deployed sentry per rank.",
+    "Stat": "AutogunGrant",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 38,
+    "MaxRank": 1,
+    "RankCosts": [
+      38
+    ],
+    "Prerequisites": [
+      "research-5f8b23b136433c3f"
+    ],
+    "X": 6,
+    "Y": 16
+  },
+  {
+    "Id": "research-b136fcc13f063af2",
+    "Name": "Sentry payload 2",
+    "Description": "Sentry damage +25 per rank.",
+    "Stat": "AutogunDamageFlat",
+    "Branch": "Defence",
+    "Amount": 25.0,
+    "Cost": 120,
+    "MaxRank": 1,
+    "RankCosts": [
+      120
+    ],
+    "Prerequisites": [
+      "research-f06b456ea0de8b66"
+    ],
+    "X": 6,
+    "Y": 17
+  },
+  {
+    "Id": "research-bad25049f619d8cd",
+    "Name": "Cargo expansion 5",
+    "Description": "Cargo storage +10000 units per rank.",
+    "Stat": "OilTankCapacity",
+    "Branch": "Market",
+    "Amount": 10000.0,
+    "Cost": 576,
+    "MaxRank": 6,
+    "RankCosts": [
+      576,
+      703,
+      810,
+      904,
+      990,
+      1068
+    ],
+    "Prerequisites": [
+      "research-a7f264d53ff073fb"
+    ],
+    "X": 2,
+    "Y": 18
+  },
+  {
+    "Id": "research-a7f264d53ff073fb",
+    "Name": "Transfer pump 5",
+    "Description": "Shipment speed +100 ore per second per rank.",
+    "Stat": "OilSellRate",
+    "Branch": "Market",
+    "Amount": 100.0,
+    "Cost": 576,
+    "MaxRank": 6,
+    "RankCosts": [
+      576,
+      703,
+      810,
+      904,
+      990,
+      1068
+    ],
+    "Prerequisites": [
+      "research-8664867517b2418f"
+    ],
+    "X": 2,
+    "Y": 19
+  },
+  {
+    "Id": "research-f89e150609ff5d38",
+    "Name": "Duplex cartridge",
+    "Description": "Fire 1 extra pellet per shot per rank.",
+    "Stat": "PistolPellets",
+    "Branch": "Pistol",
+    "Amount": 1.0,
+    "Cost": 67,
+    "MaxRank": 3,
+    "RankCosts": [
+      67,
+      90,
+      123
+    ],
+    "Prerequisites": [
+      "research-688a5aa7a053606c"
+    ],
+    "X": 0,
+    "Y": 8
+  },
+  {
+    "Id": "research-e0ecfd2fe73457ac",
+    "Name": "Bore tuning 3",
+    "Description": "Pistol damage +10 per rank.",
+    "Stat": "PistolDamageFlat",
+    "Branch": "Pistol",
+    "Amount": 10.0,
+    "Cost": 32,
+    "MaxRank": 1,
+    "RankCosts": [
+      32
+    ],
+    "Prerequisites": [
+      "research-e8dc96e6640a8181"
+    ],
+    "X": 0,
+    "Y": 9
+  },
+  {
+    "Id": "research-244d1891282ee5b8",
+    "Name": "Field bandolier 6",
+    "Description": "Reserve capacity +24 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 24,
+    "Cost": 410,
+    "MaxRank": 6,
+    "RankCosts": [
+      410,
+      500,
+      576,
+      642,
+      703,
+      758
+    ],
+    "Prerequisites": [
+      "research-eb14b94a0d861da1"
+    ],
+    "X": 1,
+    "Y": 10
+  },
+  {
+    "Id": "research-f605027e522c0708",
+    "Name": "Rotary drive 2",
+    "Description": "Rotary shots per second +3 per rank.",
+    "Stat": "MachineGunFireRateFlat",
+    "Branch": "Defence",
+    "Amount": 3.0,
+    "Cost": 120,
+    "MaxRank": 2,
+    "RankCosts": [
+      120,
+      185
+    ],
+    "Prerequisites": [
+      "research-244d1891282ee5b8"
+    ],
+    "X": 6,
+    "Y": 18
+  },
+  {
+    "Id": "research-f1348459693ed400",
+    "Name": "Field bandolier 7",
+    "Description": "Reserve capacity +24 rounds per rank.",
+    "Stat": "SmallAmmoCap",
+    "Branch": "Ammo",
+    "Amount": 24,
+    "Cost": 904,
+    "MaxRank": 2,
+    "RankCosts": [
+      904,
+      1105
+    ],
+    "Prerequisites": [
+      "research-244d1891282ee5b8"
+    ],
+    "X": 1,
+    "Y": 11
+  },
+  {
+    "Id": "research-dfccb9218b016a38",
+    "Name": "Sentry penetrator 2",
+    "Description": "Sentry rounds pierce 1 extra target per rank.",
+    "Stat": "AutogunPierce",
+    "Branch": "Defence",
+    "Amount": 1.0,
+    "Cost": 140,
+    "MaxRank": 1,
+    "RankCosts": [
+      140
+    ],
+    "Prerequisites": [
+      "research-819710fbc7ba3398"
+    ],
+    "X": 6,
+    "Y": 19
+  },
+  {
+    "Id": "research-ffd7fd783211c702",
+    "Name": "Logistics harness",
+    "Description": "Reserve capacity +25% per rank.",
+    "Stat": "AmmoCapacityPct",
+    "Branch": "Ammo",
+    "Amount": 25.0,
+    "Cost": 123,
+    "MaxRank": 4,
+    "RankCosts": [
+      123,
+      170,
+      236,
+      330
+    ],
+    "Prerequisites": [
+      "company"
+    ],
+    "X": 1,
+    "Y": 12
+  }
+]

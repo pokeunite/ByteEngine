@@ -1,5 +1,6 @@
 param(
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [switch]$SkipBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -155,7 +156,9 @@ Write-Host ""
 Write-Host "The complete Dist\ByteEngine folder must stay beside the executable."
 
 # Bundle the standalone player so game export works without a developer SDK.
-& (Join-Path $toolsDirectory "PublishPlayer.ps1") -Configuration $Configuration
+& (Join-Path $toolsDirectory "PublishPlayer.ps1") -Configuration $Configuration -DistributionDirectory $resolvedOutput
 if ($LASTEXITCODE -ne 0) { throw "Standalone Windows player packaging failed." }
+if (-not $SkipBrowser) {
 & (Join-Path $toolsDirectory "PublishBrowser.ps1") -Configuration $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Browser player packaging failed." }
+}

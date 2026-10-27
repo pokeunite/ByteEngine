@@ -1,0 +1,28 @@
+[
+  {
+    "id": "sentry",
+    "commonPrompt": "Stylized-concept. Create one premium low-poly game asset modelling reference image for an alien mining-camp game. {description} Art direction: carefully designed broad flat polygon faces, controlled bevels, strong silhouette, AAA-quality stylized low-poly craft, believable assembly, functional joints and fasteners, restrained detail rather than noisy greebles. Ochre industrial yellow painted armour, dark graphite mechanisms, subtle steel edges, small cyan indicators. Match a polished low-poly mining drill/refinery/ammo press kit. Single isolated object on neutral warm grey studio background, three-quarter elevated view, whole object visible with generous margins, warm key light and cool fill, crisp contact shadow. No characters, no environment, no firing, no projectiles, no gore, no logos, no text or labels. This is fictional game art, not a fabrication diagram.",
+    "source": "C:\\Users\\codex\\.codex\\generated_images\\01a149e1-ed42-7271-82f0-5af9d7d5fbab\\exec-2c07cdcc-4b45-4ad6-a52b-a5b7640b28a4.png",
+    "description": "A compact single-barrel autonomous sentry turret, readable optical sensor, swivel bearing, sturdy deployable three-foot base, separate elevation pivot and protective panels."
+  },
+  {
+    "id": "repeater",
+    "source": "C:\\Users\\codex\\.codex\\generated_images\\01a149e1-ed42-7271-82f0-5af9d7d5fbab\\exec-4c934611-6850-44fb-8f01-603cacf86b0a.png",
+    "description": "A heavier rapid-fire twin-barrel repeater turret, two readable parallel barrels, chunky feed box, rotary swivel, broad four-foot deployable base. Clearly distinct from a small sentry."
+  },
+  {
+    "id": "mortar",
+    "source": "C:\\Users\\codex\\.codex\\generated_images\\01a149e1-ed42-7271-82f0-5af9d7d5fbab\\exec-fc5cafb0-55a9-45e3-8bdd-e5cbf5e390b4.png",
+    "description": "A compact deployable automated mortar turret, short thick upward-angled launch tube, recoil cradle, elevation strut, circular swivel, four stabilizer legs, chunky armoured yellow panels."
+  },
+  {
+    "id": "mine",
+    "source": "C:\\Users\\codex\\.codex\\generated_images\\01a149e1-ed42-7271-82f0-5af9d7d5fbab\\exec-fea67a19-63ef-4543-9fb9-d33e99fa0a75.png",
+    "description": "A small deployable sci-fi proximity mine, low circular bevelled charcoal body, segmented yellow protective rim, recessed cyan arming indicator, three tiny anchoring feet. Clear recognizable compact silhouette."
+  },
+  {
+    "id": "supply-cache",
+    "source": "C:\\Users\\codex\\.codex\\generated_images\\01a149e1-ed42-7271-82f0-5af9d7d5fbab\\exec-c3c4e194-4e0e-40f5-8014-aa0a9643c295.png",
+    "description": "A deployable industrial field supply cache, waist-high rugged charcoal and yellow ammo storage chest with bevelled lid, chunky latch, reinforced feet and modest cyan status strip."
+  }
+]

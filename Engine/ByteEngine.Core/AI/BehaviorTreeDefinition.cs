@@ -4,8 +4,8 @@ using ByteEngine.Core.Variables;
 
 namespace ByteEngine.Core.AI;
 
-public enum BehaviorNodeKind { Priority, Sequence, Gate, Cooldown, Wait, MoveToTarget, MoveToPoint, Retreat, FaceTarget, SetMemory, Signal, WaitForMemory, DamageTarget, StopMovement, EnemyCombat, FindPosition, Search, ReserveAttack, ReleaseAttack, ReleasePosition, ChooseAttack, Telegraph, CommitAttack, Strike, Recover, SubBehavior }
-public enum BehaviorTest { HasTarget, TargetAlive, WithinDistance, OutsideDistance, LineOfSight, HealthBelow, MemoryTrue, MemoryNumberAtLeast, HasMemory, HeardNoise, AttackReserved }
+public enum BehaviorNodeKind { Priority, Sequence, Gate, Cooldown, Wait, MoveToTarget, MoveToPoint, Retreat, FaceTarget, SetMemory, Signal, WaitForMemory, DamageTarget, StopMovement, EnemyCombat, FindPosition, Search, ReserveAttack, ReleaseAttack, ReleasePosition, ChooseAttack, Telegraph, CommitAttack, Strike, Recover, SubBehavior, Wander }
+public enum BehaviorTest { HasTarget, TargetAlive, WithinDistance, OutsideDistance, LineOfSight, HealthBelow, MemoryTrue, MemoryNumberAtLeast, HasMemory, HeardNoise, AttackReserved, AttackReady }
 public enum BehaviorInterruption { Recheck, FinishBranch, FinishCommittedAttack }
 public enum AIPositionKind { Cover, FiringLane, Flank, Surround }
 public enum AIServiceKind { SetMemory, HealthFlag, Signal, PositionQuery }

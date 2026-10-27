@@ -1,4 +1,4 @@
-param([string]$Configuration = "Release")
+param([string]$Configuration = "Release", [string]$DistributionDirectory = "")
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot "Player\ByteEngine.Player\ByteEngine.Player.csproj"
@@ -11,12 +11,13 @@ if ($LASTEXITCODE -ne 0) { throw "Windows player publish failed." }
 foreach ($required in @("ByteEngine.Launcher.exe", "ByteEngine.Player.exe", "ByteEngine.Core.dll", "coreclr.dll", "hostfxr.dll", "hostpolicy.dll", "openal32.dll", "glfw3.dll", "assimp.dll")) {
     if (-not (Test-Path -LiteralPath (Join-Path $output $required))) { throw "Player publish is incomplete: $required" }
 }
-$targets = @(
-    (Join-Path $repositoryRoot "Dist\ByteEngine\PlayerRuntime"),
+$targets = if ($Configuration -eq 'Debug') { @(
     (Join-Path $repositoryRoot "Dist\ByteEngine-BuildDebug\PlayerRuntime"),
-    (Join-Path $repositoryRoot "Editor\ByteEngine.Editor\bin\Release\net9.0-windows\win-x64\PlayerRuntime"),
     (Join-Path $repositoryRoot "Editor\ByteEngine.Editor\bin\Debug\net9.0-windows\win-x64\PlayerRuntime")
-)
+) } else { @(
+    (Join-Path $repositoryRoot "Dist\ByteEngine\PlayerRuntime"),
+    (Join-Path $repositoryRoot "Editor\ByteEngine.Editor\bin\Release\net9.0-windows\win-x64\PlayerRuntime")
+) }
 foreach ($target in $targets) {
     $resolved = [IO.Path]::GetFullPath($target)
     # Only generated, explicitly named runtime folders may be refreshed.
@@ -28,7 +29,15 @@ foreach ($target in $targets) {
         Copy-Item -LiteralPath $item.FullName -Destination $resolved -Recurse -Force
     }
 }
-Write-Host "Standalone Windows player bundled with editor distributions and Release/Debug editors."
+# The editor's exporter validates exact core build identity, not just AssemblyVersion.
+# Publish flags can change the MVID; use this same current-source core in its matching editor.
+foreach ($target in $targets) {
+    $editorRoot = Split-Path -Parent $target
+    if (Test-Path -LiteralPath (Join-Path $editorRoot "ByteEngine.Editor.dll")) {
+        Copy-Item -LiteralPath (Join-Path $output "ByteEngine.Core.dll") -Destination (Join-Path $editorRoot "ByteEngine.Core.dll") -Force
+    }
+}
+Write-Host "Matching $Configuration Windows player and editor core refreshed."
 
 }
 finally {

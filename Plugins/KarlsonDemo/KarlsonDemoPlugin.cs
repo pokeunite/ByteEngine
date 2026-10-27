@@ -7,12 +7,34 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
 {
     public void Register(ByteEnginePluginContext context)
     {
+        context.RegisterSimpleComponent<MiningPauseMenu3D>("MiningPauseMenu3D",new("Mining Pause Menu","Mining","Escape pause menu with persistent sound, key bindings and graphics settings.","pause settings controls graphics audio"));
         context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Choose the view camera and weapon root. Input, animations and HUD text are authored in Event Sheets. Live values are available as component references.", "fps inventory guns ammo hud"));
         context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Damage, ammo and timing. Equip/fire/reload animations are authored in Event Sheets.", "ammo hitscan projectile pistol spread"));
         context.RegisterSimpleComponent<WeaponInstance3D>("WeaponInstance3D", new("Weapon Instance", "Weapons", "Ammo state and weapon events. Use Weapon shot hit in an Event Sheet to access Last Ray Hit.", "ammo state reload raycast hit"));
         context.RegisterSimpleComponent<MilkDepotCourse3D>("MilkDepotCourse3D", new("Milk Depot Course", "Karlson", "Editable targets, milk goal, checkpoints and fall recovery.", "level objective checkpoint"));
         context.RegisterSimpleComponent<WeaponAmmoPickup3D>("WeaponAmmoPickup3D", new("Weapon Ammo Pickup", "Weapons", "Add reserve ammunition to the equipped weapon when approached.", "ammo pickup"));
         context.RegisterSimpleComponent<BulletTrail3D>("BulletTrail3D",new("Bullet Trail","Weapons","Tapered additive bullet streak with editable core/glow colours and depth testing.","projectile tracer trail"));
+        context.RegisterSimpleComponent<MiningOperation3D>("MiningOperation3D",new("Mining Operation","Mining","Finite extraction, wave scheduling, processing, market prices and saved company upgrades. Bind controls through Event Sheets.","drill mining waves business ore"));
+        context.RegisterSimpleComponent<MiningSpawnPoint3D>("MiningSpawnPoint3D",new("Mining Enemy Spawn Point","Mining","Choose the mining operation that owns this spawn point.","alien wave spawn"));
+        context.RegisterSimpleComponent<MiningCuriosityAmbush3D>("MiningCuriosityAmbush3D",new("Curiosity Spider Ambush","Mining","A one-shot nest at the far end of the canyon. Editable trigger volume, enemy blueprint, count and spawn timing.","spider nest ambush trigger"));
+        context.RegisterSimpleComponent<MiningHud3D>("MiningHud3D",new("Mining HUD","Mining","Presentation of editable operation state. Buttons are connected by Event Sheets.","shop mining hud"));
+        context.RegisterSimpleComponent<MiningRigVisual3D>("MiningRigVisual3D",new("Mining Drill Visual","Mining","Rotate an authored drill part only while extracting.","drill animation spin"));
+        context.RegisterSimpleComponent<MiningEnemyEvasion3D>("MiningEnemyEvasion3D",new("Mining Enemy Evasion","Mining","Delayed occasional sidesteps when fired upon; editable probability and cooldown.","enemy dodge evade bullets"));
+        context.RegisterSimpleComponent<MiningAudio3D>("MiningAudio3D",new("Mining Audio","Mining","Editable selected sound assets, machine loops, combat cues and bounded spatial voices.","sound audio machines combat interface"));
+        MiningEvents.Register(context);
+        context.RegisterSimpleComponent<MiningEffects3D>("MiningEffects3D",new("Mining Effects Library","Mining","Editable muzzle, tracer, explosion and machine VFX assets with bounded prewarmed playback.","effects explosion dust smoke tracer"));
+        context.RegisterSimpleComponent<MiningMachineVfx3D>("MiningMachineVfx3D",new("Mining Machine Effects","Mining","Dust, exhaust and small material effects linked to machine operation and delivery markers.","drill refinery press dust steam"));
+        context.RegisterSimpleComponent<MiningSpiderAnimation3D>("MiningSpiderAnimation3D",new("Animated Mining Spider","Mining","Fitted spider model with editable idle, walk, jump, attack and death clips. AI owns damage and navigation.","spider animation death walk rig"));
+        context.RegisterSimpleComponent<MiningCampLayout3D>("MiningCampLayout3D",new("Camp Arrangement","Mining","Move and rotate machines and placed defences between operations. Tab opens the camp view.","camp arrange relocate move"));
+        context.RegisterSimpleComponent<MiningCampObject3D>("MiningCampObject3D",new("Movable Camp Object","Mining","Allow this machine and all its children to move together in camp arrangement.","camp machine reposition"));
+        context.RegisterSimpleComponent<MiningThirdPerson3D>("MiningThirdPerson3D",new("Third Person Combat View","Mining","Camera-relative combat, right-mouse zoom and centre crosshair. Uses the native player controller and collision boom.","third person aiming camera crosshair"));
+        context.RegisterSimpleComponent<MiningMachineAnimation3D>("MiningMachineAnimation3D",new("Mining Machine Animation","Mining","Play the imported machine rig while its operation is active.","drill press refinery animation"));
+        context.RegisterSimpleComponent<MiningAmmoBucket3D>("MiningAmmoBucket3D",new("Ammo Collection Bucket","Mining","Eject produced rounds and collect them by walking to the bucket.","ammo press pickup bucket"));
+        context.RegisterSimpleComponent<MiningRefineryOutput3D>("MiningRefineryOutput3D",new("Refinery Output Conveyor and Bin","Mining","Carry completed refined cargo along model markers into a bounded ingot pile. The pile follows actual stock and market sales.","refinery ingot conveyor bin pile"));
+        context.RegisterSimpleComponent<MiningDefensePlanner3D>("MiningDefensePlanner3D",new("Defence Placement","Mining","Place researched company defences with B and left mouse.","turret mine mortar placement"));
+        context.RegisterSimpleComponent<MiningDefense3D>("MiningDefense3D",new("Company Defence","Mining","Configurable sentry, rotary gun, mortar or proximity mine.","turret mine mortar"));
+        context.RegisterSimpleComponent<MiningTrade3D>("MiningTrade3D",new("Mining Workshop and Market","Mining","Editable ammo production, separate upgrades and saved commodity price history.","market ammo production"));
+        context.RegisterSimpleComponent<MiningBusinessUi3D>("MiningBusinessUi3D",new("Mining Business Interface","Mining","Scalable combat HUD, contextual machine panels and market. Native buttons are wired through Event Sheets.","ui mining shop market"));
         WeaponEvents.Register(context);
         WeaponReadoutEvents.Register(context);
         WeaponInventoryEvents.Register(context);

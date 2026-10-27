@@ -12,6 +12,8 @@ internal sealed class GameViewPanel : IDisposable
     private readonly SceneFramebuffer _framebuffer = new();
     private bool _focusRequested;
     private bool _pointerAimInputCaptured;
+    private bool _uiPointerLease;
+    private bool _restoreGrabAfterUi;
 
     public bool IsOpen { get; set; } = true;
     public bool IsVisible { get; private set; }
@@ -161,6 +163,7 @@ internal sealed class GameViewPanel : IDisposable
             mouse.Y <= imageMax.Y;
 
         bool pointerAim = Input.KeepGameViewPointerFree;
+        if(state.Mode!=EditorMode.Play)_uiPointerLease=false;
         pointerAim |= state.DisplayedScene.ActiveCamera?.GameObject.GetComponent<TopDownCamera3D>()?.Enabled == true;
         for (var cameraObject = state.DisplayedScene.ActiveCamera?.GameObject;
              !pointerAim && cameraObject != null;
@@ -172,7 +175,22 @@ internal sealed class GameViewPanel : IDisposable
         if (!Input.IsGameInputCaptured)
             _pointerAimInputCaptured = false;
 
-        if (state.Mode == EditorMode.Play && pointerAim)
+        // A temporary gameplay UI cursor must not release gameplay capture.
+        // Releasing it here could invalidate a selected build tool and strand
+        // the user needing another click before the camera/placement worked.
+        if(state.Mode==EditorMode.Play&&Input.IsUiPointerRequested)
+        {
+            if(!_uiPointerLease)_restoreGrabAfterUi=Input.IsGameInputCaptured&&!_pointerAimInputCaptured;
+            _uiPointerLease=true;
+            if(Input.IsGameInputCaptured)captureInput(false);
+            else if(pointerInside&&ImGui.IsMouseClicked(ImGuiMouseButton.Left))captureInput(false);
+        }
+        else if(state.Mode==EditorMode.Play&&_uiPointerLease)
+        {
+            _uiPointerLease=false;
+            if(Input.IsGameInputCaptured)captureInput(_restoreGrabAfterUi);
+        }
+        else if (state.Mode == EditorMode.Play && pointerAim)
         {
             // Gameplay still has to be active for PlayerShooter3D to rotate and
             // fire. Capture without grabbing keeps that gate enabled while the
@@ -201,7 +219,10 @@ internal sealed class GameViewPanel : IDisposable
         else if (state.Mode == EditorMode.Play)
         {
             if (_pointerAimInputCaptured && Input.IsGameInputCaptured)
+            {
                 releaseInput();
+                if(pointerInside)captureInput(true);
+            }
 
             _pointerAimInputCaptured = false;
 

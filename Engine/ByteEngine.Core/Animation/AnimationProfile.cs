@@ -304,6 +304,7 @@ public sealed class AnimationProceduralProfile
     public float AimPitchLimit { get; set; } = 65f;
     public float AimSmoothing { get; set; } = 12f;
     public string AimBone { get; set; } = string.Empty;
+    public bool AimInModelSpace { get; set; }
     public string LookAtBone { get; set; } = string.Empty;
     public string LookAtTarget { get; set; } = string.Empty;
     public float LookAtWeight { get; set; } = 1f;

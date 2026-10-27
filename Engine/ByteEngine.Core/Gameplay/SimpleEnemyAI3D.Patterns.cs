@@ -39,6 +39,7 @@ public sealed partial class SimpleEnemyAI3D
     public void ResetAttackPattern()
     {
         _behaviorStaged=false;
+        ResetRush();
         ResetTactics();
         GameObject.GetComponent<CombatArmour3D>()?.SetExposed(false);
         GameObject.GetComponent<ByteEngine.Core.Navigation.NavigationAgent3D>()?.Stop();
@@ -79,6 +80,7 @@ public sealed partial class SimpleEnemyAI3D
     }
     private void SimulatePattern(GameObject target, float dt)
     {
+        if(PredatoryRush){SimulatePredatoryRush(target,dt);return;}
         var health=GameObject.GetComponent<HealthComponent>();
         if(health != null) health.IncomingDamageMultiplier=IsExposed?Math.Max(1,RecoveryDamageMultiplier):1;
         _phaseTime=Math.Max(0,_phaseTime-dt);

@@ -14,6 +14,7 @@ using KarlsonDemo.Plugin;
 using ByteEngine.Editor.Panels;
 using ByteEngine.Core.Animation;
 
+MiningPauseTests.Run();
 HuntCombatTests.Run();
 CombatPolishTests.Run();
 NavigationFireballTests.Run();
@@ -22,6 +23,12 @@ BossOpeningTests.Run();
 GunProjectileTests.Run();
 AIBehaviorTests.Run();
 AICombatRoleTests.Run();
+RusherTests.Run();
+MiningBusinessTests.Run();
+MiningContractTests.Run();
+MiningTradeTests.Run();
+MiningResearchTests.Run();
+MiningProgressionTests.Run();
 try { AIAdvancedTests.Run(); } catch(Exception e) { Console.Error.WriteLine(e); Environment.Exit(1); }
 
 const string Prefix="bytebard.karlsondemo.";

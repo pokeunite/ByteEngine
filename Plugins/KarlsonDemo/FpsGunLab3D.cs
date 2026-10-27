@@ -11,7 +11,7 @@ using Component = ByteEngine.Core.Scene.Component;
 
 namespace KarlsonDemo.Plugin;
 
-public enum WeaponAimMode { ViewCamera, TopDownCursor }
+public enum WeaponAimMode { ViewCamera, TopDownCursor, ThirdPerson }
 
 /// <summary>Equipment orchestration only. Weapons are discovered by component, not names or types.</summary>
 public sealed class FpsGunLab3D : Component, ICharacterDebugSource
@@ -223,8 +223,10 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
             }
         }
     }
+    [Category("Inventory")] public bool AllowWeaponDropping {get;set;}=true;
     public bool Drop(WeaponInstance3D? weapon=null)
     {
+        if(!AllowWeaponDropping)return false;
         weapon??=SelectedWeapon;if(weapon==null||!Owns(weapon))return false;
         var pickup=GameObject.Scene?.GameObjects.Select(o=>o.GetComponent<WeaponPickup3D>()).FirstOrDefault(p=>p?.Weapon==weapon);
         if(pickup==null)return false;
@@ -265,8 +267,10 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     }
     public bool Fire()
     {
+        if(GameObject.GetComponent<MiningDefensePlanner3D>()?.SuppressWeaponFire==true)return false;
         _eye = GameObject.Scene?.FindGameObject(CameraObjectId);
         if (SelectedWeapon is not {} weapon) return false;
+        if(weapon.CurrentAmmo<=0&&!weapon.Reloading)MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.DryTrigger);
         System.Numerics.Vector3 origin, direction;
         if (AimMode == WeaponAimMode.TopDownCursor)
         {
@@ -277,13 +281,41 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
         else
         {
             if (_eye == null) return false;
+            if(AimMode==WeaponAimMode.ThirdPerson)GameObject.GetComponent<CameraBoom3D>()?.SnapToSocket();
             GameObject.GetComponent<FirstPersonCamera3D>()?.SnapToView();
             origin = _eye.Transform.WorldPosition; direction = _eye.Transform.Forward;
+            if(AimMode==WeaponAimMode.ThirdPerson)
+            {
+                Vector3 target=GetThirdPersonAimTarget(out _);
+                origin=weapon.TryGetMuzzleWorldPosition(out var muzzle)?muzzle:Transform.WorldPosition+Vector3.UnitY*1.3f;
+                direction=target-origin;
+            }
         }
         if (!weapon.Fire(origin, direction, GameObject)) return false;
         ShotsFired++; return true;
     }
     public bool Reload() => SelectedWeapon?.Reload() == true;
+    public Vector3 GetThirdPersonAimTarget(out bool muzzleBlocked)
+    {
+        muzzleBlocked=false;
+        var eye=GameObject.Scene?.FindGameObject(CameraObjectId);
+        if(eye==null||SelectedWeapon is not {} weapon)return Transform.WorldPosition+Transform.Forward*80;
+        float range=WeaponDefinition3D.Bound(weapon.Definition?.Range??80,80,.1f,1000);
+        Vector3 origin=eye.Transform.WorldPosition,direction=eye.Transform.Forward,target=origin+direction*range;
+        int bits=weapon.Definition?.HitMaskBits??-1;
+        var mask=ByteEngine.Core.Classification.LayerMask.FromLayers(Enumerable.Range(0,32).Where(bit=>(bits&(1<<bit))!=0).ToArray());
+        if(GameObject.Scene is {} scene)
+        {
+            if(GameplayQuery3D.Raycast(scene,origin,direction,out var hit,range,GameObject,mask,includeTriggers:false))target=hit.Point;
+            if(weapon.TryGetMuzzleWorldPosition(out var muzzle))
+            {
+                Vector3 ray=target-muzzle;float distance=ray.Length();
+                if(distance>.001f&&GameplayQuery3D.Raycast(scene,muzzle,ray/distance,out var obstruction,distance,GameObject,mask,includeTriggers:false)&&obstruction.Distance<distance-.08f)
+                {muzzleBlocked=true;target=obstruction.Point;}
+            }
+        }
+        return target;
+    }
     protected override void OnDestroy()
     {
         _locomotionController?.SetLocomotionBlendSpace(string.Empty);

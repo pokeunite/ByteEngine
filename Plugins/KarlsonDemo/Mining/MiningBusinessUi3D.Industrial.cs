@@ -1,0 +1,80 @@
+using System.Numerics;
+using ByteEngine.Core;
+using ByteEngine.Core.Assets;
+using ByteEngine.Core.Animation;
+using ByteEngine.Core.Graphics;
+namespace KarlsonDemo.Plugin;
+public sealed partial class MiningBusinessUi3D
+{
+ static readonly Vector4 MenuMuted=new(.58f,.61f,.64f,1),MenuEdge=new(.25f,.28f,.31f,1),MenuInset=new(.075f,.085f,.10f,1);
+ sealed class BusinessPainter(MiningBusinessUi3D ui,RenderContext c,float scale,float ox,float oy)
+ {
+  public void Q(float x,float y,float w,float h,Vector4 color)=>c.DrawUiQuad(new((ox+x)*scale,(oy+y)*scale),new(w*scale,h*scale),color);
+  public void L(float x,float y,float xx,float yy,Vector4? color=null,float thickness=1)=>c.DrawUiLine(new((ox+x)*scale,(oy+y)*scale),new((ox+xx)*scale,(oy+yy)*scale),thickness*scale,color??MenuEdge);
+  public void T(string value,float x,float y,int size=18,Vector4? color=null,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(value,ui.BodyFont,(int)(size*scale),new((ox+x)*scale,(oy+y)*scale),color??ui.TextColor,anchor);
+  public void Rule(float y,float width)=>L(28,y,width-28,y);
+  public void Border(float x,float y,float w,float h,Vector4 color,float thickness=1){L(x,y,x+w,y,color,thickness);L(x+w,y,x+w,y+h,color,thickness);L(x,y+h,x+w,y+h,color,thickness);L(x,y,x,y+h,color,thickness);}
+  public void Bar(float x,float y,float w,float h,float fraction){Q(x,y,w,h,new(.20f,.22f,.25f,1));Q(x,y,w*Math.Clamp(fraction,0,1),h,ui.Accent);}
+  public void Button(Guid id,string label,float x,float y,float w,float h,bool yellow=false,int size=18){var widget=ui.W(id);bool enabled=widget?.Interactable==true,hover=widget?.IsHovered==true||ReferenceEquals(UiNavigation.Focused,widget);Q(x,y,w,h,yellow&&enabled?ui.Accent:hover?new(.15f,.17f,.20f,1):MenuInset);if(!yellow||!enabled)Border(x,y,w,h,hover?ui.Accent:MenuEdge);T(label,x+w/2,y+(h-size)/2-1,size,yellow&&enabled?new(.045f,.05f,.06f,1):enabled?ui.TextColor:MenuMuted,UiAnchor.TopCenter);}
+  void Polygon(Vector2[] points,float x,float y,float size,Vector4 color){float u=size/24;for(int row=0;row<24;row++){float yy=row+.5f;var intersections=new List<float>();for(int i=0;i<points.Length;i++){var a=points[i];var b=points[(i+1)%points.Length];if((a.Y<=yy&&b.Y>yy)||(b.Y<=yy&&a.Y>yy))intersections.Add(a.X+(yy-a.Y)*(b.X-a.X)/(b.Y-a.Y));}intersections.Sort();for(int i=0;i+1<intersections.Count;i+=2)Q(x+intersections[i]*u,y+row*u,(intersections[i+1]-intersections[i])*u,u,color);}}
+  public void Icon(string icon,float x,float y,float size,Vector4? color=null){var tint=color??ui.TextColor;float u=size/24;
+   if(icon=="clock"){for(int i=0;i<32;i++){float a=i*MathF.PI/16,b=(i+1)*MathF.PI/16;L(x+(12+8*MathF.Cos(a))*u,y+(14+8*MathF.Sin(a))*u,x+(12+8*MathF.Cos(b))*u,y+(14+8*MathF.Sin(b))*u,tint,1.5f);}Q(x+9*u,y,6*u,3*u,tint);L(x+12*u,y+6*u,x+12*u,y+14*u,tint,1.5f);L(x+12*u,y+14*u,x+17*u,y+16*u,tint,1.5f);return;}
+   if(icon=="ingot"){Polygon([new(1,15),new(6,5),new(20,5),new(23,15),new(18,21),new(4,21)],x,y,size,tint);L(x+1*u,y+15*u,x+17*u,y+15*u,MenuInset,1.5f);L(x+17*u,y+15*u,x+20*u,y+5*u,MenuInset,1.5f);L(x+17*u,y+15*u,x+18*u,y+21*u,MenuInset,1.5f);return;}
+   if(icon=="ore"){Polygon([new(1,11),new(6,4),new(13,7),new(14,17),new(7,21),new(2,18)],x,y,size,tint);Polygon([new(12,4),new(18,1),new(23,8),new(22,18),new(17,21),new(15,14)],x,y,size,tint);L(x+6*u,y+4*u,x+8*u,y+12*u,MenuInset,1.2f);L(x+8*u,y+12*u,x+14*u,y+17*u,MenuInset,1.2f);return;}
+   if(icon=="hopper"){Polygon([new(1,3),new(23,3),new(16,15),new(16,22),new(8,22),new(8,15)],x,y,size,tint);return;}
+if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;var reference=new AssetReference("Assets/UI/Mining/Artwork/"+(icon=="pistol"?"company-pistol":"research-"+icon)+".png");c.DrawUiImage(assets.LoadTexture(reference),new((ox+x)*scale,(oy+y)*scale),new(size*scale),color??ui.TextColor);}
+  public void Spider(float x,float y,float size){float u=size/32;for(int row=0;row<12;row++){float half=MathF.Sqrt(Math.Max(0,36-(row-6)*(row-6)));Q(x+(16-half)*u,y+(9+row)*u,half*2*u,u,ui.TextColor);}Q(x+13*u,y+5*u,6*u,6*u,ui.TextColor);for(int side=-1;side<=1;side+=2)for(int leg=0;leg<4;leg++){float yy=10+leg*3;L(x+(16+side*4)*u,y+yy*u,x+(16+side*11)*u,y+(yy-5+leg)*u,ui.TextColor,1.3f);L(x+(16+side*11)*u,y+(yy-5+leg)*u,x+(16+side*15)*u,y+(yy+3+leg)*u,ui.TextColor,1.3f);}}
+  public void IconFrame(string icon,float x,float y,float size=48){Border(x,y,size,size,MenuEdge);Icon(icon,x+9,y+9,size-18);}
+  public void Pips(int current,int max,float x,float y){int count=Math.Min(max,8);for(int i=0;i<count;i++){Q(x+i*12,y,8,5,i<current?ui.Accent:MenuEdge);}}
+  public void Wrap(string value,float x,float y,int columns=52,int size=16){string line="";foreach(string word in value.Split(' ')){if(line.Length+word.Length>columns){T(line,x,y,size,MenuMuted);y+=size+6;line="";}line+=(line.Length>0?" ":"")+word;}if(line.Length>0)T(line,x,y,size,MenuMuted);}
+ }
+ void RenderIndustrialBusiness(RenderContext c,float width,float height,float scale)
+ {
+  if(Screen==MiningScreen.AudioCredits){RenderAudioCredits(c,width,height,scale);return;}if(Op is not {} op)return;
+  var b=CompactBounds(width,height);var p=new BusinessPainter(this,c,scale,b.X,b.Y);c.DrawUiQuad(Vector2.Zero,new(c.TargetWidth,c.TargetHeight),new(0,0,0,.28f));p.Q(0,0,b.Width,b.Height,Surface);p.Border(0,0,b.Width,b.Height,MenuEdge);p.Q(0,0,12,2,Accent);p.Q(b.Width-12,b.Height-2,12,2,Accent);
+  string title=Screen switch{MiningScreen.AmmoPress=>"AMMO PRESS",MiningScreen.Refinery=>"REFINERY",MiningScreen.Drill=>"SELECT OPERATION",_=>"COMPANY TERMINAL"};p.Q(28,27,6,23,Accent);p.T(title,46,23,Screen==MiningScreen.Drill?27:25);p.T($"{op.Credits:N0} cr",b.Width-75,29,19,Accent,UiAnchor.TopRight);p.L(b.Width-43,28,b.Width-29,42,TextColor,1.5f);p.L(b.Width-29,28,b.Width-43,42,TextColor,1.5f);p.Rule(66,b.Width);
+  if(Screen==MiningScreen.Drill)DrawIndustrialContracts(p,op);
+  else if(Screen==MiningScreen.Research&&Trade is {} research)DrawIndustrialResearch(p,c,b.X,b.Y,b.Width,b.Height,scale,research);
+  else if(Screen==MiningScreen.Market&&Trade is {} market)DrawIndustrialMarket(p,market);
+  else DrawIndustrialMachine(p,op,Trade,Screen==MiningScreen.AmmoPress);
+  if(Screen!=MiningScreen.Drill){p.T("ESC  CLOSE",b.Width-28,b.Height-42,15,MenuMuted,UiAnchor.TopRight);if(Feedback.Length>0)p.T(Feedback.Length>57?Feedback[..54]+"...":Feedback,28,b.Height-73,14,Accent);}
+ }
+ void DrawIndustrialMachine(BusinessPainter p,MiningOperation3D op,MiningTrade3D? trade,bool ammo)
+ {
+  if(ammo&&trade!=null){p.IconFrame("gear",28,90,54);bool full=trade.StoredAmmo>=trade.Capacity;p.T(full?"BUCKET FULL":"PRODUCING",102,90,23,Accent);p.T($"{trade.Output:0.#} rounds / second",102,122,17,MenuMuted);p.Bar(102,158,334,9,full?1:trade.StoredAmmo-MathF.Floor(trade.StoredAmmo));p.T(full?"100%":$"{(trade.StoredAmmo-MathF.Floor(trade.StoredAmmo))*100:0}%",492,149,15,MenuMuted,UiAnchor.TopRight);p.Rule(192,520);p.IconFrame("crate",28,211,48);p.T("BUCKET",96,209,16,MenuMuted);p.T($"{(int)trade.StoredAmmo} / {trade.Capacity}",96,232,25);p.Bar(244,242,248,8,trade.StoredAmmo/trade.Capacity);p.T("Walk up to the bucket to collect ammo",28,274,15,MenuMuted);}
+  else{p.IconFrame("ore",28,88,48);p.T("RAW ORE",92,88,15,MenuMuted);p.T(op.RawOre.ToString("N0"),92,111,29);p.L(256,87,256,144);p.IconFrame("ingot",282,88,48);p.T("REFINED",346,88,15,MenuMuted);p.T(op.RefinedOre.ToString("N0"),346,111,29);p.Rule(164,520);bool active=op.RefiningAmount>0;p.T(active?"REFINING":"READY TO REFINE",28,183,19,active?Accent:TextColor);p.T(active?$"{op.RefiningProgress:P0}":"0%",492,183,19,MenuMuted,UiAnchor.TopRight);p.Bar(28,219,464,12,op.RefiningProgress);p.T(active?$"{op.RefiningAmount} raw > {op.RefiningOutput} refined":$"Up to {op.RefineryBatch+op.RefineryLevel*op.ExtraBatchPerLevel} ore per batch",28,248,16,MenuMuted);p.T(active?$"{op.RefiningRemaining:0.0}s remaining":$"{op.RefineryDuration:0.0}s per batch",492,248,16,MenuMuted,UiAnchor.TopRight);}
+  p.Rule(295,520);
+  for(int row=0;row<3;row++){
+   float y=305+row*74;string name,current,next,icon;int cost,level,max;
+   if(ammo&&trade!=null){level=trade.Level(row);max=trade.MaximumLevel;name=row==0?"Cycle speed":row==1?"Hopper capacity":"Rounds / stroke";icon=row==0?"clock":row==1?"hopper":"ammo";current=row==0?$"{trade.Output:0.#}/s":row==1?$"{trade.Capacity}":$"{1+trade.EfficiencyLevel*trade.EfficiencyPerLevel:0.##}x";next=row==0?$"{trade.OutputAt(trade.OutputLevel+1,trade.EfficiencyLevel):0.#}/s":row==1?$"{trade.Capacity+trade.ExtraStoragePerLevel}":$"{1+(trade.EfficiencyLevel+1)*trade.EfficiencyPerLevel:0.##}x";cost=trade.Cost(row);}
+   else{var kind=RowUpgrade(row);level=op.Level(kind);max=op.MaximumUpgradeLevel;name=row==0?"Batch size":row==1?"Processing time":"Recovery yield";icon=row==0?"crate":row==1?"clock":"gear";current=row==0?$"{op.RefineryBatch+level*op.ExtraBatchPerLevel}":row==1?$"{op.RefineryDuration:0.0}s":$"{op.RefineryYieldMultiplier:0.00}x";next=row==0?$"{op.RefineryBatch+(level+1)*op.ExtraBatchPerLevel}":row==1?$"{op.RefinerySeconds/(1+(level+1)*op.RefinerySpeedPerLevel):0.0}s":$"{op.RefineryYieldMultiplier+op.RefineryYieldPerLevel:0.00}x";cost=op.Cost(kind);}
+   p.IconFrame(icon,28,y+2,46);p.T(name,90,y+2,18);p.T(current+"  >",90,y+28,18,MenuMuted);p.T(level>=max?"MAX":next,236,y+28,18,Accent);p.Pips(level,max,90,y+55);p.Button(row==0?Row0ButtonObjectId:row==1?Row1ButtonObjectId:Row2ButtonObjectId,level>=max?"MAX":$"{cost:N0} cr",384,y+7,108,42,true,18);if(row<2)p.Rule(y+68,520);
+  }
+  p.Rule(539,520);
+  if(!ammo)p.Button(PrimaryButtonObjectId,op.RefiningAmount>0?"REFINING...":"REFINE & RETURN",28,552,464,44,true,20);
+  else p.T("Upgrades improve all future production",28,563,16,MenuMuted);
+ }
+ void DrawTerminalTabs(BusinessPainter p,bool market,float width){p.Q(28,80,242,36,market?MenuInset:Accent);p.T("UPGRADES",149,89,17,market?TextColor:new(.045f,.05f,.06f,1),UiAnchor.TopCenter);p.Q(280,80,242,36,market?Accent:MenuInset);p.T("MARKET",401,89,17,market?new(.045f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);p.Rule(129,width);}
+ void DrawIndustrialMarket(BusinessPainter p,MiningTrade3D trade)
+ {
+  DrawTerminalTabs(p,true,560);
+  p.Q(28,140,98,28,!RefinedSelected?Accent:MenuInset);p.T("RAW",77,146,15,!RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);p.Q(136,140,130,28,RefinedSelected?Accent:MenuInset);p.T("REFINED",201,146,15,RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);
+  p.IconFrame(RefinedSelected?"ingot":"ore",28,187,54);p.T(RefinedSelected?"REFINED ORE":"RAW ORE",100,183,20);float quote=trade.Quote(RefinedSelected),change=(trade.PriceMultiplier-1)*100;p.T($"{quote:0.00}",100,211,31);p.T("cr / unit",221,223,17,MenuMuted);p.T($"{change:+0.0;-0.0;0.0}%",532,218,19,Accent,UiAnchor.TopRight);p.T("LIVE PRICE",28,266,13,MenuMuted);
+  float gx=53,gy=292,gw=479,gh=98;float price=RefinedSelected?Op!.RefinedOrePrice:Op!.RawOrePrice,low=price*trade.MinimumMultiplier,high=price*trade.MaximumMultiplier;for(int i=0;i<3;i++){float yy=gy+i*gh/2;p.L(gx,yy,gx+gw,yy,new(.17f,.19f,.22f,1));p.T((high-(high-low)*i/2).ToString("0.0"),gx-8,yy-7,12,MenuMuted,UiAnchor.TopRight);}var history=trade.History;for(int i=1;i<history.Count;i++){float x1=gx+(i-1)*gw/Math.Max(1,history.Count-1),x2=gx+i*gw/Math.Max(1,history.Count-1);float y1=gy+gh*(1-Math.Clamp((history[i-1]*price-low)/Math.Max(.001f,high-low),0,1)),y2=gy+gh*(1-Math.Clamp((history[i]*price-low)/Math.Max(.001f,high-low),0,1));p.L(x1,y1,x2,y2,Accent,1.6f);if(i==history.Count-1)p.Q(x2-3,y2-3,6,6,Accent);}p.T("EARLIER",53,395,11,MenuMuted);p.T("NOW",532,395,11,MenuMuted,UiAnchor.TopRight);
+  p.T($"{trade.Stock(RefinedSelected):N0} IN STOCK",28,418,18);p.T("SELL QUANTITY",28,449,14,MenuMuted);p.T(Quantity.ToString(),532,445,21,TextColor,UiAnchor.TopRight);float fraction=Quantity/(float)Math.Max(1,trade.Stock(RefinedSelected));p.Bar(30,476,500,5,fraction);p.Q(30+500*fraction-5,468,10,21,Accent);
+  if(trade.SaleInProgress){p.T($"SELLING {trade.SaleProcessed} / {trade.SaleQuantity} ORE",28,506,16);p.T($"{trade.SaleQuantity-trade.SaleProcessed} remaining",532,508,13,MenuMuted,UiAnchor.TopRight);p.Bar(28,537,504,7,trade.SaleProgress);}else p.T("Select an amount to sell at the current price",28,518,15,MenuMuted);
+  p.Button(PrimaryButtonObjectId,trade.SaleInProgress?"SHIPMENT IN PROGRESS":$"SELL {Quantity} FOR {MiningOperation3D.SaleTotal(Quantity,quote):N0} cr",28,558,504,46,true,18);
+ }
+ void DrawIndustrialResearch(BusinessPainter p,RenderContext c,float x,float y,float width,float height,float scale,MiningTrade3D trade)
+ {
+  DrawTerminalTabs(p,false,width);DrawResearchMap(c,x,y,scale,trade);p.Rule(490,width);
+  if(trade.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is {} chosen){p.IconFrame(ResearchIcon(chosen),28,513,48);p.T(chosen.Name,96,508,23);p.Wrap(chosen.Description,96,541,49,16);int rank=trade.ResearchRank(chosen.Id);string missing=string.Join(", ",chosen.Prerequisites.Where(id=>!trade.HasResearch(id)).Select(id=>trade.Research.FirstOrDefault(n=>n.Id==id)?.Name??id));p.T(missing.Length>0?"REQUIRES "+(missing.Length>45?missing[..42]+"...":missing):$"RANK {rank} / {chosen.MaxRank}  /  PERMANENT",96,590,13,MenuMuted);p.Button(PrimaryButtonObjectId,rank>=chosen.MaxRank?"MAX RANK":$"UNLOCK {trade.ResearchCost(chosen.Id):N0} cr",584,541,208,45,true,17);}
+  p.T("AUDIO CREDITS",28,616,12,MenuMuted);p.T("Drag to pan / Scroll to zoom / Enter to buy",width/2,470,12,MenuMuted,UiAnchor.TopCenter);
+ }
+ void DrawIndustrialContracts(BusinessPainter p,MiningOperation3D op)
+ {
+  for(int i=0;i<3;i++){float x=28+i*298;var wave=op.PreviewContract(i);if(wave==null)continue;bool selected=wave.Id==op.SelectedContractId;p.Q(x,86,286,288,MenuInset);p.Border(x,86,286,288,selected?Accent:MenuEdge,selected?2:1);if(selected)p.Q(x+266,97,8,8,Accent);p.T(wave.Name.ToUpperInvariant(),x+18,107,23);p.T(wave.Difficulty.ToUpperInvariant(),x+18,142,14,MenuMuted);for(int j=0;j<4;j++)p.Q(x+18+j*40,171,33,5,j<=i?Accent:MenuEdge);p.L(x+18,194,x+268,194);p.T("REWARD",x+18,208,13,MenuMuted);p.T($"{wave.Ore} RAW ORE",x+18,232,25,Accent);p.L(x+18,272,x+268,272);p.T("EXPECTED ENEMIES",x+18,287,12,MenuMuted);p.Spider(x+18,311,25);p.T($"{wave.Hunters} Hunters",x+54,311,18);p.Spider(x+18,341,25);p.T($"{wave.Raiders} Rig raiders",x+54,342,18);}
+  p.Rule(393,940);p.T("DRILL OUTPUT",28,406,12,MenuMuted);p.T($"{op.BaseOrePerOperation+op.DrillLevel*op.OrePerDrillLevel} > {op.BaseOrePerOperation+(op.DrillLevel+1)*op.OrePerDrillLevel} ore",28,428,19);p.Button(Row0ButtonObjectId,$"UPGRADE {op.Cost(MiningUpgrade.Drill):N0} cr",252,407,158,40,true,15);p.T("DRILL HEALTH",442,406,12,MenuMuted);p.Bar(442,439,180,7,op.DrillHealthFraction);p.T($"CARGO {op.CargoUsed} / {op.CargoCapacity}",652,406,14,MenuMuted);p.T($"YIELD {op.SelectedContract?.Ore??0} ORE",652,433,18,Accent);p.Button(PrimaryButtonObjectId,"START EXTRACTION",28,476,730,44,true,21);p.T("ESC CLOSE",912,490,15,MenuMuted,UiAnchor.TopRight);
+  string warning=Feedback.Length>0?Feedback:op.RefiningAmount>0?"Finish refining before the next extraction.":op.SelectedContract is {} forecast&&(long)op.RawOre+op.RefinedOre+forecast.Ore>op.CargoCapacity?"Cargo full: sell ore before starting this operation.":"Choose the risk. Prepare your defences. Start when ready.";p.T(warning,28,536,14,MenuMuted);
+ }
+}

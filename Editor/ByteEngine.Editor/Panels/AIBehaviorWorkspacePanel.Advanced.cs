@@ -18,6 +18,7 @@ internal sealed partial class AIBehaviorWorkspacePanel
             int kind=(int)n.PositionKind;if(ImGui.Combo("Position type",ref kind,new[]{"Cover","Firing lane","Flank","Surround"},4)){Checkpoint();n.PositionKind=(AIPositionKind)kind;}
             Text("Save position as",n.Key,v=>n.Key=v);Float("Preferred target distance",n.Distance,v=>n.Distance=v);Float("Search radius",n.SearchRadius,v=>n.SearchRadius=v);Float("Minimum spacing",n.Spacing,v=>n.Spacing=v);Float("Hold position seconds",n.Duration,v=>n.Duration=v);
         }
+        if(n.Kind==BehaviorNodeKind.Wander){Float("Wander radius around starting position",n.SearchRadius,v=>n.SearchRadius=v);Float("Walking speed",n.Speed,v=>n.Speed=v);Float("Choose destination every seconds",n.Duration,v=>n.Duration=v);Text("Destination memory key",n.Key,v=>n.Key=v);ImGui.TextWrapped("Wanders near this instance's placed starting position. Sight and hearing branches above it can interrupt.");}
         if(n.Kind==BehaviorNodeKind.Search){Float("Search seconds",n.Duration,v=>n.Duration=v);Float("Search radius",n.SearchRadius,v=>n.SearchRadius=v);Float("Search speed",n.Speed,v=>n.Speed=v);}
         if(n.Kind==BehaviorNodeKind.ReserveAttack){Float("Maximum hold seconds",n.Duration,v=>n.Duration=v);Float("Wait timeout",n.Timeout,v=>n.Timeout=v);ImGui.TextWrapped("The enemy component's Squad and Maximum Attackers control sharing.");}
         if(n.Kind==BehaviorNodeKind.ChooseAttack)

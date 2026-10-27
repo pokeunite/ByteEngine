@@ -19,8 +19,17 @@ static class AIAdvancedTests
     }
     public static void Run()
     {
-        Perception();ServicesAndSubtrees();Interruption();PositionsAndSquads();StagedAttacks();
+        Perception();ServicesAndSubtrees();Interruption();PositionsAndSquads();StagedAttacks();DestroyedReservations();
         Console.WriteLine("PASS advanced AI suite: sight/FOV/occlusion, hearing, memory expiry, search, services, sub-behaviour isolation/recursion, interrupt modes, tactical positions, squad limits/cleanup, staged attacks and bounded history");
+    }
+    static void DestroyedReservations()
+    {
+        var scene=new Scene("Destroyed attack owner");var target=scene.CreateGameObject("Target");var ai=Brain(scene,target);var peer=Brain(scene,target);var world=AIWorld.For(scene);
+        Check(world.ReserveAttack(ai,target.Id,5),"reserve before removal");world.ReservePosition(ai,new(2,0,2),5,1);
+        ai.GameObject.RemoveComponent(ai);
+        Check(world.AttackReservationCount==0&&world.PositionReservationCount==0,"destroyed components release all reservations without detached GameObject access");
+        Check(!world.OwnsAttack(peer)&&world.ReserveAttack(peer,target.Id,5),"surviving enemies continue reserving attacks after another is removed");scene.DestroyGameObject(peer.GameObject);
+        Check(world.AttackReservationCount==0,"destroying an enemy cannot leave a crashing attack lease");
     }
     static void Perception()
     {

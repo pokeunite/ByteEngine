@@ -37,6 +37,7 @@ public sealed class ProjectData
 
 public sealed class ProjectWindowData
 {
+    public bool StartFullscreen { get; set; } = true;
     public int Width { get; set; } =
         1280;
 

@@ -1,0 +1,4938 @@
+{
+  "scope": "Installed ZOMBILLIONAIRE Demo authored skill trees, ammo-press ladders and shop. Reference facts only; not imported gameplay or proprietary assets.",
+  "trees": [
+    {
+      "name": "Combat",
+      "hidden": false,
+      "nodes": 97
+    },
+    {
+      "name": "Economy",
+      "hidden": true,
+      "nodes": 1
+    },
+    {
+      "name": "Survival",
+      "hidden": true,
+      "nodes": 0
+    }
+  ],
+  "nodes": [
+    {
+      "Id": "e62028b96e7f4300bed21f14eca7b6de",
+      "Name": "Sharpened Rounds",
+      "Position": [
+        -40.0,
+        -60.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        5,
+        20
+      ],
+      "Effects": [
+        {
+          "Stat": 92,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "PistolDamageFlat",
+          "Description": "FLAT damage added to every pistol hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b094b79142a24dab98723453cc3cd5ff"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Pistol"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "f8372fee65274b0087b841b744f7774f",
+      "Name": "Unlock SMG",
+      "Position": [
+        -400.0,
+        -540.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 63,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockSmg",
+          "Description": "Puts the Cowsins SMG (Item_SMG) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "e62028b96e7f4300bed21f14eca7b6de"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Sharpened Rounds"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "7747e9ecb6b245cc8fa5f9ee995631d4",
+      "Name": "Small Ammo",
+      "Position": [
+        200.0,
+        180.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20,
+        30
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 15.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b094b79142a24dab98723453cc3cd5ff"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Pistol"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "5cc3cafd57c044279acc417fb1960288",
+      "Name": "Oil Price",
+      "Position": [
+        440.0,
+        180.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20,
+        30
+      ],
+      "Effects": [
+        {
+          "Stat": 127,
+          "Op": 0,
+          "ValuePerRank": 0.10000000149011612,
+          "StatName": "OilPriceFloor",
+          "Description": "Flat dollars per gallon added to the oil price FLOOR (user call 2026-09-19: \"increase oil price floor 1>2 ... no more percentage increases\"). The market sits on the floor and swings up to the peak above it, so every rank lifts the whole chart. OilMarket.Floor reads it; the tooltip prints base+ranks in dollars.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "7747e9ecb6b245cc8fa5f9ee995631d4"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Small Ammo"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "5816c48e0d8e4b7197d4e352cc8bd5d3",
+      "Name": "Siren Amplifier",
+      "Position": [
+        440.0,
+        660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 13,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "SirenLevel",
+          "Description": "Max siren level: each point unlocks the next, bigger wave call at the console.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "fb4c41338a304e9da42e0bb496e43743"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b2f55f5628ee4e65b68597a80c4fa19a",
+      "Name": "Reinforced Plating",
+      "Position": [
+        -520.0,
+        -60.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        5,
+        10
+      ],
+      "Effects": [
+        {
+          "Stat": 22,
+          "Op": 1,
+          "ValuePerRank": 10.0,
+          "StatName": "BunkerHealthPct",
+          "Description": "Bunker maximum health.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "8a848033763e480080521335309ba34e"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Melee Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "8a848033763e480080521335309ba34e",
+      "Name": "Melee Damage",
+      "Position": [
+        -520.0,
+        180.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20,
+        30
+      ],
+      "Effects": [
+        {
+          "Stat": 98,
+          "Op": 0,
+          "ValuePerRank": 10.0,
+          "StatName": "MeleeDamageFlat",
+          "Description": "FLAT damage added to every melee hit before the percentage perks multiply it (user call 2026-09-16). Per victim of a swing, like MeleeDamagePct. So one rank pays up to MeleeTargets times per swing (Item_Katana cuts 14), which is the opposite end of the family from the shotgun - size ValuePerRank well BELOW the pistol's.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b361d528edbf4f3d805f454a6cab6962"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Katana"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "831ff3a8f117439ea30b9f1bcc0d5f57",
+      "Name": "SMG Damage",
+      "Position": [
+        -400.0,
+        -780.0
+      ],
+      "MaxRank": 5,
+      "Currency": 0,
+      "RankCosts": [
+        25,
+        50,
+        75,
+        100,
+        125
+      ],
+      "Effects": [
+        {
+          "Stat": 93,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "SmgDamageFlat",
+          "Description": "FLAT damage added to every SMG hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "f8372fee65274b0087b841b744f7774f"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock SMG"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "7cccf9bb1eac452abf0c494d588a0c12",
+      "Name": "Unlock Rifle",
+      "Position": [
+        -1360.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 65,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockRifle",
+          "Description": "Puts the Cowsins Rifle (Item_Rifle) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "cd2362b70f384b24b9ac106158e0104b"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Health"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "d1cb8823bcb048bb9a5126a49cb5a574",
+      "Name": "Bigger Bullets",
+      "Position": [
+        800.0,
+        -540.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 110,
+          "Op": 0,
+          "ValuePerRank": 25.0,
+          "StatName": "AutogunDamageFlat",
+          "Description": "FLAT damage added to every Autogun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b885133266704d08b21af47b5e20dd1a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Smooth Barrels"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b885133266704d08b21af47b5e20dd1a",
+      "Name": "Smooth Barrels",
+      "Position": [
+        560.0,
+        -540.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        25,
+        50,
+        75
+      ],
+      "Effects": [
+        {
+          "Stat": 109,
+          "Op": 0,
+          "ValuePerRank": 0.5,
+          "StatName": "AutogunFireRateFlat",
+          "Description": "FLAT rounds per second added to the Autogun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "d77b3b2fd6ae4325a627428200f3f753"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "+Autogun"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "fb4c41338a304e9da42e0bb496e43743",
+      "Name": "Pump Speed",
+      "Position": [
+        200.0,
+        660.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20,
+        30
+      ],
+      "Effects": [
+        {
+          "Stat": 128,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "OilSellRate",
+          "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5ce1f437800b4d47adb7685b7175e782"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "5ce1f437800b4d47adb7685b7175e782",
+      "Name": "Bigger Tank",
+      "Position": [
+        -40.0,
+        660.0
+      ],
+      "MaxRank": 4,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20,
+        20,
+        20
+      ],
+      "Effects": [
+        {
+          "Stat": 130,
+          "Op": 0,
+          "ValuePerRank": 15.0,
+          "StatName": "OilTankCapacity",
+          "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "6140d780c4484ce28c3c593a639ad091"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Oil Price"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "8f4c464e51ca43d494d8f95991a71258",
+      "Name": "Market Peak",
+      "Position": [
+        680.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        40,
+        80
+      ],
+      "Effects": [
+        {
+          "Stat": 131,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "MarketPeakPct",
+          "Description": "Percentage POINTS added to how far the oil price can rise above its floor - base peak +5%, so ranks of 5 read 5 > 10 > 15 > 20 (user call 2026-09-19: \"start with 5% max peak, then upgrade it 5%>10%>20% from the skill tree\"). Add op, not PercentAdd: OilMarket.Swing adds it to BaseSwing before the medals multiply.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "3b725b794c604823a49547345b23954d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Airdrop Beacon"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "494975b2759442a8936a62acb6ceb8bf",
+      "Name": "Small Ammo",
+      "Position": [
+        -640.0,
+        -780.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        75,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 30.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "f8372fee65274b0087b841b744f7774f"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock SMG"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "7daf6af431574a449c7dd3e83358b60e",
+      "Name": "SMG Fire Rate",
+      "Position": [
+        -160.0,
+        -780.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 8,
+          "Op": 1,
+          "ValuePerRank": 10.0,
+          "StatName": "SmgFireRatePct",
+          "Description": "SMG rate of fire (+20% = 20% more shots per second).",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "831ff3a8f117439ea30b9f1bcc0d5f57"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "SMG Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "97fc62f1319b4292bff71de87595c194",
+      "Name": "SMG Mag Size",
+      "Position": [
+        -160.0,
+        -1020.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 7,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "SmgMagazineSize",
+          "Description": "Extra rounds in every magazine.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "7daf6af431574a449c7dd3e83358b60e"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "SMG Fire Rate"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "0ec95cdc5112470ea6aceb4e68d210ba",
+      "Name": "+Autogun",
+      "Position": [
+        320.0,
+        -540.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 119,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "AutogunGrant",
+          "Description": "Hands ValuePerRank Autogun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "e62028b96e7f4300bed21f14eca7b6de"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Sharpened Rounds"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "0903b71b034347abb762ef750fafcbff",
+      "Name": "Pistol Fire Rate",
+      "Position": [
+        920.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 77,
+          "Op": 1,
+          "ValuePerRank": 10.0,
+          "StatName": "PistolFireRatePct",
+          "Description": "Pistol rate of fire (+20% = 20% more shots per second).",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "8f4c464e51ca43d494d8f95991a71258"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Market Peak"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "dc8f7b6ddf6f4eafaf0983c1db508f2a",
+      "Name": "Piercing Bullets",
+      "Position": [
+        -1600.0,
+        -60.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        200,
+        400,
+        800,
+        2000,
+        4000,
+        8000
+      ],
+      "Effects": [
+        {
+          "Stat": 42,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "RiflePierce",
+          "Description": "Extra bodies each rifle round punches through.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "19290cb604b046afb910281776d19e27"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Large Ammo Stock"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "9ac5cc2b168b499d8e46cbbb54e12bae",
+      "Name": "Hot Bullets",
+      "Position": [
+        -640.0,
+        -1020.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 43,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "SmgPierce",
+          "Description": "Extra bodies each SMG round punches through.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "831ff3a8f117439ea30b9f1bcc0d5f57",
+        "494975b2759442a8936a62acb6ceb8bf"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "SMG Damage",
+        "Small Ammo"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "4b2dd4997ce7472aa12eb0d924251c9d",
+      "Name": "Unlock RPG",
+      "Position": [
+        440.0,
+        1140.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 68,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockRocketLauncher",
+          "Description": "Puts the Cowsins Rocket Launcher (Item_RocketLauncher) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "5816c48e0d8e4b7197d4e352cc8bd5d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Siren Amplifier"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "91db5b0f04854b899662aeb22a1911cf",
+      "Name": "Unlock Machine Gun",
+      "Position": [
+        680.0,
+        660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        3000
+      ],
+      "Effects": [
+        {
+          "Stat": 137,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockMachineGun",
+          "Description": "Owning it makes the ONE scene machine gun usable and movable (TurretUnlocks). Until then the emplacement sits in the base as a tease with the locked prompt, exactly like the atomic bomb button. User call 2026-09-20.",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "5816c48e0d8e4b7197d4e352cc8bd5d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Siren Amplifier"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "9bb32120846f425b903fc5fddaf0da19",
+      "Name": "Machine Gun Pierce",
+      "Position": [
+        1160.0,
+        660.0
+      ],
+      "MaxRank": 5,
+      "Currency": 0,
+      "RankCosts": [
+        3000,
+        6000,
+        9000,
+        18000,
+        36000
+      ],
+      "Effects": [
+        {
+          "Stat": 132,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "MachineGunPierce",
+          "Description": "Extra bodies each Machine Gun turret round punches through (base 1, the mount and the manned seat both read it through TurretStatFamilies). User call 2026-09-20, turret piercing perks.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "8c1ccc80700749579c84d68876649751"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "9f8e5290f3674d428d69ea33612b68b7",
+      "Name": "Autogun Pierce",
+      "Position": [
+        800.0,
+        -780.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        300
+      ],
+      "Effects": [
+        {
+          "Stat": 135,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "AutogunPierce",
+          "Description": "Extra bodies each Autogun round punches through (base 1, AutoTurret.FireOnce). User call 2026-09-20.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "d1cb8823bcb048bb9a5126a49cb5a574"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Bullets"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "3b725b794c604823a49547345b23954d",
+      "Name": "Airdrop Beacon",
+      "Position": [
+        440.0,
+        420.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        50
+      ],
+      "Effects": [
+        {
+          "Stat": 139,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockAirdrop",
+          "Description": "Flag: owning it reveals the airdrop beacon and the medal board (AirdropStation, HiddenUntilUnlocked) and lets the beacon call the loot crates the kill ledger has earned — 1,000 lifetime kills for the first, then doubling (AirdropConfig.KillsNeededFor). User call 2026-09-25. Hand-carried row + enum line; Generate Stat Ids is a no-op.",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "5cc3cafd57c044279acc417fb1960288"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Oil Price"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "54932c2923834aafafdadcba8feae65d",
+      "Name": "Machine Gun Damage",
+      "Position": [
+        920.0,
+        900.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        2000
+      ],
+      "Effects": [
+        {
+          "Stat": 102,
+          "Op": 0,
+          "ValuePerRank": 50.0,
+          "StatName": "MachineGunDamageFlat",
+          "Description": "FLAT damage added to every Machine Gun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "868d3792eaa44863b88600ff814f45fa",
+        "8c1ccc80700749579c84d68876649751"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Barrel Spin",
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "868d3792eaa44863b88600ff814f45fa",
+      "Name": "Barrel Spin",
+      "Position": [
+        680.0,
+        900.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        1000,
+        1500,
+        2000,
+        2500,
+        3000,
+        3500
+      ],
+      "Effects": [
+        {
+          "Stat": 101,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "MachineGunFireRateFlat",
+          "Description": "FLAT rounds per second added to the Machine Gun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "91db5b0f04854b899662aeb22a1911cf"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Machine Gun"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "bc613491655844859d50440435081a40",
+      "Name": "Rifle Damage",
+      "Position": [
+        -1840.0,
+        180.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200,
+        300
+      ],
+      "Effects": [
+        {
+          "Stat": 94,
+          "Op": 0,
+          "ValuePerRank": 15.0,
+          "StatName": "RifleDamageFlat",
+          "Description": "FLAT damage added to every rifle hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "19290cb604b046afb910281776d19e27"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Large Ammo Stock"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "00e5e79e774c4ed88f61bd6cf1486b38",
+      "Name": "Rifle Fire Rate",
+      "Position": [
+        -1360.0,
+        -60.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 78,
+          "Op": 1,
+          "ValuePerRank": 10.0,
+          "StatName": "RifleFireRatePct",
+          "Description": "Rifle rate of fire (+20% = 20% more shots per second).",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "7cccf9bb1eac452abf0c494d588a0c12"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Rifle"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "21267cdf1d9c4aba9c36881f5375509a",
+      "Name": "Oil Money",
+      "Position": [
+        -280.0,
+        900.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 127,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "OilPriceFloor",
+          "Description": "Flat dollars per gallon added to the oil price FLOOR (user call 2026-09-19: \"increase oil price floor 1>2 ... no more percentage increases\"). The market sits on the floor and swings up to the peak above it, so every rank lifts the whole chart. OilMarket.Floor reads it; the tooltip prints base+ranks in dollars.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "a1b3d8731b7743caa059eaa76afd87d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Land Mine"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "8c1ccc80700749579c84d68876649751",
+      "Name": "WE NEED MORE BULLETS!",
+      "Position": [
+        920.0,
+        660.0
+      ],
+      "MaxRank": 4,
+      "Currency": 0,
+      "RankCosts": [
+        1000,
+        1500,
+        2000,
+        2500
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "91db5b0f04854b899662aeb22a1911cf"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Machine Gun"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "f63545e0a3984155ae585e7c19bbb712",
+      "Name": "Shell Rack",
+      "Position": [
+        -760.0,
+        660.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200,
+        300
+      ],
+      "Effects": [
+        {
+          "Stat": 35,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "MortarShells",
+          "Description": "Extra shells per mortar-strike press.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b5c097a183894836a65c84d3fd8bec45"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "+Mortar"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "dfc924b679424449bd6794e4ba72ac98",
+      "Name": "Shaped Charge",
+      "Position": [
+        -520.0,
+        420.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        75,
+        100,
+        125
+      ],
+      "Effects": [
+        {
+          "Stat": 141,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "LandMineDamageFlat",
+          "Description": "FLAT centre damage added to the land mine blast (LandMine.BlastDamage) before TurretDamagePct and MinePayloadPct multiply it. The <Turret>DamageFlat shape of 2026-09-19, applied to the mine. User call 2026-09-26: separate damage and radius perks for the land mine. Hand-carried row + enum line; Generate Stat Ids is a no-op.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "0731b6c0e79947989e9b9ab1b772e91d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Wider Crater"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "0731b6c0e79947989e9b9ab1b772e91d",
+      "Name": "Wider Crater",
+      "Position": [
+        -280.0,
+        420.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        75,
+        100,
+        125
+      ],
+      "Effects": [
+        {
+          "Stat": 142,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "LandMineBlastRadius",
+          "Description": "Metres added to the land mine blast radius (LandMine.BlastRadius) before MinePayloadPct multiplies it; the placement range ring reads the same number. The LauncherBlastRadius (136) shape. User call 2026-09-26. Hand-carried row + enum line.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "a1b3d8731b7743caa059eaa76afd87d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Land Mine"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c40117c2389f4d79af4a7f99e04c9866",
+      "Name": "Heavy Shells",
+      "Position": [
+        -520.0,
+        900.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200,
+        300
+      ],
+      "Effects": [
+        {
+          "Stat": 143,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "MortarStrikeDamageFlat",
+          "Description": "FLAT damage added to every mortar-strike shell, direct hit AND blast centre (OneUseTurret.Damage / BlastDamage), before TurretDamagePct multiplies. Shells per strike stay on MortarShells (35). User call 2026-09-26. Hand-carried row + enum line.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b5c097a183894836a65c84d3fd8bec45"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "+Mortar"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "a1b3d8731b7743caa059eaa76afd87d3",
+      "Name": "Land Mine",
+      "Position": [
+        -280.0,
+        660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        50
+      ],
+      "Effects": [
+        {
+          "Stat": 125,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "LandMineGrant",
+          "Description": "Hands ValuePerRank Land Mine turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5ce1f437800b4d47adb7685b7175e782"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "91a49fe5d0984317891d99eb4f42e662",
+      "Name": "Oil Money",
+      "Position": [
+        -40.0,
+        900.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        50
+      ],
+      "Effects": [
+        {
+          "Stat": 127,
+          "Op": 0,
+          "ValuePerRank": 0.5,
+          "StatName": "OilPriceFloor",
+          "Description": "Flat dollars per gallon added to the oil price FLOOR (user call 2026-09-19: \"increase oil price floor 1>2 ... no more percentage increases\"). The market sits on the floor and swings up to the peak above it, so every rank lifts the whole chart. OilMarket.Floor reads it; the tooltip prints base+ranks in dollars.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5ce1f437800b4d47adb7685b7175e782"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b094b79142a24dab98723453cc3cd5ff",
+      "Name": "Unlock Pistol",
+      "Position": [
+        -40.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        0
+      ],
+      "Effects": [
+        {
+          "Stat": 147,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockPistol",
+          "Description": "Puts the Cowsins Pistol (Item_Pistol) in the hotbar. Read by WeaponUnlocks. User call 2026-09-29: the pistol no longer starts in the hotbar - the first perk of the tree unlocks it, for $0, so the player boots with only the katana (\"the first thing the player does in the skill tree will be unlocking the pistol\"). Not UnlockM1911 (60): that id is retired and ids are never reused.",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [],
+      "DemoLocked": false
+    },
+    {
+      "Id": "6140d780c4484ce28c3c593a639ad091",
+      "Name": "Oil Price",
+      "Position": [
+        -40.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        10,
+        20
+      ],
+      "Effects": [
+        {
+          "Stat": 127,
+          "Op": 0,
+          "ValuePerRank": 0.10000000149011612,
+          "StatName": "OilPriceFloor",
+          "Description": "Flat dollars per gallon added to the oil price FLOOR (user call 2026-09-19: \"increase oil price floor 1>2 ... no more percentage increases\"). The market sits on the floor and swings up to the peak above it, so every rank lifts the whole chart. OilMarket.Floor reads it; the tooltip prints base+ranks in dollars.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b094b79142a24dab98723453cc3cd5ff"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Pistol"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "cd2362b70f384b24b9ac106158e0104b",
+      "Name": "Health",
+      "Position": [
+        -760.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        50
+      ],
+      "Effects": [
+        {
+          "Stat": 4,
+          "Op": 0,
+          "ValuePerRank": 75.0,
+          "StatName": "PlayerMaxHealth",
+          "Description": "Flat max health.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "8a848033763e480080521335309ba34e"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Melee Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "76f85d546cba443e8d5078c82dbc10d4",
+      "Name": "Melee Damage",
+      "Position": [
+        -1120.0,
+        -300.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 98,
+          "Op": 0,
+          "ValuePerRank": 50.0,
+          "StatName": "MeleeDamageFlat",
+          "Description": "FLAT damage added to every melee hit before the percentage perks multiply it (user call 2026-09-16). Per victim of a swing, like MeleeDamagePct. So one rank pays up to MeleeTargets times per swing (Item_Katana cuts 14), which is the opposite end of the family from the shotgun - size ValuePerRank well BELOW the pistol's.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "cd2362b70f384b24b9ac106158e0104b"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Health"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c0da65adbd7a4f238ba2a238a4fce126",
+      "Name": "Melee Attack Speed",
+      "Position": [
+        -1360.0,
+        -300.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        75,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 82,
+          "Op": 1,
+          "ValuePerRank": 10.0,
+          "StatName": "MeleeFireRatePct",
+          "Description": "Melee SWING speed (+20% = 20% more swings per second). Named FireRate because HeldItem.FireRateOf is the one dial for both.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "76f85d546cba443e8d5078c82dbc10d4"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Melee Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "d5ded896682a410a9c19d9fa8c7961ab",
+      "Name": "Combat Boots",
+      "Position": [
+        -1120.0,
+        -540.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        75,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 23,
+          "Op": 1,
+          "ValuePerRank": 3.0,
+          "StatName": "MoveSpeedPct",
+          "Description": "Walk and sprint speed on foot.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "76f85d546cba443e8d5078c82dbc10d4"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Melee Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "fb79a2e8389c4695829edf1d98551f51",
+      "Name": "Health",
+      "Position": [
+        -1360.0,
+        -540.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        75,
+        100
+      ],
+      "Effects": [
+        {
+          "Stat": 4,
+          "Op": 0,
+          "ValuePerRank": 50.0,
+          "StatName": "PlayerMaxHealth",
+          "Description": "Flat max health.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "c0da65adbd7a4f238ba2a238a4fce126",
+        "d5ded896682a410a9c19d9fa8c7961ab"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Melee Attack Speed",
+        "Combat Boots"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "ff6d913ed36b4e89a6620a663731d54c",
+      "Name": "Land Mine",
+      "Position": [
+        -760.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 125,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "LandMineGrant",
+          "Description": "Hands ValuePerRank Land Mine turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "dfc924b679424449bd6794e4ba72ac98"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Shaped Charge"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "87ecd8a797d94526936eb0dbac6b8a76",
+      "Name": "SMG Damage",
+      "Position": [
+        -400.0,
+        -1020.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 93,
+          "Op": 0,
+          "ValuePerRank": 20.0,
+          "StatName": "SmgDamageFlat",
+          "Description": "FLAT damage added to every SMG hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "831ff3a8f117439ea30b9f1bcc0d5f57"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "SMG Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "a8c5e7fc30b44511879138a804950780",
+      "Name": "Bigger Tank",
+      "Position": [
+        -40.0,
+        1140.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        100,
+        150
+      ],
+      "Effects": [
+        {
+          "Stat": 130,
+          "Op": 0,
+          "ValuePerRank": 50.0,
+          "StatName": "OilTankCapacity",
+          "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "91a49fe5d0984317891d99eb4f42e662"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Oil Money"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "0c4b689342d8484e9aec5fae7f59bd98",
+      "Name": "Pump Speed",
+      "Position": [
+        -40.0,
+        1380.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        100,
+        150
+      ],
+      "Effects": [
+        {
+          "Stat": 128,
+          "Op": 0,
+          "ValuePerRank": 2.0,
+          "StatName": "OilSellRate",
+          "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "a8c5e7fc30b44511879138a804950780"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b1a7d67c30db4d39be6c46b2ff58b073",
+      "Name": "Pump Speed",
+      "Position": [
+        -280.0,
+        1380.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "Effects": [
+        {
+          "Stat": 128,
+          "Op": 0,
+          "ValuePerRank": 5.0,
+          "StatName": "OilSellRate",
+          "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "0c4b689342d8484e9aec5fae7f59bd98"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "ff19500267784078a8260e8e3501124c",
+      "Name": "Bigger Tank",
+      "Position": [
+        -280.0,
+        1140.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "Effects": [
+        {
+          "Stat": 130,
+          "Op": 0,
+          "ValuePerRank": 200.0,
+          "StatName": "OilTankCapacity",
+          "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b1a7d67c30db4d39be6c46b2ff58b073"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c0cbbd2534a84558a5e68584768b386a",
+      "Name": "Plane (Locked For Demo)",
+      "Position": [
+        200.0,
+        1140.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [
+        {
+          "Stat": 46,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockPlane",
+          "Description": "Owning it opens the plane console (PlaneConsole.Locked). Demo plan item 5.",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "2e1d8a374c8d44b8a2deed54b2d37573"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Siren Amplifier"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "8e87f92b378e43caa0b1550e5f811164",
+      "Name": "Atomic Bomb (Locked For Demo)",
+      "Position": [
+        -1000.0,
+        660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [
+        {
+          "Stat": 59,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "AtomicBomb",
+          "Description": "Arms the red button - the once-per-horde atomic bomb (demo plan item 7).",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "ff6d913ed36b4e89a6620a663731d54c"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Land Mine"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "61dbca59b3ac489c9e2bd157e9ba34ea",
+      "Name": "Rocket Ammo Cap",
+      "Position": [
+        440.0,
+        1620.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        100,
+        200,
+        300
+      ],
+      "Effects": [
+        {
+          "Stat": 91,
+          "Op": 0,
+          "ValuePerRank": 2.0,
+          "StatName": "RocketAmmoCap",
+          "Description": "ABSOLUTE rockets added to the rocket shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "17fce07bd0e440fea1c079b7df894273"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "RPG Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "17fce07bd0e440fea1c079b7df894273",
+      "Name": "RPG Damage",
+      "Position": [
+        440.0,
+        1380.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        200,
+        400
+      ],
+      "Effects": [
+        {
+          "Stat": 97,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "LauncherDamageFlat",
+          "Description": "FLAT damage added to every launcher hit before the percentage perks multiply it (user call 2026-09-16). The warhead and its blast each take it, exactly as each takes the percentage.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "4b2dd4997ce7472aa12eb0d924251c9d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock RPG"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "05d0d1d0276049e58d9299214cdf29c4",
+      "Name": "RPG Blast Radius",
+      "Position": [
+        680.0,
+        1140.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        200,
+        300,
+        400
+      ],
+      "Effects": [
+        {
+          "Stat": 136,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "LauncherBlastRadius",
+          "Description": "Metres added to the rocket launcher blast radius (ItemDefinition.BlastRadius of the Launcher class, HeldItem). User call 2026-09-20, an upgrade for making the rocket launcher explosion bigger. Tooltip base is the held launcher's own radius.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "4b2dd4997ce7472aa12eb0d924251c9d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock RPG"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "ed41ca77464b4f4fb8caf2dfac4fb598",
+      "Name": "Rapid Shelling",
+      "Position": [
+        -1000.0,
+        900.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        500,
+        750,
+        1000
+      ],
+      "Effects": [
+        {
+          "Stat": 148,
+          "Op": 0,
+          "ValuePerRank": -1.0,
+          "StatName": "MortarStrikeInterval",
+          "Description": "Seconds taken OFF the Mortars' volley interval (base FireInterval 10 s on the MortarStrike prefab, floored at 2 s in code). Read by OneUseTurret since 2026-09-29, when the strike started firing by itself while a wave is live (user call: 'make these mortars just shoot automatically ... start at like 1 shot per 10s'). Authored NEGATIVE on the Rapid Shelling node (-2 a rank x3: 10 > 8 > 6 > 4 s); the global TurretFireRatePct still divides the result. Tooltip baseline = the prefab's FireInterval (the Heavy Shells pattern). (Renamed to Mortars on screen 2026-09-29; the Name and id never change.)",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "f63545e0a3984155ae585e7c19bbb712"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Shell Rack"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c0f8f9afe9eb4a6cafb514ed71c1f7c0",
+      "Name": "+Autogun",
+      "Position": [
+        320.0,
+        -780.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        2
+      ],
+      "Effects": [
+        {
+          "Stat": 119,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "AutogunGrant",
+          "Description": "Hands ValuePerRank Autogun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "0ec95cdc5112470ea6aceb4e68d210ba"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "+Autogun"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "254c9ad34e4c4e7c8b81a046b690f167",
+      "Name": "+Mortar",
+      "Position": [
+        -760.0,
+        900.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 116,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "MortarStrikeGrant",
+          "Description": "Hands ValuePerRank Mortars turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted. (Renamed to Mortars on screen 2026-09-29; the Name and id never change.)",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "f63545e0a3984155ae585e7c19bbb712"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Shell Rack"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "e8f52d53ba784f63bd72b46b9b5edc1b",
+      "Name": "Rifle Fire Rate",
+      "Position": [
+        -1840.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        2
+      ],
+      "Effects": [
+        {
+          "Stat": 78,
+          "Op": 1,
+          "ValuePerRank": 20.0,
+          "StatName": "RifleFireRatePct",
+          "Description": "Rifle rate of fire (+20% = 20% more shots per second).",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "bc613491655844859d50440435081a40"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Rifle Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "366b040323ea4581acedc829066a941b",
+      "Name": "Extra Land Mines",
+      "Position": [
+        -1000.0,
+        420.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 125,
+          "Op": 0,
+          "ValuePerRank": 3.0,
+          "StatName": "LandMineGrant",
+          "Description": "Hands ValuePerRank Land Mine turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "ff6d913ed36b4e89a6620a663731d54c"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Land Mine"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "52ced8d54a2b45889b1a184053a757c0",
+      "Name": "Sharpened Rounds",
+      "Position": [
+        440.0,
+        -60.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 92,
+          "Op": 0,
+          "ValuePerRank": 70.0,
+          "StatName": "PistolDamageFlat",
+          "Description": "FLAT damage added to every pistol hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5cc3cafd57c044279acc417fb1960288"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Oil Price"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "77b403f4ac704dbca2a194d3dcbac066",
+      "Name": "Melee Damage",
+      "Position": [
+        -1120.0,
+        -780.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 98,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "MeleeDamageFlat",
+          "Description": "FLAT damage added to every melee hit before the percentage perks multiply it (user call 2026-09-16). Per victim of a swing, like MeleeDamagePct. So one rank pays up to MeleeTargets times per swing (Item_Katana cuts 14), which is the opposite end of the family from the shotgun - size ValuePerRank well BELOW the pistol's.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "d5ded896682a410a9c19d9fa8c7961ab"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Combat Boots"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "df550da02bf54dce87b724fe678548bf",
+      "Name": "Combat Boots",
+      "Position": [
+        -1360.0,
+        -780.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 23,
+          "Op": 1,
+          "ValuePerRank": 7.0,
+          "StatName": "MoveSpeedPct",
+          "Description": "Walk and sprint speed on foot.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "fb79a2e8389c4695829edf1d98551f51"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Health"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "4caafb4c5a3848a6a4744e32384c0e58",
+      "Name": "WE NEED MORE BULLETS!",
+      "Position": [
+        1160.0,
+        900.0
+      ],
+      "MaxRank": 4,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 400.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "54932c2923834aafafdadcba8feae65d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Machine Gun Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "e9c348913cb3414aad52a754ba261201",
+      "Name": "Machine Gun Pierce",
+      "Position": [
+        1400.0,
+        660.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 132,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "MachineGunPierce",
+          "Description": "Extra bodies each Machine Gun turret round punches through (base 1, the mount and the manned seat both read it through TurretStatFamilies). User call 2026-09-20, turret piercing perks.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "9bb32120846f425b903fc5fddaf0da19"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Machine Gun Pierce"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "0032b7fc2af8482ba46680c2f89e13ee",
+      "Name": "WE NEED MORE BULLETS!",
+      "Position": [
+        680.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5cc3cafd57c044279acc417fb1960288"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Oil Price"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "3314ce7f1f9a4e6da881a453536e04cf",
+      "Name": "Reinforced Plating",
+      "Position": [
+        -520.0,
+        -300.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 22,
+          "Op": 1,
+          "ValuePerRank": 30.0,
+          "StatName": "BunkerHealthPct",
+          "Description": "Bunker maximum health.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "b2f55f5628ee4e65b68597a80c4fa19a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Reinforced Plating"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "305cb2fb06f54aefa247a350d6f657b2",
+      "Name": "Combat Boots",
+      "Position": [
+        920.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 23,
+          "Op": 1,
+          "ValuePerRank": 3.0,
+          "StatName": "MoveSpeedPct",
+          "Description": "Walk and sprint speed on foot.",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [
+        "8f4c464e51ca43d494d8f95991a71258"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Market Peak"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "f21d02c359ec440da597be4e05d080b5",
+      "Name": "Smooth Barrels",
+      "Position": [
+        560.0,
+        -780.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 109,
+          "Op": 0,
+          "ValuePerRank": 1.5,
+          "StatName": "AutogunFireRateFlat",
+          "Description": "FLAT rounds per second added to the Autogun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "b885133266704d08b21af47b5e20dd1a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Smooth Barrels"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c424ba1fd3404b8e82370e8fffd26478",
+      "Name": "Bigger Tank",
+      "Position": [
+        -520.0,
+        1140.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        2000,
+        4000,
+        8000
+      ],
+      "Effects": [
+        {
+          "Stat": 130,
+          "Op": 0,
+          "ValuePerRank": 1000.0,
+          "StatName": "OilTankCapacity",
+          "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "ff19500267784078a8260e8e3501124c"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "55af93fae6bc45ddae6c315b79d6ce39",
+      "Name": "Pump Speed",
+      "Position": [
+        -520.0,
+        1380.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        2000,
+        4000,
+        8000
+      ],
+      "Effects": [
+        {
+          "Stat": 128,
+          "Op": 0,
+          "ValuePerRank": 30.0,
+          "StatName": "OilSellRate",
+          "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "c424ba1fd3404b8e82370e8fffd26478"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Tank"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "2e1d8a374c8d44b8a2deed54b2d37573",
+      "Name": "Siren Amplifier",
+      "Position": [
+        200.0,
+        900.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        5000
+      ],
+      "Effects": [
+        {
+          "Stat": 13,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "SirenLevel",
+          "Description": "Max siren level: each point unlocks the next, bigger wave call at the console.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "5816c48e0d8e4b7197d4e352cc8bd5d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Siren Amplifier"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b5c097a183894836a65c84d3fd8bec45",
+      "Name": "+Mortar",
+      "Position": [
+        -520.0,
+        660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 1,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 116,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "MortarStrikeGrant",
+          "Description": "Hands ValuePerRank Mortars turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted. (Renamed to Mortars on screen 2026-09-29; the Name and id never change.)",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "a1b3d8731b7743caa059eaa76afd87d3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Land Mine"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "d77b3b2fd6ae4325a627428200f3f753",
+      "Name": "+Autogun",
+      "Position": [
+        200.0,
+        -60.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        50
+      ],
+      "Effects": [
+        {
+          "Stat": 119,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "AutogunGrant",
+          "Description": "Hands ValuePerRank Autogun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "7747e9ecb6b245cc8fa5f9ee995631d4"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Small Ammo"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "aa53664d1b564803a4406124e498d87b",
+      "Name": "RPG Blast Radius",
+      "Position": [
+        680.0,
+        1380.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        2
+      ],
+      "Effects": [
+        {
+          "Stat": 136,
+          "Op": 0,
+          "ValuePerRank": 3.0,
+          "StatName": "LauncherBlastRadius",
+          "Description": "Metres added to the rocket launcher blast radius (ItemDefinition.BlastRadius of the Launcher class, HeldItem). User call 2026-09-20, an upgrade for making the rocket launcher explosion bigger. Tooltip base is the held launcher's own radius.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "05d0d1d0276049e58d9299214cdf29c4"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "RPG Blast Radius"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "9fe6ed0f3da34f41a285b069c8165ef8",
+      "Name": "Bigger Bullets",
+      "Position": [
+        800.0,
+        -300.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 110,
+          "Op": 0,
+          "ValuePerRank": 25.0,
+          "StatName": "AutogunDamageFlat",
+          "Description": "FLAT damage added to every Autogun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "d1cb8823bcb048bb9a5126a49cb5a574"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Bullets"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c80e1b1a31b54ab8aaf98ee23602b127",
+      "Name": "RPG Damage",
+      "Position": [
+        200.0,
+        1380.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 97,
+          "Op": 0,
+          "ValuePerRank": 300.0,
+          "StatName": "LauncherDamageFlat",
+          "Description": "FLAT damage added to every launcher hit before the percentage perks multiply it (user call 2026-09-16). The warhead and its blast each take it, exactly as each takes the percentage.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "17fce07bd0e440fea1c079b7df894273"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "RPG Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "c70884455cec469596a4362176fdda50",
+      "Name": "Bigger Tank",
+      "Position": [
+        -760.0,
+        1140.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        20000,
+        30000,
+        40000,
+        50000,
+        60000,
+        70000
+      ],
+      "Effects": [
+        {
+          "Stat": 130,
+          "Op": 0,
+          "ValuePerRank": 10000.0,
+          "StatName": "OilTankCapacity",
+          "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "eddbf944036a4e0ba0e2f01d5c97d25a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "eddbf944036a4e0ba0e2f01d5c97d25a",
+      "Name": "Pump Speed",
+      "Position": [
+        -760.0,
+        1380.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        20000,
+        30000,
+        40000,
+        50000,
+        60000,
+        70000
+      ],
+      "Effects": [
+        {
+          "Stat": 128,
+          "Op": 0,
+          "ValuePerRank": 100.0,
+          "StatName": "OilSellRate",
+          "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "55af93fae6bc45ddae6c315b79d6ce39"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "8d7defa6b0c04a239cec74cc114b03d4",
+      "Name": "Duplex Rounds",
+      "Position": [
+        -1600.0,
+        420.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        1500,
+        3000
+      ],
+      "Effects": [
+        {
+          "Stat": 151,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "RiflePellets",
+          "Description": "Extra bullets per rifle trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "19290cb604b046afb910281776d19e27"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Large Ammo Stock"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "b361d528edbf4f3d805f454a6cab6962",
+      "Name": "Unlock Katana",
+      "Position": [
+        -280.0,
+        180.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        0
+      ],
+      "Effects": [
+        {
+          "Stat": 66,
+          "Op": 2,
+          "ValuePerRank": 1.0,
+          "StatName": "UnlockKatana",
+          "Description": "Puts the Cowsins Katana (Item_Katana) in the hotbar. Read by WeaponUnlocks. REVIVED 2026-10-01 with its original meaning (user call after Rani's playtest: \"has no idea he has a katana in his inventory, maybe make it also a free unlock like the pistol\") - the $0 Unlock Katana node sits right after Unlock Pistol. Was retired 2026-09-13 to 2026-10-01 while the katana was a gate-less starter.",
+          "Operation": "Flag"
+        }
+      ],
+      "Prereqs": [
+        "b094b79142a24dab98723453cc3cd5ff"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Pistol"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "91970d6703344f82b02cd73e7bb39f5e",
+      "Name": "Pistol Pellets",
+      "Position": [
+        1160.0,
+        420.0
+      ],
+      "MaxRank": 3,
+      "Currency": 0,
+      "RankCosts": [
+        200,
+        400,
+        800
+      ],
+      "Effects": [
+        {
+          "Stat": 149,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "PistolPellets",
+          "Description": "Extra bullets per pistol trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "0903b71b034347abb762ef750fafcbff"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pistol Fire Rate"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "4001b87141f545b391fec7596c4eb9f7",
+      "Name": "Sharpened Rounds",
+      "Position": [
+        200.0,
+        420.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        30
+      ],
+      "Effects": [
+        {
+          "Stat": 92,
+          "Op": 0,
+          "ValuePerRank": 10.0,
+          "StatName": "PistolDamageFlat",
+          "Description": "FLAT damage added to every pistol hit before the percentage perks multiply it (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "3b725b794c604823a49547345b23954d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Airdrop Beacon"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "19290cb604b046afb910281776d19e27",
+      "Name": "Large Ammo Stock",
+      "Position": [
+        -1600.0,
+        180.0
+      ],
+      "MaxRank": 4,
+      "Currency": 0,
+      "RankCosts": [
+        50,
+        100,
+        150,
+        200
+      ],
+      "Effects": [
+        {
+          "Stat": 90,
+          "Op": 0,
+          "ValuePerRank": 10.0,
+          "StatName": "LargeAmmoCap",
+          "Description": "ABSOLUTE rounds added to the large-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "7cccf9bb1eac452abf0c494d588a0c12"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Unlock Rifle"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "a601d077ccd345ce855bc95664ca9caa",
+      "Name": "Large Large Ammo Stock",
+      "Position": [
+        -1840.0,
+        -60.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 90,
+          "Op": 0,
+          "ValuePerRank": 30.0,
+          "StatName": "LargeAmmoCap",
+          "Description": "ABSOLUTE rounds added to the large-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "bc613491655844859d50440435081a40"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Rifle Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "052741f27c044cd2b655787274f9313a",
+      "Name": "WE NEED MORE BULLETS!",
+      "Position": [
+        920.0,
+        1140.0
+      ],
+      "MaxRank": 6,
+      "Currency": 0,
+      "RankCosts": [
+        10000,
+        15000,
+        20000,
+        25000,
+        30000,
+        35000
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 200.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "54932c2923834aafafdadcba8feae65d"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Machine Gun Damage"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "7e590196e4bc42689ec87cd0ca01a784",
+      "Name": "Barrel Spin",
+      "Position": [
+        1160.0,
+        1140.0
+      ],
+      "MaxRank": 2,
+      "Currency": 2,
+      "RankCosts": [
+        1,
+        1
+      ],
+      "Effects": [
+        {
+          "Stat": 101,
+          "Op": 0,
+          "ValuePerRank": 15.0,
+          "StatName": "MachineGunFireRateFlat",
+          "Description": "FLAT rounds per second added to the Machine Gun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "052741f27c044cd2b655787274f9313a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "af354e9bd58d499984ccf6451654f1c3",
+      "Name": "WE NEED MORE BULLETS!",
+      "Position": [
+        920.0,
+        1380.0
+      ],
+      "MaxRank": 2,
+      "Currency": 0,
+      "RankCosts": [
+        50000,
+        75000
+      ],
+      "Effects": [
+        {
+          "Stat": 89,
+          "Op": 0,
+          "ValuePerRank": 300.0,
+          "StatName": "SmallAmmoCap",
+          "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "052741f27c044cd2b655787274f9313a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "4f9d2c2fe3cc4f1386b62b4da21db23d",
+      "Name": "Autogun Pierce",
+      "Position": [
+        800.0,
+        -1020.0
+      ],
+      "MaxRank": 1,
+      "Currency": 2,
+      "RankCosts": [
+        2
+      ],
+      "Effects": [
+        {
+          "Stat": 135,
+          "Op": 0,
+          "ValuePerRank": 1.0,
+          "StatName": "AutogunPierce",
+          "Description": "Extra bodies each Autogun round punches through (base 1, AutoTurret.FireOnce). User call 2026-09-20.",
+          "Operation": "Add"
+        }
+      ],
+      "Prereqs": [
+        "9f8e5290f3674d428d69ea33612b68b7"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Autogun Pierce"
+      ],
+      "DemoLocked": false
+    },
+    {
+      "Id": "94a337e402aa487489ac5dfd186634c6",
+      "Name": "Unlock Shotgun (Locked For Demo)",
+      "Position": [
+        1640.0,
+        420.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "91970d6703344f82b02cd73e7bb39f5e"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pistol Pellets"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "2d8ebf350fd046969bd8ca3f6d781d42",
+      "Name": "Tesla Tower (Locked For Demo)",
+      "Position": [
+        1280.0,
+        -660.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "d1cb8823bcb048bb9a5126a49cb5a574"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Bullets"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "1c310093c01040a8b502356c27ec6079",
+      "Name": "Flamethrower (Locked For Demo)",
+      "Position": [
+        1280.0,
+        -420.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "d1cb8823bcb048bb9a5126a49cb5a574"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Bigger Bullets"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "16a488f89894462d859ed6204261fa11",
+      "Name": "Build New California Base (Locked For Demo)",
+      "Position": [
+        -280.0,
+        1860.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "b1a7d67c30db4d39be6c46b2ff58b073"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "437fd88b51f14dbea4a3dd4faa118d77",
+      "Name": "Zombie Bait (Locked For Demo)",
+      "Position": [
+        -1240.0,
+        1380.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "eddbf944036a4e0ba0e2f01d5c97d25a"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "Pump Speed"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "45e94424e66242be80314487c2bd188b",
+      "Name": "Unlock Rocket Machine Gun (Locked For Demo)",
+      "Position": [
+        1400.0,
+        1380.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "af354e9bd58d499984ccf6451654f1c3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "5be321e08c89466187d18448d19acf4e",
+      "Name": "Unlock Drone Warfare (Locked For Demo)",
+      "Position": [
+        920.0,
+        1860.0
+      ],
+      "MaxRank": 1,
+      "Currency": 0,
+      "RankCosts": [
+        1000000000
+      ],
+      "Effects": [],
+      "Prereqs": [
+        "af354e9bd58d499984ccf6451654f1c3"
+      ],
+      "Tree": "Combat",
+      "HiddenTree": false,
+      "PrerequisiteNames": [
+        "WE NEED MORE BULLETS!"
+      ],
+      "DemoLocked": true
+    },
+    {
+      "Id": "17c66e2803e84c9cbba176443d9d4396",
+      "Name": "Ammo Lockers",
+      "Position": [
+        0.0,
+        200.0
+      ],
+      "MaxRank": 4,
+      "Currency": 0,
+      "RankCosts": [
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "Effects": [
+        {
+          "Stat": 25,
+          "Op": 1,
+          "ValuePerRank": 25.0,
+          "StatName": "AmmoCapacityPct",
+          "Description": "Ceiling of every armoury shelf (small, large and rockets alike).",
+          "Operation": "PercentAdd"
+        }
+      ],
+      "Prereqs": [],
+      "Tree": "Economy",
+      "HiddenTree": true,
+      "PrerequisiteNames": [],
+      "DemoLocked": false
+    }
+  ],
+  "stats": [
+    {
+      "Name": "ZombieHealthPct",
+      "Id": 0,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Spawn health of all zombies (negative = weaker).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlayerDamagePct",
+      "Id": 1,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "All held-weapon damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilGainPct",
+      "Id": 2,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Oil banked per pickup.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ReloadSpeedPct",
+      "Id": 3,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Reload speed (+20% = faster hands).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlayerMaxHealth",
+      "Id": 4,
+      "DefaultOp": 0,
+      "Suffix": " hp",
+      "Description": "Flat max health.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TurretDamagePct",
+      "Id": 5,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "All mounted turret damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunPellets",
+      "Id": 6,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra pellets per shotgun shell.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgMagazineSize",
+      "Id": 7,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra rounds in every magazine.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgFireRatePct",
+      "Id": 8,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "SMG rate of fire (+20% = 20% more shots per second).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneRockets",
+      "Id": 9,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra rockets per plane-strike volley.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneFireRatePct",
+      "Id": 10,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Plane rocket fire rate (+25% = shorter cooldown between volleys).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneFlightTime",
+      "Id": 11,
+      "DefaultOp": 0,
+      "Suffix": " s",
+      "Description": "Extra seconds per plane-strike run.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneRocketSplit",
+      "Id": 12,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra rockets split off each plane shot (same one round of ammo).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SirenLevel",
+      "Id": 13,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Max siren level: each point unlocks the next, bigger wave call at the console.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneBlastRadiusPct",
+      "Id": 14,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Plane rocket blast radius (+10% = wider explosions).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PlaneDamagePct",
+      "Id": 15,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Plane rocket damage — direct hit and blast both.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "OrePerDig",
+      "Id": 16,
+      "DefaultOp": 0,
+      "Suffix": " ore",
+      "Description": "Extra ore chunks per completed dig at a vein.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "CraftYieldPct",
+      "Id": 17,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Rounds the press turns each iron ore into (small and large).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "VeinCapacity",
+      "Id": 18,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra chunks every ore vein holds before it must regrow.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "VeinRegrowPct",
+      "Id": 19,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Vein regrow speed (+25% = exhausted veins refill sooner).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketsPerOre",
+      "Id": 20,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra rockets assembled per blast ore chunk.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TurretFireRatePct",
+      "Id": 21,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "HIDDEN from the perk picker 2026-09-19 (user: turret fire rate is FLAT per turret now - MachineGunFireRateFlat and its four siblings). Still read by AutoTurret, MountedState and FlameTurret for the three loot MEDALS that grant it; no perk may author it.",
+      "Group": "",
+      "Hidden": 1
+    },
+    {
+      "Name": "BunkerHealthPct",
+      "Id": 22,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Bunker maximum health.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MoveSpeedPct",
+      "Id": 23,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Walk and sprint speed on foot.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "KnockbackPct",
+      "Id": 24,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "How hard your held weapons shove zombies back.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "AmmoCapacityPct",
+      "Id": 25,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Ceiling of every armoury shelf (small, large and rockets alike).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TeslaChains",
+      "Id": 26,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each tesla-coil strike chains to.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TeslaDamagePct",
+      "Id": 27,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Tesla-coil damage, every link of the chain.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TeslaRangePct",
+      "Id": 28,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Tesla-coil reach — the grab radius and the arc's jump distance.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TeslaFireRatePct",
+      "Id": 29,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Tesla-coil strike rate — how fast the coil recharges between arcs.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "TarStickinessPct",
+      "Id": 30,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "How much walking speed the sprinkler tar strips: the kept fraction is divided by this, the fire-rate shape.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "BarricadeHealthPct",
+      "Id": 31,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Barricade panel maximum health (every panel, every refill).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "BaitRangePct",
+      "Id": 32,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Zombie bait pull radius.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MinePayloadPct",
+      "Id": 33,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Land mine payload, one dial read twice: blast damage AND blast radius.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "WindRechargePct",
+      "Id": 34,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Wind blower recharge: how fast the fan builds the next gust.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MortarShells",
+      "Id": 35,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra shells per mortar-strike press.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilPricePct",
+      "Id": 36,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "HIDDEN from the perk picker 2026-09-19 (user: \"no more percentage increases\" - the tree raises the price FLOOR in flat dollars, OilPriceFloor 127). Still read by OilMarket.Floor for the three loot MEDALS that grant it (Speculator, Market Maker, Insider Trading); no perk may author it.",
+      "Group": "",
+      "Hidden": 1
+    },
+    {
+      "Name": "MarketVolatilityPct",
+      "Id": 37,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Size of the market's per-tick swings. Pure gamble: wider swings mean better peaks to sell into and worse troughs to be caught in. Never touches the anchor, so it changes the risk and not the average payout.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MarketCrashPct",
+      "Id": 38,
+      "DefaultOp": 0,
+      "Suffix": "%",
+      "Description": "How far the CRASH ability drops the quoted oil price. 0 = the ability does not exist and the panel hides its button, so the first rank IS the unlock. Add, not PercentAdd: ranks read as \"10/15/20% off\", not as a multiplier of a multiplier.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MarketCrashSeconds",
+      "Id": 39,
+      "DefaultOp": 0,
+      "Suffix": " s",
+      "Description": "Seconds added to the crash window (base 45). The window is the whole difficulty of the ability - longer means more time to re-buy before the price recovers.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MarketCooldownPct",
+      "Id": 40,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Crash cooldown, base 180 s. Meant to be bought NEGATIVE - a perk that shortens it - so -20% reads as what it does. Floored at 15 s.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunPierce",
+      "Id": 41,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each shotgun pellet punches through.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RiflePierce",
+      "Id": 42,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each rifle round punches through.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgPierce",
+      "Id": 43,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each SMG round punches through.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolPierce",
+      "Id": 44,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each pistol round punches through.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperPierce",
+      "Id": 45,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each sniper round punches through.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockPlane",
+      "Id": 46,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Owning it opens the plane console (PlaneConsole.Locked). Demo plan item 5.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockAk47",
+      "Id": 47,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the AK-47 (Item_AK47_Anim, the Cam-animated AK) in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockAk200",
+      "Id": 48,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the AK-200 (Item_KIN_AK) in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockAsVal",
+      "Id": 49,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the AS Val in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockG3",
+      "Id": 50,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the G3 in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockMx16a4",
+      "Id": 51,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the MX16A4 in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockMps5",
+      "Id": 52,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the MPS5 in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockStrikerV",
+      "Id": 53,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the Striker-V in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockMk14Ebr",
+      "Id": 54,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the Mk14 EBR in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockL96x",
+      "Id": 55,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the L96X in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockDrake12",
+      "Id": 56,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the Drake-12 in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockViper357",
+      "Id": 57,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the Viper-357 in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockFlamethrower",
+      "Id": 58,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Flamethrower in the hotbar. Read by WeaponUnlocks.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "AtomicBomb",
+      "Id": 59,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Arms the red button - the once-per-horde atomic bomb (demo plan item 7).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockM1911",
+      "Id": 60,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-12 (gun removed from the roster) - id kept forever, never reused, nothing reads it. Was: Puts the M1911 in the hotbar. Read by WeaponUnlocks. (The demo starter is the Cowsins pistol, user call 2026-09-11; the katana joined it 2026-09-13.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockKnife",
+      "Id": 61,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Knife (Item_Knife) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockRevolver",
+      "Id": 62,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Revolver (Item_Revolver) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockSmg",
+      "Id": 63,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins SMG (Item_SMG) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockShotgun",
+      "Id": 64,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Shotgun (Item_Shotgun) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockRifle",
+      "Id": 65,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Rifle (Item_Rifle) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockKatana",
+      "Id": 66,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Katana (Item_Katana) in the hotbar. Read by WeaponUnlocks. REVIVED 2026-10-01 with its original meaning (user call after Rani's playtest: \"has no idea he has a katana in his inventory, maybe make it also a free unlock like the pistol\") - the $0 Unlock Katana node sits right after Unlock Pistol. Was retired 2026-09-13 to 2026-10-01 while the katana was a gate-less starter.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockSniper",
+      "Id": 67,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Sniper (Item_Sniper) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockRocketLauncher",
+      "Id": 68,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Rocket Launcher (Item_RocketLauncher) in the hotbar. Read by WeaponUnlocks. (2026-09-12: the Cowsins set is THE roster; KIN and the hand-rig AK are retired.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolDamagePct",
+      "Id": 69,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Pistol-class damage - direct hit and blast. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgDamagePct",
+      "Id": 70,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "SMG-class damage - direct hit and blast. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RifleDamagePct",
+      "Id": 71,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Rifle-class damage - direct hit and blast. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunDamagePct",
+      "Id": 72,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Shotgun-class damage - every pellet. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperDamagePct",
+      "Id": 73,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Sniper-class damage - direct hit and blast. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LauncherDamagePct",
+      "Id": 74,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Launcher-class damage - the warhead AND its blast. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MeleeDamagePct",
+      "Id": 75,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Melee-class damage per victim of a swing. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "FlameDamagePct",
+      "Id": 76,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Flame-class damage - the burn DPS a cloud leaves on a body. Stacks with PlayerDamagePct.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolFireRatePct",
+      "Id": 77,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Pistol rate of fire (+20% = 20% more shots per second).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RifleFireRatePct",
+      "Id": 78,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Rifle rate of fire (+20% = 20% more shots per second).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunFireRatePct",
+      "Id": 79,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Shotgun rate of fire (+20% = 20% more shells per second).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperFireRatePct",
+      "Id": 80,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Sniper rate of fire (+20% = 20% faster between bolt pulls).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LauncherFireRatePct",
+      "Id": 81,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Launcher rate of fire (+20% = 20% more rockets per second).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MeleeFireRatePct",
+      "Id": 82,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Melee SWING speed (+20% = 20% more swings per second). Named FireRate because HeldItem.FireRateOf is the one dial for both.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolMagazineSize",
+      "Id": 83,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra rounds in every pistol-class magazine.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RifleMagazineSize",
+      "Id": 84,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra rounds in every rifle-class magazine.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunMagazineSize",
+      "Id": 85,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra shells in every shotgun-class magazine.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperMagazineSize",
+      "Id": 86,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra rounds in every sniper-class magazine.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LauncherMagazineSize",
+      "Id": 87,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra rockets loaded in a launcher before it must reload.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "FlameMagazineSize",
+      "Id": 88,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "Extra fuel in the flamethrower's tank (its MagazineSize IS the tank).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmallAmmoCap",
+      "Id": 89,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "ABSOLUTE rounds added to the small-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LargeAmmoCap",
+      "Id": 90,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "ABSOLUTE rounds added to the large-ammo shelf ceiling - not a percentage (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketAmmoCap",
+      "Id": 91,
+      "DefaultOp": 0,
+      "Suffix": " rds",
+      "Description": "ABSOLUTE rockets added to the rocket shelf ceiling - not a percentage (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolDamageFlat",
+      "Id": 92,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every pistol hit before the percentage perks multiply it (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgDamageFlat",
+      "Id": 93,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every SMG hit before the percentage perks multiply it (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RifleDamageFlat",
+      "Id": 94,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every rifle hit before the percentage perks multiply it (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "ShotgunDamageFlat",
+      "Id": 95,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every shotgun hit before the percentage perks multiply it (user call 2026-09-16). Per SHELL, split across the pellets - a flat on every pellet would pay a 12-pellet shell twelve times for one rank. So size ValuePerRank against a WHOLE SHELL, an order of magnitude above the pistol's rank - Item_Shotgun is 16 pellets x 60 damage, 960 a shell, and a pistol-sized rank would move it by well under one percent.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperDamageFlat",
+      "Id": 96,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every sniper hit before the percentage perks multiply it (user call 2026-09-16).",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LauncherDamageFlat",
+      "Id": 97,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every launcher hit before the percentage perks multiply it (user call 2026-09-16). The warhead and its blast each take it, exactly as each takes the percentage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MeleeDamageFlat",
+      "Id": 98,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every melee hit before the percentage perks multiply it (user call 2026-09-16). Per victim of a swing, like MeleeDamagePct. So one rank pays up to MeleeTargets times per swing (Item_Katana cuts 14), which is the opposite end of the family from the shotgun - size ValuePerRank well BELOW the pistol's.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "FlameDamageFlat",
+      "Id": 99,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every flame hit before the percentage perks multiply it (user call 2026-09-16). Spread over the burn, so one body set alight takes it once rather than once per burning second. The burn tick rounds to whole points four times a second, so this stat only moves in steps of roughly 4 x FlameBurnSeconds points (14 at the authored 3.5 s) and a rank under that does NOTHING - see the quantization note in HeldItem.Fire.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilDrillPullPct",
+      "Id": 100,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Multiplies how fast the oil drill draws loose oil to itself: the constant pull and the wave-clear gust (OilDrops DrillStep). Read every frame; no cap.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MachineGunFireRateFlat",
+      "Id": 101,
+      "DefaultOp": 0,
+      "Suffix": " shots/s",
+      "Description": "FLAT rounds per second added to the Machine Gun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+      "Group": "Turrets/Machine Gun",
+      "Hidden": 0
+    },
+    {
+      "Name": "MachineGunDamageFlat",
+      "Id": 102,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every Machine Gun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+      "Group": "Turrets/Machine Gun",
+      "Hidden": 0
+    },
+    {
+      "Name": "ScattergunFireRateFlat",
+      "Id": 103,
+      "DefaultOp": 0,
+      "Suffix": " shots/s",
+      "Description": "FLAT rounds per second added to the Scattergun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+      "Group": "Turrets/Scattergun",
+      "Hidden": 0
+    },
+    {
+      "Name": "ScattergunDamageFlat",
+      "Id": 104,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every Scattergun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+      "Group": "Turrets/Scattergun",
+      "Hidden": 0
+    },
+    {
+      "Name": "QuadMgFireRateFlat",
+      "Id": 105,
+      "DefaultOp": 0,
+      "Suffix": " shots/s",
+      "Description": "FLAT rounds per second added to the Quad MG turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+      "Group": "Turrets/Quad MG",
+      "Hidden": 0
+    },
+    {
+      "Name": "QuadMgDamageFlat",
+      "Id": 106,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every Quad MG turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+      "Group": "Turrets/Quad MG",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketTurretFireRateFlat",
+      "Id": 107,
+      "DefaultOp": 0,
+      "Suffix": " shots/s",
+      "Description": "FLAT rounds per second added to the Rocket Turret turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+      "Group": "Turrets/Rocket Turret",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketTurretDamageFlat",
+      "Id": 108,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every Rocket Turret turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+      "Group": "Turrets/Rocket Turret",
+      "Hidden": 0
+    },
+    {
+      "Name": "AutogunFireRateFlat",
+      "Id": 109,
+      "DefaultOp": 0,
+      "Suffix": " shots/s",
+      "Description": "FLAT rounds per second added to the Autogun turret's own rate (AutoTurret._fireRate, and the seat's rate when manned) before TurretFireRatePct multiplies it. User call 2026-09-19: turret rates are flat, per turret, so the tooltip can read 'base > base+rank'.",
+      "Group": "Turrets/Autogun",
+      "Hidden": 0
+    },
+    {
+      "Name": "AutogunDamageFlat",
+      "Id": 110,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every Autogun turret shot (Mount.Damage) before TurretDamagePct multiplies it. User call 2026-09-19.",
+      "Group": "Turrets/Autogun",
+      "Hidden": 0
+    },
+    {
+      "Name": "MachineGunGrant",
+      "Id": 111,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "RETIRED 2026-09-20 - the machine gun is a one-of-a-kind scene emplacement and ArsenalGrants refuses this grant out loud. Use the UnlockMachineGun flag (137) instead. Historic - hands ValuePerRank Machine Gun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 1
+    },
+    {
+      "Name": "ScattergunGrant",
+      "Id": 112,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Scattergun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "QuadMgGrant",
+      "Id": 113,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Quad MG turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketTurretGrant",
+      "Id": 114,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Rocket Turret turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "MortarSeatGrant",
+      "Id": 115,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Mortar Seat turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "MortarStrikeGrant",
+      "Id": 116,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Mortars turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted. (Renamed to Mortars on screen 2026-09-29; the Name and id never change.)",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "GunNestGrant",
+      "Id": 117,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Gun Nest turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "WatchDeckGrant",
+      "Id": 118,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Watch Deck turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "AutogunGrant",
+      "Id": 119,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Autogun turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "FlameTurretGrant",
+      "Id": 120,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Flame Turret turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "TeslaCoilGrant",
+      "Id": 121,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Tesla Coil turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "TarSprinklerGrant",
+      "Id": 122,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Tar Sprinkler turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "BarricadeGrant",
+      "Id": 123,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Barricade turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "ZombieBaitGrant",
+      "Id": 124,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Zombie Bait turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "LandMineGrant",
+      "Id": 125,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Land Mine turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "WindBlowerGrant",
+      "Id": 126,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Hands ValuePerRank Wind Blower turret(s) to the hotbar on every rank bought (ArsenalGrants reads the node's effects, 2026-09-19 - user: 'would be best if it was inline with all the other perks and just had an effect'). Any node may carry it; several nodes may grant the same turret. Add op only; the aggregate is the count the tree has granted.",
+      "Group": "Turrets/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilPriceFloor",
+      "Id": 127,
+      "DefaultOp": 0,
+      "Suffix": " $/gal",
+      "Description": "Flat dollars per gallon added to the oil price FLOOR (user call 2026-09-19: \"increase oil price floor 1>2 ... no more percentage increases\"). The market sits on the floor and swings up to the peak above it, so every rank lifts the whole chart. OilMarket.Floor reads it; the tooltip prints base+ranks in dollars.",
+      "Group": "Market",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilSellRate",
+      "Id": 128,
+      "DefaultOp": 0,
+      "Suffix": "x",
+      "Description": "The market tank's sell-speed MULTIPLIER minus one: rate = 1 gal/s x (1 + this), so ranks of 0.25 read 1x > 1.25x > 1.5x in the tooltip against a baseline of 1 (user call 2026-09-20: \"sell rate should have an x unit, like 1.01x > 1.26x\"). MarketTank.Rate reads it. THE money-speed perk of the tank loop (2026-09-19).",
+      "Group": "Market",
+      "Hidden": 0
+    },
+    {
+      "Name": "OilTankCapacity",
+      "Id": 130,
+      "DefaultOp": 0,
+      "Suffix": " gal",
+      "Description": "Gallons added to the market tank's capacity, on top of the base 30 (MarketTank.Capacity). THE trip-count perk of the tank loop (user call 2026-09-19: \"a max tank you can upgrade ... another thing you can get stuck on and need to optimize\"). Id 129 was minted and retired the same day (auto-deposit) - never reuse it.",
+      "Group": "Market",
+      "Hidden": 0
+    },
+    {
+      "Name": "MarketPeakPct",
+      "Id": 131,
+      "DefaultOp": 0,
+      "Suffix": "%",
+      "Description": "Percentage POINTS added to how far the oil price can rise above its floor - base peak +5%, so ranks of 5 read 5 > 10 > 15 > 20 (user call 2026-09-19: \"start with 5% max peak, then upgrade it 5%>10%>20% from the skill tree\"). Add op, not PercentAdd: OilMarket.Swing adds it to BaseSwing before the medals multiply.",
+      "Group": "Market",
+      "Hidden": 0
+    },
+    {
+      "Name": "MachineGunPierce",
+      "Id": 132,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each Machine Gun turret round punches through (base 1, the mount and the manned seat both read it through TurretStatFamilies). User call 2026-09-20, turret piercing perks.",
+      "Group": "Turrets/Machine Gun",
+      "Hidden": 0
+    },
+    {
+      "Name": "ScattergunPierce",
+      "Id": 133,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each Scattergun turret pellet punches through (base 1). User call 2026-09-20.",
+      "Group": "Turrets/Scattergun",
+      "Hidden": 0
+    },
+    {
+      "Name": "QuadMgPierce",
+      "Id": 134,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each Quad MG turret round punches through (base 1). User call 2026-09-20.",
+      "Group": "Turrets/Quad MG",
+      "Hidden": 0
+    },
+    {
+      "Name": "AutogunPierce",
+      "Id": 135,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bodies each Autogun round punches through (base 1, AutoTurret.FireOnce). User call 2026-09-20.",
+      "Group": "Turrets/Autogun",
+      "Hidden": 0
+    },
+    {
+      "Name": "LauncherBlastRadius",
+      "Id": 136,
+      "DefaultOp": 0,
+      "Suffix": " m",
+      "Description": "Metres added to the rocket launcher blast radius (ItemDefinition.BlastRadius of the Launcher class, HeldItem). User call 2026-09-20, an upgrade for making the rocket launcher explosion bigger. Tooltip base is the held launcher's own radius.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockMachineGun",
+      "Id": 137,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Owning it makes the ONE scene machine gun usable and movable (TurretUnlocks). Until then the emplacement sits in the base as a tease with the locked prompt, exactly like the atomic bomb button. User call 2026-09-20.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "NuclearShrapnel",
+      "Id": 138,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Flag: the atomic bomb also scatters ShrapnelCount secondary blasts (AtomicBombConfig, the Nuclear shrapnel header) rolling outward from the impact point, each the main blast at a smaller radius with its own picture. User call 2026-09-21: the extra explosions are an upgrade you buy, not part of the bomb. Hand-carried row + enum line; Generate Stat Ids is a no-op.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockAirdrop",
+      "Id": 139,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Flag: owning it reveals the airdrop beacon and the medal board (AirdropStation, HiddenUntilUnlocked) and lets the beacon call the loot crates the kill ledger has earned — 1,000 lifetime kills for the first, then doubling (AirdropConfig.KillsNeededFor). User call 2026-09-25. Hand-carried row + enum line; Generate Stat Ids is a no-op.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "AirdropCostPct",
+      "Id": 140,
+      "DefaultOp": 1,
+      "Suffix": "%",
+      "Description": "Percent FEWER lifetime kills needed per airdrop crate, applied to every threshold of the kill ladder (AirdropConfig.KillsNeededFor), summed across ranks (Skills.Pct), clamped at 90. A dollar discount until the ladder replaced the price (user call 2026-09-25). Hand-carried row + enum line.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "LandMineDamageFlat",
+      "Id": 141,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT centre damage added to the land mine blast (LandMine.BlastDamage) before TurretDamagePct and MinePayloadPct multiply it. The <Turret>DamageFlat shape of 2026-09-19, applied to the mine. User call 2026-09-26: separate damage and radius perks for the land mine. Hand-carried row + enum line; Generate Stat Ids is a no-op.",
+      "Group": "Turrets/Land Mine",
+      "Hidden": 0
+    },
+    {
+      "Name": "LandMineBlastRadius",
+      "Id": 142,
+      "DefaultOp": 0,
+      "Suffix": " m",
+      "Description": "Metres added to the land mine blast radius (LandMine.BlastRadius) before MinePayloadPct multiplies it; the placement range ring reads the same number. The LauncherBlastRadius (136) shape. User call 2026-09-26. Hand-carried row + enum line.",
+      "Group": "Turrets/Land Mine",
+      "Hidden": 0
+    },
+    {
+      "Name": "MortarStrikeDamageFlat",
+      "Id": 143,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "FLAT damage added to every mortar-strike shell, direct hit AND blast centre (OneUseTurret.Damage / BlastDamage), before TurretDamagePct multiplies. Shells per strike stay on MortarShells (35). User call 2026-09-26. Hand-carried row + enum line.",
+      "Group": "Turrets/Mortar Strike",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmallAmmoGrant",
+      "Id": 144,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "ONE-TIME GRANT, not a live stat: every rank bought pays this many rounds onto the small shelf once (AmmoGrants ledger, over cap like a wave reward). Gameplay never reads it. User call 2026-09-27: \"perks for stuff like get +100 small ammo for all ammo types. just a one time grant. letting you decide what is more important to you at different times.\"",
+      "Group": "Ammo/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "LargeAmmoGrant",
+      "Id": 145,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "ONE-TIME GRANT, not a live stat: every rank bought pays this many rounds onto the large shelf once (AmmoGrants ledger, over cap like a wave reward). Gameplay never reads it. User call 2026-09-27: \"perks for stuff like get +100 small ammo for all ammo types. just a one time grant. letting you decide what is more important to you at different times.\"",
+      "Group": "Ammo/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "RocketAmmoGrant",
+      "Id": 146,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "ONE-TIME GRANT, not a live stat: every rank bought pays this many rounds onto the rocket shelf once (AmmoGrants ledger, over cap like a wave reward). Gameplay never reads it. User call 2026-09-27: \"perks for stuff like get +100 small ammo for all ammo types. just a one time grant. letting you decide what is more important to you at different times.\"",
+      "Group": "Ammo/Grants",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockPistol",
+      "Id": 147,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Puts the Cowsins Pistol (Item_Pistol) in the hotbar. Read by WeaponUnlocks. User call 2026-09-29: the pistol no longer starts in the hotbar - the first perk of the tree unlocks it, for $0, so the player boots with only the katana (\"the first thing the player does in the skill tree will be unlocking the pistol\"). Not UnlockM1911 (60): that id is retired and ids are never reused.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "MortarStrikeInterval",
+      "Id": 148,
+      "DefaultOp": 0,
+      "Suffix": " s",
+      "Description": "Seconds taken OFF the Mortars' volley interval (base FireInterval 10 s on the MortarStrike prefab, floored at 2 s in code). Read by OneUseTurret since 2026-09-29, when the strike started firing by itself while a wave is live (user call: 'make these mortars just shoot automatically ... start at like 1 shot per 10s'). Authored NEGATIVE on the Rapid Shelling node (-2 a rank x3: 10 > 8 > 6 > 4 s); the global TurretFireRatePct still divides the result. Tooltip baseline = the prefab's FireInterval (the Heavy Shells pattern). (Renamed to Mortars on screen 2026-09-29; the Name and id never change.)",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "PistolPellets",
+      "Id": 149,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bullets per pistol trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SmgPellets",
+      "Id": 150,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bullets per SMG trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "RiflePellets",
+      "Id": 151,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bullets per rifle trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "SniperPellets",
+      "Id": 152,
+      "DefaultOp": 0,
+      "Suffix": "",
+      "Description": "Extra bullets per sniper rifle trigger pull, for the price of one round. User call 2026-09-30: \"add perks to increase the number of pellets per weapon. like smg pellets 'split bullets' and pistol bullets\". Read by WeaponMath.PelletsOf through PelletStatOf(WeaponClass); every bullet does the gun's full per-hit damage.",
+      "Group": "",
+      "Hidden": 0
+    },
+    {
+      "Name": "UnlockAim",
+      "Id": 153,
+      "DefaultOp": 2,
+      "Suffix": "",
+      "Description": "Owning it lets a held gun aim down sights (right mouse / left trigger): the FOV pull and every spread tightening. Read by HeldItem.TickAim - the one ADS seam. User call 2026-10-01 (Rani's playtest): \"make scoping a perk you unlock somewhere around like 10m in so people learn it's not always necessary, make it cost dollars\".",
+      "Group": "",
+      "Hidden": 0
+    }
+  ],
+  "pressLadders": {
+    "SmallHopperLadder": [
+      {
+        "Capacity": 60,
+        "Price": 0
+      },
+      {
+        "Capacity": 90,
+        "Price": 40
+      },
+      {
+        "Capacity": 120,
+        "Price": 80
+      },
+      {
+        "Capacity": 150,
+        "Price": 200
+      },
+      {
+        "Capacity": 180,
+        "Price": 300
+      },
+      {
+        "Capacity": 210,
+        "Price": 450
+      },
+      {
+        "Capacity": 240,
+        "Price": 700
+      },
+      {
+        "Capacity": 270,
+        "Price": 1000
+      },
+      {
+        "Capacity": 300,
+        "Price": 1500
+      },
+      {
+        "Capacity": 330,
+        "Price": 2300
+      },
+      {
+        "Capacity": 360,
+        "Price": 3500
+      },
+      {
+        "Capacity": 400,
+        "Price": 5000
+      },
+      {
+        "Capacity": 500,
+        "Price": 10000
+      },
+      {
+        "Capacity": 1000,
+        "Price": 30000
+      }
+    ],
+    "SmallRateLadder": [
+      {
+        "HitsPerSecond": 0.25,
+        "Price": 0
+      },
+      {
+        "HitsPerSecond": 0.30000001192092896,
+        "Price": 10
+      },
+      {
+        "HitsPerSecond": 0.4000000059604645,
+        "Price": 10
+      },
+      {
+        "HitsPerSecond": 0.5,
+        "Price": 20
+      },
+      {
+        "HitsPerSecond": 0.6000000238418579,
+        "Price": 20
+      },
+      {
+        "HitsPerSecond": 0.75,
+        "Price": 30
+      },
+      {
+        "HitsPerSecond": 1.0,
+        "Price": 40
+      },
+      {
+        "HitsPerSecond": 1.2000000476837158,
+        "Price": 50
+      },
+      {
+        "HitsPerSecond": 1.399999976158142,
+        "Price": 60
+      },
+      {
+        "HitsPerSecond": 1.5,
+        "Price": 100
+      },
+      {
+        "HitsPerSecond": 1.75,
+        "Price": 500
+      },
+      {
+        "HitsPerSecond": 2.0,
+        "Price": 1000
+      },
+      {
+        "HitsPerSecond": 2.5,
+        "Price": 2000
+      },
+      {
+        "HitsPerSecond": 3.0,
+        "Price": 10000
+      }
+    ],
+    "SmallMultLadder": [
+      {
+        "Multiplier": 1,
+        "Price": 0
+      },
+      {
+        "Multiplier": 2,
+        "Price": 500
+      },
+      {
+        "Multiplier": 3,
+        "Price": 1000
+      },
+      {
+        "Multiplier": 4,
+        "Price": 2000
+      },
+      {
+        "Multiplier": 5,
+        "Price": 10000
+      },
+      {
+        "Multiplier": 6,
+        "Price": 20000
+      }
+    ],
+    "LargeHopperLadder": [
+      {
+        "Capacity": 100,
+        "Price": 0
+      },
+      {
+        "Capacity": 200,
+        "Price": 200
+      },
+      {
+        "Capacity": 300,
+        "Price": 300
+      },
+      {
+        "Capacity": 400,
+        "Price": 400
+      },
+      {
+        "Capacity": 500,
+        "Price": 500
+      }
+    ],
+    "LargeRateLadder": [
+      {
+        "HitsPerSecond": 0.5,
+        "Price": 0
+      },
+      {
+        "HitsPerSecond": 0.6000000238418579,
+        "Price": 50
+      },
+      {
+        "HitsPerSecond": 0.699999988079071,
+        "Price": 75
+      },
+      {
+        "HitsPerSecond": 0.800000011920929,
+        "Price": 100
+      },
+      {
+        "HitsPerSecond": 0.8999999761581421,
+        "Price": 150
+      },
+      {
+        "HitsPerSecond": 1.0,
+        "Price": 200
+      },
+      {
+        "HitsPerSecond": 1.25,
+        "Price": 300
+      },
+      {
+        "HitsPerSecond": 1.5,
+        "Price": 400
+      },
+      {
+        "HitsPerSecond": 1.75,
+        "Price": 500
+      },
+      {
+        "HitsPerSecond": 2.0,
+        "Price": 750
+      }
+    ],
+    "LargeMultLadder": [
+      {
+        "Multiplier": 1,
+        "Price": 0
+      },
+      {
+        "Multiplier": 2,
+        "Price": 9600
+      },
+      {
+        "Multiplier": 3,
+        "Price": 28800
+      },
+      {
+        "Multiplier": 4,
+        "Price": 86400
+      }
+    ],
+    "RocketHopperLadder": [
+      {
+        "Capacity": 5,
+        "Price": 0
+      },
+      {
+        "Capacity": 10,
+        "Price": 250
+      },
+      {
+        "Capacity": 15,
+        "Price": 500
+      },
+      {
+        "Capacity": 20,
+        "Price": 750
+      },
+      {
+        "Capacity": 25,
+        "Price": 1000
+      },
+      {
+        "Capacity": 30,
+        "Price": 1250
+      }
+    ],
+    "RocketRateLadder": [
+      {
+        "HitsPerSecond": 0.10000000149011612,
+        "Price": 0
+      },
+      {
+        "HitsPerSecond": 0.11999999731779099,
+        "Price": 100
+      },
+      {
+        "HitsPerSecond": 0.14000000059604645,
+        "Price": 150
+      },
+      {
+        "HitsPerSecond": 0.1599999964237213,
+        "Price": 200
+      },
+      {
+        "HitsPerSecond": 0.18000000715255737,
+        "Price": 250
+      },
+      {
+        "HitsPerSecond": 0.20000000298023224,
+        "Price": 300
+      }
+    ],
+    "RocketMultLadder": [
+      {
+        "Multiplier": 1,
+        "Price": 0
+      },
+      {
+        "Multiplier": 2,
+        "Price": 24000
+      },
+      {
+        "Multiplier": 3,
+        "Price": 72000
+      },
+      {
+        "Multiplier": 4,
+        "Price": 216000
+      }
+    ]
+  },
+  "shop": [
+    {
+      "Id": "boots",
+      "NameEnglish": "Boots",
+      "Price": 5,
+      "Effect": 1,
+      "Amount": 0.0,
+      "MaxBuys": 1,
+      "TaughtAction": "Player/Sprint"
+    },
+    {
+      "Id": "glasses",
+      "NameEnglish": "Glasses",
+      "Price": 50,
+      "Effect": 2,
+      "Amount": 0.0,
+      "MaxBuys": 1,
+      "TaughtAction": "Player/Aim"
+    },
+    {
+      "Id": "coffee",
+      "NameEnglish": "Coffee",
+      "Price": 200,
+      "Effect": 4,
+      "Amount": 4.0,
+      "MaxBuys": 1,
+      "TaughtAction": ""
+    }
+  ],
+  "unparsedAncillaryConfigs": [
+    {
+      "file": "resources.assets",
+      "pathId": 9039,
+      "class": "AirdropConfig",
+      "error": "read_str out of bounds"
+    },
+    {
+      "file": "resources.assets",
+      "pathId": 9040,
+      "class": "AtomicBombConfig",
+      "error": "Expected to read 408 bytes, but only read 388 bytes"
+    },
+    {
+      "file": "resources.assets",
+      "pathId": 9068,
+      "class": "WaveTreeAsset",
+      "error": "read_str out of bounds"
+    }
+  ]
+}

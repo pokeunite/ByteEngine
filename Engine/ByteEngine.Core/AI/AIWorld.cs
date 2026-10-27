@@ -29,7 +29,7 @@ public sealed class AIWorld
         if(!float.IsFinite(point.X)||!float.IsFinite(point.Y)||!float.IsFinite(point.Z)||!float.IsFinite(radius)||radius<=0)return;
         var world=For(scene);world._noises.Add(new(++world._noiseSequence,point,Math.Clamp(radius,0,1000),source,kind,scene.SimulationTime));if(world._noises.Count>128)world._noises.RemoveAt(0);
     }
-    private static bool Alive(AIBehavior3D owner)=>owner.Enabled&&!owner.Paused&&owner.GameObject.ActiveInHierarchy&&owner.GameObject.GetComponent<HealthComponent>()?.IsDead!=true&&owner.GameObject.GetComponent<SimpleEnemyAI3D>() is not {BehaviorControlled:true,Enabled:false};
+    private static bool Alive(AIBehavior3D owner)=>owner.ReservationOwner is {Scene:not null,ActiveInHierarchy:true} actor&&owner.Enabled&&!owner.Paused&&actor.GetComponent<HealthComponent>()?.IsDead!=true&&actor.GetComponent<SimpleEnemyAI3D>() is not {BehaviorControlled:true,Enabled:false};
     private void Prune()
     {
         foreach(var key in _attacks.Where(p=>!Alive(p.Value.Owner)||p.Value.Owner.BehaviorTime-p.Value.Start>=p.Value.Duration).Select(p=>p.Key).ToArray())_attacks.Remove(key);

@@ -468,6 +468,8 @@ internal sealed partial class AnimationProfileWorkspacePanel
         if (ImGui.DragFloat("Aim Smoothing", ref smoothing, .1f, 0f, 100f)) { settings.AimSmoothing = smoothing; changed = true; }
         if (ImGui.SliderFloat("Look At Weight", ref lookWeight, 0f, 1f)) { settings.LookAtWeight = lookWeight; changed = true; }
         string aimBone = settings.AimBone, lookBone = settings.LookAtBone, target = settings.LookAtTarget;
+        bool modelSpaceAim = settings.AimInModelSpace;
+        if (ImGui.Checkbox("Aim around model axes (imported rigs)", ref modelSpaceAim)) { settings.AimInModelSpace = modelSpaceAim; changed = true; }
         if (ImGui.InputText("Aim Bone (blank = mapped torso)", ref aimBone, 128) ||
             Picker("Choose Aim Bone", GetBoneNames(), ref aimBone))
         { settings.AimBone = aimBone; changed = true; }

@@ -656,6 +656,18 @@ public sealed partial class SkeletalMeshRenderer
         AnimationBoneTransform value = pose[bone];
         Quaternion offset = AnimationPoseMath.ClampAim(_smoothedAimYaw, _smoothedAimPitch,
             settings.AimYawLimit, settings.AimPitchLimit, weight);
+        if (settings.AimInModelSpace)
+        {
+            // Imported bones need not share the model's right/up axes. Apply
+            // the aim in model space, then convert back through the posed parent.
+            var globals = PoseGlobals(pose);
+            int parent = _parentIndices[bone];
+            Matrix4x4.Decompose(globals[bone], out _, out var globalRotation, out _);
+            Quaternion parentRotation = Quaternion.Identity;
+            if (parent >= 0) Matrix4x4.Decompose(globals[parent], out _, out parentRotation, out _);
+            pose[bone] = value with { Rotation = Quaternion.Normalize(Quaternion.Inverse(parentRotation) * offset * globalRotation) };
+            return;
+        }
         pose[bone] = value with { Rotation = Quaternion.Normalize(value.Rotation * offset) };
     }
 

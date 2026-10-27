@@ -1,0 +1,267 @@
+{
+  "source": "Reference.png",
+  "sourceSize": [
+    1672,
+    941
+  ],
+  "method": "Built-in image generation: isolated reference reconstructions, not exact pixel masks or 3D models.",
+  "commonPrompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: ",
+  "assets": [
+    {
+      "id": "R01",
+      "name": "Tall vertical cliff columns",
+      "box": [
+        0,
+        0,
+        700,
+        335
+      ],
+      "description": "A high boundary wall module of three to five massive upright blunt-topped basalt columns with staggered heights, deep vertical seams, bevelled flat faces; take the upper-left rear cliff directly above/behind the drill. No crystals, plants, machinery or terrain.",
+      "file": "R01-tall-vertical-cliff-columns.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R01 Tall vertical cliff columns. A high boundary wall module of three to five massive upright blunt-topped basalt columns with staggered heights, deep vertical seams, bevelled flat faces; take the upper-left rear cliff directly above/behind the drill. No crystals, plants, machinery or terrain. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [0,0,700,335].",
+      "group": "Cliffs",
+      "suggestedScale": "6\u201312 m high",
+      "role": "Continuous rear wall; repeat with overlap and rotation."
+    },
+    {
+      "id": "R02",
+      "name": "Stepped low cliff segment",
+      "box": [
+        700,
+        150,
+        1240,
+        335
+      ],
+      "description": "A lower modular cliff segment stepping DOWN in height from left to right, tightly adjoining chunky angular columns and broad flat tops, from the middle-distance left boundary as it approaches the valley mouth. No crystals or plants. Impassable solid geological wall, not walkable stairs.",
+      "file": "R02-stepped-low-cliff-segment.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R02 Stepped low cliff segment. A lower modular cliff segment stepping DOWN in height from left to right, tightly adjoining chunky angular columns and broad flat tops, from the middle-distance left boundary as it approaches the valley mouth. No crystals or plants. Impassable solid geological wall, not walkable stairs. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [700,150,1240,335].",
+      "group": "Cliffs",
+      "suggestedScale": "4\u20138 m high",
+      "role": "Side wall height transition; keep its lowest boundary taller than the player can cross."
+    },
+    {
+      "id": "R03",
+      "name": "Leaning blade cliff",
+      "box": [
+        1430,
+        240,
+        1672,
+        590
+      ],
+      "description": "A side-boundary outcrop of three prominent tall leaning wedge/blade shaped slabs, from the right-hand edge at mid height. Thick massive slabs with angled tops and a slight inward lean. No crystals or plants.",
+      "file": "R03-leaning-blade-cliff.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R03 Leaning blade cliff. A side-boundary outcrop of three prominent tall leaning wedge/blade shaped slabs, from the right-hand edge at mid height. Thick massive slabs with angled tops and a slight inward lean. No crystals or plants. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1430,240,1672,590].",
+      "group": "Cliffs",
+      "suggestedScale": "4\u20139 m high",
+      "role": "Right-hand enclosing cliffs and angled end caps."
+    },
+    {
+      "id": "R04",
+      "name": "Closed corner boulder barrier",
+      "box": [
+        0,
+        580,
+        910,
+        941
+      ],
+      "description": "A dense continuous low curved boundary cluster of interlocking large faceted basalt boulders, taken from the near-left foreground bend of the enclosing wall below the company tent. Broad angular blocks, connected natural silhouette, no gaps, no crystals or vegetation.",
+      "file": "R04-closed-corner-boulder-barrier.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R04 Closed corner boulder barrier. A dense continuous low curved boundary cluster of interlocking large faceted basalt boulders, taken from the near-left foreground bend of the enclosing wall below the company tent. Broad angular blocks, connected natural silhouette, no gaps, no crystals or vegetation. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [0,580,910,941].",
+      "group": "Cliffs",
+      "suggestedScale": "2\u20135 m high",
+      "role": "Corners and foreground boundary trim; overlap a high wall where required."
+    },
+    {
+      "id": "R05",
+      "name": "Tall split monolith",
+      "box": [
+        1080,
+        28,
+        1207,
+        149
+      ],
+      "description": "An isolated distant tall flat-topped split basalt spire/monolith from the skyline immediately left of the planet. Two unequal closely adjoining narrow vertical towers with jagged blunt tips and a cleft. Keep it a simple low-poly silhouette, not a detailed realistic stone.",
+      "file": "R05-tall-split-monolith.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R05 Tall split monolith. An isolated distant tall flat-topped split basalt spire/monolith from the skyline immediately left of the planet. Two unequal closely adjoining narrow vertical towers with jagged blunt tips and a cleft. Keep it a simple low-poly silhouette, not a detailed realistic stone. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1080,28,1207,149].",
+      "group": "Backdrop",
+      "suggestedScale": "10\u201325 m high",
+      "role": "Distant skyline landmark outside the gameplay boundary."
+    },
+    {
+      "id": "R06",
+      "name": "Layered mesa backdrop",
+      "box": [
+        758,
+        12,
+        1000,
+        126
+      ],
+      "description": "A broad flat-topped layered distant mesa landform from the upper-centre/left skyline behind the left canyon wall. Wide caprock shelf, faceted tapering cliffs underneath, simple stepped geological silhouette. No buildings or vegetation.",
+      "file": "R06-layered-mesa-backdrop.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R06 Layered mesa backdrop. A broad flat-topped layered distant mesa landform from the upper-centre/left skyline behind the left canyon wall. Wide caprock shelf, faceted tapering cliffs underneath, simple stepped geological silhouette. No buildings or vegetation. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [758,12,1000,126].",
+      "group": "Backdrop",
+      "suggestedScale": "20\u201360 m wide",
+      "role": "Distant silhouette behind the forward approach valley."
+    },
+    {
+      "id": "R07",
+      "name": "Natural rock bridge",
+      "box": [
+        793,
+        86,
+        1094,
+        166
+      ],
+      "description": "A distant naturally eroded flat-topped rock bridge joining two blocky sandstone/basalt supports, visible across the upper middle-left background canyon. One readable open gap beneath a thick rock shelf. Low-poly chunky geological arch, no masonry, no plants.",
+      "file": "R07-natural-rock-bridge.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R07 Natural rock bridge. A distant naturally eroded flat-topped rock bridge joining two blocky sandstone/basalt supports, visible across the upper middle-left background canyon. One readable open gap beneath a thick rock shelf. Low-poly chunky geological arch, no masonry, no plants. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [793,86,1094,166].",
+      "group": "Backdrop",
+      "suggestedScale": "15\u201330 m wide",
+      "role": "Far background only; no apparent accessible bridge behind camp."
+    },
+    {
+      "id": "R08",
+      "name": "Large angular boulder",
+      "box": [
+        1048,
+        705,
+        1153,
+        791
+      ],
+      "description": "ONE squat angular asymmetrical basalt boulder from the open foreground just to the right of centre near the lower edge. Broad sloping top, six-to-ten major silhouette corners, several large triangular/polygon shaded faces, flat base. No satellite stones, plants or crystals.",
+      "file": "R08-large-angular-boulder.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R08 Large angular boulder. ONE squat angular asymmetrical basalt boulder from the open foreground just to the right of centre near the lower edge. Broad sloping top, six-to-ten major silhouette corners, several large triangular/polygon shaded faces, flat base. No satellite stones, plants or crystals. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1048,705,1153,791].",
+      "group": "Boulders",
+      "suggestedScale": "0.6\u20131.4 m high",
+      "role": "Individual low cover and near-ground silhouette variation."
+    },
+    {
+      "id": "R09",
+      "name": "Broad low boulder cluster",
+      "box": [
+        1184,
+        650,
+        1378,
+        750
+      ],
+      "description": "A low wide cover-rock cluster from the front-right arena: one broad squat faceted central boulder with two smaller shoulder rocks tucked beside it. Approximately twice as wide as tall. Remove surrounding purple plants, crystals and loose floor gravel.",
+      "file": "R09-broad-low-boulder-cluster.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R09 Broad low boulder cluster. A low wide cover-rock cluster from the front-right arena: one broad squat faceted central boulder with two smaller shoulder rocks tucked beside it. Approximately twice as wide as tall. Remove surrounding purple plants, crystals and loose floor gravel. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1184,650,1378,750].",
+      "group": "Boulders",
+      "suggestedScale": "2\u20134 m wide",
+      "role": "Broad low cover cluster in the forward arena."
+    },
+    {
+      "id": "R10",
+      "name": "Upright cover boulder cluster",
+      "box": [
+        1290,
+        405,
+        1444,
+        504
+      ],
+      "description": "The medium upright cover cluster in the right-middle arena below the distant enemy silhouettes: one tall trapezoidal block-like boulder with a smaller block against its right side and little basal stones. Broad flat slanted top, hard angular flat faces. No crystals/plants.",
+      "file": "R10-upright-cover-boulder-cluster.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R10 Upright cover boulder cluster. The medium upright cover cluster in the right-middle arena below the distant enemy silhouettes: one tall trapezoidal block-like boulder with a smaller block against its right side and little basal stones. Broad flat slanted top, hard angular flat faces. No crystals/plants. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1290,405,1444,504].",
+      "group": "Boulders",
+      "suggestedScale": "1.5\u20132.5 m high",
+      "role": "Upright arena cover; keep routes around both sides."
+    },
+    {
+      "id": "R11",
+      "name": "Small broken rock pile",
+      "box": [
+        670,
+        407,
+        804,
+        469
+      ],
+      "description": "A compact low pile of angular broken rock fragments from the central open arena just behind the small sentry: one knee-high pointed wedge and four to seven smaller triangular chunks. Distinct pieces grouped tightly, flat bases, no plants, crystals or ground patch.",
+      "file": "R11-small-broken-rock-pile.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R11 Small broken rock pile. A compact low pile of angular broken rock fragments from the central open arena just behind the small sentry: one knee-high pointed wedge and four to seven smaller triangular chunks. Distinct pieces grouped tightly, flat bases, no plants, crystals or ground patch. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [670,407,804,469].",
+      "group": "Rubble",
+      "suggestedScale": "0.2\u20130.7 m high",
+      "role": "Small piles near larger formations; generally decorative."
+    },
+    {
+      "id": "R12",
+      "name": "Scattered stone chips",
+      "box": [
+        755,
+        758,
+        980,
+        817
+      ],
+      "description": "A sparse scatter group of ten to fifteen tiny angular pebbles and pointed basalt chips lying separately, like the foreground gravel trails in the reference. Mixed small triangular wedges and flattened irregular fragments with clear space between pieces. No terrain disc, no sand, no plants.",
+      "file": "R12-scattered-stone-chips.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R12 Scattered stone chips. A sparse scatter group of ten to fifteen tiny angular pebbles and pointed basalt chips lying separately, like the foreground gravel trails in the reference. Mixed small triangular wedges and flattened irregular fragments with clear space between pieces. No terrain disc, no sand, no plants. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [755,758,980,817].",
+      "group": "Rubble",
+      "suggestedScale": "0.05\u20130.25 m pieces",
+      "role": "Sparse decorative floor scatter; avoid individual collision/pathfinding obstacles."
+    },
+    {
+      "id": "R13",
+      "name": "Tall crystal fissure cliff",
+      "box": [
+        0,
+        330,
+        149,
+        544
+      ],
+      "description": "A tall three-column cliff fragment from the left edge beside the drill, containing a deep narrow vertical crack with several bright cyan prismatic crystals protruding from INSIDE the fissure. Retain integrated cyan crystal seam as its own crystal-bearing cliff variant. No plants, floor or machinery.",
+      "file": "R13-tall-crystal-fissure-cliff.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R13 Tall crystal fissure cliff. A tall three-column cliff fragment from the left edge beside the drill, containing a deep narrow vertical crack with several bright cyan prismatic crystals protruding from INSIDE the fissure. Retain integrated cyan crystal seam as its own crystal-bearing cliff variant. No plants, floor or machinery. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [0,330,149,544].",
+      "group": "Crystal rocks",
+      "suggestedScale": "4\u20138 m high",
+      "role": "Crystal-bearing variant of the enclosing cliff."
+    },
+    {
+      "id": "R14",
+      "name": "Low crystal boulder cluster",
+      "box": [
+        1340,
+        527,
+        1604,
+        740
+      ],
+      "description": "A low cluster of three broad angular dark basalt boulders from the near-right edge, with cyan prismatic crystals emerging between their cracks. Keep the integrated glowing crystal cluster and rocks together as a distinct variant. Remove purple vegetation and surrounding terrain.",
+      "file": "R14-low-crystal-boulder-cluster.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: R14 Low crystal boulder cluster. A low cluster of three broad angular dark basalt boulders from the near-right edge, with cyan prismatic crystals emerging between their cracks. Keep the integrated glowing crystal cluster and rocks together as a distinct variant. Remove purple vegetation and surrounding terrain. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1340,527,1604,740].",
+      "group": "Crystal rocks",
+      "suggestedScale": "1\u20133 m high",
+      "role": "Crystal-bearing variant of low boulders near the boundary."
+    },
+    {
+      "id": "D01",
+      "name": "Cyan crystal tuft",
+      "box": [
+        1373,
+        649,
+        1418,
+        695
+      ],
+      "description": "ONLY a small standalone tuft of five to seven irregular cyan/turquoise prismatic pointed crystals from the front-right rock fissure. Different heights, opaque faceted crystals with bright pale tips and dark teal bases; no enclosing rock, no vegetation, no terrain.",
+      "file": "D01-cyan-crystal-tuft.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: D01 Cyan crystal tuft. ONLY a small standalone tuft of five to seven irregular cyan/turquoise prismatic pointed crystals from the front-right rock fissure. Different heights, opaque faceted crystals with bright pale tips and dark teal bases; no enclosing rock, no vegetation, no terrain. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1373,649,1418,695].",
+      "group": "Decorations",
+      "suggestedScale": "0.15\u20130.7 m high",
+      "role": "Separate reusable cyan crystal insert; emission is a material setting."
+    },
+    {
+      "id": "D02",
+      "name": "Violet ground plant tuft",
+      "box": [
+        1290,
+        698,
+        1342,
+        738
+      ],
+      "description": "ONLY a small ground plant tuft from the front-right boulder base: six to ten pointed thick low-poly magenta/violet spear leaves spreading from one compact centre, short fuchsia shoots. Keep it distinct from rocks and crystals. No rocks, soil disc, pot or background.",
+      "file": "D02-violet-ground-plant-tuft.png",
+      "prompt": "Use the attached environment image as the visual source. Isolate and faithfully reconstruct ONLY the specified rock module as ONE standalone 3D modelling reference, same elevated three-quarter view and low-poly faceted art style. Preserve the visible silhouette, broad flat polygon faces, charcoal/slate-violet basalt, muted warm sunlit facets, restrained detail. Complete only occluded outer edges needed for a usable single asset reference; do not invent a new unrelated design. Remove ALL scenery, machines, sky, floor, sand, vegetation and crystals unless specifically requested below. Keep the full asset inside frame with comfortable margin. Transparent background, no ground plane, no cast shadow outside the asset, no labels, no lettering, no frame. No photoreal stone texture, no tiny noise, no outlines. Specific asset: D02 Violet ground plant tuft. ONLY a small ground plant tuft from the front-right boulder base: six to ten pointed thick low-poly magenta/violet spear leaves spreading from one compact centre, short fuchsia shoots. Keep it distinct from rocks and crystals. No rocks, soil disc, pot or background. The original reference is 1672 by 941; locate the source approximately within pixel rectangle [1290,698,1342,738].",
+      "group": "Decorations",
+      "suggestedScale": "0.15\u20130.5 m high",
+      "role": "Separate violet foliage tuft at boulder bases."
+    }
+  ]
+}

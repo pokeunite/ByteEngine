@@ -51,6 +51,11 @@ public sealed class RenderContext
     private readonly List<Action<Renderer2D>> _uiCommands = new();
 
     public Vector2 MeasureText(string text,string? fontPath,int size) => FrameSink?.MeasureText(text,fontPath,size) ?? Renderer2D.MeasureText(text,fontPath,size);
+    /// <summary>Deferred screen-space drawing for plugin-authored UI. Uses the same portable backend as native widgets.</summary>
+    public void DrawUiQuad(Vector2 position,Vector2 size,Vector4 color)=>QueueUiQuad(position,size,color);
+    public void DrawUiLine(Vector2 from,Vector2 to,float thickness,Vector4 color)=>QueueUiLine(from,to,thickness,color);
+    public void DrawUiImage(Texture2D texture,Vector2 position,Vector2 size,Vector4 color)=>QueueUiImage(texture,position,size,color);
+    public void DrawUiText(string text,ByteEngine.Core.Assets.AssetReference font,int size,Vector2 position,Vector4 color,UiAnchor anchor=UiAnchor.TopLeft)=>QueueUiText(text,FontRuntime.ResolvePath(font),size,position,color,0,anchor);
     internal void QueueUiClip(Vector4? rectangle)
     {
         if(FrameSink!=null)FrameSink.SetUiClip(rectangle);

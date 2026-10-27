@@ -77,6 +77,7 @@ public sealed class PlayerController3D : Component
     /// </summary>
     public bool UseLocalOrientation { get; set; }
     public bool AcceptLookInput { get; set; } = true;
+    public bool AllowJump { get; set; } = true;
 
     /// <summary>
     /// Standard TPS defaults to FaceMovement. FaceCamera is intended for
@@ -287,10 +288,21 @@ public sealed class PlayerController3D : Component
                 (float)Time.DeltaTime,
                 0f));
 
-        if (InputActions.WasPressed(JumpAction))
+        if (AllowJump && InputActions.WasPressed(JumpAction))
         {
             controller.Jump();
         }
+    }
+
+    /// <summary>Current camera-relative input intent, also used by movement abilities before physics advances.</summary>
+    public Vector3 ReadDesiredMovement()
+    {
+        if(!Enabled||!InputActions.GameplayEnabled)return Vector3.Zero;
+        Vector2 input=InputActions.ReadAxis2D(MoveAction);
+        Vector3 forward=UseLocalOrientation?Horizontal(Transform.Forward):ForwardFromYaw(ControlYaw);
+        Vector3 right=UseLocalOrientation?Horizontal(Transform.Right):Vector3.Normalize(Vector3.Cross(forward,Vector3.UnitY));
+        Vector3 direction=forward*input.Y+right*input.X;
+        return direction.LengthSquared()>1?Vector3.Normalize(direction):direction;
     }
 
     public void UpdateCharacterRotation(

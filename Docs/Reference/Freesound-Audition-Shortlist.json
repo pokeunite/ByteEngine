@@ -1,0 +1,396 @@
+{
+  "checked": "2026-10-26",
+  "status": "Candidates for user audition; not downloaded or imported. Uses are proposed, not in-game listening verdicts.",
+  "sounds": [
+    {
+      "id": "W1",
+      "category": "Weapons",
+      "title": "Weapons_Handun_Shot",
+      "author": "unfa",
+      "url": "https://freesound.org/people/unfa/sounds/565130/",
+      "duration": "1.02s",
+      "use": "Designed handgun shot; compare against the real recording W2.",
+      "license": "CC0"
+    },
+    {
+      "id": "W2",
+      "category": "Weapons",
+      "title": "22 magnum pistol shot",
+      "author": "michorvath",
+      "url": "https://freesound.org/people/michorvath/sounds/427594/",
+      "duration": "3.13s",
+      "use": "Real pistol recording; candidate for the main shot.",
+      "license": "CC0"
+    },
+    {
+      "id": "W3",
+      "category": "Weapons",
+      "title": "Retro-Styled Guns - Pistol Shots",
+      "author": "MalikArsYasakani",
+      "url": "https://freesound.org/people/MalikArsYasakani/sounds/849993/",
+      "duration": "2.65s",
+      "use": "Stylised alternative to W1/W2.",
+      "license": "CC0"
+    },
+    {
+      "id": "W4",
+      "category": "Weapons",
+      "title": "PistolReloadSound.wav",
+      "author": "MaximBomba",
+      "url": "https://freesound.org/people/MaximBomba/sounds/432139/",
+      "duration": "1.97s",
+      "use": "Complete reload candidate; would need to match animation timing.",
+      "license": "CC0"
+    },
+    {
+      "id": "W5",
+      "category": "Weapons",
+      "title": "Taurus G2c Misc. Foley",
+      "author": "NoonerBear",
+      "url": "https://freesound.org/people/NoonerBear/sounds/589844/",
+      "duration": "37.38s",
+      "use": "Magazine release, reload, racking and handling; source for separate reload stages.",
+      "license": "CC0"
+    },
+    {
+      "id": "W6",
+      "category": "Weapons",
+      "title": "Trigger 02.wav",
+      "author": "Nanashi",
+      "url": "https://freesound.org/people/Nanashi/sounds/104411/",
+      "duration": "0.21s",
+      "use": "Empty trigger / dry mechanical click.",
+      "license": "CC0"
+    },
+    {
+      "id": "W7",
+      "category": "Weapons",
+      "title": "Bullet Casings.wav",
+      "author": "swidmark",
+      "url": "https://freesound.org/people/swidmark/sounds/171322/",
+      "duration": "29.66s",
+      "use": "Multiple brass clinks; source for ammo press ejection and bucket sounds.",
+      "license": "CC0"
+    },
+    {
+      "id": "W8",
+      "category": "Weapons",
+      "title": "Small_Bullet_Roll_Soft_03",
+      "author": "BlondPanda",
+      "url": "https://freesound.org/people/BlondPanda/sounds/777990/",
+      "duration": "0.71s",
+      "use": "Individual small casing roll; alternate bucket detail.",
+      "license": "CC0"
+    },
+    {
+      "id": "C1",
+      "category": "Creatures",
+      "title": "Small Evil Creature Attack Shout 1",
+      "author": "qubodup",
+      "url": "https://freesound.org/people/qubodup/sounds/744792/",
+      "duration": "0.47s",
+      "use": "Short hunter attack tell; compare its character to C3/C5.",
+      "license": "CC0"
+    },
+    {
+      "id": "C2",
+      "category": "Creatures",
+      "title": "Small Evil Creature Attack Shout 2",
+      "author": "qubodup",
+      "url": "https://freesound.org/people/qubodup/sounds/744793/",
+      "duration": "0.49s",
+      "use": "Companion variation to C1, useful for avoiding repetition.",
+      "license": "CC0"
+    },
+    {
+      "id": "C3",
+      "category": "Creatures",
+      "title": "strange alien creature growl",
+      "author": "musselmox",
+      "url": "https://freesound.org/people/musselmox/sounds/779565/",
+      "duration": "2.45s",
+      "use": "Alien vocal candidate for alerts or a heavier raider.",
+      "license": "CC0"
+    },
+    {
+      "id": "C4",
+      "category": "Creatures",
+      "title": "alien growl.wav",
+      "author": "pointparkcinema",
+      "url": "https://freesound.org/people/pointparkcinema/sounds/407252/",
+      "duration": "4.10s",
+      "use": "Longer beast growl; potential raider alert source.",
+      "license": "CC0"
+    },
+    {
+      "id": "C5",
+      "category": "Creatures",
+      "title": "Monster 2",
+      "author": "randbsoundbites",
+      "url": "https://freesound.org/people/randbsoundbites/sounds/798650/",
+      "duration": "2.24s",
+      "use": "Creature attack vocal candidate.",
+      "license": "CC0"
+    },
+    {
+      "id": "C6",
+      "category": "Creatures",
+      "title": "monster_sound_medium_death.wav",
+      "author": "Leadstarson",
+      "url": "https://freesound.org/people/Leadstarson/sounds/559621/",
+      "duration": "0.90s",
+      "use": "Enemy death vocal.",
+      "license": "CC0"
+    },
+    {
+      "id": "M1",
+      "category": "Machines",
+      "title": "Industrial Machine Drone (Seamless Loop)",
+      "author": "kkenny101",
+      "url": "https://freesound.org/people/kkenny101/sounds/854269/",
+      "duration": "7.74s",
+      "use": "Low sci-fi machinery bed; candidate drill motor layer.",
+      "license": "CC0"
+    },
+    {
+      "id": "M2",
+      "category": "Machines",
+      "title": "Machine in a factory (loopable)",
+      "author": "Dominik_W",
+      "url": "https://freesound.org/people/Dominik_W/sounds/398676/",
+      "duration": "12.72s",
+      "use": "Rhythmic machinery; candidate refinery operating loop.",
+      "license": "CC0"
+    },
+    {
+      "id": "M3",
+      "category": "Machines",
+      "title": "Metal machine (loop)",
+      "author": "xkeril",
+      "url": "https://freesound.org/people/xkeril/sounds/628403/",
+      "duration": "16.29s",
+      "use": "Crushing/punching mechanism; candidate ammo press cycle source.",
+      "license": "CC0"
+    },
+    {
+      "id": "M4",
+      "category": "Machines",
+      "title": "Turn crank_Old_Metal_Machine_Loop.wav",
+      "author": "AslakHostaker",
+      "url": "https://freesound.org/people/AslakHostaker/sounds/395042/",
+      "duration": "6.72s",
+      "use": "Seamless rusty crank rhythm; alternate press or refinery layer.",
+      "license": "CC0"
+    },
+    {
+      "id": "M5",
+      "category": "Machines",
+      "title": "Industrial equipment [loop] 01",
+      "author": "cabled_mess",
+      "url": "https://freesound.org/people/cabled_mess/sounds/351452/",
+      "duration": "16.32s",
+      "use": "Synthesised industrial texture; compare to M1.",
+      "license": "CC0"
+    },
+    {
+      "id": "M6",
+      "category": "Machines",
+      "title": "Drill - Raw Recordings",
+      "author": "RICHERlandTV",
+      "url": "https://freesound.org/people/RICHERlandTV/sounds/216493/",
+      "duration": "1m 55s",
+      "use": "Unprocessed drill takes; source for start, spin and stop edits.",
+      "license": "CC0"
+    },
+    {
+      "id": "M7",
+      "category": "Machines",
+      "title": "Short Machine Sound 4 (CC0 mix)",
+      "author": "qubodup",
+      "url": "https://freesound.org/people/qubodup/sounds/871228/",
+      "duration": "2.21s",
+      "use": "Hydraulic one-shot for machine action or defence deployment.",
+      "license": "CC0"
+    },
+    {
+      "id": "M8",
+      "category": "Machines",
+      "title": "Mechanical Drone Texture (Seamless Loop)",
+      "author": "kkenny101",
+      "url": "https://freesound.org/people/kkenny101/sounds/865628/",
+      "duration": "5.99s",
+      "use": "Slower mechanical ambience; possible refinery/terminal bed.",
+      "license": "CC0"
+    },
+    {
+      "id": "F1",
+      "category": "Combat feedback",
+      "title": "Metal Impact",
+      "author": "RyanKingArt",
+      "url": "https://freesound.org/people/RyanKingArt/sounds/620077/",
+      "duration": "1.37s",
+      "use": "Drill damage or missed shot striking metal.",
+      "license": "CC0"
+    },
+    {
+      "id": "F2",
+      "category": "Combat feedback",
+      "title": "Metal Impact",
+      "author": "BennettFilmTeacher",
+      "url": "https://freesound.org/people/BennettFilmTeacher/sounds/523788/",
+      "duration": "2.61s",
+      "use": "Lower metallic impact with a reverberant tail; alternate rig hit.",
+      "license": "CC0"
+    },
+    {
+      "id": "F3",
+      "category": "Combat feedback",
+      "title": "SFX_Impact_Bullet_Hit_Body_1",
+      "author": "PoundSoundUK",
+      "url": "https://freesound.org/people/PoundSoundUK/sounds/719198/",
+      "duration": "6.00s",
+      "use": "Body-hit / hit-marker source; several impacts need cutting. Credit Marcus Dellicompagni.",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "F4",
+      "category": "Combat feedback",
+      "title": "PlayerHurt2",
+      "author": "mrickey13",
+      "url": "https://freesound.org/people/mrickey13/sounds/515624/",
+      "duration": "0.49s",
+      "use": "Short player damage grunt.",
+      "license": "CC0"
+    },
+    {
+      "id": "F5",
+      "category": "Combat feedback",
+      "title": "Footsteps Gravel (Various speeds)",
+      "author": "DaniloSFX",
+      "url": "https://freesound.org/people/DaniloSFX/sounds/672742/",
+      "duration": "46.92s",
+      "use": "Walking/running source; cut into footstep variations.",
+      "license": "CC0"
+    },
+    {
+      "id": "U1",
+      "category": "Menus and rewards",
+      "title": "GASP_UI_Confirm.wav",
+      "author": "Rob_Marion",
+      "url": "https://freesound.org/people/Rob_Marion/sounds/542044/",
+      "duration": "1.06s",
+      "use": "Confirm contract or purchase; compare with the reward tones.",
+      "license": "CC0"
+    },
+    {
+      "id": "U2",
+      "category": "Menus and rewards",
+      "title": "GASP_UI_Notification_1.wav",
+      "author": "Rob_Marion",
+      "url": "https://freesound.org/people/Rob_Marion/sounds/542043/",
+      "duration": "1.06s",
+      "use": "Refinery completion or shipment completion notification.",
+      "license": "CC0"
+    },
+    {
+      "id": "U3",
+      "category": "Menus and rewards",
+      "title": "GASP_UI_Alert_2.wav",
+      "author": "Rob_Marion",
+      "url": "https://freesound.org/people/Rob_Marion/sounds/542042/",
+      "duration": "1.06s",
+      "use": "Wave warning or low-health notification.",
+      "license": "CC0"
+    },
+    {
+      "id": "U4",
+      "category": "Menus and rewards",
+      "title": "Minimalist Sci-Fi UI Error",
+      "author": "plasterbrain",
+      "url": "https://freesound.org/people/plasterbrain/sounds/423166/",
+      "duration": "0.14s",
+      "use": "Locked upgrade, insufficient credits or invalid action.",
+      "license": "CC0"
+    },
+    {
+      "id": "U5",
+      "category": "Menus and rewards",
+      "title": "Coin.wav",
+      "author": "CogFireStudios",
+      "url": "https://freesound.org/people/CogFireStudios/sounds/420995/",
+      "duration": "2.11s",
+      "use": "Sale completion / credits received candidate.",
+      "license": "CC0"
+    },
+    {
+      "id": "U6",
+      "category": "Menus and rewards",
+      "title": "Coin Pickup SFX [3]",
+      "author": "SoundDesignForYou",
+      "url": "https://freesound.org/people/SoundDesignForYou/sounds/646671/",
+      "duration": "1.63s",
+      "use": "Alternative sale/pickup reward tone.",
+      "license": "CC0"
+    },
+    {
+      "id": "A1",
+      "category": "Atmosphere and danger",
+      "title": "Wind in the salt desert of Atacama",
+      "author": "felix.blume",
+      "url": "https://freesound.org/people/felix.blume/sounds/142335/",
+      "duration": "2m 01s",
+      "use": "Exposed alien-world wind bed.",
+      "license": "CC0"
+    },
+    {
+      "id": "A2",
+      "category": "Atmosphere and danger",
+      "title": "Low wind in a desert canyon 1",
+      "author": "fran_marenco",
+      "url": "https://freesound.org/people/fran_marenco/sounds/852880/",
+      "duration": "6m 52s",
+      "use": "Gentler background wind; alternate to A1.",
+      "license": "CC0"
+    },
+    {
+      "id": "A3",
+      "category": "Atmosphere and danger",
+      "title": "Severe Warning Alarm",
+      "author": "deleted_user_7709760",
+      "url": "https://freesound.org/people/deleted_user_7709760/sounds/423929/",
+      "duration": "5.54s",
+      "use": "Looping sci-fi alarm for critical drill health; use sparingly.",
+      "license": "CC0"
+    },
+    {
+      "id": "D1",
+      "category": "Defences",
+      "title": "Grenade Explosion SFX (medium-sized, meaty, realistic)",
+      "author": "unfa",
+      "url": "https://freesound.org/people/unfa/sounds/609587/",
+      "duration": "5.32s",
+      "use": "Mine or mortar blast candidate.",
+      "license": "CC0"
+    },
+    {
+      "id": "D2",
+      "category": "Defences",
+      "title": "Gun / Cannon / Explosion",
+      "author": "SamsterBirdies",
+      "url": "https://freesound.org/people/SamsterBirdies/sounds/580040/",
+      "duration": "1.46s",
+      "use": "Short cannon/bang source for mortar launch or heavier defence fire.",
+      "license": "CC0"
+    },
+    {
+      "id": "D3",
+      "category": "Defences",
+      "title": "Sci-Fi Grenade explosion",
+      "author": "Jean_Filho",
+      "url": "https://freesound.org/people/Jean_Filho/sounds/807381/",
+      "duration": "0.99s",
+      "use": "Electrical sci-fi alternative to D1.",
+      "license": "CC0"
+    }
+  ]
+}

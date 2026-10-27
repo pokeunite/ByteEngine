@@ -109,7 +109,27 @@ public static class Input
     public static bool IsGameViewFocused { get; private set; }
     public static bool IsGameInputCaptured { get; private set; }
     public static bool KeepGameViewPointerFree =>
-        Environment.TickCount64 < _keepGameViewPointerFreeUntil;
+        _uiPointerOwners.Count>0 || Environment.TickCount64 < _keepGameViewPointerFreeUntil;
+    private static readonly HashSet<object> EscapeOwners=new(ReferenceEqualityComparer.Instance);
+    public static bool HasGameplayEscapeHandler=>EscapeOwners.Count>0;
+    public static void RegisterGameplayEscapeHandler(object owner,bool registered){if(registered)EscapeOwners.Add(owner);else EscapeOwners.Remove(owner);}
+    private static readonly Dictionary<Key,Key> KeyBindings=new();
+    public static Key GameplayKey(Key logical)=>KeyBindings.GetValueOrDefault(logical,logical);
+    public static void BindGameplayKey(Key logical,Key physical){if(logical==Key.Escape||physical==Key.Escape)throw new ArgumentException("Escape is reserved for menus.");KeyBindings[logical]=physical;}
+    private static readonly Dictionary<MouseButton,MouseButton> MouseBindings=new();
+    public static MouseButton GameplayMouseButton(MouseButton logical)=>MouseBindings.GetValueOrDefault(logical,logical);
+    public static void BindGameplayMouseButton(MouseButton logical,MouseButton physical)=>MouseBindings[logical]=physical;
+    public static void ClearGameplayKeyBindings(){KeyBindings.Clear();MouseBindings.Clear();}
+    private static Key EffectiveKey(Key key)=>IsUiPointerRequested?key:GameplayKey(key);
+    private static readonly HashSet<object> _uiPointerOwners=new(ReferenceEqualityComparer.Instance);
+    public static bool IsUiPointerRequested => _uiPointerOwners.Count>0;
+    public static void RequestUiPointer(object owner,bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        if(visible)_uiPointerOwners.Add(owner);
+        else if(_uiPointerOwners.Remove(owner)&&_uiPointerOwners.Count==0){_keepGameViewPointerFreeUntil=0;_ignorePointerAimUntil=Environment.TickCount64+100;}
+    }
+    private static long _ignorePointerAimUntil;
     public static Vector2 MouseDelta { get; private set; }
     public static RawInputSnapshot Snapshot => RawSnapshot;
     private static Vector2 _lastGameViewDisplayPosition;
@@ -125,6 +145,7 @@ public static class Input
     /// </summary>
     public static void NotifyGameViewPointerAim()
     {
+        if(Environment.TickCount64<_ignorePointerAimUntil&&!IsUiPointerRequested)return;
         _keepGameViewPointerFreeUntil = Environment.TickCount64 + 750;
     }
 
@@ -159,8 +180,8 @@ public static class Input
             : Vector2.Zero;
 
         RawSnapshot.Clear();
-        foreach (Key key in KeysDown) RawSnapshot.KeysDown.Add(key);
-        foreach (MouseButton button in MouseButtonsDown) RawSnapshot.MouseButtonsDown.Add(button);
+        foreach (Key key in SupportedKeys) if(KeysDown.Contains(GameplayKey(key))) RawSnapshot.KeysDown.Add(key);
+        foreach (MouseButton button in SupportedMouseButtons) if(MouseButtonsDown.Contains(GameplayMouseButton(button))) RawSnapshot.MouseButtonsDown.Add(button);
         RawSnapshot.MouseDelta = MouseDelta;
         RawSnapshot.MouseWheel = mouseState.ScrollDelta.Y;
         PopulateGamepad(RawSnapshot.Gamepad, joystickStates);
@@ -184,8 +205,8 @@ public static class Input
         MouseButtonsDown.UnionWith(snapshot.MouseButtonsDown);
         MouseDelta = captured ? snapshot.MouseDelta : Vector2.Zero;
         RawSnapshot.Clear();
-        RawSnapshot.KeysDown.UnionWith(KeysDown);
-        RawSnapshot.MouseButtonsDown.UnionWith(MouseButtonsDown);
+        foreach (Key key in SupportedKeys) if(KeysDown.Contains(GameplayKey(key))) RawSnapshot.KeysDown.Add(key);
+        foreach (MouseButton button in SupportedMouseButtons) if(MouseButtonsDown.Contains(GameplayMouseButton(button))) RawSnapshot.MouseButtonsDown.Add(button);
         RawSnapshot.MouseDelta = MouseDelta;
         RawSnapshot.MouseWheel = snapshot.MouseWheel;
         RawSnapshot.Gamepad.LeftStick = snapshot.Gamepad.LeftStick;
@@ -235,22 +256,23 @@ public static class Input
         return delta;
     }
 
-    public static bool IsKeyDown(Key key) => KeysDown.Contains(key);
-    public static bool IsKeyPressed(Key key) => KeysDown.Contains(key) && !PreviousKeysDown.Contains(key);
-    public static bool IsKeyReleased(Key key) => !KeysDown.Contains(key) && PreviousKeysDown.Contains(key);
+    public static bool IsKeyDown(Key key) => KeysDown.Contains(EffectiveKey(key));
+    public static bool IsKeyPressed(Key key) => KeysDown.Contains(EffectiveKey(key)) && !PreviousKeysDown.Contains(EffectiveKey(key));
+    public static bool IsKeyReleased(Key key) => !KeysDown.Contains(EffectiveKey(key)) && PreviousKeysDown.Contains(EffectiveKey(key));
 
     public static bool IsMouseButtonDown(MouseButton button) =>
-        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) && MouseButtonsDown.Contains(button);
+        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) && MouseButtonsDown.Contains(GameplayMouseButton(button));
     public static bool IsMouseButtonPressed(MouseButton button) =>
         !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
-        IsMouseButtonPressedForUi(button);
+        IsMouseButtonPressedForUi(GameplayMouseButton(button));
     public static bool IsMouseButtonReleased(MouseButton button) =>
         !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
-        !MouseButtonsDown.Contains(button) && PreviousMouseButtonsDown.Contains(button);
+        !MouseButtonsDown.Contains(GameplayMouseButton(button)) && PreviousMouseButtonsDown.Contains(GameplayMouseButton(button));
     public static bool IsMouseButtonPressedForUi(MouseButton button) =>
         MouseButtonsDown.Contains(button) && !PreviousMouseButtonsDown.Contains(button);
     public static bool IsMouseButtonDownForUi(MouseButton button) =>
         MouseButtonsDown.Contains(button);
+    public static void ConsumeGameplayPointer()=>SetUiPointerBlocked(true);
     internal static void SetUiPointerBlocked(bool blocked)
     {
         if (blocked && MouseButtonsDown.Contains(MouseButton.Left))

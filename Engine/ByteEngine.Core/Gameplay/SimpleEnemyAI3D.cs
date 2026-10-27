@@ -52,7 +52,9 @@ public sealed partial class SimpleEnemyAI3D : Component
         State = SimpleEnemyAIState.Idle;
         IsMoving = false;
         AttackFiredThisFrame = false;
-        _cooldownRemaining = Math.Max(0f, _cooldownRemaining - stepDelta);
+        if(!PredatoryRush||AttackPhase=="Ready")_cooldownRemaining = Math.Max(0f, _cooldownRemaining - stepDelta);
+        if(TickStagger(stepDelta))return;
+        UpdateRushVelocity(stepDelta);
         GameObject? enemy = AttachedGameObject;
         RuntimeScene? scene = enemy?.Scene;
         if (enemy == null || scene == null) return;

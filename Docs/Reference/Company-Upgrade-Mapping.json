@@ -1,0 +1,380 @@
+[
+  {
+    "reference": "Sharpened Rounds",
+    "company": "Bore tuning",
+    "id": "research-37a33fc0925bc989",
+    "stat": "PistolDamageFlat"
+  },
+  {
+    "reference": "Small Ammo",
+    "company": "Field bandolier",
+    "id": "research-5f8b23b136433c3f",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Oil Price",
+    "company": "Broker margin",
+    "id": "research-0f217e430c9ccc2b",
+    "stat": "OilPriceFloor"
+  },
+  {
+    "reference": "Siren Amplifier",
+    "company": "Hazard permit",
+    "id": "research-a85790d56c45bf41",
+    "stat": "SirenLevel"
+  },
+  {
+    "reference": "Reinforced Plating",
+    "company": "Rig reinforcement",
+    "id": "research-efbb6bcd57f34085",
+    "stat": "BunkerHealthPct"
+  },
+  {
+    "reference": "Bigger Bullets",
+    "company": "Sentry payload",
+    "id": "research-f06b456ea0de8b66",
+    "stat": "AutogunDamageFlat"
+  },
+  {
+    "reference": "Smooth Barrels",
+    "company": "Sentry drive",
+    "id": "research-c6a982d9b49138e8",
+    "stat": "AutogunFireRateFlat"
+  },
+  {
+    "reference": "Pump Speed",
+    "company": "Transfer pump",
+    "id": "research-b422213eede182ae",
+    "stat": "OilSellRate"
+  },
+  {
+    "reference": "Bigger Tank",
+    "company": "Cargo expansion",
+    "id": "research-97b98318f18ba7fa",
+    "stat": "OilTankCapacity"
+  },
+  {
+    "reference": "Market Peak",
+    "company": "Premium contracts",
+    "id": "research-2074068bf78dc14c",
+    "stat": "MarketPeakPct"
+  },
+  {
+    "reference": "Small Ammo",
+    "company": "Field bandolier 2",
+    "id": "research-40af9c18ee875f37",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "+Autogun",
+    "company": "Watchpost licence",
+    "id": "research-1c9ccbf797a9db96",
+    "stat": "AutogunGrant"
+  },
+  {
+    "reference": "Pistol Fire Rate",
+    "company": "Cycle regulator",
+    "id": "research-688a5aa7a053606c",
+    "stat": "PistolFireRatePct"
+  },
+  {
+    "reference": "Unlock Machine Gun",
+    "company": "Rotary licence",
+    "id": "research-a925c51a298d6072",
+    "stat": "UnlockMachineGun"
+  },
+  {
+    "reference": "Machine Gun Pierce",
+    "company": "Rotary penetrator",
+    "id": "research-59580d0f512d20b3",
+    "stat": "MachineGunPierce"
+  },
+  {
+    "reference": "Autogun Pierce",
+    "company": "Sentry penetrator",
+    "id": "research-819710fbc7ba3398",
+    "stat": "AutogunPierce"
+  },
+  {
+    "reference": "Airdrop Beacon",
+    "company": "Emergency freight",
+    "id": "research-e8dc96e6640a8181",
+    "stat": "UnlockAirdrop"
+  },
+  {
+    "reference": "Machine Gun Damage",
+    "company": "Rotary payload",
+    "id": "research-eb14b94a0d861da1",
+    "stat": "MachineGunDamageFlat"
+  },
+  {
+    "reference": "Barrel Spin",
+    "company": "Rotary drive",
+    "id": "research-6e1c77d7338054ab",
+    "stat": "MachineGunFireRateFlat"
+  },
+  {
+    "reference": "Oil Money",
+    "company": "Broker margin 2",
+    "id": "research-b4c459810da67010",
+    "stat": "OilPriceFloor"
+  },
+  {
+    "reference": "WE NEED MORE BULLETS!",
+    "company": "Field bandolier 3",
+    "id": "research-10a1e2617ba992db",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Shell Rack",
+    "company": "Lobber salvo",
+    "id": "research-66182ecde5dd0f49",
+    "stat": "MortarShells"
+  },
+  {
+    "reference": "Shaped Charge",
+    "company": "Charge packing",
+    "id": "research-8873a3b358db25e0",
+    "stat": "LandMineDamageFlat"
+  },
+  {
+    "reference": "Wider Crater",
+    "company": "Blast lens",
+    "id": "research-e24a1a6583f8434b",
+    "stat": "LandMineBlastRadius"
+  },
+  {
+    "reference": "Heavy Shells",
+    "company": "Lobber payload",
+    "id": "research-65b119775ab7ef1a",
+    "stat": "MortarStrikeDamageFlat"
+  },
+  {
+    "reference": "Land Mine",
+    "company": "Seismic charges",
+    "id": "research-74b2451e5838ae20",
+    "stat": "LandMineGrant"
+  },
+  {
+    "reference": "Oil Money",
+    "company": "Broker margin 3",
+    "id": "research-50f822728257bbe0",
+    "stat": "OilPriceFloor"
+  },
+  {
+    "reference": "Oil Price",
+    "company": "Broker margin 4",
+    "id": "research-1f327e2412afd8e8",
+    "stat": "OilPriceFloor"
+  },
+  {
+    "reference": "Health",
+    "company": "Operator plating",
+    "id": "research-312c131d011f1739",
+    "stat": "PlayerMaxHealth"
+  },
+  {
+    "reference": "Combat Boots",
+    "company": "Servo soles",
+    "id": "research-25e8a8af1255891b",
+    "stat": "MoveSpeedPct"
+  },
+  {
+    "reference": "Health",
+    "company": "Operator plating 2",
+    "id": "research-133130eec42be09b",
+    "stat": "PlayerMaxHealth"
+  },
+  {
+    "reference": "Land Mine",
+    "company": "Seismic charges 2",
+    "id": "research-7c9a30cdf71c95ed",
+    "stat": "LandMineGrant"
+  },
+  {
+    "reference": "Bigger Tank",
+    "company": "Cargo expansion 2",
+    "id": "research-a08ef1c42637747d",
+    "stat": "OilTankCapacity"
+  },
+  {
+    "reference": "Pump Speed",
+    "company": "Transfer pump 2",
+    "id": "research-e2985211ec275ac5",
+    "stat": "OilSellRate"
+  },
+  {
+    "reference": "Pump Speed",
+    "company": "Transfer pump 3",
+    "id": "research-013cb963cbd8f661",
+    "stat": "OilSellRate"
+  },
+  {
+    "reference": "Bigger Tank",
+    "company": "Cargo expansion 3",
+    "id": "research-8ae800b8fd0d6e3b",
+    "stat": "OilTankCapacity"
+  },
+  {
+    "reference": "Rapid Shelling",
+    "company": "Lobber autoloader",
+    "id": "research-a208b266e25aaba4",
+    "stat": "MortarStrikeInterval"
+  },
+  {
+    "reference": "+Autogun",
+    "company": "Watchpost licence 2",
+    "id": "research-8ac978cef6cfb093",
+    "stat": "AutogunGrant"
+  },
+  {
+    "reference": "+Mortar",
+    "company": "Lobber licence",
+    "id": "research-3adf6255f24b641e",
+    "stat": "MortarStrikeGrant"
+  },
+  {
+    "reference": "Extra Land Mines",
+    "company": "Seismic charges 3",
+    "id": "research-d400c8f04825b631",
+    "stat": "LandMineGrant"
+  },
+  {
+    "reference": "Sharpened Rounds",
+    "company": "Bore tuning 2",
+    "id": "research-e9db1e5be166ff1e",
+    "stat": "PistolDamageFlat"
+  },
+  {
+    "reference": "Combat Boots",
+    "company": "Servo soles 2",
+    "id": "research-2deb73d96ded4d10",
+    "stat": "MoveSpeedPct"
+  },
+  {
+    "reference": "WE NEED MORE BULLETS!",
+    "company": "Field bandolier 4",
+    "id": "research-36cfcb8c9a96e460",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Machine Gun Pierce",
+    "company": "Rotary penetrator 2",
+    "id": "research-51ab29bf00ac5a4e",
+    "stat": "MachineGunPierce"
+  },
+  {
+    "reference": "WE NEED MORE BULLETS!",
+    "company": "Field bandolier 5",
+    "id": "research-5b75de8c2645985d",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Reinforced Plating",
+    "company": "Rig reinforcement 2",
+    "id": "research-eebbd5a8d2c49ec6",
+    "stat": "BunkerHealthPct"
+  },
+  {
+    "reference": "Combat Boots",
+    "company": "Servo soles 3",
+    "id": "research-a0329da1537650ce",
+    "stat": "MoveSpeedPct"
+  },
+  {
+    "reference": "Smooth Barrels",
+    "company": "Sentry drive 2",
+    "id": "research-f1a079901b8904eb",
+    "stat": "AutogunFireRateFlat"
+  },
+  {
+    "reference": "Bigger Tank",
+    "company": "Cargo expansion 4",
+    "id": "research-3d4a7a54b62c0ce9",
+    "stat": "OilTankCapacity"
+  },
+  {
+    "reference": "Pump Speed",
+    "company": "Transfer pump 4",
+    "id": "research-8664867517b2418f",
+    "stat": "OilSellRate"
+  },
+  {
+    "reference": "Siren Amplifier",
+    "company": "Hazard permit 2",
+    "id": "research-54a1c1918561e1f4",
+    "stat": "SirenLevel"
+  },
+  {
+    "reference": "+Mortar",
+    "company": "Lobber licence 2",
+    "id": "research-40d0771c7f4ebc5b",
+    "stat": "MortarStrikeGrant"
+  },
+  {
+    "reference": "+Autogun",
+    "company": "Watchpost licence 3",
+    "id": "research-dd386231e7598e68",
+    "stat": "AutogunGrant"
+  },
+  {
+    "reference": "Bigger Bullets",
+    "company": "Sentry payload 2",
+    "id": "research-b136fcc13f063af2",
+    "stat": "AutogunDamageFlat"
+  },
+  {
+    "reference": "Bigger Tank",
+    "company": "Cargo expansion 5",
+    "id": "research-bad25049f619d8cd",
+    "stat": "OilTankCapacity"
+  },
+  {
+    "reference": "Pump Speed",
+    "company": "Transfer pump 5",
+    "id": "research-a7f264d53ff073fb",
+    "stat": "OilSellRate"
+  },
+  {
+    "reference": "Pistol Pellets",
+    "company": "Duplex cartridge",
+    "id": "research-f89e150609ff5d38",
+    "stat": "PistolPellets"
+  },
+  {
+    "reference": "Sharpened Rounds",
+    "company": "Bore tuning 3",
+    "id": "research-e0ecfd2fe73457ac",
+    "stat": "PistolDamageFlat"
+  },
+  {
+    "reference": "WE NEED MORE BULLETS!",
+    "company": "Field bandolier 6",
+    "id": "research-244d1891282ee5b8",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Barrel Spin",
+    "company": "Rotary drive 2",
+    "id": "research-f605027e522c0708",
+    "stat": "MachineGunFireRateFlat"
+  },
+  {
+    "reference": "WE NEED MORE BULLETS!",
+    "company": "Field bandolier 7",
+    "id": "research-f1348459693ed400",
+    "stat": "SmallAmmoCap"
+  },
+  {
+    "reference": "Autogun Pierce",
+    "company": "Sentry penetrator 2",
+    "id": "research-dfccb9218b016a38",
+    "stat": "AutogunPierce"
+  },
+  {
+    "reference": "Ammo Lockers",
+    "company": "Logistics harness",
+    "id": "research-ffd7fd783211c702",
+    "stat": "AmmoCapacityPct"
+  }
+]

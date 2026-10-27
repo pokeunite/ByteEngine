@@ -83,6 +83,7 @@ public sealed class CharacterController3D
 
     public GameObject? GroundObject { get; private set; }
 
+    public float MoveSpeedMultiplier { get; set; } = 1;
     public float MoveSpeed { get; set; } =
         5.0f;
 
@@ -410,12 +411,12 @@ public sealed class CharacterController3D
             _hadBurstMotion = false;
             Vector3 resumed = _moveInput; resumed.Y = 0;
             if (resumed.LengthSquared() > 1) resumed = Vector3.Normalize(resumed);
-            resumed *= Math.Max(0,MoveSpeed);
+            resumed *= Math.Max(0,MoveSpeed*MoveSpeedMultiplier);
             Velocity = new(resumed.X,Velocity.Y,resumed.Z);
         }
         if (ArenaMovement)
         {
-            Velocity = ArenaVelocity(Velocity, _moveInput, IsGrounded, MoveSpeed,
+            Velocity = ArenaVelocity(Velocity, _moveInput, IsGrounded, MoveSpeed*MoveSpeedMultiplier,
                 Acceleration, GroundFriction, StopSpeed, AirAcceleration, MaximumAirSpeed, deltaTime);
             return;
         }
@@ -435,7 +436,7 @@ public sealed class CharacterController3D
 
         target *=
             Math.Max(
-                MoveSpeed,
+                MoveSpeed*Math.Clamp(MoveSpeedMultiplier,0,10),
                 0.0f);
 
         float control =

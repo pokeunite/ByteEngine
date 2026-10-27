@@ -1374,6 +1374,7 @@ public sealed class ComponentSerializer
             {
                 ["useLocalOrientation"] = ((PlayerController3D)component).UseLocalOrientation,
                 ["acceptLookInput"] = ((PlayerController3D)component).AcceptLookInput,
+                ["allowJump"] = ((PlayerController3D)component).AllowJump,
                 ["characterRotation"] = ((PlayerController3D)component).CharacterRotation.ToString(),
                 ["turnSpeed"] = ((PlayerController3D)component).TurnSpeed,
                 ["controlYaw"] = ((PlayerController3D)component).ControlYaw,
@@ -1391,6 +1392,7 @@ public sealed class ComponentSerializer
         {
             UseLocalOrientation = data.Properties["useLocalOrientation"]?.GetValue<bool>() ?? true,
             AcceptLookInput = data.Properties["acceptLookInput"]?.GetValue<bool>() ?? true,
+            AllowJump = data.Properties["allowJump"]?.GetValue<bool>() ?? true,
             CharacterRotation = Enum.TryParse(
                 Text(data, "characterRotation", nameof(CharacterRotationMode.FaceCamera)),
                 true,
@@ -1815,6 +1817,17 @@ public sealed class ComponentSerializer
                 ["windupSeconds"] = ai.WindupSeconds,
                 ["recoverySeconds"] = ai.RecoverySeconds,
                 ["chargeSpeed"] = ai.ChargeSpeed,
+                ["predatoryRush"] = ai.PredatoryRush,
+                ["rushMinimumRange"] = ai.RushMinimumRange,
+                ["rushPredictionSeconds"] = ai.RushPredictionSeconds,
+                ["rushPredictionLimit"] = ai.RushPredictionLimit,
+                ["rushLockSeconds"] = ai.RushLockSeconds,
+                ["rushAccelerationSeconds"] = ai.RushAccelerationSeconds,
+                ["rushDuration"] = ai.RushDuration,
+                ["rushHitRecovery"] = ai.RushHitRecovery,
+                ["rushCrashRecovery"] = ai.RushCrashRecovery,
+                ["rushCrashDamageMultiplier"] = ai.RushCrashDamageMultiplier,
+                ["rushKnockback"] = ai.RushKnockback,
                 ["chargeDistance"] = ai.ChargeDistance,
                 ["hazardRadius"] = ai.HazardRadius,
                 ["collisionRadius"] = ai.CollisionRadius,
@@ -1867,6 +1880,17 @@ public sealed class ComponentSerializer
                 WindupSeconds = Float(data,"windupSeconds",.8f),
                 RecoverySeconds = Float(data,"recoverySeconds",1.2f),
                 ChargeSpeed = Float(data,"chargeSpeed",10f),
+                PredatoryRush = data.Properties["predatoryRush"]?.GetValue<bool>()??false,
+                RushMinimumRange = Float(data,"rushMinimumRange",2.8f),
+                RushPredictionSeconds = Float(data,"rushPredictionSeconds",.15f),
+                RushPredictionLimit = Float(data,"rushPredictionLimit",.75f),
+                RushLockSeconds = Float(data,"rushLockSeconds",.2f),
+                RushAccelerationSeconds = Float(data,"rushAccelerationSeconds",.12f),
+                RushDuration = Float(data,"rushDuration",.6f),
+                RushHitRecovery = Float(data,"rushHitRecovery",.5f),
+                RushCrashRecovery = Float(data,"rushCrashRecovery",1.2f),
+                RushCrashDamageMultiplier = Float(data,"rushCrashDamageMultiplier",1.5f),
+                RushKnockback = Float(data,"rushKnockback",1.3f),
                 ChargeDistance = Float(data,"chargeDistance",8f),
                 HazardRadius = Float(data,"hazardRadius",2f),
                 CollisionRadius = Float(data,"collisionRadius",.35f),
@@ -2019,6 +2043,7 @@ public sealed class ComponentSerializer
                 TypeName,
                 new JsonObject
                 {
+                    ["moveSpeedMultiplier"] = controller.MoveSpeedMultiplier,
                     ["moveSpeed"] =
                         controller.MoveSpeed,
 
@@ -2075,6 +2100,7 @@ public sealed class ComponentSerializer
                 StopSpeed = Float(data, "stopSpeed", 3),
                 AirAcceleration = Float(data, "airAcceleration", 18),
                 MaximumAirSpeed = Float(data, "maximumAirSpeed", 13),
+                MoveSpeedMultiplier = Float(data,"moveSpeedMultiplier",1),
                 MoveSpeed =
                     Float(
                         data,

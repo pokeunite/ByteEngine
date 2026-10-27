@@ -37,6 +37,7 @@ internal sealed class SkyShader3D : IDisposable
             useEnvironmentMap
                 ? 1
                 : 0);
+        _shader.SetInt("uSourceIsHdr",environment.EnvironmentMapTexture?.IsHdr==true?1:0);
 
         _shader.SetFloat(
             "uEnvironmentIntensity",
@@ -159,6 +160,7 @@ internal sealed class SkyShader3D : IDisposable
         uniform float uHorizonSharpness;
 
         uniform int uSkyMode;
+        uniform int uSourceIsHdr;
         uniform sampler2D uEnvironmentMap;
         uniform float uEnvironmentIntensity;
         uniform float uEnvironmentRotationRadians;
@@ -258,7 +260,12 @@ internal sealed class SkyShader3D : IDisposable
                 vec3 environmentColor=
                     texture(
                         uEnvironmentMap,
-                        environmentUV).rgb*
+                        environmentUV).rgb;
+                // PNG/JPEG sky maps are sRGB, while HDR textures already contain
+                // linear radiance. Match the IBL import path before tone mapping.
+                if(uSourceIsHdr==0)
+                    environmentColor=mix(environmentColor/12.92,pow((environmentColor+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),environmentColor));
+                environmentColor *=
                     max(
                         uEnvironmentIntensity,
                         0.0);

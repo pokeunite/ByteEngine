@@ -1,0 +1,21 @@
+[
+  {
+    "id": "R01",
+    "target": "Docs/Concepts/AlienMining/RockKit/R01-tall-vertical-cliff-columns.png",
+    "prompt": "Remove ONLY the translucent background glow/haze around this cliff cutout. Keep every rock, silhouette, facet, lighting colour and composition unchanged. Output a fully opaque rock asset with sharp clean antialiased silhouette on a genuinely transparent alpha background: alpha ZERO everywhere outside the rock silhouette, no glow, no halo, no gradient, no floor, no shadow outside the asset. Do not add or remove rock geometry."
+  },
+  {
+    "id": "R08",
+    "target": "Docs/Concepts/AlienMining/RockKit/R08-large-angular-boulder.png",
+    "prompt": "Remove ONLY the translucent background glow/haze around this single boulder cutout. Keep the exact boulder silhouette, flat polygon facets, lighting, colours and framing unchanged. The boulder must be fully opaque, with a clean antialiased outer contour and genuinely transparent alpha ZERO everywhere outside its contour. No glow, no halo, no gradient, no ground, no external shadow, no extra rocks."
+  },
+  {
+    "id": "R04",
+    "target": "Docs/Concepts/AlienMining/RockKit/R04-closed-corner-boulder-barrier.png",
+    "prompt": "Image 1 is the edit target, Image 2 the original environment reference. Correct this to be the LOW CURVED FOREGROUND BOULDER BARRIER from the bottom-left corner of image 2, rather than another descending vertical cliff wall. Keep the charcoal-violet flat-faceted low-poly basalt material and warm edge lighting, but remove the tall tower at left. Create a clear 90-degree CONCAVE corner/curved L-shaped footprint of tightly interlocking squat angular boulders, with both arms visible in an elevated three-quarter view. All boulders should be broadly similar LOW height, roughly as wide as tall, forming one continuous solid corner barrier. No plants/crystals/terrain. This is a modular corner piece for the foreground boundary, not a wall of columns. Transparent alpha background with zero haze or glow; no cast shadow outside silhouette, no labels."
+  },
+  {
+    "id": "R11",
+    "prompt": "Clean up this isolated rock-pile image for use as a modelling reference. Preserve the exact rock arrangement, silhouettes, colours, facet shading and camera angle. Remove ONLY all surrounding coloured haze, glow, blurred backdrop and shadow beneath/around the rocks. The rocks must be fully opaque and everything outside their hard silhouettes must have alpha=0, with only narrow edge antialiasing. Genuinely transparent background. No extra objects, no geometry changes, no floor, no labels."
+  }
+]

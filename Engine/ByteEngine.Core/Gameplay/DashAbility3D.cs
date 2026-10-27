@@ -39,8 +39,10 @@ public sealed class DashAbility3D : Component
         if (!CanDash) { LastResult = IsDashing ? "Already dashing" : CooldownRemaining > 0 ? "Cooling down" : EnergyCost > 0 && (Energy?.Current ?? 0) < EnergyCost ? "Not enough energy" : "Dash unavailable"; return false; }
         var motor = GameObject.GetComponent<CharacterController3D>()!;
         var control = GameObject.GetComponent<TopDownController3D>();
+        if(control?.Enabled!=true)control=null;
+        var thirdPerson=GameObject.GetComponent<PlayerController3D>();
         Vector3 direction = DirectionMode == DashDirectionMode.Cursor && control?.HasCursorAim == true ? control.AimWorldPoint - Transform.WorldPosition :
-            DirectionMode == DashDirectionMode.MovementOrFacing ? control?.ReadDesiredMovement() ?? motor.Velocity : Transform.Forward;
+            DirectionMode == DashDirectionMode.MovementOrFacing ? control?.ReadDesiredMovement() ?? (thirdPerson?.Enabled==true?thirdPerson.ReadDesiredMovement():motor.Velocity) : Transform.Forward;
         direction.Y = 0;
         if (direction.LengthSquared() < .001f) direction = Transform.Forward;
         direction.Y = 0;

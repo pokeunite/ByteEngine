@@ -1,0 +1,5102 @@
+{
+  "name": "Enclosed alien mining canyon",
+  "floor": {
+    "centre": [
+      10,
+      -0.15,
+      -54
+    ],
+    "size": [
+      84,
+      0.3,
+      168
+    ]
+  },
+  "navigation": {
+    "origin": [
+      -32,
+      0,
+      -138
+    ],
+    "cell": 0.75,
+    "width": 112,
+    "height": 224
+  },
+  "campMinimum": [
+    -25,
+    -30
+  ],
+  "campMaximum": [
+    45,
+    24
+  ],
+  "spawnPoints": [
+    [
+      -20,
+      0,
+      -114
+    ],
+    [
+      -5,
+      0,
+      -124
+    ],
+    [
+      10,
+      0,
+      -111
+    ],
+    [
+      26,
+      0,
+      -122
+    ],
+    [
+      40,
+      0,
+      -116
+    ]
+  ],
+  "items": [
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": -29,
+      "y": -0.025,
+      "z": 28.0,
+      "yaw": 181.278,
+      "scale": [
+        1.0575,
+        1.3194,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Rear boundary",
+      "x": -20,
+      "y": -0.025,
+      "z": 28.466,
+      "yaw": 182.675,
+      "scale": [
+        1.3668,
+        1.5699,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": -11,
+      "y": -0.025,
+      "z": 28.65,
+      "yaw": 179.689,
+      "scale": [
+        1.0575,
+        1.2004,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": -2,
+      "y": -0.025,
+      "z": 28.439,
+      "yaw": 179.537,
+      "scale": [
+        1.0575,
+        1.4803,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": 7,
+      "y": -0.025,
+      "z": 27.962,
+      "yaw": 181.867,
+      "scale": [
+        1.0575,
+        1.513,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Rear boundary",
+      "x": 16,
+      "y": -0.025,
+      "z": 27.508,
+      "yaw": 177.41,
+      "scale": [
+        1.3668,
+        1.4009,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": 25,
+      "y": -0.025,
+      "z": 27.352,
+      "yaw": 180.054,
+      "scale": [
+        1.0575,
+        1.4439,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": 34,
+      "y": -0.025,
+      "z": 27.59,
+      "yaw": 182.114,
+      "scale": [
+        1.0575,
+        1.3298,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Rear boundary",
+      "x": 43,
+      "y": -0.025,
+      "z": 28.076,
+      "yaw": 177.055,
+      "scale": [
+        1.3668,
+        1.7139,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear boundary",
+      "x": 52,
+      "y": -0.025,
+      "z": 28.516,
+      "yaw": 179.776,
+      "scale": [
+        1.0575,
+        1.5137,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -30.0,
+      "y": -0.025,
+      "z": 19,
+      "yaw": 89.47,
+      "scale": [
+        1.0575,
+        1.1223,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Left boundary",
+      "x": -29.605,
+      "y": -0.025,
+      "z": 10,
+      "yaw": 89.866,
+      "scale": [
+        1.3668,
+        1.4974,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.348,
+      "y": -0.025,
+      "z": 1,
+      "yaw": 88.489,
+      "scale": [
+        1.0575,
+        1.2257,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left boundary",
+      "x": -29.318,
+      "y": -0.025,
+      "z": -8,
+      "yaw": 91.17,
+      "scale": [
+        0.8217,
+        1.5134,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.527,
+      "y": -0.025,
+      "z": -17,
+      "yaw": 88.15,
+      "scale": [
+        1.0575,
+        1.1044,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.901,
+      "y": -0.025,
+      "z": -26,
+      "yaw": 92.076,
+      "scale": [
+        1.0575,
+        1.4739,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Left boundary",
+      "x": -30.31,
+      "y": -0.025,
+      "z": -35,
+      "yaw": 91.103,
+      "scale": [
+        1.3668,
+        1.5617,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left boundary",
+      "x": -30.61,
+      "y": -0.025,
+      "z": -44,
+      "yaw": 88.667,
+      "scale": [
+        0.8217,
+        1.5352,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -30.697,
+      "y": -0.025,
+      "z": -53,
+      "yaw": 89.862,
+      "scale": [
+        1.0575,
+        1.0951,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -30.541,
+      "y": -0.025,
+      "z": -62,
+      "yaw": 92.041,
+      "scale": [
+        1.0575,
+        1.2042,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -30.196,
+      "y": -0.025,
+      "z": -71,
+      "yaw": 90.734,
+      "scale": [
+        1.0575,
+        1.3066,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Left boundary",
+      "x": -29.782,
+      "y": -0.025,
+      "z": -80,
+      "yaw": 89.068,
+      "scale": [
+        1.3668,
+        1.5204,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.444,
+      "y": -0.025,
+      "z": -89,
+      "yaw": 90.873,
+      "scale": [
+        1.0575,
+        1.2028,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.301,
+      "y": -0.025,
+      "z": -98,
+      "yaw": 89.781,
+      "scale": [
+        1.0575,
+        1.2852,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -29.402,
+      "y": -0.025,
+      "z": -107,
+      "yaw": 89.409,
+      "scale": [
+        1.0575,
+        1.3597,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left boundary",
+      "x": -29.712,
+      "y": -0.025,
+      "z": -116,
+      "yaw": 90.883,
+      "scale": [
+        0.8217,
+        1.721,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Left boundary",
+      "x": -30.122,
+      "y": -0.025,
+      "z": -125,
+      "yaw": 88.449,
+      "scale": [
+        1.3668,
+        1.2912,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left boundary",
+      "x": -30.49,
+      "y": -0.025,
+      "z": -134,
+      "yaw": 91.733,
+      "scale": [
+        1.0575,
+        1.1209,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left boundary"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right boundary",
+      "x": 50.0,
+      "y": -0.025,
+      "z": 19,
+      "yaw": -91.623,
+      "scale": [
+        1.1649,
+        1.2377,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Right boundary",
+      "x": 50.395,
+      "y": -0.025,
+      "z": 10,
+      "yaw": -91.87,
+      "scale": [
+        1.3668,
+        0.9085,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 50.652,
+      "y": -0.025,
+      "z": 1,
+      "yaw": -88.01,
+      "scale": [
+        1.0575,
+        1.0764,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right boundary",
+      "x": 50.682,
+      "y": -0.025,
+      "z": -8,
+      "yaw": -89.243,
+      "scale": [
+        1.1649,
+        0.9877,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 50.473,
+      "y": -0.025,
+      "z": -17,
+      "yaw": -89.99,
+      "scale": [
+        1.0575,
+        1.082,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 50.099,
+      "y": -0.025,
+      "z": -26,
+      "yaw": -91.354,
+      "scale": [
+        1.0575,
+        0.8291,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Right boundary",
+      "x": 49.69,
+      "y": -0.025,
+      "z": -35,
+      "yaw": -90.251,
+      "scale": [
+        1.3668,
+        0.8486,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right boundary",
+      "x": 49.39,
+      "y": -0.025,
+      "z": -44,
+      "yaw": -92.413,
+      "scale": [
+        0.8217,
+        1.4762,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 49.303,
+      "y": -0.025,
+      "z": -53,
+      "yaw": -87.54,
+      "scale": [
+        1.0575,
+        0.9556,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right boundary",
+      "x": 49.459,
+      "y": -0.025,
+      "z": -62,
+      "yaw": -92.158,
+      "scale": [
+        1.1649,
+        1.0592,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 49.804,
+      "y": -0.025,
+      "z": -71,
+      "yaw": -91.737,
+      "scale": [
+        1.0575,
+        1.1111,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Right boundary",
+      "x": 50.218,
+      "y": -0.025,
+      "z": -80,
+      "yaw": -88.881,
+      "scale": [
+        1.3668,
+        1.04,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right boundary",
+      "x": 50.556,
+      "y": -0.025,
+      "z": -89,
+      "yaw": -90.686,
+      "scale": [
+        1.1649,
+        1.2449,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 50.699,
+      "y": -0.025,
+      "z": -98,
+      "yaw": -92.353,
+      "scale": [
+        1.0575,
+        1.0413,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 50.598,
+      "y": -0.025,
+      "z": -107,
+      "yaw": -87.506,
+      "scale": [
+        1.0575,
+        0.8955,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right boundary",
+      "x": 50.288,
+      "y": -0.025,
+      "z": -116,
+      "yaw": -91.442,
+      "scale": [
+        1.1649,
+        1.2699,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R13",
+      "name": "R13 Right boundary",
+      "x": 49.878,
+      "y": -0.025,
+      "z": -125,
+      "yaw": -87.672,
+      "scale": [
+        1.3668,
+        0.9139,
+        1.1444
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right boundary",
+      "x": 49.51,
+      "y": -0.025,
+      "z": -134,
+      "yaw": -90.201,
+      "scale": [
+        1.0575,
+        1.1532,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right boundary"
+    },
+    {
+      "id": "R04",
+      "name": "R04 Boundary corners",
+      "x": -29,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 45,
+      "scale": [
+        1.05,
+        1.15,
+        1
+      ],
+      "collision": "parts",
+      "group": "Boundary corners"
+    },
+    {
+      "id": "R04",
+      "name": "R04 Boundary corners",
+      "x": 49,
+      "y": -0.025,
+      "z": 24,
+      "yaw": -45,
+      "scale": [
+        1.05,
+        1.15,
+        1
+      ],
+      "collision": "parts",
+      "group": "Boundary corners"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -36.742,
+      "y": -0.025,
+      "z": 23.0,
+      "yaw": 94.509,
+      "scale": [
+        1.1649,
+        2.2867,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": 21.0,
+      "yaw": 97.467,
+      "scale": [
+        0.8217,
+        0.4611,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.229,
+      "y": -0.025,
+      "z": 13.6,
+      "yaw": 93.439,
+      "scale": [
+        1.0575,
+        2.0297,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.03,
+      "y": -0.025,
+      "z": 4.2,
+      "yaw": 82.683,
+      "scale": [
+        1.0575,
+        2.1445,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": 2.2,
+      "yaw": 89.085,
+      "scale": [
+        0.8217,
+        0.5875,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -36.44,
+      "y": -0.025,
+      "z": -5.2,
+      "yaw": 93.15,
+      "scale": [
+        1.1649,
+        2.6696,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.656,
+      "y": -0.025,
+      "z": -14.6,
+      "yaw": 92.656,
+      "scale": [
+        1.0575,
+        2.5117,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -16.6,
+      "yaw": 100.927,
+      "scale": [
+        0.8217,
+        0.4932,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -35.96,
+      "y": -0.025,
+      "z": -24.0,
+      "yaw": 82.815,
+      "scale": [
+        1.0575,
+        2.119,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -35.462,
+      "y": -0.025,
+      "z": -33.4,
+      "yaw": 83.797,
+      "scale": [
+        1.1649,
+        2.8072,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -35.4,
+      "yaw": 87.059,
+      "scale": [
+        0.8217,
+        0.5883,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.03,
+      "y": -0.025,
+      "z": -42.8,
+      "yaw": 91.607,
+      "scale": [
+        1.0575,
+        1.9707,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.046,
+      "y": -0.025,
+      "z": -52.2,
+      "yaw": 93.488,
+      "scale": [
+        1.0575,
+        1.9114,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -54.2,
+      "yaw": 90.427,
+      "scale": [
+        0.8217,
+        0.6015,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -36.972,
+      "y": -0.025,
+      "z": -61.6,
+      "yaw": 96.751,
+      "scale": [
+        1.1649,
+        2.622,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.169,
+      "y": -0.025,
+      "z": -71.0,
+      "yaw": 88.474,
+      "scale": [
+        1.0575,
+        2.1803,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -73.0,
+      "yaw": 91.014,
+      "scale": [
+        0.8217,
+        0.6099,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.954,
+      "y": -0.025,
+      "z": -80.4,
+      "yaw": 95.89,
+      "scale": [
+        1.0575,
+        2.3352,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -35.636,
+      "y": -0.025,
+      "z": -89.8,
+      "yaw": 93.019,
+      "scale": [
+        1.1649,
+        2.961,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -91.8,
+      "yaw": 80.66,
+      "scale": [
+        0.8217,
+        0.5022,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -35.752,
+      "y": -0.025,
+      "z": -99.2,
+      "yaw": 84.158,
+      "scale": [
+        1.0575,
+        2.6844,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -36.75,
+      "y": -0.025,
+      "z": -108.6,
+      "yaw": 90.336,
+      "scale": [
+        1.0575,
+        2.7338,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -110.6,
+      "yaw": 83.573,
+      "scale": [
+        0.8217,
+        0.6936,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Left upper strata",
+      "x": -36.694,
+      "y": -0.025,
+      "z": -118.0,
+      "yaw": 87.455,
+      "scale": [
+        1.1649,
+        2.4762,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Left upper strata",
+      "x": -35.577,
+      "y": -0.025,
+      "z": -127.4,
+      "yaw": 86.906,
+      "scale": [
+        1.0575,
+        2.6592,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Left upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Left foothills",
+      "x": -27,
+      "y": -0.025,
+      "z": -129.4,
+      "yaw": 98.12,
+      "scale": [
+        0.8217,
+        0.5414,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Left foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 55.411,
+      "y": -0.025,
+      "z": 23.0,
+      "yaw": -85.129,
+      "scale": [
+        1.1649,
+        1.9604,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": 21.0,
+      "yaw": -93.691,
+      "scale": [
+        0.8217,
+        0.437,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 56.528,
+      "y": -0.025,
+      "z": 13.6,
+      "yaw": -92.575,
+      "scale": [
+        1.0575,
+        1.9667,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.19,
+      "y": -0.025,
+      "z": 4.2,
+      "yaw": -83.417,
+      "scale": [
+        1.0575,
+        2.03,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": 2.2,
+      "yaw": -98.398,
+      "scale": [
+        0.8217,
+        0.6466,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 55.178,
+      "y": -0.025,
+      "z": -5.2,
+      "yaw": -83.156,
+      "scale": [
+        1.1649,
+        2.5452,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.794,
+      "y": -0.025,
+      "z": -14.6,
+      "yaw": -88.344,
+      "scale": [
+        1.0575,
+        1.5832,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -16.6,
+      "yaw": -82.559,
+      "scale": [
+        0.8217,
+        0.4644,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.951,
+      "y": -0.025,
+      "z": -24.0,
+      "yaw": -88.604,
+      "scale": [
+        1.0575,
+        1.9445,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 55.337,
+      "y": -0.025,
+      "z": -33.4,
+      "yaw": -90.134,
+      "scale": [
+        1.1649,
+        1.6303,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -35.4,
+      "yaw": -100.239,
+      "scale": [
+        0.8217,
+        0.5148,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 56.806,
+      "y": -0.025,
+      "z": -42.8,
+      "yaw": -97.297,
+      "scale": [
+        1.0575,
+        1.5905,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 56.448,
+      "y": -0.025,
+      "z": -52.2,
+      "yaw": -84.559,
+      "scale": [
+        1.0575,
+        2.0142,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -54.2,
+      "yaw": -96.465,
+      "scale": [
+        0.8217,
+        0.4752,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 56.828,
+      "y": -0.025,
+      "z": -61.6,
+      "yaw": -91.977,
+      "scale": [
+        1.1649,
+        1.6845,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.003,
+      "y": -0.025,
+      "z": -71.0,
+      "yaw": -92.46,
+      "scale": [
+        1.0575,
+        1.3886,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -73.0,
+      "yaw": -82.959,
+      "scale": [
+        0.8217,
+        0.7009,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 56.881,
+      "y": -0.025,
+      "z": -80.4,
+      "yaw": -89.49,
+      "scale": [
+        1.0575,
+        2.2411,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 55.595,
+      "y": -0.025,
+      "z": -89.8,
+      "yaw": -93.505,
+      "scale": [
+        1.1649,
+        2.1848,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -91.8,
+      "yaw": -96.948,
+      "scale": [
+        0.8217,
+        0.6395,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.723,
+      "y": -0.025,
+      "z": -99.2,
+      "yaw": -81.123,
+      "scale": [
+        1.0575,
+        2.123,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 56.261,
+      "y": -0.025,
+      "z": -108.6,
+      "yaw": -86.639,
+      "scale": [
+        1.0575,
+        1.7735,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -110.6,
+      "yaw": -83.997,
+      "scale": [
+        0.8217,
+        0.6989,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Right upper strata",
+      "x": 56.448,
+      "y": -0.025,
+      "z": -118.0,
+      "yaw": -88.954,
+      "scale": [
+        1.1649,
+        2.4399,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Right upper strata",
+      "x": 55.683,
+      "y": -0.025,
+      "z": -127.4,
+      "yaw": -81.916,
+      "scale": [
+        1.0575,
+        1.7645,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Right upper strata"
+    },
+    {
+      "id": "R02",
+      "name": "R02 Right foothills",
+      "x": 47,
+      "y": -0.025,
+      "z": -129.4,
+      "yaw": -101.521,
+      "scale": [
+        0.8217,
+        0.5559,
+        1.2058
+      ],
+      "collision": "wall",
+      "group": "Right foothills"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Rear upper strata",
+      "x": -34,
+      "y": -0.025,
+      "z": 35.045,
+      "yaw": 187.45,
+      "scale": [
+        1.1649,
+        2.398,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": -24,
+      "y": -0.025,
+      "z": 34.55,
+      "yaw": 180.025,
+      "scale": [
+        1.0575,
+        2.6503,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": -14,
+      "y": -0.025,
+      "z": 34.546,
+      "yaw": 176.239,
+      "scale": [
+        1.0575,
+        2.1864,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Rear upper strata",
+      "x": -4,
+      "y": -0.025,
+      "z": 34.834,
+      "yaw": 177.037,
+      "scale": [
+        1.1649,
+        2.3527,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": 6,
+      "y": -0.025,
+      "z": 35.71,
+      "yaw": 182.978,
+      "scale": [
+        1.0575,
+        2.5361,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": 16,
+      "y": -0.025,
+      "z": 34.236,
+      "yaw": 178.673,
+      "scale": [
+        1.0575,
+        2.2725,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Rear upper strata",
+      "x": 26,
+      "y": -0.025,
+      "z": 35.01,
+      "yaw": 181.86,
+      "scale": [
+        1.1649,
+        2.4709,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": 36,
+      "y": -0.025,
+      "z": 35.182,
+      "yaw": 180.78,
+      "scale": [
+        1.0575,
+        1.9128,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R01",
+      "name": "R01 Rear upper strata",
+      "x": 46,
+      "y": -0.025,
+      "z": 35.082,
+      "yaw": 176.469,
+      "scale": [
+        1.0575,
+        2.5107,
+        1.0994
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "R03",
+      "name": "R03 Rear upper strata",
+      "x": 56,
+      "y": -0.025,
+      "z": 34.61,
+      "yaw": 180.501,
+      "scale": [
+        1.1649,
+        2.2465,
+        1.4551
+      ],
+      "collision": "wall",
+      "group": "Rear upper strata"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -25.0,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 344.897,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -20.9,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 110.442,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -16.8,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 252.76,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -12.7,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 65.922,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -8.6,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 147.372,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -4.5,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 153.543,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": -0.4,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 132.776,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 3.7,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 188.197,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 7.8,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 85.558,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 11.9,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 266.297,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 16.0,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 97.934,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 20.1,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 75.168,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 24.2,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 239.855,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 28.3,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 319.333,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 32.4,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 100.664,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 36.5,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 93.867,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 40.6,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 294.838,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Rear foliage",
+      "x": 44.7,
+      "y": -0.025,
+      "z": 24,
+      "yaw": 354.183,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Rear foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.324,
+      "z": 19.0,
+      "yaw": 336.575,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.267,
+      "z": 10.2,
+      "yaw": 118.713,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.599,
+      "z": 1.4,
+      "yaw": 336.122,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.938,
+      "z": -7.4,
+      "yaw": 121.862,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.084,
+      "z": -16.2,
+      "yaw": 112.116,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.67,
+      "z": -25.0,
+      "yaw": 101.786,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 3.128,
+      "z": -33.8,
+      "yaw": 105.83,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.94,
+      "z": -42.6,
+      "yaw": 108.71,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 3.188,
+      "z": -51.4,
+      "yaw": 119.816,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.925,
+      "z": -60.2,
+      "yaw": 117.179,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.094,
+      "z": -69.0,
+      "yaw": 57.183,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 1.874,
+      "z": -77.8,
+      "yaw": 288.706,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.159,
+      "z": -86.6,
+      "yaw": 141.863,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 3.162,
+      "z": -95.4,
+      "yaw": 327.058,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.854,
+      "z": -104.2,
+      "yaw": 192.618,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.18,
+      "z": -113.0,
+      "yaw": 38.388,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 3.143,
+      "z": -121.8,
+      "yaw": 36.161,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": -28,
+      "y": 2.74,
+      "z": -130.6,
+      "yaw": 288.624,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.533,
+      "z": 19.0,
+      "yaw": 251.048,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.872,
+      "z": 10.2,
+      "yaw": 227.432,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 3.176,
+      "z": 1.4,
+      "yaw": 95.392,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.968,
+      "z": -7.4,
+      "yaw": 299.946,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.598,
+      "z": -16.2,
+      "yaw": 231.164,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.188,
+      "z": -25.0,
+      "yaw": 336.442,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.663,
+      "z": -33.8,
+      "yaw": 293.2,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 3.096,
+      "z": -42.6,
+      "yaw": 311.611,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.044,
+      "z": -51.4,
+      "yaw": 259.522,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.608,
+      "z": -60.2,
+      "yaw": 39.444,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.939,
+      "z": -69.0,
+      "yaw": 28.662,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.538,
+      "z": -77.8,
+      "yaw": 159.522,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.073,
+      "z": -86.6,
+      "yaw": 75.92,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.732,
+      "z": -95.4,
+      "yaw": 159.543,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.13,
+      "z": -104.2,
+      "yaw": 293.232,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.671,
+      "z": -113.0,
+      "yaw": 303.936,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 1.596,
+      "z": -121.8,
+      "yaw": 304.334,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cliff ledge foliage",
+      "x": 48,
+      "y": 2.736,
+      "z": -130.6,
+      "yaw": 277.103,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Cliff ledge foliage"
+    },
+    {
+      "id": "R09",
+      "name": "R09 cover 1",
+      "x": 26,
+      "y": -0.025,
+      "z": -17,
+      "yaw": -1.587,
+      "scale": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 28.374,
+      "y": -0.025,
+      "z": -16.807,
+      "yaw": 216.254,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 23.625,
+      "y": -0.025,
+      "z": -15.84,
+      "yaw": 121.498,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R14",
+      "name": "R14 cover 2",
+      "x": 41,
+      "y": -0.025,
+      "z": -4,
+      "yaw": 111.227,
+      "scale": [
+        1.25,
+        1.25,
+        1.25
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 38.563,
+      "y": -0.025,
+      "z": -3.043,
+      "yaw": 199.058,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 39.095,
+      "y": -0.025,
+      "z": -2.86,
+      "yaw": 238.233,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R10",
+      "name": "R10 cover 3",
+      "x": -15,
+      "y": -0.025,
+      "z": -38,
+      "yaw": -64.33,
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -17.224,
+      "y": -0.025,
+      "z": -37.347,
+      "yaw": 9.725,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -16.578,
+      "y": -0.025,
+      "z": -38.16,
+      "yaw": 357.769,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R09",
+      "name": "R09 cover 4",
+      "x": 26,
+      "y": -0.025,
+      "z": -44,
+      "yaw": -112.377,
+      "scale": [
+        1.25,
+        1.25,
+        1.25
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 28.055,
+      "y": -0.025,
+      "z": -45.321,
+      "yaw": 52.007,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 23.836,
+      "y": -0.025,
+      "z": -42.793,
+      "yaw": 154.862,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R08",
+      "name": "R08 cover 5",
+      "x": 4,
+      "y": -0.025,
+      "z": -58,
+      "yaw": 105.517,
+      "scale": [
+        1.25,
+        1.25,
+        1.25
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 1.656,
+      "y": -0.025,
+      "z": -58.32,
+      "yaw": 160.289,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 2.182,
+      "y": -0.025,
+      "z": -58.279,
+      "yaw": 107.432,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R10",
+      "name": "R10 cover 6",
+      "x": 36,
+      "y": -0.025,
+      "z": -67,
+      "yaw": 19.102,
+      "scale": [
+        1.35,
+        1.35,
+        1.35
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 34.209,
+      "y": -0.025,
+      "z": -66.797,
+      "yaw": 209.902,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 34.201,
+      "y": -0.025,
+      "z": -65.796,
+      "yaw": 335.928,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R09",
+      "name": "R09 cover 7",
+      "x": -18,
+      "y": -0.025,
+      "z": -78,
+      "yaw": 107.884,
+      "scale": [
+        1.35,
+        1.35,
+        1.35
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -15.758,
+      "y": -0.025,
+      "z": -78.747,
+      "yaw": 198.113,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -15.799,
+      "y": -0.025,
+      "z": -77.554,
+      "yaw": 22.16,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R08",
+      "name": "R08 cover 8",
+      "x": 18,
+      "y": -0.025,
+      "z": -92,
+      "yaw": 28.678,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 20.538,
+      "y": -0.025,
+      "z": -92.391,
+      "yaw": 305.641,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 16.052,
+      "y": -0.025,
+      "z": -92.902,
+      "yaw": 269.759,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R14",
+      "name": "R14 cover 9",
+      "x": 38,
+      "y": -0.025,
+      "z": -103,
+      "yaw": 18.994,
+      "scale": [
+        1.1,
+        1.1,
+        1.1
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 36.154,
+      "y": -0.025,
+      "z": -103.922,
+      "yaw": 268.217,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 39.979,
+      "y": -0.025,
+      "z": -102.951,
+      "yaw": 292.312,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R10",
+      "name": "R10 cover 10",
+      "x": -14,
+      "y": -0.025,
+      "z": -115,
+      "yaw": -107.247,
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -15.569,
+      "y": -0.025,
+      "z": -115.977,
+      "yaw": 213.377,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": -11.985,
+      "y": -0.025,
+      "z": -115.443,
+      "yaw": 174.927,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "R09",
+      "name": "R09 cover 11",
+      "x": 19,
+      "y": -0.025,
+      "z": -126,
+      "yaw": -94.858,
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "collision": "parts",
+      "group": "Arena cover"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 17.354,
+      "y": -0.025,
+      "z": -125.302,
+      "yaw": 151.645,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Cover foliage",
+      "x": 16.815,
+      "y": -0.025,
+      "z": -124.778,
+      "yaw": 139.141,
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collision": "none",
+      "group": "Cover foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.406,
+      "y": -0.025,
+      "z": 24.0,
+      "yaw": 221.731,
+      "scale": [
+        1.671,
+        1.671,
+        1.671
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.274,
+      "y": -0.025,
+      "z": 22.5,
+      "yaw": 302.213,
+      "scale": [
+        0.8193,
+        0.8193,
+        0.8193
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -25.935,
+      "y": -0.025,
+      "z": 22.0,
+      "yaw": 300.445,
+      "scale": [
+        1.1753,
+        1.1753,
+        1.1753
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.779,
+      "y": -0.025,
+      "z": 18.5,
+      "yaw": 112.778,
+      "scale": [
+        1.7734,
+        1.7734,
+        1.7734
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.583,
+      "y": -0.025,
+      "z": 13.0,
+      "yaw": 129.3,
+      "scale": [
+        1.574,
+        1.574,
+        1.574
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.286,
+      "y": -0.025,
+      "z": 11.0,
+      "yaw": 112.983,
+      "scale": [
+        0.9172,
+        0.9172,
+        0.9172
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.661,
+      "y": -0.025,
+      "z": 7.5,
+      "yaw": 138.004,
+      "scale": [
+        1.8184,
+        1.8184,
+        1.8184
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.607,
+      "y": -0.025,
+      "z": 6.0,
+      "yaw": 218.21,
+      "scale": [
+        0.8799,
+        0.8799,
+        0.8799
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.86,
+      "y": -0.025,
+      "z": 2.0,
+      "yaw": 335.445,
+      "scale": [
+        1.9119,
+        1.9119,
+        1.9119
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -25.887,
+      "y": -0.025,
+      "z": 0.0,
+      "yaw": 120.177,
+      "scale": [
+        0.969,
+        0.969,
+        0.969
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.372,
+      "y": -0.025,
+      "z": -3.5,
+      "yaw": 118.25,
+      "scale": [
+        1.9989,
+        1.9989,
+        1.9989
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.603,
+      "y": -0.025,
+      "z": -9.0,
+      "yaw": 359.712,
+      "scale": [
+        1.6331,
+        1.6331,
+        1.6331
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.358,
+      "y": -0.025,
+      "z": -10.5,
+      "yaw": 119.569,
+      "scale": [
+        0.8083,
+        0.8083,
+        0.8083
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.534,
+      "y": -0.025,
+      "z": -11.0,
+      "yaw": 147.206,
+      "scale": [
+        0.9526,
+        0.9526,
+        0.9526
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.562,
+      "y": -0.025,
+      "z": -14.5,
+      "yaw": 237.491,
+      "scale": [
+        2.0343,
+        2.0343,
+        2.0343
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.135,
+      "y": -0.025,
+      "z": -20.0,
+      "yaw": 20.263,
+      "scale": [
+        2.202,
+        2.202,
+        2.202
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -25.836,
+      "y": -0.025,
+      "z": -22.0,
+      "yaw": 23.905,
+      "scale": [
+        1.3282,
+        1.3282,
+        1.3282
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.71,
+      "y": -0.025,
+      "z": -25.5,
+      "yaw": 282.621,
+      "scale": [
+        2.3486,
+        2.3486,
+        2.3486
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.46,
+      "y": -0.025,
+      "z": -27.0,
+      "yaw": 288.93,
+      "scale": [
+        1.1661,
+        1.1661,
+        1.1661
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.314,
+      "y": -0.025,
+      "z": -31.0,
+      "yaw": 259.941,
+      "scale": [
+        2.2182,
+        2.2182,
+        2.2182
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.098,
+      "y": -0.025,
+      "z": -33.0,
+      "yaw": 75.526,
+      "scale": [
+        0.9292,
+        0.9292,
+        0.9292
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.192,
+      "y": -0.025,
+      "z": -36.5,
+      "yaw": 242.364,
+      "scale": [
+        2.3886,
+        2.3886,
+        2.3886
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.157,
+      "y": -0.025,
+      "z": -42.0,
+      "yaw": 167.804,
+      "scale": [
+        2.1492,
+        2.1492,
+        2.1492
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.156,
+      "y": -0.025,
+      "z": -43.5,
+      "yaw": 277.688,
+      "scale": [
+        1.1532,
+        1.1532,
+        1.1532
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.891,
+      "y": -0.025,
+      "z": -44.0,
+      "yaw": 128.447,
+      "scale": [
+        0.8693,
+        0.8693,
+        0.8693
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.578,
+      "y": -0.025,
+      "z": -47.5,
+      "yaw": 310.011,
+      "scale": [
+        2.2685,
+        2.2685,
+        2.2685
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -25.906,
+      "y": -0.025,
+      "z": -53.0,
+      "yaw": 252.253,
+      "scale": [
+        1.604,
+        1.604,
+        1.604
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.635,
+      "y": -0.025,
+      "z": -55.0,
+      "yaw": 231.705,
+      "scale": [
+        0.998,
+        0.998,
+        0.998
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.731,
+      "y": -0.025,
+      "z": -58.5,
+      "yaw": 292.577,
+      "scale": [
+        2.0904,
+        2.0904,
+        2.0904
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.381,
+      "y": -0.025,
+      "z": -60.0,
+      "yaw": 255.962,
+      "scale": [
+        1.2362,
+        1.2362,
+        1.2362
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.138,
+      "y": -0.025,
+      "z": -64.0,
+      "yaw": 21.551,
+      "scale": [
+        2.3903,
+        2.3903,
+        2.3903
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -25.943,
+      "y": -0.025,
+      "z": -66.0,
+      "yaw": 207.69,
+      "scale": [
+        1.3615,
+        1.3615,
+        1.3615
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -25.961,
+      "y": -0.025,
+      "z": -69.5,
+      "yaw": 359.45,
+      "scale": [
+        1.6739,
+        1.6739,
+        1.6739
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.147,
+      "y": -0.025,
+      "z": -75.0,
+      "yaw": 276.025,
+      "scale": [
+        2.3601,
+        2.3601,
+        2.3601
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.25,
+      "y": -0.025,
+      "z": -76.5,
+      "yaw": 268.818,
+      "scale": [
+        1.1121,
+        1.1121,
+        1.1121
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.136,
+      "y": -0.025,
+      "z": -77.0,
+      "yaw": 69.549,
+      "scale": [
+        1.1684,
+        1.1684,
+        1.1684
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.279,
+      "y": -0.025,
+      "z": -80.5,
+      "yaw": 342.95,
+      "scale": [
+        1.7934,
+        1.7934,
+        1.7934
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.121,
+      "y": -0.025,
+      "z": -86.0,
+      "yaw": 38.67,
+      "scale": [
+        2.3943,
+        2.3943,
+        2.3943
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.128,
+      "y": -0.025,
+      "z": -88.0,
+      "yaw": 295.215,
+      "scale": [
+        1.1892,
+        1.1892,
+        1.1892
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.092,
+      "y": -0.025,
+      "z": -91.5,
+      "yaw": 178.778,
+      "scale": [
+        1.6952,
+        1.6952,
+        1.6952
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.447,
+      "y": -0.025,
+      "z": -93.0,
+      "yaw": 235.765,
+      "scale": [
+        0.9818,
+        0.9818,
+        0.9818
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.618,
+      "y": -0.025,
+      "z": -97.0,
+      "yaw": 150.188,
+      "scale": [
+        1.9723,
+        1.9723,
+        1.9723
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.564,
+      "y": -0.025,
+      "z": -99.0,
+      "yaw": 149.921,
+      "scale": [
+        1.2413,
+        1.2413,
+        1.2413
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.555,
+      "y": -0.025,
+      "z": -102.5,
+      "yaw": 249.915,
+      "scale": [
+        2.1002,
+        2.1002,
+        2.1002
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.507,
+      "y": -0.025,
+      "z": -108.0,
+      "yaw": 313.354,
+      "scale": [
+        2.3555,
+        2.3555,
+        2.3555
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.122,
+      "y": -0.025,
+      "z": -109.5,
+      "yaw": 128.783,
+      "scale": [
+        0.7821,
+        0.7821,
+        0.7821
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.421,
+      "y": -0.025,
+      "z": -110.0,
+      "yaw": 15.552,
+      "scale": [
+        1.1261,
+        1.1261,
+        1.1261
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.648,
+      "y": -0.025,
+      "z": -113.5,
+      "yaw": 178.133,
+      "scale": [
+        1.5972,
+        1.5972,
+        1.5972
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.699,
+      "y": -0.025,
+      "z": -119.0,
+      "yaw": 158.963,
+      "scale": [
+        2.2611,
+        2.2611,
+        2.2611
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": -26.338,
+      "y": -0.025,
+      "z": -121.0,
+      "yaw": 295.726,
+      "scale": [
+        1.3633,
+        1.3633,
+        1.3633
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": -26.536,
+      "y": -0.025,
+      "z": -124.5,
+      "yaw": 200.818,
+      "scale": [
+        1.8414,
+        1.8414,
+        1.8414
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": -26.453,
+      "y": -0.025,
+      "z": -126.0,
+      "yaw": 222.454,
+      "scale": [
+        1.0843,
+        1.0843,
+        1.0843
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.348,
+      "y": -0.025,
+      "z": 24.0,
+      "yaw": 333.987,
+      "scale": [
+        1.9545,
+        1.9545,
+        1.9545
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.076,
+      "y": -0.025,
+      "z": 22.5,
+      "yaw": 318.369,
+      "scale": [
+        1.309,
+        1.309,
+        1.309
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.51,
+      "y": -0.025,
+      "z": 22.0,
+      "yaw": 239.542,
+      "scale": [
+        1.3583,
+        1.3583,
+        1.3583
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.492,
+      "y": -0.025,
+      "z": 18.5,
+      "yaw": 312.973,
+      "scale": [
+        2.0956,
+        2.0956,
+        2.0956
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.795,
+      "y": -0.025,
+      "z": 13.0,
+      "yaw": 307.616,
+      "scale": [
+        2.1534,
+        2.1534,
+        2.1534
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.854,
+      "y": -0.025,
+      "z": 11.0,
+      "yaw": 308.979,
+      "scale": [
+        1.1098,
+        1.1098,
+        1.1098
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.089,
+      "y": -0.025,
+      "z": 7.5,
+      "yaw": 235.413,
+      "scale": [
+        1.7556,
+        1.7556,
+        1.7556
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.476,
+      "y": -0.025,
+      "z": 6.0,
+      "yaw": 50.423,
+      "scale": [
+        1.1012,
+        1.1012,
+        1.1012
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.25,
+      "y": -0.025,
+      "z": 2.0,
+      "yaw": 9.651,
+      "scale": [
+        1.7917,
+        1.7917,
+        1.7917
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 45.946,
+      "y": -0.025,
+      "z": 0.0,
+      "yaw": 167.87,
+      "scale": [
+        0.8959,
+        0.8959,
+        0.8959
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.756,
+      "y": -0.025,
+      "z": -3.5,
+      "yaw": 228.685,
+      "scale": [
+        1.5611,
+        1.5611,
+        1.5611
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.666,
+      "y": -0.025,
+      "z": -9.0,
+      "yaw": 106.784,
+      "scale": [
+        2.3245,
+        2.3245,
+        2.3245
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.052,
+      "y": -0.025,
+      "z": -10.5,
+      "yaw": 274.653,
+      "scale": [
+        1.2626,
+        1.2626,
+        1.2626
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 45.828,
+      "y": -0.025,
+      "z": -11.0,
+      "yaw": 224.745,
+      "scale": [
+        1.3081,
+        1.3081,
+        1.3081
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.302,
+      "y": -0.025,
+      "z": -14.5,
+      "yaw": 201.873,
+      "scale": [
+        1.9771,
+        1.9771,
+        1.9771
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.19,
+      "y": -0.025,
+      "z": -20.0,
+      "yaw": 127.252,
+      "scale": [
+        2.0873,
+        2.0873,
+        2.0873
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 47.002,
+      "y": -0.025,
+      "z": -22.0,
+      "yaw": 312.647,
+      "scale": [
+        1.3737,
+        1.3737,
+        1.3737
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.358,
+      "y": -0.025,
+      "z": -25.5,
+      "yaw": 153.099,
+      "scale": [
+        2.0189,
+        2.0189,
+        2.0189
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.479,
+      "y": -0.025,
+      "z": -27.0,
+      "yaw": 299.671,
+      "scale": [
+        1.3867,
+        1.3867,
+        1.3867
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.637,
+      "y": -0.025,
+      "z": -31.0,
+      "yaw": 111.201,
+      "scale": [
+        1.6909,
+        1.6909,
+        1.6909
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.986,
+      "y": -0.025,
+      "z": -33.0,
+      "yaw": 75.551,
+      "scale": [
+        1.2467,
+        1.2467,
+        1.2467
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.194,
+      "y": -0.025,
+      "z": -36.5,
+      "yaw": 76.658,
+      "scale": [
+        1.9237,
+        1.9237,
+        1.9237
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.894,
+      "y": -0.025,
+      "z": -42.0,
+      "yaw": 103.813,
+      "scale": [
+        2.0912,
+        2.0912,
+        2.0912
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.573,
+      "y": -0.025,
+      "z": -43.5,
+      "yaw": 307.292,
+      "scale": [
+        1.2815,
+        1.2815,
+        1.2815
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.704,
+      "y": -0.025,
+      "z": -44.0,
+      "yaw": 23.095,
+      "scale": [
+        1.2577,
+        1.2577,
+        1.2577
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.177,
+      "y": -0.025,
+      "z": -47.5,
+      "yaw": 259.694,
+      "scale": [
+        1.6587,
+        1.6587,
+        1.6587
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.562,
+      "y": -0.025,
+      "z": -53.0,
+      "yaw": 302.282,
+      "scale": [
+        1.7811,
+        1.7811,
+        1.7811
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.304,
+      "y": -0.025,
+      "z": -55.0,
+      "yaw": 276.244,
+      "scale": [
+        0.8552,
+        0.8552,
+        0.8552
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.137,
+      "y": -0.025,
+      "z": -58.5,
+      "yaw": 128.341,
+      "scale": [
+        2.1567,
+        2.1567,
+        2.1567
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.559,
+      "y": -0.025,
+      "z": -60.0,
+      "yaw": 34.292,
+      "scale": [
+        0.9881,
+        0.9881,
+        0.9881
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.271,
+      "y": -0.025,
+      "z": -64.0,
+      "yaw": 129.148,
+      "scale": [
+        1.6816,
+        1.6816,
+        1.6816
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.28,
+      "y": -0.025,
+      "z": -66.0,
+      "yaw": 128.134,
+      "scale": [
+        1.1313,
+        1.1313,
+        1.1313
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.467,
+      "y": -0.025,
+      "z": -69.5,
+      "yaw": 358.205,
+      "scale": [
+        2.1132,
+        2.1132,
+        2.1132
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.885,
+      "y": -0.025,
+      "z": -75.0,
+      "yaw": 165.2,
+      "scale": [
+        2.3163,
+        2.3163,
+        2.3163
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.107,
+      "y": -0.025,
+      "z": -76.5,
+      "yaw": 197.721,
+      "scale": [
+        1.1938,
+        1.1938,
+        1.1938
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 45.931,
+      "y": -0.025,
+      "z": -77.0,
+      "yaw": 278.577,
+      "scale": [
+        1.2846,
+        1.2846,
+        1.2846
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.778,
+      "y": -0.025,
+      "z": -80.5,
+      "yaw": 161.901,
+      "scale": [
+        1.6198,
+        1.6198,
+        1.6198
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 45.997,
+      "y": -0.025,
+      "z": -86.0,
+      "yaw": 164.735,
+      "scale": [
+        2.2037,
+        2.2037,
+        2.2037
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.337,
+      "y": -0.025,
+      "z": -88.0,
+      "yaw": 355.125,
+      "scale": [
+        0.8262,
+        0.8262,
+        0.8262
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.764,
+      "y": -0.025,
+      "z": -91.5,
+      "yaw": 137.671,
+      "scale": [
+        1.8034,
+        1.8034,
+        1.8034
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.645,
+      "y": -0.025,
+      "z": -93.0,
+      "yaw": 3.575,
+      "scale": [
+        0.8752,
+        0.8752,
+        0.8752
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.468,
+      "y": -0.025,
+      "z": -97.0,
+      "yaw": 352.543,
+      "scale": [
+        2.0495,
+        2.0495,
+        2.0495
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.649,
+      "y": -0.025,
+      "z": -99.0,
+      "yaw": 136.089,
+      "scale": [
+        0.6798,
+        0.6798,
+        0.6798
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 45.96,
+      "y": -0.025,
+      "z": -102.5,
+      "yaw": 7.329,
+      "scale": [
+        1.7908,
+        1.7908,
+        1.7908
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.668,
+      "y": -0.025,
+      "z": -108.0,
+      "yaw": 219.579,
+      "scale": [
+        1.5304,
+        1.5304,
+        1.5304
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.542,
+      "y": -0.025,
+      "z": -109.5,
+      "yaw": 175.027,
+      "scale": [
+        1.1986,
+        1.1986,
+        1.1986
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 45.786,
+      "y": -0.025,
+      "z": -110.0,
+      "yaw": 10.521,
+      "scale": [
+        1.1553,
+        1.1553,
+        1.1553
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.635,
+      "y": -0.025,
+      "z": -113.5,
+      "yaw": 329.544,
+      "scale": [
+        2.3443,
+        2.3443,
+        2.3443
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.787,
+      "y": -0.025,
+      "z": -119.0,
+      "yaw": 146.241,
+      "scale": [
+        2.1916,
+        2.1916,
+        2.1916
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Wall rubble",
+      "x": 46.663,
+      "y": -0.025,
+      "z": -121.0,
+      "yaw": 290.108,
+      "scale": [
+        1.3706,
+        1.3706,
+        1.3706
+      ],
+      "collision": "none",
+      "group": "Wall rubble"
+    },
+    {
+      "id": "D02",
+      "name": "D02 Wall foliage",
+      "x": 46.192,
+      "y": -0.025,
+      "z": -124.5,
+      "yaw": 302.614,
+      "scale": [
+        1.7994,
+        1.7994,
+        1.7994
+      ],
+      "collision": "none",
+      "group": "Wall foliage"
+    },
+    {
+      "id": "D01",
+      "name": "D01 Wall crystal inserts",
+      "x": 46.345,
+      "y": -0.025,
+      "z": -126.0,
+      "yaw": 15.408,
+      "scale": [
+        0.8929,
+        0.8929,
+        0.8929
+      ],
+      "collision": "none",
+      "group": "Wall crystal inserts"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": 9.022,
+      "y": -0.025,
+      "z": -56.643,
+      "yaw": 353.388,
+      "scale": [
+        1.1642,
+        1.1642,
+        1.1642
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 23.446,
+      "y": -0.025,
+      "z": -111.779,
+      "yaw": 66.856,
+      "scale": [
+        0.7747,
+        0.7747,
+        0.7747
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 32.164,
+      "y": -0.025,
+      "z": -118.48,
+      "yaw": 114.104,
+      "scale": [
+        1.2388,
+        1.2388,
+        1.2388
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": -0.388,
+      "y": -0.025,
+      "z": -18.166,
+      "yaw": 222.222,
+      "scale": [
+        0.6072,
+        0.6072,
+        0.6072
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 4.575,
+      "y": -0.025,
+      "z": -49.026,
+      "yaw": 100.275,
+      "scale": [
+        0.8496,
+        0.8496,
+        0.8496
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 30.384,
+      "y": -0.025,
+      "z": -52.271,
+      "yaw": 112.08,
+      "scale": [
+        0.8646,
+        0.8646,
+        0.8646
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": 32.042,
+      "y": -0.025,
+      "z": -71.527,
+      "yaw": 188.426,
+      "scale": [
+        1.0048,
+        1.0048,
+        1.0048
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 25.696,
+      "y": -0.025,
+      "z": -63.991,
+      "yaw": 182.019,
+      "scale": [
+        0.7637,
+        0.7637,
+        0.7637
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 12.334,
+      "y": -0.025,
+      "z": -123.163,
+      "yaw": 195.547,
+      "scale": [
+        1.03,
+        1.03,
+        1.03
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": -16.788,
+      "y": -0.025,
+      "z": -70.949,
+      "yaw": 146.784,
+      "scale": [
+        0.8708,
+        0.8708,
+        0.8708
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": -17.631,
+      "y": -0.025,
+      "z": -53.287,
+      "yaw": 304.819,
+      "scale": [
+        0.7367,
+        0.7367,
+        0.7367
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 19.483,
+      "y": -0.025,
+      "z": -102.263,
+      "yaw": 135.368,
+      "scale": [
+        1.0319,
+        1.0319,
+        1.0319
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": 35.59,
+      "y": -0.025,
+      "z": -28.489,
+      "yaw": 263.645,
+      "scale": [
+        1.0117,
+        1.0117,
+        1.0117
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 24.813,
+      "y": -0.025,
+      "z": -127.339,
+      "yaw": 243.959,
+      "scale": [
+        1.1943,
+        1.1943,
+        1.1943
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 4.09,
+      "y": -0.025,
+      "z": -86.988,
+      "yaw": 147.299,
+      "scale": [
+        0.6259,
+        0.6259,
+        0.6259
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": 29.211,
+      "y": -0.025,
+      "z": -70.142,
+      "yaw": 217.427,
+      "scale": [
+        1.2163,
+        1.2163,
+        1.2163
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 7.811,
+      "y": -0.025,
+      "z": -98.097,
+      "yaw": 51.441,
+      "scale": [
+        0.7716,
+        0.7716,
+        0.7716
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": -16.384,
+      "y": -0.025,
+      "z": -59.274,
+      "yaw": 150.856,
+      "scale": [
+        1.0018,
+        1.0018,
+        1.0018
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": -3.256,
+      "y": -0.025,
+      "z": -56.186,
+      "yaw": 275.998,
+      "scale": [
+        0.7401,
+        0.7401,
+        0.7401
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 14.533,
+      "y": -0.025,
+      "z": -53.208,
+      "yaw": 198.561,
+      "scale": [
+        1.081,
+        1.081,
+        1.081
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": -4.15,
+      "y": -0.025,
+      "z": -69.096,
+      "yaw": 172.652,
+      "scale": [
+        1.1397,
+        1.1397,
+        1.1397
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": 1.448,
+      "y": -0.025,
+      "z": -37.449,
+      "yaw": 68.993,
+      "scale": [
+        1.0045,
+        1.0045,
+        1.0045
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 0.696,
+      "y": -0.025,
+      "z": -106.824,
+      "yaw": 85.123,
+      "scale": [
+        0.6524,
+        0.6524,
+        0.6524
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": 40.352,
+      "y": -0.025,
+      "z": -115.093,
+      "yaw": 28.137,
+      "scale": [
+        0.8792,
+        0.8792,
+        0.8792
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R11",
+      "name": "R11 Ground scatter",
+      "x": -9.922,
+      "y": -0.025,
+      "z": -26.11,
+      "yaw": 336.112,
+      "scale": [
+        0.6554,
+        0.6554,
+        0.6554
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R12",
+      "name": "R12 Ground scatter",
+      "x": -14.438,
+      "y": -0.025,
+      "z": -58.191,
+      "yaw": 274.548,
+      "scale": [
+        0.9773,
+        0.9773,
+        0.9773
+      ],
+      "collision": "none",
+      "group": "Ground scatter"
+    },
+    {
+      "id": "R05",
+      "name": "R05 Distant landforms",
+      "x": -45,
+      "y": -0.025,
+      "z": -157,
+      "yaw": 25.337,
+      "scale": [
+        1.7,
+        1.7,
+        1.7
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R05",
+      "name": "R05 Distant landforms",
+      "x": -12,
+      "y": -0.025,
+      "z": -176,
+      "yaw": -12.932,
+      "scale": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R05",
+      "name": "R05 Distant landforms",
+      "x": 38,
+      "y": -0.025,
+      "z": -166,
+      "yaw": -17.373,
+      "scale": [
+        1.9,
+        1.9,
+        1.9
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R06",
+      "name": "R06 Distant landforms",
+      "x": 69,
+      "y": -0.025,
+      "z": -181,
+      "yaw": 11.134,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R06",
+      "name": "R06 Distant landforms",
+      "x": -55,
+      "y": -0.025,
+      "z": -193,
+      "yaw": -19.697,
+      "scale": [
+        2.4,
+        2.4,
+        2.4
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R06",
+      "name": "R06 Distant landforms",
+      "x": 10,
+      "y": -0.025,
+      "z": -222,
+      "yaw": 21.901,
+      "scale": [
+        2.1,
+        2.1,
+        2.1
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R07",
+      "name": "R07 Distant landforms",
+      "x": -10,
+      "y": -0.025,
+      "z": -188,
+      "yaw": 5.815,
+      "scale": [
+        1.6,
+        1.6,
+        1.6
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R06",
+      "name": "R06 Distant landforms",
+      "x": -65,
+      "y": -0.025,
+      "z": -94,
+      "yaw": 2.096,
+      "scale": [
+        2.5,
+        2.5,
+        2.5
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    },
+    {
+      "id": "R05",
+      "name": "R05 Distant landforms",
+      "x": 80,
+      "y": -0.025,
+      "z": -112,
+      "yaw": -26.985,
+      "scale": [
+        1.9,
+        1.9,
+        1.9
+      ],
+      "collision": "none",
+      "group": "Distant landforms"
+    }
+  ]
+}

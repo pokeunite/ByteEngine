@@ -1,4 +1,5 @@
 using ByteEngine.Core.Gameplay;
+using System.Numerics;
 
 namespace ByteEngine.Core.Animation;
 
@@ -9,6 +10,8 @@ public sealed partial class AnimationController
     private string _turnClip = "", _turnStance = "";
     private int _turnSign;
     private float _idleTurnAngle, _turnQuietTime;
+    private Vector3 _previousThirdPersonForward;
+    private bool _hadThirdPersonForward;
     public float PendingTurnAngle => _idleTurnAngle;
     public bool TurnInPlaceEnabled { get; set; } = true;
     public string CurrentTurn => _turnActive ? _turnClip : "";
@@ -17,11 +20,21 @@ public sealed partial class AnimationController
     {
         var settings = _loadedPoseProfile?.Locomotion.Turning;
         var control = GameObject.GetComponent<TopDownController3D>();
-        bool eligible = TurnInPlaceEnabled && settings?.Enabled == true && control is { Enabled: true, HasCursorAim: true, IsFacingCursor: true } &&
+        var thirdPerson=GameObject.GetComponent<PlayerController3D>();
+        bool tps=thirdPerson is {Enabled:true,CharacterRotation:CharacterRotationMode.FaceCamera};
+        bool eligible = TurnInPlaceEnabled && settings?.Enabled == true && (control is { Enabled: true, HasCursorAim: true, IsFacingCursor: true }||tps) &&
             State == LocomotionState.Idle && LocomotionSpeed <= settings.MaximumMoveSpeed && (!_actionActive || _maskedActionActive);
         float angle = control?.SignedAimAngleDegrees ?? 0;
         float yawSpeed = control?.YawSpeedDegrees ?? 0;
         float delta = Math.Max((float)Time.DeltaTime, 0);
+        if(tps)
+        {
+            Vector3 desired=PlayerController3D.ForwardFromYaw(thirdPerson!.ControlYaw),forward=Transform.Forward;
+            angle=MathF.Atan2(Vector3.Dot(desired,Transform.Right),Vector3.Dot(desired,forward))*180/MathF.PI;
+            yawSpeed=_hadThirdPersonForward?MathF.Atan2(Vector3.Dot(forward,Vector3.Cross(_previousThirdPersonForward,Vector3.UnitY)),Vector3.Dot(forward,_previousThirdPersonForward))*180/MathF.PI/Math.Max(delta,.00001f):0;
+            _previousThirdPersonForward=forward;_hadThirdPersonForward=true;
+        }
+        else _hadThirdPersonForward=false;
         if (!_turnActive)
             _idleTurnAngle = eligible ? Math.Clamp(_idleTurnAngle + yawSpeed * delta, -360, 360) : 0;
         _turnQuietTime = Math.Abs(yawSpeed) < 3 ? _turnQuietTime + delta : 0;

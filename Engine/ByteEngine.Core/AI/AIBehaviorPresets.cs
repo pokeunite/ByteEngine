@@ -13,6 +13,24 @@ public static class AIBehaviorPresets
         new(){Kind=BehaviorNodeKind.Recover,Name="Leave a recovery opportunity"},
         new(){Kind=BehaviorNodeKind.ReleasePosition,Name="Release the approach position"}
     ]}};
+    public static BehaviorTreeDefinition PredatoryRusher(AssetReference attack, float approachSpeed=4.5f, float minRange=2.8f, float maxRange=7.5f)
+    {
+        BehaviorNode Gate(string name,BehaviorTest test,BehaviorNode child,float distance=0,bool invert=false)=>new(){Kind=BehaviorNodeKind.Gate,Name=name,Test=test,Distance=distance,Invert=invert,Interruption=BehaviorInterruption.FinishBranch,Children=[child]};
+        var rush=Gate("Charge cooldown is ready",BehaviorTest.AttackReady,
+            Gate("Player is in charge range",BehaviorTest.WithinDistance,
+                Gate("Enough room to launch",BehaviorTest.WithinDistance,
+                    new(){Kind=BehaviorNodeKind.SubBehavior,Name="Predatory rush — track, lock, launch, resolve, recover",SubBehavior=attack},minRange,true),maxRange));
+        // Latch from wind-up through recovery, while global death/stagger interrupts still preempt execution.
+        rush.Interruption=BehaviorInterruption.FinishBranch;
+        var combat=new BehaviorNode{Kind=BehaviorNodeKind.Priority,Name="Combat: rush or approach",Children=[rush,
+            Gate("Too close: make room",BehaviorTest.WithinDistance,new(){Kind=BehaviorNodeKind.Retreat,Name="Reposition outside minimum charge distance",Distance=minRange+.3f,Speed=approachSpeed,Timeout=1},minRange),
+            Gate("Cooldown: pause before another charge",BehaviorTest.AttackReady,new(){Kind=BehaviorNodeKind.Wait,Name="Recovery breathing room",Duration=.2f},invert:true),
+            new(){Kind=BehaviorNodeKind.MoveToTarget,Name="Stalk into charge range",Distance=maxRange-.5f,Speed=approachSpeed,Timeout=3}]};
+        var visible=Gate("Player visible: hunt",BehaviorTest.LineOfSight,combat);visible.Interruption=BehaviorInterruption.FinishBranch;
+        return new(){Name="Rusher — predatory rush",Root=new(){Kind=BehaviorNodeKind.Priority,Name="Rusher priority: active attack, sight, memory, idle",Children=[visible,
+            Gate("Player lost: investigate",BehaviorTest.HasMemory,new(){Kind=BehaviorNodeKind.Search,Name="Approach last known position and search",Duration=2.5f,Speed=approachSpeed,SearchRadius=2}),
+            new(){Kind=BehaviorNodeKind.Wait,Name="Idle and listen",Duration=.4f}]}};
+    }
     public static BehaviorTreeDefinition Create(AIBehaviorRole role,AssetReference sharedAttack,bool flank=false)
     {
         bool ranged=role is AIBehaviorRole.Ranged or AIBehaviorRole.Caster;

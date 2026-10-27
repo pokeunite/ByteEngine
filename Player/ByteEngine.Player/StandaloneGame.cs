@@ -24,10 +24,13 @@ internal sealed class StandaloneGame : ByteEngineApplication
         _smokeTest=smokeTest;
         _validateOnly=validateOnly;
         if(smokeTest||validateOnly)IsVisible=false;
+
     }
 
     protected override void OnEngineStart()
     {
+        if(!_smokeTest&&!_validateOnly&&_project.Project.Window.StartFullscreen)
+            WindowState=OpenTK.Windowing.Common.WindowState.Fullscreen;
         foreach (var variable in _project.Project.GlobalVariables)
             Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
         var currentPath=_project.Project.StartupScene;

@@ -6,7 +6,8 @@ public enum PrimitiveMeshType
 {
     Cube,
     Plane,
-    Sphere
+    Sphere,
+    Cylinder
 }
 
 public static class PrimitiveMesh
@@ -16,6 +17,7 @@ public static class PrimitiveMesh
         PrimitiveMeshType.Cube => CreateCube(),
         PrimitiveMeshType.Plane => CreatePlane(),
         PrimitiveMeshType.Sphere => CreateSphere(),
+        PrimitiveMeshType.Cylinder => CreateCylinder(),
         _ => throw new ArgumentOutOfRangeException(nameof(type))
     };
 
@@ -77,6 +79,30 @@ public static class PrimitiveMesh
         }
 
         return new Mesh(vertices.ToArray(), indices.ToArray());
+    }
+
+    private static Mesh CreateCylinder()
+    {
+        const int count=24;var vertices=new List<float>();var indices=new List<uint>();
+        for(int i=0;i<count;i++)
+        {
+            float a=i*MathF.Tau/count,b=(i+1)*MathF.Tau/count;
+            Vector3 n1=new(MathF.Cos(a),0,MathF.Sin(a)),n2=new(MathF.Cos(b),0,MathF.Sin(b));
+            Vector3 low1=n1*.5f-Vector3.UnitY*.5f,low2=n2*.5f-Vector3.UnitY*.5f;
+            uint start=(uint)(vertices.Count/8);
+            AddVertex(vertices,low1,n1,0,0);AddVertex(vertices,low1+Vector3.UnitY,n1,0,1);
+            AddVertex(vertices,low2+Vector3.UnitY,n2,1,1);AddVertex(vertices,low2,n2,1,0);
+            indices.AddRange([start,start+1,start+2,start,start+2,start+3]);
+            start=(uint)(vertices.Count/8);
+            AddVertex(vertices,Vector3.UnitY*.5f,Vector3.UnitY,.5f,.5f);
+            AddVertex(vertices,low2+Vector3.UnitY,Vector3.UnitY,1,0);AddVertex(vertices,low1+Vector3.UnitY,Vector3.UnitY,0,0);
+            indices.AddRange([start,start+1,start+2]);
+            start=(uint)(vertices.Count/8);
+            AddVertex(vertices,-Vector3.UnitY*.5f,-Vector3.UnitY,.5f,.5f);
+            AddVertex(vertices,low1,-Vector3.UnitY,0,0);AddVertex(vertices,low2,-Vector3.UnitY,1,0);
+            indices.AddRange([start,start+1,start+2]);
+        }
+        return new Mesh(vertices.ToArray(),indices.ToArray());
     }
 
     private static void AddFace(

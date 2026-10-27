@@ -1,0 +1,99 @@
+﻿Id,Tree,Name,Ranks,Currency,Rank costs,Effects,Prerequisites,Demo locked
+e62028b96e7f4300bed21f14eca7b6de,Combat,Sharpened Rounds,2,Dollars,5/20,PistolDamageFlat: 5 / rank (Add),Unlock Pistol,False
+f8372fee65274b0087b841b744f7774f,Combat,Unlock SMG,1,Chips,1,UnlockSmg: 1 / rank (Flag),Sharpened Rounds,False
+7747e9ecb6b245cc8fa5f9ee995631d4,Combat,Small Ammo,3,Dollars,10/20/30,SmallAmmoCap: 15 / rank (Add),Unlock Pistol,False
+5cc3cafd57c044279acc417fb1960288,Combat,Oil Price,3,Dollars,10/20/30,OilPriceFloor: 0.1 / rank (Add),Small Ammo,False
+5816c48e0d8e4b7197d4e352cc8bd5d3,Combat,Siren Amplifier,1,Dollars,200,SirenLevel: 1 / rank (Add),Pump Speed,False
+b2f55f5628ee4e65b68597a80c4fa19a,Combat,Reinforced Plating,2,Dollars,5/10,BunkerHealthPct: 10% / rank (PercentAdd),Melee Damage,False
+8a848033763e480080521335309ba34e,Combat,Melee Damage,3,Dollars,10/20/30,MeleeDamageFlat: 10 / rank (Add),Unlock Katana,False
+831ff3a8f117439ea30b9f1bcc0d5f57,Combat,SMG Damage,5,Dollars,25/50/75/100/125,SmgDamageFlat: 5 / rank (Add),Unlock SMG,False
+7cccf9bb1eac452abf0c494d588a0c12,Combat,Unlock Rifle,1,Chips,1,UnlockRifle: 1 / rank (Flag),Health,False
+d1cb8823bcb048bb9a5126a49cb5a574,Combat,Bigger Bullets,2,Dollars,100/200,AutogunDamageFlat: 25 / rank (Add),Smooth Barrels,False
+b885133266704d08b21af47b5e20dd1a,Combat,Smooth Barrels,3,Dollars,25/50/75,AutogunFireRateFlat: 0.5 / rank (Add),+Autogun,False
+fb4c41338a304e9da42e0bb496e43743,Combat,Pump Speed,3,Dollars,10/20/30,OilSellRate: 1 / rank (Add),Bigger Tank,False
+5ce1f437800b4d47adb7685b7175e782,Combat,Bigger Tank,4,Dollars,10/20/20/20,OilTankCapacity: 15 / rank (Add),Oil Price,False
+8f4c464e51ca43d494d8f95991a71258,Combat,Market Peak,2,Dollars,40/80,MarketPeakPct: 5 / rank (Add),Airdrop Beacon,False
+494975b2759442a8936a62acb6ceb8bf,Combat,Small Ammo,3,Dollars,50/75/100,SmallAmmoCap: 30 / rank (Add),Unlock SMG,False
+7daf6af431574a449c7dd3e83358b60e,Combat,SMG Fire Rate,2,Dollars,50/100,SmgFireRatePct: 10% / rank (PercentAdd),SMG Damage,False
+97fc62f1319b4292bff71de87595c194,Combat,SMG Mag Size,2,Dollars,50/100,SmgMagazineSize: 5 / rank (Add),SMG Fire Rate,False
+0ec95cdc5112470ea6aceb4e68d210ba,Combat,+Autogun,1,Chips,1,AutogunGrant: 1 / rank (Add),Sharpened Rounds,False
+0903b71b034347abb762ef750fafcbff,Combat,Pistol Fire Rate,2,Dollars,100/200,PistolFireRatePct: 10% / rank (PercentAdd),Market Peak,False
+dc8f7b6ddf6f4eafaf0983c1db508f2a,Combat,Piercing Bullets,6,Dollars,200/400/800/2000/4000/8000,RiflePierce: 1 / rank (Add),Large Ammo Stock,False
+9ac5cc2b168b499d8e46cbbb54e12bae,Combat,Hot Bullets,2,Wrench,1/1,SmgPierce: 1 / rank (Add),SMG Damage; Small Ammo,False
+4b2dd4997ce7472aa12eb0d924251c9d,Combat,Unlock RPG,1,Chips,1,UnlockRocketLauncher: 1 / rank (Flag),Siren Amplifier,False
+91db5b0f04854b899662aeb22a1911cf,Combat,Unlock Machine Gun,1,Dollars,3000,UnlockMachineGun: 1 / rank (Flag),Siren Amplifier,False
+9bb32120846f425b903fc5fddaf0da19,Combat,Machine Gun Pierce,5,Dollars,3000/6000/9000/18000/36000,MachineGunPierce: 1 / rank (Add),WE NEED MORE BULLETS!,False
+9f8e5290f3674d428d69ea33612b68b7,Combat,Autogun Pierce,1,Dollars,300,AutogunPierce: 1 / rank (Add),Bigger Bullets,False
+3b725b794c604823a49547345b23954d,Combat,Airdrop Beacon,1,Dollars,50,UnlockAirdrop: 1 / rank (Flag),Oil Price,False
+54932c2923834aafafdadcba8feae65d,Combat,Machine Gun Damage,1,Dollars,2000,MachineGunDamageFlat: 50 / rank (Add),Barrel Spin; WE NEED MORE BULLETS!,False
+868d3792eaa44863b88600ff814f45fa,Combat,Barrel Spin,6,Dollars,1000/1500/2000/2500/3000/3500,MachineGunFireRateFlat: 5 / rank (Add),Unlock Machine Gun,False
+bc613491655844859d50440435081a40,Combat,Rifle Damage,3,Dollars,100/200/300,RifleDamageFlat: 15 / rank (Add),Large Ammo Stock,False
+00e5e79e774c4ed88f61bd6cf1486b38,Combat,Rifle Fire Rate,2,Dollars,100/200,RifleFireRatePct: 10% / rank (PercentAdd),Unlock Rifle,False
+21267cdf1d9c4aba9c36881f5375509a,Combat,Oil Money,1,Dollars,100,OilPriceFloor: 1 / rank (Add),Land Mine,False
+8c1ccc80700749579c84d68876649751,Combat,WE NEED MORE BULLETS!,4,Dollars,1000/1500/2000/2500,SmallAmmoCap: 100 / rank (Add),Unlock Machine Gun,False
+f63545e0a3984155ae585e7c19bbb712,Combat,Shell Rack,3,Dollars,100/200/300,MortarShells: 1 / rank (Add),+Mortar,False
+dfc924b679424449bd6794e4ba72ac98,Combat,Shaped Charge,3,Dollars,75/100/125,LandMineDamageFlat: 100 / rank (Add),Wider Crater,False
+0731b6c0e79947989e9b9ab1b772e91d,Combat,Wider Crater,3,Dollars,75/100/125,LandMineBlastRadius: 1 / rank (Add),Land Mine,False
+c40117c2389f4d79af4a7f99e04c9866,Combat,Heavy Shells,3,Dollars,100/200/300,MortarStrikeDamageFlat: 100 / rank (Add),+Mortar,False
+a1b3d8731b7743caa059eaa76afd87d3,Combat,Land Mine,1,Dollars,50,LandMineGrant: 1 / rank (Add),Bigger Tank,False
+91a49fe5d0984317891d99eb4f42e662,Combat,Oil Money,1,Dollars,50,OilPriceFloor: 0.5 / rank (Add),Bigger Tank,False
+b094b79142a24dab98723453cc3cd5ff,Combat,Unlock Pistol,1,Dollars,0,UnlockPistol: 1 / rank (Flag),,False
+6140d780c4484ce28c3c593a639ad091,Combat,Oil Price,2,Dollars,10/20,OilPriceFloor: 0.1 / rank (Add),Unlock Pistol,False
+cd2362b70f384b24b9ac106158e0104b,Combat,Health,1,Dollars,50,PlayerMaxHealth: 75 / rank (Add),Melee Damage,False
+76f85d546cba443e8d5078c82dbc10d4,Combat,Melee Damage,1,Chips,1,MeleeDamageFlat: 50 / rank (Add),Health,False
+c0da65adbd7a4f238ba2a238a4fce126,Combat,Melee Attack Speed,3,Dollars,50/75/100,MeleeFireRatePct: 10% / rank (PercentAdd),Melee Damage,False
+d5ded896682a410a9c19d9fa8c7961ab,Combat,Combat Boots,3,Dollars,50/75/100,MoveSpeedPct: 3% / rank (PercentAdd),Melee Damage,False
+fb79a2e8389c4695829edf1d98551f51,Combat,Health,3,Dollars,50/75/100,PlayerMaxHealth: 50 / rank (Add),Melee Attack Speed; Combat Boots,False
+ff6d913ed36b4e89a6620a663731d54c,Combat,Land Mine,2,Dollars,100/200,LandMineGrant: 1 / rank (Add),Shaped Charge,False
+87ecd8a797d94526936eb0dbac6b8a76,Combat,SMG Damage,1,Wrench,1,SmgDamageFlat: 20 / rank (Add),SMG Damage,False
+a8c5e7fc30b44511879138a804950780,Combat,Bigger Tank,3,Dollars,50/100/150,OilTankCapacity: 50 / rank (Add),Oil Money,False
+0c4b689342d8484e9aec5fae7f59bd98,Combat,Pump Speed,3,Dollars,50/100/150,OilSellRate: 2 / rank (Add),Bigger Tank,False
+b1a7d67c30db4d39be6c46b2ff58b073,Combat,Pump Speed,6,Dollars,300/400/500/600/700/800,OilSellRate: 5 / rank (Add),Pump Speed,False
+ff19500267784078a8260e8e3501124c,Combat,Bigger Tank,6,Dollars,300/400/500/600/700/800,OilTankCapacity: 200 / rank (Add),Pump Speed,False
+c0cbbd2534a84558a5e68584768b386a,Combat,Plane (Locked For Demo),1,Dollars,1000000000,UnlockPlane: 1 / rank (Flag),Siren Amplifier,True
+8e87f92b378e43caa0b1550e5f811164,Combat,Atomic Bomb (Locked For Demo),1,Dollars,1000000000,AtomicBomb: 1 / rank (Flag),Land Mine,True
+61dbca59b3ac489c9e2bd157e9ba34ea,Combat,Rocket Ammo Cap,3,Dollars,100/200/300,RocketAmmoCap: 2 / rank (Add),RPG Damage,False
+17fce07bd0e440fea1c079b7df894273,Combat,RPG Damage,2,Dollars,200/400,LauncherDamageFlat: 100 / rank (Add),Unlock RPG,False
+05d0d1d0276049e58d9299214cdf29c4,Combat,RPG Blast Radius,3,Dollars,200/300/400,LauncherBlastRadius: 1 / rank (Add),Unlock RPG,False
+ed41ca77464b4f4fb8caf2dfac4fb598,Combat,Rapid Shelling,3,Dollars,500/750/1000,MortarStrikeInterval: -1 / rank (Add),Shell Rack,False
+c0f8f9afe9eb4a6cafb514ed71c1f7c0,Combat,+Autogun,1,Wrench,2,AutogunGrant: 1 / rank (Add),+Autogun,False
+254c9ad34e4c4e7c8b81a046b690f167,Combat,+Mortar,1,Wrench,1,MortarStrikeGrant: 1 / rank (Add),Shell Rack,False
+e8f52d53ba784f63bd72b46b9b5edc1b,Combat,Rifle Fire Rate,2,Wrench,1/2,RifleFireRatePct: 20% / rank (PercentAdd),Rifle Damage,False
+366b040323ea4581acedc829066a941b,Combat,Extra Land Mines,1,Wrench,1,LandMineGrant: 3 / rank (Add),Land Mine,False
+52ced8d54a2b45889b1a184053a757c0,Combat,Sharpened Rounds,1,Wrench,1,PistolDamageFlat: 70 / rank (Add),Oil Price,False
+77b403f4ac704dbca2a194d3dcbac066,Combat,Melee Damage,2,Wrench,1/1,MeleeDamageFlat: 100 / rank (Add),Combat Boots,False
+df550da02bf54dce87b724fe678548bf,Combat,Combat Boots,2,Wrench,1/1,MoveSpeedPct: 7% / rank (PercentAdd),Health,False
+4caafb4c5a3848a6a4744e32384c0e58,Combat,WE NEED MORE BULLETS!,4,Wrench,1/1/1/1,SmallAmmoCap: 400 / rank (Add),Machine Gun Damage,False
+e9c348913cb3414aad52a754ba261201,Combat,Machine Gun Pierce,2,Wrench,1/1,MachineGunPierce: 1 / rank (Add),Machine Gun Pierce,False
+0032b7fc2af8482ba46680c2f89e13ee,Combat,WE NEED MORE BULLETS!,1,Wrench,1,SmallAmmoCap: 100 / rank (Add),Oil Price,False
+3314ce7f1f9a4e6da881a453536e04cf,Combat,Reinforced Plating,1,Wrench,1,BunkerHealthPct: 30% / rank (PercentAdd),Reinforced Plating,False
+305cb2fb06f54aefa247a350d6f657b2,Combat,Combat Boots,1,Wrench,1,MoveSpeedPct: 3% / rank (PercentAdd),Market Peak,False
+f21d02c359ec440da597be4e05d080b5,Combat,Smooth Barrels,1,Wrench,1,AutogunFireRateFlat: 1.5 / rank (Add),Smooth Barrels,False
+c424ba1fd3404b8e82370e8fffd26478,Combat,Bigger Tank,3,Dollars,2000/4000/8000,OilTankCapacity: 1000 / rank (Add),Bigger Tank,False
+55af93fae6bc45ddae6c315b79d6ce39,Combat,Pump Speed,3,Dollars,2000/4000/8000,OilSellRate: 30 / rank (Add),Bigger Tank,False
+2e1d8a374c8d44b8a2deed54b2d37573,Combat,Siren Amplifier,1,Dollars,5000,SirenLevel: 1 / rank (Add),Siren Amplifier,False
+b5c097a183894836a65c84d3fd8bec45,Combat,+Mortar,1,Chips,1,MortarStrikeGrant: 1 / rank (Add),Land Mine,False
+d77b3b2fd6ae4325a627428200f3f753,Combat,+Autogun,1,Dollars,50,AutogunGrant: 1 / rank (Add),Small Ammo,False
+aa53664d1b564803a4406124e498d87b,Combat,RPG Blast Radius,1,Wrench,2,LauncherBlastRadius: 3 / rank (Add),RPG Blast Radius,False
+9fe6ed0f3da34f41a285b069c8165ef8,Combat,Bigger Bullets,1,Wrench,1,AutogunDamageFlat: 25 / rank (Add),Bigger Bullets,False
+c80e1b1a31b54ab8aaf98ee23602b127,Combat,RPG Damage,1,Wrench,1,LauncherDamageFlat: 300 / rank (Add),RPG Damage,False
+c70884455cec469596a4362176fdda50,Combat,Bigger Tank,6,Dollars,20000/30000/40000/50000/60000/70000,OilTankCapacity: 10000 / rank (Add),Pump Speed,False
+eddbf944036a4e0ba0e2f01d5c97d25a,Combat,Pump Speed,6,Dollars,20000/30000/40000/50000/60000/70000,OilSellRate: 100 / rank (Add),Pump Speed,False
+8d7defa6b0c04a239cec74cc114b03d4,Combat,Duplex Rounds,2,Dollars,1500/3000,RiflePellets: 1 / rank (Add),Large Ammo Stock,False
+b361d528edbf4f3d805f454a6cab6962,Combat,Unlock Katana,1,Dollars,0,UnlockKatana: 1 / rank (Flag),Unlock Pistol,False
+91970d6703344f82b02cd73e7bb39f5e,Combat,Pistol Pellets,3,Dollars,200/400/800,PistolPellets: 1 / rank (Add),Pistol Fire Rate,False
+4001b87141f545b391fec7596c4eb9f7,Combat,Sharpened Rounds,1,Dollars,30,PistolDamageFlat: 10 / rank (Add),Airdrop Beacon,False
+19290cb604b046afb910281776d19e27,Combat,Large Ammo Stock,4,Dollars,50/100/150/200,LargeAmmoCap: 10 / rank (Add),Unlock Rifle,False
+a601d077ccd345ce855bc95664ca9caa,Combat,Large Large Ammo Stock,1,Wrench,1,LargeAmmoCap: 30 / rank (Add),Rifle Damage,False
+052741f27c044cd2b655787274f9313a,Combat,WE NEED MORE BULLETS!,6,Dollars,10000/15000/20000/25000/30000/35000,SmallAmmoCap: 200 / rank (Add),Machine Gun Damage,False
+7e590196e4bc42689ec87cd0ca01a784,Combat,Barrel Spin,2,Wrench,1/1,MachineGunFireRateFlat: 15 / rank (Add),WE NEED MORE BULLETS!,False
+af354e9bd58d499984ccf6451654f1c3,Combat,WE NEED MORE BULLETS!,2,Dollars,50000/75000,SmallAmmoCap: 300 / rank (Add),WE NEED MORE BULLETS!,False
+4f9d2c2fe3cc4f1386b62b4da21db23d,Combat,Autogun Pierce,1,Wrench,2,AutogunPierce: 1 / rank (Add),Autogun Pierce,False
+94a337e402aa487489ac5dfd186634c6,Combat,Unlock Shotgun (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,Pistol Pellets,True
+2d8ebf350fd046969bd8ca3f6d781d42,Combat,Tesla Tower (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,Bigger Bullets,True
+1c310093c01040a8b502356c27ec6079,Combat,Flamethrower (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,Bigger Bullets,True
+16a488f89894462d859ed6204261fa11,Combat,Build New California Base (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,Pump Speed,True
+437fd88b51f14dbea4a3dd4faa118d77,Combat,Zombie Bait (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,Pump Speed,True
+45e94424e66242be80314487c2bd188b,Combat,Unlock Rocket Machine Gun (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,WE NEED MORE BULLETS!,True
+5be321e08c89466187d18448d19acf4e,Combat,Unlock Drone Warfare (Locked For Demo),1,Dollars,1000000000,No serialized gameplay effect,WE NEED MORE BULLETS!,True
+17c66e2803e84c9cbba176443d9d4396,Economy,Ammo Lockers,4,Dollars,800/1600/3200/6400,AmmoCapacityPct: 25% / rank (PercentAdd),,False

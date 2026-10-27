@@ -14,7 +14,7 @@ namespace ByteEngine.Core.AI;
 /// <summary>Independent per-agent execution state for reusable, data-authored behaviour trees.</summary>
 public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
 {
-    [Category("Behaviour"), Description("Reusable .byteai asset. Disable Simple Enemy AI on this actor to avoid two movement/attack drivers.")]
+    [Category("Behaviour"), Description("Reusable .byteai asset. For staged attacks, keep Simple Enemy AI enabled and turn on its Behaviour Controlled setting.")]
     public AssetReference Behavior { get; set; } = AssetReference.Empty;
     [Category("Perception"), SceneObjectReference] public Guid TargetObjectId { get; set; }
     [Category("Perception")] public bool FindNearestCharacter { get; set; } = true;
@@ -23,6 +23,8 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     [Category("Perception")] public float EyeHeight { get; set; } = .8f;
     [Category("Behaviour"), Description("Decision/perception interval; navigation still moves smoothly each frame.")]
     public float DecisionInterval { get; set; } = .1f;
+    [Category("Behaviour"), Description("Scales all movement task speeds without changing the shared behaviour asset.")] public float MovementSpeedMultiplier {get;set;}=1;
+    internal float SafeMovementMultiplier=>float.IsFinite(MovementSpeedMultiplier)?Math.Clamp(MovementSpeedMultiplier,.1f,10):1;
     [Category("Behaviour")] public bool Paused { get; set; }
     [Category("Live State")] public string CurrentTask { get; private set; } = "Idle";
     [Category("Live State")] public BehaviorStatus Status { get; private set; }
@@ -47,6 +49,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     private Guid? _combatNode;
     private double _clock, _accumulator;
     private bool _attemptedLoad;
+    private Vector3? _wanderHome;
     public override int UpdateOrder => -1050;
     internal void Configure(Func<AssetReference,BehaviorTreeDefinition> loader) => _loader = loader;
     public void SetDefinition(BehaviorTreeDefinition definition)
@@ -70,12 +73,20 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     protected override void OnUpdate() { if(GameObject.Scene?.FixedSimulation!=true)Tick((float)Time.DeltaTime); }
     protected override void OnFixedUpdate() { if(GameObject.Scene?.FixedSimulation==true)Tick((float)Time.FixedDeltaTime); }
     protected override void OnStop() => Stop();
+    protected override void OnDestroy() => Stop();
+    internal GameObject? ReservationOwner => AttachedGameObject;
     private float Interval => float.IsFinite(DecisionInterval)?Math.Clamp(DecisionInterval,.02f,2):.1f;
     /// <summary>Public simulation entry point also permits deterministic headless tests.</summary>
     public void Tick(float delta)
     {
         if(!float.IsFinite(delta)||delta<=0||AttachedGameObject?.Scene==null)return;
         if(GameObject.GetComponent<HealthComponent>()?.IsDead==true){Stop();return;}
+        if(GameObject.GetComponent<SimpleEnemyAI3D>() is {} stagger && stagger.StaggerRemaining>0)
+        {
+            float remaining=stagger.StaggerRemaining;CancelMovement();CancelCombat();CancelAdvanced("Designated stagger");
+            stagger.Stagger(remaining);stagger.TickStagger(delta);_indices.Clear();_started.Clear();_status.Clear();
+            Status=BehaviorStatus.Running;CurrentTask="Staggered — normal decisions suspended";return;
+        }
         if(Paused){CancelMovement();CancelCombat();CancelAdvanced("Paused");return;}
         if(GameObject.GetComponent<SimpleEnemyAI3D>() is {BehaviorControlled:true,Enabled:false}){CancelMovement();CancelCombat();CancelAdvanced("Encounter inactive");_indices.Clear();_started.Clear();Status=BehaviorStatus.Idle;CurrentTask="Waiting for encounter";LastError="";return;}
         if(GameObject.GetComponent<SimpleEnemyAI3D>() is { Enabled:true, BehaviorControlled:false }){LastError="Disable Simple Enemy AI or enable its Behaviour Controlled setting.";CancelMovement();CancelCombat();return;}
@@ -96,6 +107,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
             catch(Exception e)when(e is IOException or InvalidDataException or System.Text.Json.JsonException or ArgumentException){LastError=e.Message;CancelMovement();return;}
         }
         if(_definition==null)return;
+        _wanderHome??=Transform.WorldPosition;
         _clock+=delta;
         bool dodging=_combatDriver==null&&GameObject.GetComponent<SimpleEnemyAI3D>() is {BehaviorControlled:true} background&&background.TickBehaviorBackground(delta);
         TickStagedCombat(delta);
@@ -136,6 +148,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     private bool Test(BehaviorNode n)
     {
         bool value=n.Test switch {
+            BehaviorTest.AttackReady=>GameObject.GetComponent<SimpleEnemyAI3D>() is {AttackPhase:"Ready",AttackCooldownRemaining:<=0,StaggerRemaining:<=0},
             BehaviorTest.HasMemory=>HasInterest,
             BehaviorTest.HeardNoise=>ReadBool("HeardNoise"),
             BehaviorTest.AttackReserved=>AIWorld.For(GameObject.Scene!).OwnsAttack(this),
@@ -228,7 +241,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
                 var agent=GameObject.GetComponent<NavigationAgent3D>();
                 if(agent is not {Enabled:true}||(agent.ExternallyDriven&&agent!=_ownedAgent)){LastError="Movement task needs an enabled Navigation Agent with Externally Driven off.";return BehaviorStatus.Failure;}
                 if(_movementOwner==n.Id&&agent.Status is NavigationAgentStatus.Unreachable or NavigationAgentStatus.MissingRegion){CancelMovement();return BehaviorStatus.Failure;}
-                _movementOwner=n.Id;_ownedAgent=agent;agent.ExternallyDriven=true;agent.Destination=point;agent.Speed=Math.Max(0,n.Speed);agent.Moving=true;Face(point);return BehaviorStatus.Running;
+                _movementOwner=n.Id;_ownedAgent=agent;agent.ExternallyDriven=true;agent.Destination=point;agent.Speed=Math.Max(0,n.Speed)*SafeMovementMultiplier;agent.Moving=true;Face(point);return BehaviorStatus.Running;
             default:return BehaviorStatus.Failure;
         }
     }

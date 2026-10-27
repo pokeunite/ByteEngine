@@ -9,6 +9,7 @@ namespace ByteEngine.Core.AI;
 public sealed partial class AIBehavior3D
 {
     [Category("Perception")] public bool PerceptionMemory {get;set;}
+    [Category("Perception"), Description("Range for an already acquired target; zero uses Detection Range.")] public float LoseTargetRange {get;set;}
     [Category("Perception")] public float FieldOfView {get;set;}=240;
     [Category("Perception")] public float MemorySeconds {get;set;}=6;
     [Category("Perception")] public float HearingRange {get;set;}=22;
@@ -65,6 +66,7 @@ public sealed partial class AIBehavior3D
         Blackboard.Set("TargetPosition",VariableValue.FromVector3(LastKnownPosition));
         Blackboard.Set("LastKnownPosition",VariableValue.FromVector3(LastKnownPosition));
         if(GameObject.GetComponent<SimpleEnemyAI3D>() is {} combat){Blackboard.Set("EvadedCharges",VariableValue.FromNumber(combat.EvadedCharges));Blackboard.Set("EvadedSlams",VariableValue.FromNumber(combat.EvadedSlams));Blackboard.Set("AttackPhase",VariableValue.FromString(combat.AttackPhase));Blackboard.Set("IsDodging",VariableValue.FromBoolean(combat.CurrentTactic=="Dodge"));}
+        if(GameObject.GetComponent<SimpleEnemyAI3D>() is {} rush){Blackboard.Set("RushOutcome",VariableValue.FromString(rush.LastRushOutcome.ToString()));Blackboard.Set("AttackReady",VariableValue.FromBoolean(rush.AttackPhase=="Ready"&&rush.AttackCooldownRemaining<=0));}
         Blackboard.Set("IsEnraged",VariableValue.FromBoolean(GameObject.GetComponent<CombatArmour3D>()?.IsEnraged==true));
         Blackboard.Set("HealthFraction",VariableValue.FromNumber(GameObject.GetComponent<HealthComponent>()?.HealthPercent??1));
     }
@@ -72,7 +74,8 @@ public sealed partial class AIBehavior3D
     {
         if(target==null||target==GameObject||!target.ActiveInHierarchy||target.GetComponent<HealthComponent>()?.IsDead==true)return false;
         var delta=target.Transform.WorldPosition-Transform.WorldPosition;
-        if(delta.Length()>Safe(DetectionRange,25,0,10000))return false;
+        float range=target.Id==_rememberedTarget&&HasInterest&&LoseTargetRange>0?Math.Max(DetectionRange,LoseTargetRange):DetectionRange;
+        if(delta.Length()>Safe(range,25,0,10000))return false;
         delta.Y=0;
         if(delta.LengthSquared()>.001f&&Vector3.Dot(Vector3.Normalize(delta),Transform.Forward)<MathF.Cos(Safe(FieldOfView,240,1,360)*MathF.PI/360))return false;
         return SightFrom(Transform.WorldPosition,target.Transform.WorldPosition,target);

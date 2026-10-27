@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><LangVersion>latest</LangVersion><BytePluginName>KarlsonDemo</BytePluginName></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj" Private="false"/></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Mining/CompanyResearchCatalog.json" LogicalName="CompanyResearchCatalog.json"/></ItemGroup>
   <ItemGroup><BytePluginContent Include="Samples/*.byteevents;Samples/Hud/Art/*.png;Samples/Hud/README.md;EVENT SHEETS.txt"/></ItemGroup>
   <Import Project="../BytePlugin.targets"/>
 </Project>
