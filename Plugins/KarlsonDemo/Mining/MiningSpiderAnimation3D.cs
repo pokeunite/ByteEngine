@@ -6,6 +6,8 @@ using ByteEngine.Core.Assets;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Physics;
+using ByteEngine.Core.Characters;
 using Component=ByteEngine.Core.Scene.Component;
 namespace KarlsonDemo.Plugin;
 /// <summary>Presentation only: navigation, attack timing and damage remain owned by the AI.</summary>
@@ -27,6 +29,9 @@ public sealed partial class MiningSpiderAnimation3D:Component
  [Category("Playback")] public bool AutomaticPlayback{get;set;}=true;
  [Category("Death")] public float CorpseSeconds{get;set;}=3;
  [Category("Death")] public int MaximumCorpses{get;set;}=12;
+ [Category("Damage hitbox")] public bool BodyHitboxEnabled{get;set;}=true;
+ [Category("Damage hitbox")] public Vector3 BodyHitboxSize{get;set;}=new(.9f,.85f,1.45f);
+ [Category("Damage hitbox")] public Vector3 BodyHitboxCenter{get;set;}=new(0,.55f,.1f);
  public string State{get;private set;}="";
  public string LastError{get;private set;}="";
  public bool ModelReady=>renderer?.ResolvedModel!=null;
@@ -36,6 +41,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  protected override void OnStart()
  {
   previous=Transform.WorldPosition;health=GameObject.GetComponent<HealthComponent>();if(health!=null)health.Died+=OnDeath;
+  if(BodyHitboxEnabled){var hit=GameObject.Scene!.CreateGameObject("Spider body damage hitbox");hit.Layer=GameObject.Layer;hit.SetParent(GameObject,false);hit.AddComponent(new BoxCollider3D{IsTrigger=true,Size=BodyHitboxSize,Center=BodyHitboxCenter});hit.AddComponent(new DamageRegion3D{HealthOwnerId=GameObject.Id,IsWeakPoint=false});}
   if(!AnimationRuntimeAssets.IsConfigured){LastError="Model asset service is unavailable";return;}
   try{
    visual=GameObject.Scene!.CreateGameObject("Animated spider");visual.SetParent(GameObject,false);visual.Transform.LocalScale=new(Math.Clamp(ModelScale,.1f,3));

@@ -119,7 +119,13 @@ public sealed class VfxLayer
 public static class VfxEffectSerializer
 {
     public const string FileExtension = ".bvfx";
-    internal static readonly JsonSerializerOptions Options = new() { IncludeFields = true, WriteIndented = true, NumberHandling=JsonNumberHandling.AllowNamedFloatingPointLiterals, Converters = { new JsonStringEnumConverter() } };
+    internal static readonly JsonSerializerOptions Options = new() {
+        IncludeFields = true, WriteIndented = true,
+        NumberHandling=JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        Converters = { new ByteEngine.Core.Serialization.Vector4JsonConverter(), new JsonStringEnumConverter() },
+        TypeInfoResolver=System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.Combine(
+            VfxJsonContext.Default,new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver())
+    };
     public static VfxEffect Load(string path)
     {
         if (new FileInfo(path).Length > 1024 * 1024) throw new InvalidDataException("VFX asset exceeds 1 MB.");

@@ -12,6 +12,7 @@
     <EmbeddedResource Include="../../Plugins/KarlsonDemo/*.cs" LogicalName="ByteAssistant.Reference.Plugins.KarlsonDemo.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../Plugins/KarlsonDemo/Mining/*.cs" LogicalName="ByteAssistant.Reference.Plugins.KarlsonDemo.Mining.%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../Docs/Mining-Ranked-Defences-and-Shipments.md" LogicalName="ByteAssistant.Reference.Docs.Mining-Ranked-Defences-and-Shipments.md" />
+    <EmbeddedResource Include="../../Docs/HazardPay-Workshop-Balance.md;../../Docs/HazardPay-Explorer-Character.md;../../Docs/HazardPay-PC-Polish-2026-10-29.md;../../Docs/Shared-Runtime-Performance-2026-10-28.md;../../Docs/Web-Performance-Capture.md;../../Docs/Browser-Export-Reliability.md;../../Docs/Windows-Release-Protection.md" LogicalName="ByteAssistant.Reference.Docs.%(Filename)%(Extension)" />
     <Content Include="Resources\Fonts\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Resources\Starters\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Resources\Characters\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

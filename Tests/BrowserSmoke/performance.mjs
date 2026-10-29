@@ -4,10 +4,10 @@ let clock=0;globalThis.performance={now:()=>clock};globalThis.devicePixelRatio=1
 const controls=[];class Element{constructor(){this.style={};this.hidden=false;}append(e){if(e instanceof Element&&e.textContent)controls.push(e);}click(){this.onclick?.();}}
 globalThis.document={hidden:false,visibilityState:'visible',body:new Element(),createElement:()=>new Element(),addEventListener(){}};globalThis.window={addEventListener(){}};
 const module=await import('data:text/javascript;base64,'+Buffer.from(readFileSync('Player/ByteEngine.Browser/wwwroot/performance.js')).toString('base64'));
-const capture=module.createPerformanceCapture();for(let i=0;i<8000;i++){clock+=8;capture.frame({intervalMs:8,managedMs:2,parseMs:.2,uploadMs:0},()=>({scene:'Test',managedMemoryMB:20}));}
-let r=capture.report();assert.equal(r.frames.length,7200);assert.equal(r.droppedFrames,800);assert.equal(r.summary.fps,125);
-for(let i=0;i<2100;i++)capture.event('marker');r=capture.report();assert.equal(r.events.length,2000);assert(r.droppedEvents>0);
-controls.find(e=>e.textContent==='Pause capture').click();clock+=120000;assert.equal(capture.report().frames.length,7200,'Paused capture lost frames');
+const capture=module.createPerformanceCapture();for(let i=0;i<20000;i++){clock+=8;capture.frame({intervalMs:8,managedMs:2,parseMs:.2,uploadMs:0},()=>({scene:'Test',managedMemoryMB:20}));}
+let r=capture.report();assert(r.frames.length>=15000&&r.frames.length<=15001);assert.equal(r.droppedFrames,2000);assert.equal(r.summary.fps,125);
+for(let i=0;i<4200;i++)capture.event('marker');r=capture.report();assert.equal(r.events.length,4096);assert(r.droppedEvents>0);
+const retained=r.frames.length;controls.find(e=>e.textContent==='Pause capture').click();clock+=120000;assert.equal(capture.report().frames.length,retained,'Paused capture lost frames');
 controls.find(e=>e.textContent==='3D on').click();assert.equal(capture.probes.skipGeometry,true);
 controls.find(e=>e.textContent==='New capture').click();assert.equal(capture.report().frames.length,0);
-console.log('PASS bounded 60-second capture, percentile summary, bounded events, paused retention, render probe, reset');
+console.log('PASS bounded 120-second capture, percentile summary, bounded events, paused retention, render probe, reset');

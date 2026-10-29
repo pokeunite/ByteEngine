@@ -39,6 +39,8 @@ public sealed partial class MiningBusinessUi3D:Component
  [Category("Typography")] public AssetReference HeadingFont{get;set;}=AssetReference.Empty;
  [Category("Typography")] public AssetReference BodyFont{get;set;}=AssetReference.Empty;
  [Category("Artwork")] public AssetReference MachineIllustration{get;set;}=AssetReference.Empty;
+ [Category("Artwork")] public AssetReference RawOreIcon{get;set;}=AssetReference.Empty;
+ [Category("Artwork")] public AssetReference RefinedOreIcon{get;set;}=AssetReference.Empty;
  [Category("Artwork")] public AssetReference OreIllustration{get;set;}=AssetReference.Empty;
  [Category("Artwork")] public AssetReference DrillIllustration{get;set;}=AssetReference.Empty;
  [Category("Artwork")] public AssetReference RefineryIllustration{get;set;}=AssetReference.Empty;
@@ -54,6 +56,8 @@ public sealed partial class MiningBusinessUi3D:Component
  public string Feedback{get;private set;}="";
  public MiningScreen NearestScreen{get;private set;}
  public string SelectedResearchId{get;private set;}="company";
+ public float HoverSoundGain{get;set;}=.22f;
+ Guid hoveredButton;
  MiningCampLayout3D? CampLayout=>GameObject.Scene?.FindGameObject(Op?.PlayerObjectId??Guid.Empty)?.GetComponent<MiningCampLayout3D>();
  bool CampEditing=>CampLayout?.IsEditing==true;
  public bool NearTerminal{get{if(Op is not {} op||GameObject.Scene?.FindGameObject(TerminalObjectId) is not {} terminal||GameObject.Scene.FindGameObject(op.PlayerObjectId) is not {} player)return false;var d=player.Transform.WorldPosition-terminal.Transform.WorldPosition;return d.X*d.X+d.Z*d.Z<=InteractionDistance*InteractionDistance;}}
@@ -79,9 +83,9 @@ public sealed partial class MiningBusinessUi3D:Component
   bool ammo=Screen==MiningScreen.AmmoPress,market=Screen==MiningScreen.Market,refinery=Screen==MiningScreen.Refinery,research=Screen==MiningScreen.Research;
   Set(CloseButtonObjectId,modal&&!market);Set(CloseXButtonObjectId,modal);
   Set(Row0ButtonObjectId,ammo||refinery||Screen==MiningScreen.Drill,CanBuy(0));Set(Row1ButtonObjectId,ammo||refinery,CanBuy(1));Set(Row2ButtonObjectId,ammo||refinery,CanBuy(2));
-  Set(PrimaryButtonObjectId,modal&&!ammo,market?Trade?.SaleInProgress!=true&&Trade?.Stock(RefinedSelected)>=Quantity&&Quantity>0:research?Trade?.CanBuyResearch(SelectedResearchId)==true:ammo?(Trade?.CollectibleAmmo??0)>0:refinery?op.RefiningAmount==0&&op.RawOre>0:Screen!=MiningScreen.Drill||op.RefiningAmount==0);
-  for(int i=0;i<3;i++)Set(ContractButton(i),Screen==MiningScreen.Drill,op.PreviewContract(i)!=null);
-  if(Screen==MiningScreen.Drill)Set(PrimaryButtonObjectId,true,op.SelectedContract is {} preview&&op.RefiningAmount==0&&(long)op.RawOre+op.RefinedOre+preview.Ore<=op.CargoCapacity);
+  Set(PrimaryButtonObjectId,modal&&!ammo,market?Trade?.SaleInProgress!=true&&Trade?.Stock(RefinedSelected)>=Quantity&&Quantity>0:research?Trade?.CanBuyResearch(SelectedResearchId)==true:ammo?(Trade?.CollectibleAmmo??0)>0:refinery?op.RefiningAmount==0&&op.RawOre>0:Screen!=MiningScreen.Drill||op.RefiningAmount==0||op.QueueRefineryBatches);
+  for(int i=0;i<3;i++)Set(ContractButton(i),Screen==MiningScreen.Drill,Screen==MiningScreen.Drill&&op.PreviewContract(i)!=null);
+  if(Screen==MiningScreen.Drill)Set(PrimaryButtonObjectId,true,op.SelectedContract is {} preview&&(op.RefiningAmount==0||op.QueueRefineryBatches)&&(long)op.RawOre+op.RefinedOre+preview.Ore<=op.CargoCapacity);
   Set(CreditsButtonObjectId,research);if(Screen==MiningScreen.AudioCredits)Set(PrimaryButtonObjectId,false);
   Set(SecondaryButtonObjectId,market||research||Screen==MiningScreen.Company);
   Set(CloseButtonObjectId,modal);
@@ -90,10 +94,12 @@ public sealed partial class MiningBusinessUi3D:Component
   if(market&&W(QuantitySliderObjectId) is {} slider){slider.Maximum=Math.Max(1,Trade?.Stock(RefinedSelected)??0);Quantity=Math.Clamp((int)MathF.Round(slider.Value),0,Trade?.Stock(RefinedSelected)??0);}
   for(int i=0;i<ResearchButtonObjectIds.Count;i++)Set(ResearchButtonObjectIds[i],research&&i<(Trade?.Research.Count??0));
   UpdateDefenceHud();UpdateMapInput();LayoutCompact();
+  var hovered=modal?GameObject.Scene!.GameObjects.SelectMany(o=>o.Components.OfType<UiWidget>()).FirstOrDefault(w=>w.Visible&&w.Interactable&&w.IsHovered)?.GameObject.Id??Guid.Empty:Guid.Empty;
+  if(hovered!=hoveredButton){if(hovered!=Guid.Empty)MiningAudio3D.Find(GameObject)?.PlayHoverCue(HoverSoundGain);hoveredButton=hovered;}
  }
  protected override void OnStop(){Input.RequestUiPointer(defencePointerOwner,false);Close();}
  protected override void OnDestroy(){Input.RequestUiPointer(defencePointerOwner,false);Input.RequestUiPointer(this,false);}
- public void OpenNearby(){if(CampEditing)return;if(Screen!=MiningScreen.None){Close();return;}if(Op?.Phase==MiningPhase.Failed){Op.Retry();return;}Open(NearestScreen);}
+ public void OpenNearby(){if(CampEditing)return;if(Screen!=MiningScreen.None){Close();return;}if(Op?.Recovering==true)return;if(Op?.Phase==MiningPhase.Failed){Op.Retry();return;}Open(NearestScreen);}
  public void Open(MiningScreen screen)
  {
   if(CampEditing)return;
@@ -164,19 +170,20 @@ public sealed partial class MiningBusinessUi3D:Component
    else{R(7,1,10,22);R(1,7,22,10);R(4,4,16,16);Q(x+8*u,y+8*u,8*u,8*u,Surface);}
   }
   Card(20,20,210,48);Icon("credit",32,33,22,Accent);T($"{op.Credits:N0} cr",64,29,26,bold:true);
-  Card(20,76,210,64);Icon("ore",32,89,22,Accent);T($"{op.RefinedOre} REFINED",64,82,22,bold:true);T($"{op.RawOre} RAW",64,111,18,muted);
+  Card(20,76,220,80);if(!Image(RefinedOreIcon,32,88,24,24))Icon("box",32,88,24,TextColor);T($"{op.RefinedOre} REFINED",68,85,20,bold:true);if(!Image(RawOreIcon,32,121,24,24))Icon("ore",32,121,24,TextColor);T($"{op.RawOre} RAW",68,118,18,muted);
   var cargoColor=op.CargoFull?new Vector4(.94f,.35f,.23f,1):((float)op.CargoUsed+op.CargoReservedSpace)/op.CargoCapacity>=.8f?Accent:green;
-  Card(20,150,210,78);T($"CARGO {op.CargoUsed:N0} / {op.CargoCapacity:N0}",32,157,18,cargoColor,bold:true);
-  Q(32,188,186,9,new(.18f,.22f,.16f,1));Q(32,188,186*op.CargoFillFraction,9,cargoColor);float reserved=Math.Min(1-op.CargoFillFraction,(float)op.CargoReservedSpace/op.CargoCapacity);if(reserved>0)Q(32+186*op.CargoFillFraction,188,186*reserved,9,Accent);
-  T(op.CargoReservedSpace>0?$"{op.CargoReservedSpace} RESERVED":op.CargoFull?"HOLD FULL":$"{Math.Max(0,op.CargoCapacity-op.CargoUsed)} SPACE FREE",32,203,15,op.CargoFull?cargoColor:muted);
-  float activityY=238;
+  Card(20,166,220,78);T($"CARGO {op.CargoUsed:N0} / {op.CargoCapacity:N0}",32,173,18,cargoColor,bold:true);
+  Q(32,204,186,9,new(.18f,.22f,.16f,1));Q(32,204,186*op.CargoFillFraction,9,cargoColor);float reserved=Math.Min(1-op.CargoFillFraction,(float)op.CargoReservedSpace/op.CargoCapacity);if(reserved>0)Q(32+186*op.CargoFillFraction,204,186*reserved,9,Accent);
+  T(op.CargoReservedSpace>0?$"{op.CargoReservedSpace} RESERVED":op.CargoFull?"HOLD FULL":$"{Math.Max(0,op.CargoCapacity-op.CargoUsed)} SPACE FREE",32,219,15,op.CargoFull?cargoColor:muted);
+  float activityY=254;
   if(op.RefiningAmount>0){Card(20,activityY,280,52);T($"REFINING  {op.RefiningProgress:P0}",32,activityY+4,20,bold:true);Bar(32,activityY+34,256,7,op.RefiningProgress,green);activityY+=60;}
   if(trade?.SaleInProgress==true){Card(20,activityY,280,52);T($"SHIPPING  {trade.SaleProcessed}/{trade.SaleQuantity}",32,activityY+4,20,bold:true);Bar(32,activityY+34,256,7,trade.SaleProgress,Accent);}
   string wave=op.Phase==MiningPhase.Drilling?$"WAVE {op.CompletedRounds+1:00}  |  {Math.Max(0,op.EnemiesScheduled-op.EnemiesSpawned)+op.AliveEnemies} LEFT":op.Phase==MiningPhase.Failed?"OPERATION FAILED":$"OPERATION {op.CompletedRounds+1:00}  |  READY";
   Card(width/2-200,20,400,52);T(wave,width/2,29,27,bold:true,anchor:UiAnchor.TopCenter);
-  Card(width-240,20,220,50);T("DRILL HEALTH",width-224,25,16,bold:true);Bar(width-224,52,188,8,op.DrillHealthFraction,green);
+
   var player=GameObject.Scene?.FindGameObject(op.PlayerObjectId);var hp=player?.GetComponent<HealthComponent>();var energy=player?.GetComponent<ResourceMeter3D>();
   float vitalsY=height-(ShowEnergy?100:66);
+  Card(20,vitalsY-58,325,46);T("DRILL",34,vitalsY-46,16,bold:true);Bar(115,vitalsY-40,138,13,op.DrillHealthFraction,green);T($"{op.DrillHealthFraction:P0}",266,vitalsY-47,20,bold:true);
   Card(20,vitalsY,325,ShowEnergy?80:46);Icon("health",34,vitalsY+15,18,green);T("HP",62,vitalsY+12,18,bold:true);Bar(115,vitalsY+18,138,13,hp?.HealthPercent??0,green);T($"{hp?.CurrentHealth??0:0} / {hp?.MaxHealth??100:0}",266,vitalsY+11,21,bold:true);
   if(ShowEnergy){Icon("energy",34,height-54,18,Accent);T("ENERGY",62,height-57,18,bold:true);Bar(115,height-51,138,13,energy?.Fraction??0,Accent);T($"{energy?.Current??0:0} / {energy?.Capacity??100:0}",266,height-58,21,bold:true);}
   var weapon=player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;Card(width-285,height-100,265,80);if(weapon?.Definition is {} iconDef&&!Image(iconDef.HudIcon,width-274,height-85,86,43))Icon("gun",width-260,height-79,36,TextColor);T(weapon==null?"UNARMED":$"{weapon.CurrentAmmo}",width-172,height-94,48,bold:true);if(weapon!=null)T($"/ {weapon.ReserveAmmo}",width-100,height-77,30,bold:true);

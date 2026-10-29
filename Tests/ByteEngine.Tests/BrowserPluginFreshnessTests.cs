@@ -16,6 +16,8 @@ internal static partial class BrowserChunkTests
   Reject();
   File.WriteAllText(builds,JsonSerializer.Serialize(new Dictionary<string,object>{{plugin.Id,new{version=plugin.Version,sha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly)))}}}));
   WebGamePackageExporter.ValidatePluginBuilds(dir,[plugin]);
+  File.WriteAllText(assembly,"changed code, same version");Reject();
+  File.WriteAllText(assembly,"current plugin");
   plugin=plugin with { Version="1.0.1" };Reject();
   Console.WriteLine("PASS Browser plugin freshness: missing metadata rejected, matching code accepted, newer project plugin rejected");
  }

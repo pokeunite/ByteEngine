@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-const {decodeUiPacket}=await import('data:text/javascript;base64,'+readFileSync('Player/ByteEngine.Browser/wwwroot/frame-wire.js').toString('base64'));
+const wireUrl='data:text/javascript;base64,'+readFileSync('Player/ByteEngine.Browser/wwwroot/frame-wire.js').toString('base64');
+const {decodeUiPacket,decodeDrawPacket}=await import(wireUrl);
+const drawBytes=new Uint8Array(136+3*64),drawHeader=new DataView(drawBytes.buffer);
+drawHeader.setInt32(0,2,true);drawHeader.setInt32(4,1,true);
+const drawValues=new Float32Array(drawBytes.buffer,8);for(let i=0;i<drawValues.length;i++)drawValues[i]=i+.125;
+const decoded=decodeDrawPacket(drawBytes,{});
+assert.equal(decoded.model[15],15.125);assert.equal(decoded.wet[0],16.125);
+assert.equal(decoded.instances.length,32);assert.equal(decoded.shadowInstances[0],64.125);
+assert.equal(decoded.instances.buffer,drawBytes.buffer);
+const drawPadded=new Uint8Array(drawBytes.length+4);drawPadded.set(drawBytes,4);
+assert.equal(decodeDrawPacket(drawPadded.subarray(4),{}).shadowInstances[15],79.125);
+drawHeader.setInt32(0,-1,true);assert.throws(()=>decodeDrawPacket(drawBytes,{}),/Invalid/);
+drawHeader.setInt32(0,3,true);assert.throws(()=>decodeDrawPacket(drawBytes,{}),/Invalid/);
+assert.throws(()=>decodeDrawPacket(new Uint8Array(4),{}),/Invalid/);
+console.log('PASS Binary draw matrices, wet contacts, visible/shadow ordering, exact offsets and malformed counts');
 const bytes=new Uint8Array(4*56),view=new DataView(bytes.buffer);
 for(let i=0;i<4;i++){
     view.setInt32(i*56,i,true);view.setInt32(i*56+4,17000001,true);
@@ -16,14 +30,19 @@ const padded=new Uint8Array(bytes.length+7);padded.set(bytes,7);
 assert.equal(decodeUiPacket(padded.subarray(7),4)[1].texture,17000001);
 assert.throws(()=>decodeUiPacket(bytes,3),/Invalid/);
 assert.throws(()=>decodeUiPacket(bytes,-1),/Invalid/);
-view.setInt32(0,4,true);assert.throws(()=>decodeUiPacket(bytes,4),/Unknown/);
+view.setInt32(0,4,true);assert.equal(decodeUiPacket(bytes,4)[0].kind,'line');
+view.setInt32(0,5,true);assert.throws(()=>decodeUiPacket(bytes,4),/Unknown/);
 decodeUiPacket(new Uint8Array(),0,commands);assert.equal(commands.length,0);
 console.log('PASS Binary UI coordinates, colors, command order, exact integer IDs, reuse, subarray offsets and malformed packet rejection');
 
-const {BrowserRenderer}=await import('data:text/javascript;base64,'+readFileSync('Player/ByteEngine.Browser/wwwroot/renderer.js').toString('base64'));
+const waterUrl='data:text/javascript;base64,'+readFileSync('Player/ByteEngine.Browser/wwwroot/water.js').toString('base64');
+const rendererSource=readFileSync('Player/ByteEngine.Browser/wwwroot/renderer.js','utf8').replace("'./water.js'",JSON.stringify(waterUrl)).replace("'./frame-wire.js'",JSON.stringify(wireUrl));
+const {BrowserRenderer}=await import('data:text/javascript;base64,'+Buffer.from(rendererSource).toString('base64'));
 const calls=[];
 const gl=new Proxy({}, {get:(_,name)=>/^[A-Z_0-9]+$/.test(name)?0:(...args)=>{calls.push([name,...args]);return name==='getUniformLocation'?args[1]:undefined;}});
-const renderer=Object.assign(Object.create(BrowserRenderer.prototype),{gl,ui:{clearRect(){},globalAlpha:1},materials:new Map(),meshes:new Map([[7,{vao:{},count:3}]]),textures:new Map(),tints:new Map(),tintBytes:0,locations:new Map(),profile:{},gpuTimer:null});
+const uiCalls=[];
+const ui=new Proxy({canvas:{width:100,height:100},globalAlpha:1},{get:(o,k)=>k in o?o[k]:(...a)=>uiCalls.push([k,...a])});
+const renderer=Object.assign(Object.create(BrowserRenderer.prototype),{gl,ui,prepareTargets(){},worldTarget:{},waterTarget:{},postLocations:{},targetWidth:100,targetHeight:100,materials:new Map(),meshes:new Map([[7,{vao:{},count:3}]]),textures:new Map(),tints:new Map(),tintBytes:0,locations:new Map(),profile:{},gpuTimer:null});
 const material={material:4,color:[1,.5,.25,1],metallic:0,roughness:.7,ao:1,normalStrength:1,cutoff:-1,channels:[0,1,2],emission:[0,0,0],tiling:[1,1],offset:[0,0],heightUv:[0,0,1,1],heightSize:[1,1],heightRange:0,heightBias:0,depth:true,write:true,blend:'Opaque',cull:'None',front:'CounterClockwise'};
 const frame={materials:[material],deadMaterials:[],deadMeshes:[],deadTextures:[],uploads:[],textures:[],background:[0,0,0],vp:[],eye:[0,0,0],lights:[],points:[],draws:[{id:7,material:4,model:[11],instances:[]},{id:7,material:4,model:[22],instances:[]}],ui:[]};
 renderer.draw(frame,100,100);
@@ -34,3 +53,48 @@ frame.materials=[{...material,color:[0,1,0,1]}];renderer.draw(frame,100,100);ass
 frame.draws=[];frame.materials=[];frame.deadMaterials=[4];renderer.draw(frame,100,100);assert.equal(renderer.materials.size,0);
 frame.draws=[{id:7,material:4,model:[],instances:[]}];assert.throws(()=>renderer.draw(frame,100,100),/Missing browser material/);
 console.log('PASS Material reuse, independent model transforms, state binding, changed colors, retirement and missing-reference rejection');
+frame.draws=[];frame.deadMaterials=[];frame.ui=[{kind:'line',x:2,y:3,w:80,h:50,sx:2,color:[1,1,1,1]}];
+renderer.draw(frame,100,100);assert.equal(uiCalls.filter(c=>c[0]==='stroke').length,1);assert(uiCalls.some(c=>c[0]==='moveTo'&&c[1]===2&&c[2]===3));assert(uiCalls.some(c=>c[0]==='lineTo'&&c[1]===80&&c[2]===50));
+console.log('PASS One browser stroke per HUD line with exact endpoints and thickness');
+renderer.gpuTimer={GPU_DISJOINT_EXT:900,TIME_ELAPSED_EXT:901};
+renderer.gpuQueries=[{elapsed:20000000},{elapsed:6000000}];
+renderer.gl=new Proxy(gl,{get:(target,name)=>{
+    if(name==='QUERY_RESULT_AVAILABLE')return 902;
+    if(name==='QUERY_RESULT')return 903;
+    if(name==='getQueryParameter')return (query,field)=>field===902?true:query.elapsed;
+    if(name==='getParameter')return ()=>false;
+    return Reflect.get(target,name);
+}});
+renderer.draw(frame,100,100);
+assert.equal(renderer.profile.gpuMs,6,'Newest completed GPU sample must win');
+console.log('PASS GPU timing retains the newest available sample');
+
+// Real buffer identities exercise rotation, bounded extra storage and cleanup.
+renderer.gpuTimer=null;let bufferSerial=0;
+renderer.gl=new Proxy(gl,{get:(target,name)=>name==='createBuffer'?()=>({buffer:++bufferSerial}):Reflect.get(target,name)});
+const vertexData=new Uint8Array(new Float32Array(24).buffer),indexData=new Uint8Array(new Uint32Array([0,1,2]).buffer);
+const paddedPixels=new Uint8Array(24);paddedPixels.fill(255,4,20);
+renderer.readBuffer=i=>[vertexData,indexData,paddedPixels.subarray(4,20),new Uint8Array([255,0,0,255])][i];
+frame.ui=[];frame.draws=[];calls.length=0;
+for(let i=0;i<6;i++){frame.uploads=[{id:88,vertices:0,indices:i===0?1:-1}];renderer.draw(frame,100,100);}
+assert.equal(renderer.meshes.get(88).vertexSlots.length,3);
+assert.equal(new Set(renderer.meshes.get(88).vertexSlots).size,3);
+assert.equal(renderer.extraVertexBytes,vertexData.byteLength*2);
+assert.equal(calls.filter(c=>c[0]==='bufferSubData').length,3,'warmed rotating buffers should update existing storage');
+frame.uploads=[];frame.deadMeshes=[88];calls.length=0;renderer.draw(frame,100,100);
+assert.equal(calls.filter(c=>c[0]==='deleteBuffer').length,4);assert.equal(renderer.extraVertexBytes,0);
+frame.deadMeshes=[];renderer.extraVertexBytes=64*1024*1024;
+for(let i=0;i<2;i++){frame.uploads=[{id:89,vertices:0,indices:i===0?1:-1}];renderer.draw(frame,100,100);}
+assert.equal(renderer.meshes.get(89).vertexSlots.length,1,'rotation must respect the extra-memory budget');
+renderer.extraVertexBytes=0;frame.uploads=[];
+const pixelsWritten=[];
+globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>({putImageData:image=>pixelsWritten.push(image.data.length)})})};
+globalThis.ImageData=class {constructor(data,width,height){assert.equal(data.length,width*height*4);this.data=data;}};
+frame.textures=[0,2].map(x=>({id:90,width:4,height:2,w:2,h:2,x,y:0,partial:true,allocate:x===0,pixels:2,hdr:false,nearest:false}));
+calls.length=0;renderer.draw(frame,100,100);
+assert.equal(calls.filter(c=>c[0]==='generateMipmap').length,1,'chunked texture should build mipmaps only once per frame');
+assert.deepEqual(pixelsWritten,[16,16],'texture copies must honor byte offsets and lengths');
+frame.textures=[{id:90,width:4,height:2,w:1,h:1,x:0,y:0,partial:true,allocate:false,pixels:3,hdr:false,nearest:false}];
+calls.length=0;renderer.draw(frame,100,100);
+assert.equal(calls.filter(c=>c[0]==='generateMipmap').length,1,'interior dirty regions must refresh their mip chain too');
+console.log('PASS dynamic vertex rotation/budget/retirement, texture subarrays and one mipmap build per dirty texture');

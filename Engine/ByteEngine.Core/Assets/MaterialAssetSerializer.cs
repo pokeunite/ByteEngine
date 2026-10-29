@@ -133,10 +133,13 @@ public static class MaterialAssetSerializer
         };
         options.Converters.Add(new JsonStringEnumConverter());
         options.Converters.Add(new MaterialAssetReferenceConverter());
+        options.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.Combine(
+            ByteEngine.Core.Serialization.PortableAssetJsonContext.Default,
+            new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
         return options;
     }
 
-    private sealed class MaterialDocument
+    internal sealed class MaterialDocument
     {
         public int Version { get; set; } = MaterialAsset.CurrentVersion;
         public MaterialAssetKind Kind { get; set; }

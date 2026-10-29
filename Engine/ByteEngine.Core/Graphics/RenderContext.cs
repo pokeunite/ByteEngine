@@ -85,8 +85,7 @@ public sealed class RenderContext
         }
         else
         {
-            int steps = Math.Clamp((int)(length/Math.Max(thickness,1)),1,512);
-            for(int i=0;i<=steps;i++) FrameSink.DrawQuad(Vector2.Lerp(from,to,i/(float)steps)-new Vector2(thickness*.5f),new(thickness),color);
+            FrameSink.DrawLine(from,to,thickness,color);
         }
     }
 

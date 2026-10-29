@@ -49,7 +49,7 @@ public sealed partial class MiningPauseMenu3D
   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;
   for(int i=0;i<160;i++){int x0=(int)MathF.Round(c.TargetWidth*i/160f),x1=(int)MathF.Round(c.TargetWidth*(i+1)/160f);float alpha=.95f*MathF.Pow(1-i/160f,2.1f);c.DrawUiQuad(new(x0,0),new(x1-x0,c.TargetHeight),new(0,0,0,alpha));}
   void T(string value,float x,float y,int size,Vector4 color)=>c.DrawUiText(value,HeadingFont,(int)(size*s),new(x*s,y*s),color,UiAnchor.TopLeft);
-  T("MAIN MENU",w*.13f,h*.22f,34,text);
+  T(string.IsNullOrWhiteSpace(CompanyTitle)?"MAIN MENU":CompanyTitle.ToUpperInvariant(),w*.13f,h*.22f,34,text);
   items.Clear();BuildMain(w,h);bool hovered=items.Any(i=>Inside(i.X,i.Y,i.W,i.H));
   for(int n=0;n<items.Count;n++){var i=items[n];bool selected=Inside(i.X,i.Y,i.W,i.H)||!hovered&&focus==n;T(i.Label,i.X,i.Y+6,28,selected?accent:text);if(selected){c.DrawUiQuad(new((i.X-90)*s,(i.Y+20)*s),new(9*s),accent);c.DrawUiLine(new((i.X-70)*s,(i.Y+24)*s),new((i.X-22)*s,(i.Y+24)*s),s,accent);}}
 

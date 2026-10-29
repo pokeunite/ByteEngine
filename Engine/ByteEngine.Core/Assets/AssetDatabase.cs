@@ -25,6 +25,7 @@ public sealed class AssetDatabase : IDisposable
     public AssetDependencyGraph Dependencies { get; } = new();
     private bool _disposed;
     private readonly bool _readOnly;
+    public bool IsReadOnly=>_readOnly;
 
     public string ProjectRoot => _projectRoot;
     public IReadOnlyCollection<AssetRecord> Assets => _byGuid.Values;

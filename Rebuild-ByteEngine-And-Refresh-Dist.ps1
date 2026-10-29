@@ -41,6 +41,15 @@ function SyncFolder([string]$source,[string]$destination){
  if(!$destination.StartsWith($InstallRoot+'\',[StringComparison]::OrdinalIgnoreCase)){throw "Install target outside the requested engine: $destination"}
  New-Item -ItemType Directory -Path $destination -Force | Out-Null
  foreach($item in Get-ChildItem -LiteralPath $source -Force){Copy-Item -LiteralPath $item.FullName -Destination $destination -Recurse -Force}
+ # A copy-only install leaves old fingerprinted WebAssembly binaries behind.
+ # Only prune direct files in the generated browser framework folder.
+ $relativeFramework=if([IO.Path]::GetFileName($source)-eq 'BrowserRuntime'){'_framework'}else{'BrowserRuntime/_framework'}
+ $sourceFramework=Join-Path $source $relativeFramework;$targetFramework=[IO.Path]::GetFullPath((Join-Path $destination $relativeFramework))
+ if((Test-Path -LiteralPath $sourceFramework)-and(Test-Path -LiteralPath $targetFramework)){
+  if(!$targetFramework.StartsWith($InstallRoot+'\',[StringComparison]::OrdinalIgnoreCase)-or[IO.Path]::GetFileName($targetFramework)-ne '_framework'){throw "Unsafe generated browser target: $targetFramework"}
+  $currentFiles=@(Get-ChildItem -LiteralPath $sourceFramework -File | ForEach-Object Name)
+  foreach($old in Get-ChildItem -LiteralPath $targetFramework -File){if($old.Name-notin $currentFiles){Remove-Item -LiteralPath $old.FullName -Force}}
+ }
 }
 Push-Location $SourceRoot
 try{

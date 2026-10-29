@@ -94,7 +94,8 @@ public sealed class RenderWorld
         RenderQueue3D queue = RenderQueue3D.Opaque,
         bool frustumCulling = true,
         bool castShadows = true,
-        bool receiveShadows = true)
+        bool receiveShadows = true,
+        BoundingBox3D? knownWorldBounds = null)
     {
         ArgumentNullException.ThrowIfNull(
             mesh);
@@ -103,8 +104,7 @@ public sealed class RenderWorld
             material);
 
         BoundingBox3D worldBounds =
-            mesh.LocalBounds.Transform(
-                modelMatrix);
+            knownWorldBounds??mesh.LocalBounds.Transform(modelMatrix);
 
         if(material.HeightFieldTexture!=null){
             var low=mesh.LocalBounds.Minimum;var high=mesh.LocalBounds.Maximum;

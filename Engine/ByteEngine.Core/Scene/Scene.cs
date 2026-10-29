@@ -18,10 +18,12 @@ public sealed partial class Scene
     public float SimulationTimeScale { get; set; } = 1f;
     public double SimulationTime { get; private set; }
     public RuntimeFrameMetrics LastFrameMetrics { get; private set; }
+    public ComponentFrameProfiler ComponentProfiler { get; } = new();
     internal double AnimationMilliseconds;
     internal int AnimatedComponentCount;
     private readonly List<GameObject> _gameObjects =
         new();
+    private Dictionary<Guid,GameObject>? _objectLookup;
 
     private readonly HashSet<Guid> _pendingDestroy =
         new();
@@ -283,8 +285,11 @@ public sealed partial class Scene
     public GameObject? FindGameObject(string name) =>
         _gameObjects.FirstOrDefault(item => item.Name == name);
 
-    public GameObject? FindGameObject(Guid id) =>
-        _gameObjects.FirstOrDefault(item => item.Id == id);
+    public GameObject? FindGameObject(Guid id)
+    {
+        if(_objectLookup==null){_objectLookup=new();foreach(var item in _gameObjects)_objectLookup.TryAdd(item.Id,item);}
+        return _objectLookup.GetValueOrDefault(id);
+    }
 
     public GameObject? FindFirstWithTag(Guid tagId) =>
         _tagIndex.TryGetValue(tagId, out HashSet<GameObject>? objects) ? objects.FirstOrDefault(item => item.ActiveInHierarchy) : null;
@@ -356,11 +361,14 @@ public sealed partial class Scene
 
     private readonly List<GameObject> _frameObjects = new();
     private readonly List<(GameObject Object, int Order, int Index)> _renderObjects = new();
+    private readonly List<(GameObject Object,int Order)> _renderOrderInputs=new();
+    private readonly List<GameObject> _renderOrderCache=new();
 
     internal void UpdateInternal()
     {
         if (!_loaded) return;
 
+        ComponentProfiler.BeginFrame();
         using var timeScope = Time.EnterSceneScale(SimulationTimeScale);
         SimulationTime += Time.DeltaTime;
         VisualLogic.CreatorSceneServices.AdvanceIfPresent(this,Time.DeltaTime);
@@ -557,16 +565,24 @@ public sealed partial class Scene
         }
     }
 
-    private IEnumerable<GameObject> GetRenderOrder()
+    private List<GameObject> GetRenderOrder()
     {
+        bool same=_renderOrderInputs.Count==_gameObjects.Count;
+        if(same)for(int i=0;i<_gameObjects.Count;i++)if(!ReferenceEquals(_renderOrderInputs[i].Object,_gameObjects[i])||_renderOrderInputs[i].Order!=_gameObjects[i].RenderOrder){same=false;break;}
+        if(same)return _renderOrderCache;
+        _renderOrderInputs.Clear();_renderOrderCache.Clear();
         _renderObjects.Clear();
         for (int i = 0; i < _gameObjects.Count; i++)
+        {
             _renderObjects.Add((_gameObjects[i], _gameObjects[i].RenderOrder, i));
+            _renderOrderInputs.Add((_gameObjects[i],_gameObjects[i].RenderOrder));
+        }
         _renderObjects.Sort(static (a, b) =>
         {
             int order = a.Order.CompareTo(b.Order);
             return order != 0 ? order : a.Index.CompareTo(b.Index);
         });
-        for (int i = 0; i < _renderObjects.Count; i++) yield return _renderObjects[i].Object;
+        for (int i = 0; i < _renderObjects.Count; i++) _renderOrderCache.Add(_renderObjects[i].Object);
+        return _renderOrderCache;
     }
 }

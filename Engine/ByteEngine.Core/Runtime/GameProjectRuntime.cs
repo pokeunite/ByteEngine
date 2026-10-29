@@ -24,9 +24,12 @@ public sealed class GameProjectRuntime : IDisposable
     private readonly Guid _spawner;
     private readonly ByteEnginePluginSession _plugins;
     private bool _disposed;
+    private readonly Action<string>? _warning;
+    public IReadOnlyList<ByteEngine.Core.Graphics.Texture2D> PreparedSpawnTextures {get;private set;}=[];
 
     public GameProjectRuntime(string projectFile, Action<string>? warning = null)
     {
+        _warning=warning;
         Project = new ProjectSerializer().Load(projectFile);
         Root = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
         GamePackageExporter.ResolveInside(Root, Project.AssetDirectory);
@@ -66,13 +69,22 @@ public sealed class GameProjectRuntime : IDisposable
     public Scene.Scene LoadScene(string path)
     {
         var scene = Serializer.Load(GamePackageExporter.ResolveInside(Root, path));
+        PrepareScene(scene);return scene;
+    }
+    public IEnumerable<Scene.SceneLoadStep> LoadSceneSteps(string path)
+    {
+        foreach(var step in Serializer.LoadSteps(GamePackageExporter.ResolveInside(Root,path)))
+        {if(step.Scene is {} scene)PrepareScene(scene);yield return step;}
+    }
+    private void PrepareScene(Scene.Scene scene)
+    {
         var missing = scene.GameObjects.SelectMany(o => o.Components).OfType<MissingComponent>()
             .Where(c => c.AuthoredEnabled && c.GameObject.ActiveInHierarchy)
             .Select(c => c.MissingType).Distinct().ToArray();
         if (missing.Length > 0)
             throw new InvalidDataException("The game cannot start because required scene components did not load: " +
                 string.Join(", ", missing) + ". Refresh the Windows player runtime and re-export with the project's runtime plugins enabled.");
-        return scene;
+        PreparedSpawnTextures=RuntimeAssetPrewarmer.Prepare(scene,Database,Assets,_warning);
     }
 
     public void Dispose()

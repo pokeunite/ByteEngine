@@ -43,6 +43,23 @@ jobs:
       - name: Browser content regressions
         run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --web-chunks
 
+      - name: Shared portable lifecycle and browser integrity
+        run: dotnet run --project Tests/ByteEngine.Browser.Tests/ByteEngine.Browser.Tests.csproj --configuration Release
+
+      - name: Engine allocation and render cache budgets
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --engine-optimization
+
+      - name: Rigid skin animation and deformation fallback
+        run: dotnet run --project Tests/ByteEngine.GltfSkin.Tests/ByteEngine.GltfSkin.Tests.csproj --configuration Release
+
+      - name: Direct texture upload and scene loading lifecycle
+        run: |
+          dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --browser-texture-lifecycle
+          dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --scene-navigation
+
+      - name: Event evaluation and timer regressions
+        run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --event-timers
+
       - name: Mesh collision regressions
         run: dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj --configuration Release --no-build --no-restore -- --roadmap-mesh
 
@@ -87,6 +104,10 @@ jobs:
           node --check Player/ByteEngine.Browser/wwwroot/performance.js
           node Tests/BrowserSmoke/performance.mjs
           node Tests/BrowserRuntime/FrameWire.test.mjs
+          node Tests/BrowserRuntime/Input.test.mjs
+          node Tests/BrowserRuntime/PerformanceCapture.test.mjs
+          node Tests/BrowserRuntime/ReleaseGate.test.mjs
+          node Tests/BrowserRuntime/PublishedRuntime.test.mjs Player/ByteEngine.Browser/bin/Release/net9.0/publish/wwwroot
 
       - uses: actions/download-artifact@v4
         with:

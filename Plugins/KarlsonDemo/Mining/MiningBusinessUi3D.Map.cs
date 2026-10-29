@@ -34,7 +34,7 @@ public sealed partial class MiningBusinessUi3D
   }
  }
  Vector2 NodePoint(CompanyUpgrade n)=>new Vector2(mapWidth*.5f,300)+(mapPositions.GetValueOrDefault(n.Id))*ResearchZoom+ResearchPan;
- bool NodeVisible(Vector2 p)=>p.X>52&&p.X<mapWidth-52&&p.Y>158&&p.Y<442;
+ bool NodeVisible(Vector2 p)=>p.X>52&&p.X<mapWidth-52&&p.Y>158&&p.Y<430;
  float NodeRadius=>30*Math.Clamp(ResearchZoom,.7f,1.15f);
  void UpdateMapInput()
  {

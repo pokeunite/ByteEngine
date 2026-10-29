@@ -25,6 +25,20 @@ public sealed class SceneData
 
 public sealed class GameObjectData
 {
+    public GameObjectData DeepClone()=>new() {
+        Id=Id,Name=Name,Active=Active,Tags=Tags.ToList(),Layer=Layer,ParentId=ParentId,ParentSocket=ParentSocket,
+        AttachmentLocationRule=AttachmentLocationRule,AttachmentRotationRule=AttachmentRotationRule,AttachmentScaleRule=AttachmentScaleRule,
+        AttachmentOffset=CopyTransform(AttachmentOffset),Transform=CopyTransform(Transform)!,
+        Components=Components.Select(c=>new ComponentData {Type=c.Type,Enabled=c.Enabled,Properties=(JsonObject)c.Properties.DeepClone()}).ToList(),
+        Variables=Variables.Select(v=>new VariableData {Name=v.Name,Value=v.Value.Clone()}).ToList()
+    };
+    private static TransformData? CopyTransform(TransformData? t)=>t==null?null:new() {
+        LocalPosition=t.LocalPosition is {} p?new() {X=p.X,Y=p.Y,Z=p.Z}:null,
+        LocalRotation=t.LocalRotation is {} r?new() {X=r.X,Y=r.Y,Z=r.Z,W=r.W}:null,
+        LocalScale=t.LocalScale is {} s?new() {X=s.X,Y=s.Y,Z=s.Z}:null,
+        Position=t.Position is {} p2?new() {X=p2.X,Y=p2.Y}:null,Rotation=t.Rotation,
+        Size=t.Size is {} s2?new() {X=s2.X,Y=s2.Y}:null
+    };
     public Guid Id { get; set; }
 
     public string Name { get; set; } =

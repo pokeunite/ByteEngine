@@ -5,6 +5,19 @@ namespace ByteEngine.Core.Scene;
 
 public abstract class Component
 {
+    private sealed record Callbacks(bool Update, bool Late, bool Fixed);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, Callbacks> CallbackTypes = new();
+    private Callbacks? _callbacks;
+    private Callbacks RuntimeCallbacks => _callbacks ??= CallbackTypes.GetValue(GetType(), static type =>
+    {
+        bool Overrides(string name) => type.GetMethod(name,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null, Type.EmptyTypes, null)?.DeclaringType != typeof(Component);
+        return new(Overrides(nameof(OnUpdate)), Overrides(nameof(OnLateUpdate)), Overrides(nameof(OnFixedUpdate)));
+    });
+    internal bool HasUpdateCallback => RuntimeCallbacks.Update;
+    internal bool HasLateUpdateCallback => RuntimeCallbacks.Late;
+    internal bool HasFixedUpdateCallback => RuntimeCallbacks.Fixed;
     private GameObject? _gameObject;
 
     private bool _started;
@@ -67,7 +80,10 @@ public abstract class Component
             StartInternal();
         }
 
-        OnUpdate();
+        var profiler = _gameObject?.Scene?.ComponentProfiler;
+        if (profiler is not { Enabled: true }) { OnUpdate(); return; }
+        var start = profiler.Begin(this);
+        try { OnUpdate(); } finally { profiler.End(this, "Update", start); }
     }
 
     internal void LateUpdateInternal()
@@ -82,14 +98,20 @@ public abstract class Component
             StartInternal();
         }
 
-        OnLateUpdate();
+        var profiler = _gameObject?.Scene?.ComponentProfiler;
+        if (profiler is not { Enabled: true }) { OnLateUpdate(); return; }
+        var start = profiler.Begin(this);
+        try { OnLateUpdate(); } finally { profiler.End(this, "LateUpdate", start); }
     }
 
     internal void FixedUpdateInternal()
     {
         if (!Enabled) return;
         if (!_started) StartInternal();
-        OnFixedUpdate();
+        var profiler = _gameObject?.Scene?.ComponentProfiler;
+        if (profiler is not { Enabled: true }) { OnFixedUpdate(); return; }
+        var start = profiler.Begin(this);
+        try { OnFixedUpdate(); } finally { profiler.End(this, "FixedUpdate", start); }
     }
 
     /// <summary>Runs before each fixed physics tick in scenes that opt into fixed simulation.</summary>
@@ -108,7 +130,10 @@ public abstract class Component
             StartInternal();
         }
 
-        OnRender(context);
+        var profiler = _gameObject?.Scene?.ComponentProfiler;
+        if (profiler is not { Enabled: true }) { OnRender(context); return; }
+        var start = profiler.Begin(this);
+        try { OnRender(context); } finally { profiler.End(this, "Render", start); }
     }
 
     internal void RenderEditorInternal(

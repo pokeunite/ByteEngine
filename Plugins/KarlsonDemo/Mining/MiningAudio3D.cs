@@ -74,7 +74,9 @@ public sealed partial class MiningAudio3D:Component
   MiningSoundCue.PlayerHurt=>PlayerHurt,MiningSoundCue.Confirm=>Confirm,MiningSoundCue.Notification=>Notification,MiningSoundCue.Alert=>Alert,MiningSoundCue.Error=>Error,MiningSoundCue.Credits=>Credits,MiningSoundCue.Explosion=>Explosion,MiningSoundCue.Cannon=>Cannon,
   MiningSoundCue.RefineryOpen=>RefineryMenuOpen,MiningSoundCue.PanelClose=>MenuClose,MiningSoundCue.RefineryOreImpact=>OreImpactClip(),MiningSoundCue.PressOpen=>PressMenuOpen,MiningSoundCue.PressStroke=>PressStroke,MiningSoundCue.PressBucketImpact=>PressImpactClip(),MiningSoundCue.DefenceShot=>TurretShot.IsEmpty?PistolShot:TurretShot,MiningSoundCue.RepeaterShot=>RepeaterShot.IsEmpty?PistolShot:RepeaterShot,MiningSoundCue.TerminalOpen=>TerminalOpen,MiningSoundCue.TerminalSelect=>TerminalSelect,MiningSoundCue.TerminalPurchase=>TerminalPurchase,_=>PistolShot
  };
- public bool PlayCue(MiningSoundCue cue,Vector3? position=null,GameObject? owner=null)
+ public bool PlayCue(MiningSoundCue cue,Vector3? position=null,GameObject? owner=null)=>PlayCueWithGain(cue,position,owner,1);
+ public bool PlayHoverCue(float gain=.22f)=>PlayCueWithGain(MiningSoundCue.TerminalSelect,null,null,gain);
+ bool PlayCueWithGain(MiningSoundCue cue,Vector3? position,GameObject? owner,float gain)
  {
   if(!Enum.IsDefined(cue)||AttachedGameObject?.Scene==null)return false;
   double now=Time.TotalTime;if(deadlines.TryGetValue(cue,out var until)&&now<until)return false;
@@ -106,6 +108,7 @@ public sealed partial class MiningAudio3D:Component
   if(cue==MiningSoundCue.PressBucketImpact)source.Pitch=.94f+(float)random.NextDouble()*.12f;
   source.GameObject.Transform.WorldPosition=position??Transform.WorldPosition;
   if(source.ClipReference!=clip||!source.ClipLoaded){source.Stop();if(!AudioRuntimeAssets.TryLoadClip(source,clip,m=>LastError=m))return false;}
+  source.Volume*=Math.Clamp(float.IsFinite(gain)?gain:1,0,1);
   source.Play();if(!source.IsPlaying){LastError=source.BackendStatus;return false;}
   deadlines[cue]=now+gap;PlayedCues++;LastCue=cue.ToString();LastError="";return true;
  }
@@ -130,7 +133,7 @@ public sealed partial class MiningAudio3D:Component
  protected override void OnUpdate()=>Tick((float)Time.DeltaTime);
  public void Tick(float dt)
  {
-  TickMusic(dt);
+  TickMusic((float)Time.UnscaledDeltaTime);
   if(!AutomaticCues){StopAutomatic();return;}
   if(!float.IsFinite(dt)||dt<=0||Op is not {} op||Trade is not {} trade)return;
   if(!stateReady){stateReady=true;previousAmmo=trade.StoredAmmo;previousPhase=op.Phase;refining=op.RefiningAmount>0;shipping=trade.SaleInProgress;}

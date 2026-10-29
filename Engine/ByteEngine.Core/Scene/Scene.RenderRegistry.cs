@@ -5,6 +5,8 @@ namespace ByteEngine.Core.Scene;
 public sealed partial class Scene
 {
     private bool _renderRegistryDirty = true;
+    internal long RenderHierarchyVersion {get;private set;}
+    internal void InvalidateRenderHierarchy()=>RenderHierarchyVersion++;
     private readonly List<SkyEnvironment> _environments = new();
     private readonly List<DirectionalLight> _directionalLights = new();
     private readonly List<PointLight> _pointLights = new();
@@ -13,6 +15,7 @@ public sealed partial class Scene
     internal IReadOnlyList<PointLight> PointLights { get { RefreshRenderRegistry(); return _pointLights; } }
     internal void InvalidateComponentRegistries()
     {
+        _objectLookup=null;
         InvalidatePhysicsRegistry();
         _renderRegistryDirty = true;
     }

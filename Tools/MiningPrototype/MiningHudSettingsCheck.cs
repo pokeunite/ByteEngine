@@ -1,0 +1,24 @@
+using System.Numerics;
+using System.Reflection;
+using ByteEngine.Core;
+using ByteEngine.Core.InputSystem;
+using ByteEngine.Core.Runtime;
+using ByteEngine.Core.Scene;
+using KarlsonDemo.Plugin;
+internal static class MiningHudSettingsCheck
+{
+ static void Check(bool ok,string label){if(!ok)throw new Exception(label);Console.WriteLine("PASS HUD/SETTINGS "+label);}
+ public static void Run(Scene scene,MiningOperation3D op)
+ {
+  var hash=System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Program.Root+"/Scenes/Main.bytescene"));var host=new SceneManager();host.LoadScene(scene);var menu=op.GameObject.GetComponent<MiningPauseMenu3D>()!;menu.PersistSettings=false;var ui=scene.GameObjects.SelectMany(o=>o.Components).OfType<MiningBusinessUi3D>().Single();var trade=op.GameObject.GetComponent<MiningTrade3D>()!;
+  void Frame(Key? key=null,bool mouse=false,Vector2? point=null){var raw=new RawInputSnapshot();if(key is {} k)raw.KeysDown.Add(k);if(mouse)raw.MouseButtonsDown.Add(MouseButton.Left);typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[raw,true]);typeof(Input).GetMethod("SetGameInputCaptured",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[true]);Input.SetGameViewPointer((point??new(640,360))/new Vector2(1280,720),new(1280,720),true);typeof(Time).GetMethod("Update",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,[.05d]);typeof(Scene).GetMethod("UpdateInternal",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(scene,null);}
+  (string Label,Vector2 Position,Vector2 Size)[] Items(){typeof(MiningPauseMenu3D).GetMethod("Build",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(menu,[1280f,720f,false]);return ((System.Collections.IEnumerable)typeof(MiningPauseMenu3D).GetField("items",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(menu)!).Cast<object>().Select(i=>{var t=i.GetType();float F(string n)=>(float)t.GetProperty(n)!.GetValue(i)!;return ((string)t.GetProperty("Label")!.GetValue(i)!,new Vector2(F("X"),F("Y")),new Vector2(F("W"),F("H")));}).ToArray();}
+  void Click(string prefix){Frame();var item=Items().First(i=>i.Label.StartsWith(prefix));Frame(mouse:true,point:item.Position+item.Size/2);Frame();}
+  Frame();menu.Open();Check(Items().Max(i=>i.Size.X)<400,"pause actions fit a compact panel");menu.ShowPage(MiningPausePage.Graphics);Check(Items().Count(i=>i.Label=="BACK")==1&&!Items().Any(i=>i.Label.Contains("ESC")),"settings have one clearly labelled Back button");
+  GameWindowMode applied=GameWindowMode.Fullscreen;using(var lease=GameWindowDisplay.Attach(m=>applied=m,GameWindowMode.Fullscreen)){menu.ShowPage(MiningPausePage.Graphics);foreach(var expected in new[]{GameWindowMode.Windowed,GameWindowMode.Borderless,GameWindowMode.Fullscreen}){Click("WINDOW MODE|");Click(expected.ToString().ToUpperInvariant());Click("APPLY");Check(applied==expected,"graphics mode selector and Apply request "+expected);}}Click("BACK");Check(menu.Page==MiningPausePage.Pause,"Back click returns to pause");menu.Resume();
+  Check(!ui.RawOreIcon.IsEmpty&&!ui.RefinedOreIcon.IsEmpty&&ui.RawOreIcon!=ui.RefinedOreIcon,"raw and refined ore have separate authored icons");
+  typeof(MiningOperation3D).GetProperty("Credits")!.SetValue(op,1000000);var licence=trade.Research.First(n=>n.Stat=="AutogunGrant");void Unlock(string id){var n=trade.Research.First(n=>n.Id==id);foreach(var p in n.Prerequisites)Unlock(p);if(!trade.HasResearch(id))Check(trade.BuyResearch(id),"unlock defence licence prerequisite "+n.Name);}Unlock(licence.Id);Frame();Check(ui.ReadyDefenceHudCount>0,"ready defence is exposed on the HUD");Frame(Key.LeftAlt);Check(!Input.IsUiPointerRequested,"Alt no longer captures the pointer");Frame();Frame(Key.F1);Frame();var player=scene.FindGameObject(op.PlayerObjectId)!;var planner=player.GetComponent<MiningDefensePlanner3D>()!;Check(planner.BuildMode&&planner.SelectedKind==MiningDefenseKind.Sentry,"F1 starts sentry placement without Alt");Check(ui.DefenceButtonObjectIds.All(id=>scene.FindGameObject(id)?.GetComponent<ByteEngine.Core.Graphics.UiWidget>()?.Visible!=true),"decorative defence cards cannot steal mouse-look clicks");
+  player.Transform.WorldPosition=new(15,0,-30);bool placed=false;foreach(var offset in new[]{new Vector3(4,0,0),new Vector3(-4,0,0),new Vector3(0,0,4),new Vector3(0,0,-4)})if(planner.TryPlace(player.Transform.WorldPosition+offset)){placed=true;break;}Check(placed,"ready defence can be deployed to valid ground");Frame();Check(planner.Available(MiningDefenseKind.Sentry)==0&&ui.ReadyDefenceHudCount==0,"fully deployed defence disappears from ready HUD");
+  host.UnloadScene();Check(hash.SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Program.Root+"/Scenes/Main.bytescene"))),"verification preserves scene and saves");
+ }
+}

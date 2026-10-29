@@ -36,11 +36,12 @@ internal static class MiningCampGeometry
  internal static float SurfaceDistance(GameObject root,Vector3 point)
  {
   float distance=float.PositiveInfinity;
-  foreach(var o in root.Scene!.GameObjects.Where(o=>o.ActiveInHierarchy&&Under(o,root)))foreach(var c in o.Components.OfType<Collider3D>().Where(c=>c.Enabled&&!c.IsTrigger))
+  foreach(var o in Hierarchy(root).Where(o=>o.ActiveInHierarchy))foreach(var c in o.Components.OfType<Collider3D>().Where(c=>c.Enabled&&!c.IsTrigger))
   {
    var b=ColliderBounds(c);if(b.Minimum.Y>point.Y+2.2f)continue;
    float x=Math.Clamp(point.X,b.Minimum.X,b.Maximum.X),z=Math.Clamp(point.Z,b.Minimum.Z,b.Maximum.Z);distance=Math.Min(distance,Vector2.Distance(new(point.X,point.Z),new(x,z)));
   }
   return float.IsFinite(distance)?distance:Vector3.Distance(root.Transform.WorldPosition,point);
  }
+ static IEnumerable<GameObject> Hierarchy(GameObject root){yield return root;foreach(var child in root.Children)foreach(var item in Hierarchy(child))yield return item;}
 }

@@ -42,7 +42,8 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     private readonly Dictionary<Guid, int> _indices = [];
     private readonly Dictionary<Guid, double> _started = [], _cooldowns = [];
     private readonly List<(long Sequence,string Name)> _signals = [];
-    private HashSet<Guid> _visited = [];
+    private readonly HashSet<Guid> _visited = [];
+    private readonly List<Guid> _previousRunning=new(),_obsoleteKeys=new();
     private Guid? _movementOwner;
     private NavigationAgent3D? _ownedAgent;
     private SimpleEnemyAI3D? _combatDriver;
@@ -85,7 +86,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
         {
             float remaining=stagger.StaggerRemaining;CancelMovement();CancelCombat();CancelAdvanced("Designated stagger");
             stagger.Stagger(remaining);stagger.TickStagger(delta);_indices.Clear();_started.Clear();_status.Clear();
-            Status=BehaviorStatus.Running;CurrentTask="Staggered — normal decisions suspended";return;
+            Status=BehaviorStatus.Running;CurrentTask="Staggered â€” normal decisions suspended";return;
         }
         if(Paused){CancelMovement();CancelCombat();CancelAdvanced("Paused");return;}
         if(GameObject.GetComponent<SimpleEnemyAI3D>() is {BehaviorControlled:true,Enabled:false}){CancelMovement();CancelCombat();CancelAdvanced("Encounter inactive");_indices.Clear();_started.Clear();Status=BehaviorStatus.Idle;CurrentTask="Waiting for encounter";LastError="";return;}
@@ -114,13 +115,13 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
         if (!dodging&&_movementOwner.HasValue){var before=Transform.WorldPosition;_ownedAgent?.Tick(delta);GameObject.GetComponent<SimpleEnemyAI3D>()?.SetBehaviorMovement(Vector3.DistanceSquared(before,Transform.WorldPosition)>.000001f);}
         _combatDriver?.TickBehaviorCombat(delta);
         _accumulator+=delta;if(_accumulator<Interval)return;_accumulator=0;
-        var previousRunning = _status.Where(p=>p.Value==BehaviorStatus.Running).Select(p=>p.Key).ToArray();
-        LastError="";Sense();RunServices();_visited=[];_status.Clear();CurrentTask="Idle";
+        _previousRunning.Clear();foreach(var pair in _status)if(pair.Value==BehaviorStatus.Running)_previousRunning.Add(pair.Key);
+        LastError="";Sense();RunServices();_visited.Clear();_status.Clear();CurrentTask="Idle";
         try { Status=Evaluate(_definition.Root,0); }
         catch(Exception e) {LastError="Behaviour stopped: "+e.Message;Status=BehaviorStatus.Failure;CancelMovement();CancelCombat();}
-        foreach(var id in previousRunning.Where(id=>!_visited.Contains(id))){_status[id]=BehaviorStatus.Aborted;Record(id,"Aborted","Higher-priority rule or condition changed");}
-        foreach(var id in _started.Keys.Where(id=>!_visited.Contains(id)).ToArray())_started.Remove(id);
-        foreach(var id in _indices.Keys.Where(id=>!_visited.Contains(id)).ToArray())_indices.Remove(id);
+        foreach(var id in _previousRunning)if(!_visited.Contains(id)){_status[id]=BehaviorStatus.Aborted;Record(id,"Aborted","Higher-priority rule or condition changed");}
+        _obsoleteKeys.Clear();foreach(var id in _started.Keys)if(!_visited.Contains(id))_obsoleteKeys.Add(id);foreach(var id in _obsoleteKeys)_started.Remove(id);
+        _obsoleteKeys.Clear();foreach(var id in _indices.Keys)if(!_visited.Contains(id))_obsoleteKeys.Add(id);foreach(var id in _obsoleteKeys)_indices.Remove(id);
         if(_movementOwner.HasValue&&!_visited.Contains(_movementOwner.Value))CancelMovement();
         if(_combatNode.HasValue&&!_visited.Contains(_combatNode.Value))CancelCombat();
         CleanupAdvanced();

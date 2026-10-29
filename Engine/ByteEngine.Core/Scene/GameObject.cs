@@ -14,6 +14,30 @@ public sealed class GameObject
     private int _layer;
     private bool _started;
     private Scene? _scene;
+    private bool _hasUpdateCallbacks, _hasLateCallbacks, _hasFixedCallbacks;
+    private Dictionary<Type, Component?>? _componentLookup;
+    private Component[]? _updateSchedule;
+    private Component[] _lateSchedule = [], _fixedSchedule = [];
+    private int[] _scheduledOrders = [];
+
+    private void InvalidateComponentCaches()
+    {
+        _componentLookup?.Clear();
+        _updateSchedule = null;
+        _lateSchedule = _fixedSchedule = [];
+        _scheduledOrders = [];
+    }
+
+    private void RefreshCallbacks()
+    {
+        _hasUpdateCallbacks = _hasLateCallbacks = _hasFixedCallbacks = false;
+        foreach (var component in _components)
+        {
+            _hasUpdateCallbacks |= component.HasUpdateCallback;
+            _hasLateCallbacks |= component.HasLateUpdateCallback;
+            _hasFixedCallbacks |= component.HasFixedUpdateCallback;
+        }
+    }
 
     public Guid Id { get; private set; }
     public string Name { get; set; }
@@ -81,6 +105,7 @@ public sealed class GameObject
         Parent = parent;
         if (parent == null) ParentSocket = string.Empty;
         Parent?._children.Add(this);
+        _scene?.InvalidateRenderHierarchy();
 
         _scene?.MoveObjectToEndOfSiblingGroup(this);
 
@@ -185,6 +210,11 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
+        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)_scene?.InvalidateRenderHierarchy();
+        InvalidateComponentCaches();
+        _hasUpdateCallbacks |= component.HasUpdateCallback;
+        _hasLateCallbacks |= component.HasLateUpdateCallback;
+        _hasFixedCallbacks |= component.HasFixedUpdateCallback;
         _contactComponents=null;
         _scene?.InvalidateComponentRegistries();
 
@@ -197,9 +227,22 @@ public sealed class GameObject
 
     public T? GetComponent<T>() where T : Component
     {
-        foreach (Component component in _components)
-            if (component is T match) return match;
-        return null;
+        int count = _components.Count;
+        if (count == 0) return null;
+        if (count == 1) return _components[0] as T;
+        var type = typeof(T);
+        if (_componentLookup != null && _componentLookup.TryGetValue(type, out var cached)) return (T?)cached;
+        T? result = null;
+        for (int i = 0; i < count; i++)
+            if (_components[i] is T match) { result = match; break; }
+        // Cache misses too: most ancestor searches ask for an absent engine component.
+        // Do not root types from collectible editor plugin contexts through a negative cache.
+        if (!type.Assembly.IsCollectible)
+        {
+            _componentLookup ??= new();
+            if (_componentLookup.Count < 32) _componentLookup[type] = result;
+        }
+        return result;
     }
 
     public bool TryGetComponent<T>(out T? component)
@@ -218,12 +261,17 @@ public sealed class GameObject
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
         _components.Clear();_contactComponents=null;
         _scene?.InvalidateComponentRegistries();_components.AddRange(ordered);
+        if(_components.Any(c=>c is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance))_scene?.InvalidateRenderHierarchy();
+        InvalidateComponentCaches();
     }
 
     public bool RemoveComponent(Component component)
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
+        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)_scene?.InvalidateRenderHierarchy();
+        InvalidateComponentCaches();
+        RefreshCallbacks();
         _contactComponents=null;
         _scene?.InvalidateComponentRegistries();
 
@@ -248,10 +296,11 @@ public sealed class GameObject
 
     internal void UpdateInternal()
     {
-        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
+        if (!_hasUpdateCallbacks) return;
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
 
         // A single component needs no ordered enumeration or sort buffer.
         if (_components.Count == 1)
@@ -265,10 +314,11 @@ public sealed class GameObject
 
     internal void LateUpdateInternal()
     {
-        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
+        if (!_hasLateCallbacks) return;
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
 
         // A single component needs no ordered enumeration or sort buffer.
         if (_components.Count == 1)
@@ -282,39 +332,61 @@ public sealed class GameObject
 
     internal void FixedUpdateInternal()
     {
-        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
+        if (!_hasFixedCallbacks) return;
+        using var localClock=Time.EnterObjectScale(SimulationRate3D.Resolve(this));
         int count = _components.Count;
         if (count == 0) return;
         if (count == 1) { _components[0].FixedUpdateInternal(); return; }
-        var snapshot = System.Buffers.ArrayPool<Component>.Shared.Rent(count);
-        try
-        {
-            _components.CopyTo(snapshot, 0);
-            for (int i = 1; i < count; i++)
-            {
-                var value = snapshot[i]; int j = i - 1;
-                while (j >= 0 && snapshot[j].UpdateOrder > value.UpdateOrder)
-                { snapshot[j + 1] = snapshot[j]; j--; }
-                snapshot[j + 1] = value;
-            }
-            for (int i = 0; i < count; i++) snapshot[i].FixedUpdateInternal();
-        }
-        finally { System.Buffers.ArrayPool<Component>.Shared.Return(snapshot, clearArray: true); }
+        EnsureComponentSchedule();
+        var snapshot = _fixedSchedule;
+        for (int i = 0; i < snapshot.Length; i++) snapshot[i].FixedUpdateInternal();
     }
 
     private void RunOrderedComponents(bool late)
     {
-        // A snapshot retains mutation-during-update semantics, while pooled storage avoids
-        // the two LINQ sort buffers previously allocated per object per frame.
-        int count=_components.Count;var snapshot=System.Buffers.ArrayPool<Component>.Shared.Rent(count);
-        try{
-            _components.CopyTo(snapshot,0);
-            for(int i=1;i<count;i++){var value=snapshot[i];int j=i-1;while(j>=0&&snapshot[j].UpdateOrder>value.UpdateOrder){snapshot[j+1]=snapshot[j];j--;}snapshot[j+1]=value;}
-            for(int i=0;i<count;i++){if(late)snapshot[i].LateUpdateInternal();else snapshot[i].UpdateInternal();}
+        EnsureComponentSchedule();
+        // Hold the old immutable snapshot if a callback changes component membership.
+        var snapshot = late ? _lateSchedule : _updateSchedule!;
+        for (int i = 0; i < snapshot.Length; i++)
+            if (late) snapshot[i].LateUpdateInternal(); else snapshot[i].UpdateInternal();
+    }
+
+    private void EnsureComponentSchedule()
+    {
+        int count = _components.Count;
+        if (_updateSchedule != null && _scheduledOrders.Length == count)
+        {
+            bool same = true;
+            for (int i = 0; i < count; i++)
+                if (_scheduledOrders[i] != _components[i].UpdateOrder) { same = false; break; }
+            if (same) return;
         }
-        finally{System.Buffers.ArrayPool<Component>.Shared.Return(snapshot,clearArray:true);}
+        _scheduledOrders = new int[count];
+        var ordered = new (Component Item, int Order)[count];
+        for (int i = 0; i < count; i++)
+        {
+            int order = _components[i].UpdateOrder;
+            _scheduledOrders[i] = order;
+            ordered[i] = (_components[i], order);
+        }
+        // Stable insertion order preserves equal-priority callbacks and authored order.
+        for (int i = 1; i < count; i++)
+        {
+            var value = ordered[i]; int j = i - 1;
+            while (j >= 0 && ordered[j].Order > value.Order) { ordered[j + 1] = ordered[j]; j--; }
+            ordered[j + 1] = value;
+        }
+        var updates = new List<Component>(); var late = new List<Component>(); var fixedUpdates = new List<Component>();
+        for (int i = 0; i < count; i++)
+        {
+            var component = ordered[i].Item;
+            if (component.HasUpdateCallback) updates.Add(component);
+            if (component.HasLateUpdateCallback) late.Add(component);
+            if (component.HasFixedUpdateCallback) fixedUpdates.Add(component);
+        }
+        _updateSchedule = updates.ToArray(); _lateSchedule = late.ToArray(); _fixedSchedule = fixedUpdates.ToArray();
     }
 
     internal void RenderInternal(Graphics.RenderContext context)

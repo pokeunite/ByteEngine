@@ -15,6 +15,8 @@ using ByteEngine.Editor.Panels;
 using ByteEngine.Core.Animation;
 
 MiningPauseTests.Run();
+MiningPcPolishTests.Run();
+MiningWorkshopBalanceTests.Run();
 HuntCombatTests.Run();
 CombatPolishTests.Run();
 NavigationFireballTests.Run();

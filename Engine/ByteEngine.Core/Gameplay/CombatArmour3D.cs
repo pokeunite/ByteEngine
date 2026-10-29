@@ -83,6 +83,7 @@ public sealed class CombatArmour3D : Component
 public sealed class DamageRegion3D : Component
 {
  [SceneObjectReference] public Guid HealthOwnerId {get;set;}
+ public bool IsWeakPoint {get;set;}=true;
  public void ApplyDamage(float amount,Vector3 direction)
- {var owner=GameObject.Scene?.FindGameObject(HealthOwnerId)??GameObject.Parent;owner?.GetComponent<HealthComponent>()?.DamageHit(amount,direction,GameObject.ActiveInHierarchy);}
+ {var owner=GameObject.Scene?.FindGameObject(HealthOwnerId)??GameObject.Parent;owner?.GetComponent<HealthComponent>()?.DamageHit(amount,direction,IsWeakPoint&&GameObject.ActiveInHierarchy);}
 }

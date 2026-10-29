@@ -671,9 +671,7 @@ public sealed class SceneSerializer
         var clones = new List<GameObjectData>();
         foreach (GameObjectData source in sourceObjects)
         {
-            GameObjectData clone = JsonSerializer.Deserialize<GameObjectData>(
-                JsonSerializer.Serialize(source, JsonSerialization.Options),
-                JsonSerialization.Options) ?? throw new InvalidDataException("Could not clone Blueprint object data.");
+            GameObjectData clone = source.DeepClone();
             clone.Id = idMap[source.Id];
             clone.ParentId = source.ParentId.HasValue && idMap.TryGetValue(source.ParentId.Value, out Guid parentId)
                 ? parentId

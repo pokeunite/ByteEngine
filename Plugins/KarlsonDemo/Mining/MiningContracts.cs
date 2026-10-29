@@ -29,6 +29,10 @@ public sealed partial class MiningOperation3D
  [Category("Enemy pressure")] public float RaiderMoveSpeed{get;set;}=3.8f;
  [Category("Enemy pressure")] public float HunterHealth{get;set;}=50;
  [Category("Enemy pressure")] public float RaiderHealth{get;set;}=75;
+ [Category("Enemy pressure")] public float HunterDamage{get;set;}=6;
+ [Category("Enemy pressure")] public float RaiderDamage{get;set;}=6;
+ [Category("Enemy pressure")] public int HunterAttackSlots{get;set;}=3;
+ [Category("Enemy pressure")] public int RaiderAttackSlots{get;set;}=3;
  [Category("Enemy pressure")] public float HealthGrowthPerOperation{get;set;}=.06f;
  [Category("Enemy pressure")] public float MaximumHealthGrowth{get;set;}=2;
  [Category("Enemy pressure")] public float HunterWindup{get;set;}=.38f;
@@ -44,8 +48,9 @@ public sealed partial class MiningOperation3D
  [Category("Live state")] public MiningWavePreview? ActiveWave{get;private set;}
  public IReadOnlyList<MiningContract> Contracts
  {
-  get{try{var list=JsonSerializer.Deserialize<MiningContract[]>(ContractsJson)??[];return list.Length==3&&list.All(c=>c!=null)&&list.Select(c=>c.Id).Distinct().Count()==3&&list.All(c=>c!=null&&!string.IsNullOrWhiteSpace(c.Id)&&Valid(c.EnemyMultiplier,.1f,10)&&Valid(c.OreMultiplier,.1f,10)&&Valid(c.SpawnIntervalMultiplier,.1f,5)&&Valid(c.SpeedMultiplier,.1f,3)&&Valid(c.DamageMultiplier,.1f,5)&&Valid(c.HealthMultiplier,.1f,5)&&Valid(c.HunterFraction,0,1))?list:[];}catch(JsonException){return [];}}
+  get{if(parsedContractsJson==ContractsJson)return parsedContracts;parsedContractsJson=ContractsJson;try{var list=JsonSerializer.Deserialize<MiningContract[]>(ContractsJson)??[];return parsedContracts=list.Length==3&&list.All(c=>c!=null)&&list.Select(c=>c.Id).Distinct().Count()==3&&list.All(c=>c!=null&&!string.IsNullOrWhiteSpace(c.Id)&&Valid(c.EnemyMultiplier,.1f,10)&&Valid(c.OreMultiplier,.1f,10)&&Valid(c.SpawnIntervalMultiplier,.1f,5)&&Valid(c.SpeedMultiplier,.1f,3)&&Valid(c.DamageMultiplier,.1f,5)&&Valid(c.HealthMultiplier,.1f,5)&&Valid(c.HunterFraction,0,1))?list:[];}catch(JsonException){return parsedContracts=[];}}
  }
+ string? parsedContractsJson;IReadOnlyList<MiningContract> parsedContracts=[];
  static bool Valid(float n,float min,float max)=>float.IsFinite(n)&&n>=min&&n<=max;
  public MiningWavePreview? PreviewContract(int index)
  {
@@ -67,7 +72,7 @@ public sealed partial class MiningOperation3D
   ai.MovementSpeedMultiplier=speed/Math.Max(.1f,combat.MoveSpeed);combat.MoveSpeed=speed;
   if(enemy.GetComponent<NavigationAgent3D>() is {} agent)agent.Speed=speed;
   combat.WindupSeconds=Math.Clamp(hunter?HunterWindup:RaiderWindup,.2f,5);combat.RecoverySeconds=Math.Clamp(hunter?HunterRecovery:RaiderRecovery,.2f,5);combat.AttackCooldown=Math.Clamp(hunter?HunterAttackCooldown:RaiderAttackCooldown,.3f,10);
-  combat.Damage*=ActiveWave?.DamageMultiplier??1;ai.DecisionInterval=.08f;ai.MaximumAttackers=hunter?3:4;
-  if(!hunter&&RaiderDodging){combat.DodgeEnabled=true;combat.DodgeCooldown=Math.Clamp(RaiderDodgeCooldown,2,15);combat.DodgeSpeed=5;combat.DodgeSeconds=.18f;var evade=enemy.AddComponent(new MiningEnemyEvasion3D{PlayerObjectId=PlayerObjectId,Chance=Math.Clamp(RaiderDodgeChance,0,1),Cooldown=combat.DodgeCooldown,ReactionSeconds=Math.Clamp(RaiderDodgeReaction,.1f,.5f)});}
+  combat.Damage=Math.Clamp(hunter?HunterDamage:RaiderDamage,0,1000)*(ActiveWave?.DamageMultiplier??1);ai.DecisionInterval=.08f;ai.MaximumAttackers=Math.Clamp(hunter?HunterAttackSlots:RaiderAttackSlots,1,12);
+  if(!hunter&&RaiderDodging){combat.DodgeEnabled=true;combat.DodgeCooldown=Math.Clamp(RaiderDodgeCooldown,2,15);combat.DodgeSpeed=5;combat.DodgeSeconds=.18f;var evade=enemy.GetComponent<MiningEnemyEvasion3D>()??enemy.AddComponent(new MiningEnemyEvasion3D{PlayerObjectId=PlayerObjectId,Chance=Math.Clamp(RaiderDodgeChance,0,1),Cooldown=combat.DodgeCooldown,ReactionSeconds=Math.Clamp(RaiderDodgeReaction,.1f,.5f)});}
  }
 }

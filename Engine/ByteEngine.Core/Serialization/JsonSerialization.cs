@@ -25,6 +25,8 @@ internal static class JsonSerialization
         };
         options.Converters.Add(new Vector4JsonConverter());
         options.Converters.Add(new JsonStringEnumConverter());
+        options.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.Combine(
+            PortableAssetJsonContext.Default, new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver());
         return options;
     }
 

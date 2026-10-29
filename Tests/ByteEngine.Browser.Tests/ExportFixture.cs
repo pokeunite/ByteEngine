@@ -70,15 +70,22 @@ internal static class ExportFixture
         if (archive.GetEntry("index.html")==null || archive.GetEntry("web-game.json")==null)
             throw new Exception("HTML ZIP must have root entry page and manifest.");
         if (Directory.Exists(Path.Combine(site, "Content")) || Directory.Exists(Path.Combine(site, "Resources")) ||
-            archive.GetEntry("Game.bytepak") == null)
+            !archive.Entries.Any(e => e.FullName.StartsWith("Game.bytepak.", StringComparison.Ordinal) && e.FullName.EndsWith(".bin")))
             throw new Exception("Web export must ship packaged content rather than loose assets.");
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(site,"web-game.json")));
+        string assembled = Path.Combine(parent, ByteAssetPackage.FileName);
+        using (var output = File.Create(assembled))
+            foreach (var part in manifest.RootElement.GetProperty("files").EnumerateArray())
+            {
+                string file = GamePackageExporter.ResolveInside(site, part.GetProperty("path").GetString()!);
+                using var input = File.OpenRead(file); input.CopyTo(output);
+            }
         string extracted = Path.Combine(parent, "Mounted Web Package");
-        var packedPaths = ByteAssetPackage.Extract(Path.Combine(site, ByteAssetPackage.FileName), extracted);
+        var packedPaths = ByteAssetPackage.Extract(assembled, extracted);
         var cooked = CookedModelStore.Load(Path.Combine(extracted,"Content"),modelId);
         if (cooked.Skeleton==null || cooked.Animations.Count!=1 || cooked.Meshes.Count!=1)
             throw new Exception("Cooked skeleton/animation/mesh lost.");
-        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(site,"web-game.json")));
-        if (manifest.RootElement.GetProperty("formatVersion").GetInt32() != 2 ||
+        if (manifest.RootElement.GetProperty("formatVersion").GetInt32() != 3 ||
             !packedPaths.Any(path => path.EndsWith(".ttf")) || !packedPaths.Any(path => path.EndsWith(".wav")))
             throw new Exception("Default font missing.");
         if(before.Any(p=>File.GetLastWriteTimeUtc(p.Key)!=p.Value))throw new Exception("Export changed source content.");

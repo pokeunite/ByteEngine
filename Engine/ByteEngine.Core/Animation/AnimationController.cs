@@ -441,9 +441,9 @@ public sealed partial class AnimationController : Component
                 model =
                     assets.LoadModel(instance.Model);
             }
-            catch
+            catch (Exception error)
             {
-                continue;
+                throw new InvalidDataException($"Animation model '{instance.Model.ProjectPath}' could not load on '{gameObject.Name}'.", error);
             }
 
             if (model.Skeleton == null)

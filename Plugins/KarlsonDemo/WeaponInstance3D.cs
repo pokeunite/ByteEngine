@@ -147,9 +147,7 @@ public sealed class WeaponInstance3D : Component
         if (!CanFire || Definition is not {} d || GameObject.Scene is not {} scene ||
             !float.IsFinite(direction.LengthSquared()) || direction.LengthSquared() < 1e-6f) return false;
         direction = Vector3.Normalize(direction);
-        var right=Vector3.Cross(direction,Vector3.UnitY);if(right.LengthSquared()<.0001f)right=Vector3.UnitX;else right=Vector3.Normalize(right);
-        var up=Vector3.Normalize(Vector3.Cross(right,direction));
-        direction=Vector3.Normalize(direction+up*MathF.Tan(RecoilAngles.X*MathF.PI/180)+right*MathF.Tan(RecoilAngles.Y*MathF.PI/180));
+        direction=RecoiledDirection(direction);
         float moving=owner.GetComponent<ByteEngine.Core.Characters.CharacterController3D>()?.Speed??0;
         CurrentInaccuracyDegrees=WeaponDefinition3D.Bound(d.AccuracyDegrees,0,0,45)+AccuracyBloom+
             WeaponDefinition3D.Bound(d.MovingInaccuracyDegrees,0,0,45)*Math.Clamp(moving/2,0,1);
@@ -169,7 +167,7 @@ public sealed class WeaponInstance3D : Component
             Vector3 end = origin + shot * range;
             if (d.ShotMode == WeaponShotMode.Hitscan)
             {
-                if (GameplayQuery3D.Raycast(scene, origin, shot, out var hit, range, owner, mask, includeTriggers: false))
+                if (GameplayQuery3D.RaycastWithDamageHits(scene, origin, shot, out var hit, range, owner, mask, includeTriggers: false,includeDamageTriggers:true))
                 {
                     end = hit.Point; HitCount++; HitThisFrame = true;_shotHits.Add(new(hit,shot)); Hit?.Invoke(hit);
                     if(hit.GameObject.GetComponent<DamageRegion3D>() is {} region)region.ApplyDamage(WeaponDefinition3D.Bound(d.DamagePerPellet,25,0,100000),shot);
@@ -184,7 +182,7 @@ public sealed class WeaponInstance3D : Component
                 var launcher = owner.GetComponent<ProjectileLauncher3D>() ?? owner.AddComponent(new ProjectileLauncher3D());
                 Vector3 muzzle = muzzlePosition;
                 // Aim at the camera's first obstruction, but launch from the model socket.
-                if (GameplayQuery3D.Raycast(scene, origin, shot, out var aim, range, owner, mask, includeTriggers: false)) end = aim.Point;
+                if (GameplayQuery3D.RaycastWithDamageHits(scene, origin, shot, out var aim, range, owner, mask, includeTriggers: false,includeDamageTriggers:true)) end = aim.Point;
                 launcher.MuzzleOffset = Vector3.Transform(muzzle, Matrix4x4.Invert(owner.Transform.WorldMatrix, out var inverse) ? inverse : Matrix4x4.Identity);
                 launcher.ProjectileBlueprint = d.ProjectileBlueprint;
                 launcher.ProjectileSpeed = WeaponDefinition3D.Bound(d.ProjectileSpeed, 30, .1f, 500);
@@ -241,6 +239,13 @@ public sealed class WeaponInstance3D : Component
         _sinceShot=0;
         ByteEngine.Core.AI.AIWorld.ReportNoise(scene,muzzlePosition,WeaponDefinition3D.Bound(d.NoiseRadius,24,0,1000),owner.Id,"Gunshot");
         ShotsFired++; FiredThisFrame = true; Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
+    }
+    public Vector3 RecoiledDirection(Vector3 direction)
+    {
+        if(direction.LengthSquared()<.000001f)return Vector3.UnitZ;direction=Vector3.Normalize(direction);
+        var right=Vector3.Cross(direction,Vector3.UnitY);right=right.LengthSquared()<.0001f?Vector3.UnitX:Vector3.Normalize(right);
+        var up=Vector3.Normalize(Vector3.Cross(right,direction));
+        return Vector3.Normalize(direction+up*MathF.Tan(RecoilAngles.X*MathF.PI/180)+right*MathF.Tan(RecoilAngles.Y*MathF.PI/180));
     }
     private static float ApproachZero(float value,float amount)=>Math.Sign(value)*Math.Max(0,Math.Abs(value)-amount);
     private void Flash(Vector3 position, Vector3 direction)

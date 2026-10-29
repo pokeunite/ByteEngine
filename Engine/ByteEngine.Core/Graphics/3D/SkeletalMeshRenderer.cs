@@ -1145,10 +1145,9 @@ public sealed partial class SkeletalMeshRenderer : Component
                 ? runtime.SkinMatrices
                 : runtime.SkinMatrices = new Matrix4x4[_skeleton.Bones.Count];
 
-            for (int boneIndex = 0;
-                 boneIndex < skinMatrices.Length;
-                 boneIndex++)
+            foreach (int boneIndex in runtime.UsedBones)
             {
+                if(boneIndex<0||boneIndex>=skinMatrices.Length)continue;
                 int nodeIndex =
                     _boneNodeIndices[boneIndex];
 
@@ -1179,21 +1178,33 @@ public sealed partial class SkeletalMeshRenderer : Component
 
             // Unchanged bones cannot deform this mesh. Retain the completed
             // vertex buffer instead of skinning and uploading it again.
-            bool skinChanged = runtime.PreviousSkinMatrices.Length != skinMatrices.Length;
+            bool rigid=runtime.RigidBoneIndex>=0&&runtime.RigidBoneIndex<skinMatrices.Length&&
+                SupportsRigidTransform(skinMatrices[runtime.RigidBoneIndex]);
+            bool skinChanged = !runtime.HasPreviousSkinPose||runtime.PreviousSkinMatrices.Length != skinMatrices.Length;
             if (!skinChanged)
                 foreach (int bone in runtime.UsedBones)
                     if (bone >= 0 && bone < skinMatrices.Length &&
                         runtime.PreviousSkinMatrices[bone] != skinMatrices[bone])
                     { skinChanged = true; break; }
-            if (skinChanged)
+            if(rigid)
+            {
+                // One common bone is a model transform, not a vertex deformation.
+                // Restore source geometry once if an earlier non-uniform pose
+                // required CPU skinning. Bounds and pose captures use this matrix.
+                if(runtime.CpuDeformed){runtime.Source.Vertices.CopyTo(runtime.DeformedVertices,0);runtime.Mesh.UpdateVertices(runtime.DeformedVertices);runtime.CpuDeformed=false;}
+            }
+            else if (skinChanged||!runtime.CpuDeformed)
             {
                 long skinStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 SkinMesh(runtime, skinMatrices);
+                runtime.CpuDeformed=true;
                 DiagnosticSkinTicks += System.Diagnostics.Stopwatch.GetTimestamp() - skinStart;
                 if (runtime.PreviousSkinMatrices.Length != skinMatrices.Length)
                     runtime.PreviousSkinMatrices = new Matrix4x4[skinMatrices.Length];
-                skinMatrices.CopyTo(runtime.PreviousSkinMatrices, 0);
             }
+            if(runtime.PreviousSkinMatrices.Length!=skinMatrices.Length)runtime.PreviousSkinMatrices=new Matrix4x4[skinMatrices.Length];
+            foreach(int bone in runtime.UsedBones)if(bone>=0&&bone<skinMatrices.Length)runtime.PreviousSkinMatrices[bone]=skinMatrices[bone];
+            runtime.HasPreviousSkinPose=true;
 
             /*
              * Keep the animation result in model space. World placement is
@@ -1205,7 +1216,7 @@ public sealed partial class SkeletalMeshRenderer : Component
              * or another rotated importer axis.
              */
             runtime.MeshToModelMatrix =
-                meshGlobal *
+                (rigid?skinMatrices[runtime.RigidBoneIndex]:Matrix4x4.Identity)*meshGlobal *
                 rootMotionCorrection;
         }
 
@@ -1580,6 +1591,16 @@ public sealed partial class SkeletalMeshRenderer : Component
         return globals[index];
     }
 
+    private static bool SupportsRigidTransform(Matrix4x4 matrix)
+    {
+        // Uniform orthogonal transforms preserve the existing skinned normal
+        // direction. Non-uniform scale/shear remains on the CPU fallback path.
+        var x=new Vector3(matrix.M11,matrix.M12,matrix.M13);var y=new Vector3(matrix.M21,matrix.M22,matrix.M23);var z=new Vector3(matrix.M31,matrix.M32,matrix.M33);
+        float length=x.LengthSquared(),tolerance=Math.Max(1e-8f,length*1e-4f);
+        return float.IsFinite(length)&&length>1e-12f&&Math.Abs(y.LengthSquared()-length)<tolerance&&Math.Abs(z.LengthSquared()-length)<tolerance&&
+            Math.Abs(Vector3.Dot(x,y))<tolerance&&Math.Abs(Vector3.Dot(x,z))<tolerance&&Math.Abs(Vector3.Dot(y,z))<tolerance&&
+            matrix.M14==0&&matrix.M24==0&&matrix.M34==0&&matrix.M44==1;
+    }
     private static void SkinMesh(
         RuntimeSkinnedMesh runtime,
         Matrix4x4[] skinMatrices)
@@ -1866,6 +1887,9 @@ public sealed partial class SkeletalMeshRenderer : Component
         public SkinInfluences[] Influences { get; }
         public int[] SingleBoneIndices { get; }
         public bool AllSingleBone { get; }
+        public int RigidBoneIndex {get;}
+        public bool CpuDeformed {get;set;}
+        public bool HasPreviousSkinPose {get;set;}
         public int[] UsedBones { get; }
         public Matrix4x4[] PreviousSkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
         public Matrix4x4[] SkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
@@ -1907,6 +1931,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                 allSingleBone &= count == 1;
             }
             AllSingleBone = allSingleBone;
+            RigidBoneIndex=allSingleBone&&SingleBoneIndices.Length>0&&SingleBoneIndices.All(i=>i==SingleBoneIndices[0])?SingleBoneIndices[0]:-1;
             UsedBones = Influences.SelectMany(i => new[] {
                 (i.Bone0,i.Weight0), (i.Bone1,i.Weight1),
                 (i.Bone2,i.Weight2), (i.Bone3,i.Weight3) })

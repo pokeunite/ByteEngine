@@ -47,6 +47,7 @@ public sealed class MiningThirdPerson3D:Component
   if(GameObject.Scene?.ActiveCamera is {} camera&&GameObject.GetComponent<FpsGunLab3D>() is {} gun)
   {
    Vector3 target=gun.GetThirdPersonAimTarget(out bool blocked);if(blocked)color=new(1,.3f,.16f,1);
+   if(gun.SelectedWeapon is {} weapon&&weapon.TryGetMuzzleWorldPosition(out var muzzle)){var ray=target-muzzle;target=muzzle+weapon.RecoiledDirection(ray)*ray.Length();}
    Vector4 clip=Vector4.Transform(new Vector4(target,1),camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(c.TargetWidth/(float)Math.Max(1,c.TargetHeight)));
    if(clip.W>.001f)p=new((clip.X/clip.W+1)*c.TargetWidth*.5f,(1-clip.Y/clip.W)*c.TargetHeight*.5f);
   }

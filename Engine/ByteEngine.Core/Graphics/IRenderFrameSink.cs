@@ -17,5 +17,10 @@ public interface IRenderFrameSink
     void DrawText(string value, string? fontPath, int size, Vector2 position,
         Vector4 color, float wrapWidth, UiAnchor anchor);
     void DrawQuad(Vector2 position, Vector2 size, Vector4 color);
+    void DrawLine(Vector2 from, Vector2 to, float thickness, Vector4 color)
+    {
+        int steps = Math.Clamp((int)(Vector2.Distance(from,to)/Math.Max(thickness,1)),1,512);
+        for(int i=0;i<=steps;i++) DrawQuad(Vector2.Lerp(from,to,i/(float)steps)-new Vector2(thickness*.5f),new(thickness),color);
+    }
     void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color);
 }

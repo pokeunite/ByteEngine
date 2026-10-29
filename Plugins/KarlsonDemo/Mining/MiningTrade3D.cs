@@ -15,9 +15,22 @@ public sealed partial class MiningTrade3D:Component
  [Category("Ammo press")] public int BaseStorage{get;set;}=100;
  [Category("Ammo press")] public int ExtraStoragePerLevel{get;set;}=50;
  [Category("Ammo press")] public float EfficiencyPerLevel{get;set;}=.1f;
- [Category("Ammo press")] public int OutputCost{get;set;}=35;
- [Category("Ammo press")] public int StorageCost{get;set;}=25;
- [Category("Ammo press")] public int EfficiencyCost{get;set;}=40;
+ [Category("Ammo press / cycles")] public bool UseProductionCycles{get;set;}
+ [Category("Ammo press / cycles")] public float BaseCycleSeconds{get;set;}=5;
+ [Category("Ammo press / cycles")] public float CycleSecondsReductionPerLevel{get;set;}=.5f;
+ [Category("Ammo press / cycles")] public float MinimumCycleSeconds{get;set;}=1;
+ [Category("Ammo press / cycles")] public int BaseRoundsPerCycle{get;set;}=5;
+ [Category("Ammo press / cycles")] public int ExtraRoundsPerCycle{get;set;}=1;
+ public float CycleDurationAt(int level)=>Math.Max(Math.Max(.1f,MinimumCycleSeconds),BaseCycleSeconds-Math.Max(0,level)*Math.Max(0,CycleSecondsReductionPerLevel));
+ public float CycleDuration=>CycleDurationAt(OutputLevel);
+ public float RoundsAt(int level)=>Math.Max(1,BaseRoundsPerCycle+Math.Max(0,level)*Math.Max(0,ExtraRoundsPerCycle))*(1+ProductionResearchBonus);
+ public float RoundsPerCycle=>RoundsAt(EfficiencyLevel);
+ public float ProductionCycleProgress=>Math.Clamp(productionClock/Math.Max(.1f,CycleDuration),0,1);
+ float productionClock;
+ [Category("Ammo press")] public int OutputCost{get;set;}=140;
+ [Category("Ammo press")] public int StorageCost{get;set;}=110;
+ [Category("Ammo press")] public int EfficiencyCost{get;set;}=180;
+ [Category("Ammo press")] public float UpgradeCostGrowth{get;set;}=2.15f;
  [Category("Ammo press")] public int MaximumLevel{get;set;}=5;
  [Category("Market")] public float MinimumMultiplier{get;set;}=.65f;
  [Category("Market")] public float MaximumMultiplier{get;set;}=1.6f;
@@ -40,8 +53,8 @@ public sealed partial class MiningTrade3D:Component
  public float PriceClock{get;private set;}
  public uint MarketSeed{get;private set;}=247319;
  public IReadOnlyList<float> History=>_history;
- public float Output=>Math.Max(0,BaseOutputPerSecond+OutputLevel*ExtraOutputPerLevel)*(1+EfficiencyLevel*Math.Max(0,EfficiencyPerLevel))*(1+ProductionResearchBonus);
- public float OutputAt(int speedLevel,int payloadLevel)=>Math.Max(0,BaseOutputPerSecond+speedLevel*ExtraOutputPerLevel)*(1+payloadLevel*Math.Max(0,EfficiencyPerLevel))*(1+ProductionResearchBonus);
+ public float Output=>OutputAt(OutputLevel,EfficiencyLevel);
+ public float OutputAt(int speedLevel,int payloadLevel)=>UseProductionCycles?RoundsAt(payloadLevel)/CycleDurationAt(speedLevel):Math.Max(0,BaseOutputPerSecond+speedLevel*ExtraOutputPerLevel)*(1+payloadLevel*Math.Max(0,EfficiencyPerLevel))*(1+ProductionResearchBonus);
  public int Capacity=>Math.Max(1,BaseStorage+StorageLevel*ExtraStoragePerLevel);
  public int CollectibleAmmo{get{var op=Operation;var weapon=op==null?null:GameObject.Scene?.FindGameObject(op.PlayerObjectId)?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;return weapon?.Definition is {} d?Math.Min((int)StoredAmmo,Math.Max(0,d.ReserveCapacity-weapon.ReserveAmmo)):0;}}
  public MiningOperation3D? Operation=>GameObject.Scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>();
@@ -70,7 +83,12 @@ public sealed partial class MiningTrade3D:Component
  {
   if(!float.IsFinite(delta)||delta<=0)return;Initialize();var op=Operation;if(op==null)return;
   TickShipment(delta);
-  if(op.Phase!=MiningPhase.Failed)StoredAmmo=Math.Min(Capacity,StoredAmmo+Output*delta);
+  if(op.Phase!=MiningPhase.Failed)
+  {
+   if(!UseProductionCycles)StoredAmmo=Math.Min(Capacity,StoredAmmo+Output*delta);
+   else if(StoredAmmo>=Capacity)productionClock=0;
+   else{productionClock+=delta;int cycles=(int)Math.Min(100000,Math.Floor(productionClock/CycleDuration));if(cycles>0){StoredAmmo=Math.Min(Capacity,StoredAmmo+cycles*RoundsPerCycle);productionClock-=cycles*CycleDuration;if(StoredAmmo>=Capacity)productionClock=0;}}
+  }
   if(op.Phase==MiningPhase.Preparation){if(AutomaticRefining&&op.RawOre>0&&op.RefiningAmount==0)op.BeginRefining();if(AutomaticAmmoDelivery)Collect();}
   PriceClock=Math.Min(PriceClock+delta,Math.Max(.1f,PriceIntervalSeconds)*4);int budget=4;while(PriceClock>=Math.Max(.1f,PriceIntervalSeconds)&&budget-->0){PriceClock-=Math.Max(.1f,PriceIntervalSeconds);StepPrice();}
   saveClock+=delta;if(saveClock>=5){saveClock=0;Save();}
@@ -79,7 +97,7 @@ public sealed partial class MiningTrade3D:Component
  public float Quote(bool refined)=>MathF.Round(Math.Max(0,refined?Operation?.RefinedOrePrice??5:Operation?.RawOrePrice??2)*PriceMultiplier+Stat("OilPriceFloor"),2);
  public int Stock(bool refined)=>Math.Max(0,(refined?Operation?.RefinedOre??0:Math.Max(0,(Operation?.RawOre??0)-(Operation?.RefiningAmount??0)))-(SaleInProgress&&SaleRefined==refined?SaleQuantity-SaleProcessed:0));
  public int Level(int row)=>row switch{0=>OutputLevel,1=>StorageLevel,_=>EfficiencyLevel};
- public int Cost(int row)=>(int)Math.Clamp(Math.Ceiling((row switch{0=>OutputCost,1=>StorageCost,_=>EfficiencyCost})*Math.Pow(1.65,Level(row))),1,1000000000);
+ public int Cost(int row)=>(int)Math.Clamp(Math.Ceiling((row switch{0=>OutputCost,1=>StorageCost,_=>EfficiencyCost})*Math.Pow(Math.Clamp(UpgradeCostGrowth,1,3),Level(row))),1,1000000000);
  public bool Buy(int row){Initialize();if(row is <0 or >2||Level(row)>=MaximumLevel||Operation?.SpendCredits(Cost(row))!=true)return false;switch(row){case 0:OutputLevel++;break;case 1:StorageLevel++;break;default:EfficiencyLevel++;break;}Save();return true;}
  public int Collect()
  {

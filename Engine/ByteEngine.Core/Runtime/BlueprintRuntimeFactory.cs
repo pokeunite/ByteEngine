@@ -19,6 +19,19 @@ namespace ByteEngine.Core.Runtime;
 /// </summary>
 public static class BlueprintRuntimeFactory
 {
+    private sealed record Template(BlueprintDefinition Definition,IReadOnlyList<GameObjectData> Objects,string Snapshot);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AssetDatabase,Dictionary<Guid,Template>> Templates=new();
+    private static Template LoadTemplate(AssetRecord asset,AssetDatabase database)
+    {
+        Dictionary<Guid,Template>? cache=database.IsReadOnly?Templates.GetValue(database,_=>new()):null;
+        if(cache!=null&&cache.TryGetValue(asset.Guid,out var found))return found;
+        var definition=new BlueprintSerializer(database).Load(asset.FullPath);
+        var objects=new List<GameObjectData>{definition.Root};objects.AddRange(definition.Children);
+        var template=new Template(definition,objects,System.Text.Json.JsonSerializer.Serialize(objects,ByteEngine.Core.Serialization.JsonSerialization.Options));
+        if(cache!=null){if(cache.Count>=128)cache.Clear();cache[asset.Guid]=template;}
+        return template;
+    }
+    internal static BlueprintDefinition Prepare(AssetRecord asset,AssetDatabase database)=>LoadTemplate(asset,database).Definition;
     public static GameObject? Spawn(
         RuntimeScene scene,
         AssetReference blueprintReference,
@@ -59,13 +72,11 @@ public static class BlueprintRuntimeFactory
         }
 
         BlueprintDefinition blueprint;
+        Template template;
 
         try
         {
-            blueprint =
-                new BlueprintSerializer(database)
-                    .Load(
-                        asset.FullPath);
+            template=LoadTemplate(asset,database);blueprint=template.Definition;
         }
         catch (Exception exception)
         {
@@ -75,14 +86,7 @@ public static class BlueprintRuntimeFactory
             return null;
         }
 
-        var sourceObjects =
-            new List<GameObjectData>
-            {
-                blueprint.Root
-            };
-
-        sourceObjects.AddRange(
-            blueprint.Children);
+        var sourceObjects = template.Objects;
 
         IReadOnlyList<GameObject> roots;
         IReadOnlyDictionary<Guid, Guid> objectMap;
@@ -158,7 +162,7 @@ public static class BlueprintRuntimeFactory
         }
 
         BlueprintInstance instance = existingInstance ?? root.GetComponent<BlueprintInstance>()!;
-        instance.SourceSnapshot = System.Text.Json.JsonSerializer.Serialize(sourceObjects, ByteEngine.Core.Serialization.JsonSerialization.Options);
+        instance.SourceSnapshot = template.Snapshot;
         instance.ObjectMap.Clear();
         foreach (var pair in objectMap) instance.ObjectMap[pair.Key] = pair.Value;
         instance.ModifiedPropertyCount = instance.AddedComponentCount = instance.RemovedComponentCount =

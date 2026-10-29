@@ -11,6 +11,8 @@
     <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
     <WasmEnableSIMD>true</WasmEnableSIMD>
     <WasmDedup>true</WasmDedup>
+    <!-- Keep a private function-index map for CPU captures; the publisher archives it outside the shipped runtime. -->
+    <WasmEmitSymbolMap>true</WasmEmitSymbolMap>
     <PublishTrimmed>true</PublishTrimmed>
     <!-- The static-host exporter ships plain files; CDN HTTP compression is handled by the host. -->
     <CompressionEnabled>false</CompressionEnabled>
@@ -18,9 +20,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Scene codecs and tuning use reflection: retain application metadata for AOT. -->
-    <TrimmerRootAssembly Include="ByteEngine.Browser;ByteEngine.Core;DuneCompany.Plugin;DesertTerrain.Plugin;System.Numerics.Vectors" />
+    <TrimmerRootAssembly Include="ByteEngine.Browser;ByteEngine.Core;DuneCompany.Plugin;DesertTerrain.Plugin;KarlsonDemo.Plugin;System.Numerics.Vectors" />
     <SupportedPlatform Include="browser" />
     <Content Include="../../Engine/ByteEngine.Core/ThirdPartyNotices/*.txt" Link="wwwroot/ThirdPartyNotices/%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    <ProjectReference Include="../../Plugins/KarlsonDemo/KarlsonDemo.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/DuneCompany/DuneCompany.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Engine/ByteEngine.Core/ByteEngine.Core.csproj" />

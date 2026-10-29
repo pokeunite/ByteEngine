@@ -16,6 +16,8 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
  public Vector3 EjectionOffset{get;set;}=new(.5f,.9f,-.8f);
  [Category("Collection")] public float PickupRadius{get;set;}=1.65f;
  public bool AutoPickup{get;set;}=true;
+ [Category("Collection")] public float PickupFlightSeconds{get;set;}=.28f;
+ [Category("Collection")] public int MaximumPickupTrails{get;set;}=12;
  [Category("Visible ammunition")] public int MaximumVisibleRounds{get;set;}=72;
  public int RoundsPerVisual{get;set;}=2;
  public int MaximumTravellingRounds{get;set;}=12;
@@ -38,6 +40,9 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
  const int Limit=96;
  readonly record struct Flight(float Age,int Seed);
  readonly List<Flight> flights=[];int deliverySequence;
+ readonly record struct PickupFlight(Vector3 Start,Guid Player,float Age,int Seed);
+ readonly List<PickupFlight> pickups=[];
+ [Browsable(false)] public int CollectingRounds=>pickups.Count;
  readonly Matrix4x4[] poses=new Matrix4x4[Limit];
  float previous,credit;bool initialized;int poseCount;
  Vector3 start,end,bucket,forward=Vector3.UnitZ,side=Vector3.UnitX;
@@ -48,6 +53,7 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
  {
   if(GameObject.Scene?.FindGameObject(WorkshopObjectId)?.GetComponent<MiningTrade3D>() is not {} trade)return;
   ResolveAnchors();float dt=Math.Clamp((float)Time.DeltaTime,0,1);
+  for(int i=pickups.Count-1;i>=0;i--){pickups[i]=pickups[i] with{Age=pickups[i].Age+dt};if(pickups[i].Age>=Math.Max(.05f,PickupFlightSeconds)||GameObject.Scene.FindGameObject(pickups[i].Player)==null)pickups.RemoveAt(i);}
   float travel=Vector3.Distance(start,end)/Math.Max(.1f,ConveyorSpeed),drop=Math.Max(.1f,DropSeconds);
   if(initialized&&trade.StoredAmmo<previous-.01f){flights.Clear();credit=0;}
   for(int i=flights.Count-1;i>=0;i--){flights[i]=flights[i] with {Age=flights[i].Age+dt};if(flights[i].Age>=travel+drop){LastLandingPosition=PilePosition(VisiblePileRounds+i);LandedRoundSequence++;flights.RemoveAt(i);}}
@@ -70,11 +76,18 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
    else{float t=Math.Clamp((age-travel)/drop,0,1);p=Vector3.Lerp(end,target,t)+Vector3.UnitY*MathF.Sin(t*MathF.PI)*.12f;}
    poses[poseCount++]=RoundPose(p,age<travel?MathF.PI/2:seed*2.39996f,age<travel?0:(age-travel)*5);
   }
+  for(int i=0;i<pickups.Count&&poseCount<Limit;i++)
+  {
+   var pickup=pickups[i];var target=GameObject.Scene.FindGameObject(pickup.Player)!.Transform.WorldPosition+Vector3.UnitY*.95f;
+   float t=Math.Clamp(pickup.Age/Math.Max(.05f,PickupFlightSeconds),0,1);float ease=t*t;
+   var position=Vector3.Lerp(pickup.Start,target,ease)+Vector3.UnitY*(MathF.Sin(t*MathF.PI)*.2f);
+   poses[poseCount++]=RoundPose(position,pickup.Seed*.91f,t*8);
+  }
   if(AutoPickup&&trade.Operation is {} op&&GameObject.Scene.FindGameObject(op.PlayerObjectId) is {} player)
   {
    var delta=player.Transform.WorldPosition-bucket;delta.Y=0;
    if(delta.LengthSquared()<=MathF.Pow(Math.Max(.1f,PickupRadius),2)&&trade.CollectibleAmmo>0)
-   {LastCollected=trade.Collect();if(LastCollected>0){CollectionSequence++;flights.Clear();credit=0;previous=trade.StoredAmmo;}}
+   {LastCollected=trade.Collect();if(LastCollected>0){CollectionSequence++;int count=Math.Min(Math.Clamp(MaximumPickupTrails,0,16)-pickups.Count,Math.Max(1,(int)Math.Ceiling(LastCollected/VisualUnits(trade.Capacity))));for(int i=0;i<count;i++)pickups.Add(new(PilePosition(i),player.Id,0,i));flights.Clear();credit=0;previous=trade.StoredAmmo;}}
   }
  }
  float VisualUnits(int capacity)=>Math.Max(Math.Max(1,RoundsPerVisual),capacity/(float)Math.Clamp(MaximumVisibleRounds,1,72));
@@ -128,5 +141,5 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
    vertices[at++]=p.X;vertices[at++]=p.Y;vertices[at++]=p.Z;vertices[at++]=n.X;vertices[at++]=n.Y;vertices[at++]=n.Z;vertices[at++]=0;vertices[at++]=0;
   }
  }
- protected override void OnDestroy(){cases?.Dispose();tips?.Dispose();cases=tips=null;flights.Clear();}
+ protected override void OnDestroy(){cases?.Dispose();tips?.Dispose();cases=tips=null;flights.Clear();pickups.Clear();}
 }

@@ -6,6 +6,24 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 public sealed class MeshRenderer : Component
 {
+    private ByteEngine.Core.Scene.Scene? _hierarchyScene;
+    private long _hierarchyVersion=long.MinValue;
+    private ModelHierarchyInstance? _materialHierarchy;
+    private bool _hasLodAncestor;
+    private Mesh? _boundsMesh;
+    private int _boundsGeometry=-1;
+    private System.Numerics.Matrix4x4 _boundsMatrix;
+    private BoundingBox3D _worldBounds;
+    private void RefreshHierarchy()
+    {
+        var scene=GameObject.Scene;long version=scene?.RenderHierarchyVersion??-1;
+        if(scene!=null&&ReferenceEquals(scene,_hierarchyScene)&&version==_hierarchyVersion)return;
+        _hierarchyScene=scene;_hierarchyVersion=version;_materialHierarchy=null;_hasLodAncestor=false;
+        for(GameObject? item=GameObject;item!=null;item=item.Parent){
+            _materialHierarchy??=item.GetComponent<ModelHierarchyInstance>();
+            if(item!=GameObject&&item.GetComponent<MeshLodGroup>()!=null)_hasLodAncestor=true;
+        }
+    }
     public Mesh? Mesh { get; set; }
     private readonly MeshLodGroup _modelLod=new(){ScreenSize=true};
     public bool AutomaticModelLod {get;set;}=true;
@@ -174,12 +192,13 @@ public sealed class MeshRenderer : Component
     protected override void OnRender(
         RenderContext context)
     {
-        if (context.RenderWorld.View is {} lodView && !MeshLodGroup.Allows(GameObject,lodView,context.ViewportName)) return;
         if (!Visible ||
             !context.Has3DCamera)
         {
             return;
         }
+        RefreshHierarchy();
+        if (_hasLodAncestor&&context.RenderWorld.View is {} lodView&&!MeshLodGroup.Allows(GameObject,lodView,context.ViewportName))return;
 
         Mesh? mesh =
             Mesh;
@@ -204,19 +223,26 @@ public sealed class MeshRenderer : Component
             int level=_modelLod.SelectForViewport(context.ViewportName,view,distance,pixels);if(level>0)mesh=assets.GetModelLodMesh(MeshReference,level);
         }
         Material effectiveMaterial = ResolveEffectiveMaterial();
+        var matrix=Transform.RenderMatrix;
+        if(!ReferenceEquals(mesh,_boundsMesh)||_boundsGeometry!=mesh.GeometryVersion||matrix!=_boundsMatrix){
+            _boundsMesh=mesh;_boundsGeometry=mesh.GeometryVersion;_boundsMatrix=matrix;_worldBounds=mesh.LocalBounds.Transform(matrix);
+        }
         context.RenderWorld.Submit(
             mesh,
             effectiveMaterial,
-            Transform.RenderMatrix,
+            matrix,
             ResolveRenderQueue(effectiveMaterial),
             FrustumCulling,
             CastShadows,
-            ReceiveShadows);
+            ReceiveShadows,_worldBounds);
     }
 
     private Material ResolveEffectiveMaterial()
     {
-        Material source = ModelHierarchyInstance.ResolveMaterialOverride(GameObject) ?? ResolveBaseMaterial();
+        Material? inherited=null;
+        if(_materialHierarchy is {} hierarchy&&!hierarchy.MaterialOverride.IsEmpty&&AnimationRuntimeAssets.TryGet(out var manager)&&manager!=null)
+            try{inherited=manager.LoadMaterial(hierarchy.MaterialOverride);}catch{ }
+        Material source = inherited ?? ResolveBaseMaterial();
         if (MaterialOverrides.IsEmpty) return source;
         _overrideMaterial ??= source.Clone();
         AnimationRuntimeAssets.TryGet(out AssetManager? assets);

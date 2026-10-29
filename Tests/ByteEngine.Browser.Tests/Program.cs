@@ -43,13 +43,50 @@ loop.Tick(20, input, 800, 600, new(.5f), true, false, sink);
 Check(Input.IsKeyReleased(Key.W), "release transition");
 Check(Time.DeltaTime == .1, "background-tab delta clamp");
 Check(movement.Starts == 1 && movement.Updates == 3, "no repeated start");
+Check(scene.ComponentProfiler.Snapshot().Length == 0, "component profiling disabled during normal play");
+scene.ComponentProfiler.Enabled = true;
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+var samples = scene.ComponentProfiler.Snapshot();
+Check(samples.Single(s => s.Component == typeof(Movement).FullName && s.Phase == "Update").Calls == 2,
+    "profiler aggregates component instances by phase");
+Check(samples.All(s => double.IsFinite(s.TotalMs) && s.TotalMs >= 0 && s.SlowestObject.Length > 0),
+    "profiler records finite timings and object context");
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+Check(scene.ComponentProfiler.Snapshot().Single(s => s.Component == typeof(Movement).FullName && s.Phase == "Update").Calls == 2,
+    "profiler resets each frame instead of growing without bound");
+scene.ComponentProfiler.Enabled = false;
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+Check(scene.ComponentProfiler.Snapshot().Length == 0, "disabling profiler clears last-frame references");
+RuntimeIntegrityChecks.Run();
+MatrixPackingChecks.Run();
+var startOnlyObject = new GameObject("Start-only callback owner");
+var startOnly = startOnlyObject.AddComponent(new StartOnlySpawner());
+scene.AddGameObject(startOnlyObject);
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+Check(startOnly.Child is { Updates: 1, LateUpdates: 1 }, "start-only components can introduce inherited update callbacks");
+var removedCounter = startOnly.Child!;
+startOnlyObject.RemoveComponent(removedCounter);
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+Check(removedCounter.Updates == 1, "removing the last callback retires its updates");
+var addedCounter = startOnlyObject.AddComponent(new InheritedCounter());
+loop.Tick(.016, input, 800, 600, new(.5f), true, false, sink);
+Check(addedCounter.Updates == 1 && addedCounter.LateUpdates == 1, "adding callbacks to a static object activates both phases");
+Check(scene.FindGameObject(cube.Id)==cube,"scene identity lookup finds an existing object");
+var temporary=scene.CreateGameObject("Identity cache lifecycle");
+Check(scene.FindGameObject(temporary.Id)==temporary,"scene identity lookup sees objects added after caching");
+scene.DestroyGameObject(temporary);
+Check(scene.FindGameObject(temporary.Id)==null,"scene identity lookup retires destroyed objects");
 bool rejected = false;
 try { loop.Tick(double.NaN, input, 800, 600, new(.5f), true, false, sink); }
 catch (ArgumentOutOfRangeException) { rejected = true; }
 Check(rejected, "invalid time rejected");
 loop.Dispose();
 Check(movement.Stops == 1 && !scene.IsLoaded, "shared unload lifecycle");
-Console.WriteLine("Portable runtime: 13 checks passed (no GLFW/OpenGL initialization).");
+ComponentSchedulingChecks.Run();
+VfxSerializationChecks.Run();
+PerformanceProfilerChecks.Run();
+RuntimePerformanceChecks.Run();
+Console.WriteLine("Portable runtime checks passed (no GLFW/OpenGL initialization).");
 
 if (args.Length >= 2 && args[0] == "--export") ExportFixture.Run(Path.GetFullPath(args[1]));
 
@@ -74,6 +111,18 @@ sealed class StartupSpawner : Component
 {
     public Movement? Created;
     protected override void OnStart() => Created = GameObject.AddComponent(new Movement());
+}
+class PhaseCounter : Component
+{
+    public int Updates, LateUpdates;
+    protected override void OnUpdate() => Updates++;
+    protected override void OnLateUpdate() => LateUpdates++;
+}
+sealed class InheritedCounter : PhaseCounter { }
+sealed class StartOnlySpawner : Component
+{
+    public InheritedCounter? Child;
+    protected override void OnStart() => Child = GameObject.AddComponent(new InheritedCounter());
 }
 sealed class Sink : IRenderFrameSink
 {

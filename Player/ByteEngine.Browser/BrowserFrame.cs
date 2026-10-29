@@ -10,6 +10,11 @@ internal sealed class BrowserFrame
     public float exposure { get; set; } = 1;
     public int pendingTextures { get; set; }
     public double loopMs { get; set; }
+    public ByteEngine.Core.Diagnostics.RuntimeFrameMetrics sceneMetrics {get;set;}
+    public double inputMs {get;set;}
+    public double updateStepMs {get;set;}
+    public double renderPreparationMs {get;set;}
+    public long renderAllocatedBytes {get;set;}
     public float ambient { get; set; }
     public float[] look { get; set; } = [1,1,0];
     public float[] pixelArt { get; set; } = [0,4,8,.35f];
@@ -130,13 +135,10 @@ internal sealed class BrowserDraw
 internal sealed class BrowserDrawCommand
 {
     public BrowserWater? water {get;set;}
-    public float[] wet {get;set;}=[];
     public bool receiveShadows { get; set; }
-    public float[] shadowInstances { get; set; } = [];
     public int id { get; set; }
     public int material { get; set; }
-    public float[] model { get; set; } = [];
-    public float[] instances { get; set; } = [];
+    public int dataBuffer { get; set; }
 }
 
 internal sealed class BrowserWater

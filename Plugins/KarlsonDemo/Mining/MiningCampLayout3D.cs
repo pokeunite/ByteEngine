@@ -134,8 +134,8 @@ public sealed partial class MiningCampLayout3D:Component
   if(!IsEditing)return;float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;
   void Q(float x,float y,float width,float height,Vector4 color)=>c.DrawUiQuad(new(x*s,y*s),new(width*s,height*s),color);
   void T(string text,float x,float y,int size,Vector4 color)=>c.DrawUiText(text,Font,Math.Max(12,(int)(size*s)),new(x*s,y*s),color,UiAnchor.TopLeft);
-  var light=new Vector4(.94f,.94f,.84f,1);Q(16,16,590,64,new(.045f,.065f,.05f,.98f));T("ARRANGE CAMP",32,22,28,light);T("Click a machine or placed defence to reposition it.",32,53,20,light);
-  Q(16,h-94,w-32,78,new(.045f,.065f,.05f,.98f));T(Selected is {} root?$"{Name(root).ToUpperInvariant()} — {Status}":Status,32,h-86,22,Selected==null||PreviewValid?new(.86f,.91f,.65f,1):new(1,.46f,.29f,1));T("Click: select / place     Q / E: rotate     Right click / Esc: cancel     Tab: finish",32,h-52,20,light);
+  var light=new Vector4(.94f,.94f,.84f,1);Q(16,16,410,49,new(.045f,.065f,.05f,.93f));T("ARRANGE CAMP",28,20,23,light);T("Select a machine or defence to move it",28,44,17,light);
+  float strip=Math.Min(w-32,760),left=(w-strip)/2;Q(left,h-68,strip,52,new(.045f,.065f,.05f,.93f));T(Selected is {} root?$"{Name(root)} — {Status}":Status,left+12,h-63,18,Selected==null||PreviewValid?new(.86f,.91f,.65f,1):new(1,.46f,.29f,1));T("Click: place   Q / E: rotate   Esc: cancel   Tab: finish",left+12,h-40,17,light);
   if(Selected is {} selected)
   {
    var b=WorldBounds(selected,PreviewPosition,PreviewYaw);outline.BaseColor=PreviewValid?new(.25f,1,.45f,1):new(1,.24f,.1f,1);
@@ -144,7 +144,7 @@ public sealed partial class MiningCampLayout3D:Component
   }
   if(editCamera?.GetComponent<Camera3D>() is {} camera)foreach(var o in Objects)
   {
-   var p=o.Transform.WorldPosition;var clip=Vector4.Transform(new Vector4(p+Vector3.UnitY*.2f,1),camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(c.TargetWidth/(float)c.TargetHeight));if(clip.W<=0)continue;float x=(clip.X/clip.W+1)*w*.5f,y=(1-clip.Y/clip.W)*h*.5f;string text=Name(o);Q(x-70,y-12,140,26,new(.04f,.06f,.04f,.85f));T(text,x-63,y-11,18,light);
+   var p=o.Transform.WorldPosition;var clip=Vector4.Transform(new Vector4(p+Vector3.UnitY*.2f,1),camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(c.TargetWidth/(float)c.TargetHeight));if(clip.W<=0)continue;float x=(clip.X/clip.W+1)*w*.5f,y=(1-clip.Y/clip.W)*h*.5f;string text=Name(o);float label=Math.Clamp(text.Length*8+16,58,150);Q(x-label/2,y-11,label,23,new(.04f,.06f,.04f,.85f));T(text,x-label/2+8,y-10,17,light);
   }
  }
 }

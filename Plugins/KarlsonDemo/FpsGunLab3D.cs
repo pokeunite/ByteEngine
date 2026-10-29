@@ -306,11 +306,11 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
         var mask=ByteEngine.Core.Classification.LayerMask.FromLayers(Enumerable.Range(0,32).Where(bit=>(bits&(1<<bit))!=0).ToArray());
         if(GameObject.Scene is {} scene)
         {
-            if(GameplayQuery3D.Raycast(scene,origin,direction,out var hit,range,GameObject,mask,includeTriggers:false))target=hit.Point;
+            if(GameplayQuery3D.RaycastWithDamageHits(scene,origin,direction,out var hit,range,GameObject,mask,includeTriggers:false,includeDamageTriggers:true))target=hit.Point;
             if(weapon.TryGetMuzzleWorldPosition(out var muzzle))
             {
                 Vector3 ray=target-muzzle;float distance=ray.Length();
-                if(distance>.001f&&GameplayQuery3D.Raycast(scene,muzzle,ray/distance,out var obstruction,distance,GameObject,mask,includeTriggers:false)&&obstruction.Distance<distance-.08f)
+                if(distance>.001f&&GameplayQuery3D.RaycastWithDamageHits(scene,muzzle,ray/distance,out var obstruction,distance,GameObject,mask,includeTriggers:false,includeDamageTriggers:true)&&obstruction.Distance<distance-.08f)
                 {muzzleBlocked=true;target=obstruction.Point;}
             }
         }

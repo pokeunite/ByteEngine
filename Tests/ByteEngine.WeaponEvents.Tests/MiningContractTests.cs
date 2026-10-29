@@ -13,6 +13,9 @@ static class MiningContractTests
  {
   var scene=new Scene("Contract test");var player=scene.CreateGameObject("Operator");player.AddComponent(new HealthComponent());var drill=scene.CreateGameObject("Drill");drill.AddComponent(new HealthComponent());var op=scene.CreateGameObject("Company").AddComponent(new MiningOperation3D{PlayerObjectId=player.Id,DrillObjectId=drill.Id,PersistProgress=false,SpawnInterval=.05f,ExtractionSeconds=1,RaiderBlueprint=new("raider.byteblueprint"),HunterBlueprint=new("hunter.byteblueprint"),MaximumAlive=100});scene.CreateGameObject("Front entrance").AddComponent(new MiningSpawnPoint3D{OperationObjectId=op.GameObject.Id});
   var a=op.PreviewContract(0)!;var b=op.PreviewContract(1)!;var c=op.PreviewContract(2)!;
+  var authoredContracts=op.ContractsJson;op.ContractsJson="{";
+  Check(op.Contracts.Count==0,"editing contract JSON invalidates prior valid previews");
+  op.ContractsJson=authoredContracts;Check(op.Contracts.Count==3,"repairing contract JSON restores previews immediately");
   Check(a.Total==6&&a.Raiders==4&&a.Hunters==2&&a.Ore==18,"shallow preview has explicit role counts and ore");Check(a.HunterHealth==50&&a.RaiderHealth==75&&a.HunterSpeed==5&&a.RaiderSpeed==3.8f,"preview exposes tougher health and faster approach speeds");Check(b.Total>a.Total&&c.Total>b.Total&&b.Ore>a.Ore&&c.Ore>b.Ore,"risk and reward increase together");
   foreach(var wave in new[]{a,b,c})Check(Enumerable.Range(0,wave.Total).Count(i=>MiningOperation3D.IsHunterAt(wave,i))==wave.Hunters,"spawn schedule exactly matches preview for "+wave.Id);
   op.MaximumEnemiesPerRound=7;Check(op.PreviewContract(2)!.Total==7,"preview respects hard enemy budget");op.MaximumEnemiesPerRound=24;

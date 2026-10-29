@@ -48,9 +48,24 @@ public static partial class BrowserGame
     [JSExport]
     public static void PhysicsProfile(int iterations,int substeps){Loop.Scenes.ActiveScene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault()?.SetPhysicsProfile(iterations,substeps);}
     [JSExport]
-    public static string Diagnostics(){var scene=Loop.Scenes.ActiveScene;var vehicle=scene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault();return JsonSerializer.Serialize(new {scene=scene?.Name,building=vehicle?.Building,velocity=vehicle?.PhysicalVelocity.Length(),position=vehicle?.Transform.WorldPosition.ToString(),winch=vehicle?.WinchMission,blocks=vehicle?.Blocks.Count,motorsport=vehicle?.MotorsportDiagnostics,physicsMs=vehicle?.LastDriveCpuMilliseconds,physicsSteps=vehicle?.PhysicsSteps,physicsPhases=vehicle?.PhysicsPhases,suspension=vehicle?.SuspensionDiagnostics,droppedPhysicsSeconds=vehicle?.DroppedPhysicsSeconds, loopMs=_lastLoopMilliseconds, encodeMs=_lastEncodeMilliseconds,managedMemoryMB=GC.GetTotalMemory(false)/1048576.0,gc0=GC.CollectionCount(0),gc1=GC.CollectionCount(1),gc2=GC.CollectionCount(2)});}
+    public static string Diagnostics(){var scene=Loop.Scenes.ActiveScene;var vehicle=scene?.GameObjects.SelectMany(o=>o.Components).OfType<DuneCompany.DuneWorkshop3D>().FirstOrDefault();return JsonSerializer.Serialize(new {scene=scene?.Name,sceneMetrics=scene?.LastFrameMetrics,building=vehicle?.Building,velocity=vehicle?.PhysicalVelocity.Length(),position=vehicle?.Transform.WorldPosition.ToString(),winch=vehicle?.WinchMission,blocks=vehicle?.Blocks.Count,motorsport=vehicle?.MotorsportDiagnostics,physicsMs=vehicle?.LastDriveCpuMilliseconds,physicsSteps=vehicle?.PhysicsSteps,physicsPhases=vehicle?.PhysicsPhases,suspension=vehicle?.SuspensionDiagnostics,droppedPhysicsSeconds=vehicle?.DroppedPhysicsSeconds, loopMs=_lastLoopMilliseconds, encodeMs=_lastEncodeMilliseconds,managedMemoryMB=GC.GetTotalMemory(false)/1048576.0,gc0=GC.CollectionCount(0),gc1=GC.CollectionCount(1),gc2=GC.CollectionCount(2)});}
     [JSExport]
     public static string SaveKey(){var data=new ByteEngine.Core.Serialization.ProjectSerializer().Load("/game/Content/Game.byteproject");return "byteengine-saves-"+data.ProjectId.ToString("N")+(data.RuntimeSaveId is {} id ? "-"+id.ToString("N") : "");}
+
+    [JSExport]
+    public static string AnimationDiagnostics()
+    {
+        var skins=Loop.Scenes.ActiveScene?.GameObjects.SelectMany(o=>o.Components.OfType<SkeletalMeshRenderer>()).ToArray()??[];
+        return JsonSerializer.Serialize(skins.Select(s=>{
+            var m=s.ResolvedModel;bool valid=s.TryGetCurrentModelBounds(out var b);
+            return new {name=s.GameObject.Name,s.Enabled,s.Visible,active=s.GameObject.ActiveInHierarchy,
+                model=m?.Name,s.CurrentAnimation,s.PlaybackTime,s.SkinnedMeshCount,
+                position=new[]{s.Transform.WorldPosition.X,s.Transform.WorldPosition.Y,s.Transform.WorldPosition.Z},
+                bounds=valid?new[]{b.Minimum.X,b.Minimum.Y,b.Minimum.Z,b.Maximum.X,b.Maximum.Y,b.Maximum.Z}:null,
+                firstNode=m?.Nodes.FirstOrDefault()?.LocalTransform.ToString(),
+                firstRotation=m?.Animations.FirstOrDefault()?.Channels.FirstOrDefault(c=>c.Rotation?.Keys.Count>0)?.Rotation?.Keys.FirstOrDefault().Value.ToString()};
+        }));
+    }
     [JSExport]
     public static void RestoreSaves(string json){if(_started)throw new InvalidOperationException("Restore before startup");if(json.Length>10*1024*1024)throw new InvalidDataException("Browser save is too large");var data=new ByteEngine.Core.Serialization.ProjectSerializer().Load("/game/Content/Game.byteproject");var directory=GameSaveStorage.Register("/game/Content",data.ProjectId,data.RuntimeSaveId);foreach(var entry in JsonSerializer.Deserialize<Dictionary<string,string>>(json)??[]){if(!entry.Key.EndsWith(".json",StringComparison.OrdinalIgnoreCase)&&!entry.Key.EndsWith(".json.name",StringComparison.OrdinalIgnoreCase)&&entry.Key!="active-blueprint.txt")continue;var path=GamePackageExporter.ResolveInside(directory,entry.Key);Directory.CreateDirectory(Path.GetDirectoryName(path)!);File.WriteAllText(path,entry.Value);}}
     [JSExport]
@@ -68,27 +83,32 @@ public static partial class BrowserGame
     [JSExport]
     public static void Start(bool demo)
     {
+        // Editor node highlighting has no consumer in a packaged game.
+        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Enabled = false;
+        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Clear();
         ByteEngine.Core.VisualLogic.CreatorHost.OpenUrl=Audio.OpenUrl;
         ByteEngine.Core.Media.VideoHost.Create=path=>new ByteEngine.Browser.BrowserVideoPlayback(path,Audio.Enqueue);
         if (_started) return;
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.desertterrain", new DesertTerrain.DesertTerrainPlugin());
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.dunecompany", new DuneCompany.DuneCompanyPlugin());
+        ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.karlsondemo", new KarlsonDemo.Plugin.KarlsonDemoPlugin());
         PortableAudio.Backend = Audio;
         if (!demo)
         {
             _project = new GameProjectRuntime("/game/Content/Game.byteproject", Console.Error.WriteLine);
             string currentPath=_project.Project.StartupScene;
-            Loop.Scenes.SceneFactory=path=>{var fresh=_project.LoadScene(path);currentPath=path;return fresh;};
-            Loop.Scenes.ProgressiveSceneFactory=path=>{currentPath=path;return _project.Serializer.LoadSteps(GamePackageExporter.ResolveInside(_project.Root,path));};
+            Loop.Scenes.SceneFactory=path=>{var fresh=_project.LoadScene(path);Sink.PrewarmTextures(_project.PreparedSpawnTextures);currentPath=path;return fresh;};
+            Loop.Scenes.ProgressiveSceneFactory=path=>{currentPath=path;return PreparedSteps(path);};
             Loop.Scenes.ShowLoadingScreen=true;
             Loop.Scenes.QuitHandler=()=>Loop.Scenes.UnloadScene();
             var scene = _project.LoadStartupScene();
+            Sink.PrewarmTextures(_project.PreparedSpawnTextures);
             Loop.Scenes.RestartSceneFactory = () =>
             {
                 Loop.Scenes.GlobalVariables.Clear();
                 foreach (var variable in _project.Project.GlobalVariables)
                     Loop.Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
-                return _project.LoadScene(currentPath);
+                var fresh=_project.LoadScene(currentPath);Sink.PrewarmTextures(_project.PreparedSpawnTextures);return fresh;
             };
             Loop.Scenes.LoadScene(scene);
         }
@@ -128,8 +148,41 @@ public static partial class BrowserGame
     public static void VideoState(string id,double seconds,bool paused,bool ended,string error)=>ByteEngine.Browser.BrowserVideoPlayback.Report(id,seconds,paused,ended,error);
 
     private static string _lastFrameError = "";
+    private static IEnumerable<SceneLoadStep> PreparedSteps(string path)
+    {foreach(var step in _project!.LoadSceneSteps(path)){if(step.Scene!=null)Sink.PrewarmTextures(_project.PreparedSpawnTextures);yield return step;}}
     [JSExport]
     public static string LastFrameError() => _lastFrameError;
+
+    [JSExport]
+    public static void ProfileComponents(bool enabled)
+    {
+        _captureComponents=enabled;
+        _captureAccumulate=false;
+        if (Loop.Scenes.ActiveScene is { } scene){scene.ComponentProfiler.Enabled = enabled;scene.ComponentProfiler.AccumulateFrames=false;}
+    }
+
+    [JSExport]
+    public static string ComponentTimings() => JsonSerializer.Serialize(
+        Loop.Scenes.ActiveScene?.ComponentProfiler.Snapshot() ?? []);
+
+    [JSExport]
+    public static string VfxDiagnostics() => JsonSerializer.Serialize(
+        Loop.Scenes.ActiveScene?.GameObjects.SelectMany(o=>o.Components.OfType<ByteEngine.Core.Vfx.VfxPlayer>())
+        .Select(v=>new { name=v.GameObject.Name,v.Status,v.IsPlaying,v.ActiveParticles,v.RenderedParticles,
+            layers=VfxLayers(v) }).ToArray() ?? []);
+
+    private static object[] VfxLayers(ByteEngine.Core.Vfx.VfxPlayer player)
+    {
+        try
+        {
+            var effect=player.Effect.IsEmpty?ByteEngine.Core.Vfx.VfxPresets.Create(player.Preset):
+                ByteEngine.Core.Animation.AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null?assets.LoadVfxEffect(player.Effect):null;
+            return effect?.Layers.Select(l=>(object)new {l.Name,l.Rate,l.Burst,l.StartSize,
+                color=new[]{l.StartColor.X,l.StartColor.Y,l.StartColor.Z,l.StartColor.W},
+                offset=new[]{l.Offset.X,l.Offset.Y,l.Offset.Z}}).ToArray() ?? [];
+        }
+        catch(Exception e) { return [new {error=e.Message}]; }
+    }
 
     [JSExport]
     public static bool WantsPointerLock() => !Input.KeepGameViewPointerFree &&
@@ -171,12 +224,13 @@ public static partial class BrowserGame
         }
         Sink.Begin();
         phase="scene update and rendering";
+        if(Loop.Scenes.ActiveScene is {} profiledScene){profiledScene.ComponentProfiler.Enabled=_captureComponents;profiledScene.ComponentProfiler.AccumulateFrames=_captureAccumulate;}
         long start=System.Diagnostics.Stopwatch.GetTimestamp();
         Loop.Tick(seconds, Snapshot, width, height, new((float)mouseX, (float)mouseY), focused, captured, Sink);
         _lastLoopMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         start=System.Diagnostics.Stopwatch.GetTimestamp();
         phase="deferred uploads and frame encoding";
-        string result=Sink.Finish(Audio.Drain(),_lastLoopMilliseconds);
+        string result=Sink.Finish(Audio.Drain(),_lastLoopMilliseconds,Loop);
         _lastEncodeMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         return result;
         }
@@ -202,6 +256,19 @@ public static partial class BrowserGame
 
 internal sealed class BrowserFrameSink : IRenderFrameSink
 {
+    private readonly HashSet<Texture2D> _preparedTextures=new();
+    public void PrewarmTextures(IReadOnlyList<Texture2D> textures)
+    {
+        _preparedTextures.Clear();long retained=0;
+        foreach(var texture in textures){long bytes=(long)texture.PixelData.Length+(long)texture.FloatPixelData.Length*4;
+            if(bytes==0||retained+bytes>64L*1024*1024)continue;retained+=bytes;_preparedTextures.Add(texture);Texture(texture);}
+    }
+    private int _submittedCount,_visibleCount;
+    public object CaptureStats()=>new {submitted=_submittedCount,visible=_visibleCount,culled=_submittedCount-_visibleCount,batches=_draws.Count,
+        buffers=_buffers.Count,bufferBytes=_buffers.ActiveBytes,transferPoolBytes=_buffers.RetainedBytes,transferCreatedBytes=_buffers.CreatedBytes,transferReuseHits=_buffers.ReuseHits,pendingTextureChunks=_pendingTextureUploads.Count,
+        residentMeshes=_meshes.Count,residentTextures=_textures.Count,materials=_materials.Count,fontAtlases=_fonts.Count,
+        cpuMeshBytes=_meshes.Keys.Sum(m=>(long)m.VertexData.Length*4+(long)m.IndexData.Length*4),
+        cpuTextureBytes=_textures.Keys.Sum(t=>(long)t.PixelData.Length+(long)t.FloatPixelData.Length*4)};
     private readonly Dictionary<Mesh, (int Id, int Version)> _meshes = new();
     private readonly Dictionary<Texture2D, (int Id, int Version)> _textures = new();
     private readonly Dictionary<Texture2D, int> _textureLastFrame = new();
@@ -215,6 +282,8 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     private readonly List<BrowserMeshUpload> _uploads = new();
     private readonly List<BrowserTextureUpload> _textureUploads = new();
     private readonly List<BrowserDrawCommand> _draws = new();
+    private readonly RenderBatcher.Builder _batchBuilder = new();
+    private readonly List<RenderSubmission> _visible = new();
     private readonly Dictionary<MaterialKey, int> _materials = new();
     private readonly HashSet<MaterialKey> _usedMaterials = new();
     private readonly List<BrowserDraw> _materialUploads = new();
@@ -226,9 +295,9 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         int MetallicChannel, bool DirectX, bool Packed, bool Unlit, bool Srgb, bool Depth, bool Write,
         BlendMode3D Blend, CullMode3D Cull, FrontFaceWinding3D Front, int SandImprint, Vector2 SandOrigin);
     private readonly List<BrowserUi> _ui = new();
-    private readonly List<byte[]> _buffers = new();
+    private readonly FrameTransferBuffers _buffers = new();
     public byte[] ReadBuffer(int index) => _buffers[index];
-    private int Buffer(ReadOnlySpan<byte> data) { int index=_buffers.Count; _buffers.Add(data.ToArray()); return index; }
+    private int Buffer(ReadOnlySpan<byte> data) => _buffers.Copy(data);
     readonly Queue<(Texture2D Texture,int Id,int X,int Y,int W,int H,bool Allocate)> _pendingTextureUploads=new();
     private float[] _inverseVp=[];
     private float[] _vp = new float[16], _eye = [0,0,0], _background = [.07f,.1f,.15f];
@@ -242,7 +311,8 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     public void Begin()
     {
         _frameNumber++;
-        _uploads.Clear(); _textureUploads.Clear(); _draws.Clear(); _ui.Clear(); _buffers.Clear();
+        _submittedCount=_visibleCount=0;
+        _uploads.Clear(); _textureUploads.Clear(); _draws.Clear(); _ui.Clear(); _buffers.BeginFrame();
         _usedMeshes.Clear(); _usedTextures.Clear(); _usedFonts.Clear(); _sky=null;_shadow=null;
         _usedMaterials.Clear(); _materialUploads.Clear();
     }
@@ -266,6 +336,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         RenderEnvironment3D environment, IReadOnlyList<RenderSubmission> submissions)
     {
         if (view is not { } camera) return;
+        _submittedCount=submissions.Count;
         _vp = Matrix(camera.ViewProjectionMatrix);Matrix4x4.Invert(camera.ViewProjectionMatrix,out var inverseWater);_inverseVp=Matrix(inverseWater);
         _eye = V3(camera.CameraPosition);
         _background = environment.DrawSky ? V3(environment.HorizonColor * environment.SkyIntensity) : [.07f,.1f,.15f];
@@ -288,9 +359,15 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             color = V3(l.Color * l.Intensity) }).ToArray();
         _points = lighting.PointLights.Select(l => new BrowserLight { position = V3(l.Position),
             color = V3(l.Color * l.Intensity), range = l.Range }).ToArray();
-        var visible=submissions.Where(s=>!s.FrustumCullingEnabled||camera.Frustum.Intersects(s.WorldBounds)).OrderBy(s=>s.Material.WaterSurface?3500:(int)s.Queue).ThenBy(s=>
-            s.Queue==RenderQueue3D.Transparent?-s.DistanceSquaredToCamera:s.SubmissionIndex).ToArray();
-        foreach (var batch in RenderBatcher.Build(visible))
+        _visible.Clear();
+        for (int i = 0; i < submissions.Count; i++)
+        {
+            var item = submissions[i];
+            if (!item.FrustumCullingEnabled || camera.Frustum.Intersects(item.WorldBounds)) _visible.Add(item);
+        }
+        _visible.Sort(BrowserMatrixPacking.Compare);
+        _visibleCount=_visible.Count;
+        foreach (var batch in _batchBuilder.Build(_visible))
         {
             var draw=batch.First;
             _usedMeshes.Add(draw.Mesh);
@@ -331,11 +408,11 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
                 blend = m.BlendMode.ToString(), depth = m.DepthTest, write = m.ResolveDepthWrite(),
                 cull = m.CullMode.ToString(), front = m.FrontFace.ToString() });
             }
-            _draws.Add(new BrowserDrawCommand { id = cached.Id, material = materialId, model = Matrix(draw.ModelMatrix),
+            int drawBuffer=_buffers.Allocate(BrowserMatrixPacking.PacketLength(batch.Instances),out var drawBytes);
+            BrowserMatrixPacking.WritePacket(drawBytes,batch.Instances);
+            _draws.Add(new BrowserDrawCommand { id = cached.Id, material = materialId, dataBuffer=drawBuffer,
                 water=m.WaterSurface||m.WaterVolume?new BrowserWater{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null,
-                wet=[..V4(m.WetContact0),..V4(m.WetContact1),..V4(m.WetContact2),..V4(m.WetLevels)],
-                receiveShadows=draw.ReceiveShadows,shadowInstances=batch.Instances.Where(s=>s.CastShadows&&s.Queue==RenderQueue3D.Opaque).SelectMany(s=>Matrix(s.ModelMatrix)).ToArray(),
-                instances = batch.Instances.Count > 1 ? batch.Instances.SelectMany(s => Matrix(s.ModelMatrix)).ToArray() : [] });
+                receiveShadows=draw.ReceiveShadows });
         }
     }
 
@@ -403,10 +480,13 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         _ui.Add(new BrowserUi { kind = "image", texture = Texture(texture), x = position.X, y = position.Y, w = size.X, h = size.Y,
             sx = 0, sy = 0, sw = texture.Width, sh = texture.Height, color = V4(color) });
 
-    public string Finish(object[] audio,double loopMs)
+    public void DrawLine(Vector2 from, Vector2 to, float thickness, Vector4 color) =>
+        _ui.Add(new BrowserUi { kind="line",x=from.X,y=from.Y,w=to.X,h=to.Y,sx=thickness,color=V4(color) });
+
+    public string Finish(object[] audio,double loopMs,PortableGameLoop loop)
     {
         int budget=4*1024*1024;
-        while(budget>0&&_pendingTextureUploads.TryDequeue(out var r)){if(!_textures.TryGetValue(r.Texture,out var resident)||resident.Id!=r.Id)continue;if(!BrowserTextureTransfer.TryRead(r.Texture,r.X,r.Y,r.W,r.H,out var pixels,out bool hdr))continue;budget-=pixels.Length;_textureUploads.Add(new BrowserTextureUpload {source=string.IsNullOrEmpty(r.Texture.FilePath)?"dynamic/embedded texture":Path.GetFileName(r.Texture.FilePath),id=r.Id,width=r.Texture.Width,height=r.Texture.Height,x=r.X,y=r.Y,w=r.W,h=r.H,allocate=r.Allocate,partial=true,pixels=Buffer(pixels),hdr=hdr,nearest=r.Texture.Filter==TextureFilter.Nearest});}
+        while(budget>0&&_pendingTextureUploads.TryDequeue(out var r)){if(!_textures.TryGetValue(r.Texture,out var resident)||resident.Id!=r.Id)continue;if(!BrowserTextureTransfer.TryGetLength(r.Texture,r.X,r.Y,r.W,r.H,out int length,out bool hdr))continue;int pixelBuffer=_buffers.Allocate(length,out var pixels);if(!BrowserTextureTransfer.TryCopy(r.Texture,r.X,r.Y,r.W,r.H,pixels,out hdr))continue;budget-=length;_textureUploads.Add(new BrowserTextureUpload {source=string.IsNullOrEmpty(r.Texture.FilePath)?"dynamic/embedded texture":Path.GetFileName(r.Texture.FilePath),id=r.Id,width=r.Texture.Width,height=r.Texture.Height,x=r.X,y=r.Y,w=r.W,h=r.H,allocate=r.Allocate,partial=true,pixels=pixelBuffer,hdr=hdr,nearest=r.Texture.Filter==TextureFilter.Nearest});}
         // Retain a small cache; size animations must not accumulate large atlas textures forever.
         foreach (var key in _fonts.Keys.Where(k => !_usedFonts.Contains(_fonts[k])).ToArray())
         {
@@ -420,30 +500,29 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         foreach(var key in hiddenMeshes)if(_frameNumber-_meshLastFrame[key]>120||hiddenMeshBytes>32L*1024*1024){expiredMeshes.Add(_meshes[key].Id);hiddenMeshBytes-=(long)key.VertexData.Length*4+(long)key.IndexData.Length*4;_meshes.Remove(key);_meshIndices.Remove(key);_meshLastFrame.Remove(key);}
         var deadMeshes = expiredMeshes.ToArray();
         // Keep recently hidden UI frames resident, but bound unused residency to 16 MiB / 128 textures.
-        var unused=_textures.Keys.Where(k=>!_usedTextures.Contains(k)).OrderBy(k=>_textureLastFrame[k]).ToArray();
+        var unused=_textures.Keys.Where(k=>!_usedTextures.Contains(k)&&!_preparedTextures.Contains(k)).OrderBy(k=>_textureLastFrame[k]).ToArray();
         long unusedBytes=unused.Sum(k=>(long)k.PixelData.Length+(long)k.FloatPixelData.Length*4);int unusedCount=unused.Length;
         var expired=new List<int>();
         foreach(var key in unused)if((key.PixelData.IsEmpty&&key.FloatPixelData.IsEmpty)||_frameNumber-_textureLastFrame[key]>600||unusedBytes>16L*1024*1024||unusedCount>128){expired.Add(_textures[key].Id);unusedBytes-=(long)key.PixelData.Length+(long)key.FloatPixelData.Length*4;unusedCount--;_textures.Remove(key);_textureLastFrame.Remove(key);}
         var deadTextures=expired.ToArray();
-        if(_uploads.Count>0&&GC.GetTotalMemory(false)>512L*1024*1024)GC.Collect();
-        if(_uploads.Count>0)Console.WriteLine($"Browser uploads meshes={_uploads.Count}, textures={_textureUploads.Count}, managedMB={GC.GetTotalMemory(false)/1048576}, pixelsMB={_textures.Keys.Sum(t=>(long)t.PixelData.Length)/1048576}, vertices={_meshes.Keys.Sum(m=>(long)m.VertexData.Length)}");
         var unusedMaterials = _materials.Keys.Where(k => !_usedMaterials.Contains(k)).ToArray();
         var deadMaterials = unusedMaterials.Select(k => _materials[k]).ToArray();
         foreach (var key in unusedMaterials) _materials.Remove(key);
-        var uiBytes = new byte[_ui.Count * 56];
+        int uiBuffer = _buffers.Allocate(_ui.Count * 56,out var uiBytes);
         Span<float> values = stackalloc float[12];
         for (int i = 0; i < _ui.Count; i++)
         {
             var command = _ui[i]; var bytes = uiBytes.AsSpan(i * 56, 56);
-            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes, command.kind switch { "quad" => 0, "image" => 1, "clip" => 2, "unclip" => 3, _ => throw new InvalidOperationException("Unknown UI command") });
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes, command.kind switch { "quad" => 0, "image" => 1, "clip" => 2, "unclip" => 3, "line" => 4, _ => throw new InvalidOperationException("Unknown UI command") });
             System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes[4..], command.texture);
             values[0]=command.x; values[1]=command.y; values[2]=command.w; values[3]=command.h;
             values[4]=command.sx; values[5]=command.sy; values[6]=command.sw; values[7]=command.sh;
             for (int j=0;j<4;j++) values[8+j]=command.color[j];
             for (int j = 0; j < values.Length; j++) System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(bytes[(8+j*4)..], values[j]);
         }
-        int uiBuffer = _buffers.Count; _buffers.Add(uiBytes);
         return JsonSerializer.Serialize(new BrowserFrame { quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,pixelArt=_pixelArt,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
+            sceneMetrics=loop.Scenes.ActiveScene?.LastFrameMetrics??default,inputMs=loop.LastInputMilliseconds,updateStepMs=loop.LastUpdateMilliseconds,
+            renderPreparationMs=loop.LastRenderMilliseconds,renderAllocatedBytes=loop.LastRenderAllocatedBytes,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,
             draws = _draws, materials = _materialUploads, deadMaterials = deadMaterials, uiBuffer = uiBuffer, uiCount = _ui.Count,
             deadMeshes=deadMeshes, deadTextures=deadTextures, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);

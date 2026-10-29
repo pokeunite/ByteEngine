@@ -13,6 +13,10 @@ internal static class RenderOptimizationTests
         Material Clone(){var m=new Material();foreach(var p in typeof(Material).GetProperties().Where(p=>p.CanRead&&p.CanWrite))p.SetValue(m,p.GetValue(original));return m;}
         RenderSubmission Submission(Material material,RenderQueue3D queue=RenderQueue3D.Opaque,bool receive=true)=>new(mesh,material,Matrix4x4.Identity,mesh.LocalBounds,queue,true,true,receive,0,0);
         Check(RenderBatcher.Build([Submission(original),Submission(Clone())]).Count==1,"Equivalent material instances do not batch");
+        var reusable=new RenderBatcher.Builder();var changing=Clone();
+        Check(reusable.Build([Submission(original),Submission(changing)]).Count==1,"Reusable builder does not merge equivalent materials");
+        changing.BaseColor=new(1,0,0,1);
+        Check(reusable.Build([Submission(original),Submission(changing)]).Count==2,"Per-pass material hash cache retained stale authored state");
         foreach(var p in typeof(Material).GetProperties().Where(p=>p.CanRead&&p.CanWrite))
         {
             var m=Clone();object value=p.GetValue(m)!;object changed;

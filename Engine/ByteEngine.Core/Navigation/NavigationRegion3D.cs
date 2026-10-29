@@ -14,6 +14,7 @@ public sealed class NavigationRegion3D : Component
     public float EndpointSearchRadius {get;set;}=1.5f;
     public IReadOnlyList<Vector3> FindPath(Vector3 start,Vector3 end,int maximumVisited=10000)
     {
+        using var capture=AttachedGameObject?.Scene?.ComponentProfiler.MeasureSystem("Navigation.FindPath",AttachedGameObject.Name);
         if(Mesh!=null)return Mesh.FindPath(start,end,maximumVisited);
         if(Grid is not {} grid)return Array.Empty<Vector3>();
         bool Snap(Vector3 point,out Vector3 result)

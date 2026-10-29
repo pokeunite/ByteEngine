@@ -9,6 +9,7 @@ internal static class EventModuleTimerTests
 {
     public static void Run()
     {
+        EventWorkspaceRegressionTests.Run();
         var registry = VisualLogicRegistry.CreateDefault();
         foreach (string id in new[] { "time.timerFinished", "time.timerRunning" })
             Check(registry.TryGetCondition(id, out var c) && c!.Category == "Time", id + " registered");

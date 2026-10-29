@@ -20,7 +20,7 @@ public static class CookedModelStore
    BaseColorTexture=CookTexture(m.BaseColorTexture),NormalTexture=CookTexture(m.NormalTexture),MetallicRoughnessTexture=CookTexture(m.MetallicRoughnessTexture),MetallicTexture=CookTexture(m.MetallicTexture),RoughnessTexture=CookTexture(m.RoughnessTexture),AmbientOcclusionTexture=CookTexture(m.AmbientOcclusionTexture),EmissionTexture=CookTexture(m.EmissionTexture)}).ToList()};
   string path=PathFor(root,model.Guid);Directory.CreateDirectory(Path.GetDirectoryName(path)!);
   string temporary=path+"."+Guid.NewGuid().ToString("N")+".tmp";
-  try { using(var file=File.Create(temporary)) { using var writer=new BinaryWriter(file);writer.Write("BYTMOD03"u8);var json=JsonSerializer.SerializeToUtf8Bytes(metadata,JsonSerialization.Options);writer.Write(json.Length);writer.Write(json);
+  try { using(var file=File.Create(temporary)) { using var writer=new BinaryWriter(file);writer.Write("BYTMOD03"u8);var json=JsonSerializer.SerializeToUtf8Bytes(metadata,new JsonSerializerOptions(JsonSerialization.Options){WriteIndented=false});writer.Write(json.Length);writer.Write(json);
   foreach(var mesh in model.Meshes){Write(writer,mesh.Vertices);Write(writer,mesh.Indices);Write(writer,mesh.JointIndices);Write(writer,mesh.JointWeights);}
   } File.Move(temporary,path,true); } finally { if(File.Exists(temporary))File.Delete(temporary); }
  }
@@ -52,7 +52,7 @@ public static class CookedModelStore
   string path=PathFor(root,id);if(!File.Exists(path)){var legacy=ReadMetadata(File.ReadAllBytes(Path.ChangeExtension(path,"json")),hydrateTextures?root:null);if(legacy.Guid!=id)throw new InvalidDataException("Cooked model GUID mismatch.");return legacy;}
   using var file=File.OpenRead(path);using var reader=new BinaryReader(file);
   if(!reader.ReadBytes(8).AsSpan().SequenceEqual("BYTMOD03"u8))throw new InvalidDataException("Invalid cooked model header.");
-  int length=reader.ReadInt32();if(length<0||length>64*1024*1024||length>file.Length-file.Position)throw new InvalidDataException("Invalid cooked model metadata length.");
+  int length=reader.ReadInt32();if(length<0||length>256*1024*1024||length>file.Length-file.Position)throw new InvalidDataException("Invalid cooked model metadata length.");
   var metadata=ReadMetadata(reader.ReadBytes(length),hydrateTextures?root:null);if(metadata.Guid!=id)throw new InvalidDataException("Cooked model GUID mismatch.");
   var meshes=new List<ImportedMesh>();foreach(var m in metadata.Meshes){var vertices=Read<float>(reader);var indices=Read<uint>(reader);var joints=Read<Vector4>(reader);var weights=Read<Vector4>(reader);if(vertices.Length%8!=0||indices.Any(i=>i>=vertices.Length/8))throw new InvalidDataException("Invalid cooked mesh geometry.");meshes.Add(new(){Key=m.Key,Name=m.Name,MaterialKey=m.MaterialKey,Vertices=vertices,Indices=indices,JointIndices=joints,JointWeights=weights});}
   if(file.Position!=file.Length)throw new InvalidDataException("Unexpected cooked model trailing bytes.");

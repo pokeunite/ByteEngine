@@ -10,6 +10,22 @@ namespace ByteEngine.Core.VisualLogic;
 public sealed partial class EventModuleRuntime
 {
     private readonly VisualLogicRegistry _registry;
+    // Each recursive evaluation owns its scratch data until it returns. Rebuilding
+    // the maps still observes live sheet edits; pooling only removes allocations.
+    private readonly Stack<RuleScratch> _scratchPool = new();
+    private sealed class RuleScratch
+    {
+        public readonly Dictionary<Guid, VisualInstruction> Conditions = new(), Actions = new();
+        public readonly Dictionary<Guid, bool> Results = new();
+        public readonly HashSet<Guid> Evaluating = new(), Evaluated = new(), VisitedActions = new();
+        public readonly List<Guid> Roots = new();
+        public readonly List<VisualInstruction> Triggers = new();
+        public void Clear()
+        {
+            Conditions.Clear(); Actions.Clear(); Results.Clear(); Evaluating.Clear();
+            Evaluated.Clear(); VisitedActions.Clear(); Roots.Clear(); Triggers.Clear();
+        }
+    }
 
     private readonly HashSet<Guid> _triggerOnceLatched =
         new();
@@ -265,6 +281,15 @@ public sealed partial class EventModuleRuntime
         EventRuleDefinition rule,
         EventExecutionContext context)
     {
+        using var capture=context.Scene.ComponentProfiler.MeasureSystem("EventSheet.Rule",rule.DisplayName);
+        var scratch = _scratchPool.Count > 0 ? _scratchPool.Pop() : new RuleScratch();
+        try { return EvaluateRuleCore(module, rule, context, scratch); }
+        finally { scratch.Clear(); if (_scratchPool.Count < 64) _scratchPool.Push(scratch); }
+    }
+
+    private bool EvaluateRuleCore(EventModuleDefinition module, EventRuleDefinition rule,
+        EventExecutionContext context, RuleScratch scratch)
+    {
         if (!rule.Enabled)
         {
             ResetLatchTree(
@@ -273,23 +298,14 @@ public sealed partial class EventModuleRuntime
             return false;
         }
 
-        Dictionary<Guid, VisualInstruction> conditionMap =
-            rule.Conditions.ToDictionary(
-                condition =>
-                    condition.InstanceId);
-
-        IReadOnlyList<Guid> rootConditionIds =
-            GetActiveConditionIds(
-                rule);
-
-        Dictionary<Guid, bool> results =
-            new();
-
-        HashSet<Guid> evaluating =
-            new();
-
-        HashSet<Guid> evaluated =
-            new();
+        var conditionMap = scratch.Conditions;
+        foreach (var condition in rule.Conditions) conditionMap.Add(condition.InstanceId, condition);
+        if (!rule.HasExplicitConditionFlow)
+            foreach (var condition in rule.Conditions) scratch.Roots.Add(condition.InstanceId);
+        IReadOnlyList<Guid> rootConditionIds = rule.HasExplicitConditionFlow ? rule.ConnectedConditionIds : scratch.Roots;
+        var results = scratch.Results;
+        var evaluating = scratch.Evaluating;
+        var evaluated = scratch.Evaluated;
 
         /*
          * Once a rule has explicit ByteGraph condition wiring, zero root
@@ -325,23 +341,11 @@ public sealed partial class EventModuleRuntime
             }
         }
 
-        List<VisualInstruction> triggerOnceConditions =
-            evaluated
-                .Select(
-                    id =>
-                        conditionMap.TryGetValue(
-                            id,
-                            out VisualInstruction? condition)
-                            ? condition
-                            : null)
-                .Where(
-                    condition =>
-                        condition != null &&
-                        condition.Id.Equals(
-                            "system.triggerOnce",
-                            StringComparison.OrdinalIgnoreCase))
-                .Cast<VisualInstruction>()
-                .ToList();
+        var triggerOnceConditions = scratch.Triggers;
+        foreach (var id in evaluated)
+            if (conditionMap.TryGetValue(id, out var condition) &&
+                condition.Id.Equals("system.triggerOnce", StringComparison.OrdinalIgnoreCase))
+                triggerOnceConditions.Add(condition);
 
         if (!allPassed)
         {
@@ -417,7 +421,7 @@ public sealed partial class EventModuleRuntime
         ExecuteActions(
             module,
             rule,
-            context);
+            context, scratch);
 
         foreach (EventRuleDefinition child
                  in rule.SubEvents)
@@ -646,7 +650,7 @@ public sealed partial class EventModuleRuntime
     private void ExecuteActions(
         EventModuleDefinition module,
         EventRuleDefinition rule,
-        EventExecutionContext context)
+        EventExecutionContext context, RuleScratch scratch)
     {
         /*
          * Compatibility path for Event Modules authored before explicit
@@ -664,13 +668,9 @@ public sealed partial class EventModuleRuntime
             return;
         }
 
-        Dictionary<Guid, VisualInstruction> actions =
-            rule.Actions.ToDictionary(
-                action =>
-                    action.InstanceId);
-
-        HashSet<Guid> visited =
-            new();
+        var actions = scratch.Actions;
+        foreach (var action in rule.Actions) actions.Add(action.InstanceId, action);
+        var visited = scratch.VisitedActions;
 
         ExecuteActionFlow(
             module,

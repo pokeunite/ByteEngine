@@ -17,13 +17,20 @@ namespace ByteEngine.Core.Physics;
 /// </summary>
 public static class GameplayQuery3D
 {
+    private static ByteEngine.Core.Diagnostics.ComponentFrameProfiler.WorkScope CaptureQuery(RuntimeScene? scene,string name)
+        =>scene?.ComponentProfiler.MeasureSystem(name)??default;
     private const float Epsilon =
         0.000001f;
 
     private const int MaximumCapsuleSamples =
         16;
 
-    public static bool Raycast(
+    public static bool Raycast(RuntimeScene scene,Vector3 origin,Vector3 direction,out RaycastHit3D hit,
+        float maxDistance=float.PositiveInfinity,GameObject? ignore=null,LayerMask? layerMask=null,
+        GameObject? source=null,bool bypassCollisionMatrix=false,bool includeTriggers=true)
+        =>RaycastWithDamageHits(scene,origin,direction,out hit,maxDistance,ignore,layerMask,source,bypassCollisionMatrix,includeTriggers,false);
+
+    public static bool RaycastWithDamageHits(
         RuntimeScene scene,
         Vector3 origin,
         Vector3 direction,
@@ -33,8 +40,10 @@ public static class GameplayQuery3D
         LayerMask? layerMask = null,
         GameObject? source = null,
         bool bypassCollisionMatrix = false,
-        bool includeTriggers = true)
+        bool includeTriggers = true,
+        bool includeDamageTriggers = false)
     {
+        using var capture=CaptureQuery(scene,"Physics.Raycast");
         return
             Cast(
                 scene,
@@ -50,7 +59,7 @@ public static class GameplayQuery3D
                 source,
                 bypassCollisionMatrix,
                 includeTriggers,
-                false);
+                false,includeDamageTriggers:includeDamageTriggers);
     }
 
     public static bool SphereCast(
@@ -66,6 +75,7 @@ public static class GameplayQuery3D
         bool bypassCollisionMatrix = false,
         bool includeTriggers = true)
     {
+        using var capture=CaptureQuery(scene,"Physics.SphereCast");
         return
             Cast(
                 scene,
@@ -114,8 +124,8 @@ public static class GameplayQuery3D
                     LayerMask.All,
                 source,
                 false,
-                true,
-                false);
+                false,
+                false,includeDamageTriggers:true);
     }
 
     /// <summary>
@@ -140,6 +150,7 @@ public static class GameplayQuery3D
         bool bypassCollisionMatrix = false,
         bool includeTriggers = true)
     {
+        using var capture=CaptureQuery(scene,"Physics.CapsuleCast");
         ArgumentNullException.ThrowIfNull(
             scene);
 
@@ -251,6 +262,7 @@ public static class GameplayQuery3D
         bool bypassCollisionMatrix = false,
         bool includeTriggers = true)
     {
+        using var capture=CaptureQuery(scene,"Physics.OverlapSphere");
         return
             OverlapCapsule(
                 scene,
@@ -278,6 +290,7 @@ public static class GameplayQuery3D
         bool bypassCollisionMatrix = false,
         bool includeTriggers = true)
     {
+        using var capture=CaptureQuery(scene,"Physics.OverlapCapsule");
         ArgumentNullException.ThrowIfNull(
             scene);
 
@@ -363,7 +376,8 @@ public static class GameplayQuery3D
         bool bypassCollisionMatrix,
         bool includeTriggers,
         bool ignoreInitialOverlapWhenMovingOut,
-        IReadOnlyList<GameObject>? candidates = null)
+        IReadOnlyList<GameObject>? candidates = null,
+        bool includeDamageTriggers = false)
     {
         ArgumentNullException.ThrowIfNull(
             scene);
@@ -419,7 +433,7 @@ public static class GameplayQuery3D
                 if (!collider.Enabled ||
                     (
                         !includeTriggers &&
-                        collider.IsTrigger
+                        collider.IsTrigger && !(includeDamageTriggers && gameObject.GetComponent<ByteEngine.Core.Gameplay.DamageRegion3D>()!=null)
                     ) ||
                     (
                         !bypassCollisionMatrix &&

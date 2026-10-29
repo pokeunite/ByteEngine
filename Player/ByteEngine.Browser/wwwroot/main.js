@@ -29,7 +29,7 @@ window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
     const renderer=new BrowserRenderer(canvas,overlay);
     const presentation=new BrowserPresentation();let graphics={quality:'Balanced',worldResolution:'Auto'};
-    globalThis.byteEngineGraphics=()=>{const gl=renderer.gl,ext=gl.getExtension('WEBGL_debug_renderer_info');return {renderer:gl.getParameter(ext?ext.UNMASKED_RENDERER_WEBGL:gl.RENDERER),error:gl.getError(),meshes:renderer.meshes.size,textures:renderer.textures.size,tintBytes:renderer.tintBytes};};
+    globalThis.byteEngineGraphics=()=>{const gl=renderer.gl,ext=gl.getExtension('WEBGL_debug_renderer_info');return {renderer:gl.getParameter(ext?ext.UNMASKED_RENDERER_WEBGL:gl.RENDERER),error:gl.getError(),meshes:renderer.meshes.size,textures:renderer.textures.size,tintBytes:renderer.tintBytes,gpuTimer:!!renderer.gpuTimer,limits:{maxTextureSize:gl.getParameter(gl.MAX_TEXTURE_SIZE),maxVertexAttributes:gl.getParameter(gl.MAX_VERTEX_ATTRIBS),maxTextureUnits:gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)},extensions:gl.getSupportedExtensions()};};
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fail('Graphics context lost. Reload this page.');});
     capture.setHardware(byteEngineGraphics());
     const runtimeReady=dotnet.create().then(runtime=>{capture.event('runtime-ready');return runtime;});
@@ -44,6 +44,13 @@ try{
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
     const videos=new BrowserVideos(files,overlay,(id,seconds,paused,ended,error)=>game.VideoState(id,seconds,paused,ended,error));audio.videos=videos;
+    capture.configure({profileComponents:value=>game.CaptureProfileComponents(value),readDetails:()=>JSON.parse(game.PerformanceDetails()),
+        readInventory:()=>JSON.parse(game.PerformanceInventory()),build:{name:manifest.name,runtime:runtime.getConfig().mainAssemblyName},
+        readBrowser:()=>({graphics:renderer.diagnostics(capture.deep),audio:{state:audio.context.state,sources:audio.sources.size,
+            playing:[...audio.sources.values()].filter(s=>s.wantsPlay).length,decodedBuffers:audio.bufferBytes.size,
+            decodedBytes:[...audio.bufferBytes.values()].reduce((a,b)=>a+b,0),streamingUrls:audio.urls.size,baseLatency:audio.context.baseLatency,outputLatency:audio.context.outputLatency}})});
+    Promise.all(['browser-runtime-integrity.json','browser-plugin-builds.json'].map(path=>fetch(path).then(r=>r.ok?r.json():null)))
+        .then(([integrity,plugins])=>capture.setBuildIdentity({bootSha256:integrity?.files?.['_framework/blazor.boot.json']??null,plugins})).catch(e=>capture.event('build-identity-unavailable',{message:String(e)}));
     status.setProgress(null,'Preparing audio…');
     const decodeStart=performance.now();await audio.decode();capture.event('audio-ready',{durationMs:performance.now()-decodeStart});
     if(stopped)throw new Error("Startup was interrupted; use Retry loading.");
@@ -65,6 +72,7 @@ try{
     status.setProgress(null,'Preparing graphics…');
     const keys=new Set(),buttons=new Set(),keyPulses=new Set(),buttonPulses=new Set();
     let pointer=[.5,.5],delta=[0,0],wheel=0,previous=performance.now(),graphicsReady=false,previousPending=-1;
+    let wasPointerLocked=false,pauseFromCapture=false;
     const names={ArrowUp:'Up',ArrowDown:'Down',ArrowLeft:'Left',ArrowRight:'Right',Space:'Space',
         ShiftLeft:'LeftShift',ShiftRight:'RightShift',ControlLeft:'LeftControl',ControlRight:'RightControl',
         AltLeft:'LeftAlt',AltRight:'RightAlt',Escape:'Escape',Enter:'Enter',Tab:'Tab',
@@ -72,21 +80,36 @@ try{
     function keyName(code){return names[code]||(code.startsWith('Key')?code.slice(3):code.startsWith('Digit')?'D'+code.slice(5):/^F\d+$/.test(code)?code:null);}
     canvas.addEventListener('keydown',e=>{
         const k=keyName(e.code);if(k){keys.add(k);if(!e.repeat)keyPulses.add(k);e.preventDefault();}
-        if(e.code==='Escape')document.exitPointerLock();
+        if(e.code==='Escape'){
+            if(document.pointerLockElement===canvas)pauseFromCapture=true;
+            document.exitPointerLock();
+        }
     });
     window.addEventListener('keyup',e=>{const k=keyName(e.code);if(k)keys.delete(k);});
-    function release(){game.CancelTouches();keys.clear();buttons.clear();keyPulses.clear();buttonPulses.clear();delta=[0,0];wheel=0;previous=performance.now();}
+    function release(){game.CancelTouches();keys.clear();buttons.clear();keyPulses.clear();buttonPulses.clear();pauseFromCapture=false;delta=[0,0];wheel=0;previous=performance.now();}
     function touch(e,phase){const r=canvas.getBoundingClientRect();game.Touch(e.pointerId,(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height,phase);}
     canvas.style.touchAction='none';
     canvas.addEventListener('pointercancel',e=>{if(e.pointerType!=='mouse')touch(e,'Cancelled');});
     canvas.addEventListener('blur',release);document.addEventListener('visibilitychange',release);
     canvas.addEventListener('pointerdown',e=>{
         canvas.focus();audio.activate().catch(fail);
-        if(e.pointerType!=='mouse'){canvas.setPointerCapture(e.pointerId);touch(e,'Started');return;}
-        const b=['Left','Middle','Right'][e.button];if(b){buttons.add(b);buttonPulses.add(b);}
+        if(e.pointerType!=='mouse'){canvas.setPointerCapture(e.pointerId);touch(e,'Started');e.preventDefault();return;}
         if(game.WantsPointerLock()&&document.pointerLockElement!==canvas)canvas.requestPointerLock()?.catch(()=>{});
     });
-    window.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse'){touch(e,'Ended');return;}buttons.delete(['Left','Middle','Right'][e.button]);});
+    // Pointer events only signal the first/last held mouse button. Mouse events
+    // signal each transition, including left-fire while right-aim is held.
+    canvas.addEventListener('mousedown',e=>{const b=['Left','Middle','Right'][e.button];if(b){buttons.add(b);buttonPulses.add(b);}e.preventDefault();});
+    window.addEventListener('mouseup',e=>buttons.delete(['Left','Middle','Right'][e.button]));
+    window.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')touch(e,'Ended');});
+    document.addEventListener('pointerlockchange',()=>{
+        const locked=document.pointerLockElement===canvas;
+        // Escape is reserved by the browser while locked and may produce no
+        // keydown. Forward one pause press with the capture state it began in.
+        if(wasPointerLocked&&!locked&&game.WantsPointerLock()&&!document.hidden&&document.hasFocus()){
+            keyPulses.add('Escape');pauseFromCapture=true;buttons.clear();buttonPulses.clear();delta=[0,0];
+        }
+        wasPointerLocked=locked;
+    });
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('wheel',e=>{wheel-=Math.sign(e.deltaY);e.preventDefault();},{passive:false});
     canvas.addEventListener('pointermove',e=>{
@@ -105,19 +128,20 @@ try{
             if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
             const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
+            const deepProfile=capture.beforeFrame();
             const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
-                document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad);
+                document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas||pauseFromCapture,gamepad);
             const wasmEnd=performance.now();const data=JSON.parse(payload);
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
             if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
-            const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();
+            const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();pauseFromCapture=false;
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};
             const audioStart=performance.now();audio.commands(data.audio);const audioEnd=performance.now();
-            videos.update();
+            videos.update();const videoEnd=performance.now();
             for(const [id,state] of audio.sources){const seconds=state.media?state.media.currentTime:state.offset+(state.node?(audio.context.currentTime-state.started)*state.pitch:0);game.AudioPosition(id,seconds);}
-            const drawCount=data.draws.length,uiCount=data.ui.length;
+            const drawCount=data.draws.length,uiCount=data.ui.length,drawStart=performance.now();
             if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi)data.ui=[];
             renderer.draw(data,width,height);
             presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures);
@@ -127,7 +151,12 @@ try{
             if(allocations.length||renderer.profile.uploadMs>8)capture.event('graphics-upload',{durationMs:renderer.profile.uploadMs,meshBytes:renderer.profile.meshUploadBytes,textureBytes:renderer.profile.textureUploadBytes,allocations:allocations.map(t=>({id:t.id,source:t.source,width:t.width,height:t.height,hdr:t.hdr}))});
             byteEnginePerf.frames.push({frameMs:renderEnd-frameStart,managedMs:managedEnd-frameStart,renderMs:renderEnd-managedEnd,intervalMs,loopMs:data.loopMs,draws:data.draws.length,pending:data.pendingTextures});
             if(byteEnginePerf.frames.length>600)byteEnginePerf.frames.shift();
-            capture.frame({frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,renderMs:renderEnd-audioEnd,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,draws:drawCount,uiCommands:uiCount,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
+            capture.frame({startMs:frameStart,deep:deepProfile,frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,
+                videoMs:videoEnd-audioEnd,audioPositionMs:drawStart-videoEnd,renderMs:renderEnd-drawStart,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,uiBytes:uiCount*56,
+                draws:drawCount,uiCommands:uiCount,audioCommands:data.audio.length,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,
+                directionalLights:data.lights.length,pointLights:data.points.length,shadowResolution:data.shadow?.resolution??0,
+                sceneMetrics:data.sceneMetrics,inputMs:data.inputMs,updateStepMs:data.updateStepMs,renderPreparationMs:data.renderPreparationMs,renderAllocatedBytes:data.renderAllocatedBytes,
+                focused:document.activeElement===canvas,captured:document.pointerLockElement===canvas,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
             if(data.pendingTextures!==previousPending){capture.event('graphics-queue',{pending:data.pendingTextures,reason:graphicsReady?'background asset uploads':'initial graphics'});previousPending=data.pendingTextures;}
             if(!graphicsReady&&data.pendingTextures===0){graphicsReady=true;capture.event('first-ready-frame');}
             // A background upload must not replace gameplay with the startup splash.

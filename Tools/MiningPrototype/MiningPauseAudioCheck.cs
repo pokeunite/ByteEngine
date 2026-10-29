@@ -27,7 +27,7 @@ internal static class MiningPauseAudioCheck
   Check(menu.IsOpen&&scene.SimulationTime==time&&op.SpawnedEnemies.Count==alive&&player.Transform.WorldPosition==before,"pause freezes the active wave, player and simulation clock");
   Check(Input.IsUiPointerRequested&&Input.HasGameplayEscapeHandler,"pause owns Escape and keeps the cursor available");
   menu.ShowPage(MiningPausePage.Sound);var raw=new RawInputSnapshot();raw.MouseButtonsDown.Add(MouseButton.Left);
-  typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[raw,true]);Input.SetGameViewPointer(new(840f/1280,211f/720),new(1280,720),true);Frame();
+  typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[raw,true]);Input.SetGameViewPointer(new(805f/1280,226f/720),new(1280,720),true);Frame();
   Check(Math.Abs(AudioMixer.GetVolume(AudioBus.Master)-.5f)<.02f,"sound slider responds to actual pointer input while paused");AudioMixer.SetVolume(AudioBus.Master,1);
   typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[new RawInputSnapshot(),true]);
   menu.ShowPage(MiningPausePage.Controls);var wheel=new RawInputSnapshot{MouseWheel=-100};typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[wheel,true]);Frame();Check((float)typeof(MiningPauseMenu3D).GetField("controlsScroll",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(menu)!>7,"mouse wheel scrolls to the lower defence and mouse bindings");Check(menu.Rebind(Key.E,Key.F),"controls accept a new interaction key");menu.Resume();

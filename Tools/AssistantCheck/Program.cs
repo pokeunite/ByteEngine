@@ -18,6 +18,7 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.Common;
 
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-AssistantCheck-" + Guid.NewGuid().ToString("N"));
+if(args.Contains("--current-knowledge")){CurrentKnowledgeChecks.Run();return;}
 Directory.CreateDirectory(Path.Combine(root, "Assets"));
 using var database = new AssetDatabase(root, ["Assets"]);
 var assets = new AssetManager(database);

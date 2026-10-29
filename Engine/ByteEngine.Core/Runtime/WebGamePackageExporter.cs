@@ -27,6 +27,7 @@ public static class WebGamePackageExporter
         var runtimePlugins = ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ListInstalled(root)
             .Where(p => p.Enabled && ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(p.ManifestPath)).Runtime).ToArray();
         runtimeDirectory = Path.GetFullPath(runtimeDirectory);
+        BrowserRuntimeIntegrity.Validate(runtimeDirectory);
         string capabilityFile = Path.Combine(runtimeDirectory,"browser-plugins.json");
         var supported = File.Exists(capabilityFile) ? JsonSerializer.Deserialize<string[]>(File.ReadAllText(capabilityFile)) ?? [] : [];
         var unsupported = runtimePlugins.Where(p=>!supported.Contains(p.Id,StringComparer.OrdinalIgnoreCase)).ToArray();
@@ -78,6 +79,11 @@ public static class WebGamePackageExporter
             {
                 progress?.Report("Preparing model: " + model.ProjectPath);
                 CookedModelStore.Save(content, ModelImportPipeline.Import(model, model.Metadata.ModelImporter),browserOptimized:true,textureLimit:graphics.TextureLimit);
+                // Exercise the exact portable reader now. A successful writer is not
+                // enough: previously a 72 MB character exceeded the reader's limit
+                // and shipped as an invisible actor with no export error.
+                try { CookedModelStore.Load(content, model.Guid); }
+                catch (Exception error) { throw new InvalidDataException("Portable model validation failed: " + model.ProjectPath, error); }
                 // Keep the asset path/GUID for resolution; WASM loads the cooked model, never the native source.
                 File.WriteAllBytes(GamePackageExporter.ResolveInside(content,model.ProjectPath),Array.Empty<byte>());
             }
@@ -161,6 +167,10 @@ public static class WebGamePackageExporter
             if (!builds.RootElement.TryGetProperty(plugin.Id, out var build) ||
                 !build.TryGetProperty("version", out var version) || version.GetString() != plugin.Version)
                 throw new InvalidOperationException("Browser runtime has an outdated or different compiled plugin: " + plugin.Name + ". Refresh the browser runtime to include this project's updates before exporting.");
+            string assembly = GamePackageExporter.ResolveInside(Path.GetDirectoryName(plugin.ManifestPath)!, manifest.Assembly);
+            if (!File.Exists(assembly) || !build.TryGetProperty("sha256", out var fingerprint) ||
+                !string.Equals(Hash(assembly), fingerprint.GetString(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Browser runtime contains different plugin code: " + plugin.Name + ". Refresh the browser runtime even when the plugin version has not changed.");
         }
     }
 
