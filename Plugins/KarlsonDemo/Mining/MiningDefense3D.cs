@@ -25,7 +25,7 @@ public sealed partial class MiningDefense3D:Component
  {var o=GameObject.Scene!.CreateGameObject(name);o.SetParent(GameObject,false);o.Transform.LocalPosition=p;o.Transform.LocalScale=size;o.AddComponent(new MeshRenderer{UsePrimitive=true,Primitive=shape,Material=new(){BaseColor=color,Roughness=.55f}});return o;}
  protected override void OnStart()
  {
-  if(TryStartVisual()){CreateShotEffects();return;}
+  InitializeDurability();if(TryStartVisual()){CreateShotEffects();return;}
   var gold=new Vector4(.65f,.42f,.08f,1);var dark=new Vector4(.1f,.15f,.17f,1);
   if(Kind==MiningDefenseKind.SupplyCache){head=Part("Incoming supply crate",new(0,8,0),new(.8f),gold);Part("Landing marker",new(0,.02f,0),new(1.2f,.025f,1.2f),gold,PrimitiveMeshType.Cylinder);return;}
   Part("Defence foundation",new(0,.12f,0),Kind==MiningDefenseKind.Mine?new(.7f,.15f,.7f):new(1,.24f,1),dark,PrimitiveMeshType.Cylinder);
@@ -36,7 +36,7 @@ public sealed partial class MiningDefense3D:Component
  }
  public void Tick(float dt)
  {
-  if(dt<=0||!float.IsFinite(dt))return;TickVisual(dt);
+  if(dt<=0||!float.IsFinite(dt)||ResolveDestruction())return;TickVisual(dt);
   if(Spent||Op is not {} op||Trade is not {} trade)return;
   if(Kind==MiningDefenseKind.SupplyCache){cacheHeight=Math.Max(.6f,cacheHeight-dt*5);if(head!=null)head.Transform.LocalPosition=new(0,cacheHeight,0);if(visualRoot!=null)visualRoot.Transform.LocalPosition=new(0,cacheHeight-.6f,0);var player=GameObject.Scene!.FindGameObject(op.PlayerObjectId);var weapon=player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;var health=player?.GetComponent<HealthComponent>();if(cacheHeight<=.6f&&player!=null&&Vector3.Distance(player.Transform.WorldPosition,Transform.WorldPosition)<1.6f&&(weapon?.ReserveAmmo<weapon?.Definition?.ReserveCapacity||health?.HealthPercent<1)){if(weapon?.Definition is {} d)weapon.SetAmmo(weapon.CurrentAmmo,Math.Min(d.ReserveCapacity,weapon.ReserveAmmo+24));health?.Heal(15);if(!CollectVisual()){Spent=true;GameObject.Scene.DestroyGameObject(GameObject);}}return;}
   cooldown=Math.Max(0,cooldown-dt);flash=Math.Max(0,flash-dt);if(beam!=null)beam.Active=flash>0;

@@ -102,6 +102,7 @@ internal static class VfxAtlas
         float x=(u-.5f)*2,y=(v-.5f)*2,r=MathF.Sqrt(x*x+y*y),disc=Math.Clamp(1-r,0,1);
         return sprite switch {
             VfxSprite.Solid=>1,
+            VfxSprite.ToonPuff=>ToonPuff(x,y),
             VfxSprite.Ring=>Math.Clamp(1-MathF.Abs(r-.72f)*9,0,1),
             VfxSprite.Spark=>MathF.Pow(disc,.65f),
             VfxSprite.Smoke=>Math.Clamp((1-r*r)*Noise(u*5+age*.7f,v*5-age)*2,0,1)*Math.Clamp((1-r)*6,0,1),
@@ -112,6 +113,12 @@ internal static class VfxAtlas
             VfxSprite.Ripple=>Math.Clamp(1-MathF.Abs(r-(.2f+age*.65f))*20,0,1),
             _=>MathF.Pow(disc,1.6f)
         };
+    }
+    private static float ToonPuff(float x,float y)
+    {
+        float angle=MathF.Atan2(y,x),radius=MathF.Sqrt(x*x+y*y);
+        float edge=.76f+.09f*MathF.Cos(angle*7)+.035f*MathF.Sin(angle*11);
+        return Math.Clamp((edge-radius)*80,0,1);
     }
     private static float Hash(float x,float y){float v=MathF.Sin(x*127.1f+y*311.7f)*43758.5453f;return v-MathF.Floor(v);}
     private static float Noise(float x,float y)

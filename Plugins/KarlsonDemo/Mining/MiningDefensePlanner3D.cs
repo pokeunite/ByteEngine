@@ -38,18 +38,30 @@ public sealed class MiningDefensePlanner3D:Component
  public Vector3 PlacementPoint{get;private set;}
  public bool PlacementValid{get;private set;}
  public int PlacedCount=>placed.Count;
+ public IEnumerable<MiningDefense3D> LiveDefences=>placed.Where(p=>p.Root.Scene==GameObject.Scene).Select(p=>p.Root.GetComponent<MiningDefense3D>()).OfType<MiningDefense3D>();
+ public int ReplacementCost(MiningDefenseKind kind)=>retired.Any(p=>p.Kind==kind&&p.Destroyed)?Math.Max(0,ReplacementOreCost):0;
+ public void Retire(MiningDefense3D defence,bool destroyed)
+ {
+  var item=placed.FirstOrDefault(p=>p.Root==defence.GameObject);if(item.Root==null)return;
+  var v=item.Root.Transform.WorldPosition;retired.Add(new(){Kind=item.Kind,X=v.X,Y=v.Y,Z=v.Z,Yaw=GetYaw(item.Root),Destroyed=destroyed});placed.Remove(item);
+  if(item.Kind==MiningDefenseKind.Mine&&!destroyed)spentMines++;Save();
+ }
+ public void RearmMines(){spentMines=0;foreach(var p in retired.Where(p=>!p.Destroyed&&p.Kind==MiningDefenseKind.Mine).ToArray()){Spawn(p.Kind,new(p.X,p.Y,p.Z),p.Yaw);retired.Remove(p);}Save();}
+ public int ReplacementOreCost{get;set;}=20;
+ readonly List<Placement> retired=[];
  readonly List<(MiningDefenseKind Kind,GameObject Root)> placed=[];int spentMines,spentCaches,round=-1;GameObject? marker;
  MiningTrade3D? Trade=>GameObject.Scene?.FindGameObject(WorkshopObjectId)?.GetComponent<MiningTrade3D>();
  public int Allowance(MiningDefenseKind kind)=>Trade is {} t?Math.Clamp((int)t.Stat(kind switch{MiningDefenseKind.Sentry=>"AutogunGrant",MiningDefenseKind.Repeater=>"UnlockMachineGun",MiningDefenseKind.Mortar=>"MortarStrikeGrant",MiningDefenseKind.SupplyCache=>"UnlockAirdrop",_=>"LandMineGrant"}),0,12):0;
  public int Available(MiningDefenseKind kind)=>Math.Max(0,Allowance(kind)-placed.Count(p=>p.Kind==kind)-(kind==MiningDefenseKind.Mine?spentMines:kind==MiningDefenseKind.SupplyCache?spentCaches:0));
  public void CycleBuild()
  {if(GameObject.GetComponent<MiningCampLayout3D>()?.IsEditing==true)return;var kinds=Enum.GetValues<MiningDefenseKind>().Where(k=>Available(k)>0).ToArray();if(kinds.Length==0){BuildMode=false;Status="Research a defence licence at the company tent.";return;}int index=BuildMode?Array.IndexOf(kinds,SelectedKind)+1:0;if(index>=kinds.Length){BuildMode=false;return;}SelectedKind=kinds[index];BuildMode=true;}
- public bool SelectBuild(MiningDefenseKind kind){if(GameObject.GetComponent<MiningCampLayout3D>()?.IsEditing==true||!Enum.IsDefined(kind)||Trade?.Operation?.Phase==MiningPhase.Failed||Available(kind)<=0)return false;SelectedKind=kind;BuildMode=true;return true;}
+ public bool SelectBuild(MiningDefenseKind kind){if(GameObject.GetComponent<MiningCampLayout3D>()?.IsEditing==true||!Enum.IsDefined(kind)||Trade?.Operation?.Phase==MiningPhase.Failed||Available(kind)<=0)return false;SelectedKind=kind;BuildMode=true;Status=ReplacementCost(kind)>0?$"Replacement: {ReplacementCost(kind)} refined ore on placement.":"Choose a placement.";return true;}
  public void Cancel()=>BuildMode=false;
  public bool TryPlace(Vector3 point)
  {
   var op=Trade?.Operation;if(op==null||op.Phase==MiningPhase.Failed||Available(SelectedKind)<=0||!float.IsFinite(point.X)||!float.IsFinite(point.Y)||!float.IsFinite(point.Z)||Vector3.Distance(point,Transform.WorldPosition)>Math.Clamp(PlacementRange,1,20)||placed.Any(p=>Vector3.Distance(p.Root.Transform.WorldPosition,point)<MinimumSpacing))return false;
   if(GameplayQuery3D.OverlapSphere(GameObject.Scene!,point+Vector3.UnitY*.7f,.5f,GameObject,includeTriggers:false).Any())return false;
+  var replacement=retired.FirstOrDefault(p=>p.Kind==SelectedKind&&p.Destroyed);if(replacement!=null){if(!op.SpendRefinedOre(Math.Max(0,ReplacementOreCost))){Status=$"Replacement needs {ReplacementOreCost} refined ore.";return false;}retired.Remove(replacement);}
   Spawn(SelectedKind,point);placementTime=Time.TotalTime;BuildMode=false;Status="Defence deployed.";Save();return true;
  }
  void Spawn(MiningDefenseKind kind,Vector3 point,float yaw=0)
@@ -59,13 +71,13 @@ public sealed class MiningDefensePlanner3D:Component
  }
  protected override void OnStart()
  {
-  if(!PersistProgress)return;try{if(File.Exists(PathName)){var s=JsonSerializer.Deserialize<State>(File.ReadAllText(PathName));if(s?.Version==1){spentCaches=Math.Clamp(s.SpentCaches,0,100);spentMines=Math.Clamp(s.SpentMines,0,100);round=s.Round;foreach(var p in (s.Placements??[]).Take(36))if(Enum.IsDefined(p.Kind)&&float.IsFinite(p.X)&&float.IsFinite(p.Y)&&float.IsFinite(p.Z))Spawn(p.Kind,new(p.X,p.Y,p.Z),float.IsFinite(p.Yaw)?p.Yaw:0);}}}catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){Status=e.Message;}
+  if(!PersistProgress)return;try{if(File.Exists(PathName)){var s=JsonSerializer.Deserialize<State>(File.ReadAllText(PathName));if(s?.Version==1){spentCaches=Math.Clamp(s.SpentCaches,0,100);spentMines=Math.Clamp(s.SpentMines,0,100);round=s.Round;retired.AddRange(s.Retired??[]);foreach(var p in (s.Placements??[]).Take(36))if(Enum.IsDefined(p.Kind)&&float.IsFinite(p.X)&&float.IsFinite(p.Y)&&float.IsFinite(p.Z))Spawn(p.Kind,new(p.X,p.Y,p.Z),float.IsFinite(p.Yaw)?p.Yaw:0);}}}catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){Status=e.Message;}
  }
  protected override void OnUpdate()
  {
   if(Trade?.Operation is not {} op)return;
-  if(round!=op.CompletedRounds){round=op.CompletedRounds;spentMines=spentCaches=0;Save();}
-  foreach(var p in placed.Where(p=>p.Root.Scene!=GameObject.Scene).ToArray()){if(p.Kind==MiningDefenseKind.Mine)spentMines++;if(p.Kind==MiningDefenseKind.SupplyCache)spentCaches++;placed.Remove(p);Save();}
+  CollectRemoved();
+  if(round!=op.CompletedRounds){round=op.CompletedRounds;spentMines=spentCaches=0;foreach(var p in retired.Where(p=>!p.Destroyed&&p.Kind==MiningDefenseKind.Mine).ToArray()){Spawn(p.Kind,new(p.X,p.Y,p.Z),p.Yaw);retired.Remove(p);}Save();}
   // A HUD click can select a defence while the host still has the UI cursor.
   // Preserve that selection until the host restores gameplay capture.
   if(!Input.IsGameInputCaptured||Input.IsUiPointerRequested){PlacementValid=false;if(marker!=null)marker.Active=false;return;}
@@ -86,8 +98,9 @@ public sealed class MiningDefensePlanner3D:Component
  public bool Owns(GameObject root)=>placed.Any(p=>p.Root==root&&root.Scene==GameObject.Scene);
  public bool SaveRelocation(GameObject root){if(!Owns(root))return false;Save();return LastSaveSucceeded;}
  static float GetYaw(GameObject root){var q=root.Transform.WorldRotation;return MathF.Atan2(2*(q.W*q.Y+q.X*q.Z),1-2*(q.Y*q.Y+q.Z*q.Z))*180/MathF.PI;}
- public void Save(){LastSaveSucceeded=true;foreach(var p in placed.Where(p=>p.Root.Scene!=GameObject.Scene).ToArray()){if(p.Kind==MiningDefenseKind.Mine)spentMines++;if(p.Kind==MiningDefenseKind.SupplyCache)spentCaches++;placed.Remove(p);}if(!PersistProgress||AttachedGameObject?.Scene==null)return;try{Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PathName)!);File.WriteAllText(PathName+".tmp",JsonSerializer.Serialize(new State{SpentCaches=spentCaches,SpentMines=spentMines,Round=round,Placements=placed.Where(p=>p.Root.Scene==GameObject.Scene).Select(p=>new Placement{Kind=p.Kind,X=p.Root.Transform.WorldPosition.X,Y=p.Root.Transform.WorldPosition.Y,Z=p.Root.Transform.WorldPosition.Z,Yaw=GetYaw(p.Root)}).ToArray()}));File.Move(PathName+".tmp",PathName,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastSaveSucceeded=false;Status=e.Message;}}
+ void CollectRemoved(){foreach(var p in placed.Where(p=>p.Root.Scene!=GameObject.Scene).ToArray()){bool destroyed=p.Root.GetComponent<MiningDefense3D>()?.DestroyedByEnemy==true;if(destroyed||p.Kind==MiningDefenseKind.Mine){var v=p.Root.Transform.WorldPosition;retired.Add(new(){Kind=p.Kind,X=v.X,Y=v.Y,Z=v.Z,Yaw=GetYaw(p.Root),Destroyed=destroyed});}if(p.Kind==MiningDefenseKind.Mine&&!destroyed)spentMines++;if(p.Kind==MiningDefenseKind.SupplyCache)spentCaches++;placed.Remove(p);}}
+ public void Save(){LastSaveSucceeded=true;CollectRemoved();if(!PersistProgress||AttachedGameObject?.Scene==null)return;try{Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PathName)!);File.WriteAllText(PathName+".tmp",JsonSerializer.Serialize(new State{Retired=retired.ToArray(),SpentCaches=spentCaches,SpentMines=spentMines,Round=round,Placements=placed.Where(p=>p.Root.Scene==GameObject.Scene).Select(p=>new Placement{Kind=p.Kind,X=p.Root.Transform.WorldPosition.X,Y=p.Root.Transform.WorldPosition.Y,Z=p.Root.Transform.WorldPosition.Z,Yaw=GetYaw(p.Root)}).ToArray()}));File.Move(PathName+".tmp",PathName,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastSaveSucceeded=false;Status=e.Message;}}
  protected override void OnStop()=>Save();
- public sealed class State{public int Version{get;set;}=1;public int Round{get;set;}public int SpentMines{get;set;}public int SpentCaches{get;set;}public Placement[]? Placements{get;set;}}
- public sealed class Placement{public MiningDefenseKind Kind{get;set;}public float X{get;set;}public float Y{get;set;}public float Z{get;set;}public float Yaw{get;set;}}
+ public sealed class State{public int Version{get;set;}=1;public int Round{get;set;}public int SpentMines{get;set;}public int SpentCaches{get;set;}public Placement[]? Retired{get;set;}public Placement[]? Placements{get;set;}}
+ public sealed class Placement{public bool Destroyed{get;set;}public MiningDefenseKind Kind{get;set;}public float X{get;set;}public float Y{get;set;}public float Z{get;set;}public float Yaw{get;set;}}
 }

@@ -13,6 +13,17 @@ public sealed class AIWorld
     public static AIWorld For(RuntimeScene scene)=>Worlds.GetValue(scene,_=>new());
     private readonly List<AINoiseEvent> _noises=[];
     private long _noiseSequence;
+    private readonly List<GameObject> _characters=[];
+    private long _characterRevision=-1;
+    internal IReadOnlyList<GameObject> CharacterCandidates(RuntimeScene scene)
+    {
+        if(_characterRevision!=scene.AIRegistryRevision)
+        {
+            _characters.Clear();foreach(var obj in scene.GameObjects)if(obj.GetComponent<ByteEngine.Core.Characters.CharacterController3D>()!=null)_characters.Add(obj);
+            _characterRevision=scene.AIRegistryRevision;
+        }
+        return _characters;
+    }
     private long _querySlot=-1;
     public bool TryPositionQuery(AIBehavior3D owner)
     {
@@ -30,17 +41,21 @@ public sealed class AIWorld
         var world=For(scene);world._noises.Add(new(++world._noiseSequence,point,Math.Clamp(radius,0,1000),source,kind,scene.SimulationTime));if(world._noises.Count>128)world._noises.RemoveAt(0);
     }
     private static bool Alive(AIBehavior3D owner)=>owner.ReservationOwner is {Scene:not null,ActiveInHierarchy:true} actor&&owner.Enabled&&!owner.Paused&&actor.GetComponent<HealthComponent>()?.IsDead!=true&&actor.GetComponent<SimpleEnemyAI3D>() is not {BehaviorControlled:true,Enabled:false};
+    private readonly List<Guid> _expired=[];
     private void Prune()
     {
-        foreach(var key in _attacks.Where(p=>!Alive(p.Value.Owner)||p.Value.Owner.BehaviorTime-p.Value.Start>=p.Value.Duration).Select(p=>p.Key).ToArray())_attacks.Remove(key);
-        foreach(var key in _positions.Where(p=>!Alive(p.Value.Owner)||p.Value.Owner.BehaviorTime-p.Value.Start>=p.Value.Duration).Select(p=>p.Key).ToArray())_positions.Remove(key);
+        _expired.Clear();foreach(var pair in _attacks)if(!Alive(pair.Value.Owner)||pair.Value.Owner.BehaviorTime-pair.Value.Start>=pair.Value.Duration)_expired.Add(pair.Key);
+        foreach(var key in _expired)_attacks.Remove(key);
+        _expired.Clear();foreach(var pair in _positions)if(!Alive(pair.Value.Owner)||pair.Value.Owner.BehaviorTime-pair.Value.Start>=pair.Value.Duration)_expired.Add(pair.Key);
+        foreach(var key in _expired)_positions.Remove(key);
     }
     public bool ReserveAttack(AIBehavior3D owner,Guid target,float duration)
     {
         Prune();if(_attacks.ContainsKey(owner.GameObject.Id))return true;
-        var peers=_attacks.Values.Where(p=>p.Target==target&&p.Squad==owner.Squad).ToArray();
-        int limit=Math.Clamp(owner.MaximumAttackers,1,16);if(peers.Length>0)limit=Math.Min(limit,peers.Min(p=>Math.Clamp(p.Owner.MaximumAttackers,1,16)));
-        if(peers.Length>=limit)return false;
+        if(owner.AttackReservationTargetId!=Guid.Empty)target=owner.AttackReservationTargetId;
+        int peers=0,limit=Math.Clamp(owner.MaximumAttackers,1,16);
+        foreach(var lease in _attacks.Values)if(lease.Target==target&&lease.Squad==owner.Squad){peers++;limit=Math.Min(limit,Math.Clamp(lease.Owner.MaximumAttackers,1,16));}
+        if(peers>=limit)return false;
         _attacks[owner.GameObject.Id]=new(owner,target,owner.Squad,owner.BehaviorTime,Math.Clamp(duration,1,30));return true;
     }
     public bool OwnsAttack(AIBehavior3D owner){Prune();return _attacks.ContainsKey(owner.GameObject.Id);}

@@ -43,7 +43,7 @@ public sealed class MiningEffects3D:Component
  }
  public VfxPlayer? Emit(MiningEffectCue cue,Vector3 position,Vector3? direction=null,float size=1,Vector3? target=null)
  {
-  if(!Enum.IsDefined(cue))return null;var p=pool.FirstOrDefault(x=>x.Cue==cue&&!x.Player.GameObject.Active).Player??Create(cue);
+  if(!Enum.IsDefined(cue))return null;if(cue is MiningEffectCue.MineExplosion or MiningEffectCue.MortarExplosion&&MiningGameFeel3D.Find(GameObject) is {} feedback&&GameObject.Scene?.FindGameObject(feedback.PlayerObjectId) is {} player){float distance=Vector3.Distance(player.Transform.WorldPosition,position);if(distance<20)feedback.AddCameraImpulse(feedback.ExplosionKickDegrees*(1-distance/20));}var p=pool.FirstOrDefault(x=>x.Cue==cue&&!x.Player.GameObject.Active).Player??Create(cue);
   if(p==null){DroppedEffects++;return null;}
   p.GameObject.Active=true;p.Transform.WorldPosition=position;p.Transform.WorldRotation=Align(direction??Vector3.UnitY);p.Size=Math.Clamp(float.IsFinite(size)?size:1,.05f,12);p.ClearBeamTarget();if(target.HasValue)p.SetBeamTarget(target.Value);p.Play();EmittedEffects++;return p;
  }

@@ -1,25 +1,42 @@
+using System.ComponentModel;
 namespace KarlsonDemo.Plugin;
 public sealed partial class MiningTrade3D
 {
- public float BaseSaleUnitsPerSecond{get;set;}=5;
- public int SaleQuantity{get;private set;}
- public int SaleProcessed{get;private set;}
- public bool SaleRefined{get;private set;}
- public float SaleQuote{get;private set;}
- public bool SaleInProgress=>SaleProcessed<SaleQuantity;
- public float SaleProgress=>SaleQuantity>0?SaleProcessed/(float)SaleQuantity:0;
- public float SaleUnitsPerSecond=>Math.Max(.1f,BaseSaleUnitsPerSecond+Stat("OilSellRate"))*Math.Clamp(PriceMultiplier,.65f,1.6f);
- float saleAccumulator;
+ [Category("Market / sales")]public float SaleSeconds{get;set;}=30;
+ [Category("Market / sales")]public float GuaranteedPriceFactor{get;set;}=.9f;
+ [Category("Market / sales")]public float BaseExchangeFeePercent{get;set;}=3;
+ [Category("Market / sales")]public int BaseDeliveryCapacity{get;set;}=40;
+ [Browsable(false)]public float BaseSaleUnitsPerSecond{get;set;}=5;
+ public float ExchangeFeePercent=>Math.Clamp(BaseExchangeFeePercent-Stat("MarketFeeReductionPct"),0,25);
+ public int DeliveryCapacity=>Math.Clamp(BaseDeliveryCapacity+(int)Stat("DeliveryCapacity"),1,1000000);
+ public float GuaranteedQuote(bool refined)=>MathF.Round(Math.Max(0,refined?Operation?.RefinedOrePrice??5:Operation?.RawOrePrice??2)*Math.Clamp(GuaranteedPriceFactor,0,10),2);
+ public float LiveQuote(bool refined)=>MathF.Floor(Quote(refined)*100*(1-ExchangeFeePercent/100)+.0001f)/100;
+ public float SaleQuote=>Operation?.PendingMarketSale?.Quote??Operation?.LastMarketSale?.Quote??0;
+ public int SaleQuantity=>Operation?.PendingMarketSale?.Quantity??Operation?.LastMarketSale?.Quantity??0;
+ public int SaleProcessed=>Operation?.PendingMarketSale is {} s?(int)Math.Floor(s.Quantity*SaleProgress):Operation?.LastMarketSale?.Quantity??0;
+ public bool SaleRefined=>Operation?.PendingMarketSale?.Refined??Operation?.LastMarketSale?.Refined??true;
+ public bool SaleInProgress=>Operation?.PendingMarketSale!=null;
+ public float SaleProgress=>Operation?.PendingMarketSale is {} s?Math.Clamp(s.Age/s.Seconds,0,1):Operation?.LastMarketSale!=null?1:0;
+ public float SaleUnitsPerSecond=>Operation?.PendingMarketSale is {} s?s.Quantity/s.Seconds:0;
+ public int LockedSaleCredits=>Operation?.PendingMarketSale?.Credits??0;
+ public float SaleSecondsRemaining=>Operation?.PendingMarketSale is {} pending?Math.Max(0,pending.Seconds-pending.Age):0;
+ public bool ShippingGuaranteedDelivery=>Operation?.PendingMarketSale?.Guaranteed==true;
+ public int LastSaleAdvantage=>Operation?.LastMarketSale?.Advantage??0;
+ public int LastSaleQuantity=>Operation?.LastMarketSale?.Quantity??0;
+ public bool LastSaleWasGuaranteed=>Operation?.LastMarketSale?.Guaranteed??false;
  public bool BeginSale(bool refined,int quantity)
  {
-  Initialize();if(SaleInProgress||Operation?.Phase!=MiningPhase.Preparation||quantity<=0||Stock(refined)<quantity)return false;
-  SaleQuantity=quantity;SaleProcessed=0;SaleRefined=refined;SaleQuote=Quote(refined);saleAccumulator=0;LastSaleTotal=0;LastSaleQuote=SaleQuote;return true;
+  return BeginMarketSale(refined,quantity,false);
+ }
+ public bool BeginMarketSale(bool refined,int quantity,bool guaranteed)
+ {
+  Initialize();if(guaranteed)return refined&&ActiveDeliveryContract?.Quantity==quantity&&DeliverContract();
+  return Operation?.ReserveMarketSale(refined,quantity,LiveQuote(refined),GuaranteedQuote(refined),false,SaleSeconds)==true;
  }
  void TickShipment(float delta)
  {
-  if(!SaleInProgress||Operation==null)return;
-  saleAccumulator=Math.Min(SaleQuantity,saleAccumulator+delta*SaleUnitsPerSecond);int count=Math.Min(SaleQuantity-SaleProcessed,(int)saleAccumulator);if(count==0)return;
-  if(Operation.ProcessShipmentUnits(SaleRefined,count,SaleQuote,SaleProcessed)){SaleProcessed+=count;saleAccumulator-=count;LastSaleTotal=MiningOperation3D.SaleTotal(SaleProcessed,SaleQuote);}
-  else{SaleQuantity=SaleProcessed;LastError="Shipment stopped: cargo changed. Unsold cargo remains in storage.";}
+  bool wasShipping=SaleInProgress;
+  Operation?.AdvanceMarketSale(delta);
+  if(wasShipping&&!SaleInProgress)MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.Notification);
  }
 }

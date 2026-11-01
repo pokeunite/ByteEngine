@@ -14,7 +14,7 @@ public sealed class MiningAmmoBucket3D:ByteEngine.Core.Scene.Component
  public string BucketMarker{get;set;}="BucketFloor";
  public Vector3 BucketOffset{get;set;}=new(.5f,.5f,-1.5f);
  public Vector3 EjectionOffset{get;set;}=new(.5f,.9f,-.8f);
- [Category("Collection")] public float PickupRadius{get;set;}=1.65f;
+ [Category("Collection")] public float PickupRadius{get;set;}=4.5f;
  public bool AutoPickup{get;set;}=true;
  [Category("Collection")] public float PickupFlightSeconds{get;set;}=.28f;
  [Category("Collection")] public int MaximumPickupTrails{get;set;}=12;

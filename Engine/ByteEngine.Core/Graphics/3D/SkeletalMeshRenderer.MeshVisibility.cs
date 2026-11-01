@@ -121,6 +121,7 @@ public sealed partial class SkeletalMeshRenderer
 
     private void ApplyMeshVisibility()
     {
+        if(ShareCrowdPoses){foreach(var runtime in _runtimeMeshes)runtime.SharedCrowdMesh=null;_poseDirty=true;}
         foreach (RuntimeSkinnedMesh runtime in _runtimeMeshes)
         {
             bool hidden =

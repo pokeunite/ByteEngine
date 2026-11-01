@@ -243,7 +243,7 @@ public sealed class Renderer3D : IDisposable
         casters.Clear();
         for (int i = 0; i < submissions.Count; i++)
         {
-            var submission = submissions[i];
+            var submission = submissions[i].AsShadowCaster();
             if (submission.CastShadows && submission.Queue != RenderQueue3D.Overlay &&
                 submission.Material.BlendMode is BlendMode3D.Opaque or BlendMode3D.Cutout)
                 casters.Add(submission);
@@ -487,7 +487,7 @@ public sealed class Renderer3D : IDisposable
             casters.Clear();
             for (int i = 0; i < submissions.Count; i++)
             {
-                var submission = submissions[i];
+                var submission = submissions[i].AsShadowCaster();
                 if (submission.CastShadows && submission.Queue != RenderQueue3D.Overlay &&
                     submission.Material.BlendMode is BlendMode3D.Opaque or BlendMode3D.Cutout &&
                     IntersectsPointLightRange(submission.WorldBounds, light.Position, light.Range))

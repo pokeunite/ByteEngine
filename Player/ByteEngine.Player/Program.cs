@@ -24,9 +24,14 @@ internal static class Program
         Console.SetError(writer);
         bool smokeTest=args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
         bool validate = args.Contains("--validate", StringComparer.OrdinalIgnoreCase);
-        using var splash = smokeTest || validate ? null : new StartupSplash();
+        using var splash = smokeTest || validate || args.Contains("--write-runtime-identity") ? null : new StartupSplash();
         try
         {
+            if(args.Length==2&&args[0]=="--write-runtime-identity")
+            {
+                File.WriteAllText(args[1],typeof(GamePackageExporter).Assembly.ManifestModule.ModuleVersionId.ToString());
+                return 0;
+            }
             if (RuntimeInformation.ProcessArchitecture != Architecture.X64)
                 throw new PlatformNotSupportedException("This game is built for Windows x64.");
             foreach (string library in new[] { "glfw3.dll", "assimp.dll", "openal32.dll" })
@@ -43,7 +48,7 @@ internal static class Program
                         "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
                 }
             }
-            string gameDirectory=AppContext.BaseDirectory;
+            string gameDirectory=SingleExecutablePackage.Prepare(Environment.ProcessPath!)??AppContext.BaseDirectory;
             if(string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(gameDirectory)),"Runtime",StringComparison.OrdinalIgnoreCase))
                 gameDirectory=Directory.GetParent(Path.TrimEndingDirectorySeparator(gameDirectory))!.FullName;
             if (validate) GamePackageExporter.ValidatePackage(gameDirectory);

@@ -43,6 +43,7 @@ public sealed partial class MiningOperation3D
  }
  protected override void OnRender(RenderContext context)
  {
+  DrawTarget(context);
   if(RecoveryOpacity>0)context.DrawUiQuad(Vector2.Zero,new(context.TargetWidth,context.TargetHeight),new(0,0,0,RecoveryOpacity));
  }
 }

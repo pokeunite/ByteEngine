@@ -21,7 +21,7 @@ public sealed partial class MiningAudio3D
   if(campMusicSource.ClipReference!=CampMusic||!campMusicSource.ClipLoaded){campMusicSource.Stop();if(!AudioRuntimeAssets.TryLoadClip(campMusicSource,CampMusic,m=>LastError=m))return;}
   bool mainMenu=GameObject.Scene!.GameObjects.SelectMany(o=>o.Components).OfType<MiningPauseMenu3D>().Any(m=>m.MainMenuMode);
   bool calm=mainMenu||Op is {Phase:MiningPhase.Preparation,RoamingEnemiesAlive:0};
-  float target=calm?Math.Clamp(CampMusicVolume,0,1):0;
+  float target=calm?Math.Clamp(CampMusicVolume,0,1)*(GameObject.GetComponent<MiningGameFeel3D>()?.MusicGain??1):0;
   float step=dt/Math.Clamp(MusicFadeSeconds,.1f,10);
   campMusicSource.Volume+=Math.Clamp(target-campMusicSource.Volume,-step,step);
   if(calm&&!campMusicSource.IsPlaying)campMusicSource.Play();
@@ -30,7 +30,7 @@ public sealed partial class MiningAudio3D
   if(!BattleMusic.IsEmpty){
    if(battleMusicSource==null){var o=GameObject.Scene!.CreateGameObject("Mining combat music");o.SetParent(GameObject,false);battleMusicSource=o.AddComponent(new AudioSource3D{Loop=true,Spatial=false,Bus=AudioBus.Music,Volume=0,Priority=20});}
    if(battleMusicSource.ClipReference!=BattleMusic||!battleMusicSource.ClipLoaded){battleMusicSource.Stop();if(!AudioRuntimeAssets.TryLoadClip(battleMusicSource,BattleMusic,m=>LastError=m))return;}
-   float battleTarget=battle?Math.Clamp(BattleMusicVolume,0,1):0;
+   float battleTarget=battle?Math.Clamp(BattleMusicVolume,0,1)*(GameObject.GetComponent<MiningGameFeel3D>()?.MusicGain??1):0;
    battleMusicSource.Volume+=Math.Clamp(battleTarget-battleMusicSource.Volume,-step,step);
    if(battle&&!battleMusicSource.IsPlaying)battleMusicSource.Play();else if(!battle&&battleMusicSource.Volume<=.001f)battleMusicSource.Stop();
   }

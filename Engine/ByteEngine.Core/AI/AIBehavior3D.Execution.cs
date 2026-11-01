@@ -48,19 +48,20 @@ public sealed partial class AIBehavior3D
         _attackTarget=null;_attackOwner=null;_stagedPhase=null;_attackCommitted=false;_phaseFinished=false;
         if(AttachedGameObject?.Scene is {} scene){var world=AIWorld.For(scene);world.ReleaseAttack(this);world.ReleasePosition(this);}
     }
+    private readonly List<Guid> _advancedCleanup=[];
     private void CleanupAdvanced()
     {
-        foreach(var id in _runningGates.Where(id=>!_visited.Contains(id)).ToArray())_runningGates.Remove(id);
-        foreach(var id in _searchPoints.Keys.Where(id=>!_visited.Contains(id)).ToArray())_searchPoints.Remove(id);
+        _advancedCleanup.Clear();foreach(var id in _runningGates)if(!_visited.Contains(id))_advancedCleanup.Add(id);foreach(var id in _advancedCleanup)_runningGates.Remove(id);
+        _advancedCleanup.Clear();foreach(var id in _searchPoints.Keys)if(!_visited.Contains(id))_advancedCleanup.Add(id);foreach(var id in _advancedCleanup)_searchPoints.Remove(id);
         if(_attackOwner.HasValue&&(!_visited.Contains(_attackOwner.Value)||_status.GetValueOrDefault(_attackOwner.Value)==BehaviorStatus.Failure))CancelAdvanced("Branch interrupted");
         if(Status!=BehaviorStatus.Running&&!_attackCommitted)AIWorld.For(GameObject.Scene!).ReleaseAttack(this);
     }
     private void RunServices()=>RunServicesFor(_definition!);
     private void RunServicesFor(BehaviorTreeDefinition definition)
     {
-        foreach(var service in definition.Services.Where(s=>s.Enabled))
+        foreach(var service in definition.Services)
         {
-            if(_serviceNext.GetValueOrDefault(service.Id)>_clock)continue;
+            if(!service.Enabled||_serviceNext.GetValueOrDefault(service.Id)>_clock)continue;
             _serviceNext[service.Id]=_clock+Math.Max(.02f,service.Interval);
             switch(service.Kind)
             {

@@ -126,6 +126,8 @@ public sealed partial class AnimationController
             renderer.ConfigurePoseProfile(profile);
     }
 
+    public float DirectionBlendSmoothingSeconds {get;set;}=.10f;
+    private Vector2 _stableLocalVelocity;
     private void UpdateAdvancedPoseControls()
     {
         if (_loadedPoseProfile == null) return;
@@ -167,6 +169,10 @@ public sealed partial class AnimationController
         Vector3 velocity = motor?.Velocity ?? Vector3.Zero;
         float forward = Vector3.Dot(velocity, Transform.Forward);
         float right = Vector3.Dot(velocity, Transform.Right);
+        float alpha=1-MathF.Exp(-Math.Max(0,(float)ByteEngine.Core.Time.DeltaTime)/Math.Max(.001f,DirectionBlendSmoothingSeconds));
+        _stableLocalVelocity=Vector2.Lerp(_stableLocalVelocity,new(right,forward),alpha);
+        right=_stableLocalVelocity.X;forward=_stableLocalVelocity.Y;
+        if(MathF.Abs(right)<MathF.Abs(forward)*.16f)right=0;
         float x = _selectedBlendSpace == null ? 0f :
             ResolveBlendParameter(_selectedBlendSpace.ParameterX, motor, right, forward);
         float y = _selectedBlendSpace?.TwoDimensional == true

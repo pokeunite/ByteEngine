@@ -98,7 +98,7 @@ public sealed partial class SimpleEnemyAI3D
             State=SimpleEnemyAIState.Attack;
             float step=Math.Min(Math.Max(0,ChargeSpeed)*dt*BossTempo,Math.Max(0,ChargeDistance-_chargeTravel));
             if(_bossAttack!="Feint" && !_chargeHit && distance<Math.Max(1,CollisionRadius+.65f))
-            {target.GetComponent<HealthComponent>()?.Damage(Damage); _chargeHit=true;}
+            {target.GetComponent<HealthComponent>()?.Damage(Damage,target.Transform.WorldPosition-Transform.WorldPosition); _chargeHit=true;}
             bool moved=MovePattern(_lockedDirection,step); _chargeTravel+=step;
             if(!moved||_chargeTravel>=(_bossAttack=="Feint"?FeintDistance:ChargeDistance)||step<=0)
             {
@@ -124,9 +124,9 @@ public sealed partial class SimpleEnemyAI3D
             else if(AttackStyle==EnemyAttackStyle.GroundCaster)
             {
                 if(FallingFireball)SpawnImpact();
-                var d=target.Transform.WorldPosition-_lockedPoint; d.Y=0;if(d.Length()<=HazardRadius)target.GetComponent<HealthComponent>()?.Damage(Damage);
+                var d=target.Transform.WorldPosition-_lockedPoint; d.Y=0;if(d.Length()<=HazardRadius)target.GetComponent<HealthComponent>()?.Damage(Damage,target.Transform.WorldPosition-Transform.WorldPosition);
             }
-            else if(distance<=AttackRange+.25f&&StagedMeleeCanHit(target,direction)) target.GetComponent<HealthComponent>()?.Damage(Damage);
+            else if(distance<=AttackRange&&StagedMeleeCanHit(target,direction)) target.GetComponent<HealthComponent>()?.Damage(Damage,target.Transform.WorldPosition-Transform.WorldPosition);
             Recover(); return;
         }
         if(distance>DetectionRange)return;

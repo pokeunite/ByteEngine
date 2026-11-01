@@ -23,7 +23,7 @@ public sealed partial class MiningDefense3D
   var scene=GameObject.Scene;if(scene==null||range<=.01f)return false;
   bullets.RemoveAll(b=>b.Scene!=scene);
   if(bullets.Count>=Math.Clamp(MaximumProjectiles,1,128))return false;
-  float speed=WeaponDefinition3D.Bound(ProjectileSpeed,75,1,500);
+  float speed=WeaponDefinition3D.Bound(ProjectileSpeed*(1+(Kind==MiningDefenseKind.Sentry?Trade?.Stat("AutogunProjectileSpeedPct")??0:0)/100),75,1,500);
   var bullet=scene.CreateGameObject("Company defence projectile");bullets.Add(bullet);
   bullet.Transform.WorldPosition=origin;bullet.Transform.LocalScale=new(.055f);
   var mesh=bullet.AddComponent(new MeshRenderer{UsePrimitive=true,Primitive=PrimitiveMeshType.Sphere,CastShadows=false,Material=new(){Shading=MaterialShadingMode.Unlit,BaseColor=new(1,.95f,.7f,1)}});

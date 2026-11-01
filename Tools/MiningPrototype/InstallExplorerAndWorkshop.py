@@ -13,6 +13,12 @@ if not meta.exists():
  source=json.loads((root/'Assets/Characters/synty new.glb.meta').read_text(encoding='utf-8-sig'))
  source['guid']=str(uuid.uuid4());meta.write_text(json.dumps(source,indent=2)+'\n')
 model_id=json.loads(meta.read_text(encoding='utf-8-sig'))['guid']
+old_model_id=json.loads((root/'Assets/Characters/synty new.glb.meta').read_text(encoding='utf-8-sig'))['guid']
+socket_folder=root/'.byteengine/ModelSockets'
+old_sockets=socket_folder/(old_model_id.replace('-','')+'.sockets.json')
+new_sockets=socket_folder/(model_id.replace('-','')+'.sockets.json')
+if old_sockets.exists() and not new_sockets.exists():
+ sockets=json.loads(old_sockets.read_text());sockets['modelGuid']=model_id;new_sockets.write_text(json.dumps(sockets,indent=2)+'\n')
 player_id=next(c['properties']['playerObjectId'] for o in scene['gameObjects'] for c in o['components'] if c['type'].endswith('MiningOperation3D'))
 player=next(o for o in scene['gameObjects'] if o['id']==player_id)
 profile_source=root/'Assets/Animations/SyntyDirectionalLocomotion.byteanim'

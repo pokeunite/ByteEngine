@@ -13,6 +13,7 @@ public sealed class MeshCollider3D:Collider3D
  private int _revision,_builtRevision=-1;private Matrix4x4 _matrix;private Vector3 _geometryCenter;private object? _model;
  private AssetReference _modelReference=AssetReference.Empty;private string _meshKey=string.Empty;
  private MeshCollisionMode _mode;
+ private double _lastModelPoll=double.NaN;
  internal MeshCollisionGeometry? Geometry {get{try{EnsureGeometry();}catch(Exception e)when(e is IOException or InvalidDataException or ArgumentException){_geometry=null;GeometryStatus=e.Message;}return _geometry;}}
  private MeshCollisionGeometry? _geometry;
  public AssetReference Model {get=>_modelReference;set{_modelReference=value??AssetReference.Empty;_model=null;_revision++;}}
@@ -26,10 +27,16 @@ public sealed class MeshCollider3D:Collider3D
  internal BoundingBox3D WorldBounds=>Geometry?.Bounds??new(Transform.WorldPosition,Transform.WorldPosition);
  private void EnsureGeometry()
  {
+  // A ray/sweep can visit the same static imported collider hundreds of times
+  // in one frame. Keep transform/shape edits immediate; poll asset replacement
+  // once per frame rather than allocating a mesh-search predicate per query.
+  if(_geometry!=null&&_builtRevision==_revision&&_matrix==Transform.WorldMatrix&&_geometryCenter==Center&&_lastModelPoll==ByteEngine.Core.Time.TotalTime)return;
+  _lastModelPoll=ByteEngine.Core.Time.TotalTime;
   Vector3[] vertices=_vertices;uint[] triangles=_triangles;
   if(!Model.IsEmpty&&AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)
   {
    var model=assets.LoadModel(Model);if(!ReferenceEquals(model,_model)){_model=model;_revision++;}
+   if(_geometry!=null&&_builtRevision==_revision&&_matrix==Transform.WorldMatrix&&_geometryCenter==Center)return;
    var mesh=model.Meshes.FirstOrDefault(m=>m.Key==MeshKey)??(string.IsNullOrWhiteSpace(MeshKey)?model.Meshes.FirstOrDefault():null);
    if(mesh==null){_geometry=null;GeometryStatus="Mesh not found";return;}
    if(_builtRevision==_revision&&_matrix==Transform.WorldMatrix&&_geometryCenter==Center)return;

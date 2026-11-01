@@ -1,5 +1,7 @@
 # Hazard Pay explorer character
 
+> This describes the earlier explorer. The current turnaround-based character, fitted rig, active paths and validation are documented in [HazardPay-Explorer-Integration.md](HazardPay-Explorer-Integration.md).
+
 The original yellow/charcoal explorer is saved in the game project, outside the engine repository:
 
 - `Assets/Characters/HazardPayExplorer.glb`: import-ready asset with the supplied source skeleton and animations.
@@ -15,3 +17,9 @@ Choose clips through the rig's Action editor/NLA tracks. The original import is 
 `PreserveExplorerAnimation.py` combines the Blender-authored mesh with the original animation and bind data. It refuses to overwrite the imported asset. Optional Blender material extensions are removed for the engine's core PBR import path. It does not copy the original mesh into the delivered asset.
 
 Validation: no unweighted vertices or unknown bone groups; 16 key clips sampled at three points; native ByteEngine import confirms 51 bones, 76 clips and 10 mesh parts. These checks establish import/rig compatibility, not a complete in-game combat playtest.
+
+## Reference repair pass
+
+The replacement now uses fuller yellow trouser volumes, a tailored fly panel, wrapped independent thigh bands with open metal buckles, utility pouch lids/latches, sleeve folds, faceted visor glazing, and continuous corrugated breathing hoses with locking collars at chest and side ports. The armature remains unchanged. The model is a hand-built interpretation of the reference, not an exact scan.
+
+Weapon sockets are model-owned sidecars. The original PistolGrip, RifleGrip and ShotgunGrip definitions were migrated to the replacement model GUID in `.byteengine/ModelSockets`. A real runtime attachment refresh and unobstructed hitscan/projectile checks validate the grip and aiming; inventory ownership alone is not sufficient.

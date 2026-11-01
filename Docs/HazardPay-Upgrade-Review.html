@@ -1,0 +1,339 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hazard Pay · Progression review</title>
+<style>
+:root{color-scheme:dark;--bg:#101315;--panel:#191e21;--line:#3b4549;--muted:#9ca9ae;--text:#edf1e8;--gold:#f9c529}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui}button,input,select{font:inherit}button{cursor:pointer;background:#252d31;border:1px solid #59666b;color:var(--text);padding:9px 15px;border-radius:5px}button:hover,button:focus-visible{border-color:var(--gold);outline:none}header{padding:20px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:22px}h1{font-size:23px;letter-spacing:2px;margin:0}header small{color:var(--gold)}nav{margin-left:auto;display:flex;gap:8px}nav .active{background:var(--gold);color:#15190f}main{height:calc(100vh - 91px);display:grid;grid-template-columns:minmax(650px,1fr) 335px}#canvas{overflow:auto;position:relative;background:radial-gradient(ellipse at 48% 35%,#25302b55,transparent 75%)}#map{min-width:930px;width:100%;height:1400px}aside{background:var(--panel);padding:22px;border-left:1px solid var(--line);overflow:auto}h2{font-size:23px;margin:4px 0 14px}h3{font-size:17px;margin:26px 0 10px;color:var(--gold)}p{line-height:1.55;color:#c9d0d1}label{display:block;margin:15px 0 6px;color:var(--muted);font-size:14px}input{width:100%;accent-color:var(--gold)}input[type=number]{padding:8px;background:#111719;border:1px solid var(--line);color:white}select{background:#111719;color:white;padding:8px;width:100%}.tag{display:inline-block;padding:5px 9px;border:1px solid #616b65;color:var(--gold);font-size:12px;letter-spacing:1px}.metric{display:flex;justify-content:space-between;margin:15px 0;padding-bottom:10px;border-bottom:1px solid var(--line)}.muted{color:var(--muted);font-size:14px}.legend{position:sticky;top:12px;left:16px;display:flex;gap:16px;padding:12px 16px;background:#11191ee8;width:max-content;z-index:1;font-size:13px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--gold);margin-right:5px}.hidden{display:none!important}#balance{padding:24px 30px;overflow:auto;grid-column:1/3}table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--line)}th{position:sticky;top:0;background:#242c30;color:var(--gold)}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}.card{padding:18px;background:var(--panel);border:1px solid var(--line)}.card b{display:block;font-size:26px;color:var(--gold)}.node{cursor:pointer}.node:focus{outline:none}.node:focus polygon{stroke:white;stroke-width:3}.node text{pointer-events:none}.node:hover polygon{stroke:white;stroke-width:3}#notes{max-width:1050px;padding:30px;margin:auto;grid-column:1/3;overflow:auto}#notes p{max-width:850px}.wide{width:100%;margin-top:12px}.warn{color:#ffbf7a}#summary{color:#dde5d7;font-size:14px}.notice{border-left:3px solid var(--gold);padding:10px 15px;background:#2a2b1b}
+@media(max-width:1000px){main{grid-template-columns:minmax(430px,1fr) 300px}header{flex-wrap:wrap}nav{margin-left:0}.cards{grid-template-columns:1fr}aside{padding:16px}}
+</style>
+<header><div><h1>HAZARD PAY <small> / UPGRADE REVIEW</small></h1><span class="muted">Proposal only · changes here do not change your game</span></div><nav><button class="active" data-tab="tree">Upgrade map</button><a href="HazardPay-Market-Review.html" style="color:#ffd044;padding:10px">Trading prototype ↗</a><button data-tab="balance">Round model</button><button data-tab="notes">Design rules</button></nav></header>
+<main><section id="canvas"><div class="legend"><span><i class="dot"></i>Purchased</span><span><i class="dot" style="background:#789782"></i>Available</span><span><i class="dot" style="background:#4b555c"></i>Locked</span></div><svg id="map" viewBox="0 0 1000 1400" role="group" aria-label="Selectable upgrade graph"></svg></section>
+<aside id="details"><span class="tag">SELECT AN UPGRADE</span><h2 id="name"></h2><p id="effect"></p><div class="metric"><span>Cost</span><b id="cost"></b></div><div class="metric"><span>Planned unlock</span><b id="round"></b></div><p id="requirements" class="muted"></p><label for="editCost">Review this upgrade's price</label><input id="editCost" type="number" min="0" step="10"><button id="previewBuy" class="wide">Preview purchase</button><button id="reset" class="wide">Reset preview</button><h3>Why it belongs here</h3><p id="reason"></p><h3>Economy assumptions</h3><label for="quote">Exchange quote: <b id="quoteValue"></b> cr / refined ore</label><input id="quote" type="range" min="3.25" max="8" step=".25" value="5"><label for="minutes">Minutes per operation + preparation</label><input id="minutes" type="number" min="1" max="15" step=".5" value="4"><label for="repair">Defences lost per operation</label><input id="repair" type="range" min="0" max="1" step=".1" value=".1"><p id="summary"></p><button id="download" class="wide">Save reviewed prices as JSON</button></aside>
+<section id="balance" class="hidden"><h2>Can the player afford their next answer?</h2><p>Calculated route: combat-and-industry focus, saving for the next planned purchase instead of buying every affordable optional node. Purchases wait for their intended round, prerequisites and available cash. This is a planning model, not measured playtest evidence. Change the assumptions in the map sidebar to stress-test it.</p><div id="cards" class="cards"></div><div class="notice">Current game baseline: 18 ore + 7 per drill level, 6 enemies + 2 per completed round (capped at 24), 5 cr base refined price, 20 starting credits. The proposal adds later extraction milestones and more pressure instead of relying on damage inflation. These are proposed values, not installed game changes. Station upgrades are not duplicated. The delivery fallback prevents a poor exchange quote from blocking all progression. Deep-core permit proposes +70 ore under higher pressure.</div><table><thead><tr><th>Round</th><th>Pressure proposal</th><th>Ore × yield</th><th>Gross</th><th>Repairs</th><th>Purchases</th><th>Cash held</th><th>Active time</th></tr></thead><tbody id="rows"></tbody></table></section>
+<section id="notes" class="hidden"><h2>Company research should unlock choices</h2><p>Refinery and ammo-press stat upgrades stay at their machines. They do not appear again as company research. Player HP automatically restores at the end of a successful round; there is no medkit node and no Emergency Plating.</p><h3>Scatter Specialist</h3><p>Eight pellets may home gently toward up to three visible enemies in a 25-degree aiming cone, within 12 metres. Assign pellets across targets instead of dumping them into one. No through-wall seeking and no added total damage. Unassigned pellets remain normal ballistic shots. Smart Spread later adds a fourth target without creating extra pellets. These are proposed values to playtest.</p><h3>Delivery or exchange</h3><p>Delivery contracts lock a guaranteed price and complete in the background. The live exchange lets the player set target sales, manage reserved stock and look for a better net payout. Quantity and target are the only required choices. The chart shows the price needed to beat delivery after fees, a target line, recent trend and current buyer demand. Indicators describe conditions, not certain future profit.</p><h3>Market research</h3><p>Freight Licence increases guaranteed dispatch size from 40 to 80 ore. Demand Scanner reveals the next published demand cycle and countdown. Broker Agreement reduces live exchange fees from 3% to 1%. All three are now active in-game. Displayed live offers include fees; every completed sale records its gain or shortfall against the guaranteed buyer.</p><h3>Economy assumptions</h3><p>The round calculator uses the better of guaranteed delivery at 4.50 credits or the exchange quote after fees. Fees begin at 3%, falling to 1% with Broker Agreement. Expected defence replacement consumes refined ore only after a defence is unlocked. Refinery yield is held at 1.00 in this company-map model; improvements at the actual refinery are not duplicated here. All ore is assumed processed and sold: processing, freight delays, failed rounds and limited fill demand are not simulated, so this is an optimistic design estimate.</p><h3>Pressure and the final target</h3><p>Keep 30,000 credits before five active hours expire (ten displayed days). Money spent on upgrades slows that target but should earn useful options or improve later output. The proposed deep-core extraction increase is still required for later income; it is not an already-installed feature. Verify kill times, ammo supply, actual trading decisions and failure rates in playtests before applying these prices.</p></section></main>
+<script>
+const N=(id,name,icon,x,y,cost,r,pre,effect,reason)=>({id,name,icon,x,y,cost,r,pre,effect,reason});
+const nodes=[
+  {
+    "id": "charter",
+    "name": "Mining licence",
+    "icon": "camp",
+    "x": 500,
+    "y": 65,
+    "cost": 0,
+    "r": 0,
+    "pre": [],
+    "effect": "Pistol, drill, refinery and ammo press. Start with 20 credits. Full HP restores after a successful round. Guaranteed delivery and live selling are available from the start.",
+    "reason": "The core loop is available immediately."
+  },
+  {
+    "id": "survey",
+    "name": "Deeper bite",
+    "icon": "drill",
+    "x": 70,
+    "y": 225,
+    "cost": 30,
+    "r": 1,
+    "pre": [
+      "charter"
+    ],
+    "effect": "Drill extraction +7 raw ore per operation.",
+    "reason": "An investment choice before automatic firepower."
+  },
+  {
+    "id": "shotgun",
+    "name": "Breach licence",
+    "icon": "shotgun",
+    "x": 425,
+    "y": 225,
+    "cost": 150,
+    "r": 3,
+    "pre": [
+      "charter"
+    ],
+    "effect": "Unlock shotgun and shell recipe; 6-shell magazine, strong close-range stagger.",
+    "reason": "A different solution to close packs, not a pistol damage multiplier."
+  },
+  {
+    "id": "vest",
+    "name": "Worksite armour",
+    "icon": "shield",
+    "x": 930,
+    "y": 225,
+    "cost": 120,
+    "r": 2,
+    "pre": [
+      "charter"
+    ],
+    "effect": "Maximum HP +15. Full HP restores after a successful round.",
+    "reason": "Survivability has an opportunity cost."
+  },
+  {
+    "id": "mine",
+    "name": "Tripwire licence",
+    "icon": "mine",
+    "x": 750,
+    "y": 225,
+    "cost": 150,
+    "r": 4,
+    "pre": [
+      "charter"
+    ],
+    "effect": "Unlock one mine. Normal detonations re-arm next operation.",
+    "reason": "Area denial before permanent autonomous firepower."
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry licence",
+    "icon": "turret",
+    "x": 750,
+    "y": 405,
+    "cost": 150,
+    "r": 5,
+    "pre": [
+      "shotgun"
+    ],
+    "effect": "Unlock one sentry; destructible, 20 refined ore to replace.",
+    "reason": "The first autonomous defence should feel earned."
+  },
+  {
+    "id": "ar",
+    "name": "Survey rifle licence",
+    "icon": "rifle",
+    "x": 575,
+    "y": 225,
+    "cost": 400,
+    "r": 7,
+    "pre": [
+      "mine"
+    ],
+    "effect": "Unlock AR and rifle recipe; 24-round magazine and sustained-fire bloom.",
+    "reason": "Adds mid-range sustained fire, with its own supply pressure."
+  },
+  {
+    "id": "tracking",
+    "name": "Tracking assembly",
+    "icon": "turret",
+    "x": 750,
+    "y": 585,
+    "cost": 400,
+    "r": 7,
+    "pre": [
+      "sentry"
+    ],
+    "effect": "Sentry prioritises nearby drill threats; +25% projectile speed.",
+    "reason": "Reliability, not a large universal DPS multiplier."
+  },
+  {
+    "id": "boots",
+    "name": "Sure footing",
+    "icon": "boots",
+    "x": 930,
+    "y": 405,
+    "cost": 360,
+    "r": 6,
+    "pre": [
+      "vest"
+    ],
+    "effect": "Reduce hit slow duration by 40%; no movement-speed stacking.",
+    "reason": "Removes frustrating stunlock without removing threat."
+  },
+  {
+    "id": "deep",
+    "name": "Core survey",
+    "icon": "drill",
+    "x": 70,
+    "y": 405,
+    "cost": 650,
+    "r": 8,
+    "pre": [
+      "survey"
+    ],
+    "effect": "Extraction +14 raw ore per operation.",
+    "reason": "Funds the later defensive and weapon choices."
+  },
+  {
+    "id": "pellet",
+    "name": "Scatter specialist",
+    "icon": "shotgun",
+    "x": 425,
+    "y": 405,
+    "cost": 540,
+    "r": 9,
+    "pre": [
+      "shotgun"
+    ],
+    "effect": "Shotgun pellets gently home across up to 3 visible enemies in a 25-degree aiming cone within 12 metres. Split the existing pellet count across targets; no extra pellets or damage and no through-wall targeting.",
+    "reason": "Requested multi-target homing replaces the old lunge-interruption effect. Values remain proposed."
+  },
+  {
+    "id": "mortar",
+    "name": "Indirect fire licence",
+    "icon": "mortar",
+    "x": 750,
+    "y": 765,
+    "cost": 1050,
+    "r": 10,
+    "pre": [
+      "tracking"
+    ],
+    "effect": "Unlock one mortar. Slow travel and fixed impact point; can miss moving targets.",
+    "reason": "A deliberate group-clear answer, not a universal solution."
+  },
+  {
+    "id": "pierce",
+    "name": "Armour breaker",
+    "icon": "rifle",
+    "x": 575,
+    "y": 405,
+    "cost": 900,
+    "r": 12,
+    "pre": [
+      "ar"
+    ],
+    "effect": "AR rounds penetrate one target at 50% damage.",
+    "reason": "Changes positioning and rewards lining up targets."
+  },
+  {
+    "id": "second",
+    "name": "Redundant coverage",
+    "icon": "turret",
+    "x": 750,
+    "y": 945,
+    "cost": 1200,
+    "r": 12,
+    "pre": [
+      "mortar"
+    ],
+    "effect": "Unlock a second sentry slot, with independent health and replacement.",
+    "reason": "Coverage is powerful and arrives after multiple roles exist."
+  },
+  {
+    "id": "reclaim",
+    "name": "Salvage protocol",
+    "icon": "health",
+    "x": 930,
+    "y": 585,
+    "cost": 1000,
+    "r": 12,
+    "pre": [
+      "boots"
+    ],
+    "effect": "Failed operations retain 25% unrefined cargo.",
+    "reason": "Softens failure costs; does not make winning easier."
+  },
+  {
+    "id": "industrial",
+    "name": "Deep-core permit",
+    "icon": "drill",
+    "x": 70,
+    "y": 585,
+    "cost": 2100,
+    "r": 16,
+    "pre": [
+      "deep"
+    ],
+    "effect": "Extraction +70 raw ore; requires a pressure contract.",
+    "reason": "Later extraction growth is paid for with danger."
+  },
+  {
+    "id": "precision",
+    "name": "Controlled burst",
+    "icon": "rifle",
+    "x": 575,
+    "y": 585,
+    "cost": 1350,
+    "r": 15,
+    "pre": [
+      "pierce"
+    ],
+    "effect": "First 3 AR shots after a pause have 30% less spread.",
+    "reason": "Rewards trigger discipline."
+  },
+  {
+    "id": "rotary",
+    "name": "Rotary emplacement",
+    "icon": "turret",
+    "x": 750,
+    "y": 1125,
+    "cost": 2500,
+    "r": 17,
+    "pre": [
+      "second"
+    ],
+    "effect": "Unlock rotary defence; higher output, slower tracking and wider spread.",
+    "reason": "An alternative defensive role with clear limitations."
+  },
+  {
+    "id": "terminal",
+    "name": "Business continuity",
+    "icon": "camp",
+    "x": 930,
+    "y": 765,
+    "cost": 1500,
+    "r": 16,
+    "pre": [
+      "reclaim"
+    ],
+    "effect": "One emergency drill repair: 25% health, once per operation.",
+    "reason": "A late safety net, not an early free win."
+  },
+  {
+    "id": "freight",
+    "name": "Freight licence",
+    "cost": 120,
+    "r": 4,
+    "pre": [
+      "charter"
+    ],
+    "icon": "contract",
+    "effect": "Guaranteed delivery dispatch size: 40 to 80 ore.",
+    "reason": "New market branch: proposed price, not part of the submitted price edits. Implemented in-game after market approval.",
+    "x": 250,
+    "y": 225
+  },
+  {
+    "id": "scanner",
+    "name": "Demand scanner",
+    "cost": 300,
+    "r": 7,
+    "pre": [
+      "freight"
+    ],
+    "icon": "chart",
+    "effect": "Shows upcoming demand-event notices on the live market. No guaranteed price forecast.",
+    "reason": "New market branch: proposed price, not part of the submitted price edits. Implemented in-game after market approval.",
+    "x": 250,
+    "y": 405
+  },
+  {
+    "id": "broker",
+    "name": "Broker agreement",
+    "cost": 650,
+    "r": 10,
+    "pre": [
+      "scanner"
+    ],
+    "icon": "chart",
+    "effect": "Improves live-sale proceeds through a fee reduction from 3% to 1%; all displayed payouts already include fees.",
+    "reason": "New market branch: proposed price, not part of the submitted price edits. Implemented in-game after market approval.",
+    "x": 250,
+    "y": 585
+  }
+];
+const by=Object.fromEntries(nodes.map(n=>[n.id,n]));let selected=nodes[1],owned=new Set(['charter']),cash=1200,results=[];
+const paths={camp:'M7 23V10l13-6 13 6v13M12 23V13h16v10M17 23v-7h6v7',drill:'M11 4h18v5H11zM20 9v19M15 12l10 4-10 4 10 4-5 5M9 30h22',ammo:'M9 28V14l3-5 3 5v14M18 28V10l3-5 3 5v18M27 28V15l3-5 3 5v13',shotgun:'M5 14h26v5H17l-3 9H8l3-10H5M29 13h5v7h-5',rifle:'M3 14h31v5H21l3 7h-5l-3-7h-4l-5 6H3l4-9M25 11v3',shield:'M20 4l12 5v10c0 7-12 12-12 12S8 26 8 19V9z',ore:'M6 25l6-16 10-4 11 18-12 8zM12 9l9 22 1-26M6 25l27-2',mine:'M7 25h26l-4-10H11zM20 7v8M15 11l-4-4M25 11l4-4',turret:'M7 28h26M14 28l3-11h7l3 11M12 12h18v6H12zM28 13h7v3',mortar:'M9 29h23M14 27l4-12M26 27l-2-11M12 9l7-4 11 17-8 5z',health:'M16 7h8v8h8v8h-8v8h-8v-8H8v-8h8z',boots:'M11 6h13v14l9 5v5H8v-9l3-2z'};
+Object.assign(paths,{chart:'M5 29h30M9 26V16h5v10M18 26V10h5v16M27 26V4h5v22',contract:'M10 5h20v28H10zM14 12h12M14 18h12M14 24h8'});
+function icon(n){if(n.icon==='rifle'||n.icon==='shotgun')return '<image href="Art/hazard-weapon-'+n.icon+'.png" x="0" y="6" width="40" height="24"/>';return `<path d="${paths[n.icon]||paths.ore}" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/>`}
+function draw(){let out='';for(const n of nodes)for(const pre of n.pre){let a=by[pre];out+=`<path d="M${a.x},${a.y+36} V${(a.y+n.y)/2} H${n.x} V${n.y-36}" fill="none" stroke="${owned.has(pre)?'#bd9a32':'#465057'}" stroke-width="2"/>`}
+for(const n of nodes){let bought=owned.has(n.id),available=n.pre.every(p=>owned.has(p)),focus=n===selected;out+=`<g class="node" tabindex="0" role="button" aria-label="${n.name}, ${n.cost} credits, planned round ${n.r}" data-id="${n.id}" transform="translate(${n.x},${n.y})"><polygon points="-31,-38 31,-38 42,-27 42,27 31,38 -31,38 -42,27 -42,-27" fill="${bought?'#d1ad40':available?'#33463a':'#232b30'}" stroke="${focus?'white':bought?'#ffe99b':available?'#95b09a':'#5b676e'}" stroke-width="${focus?3:1.5}"/><g transform="translate(-20,-24)" color="${bought?'#17211b':available?'#f1edd4':'#89959a'}">${icon(n)}</g><text text-anchor="middle" y="27" fill="${bought?'#17211b':'#c8d1cb'}" font-size="12">${bought?'OWNED':n.cost+' cr'}</text><text text-anchor="middle" y="63" fill="#e1e6df" font-size="15">${n.name}</text><text text-anchor="middle" y="83" fill="#99aaa6" font-size="13">${n.r?'Round '+n.r:'START'}</text></g>`}document.querySelector('#map').innerHTML=out;
+document.querySelectorAll('.node').forEach(el=>{el.onclick=()=>choose(el.dataset.id);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose(el.dataset.id)}}});}
+function choose(id){selected=by[id];let n=selected;document.querySelector('#name').textContent=n.name;document.querySelector('#effect').textContent=n.effect;document.querySelector('#cost').textContent=n.cost.toLocaleString()+' cr';document.querySelector('#round').textContent=n.r?'Round '+n.r:'Starting equipment';document.querySelector('#requirements').textContent='Requires: '+(n.pre.map(p=>by[p].name).join(', ')||'nothing');document.querySelector('#reason').textContent=n.reason;document.querySelector('#editCost').value=n.cost;document.querySelector('#previewBuy').textContent=owned.has(id)?'Purchased in preview':n.pre.every(p=>owned.has(p))?'Preview purchase':'Prerequisites locked';document.querySelector('#previewBuy').disabled=owned.has(id)||!n.pre.every(p=>owned.has(p));draw()}
+function simulate(){let quote=+document.querySelector('#quote').value,mins=Math.min(15,Math.max(1,+document.querySelector('#minutes').value||4)),loss=+document.querySelector('#repair').value;document.querySelector('#quoteValue').textContent=quote.toFixed(2);let bought=new Set(['charter']),bank=20,earned=0,costs=0,win=null;results=[];let unlocks={};
+for(let round=1;round<=90;round++){let drill=(bought.has('survey')?1:0)+(bought.has('deep')?2:0)+(bought.has('industrial')?10:0),ore=Math.floor((18+7*drill)*(round>=8?1.7:1)),yieldRate=1,netQuote=Math.max(4.5,quote*(bought.has('broker')?.99:.97)),gross=Math.floor(ore*yieldRate*netQuote),repair=["mine","sentry","mortar","second","rotary"].some(id=>bought.has(id))?Math.ceil(loss*20*netQuote):0;bank+=gross-repair;earned+=gross;let purchases=[];
+const route=['survey','shotgun','mine','sentry','ar','deep','tracking','pellet','mortar','industrial','pierce','precision','second','rotary'];for(let id of route){let n=by[id];if(bought.has(id))continue;if(round<n.r||!n.pre.every(p=>bought.has(p))||bank<n.cost)break;bank-=n.cost;costs+=n.cost;bought.add(id);unlocks[id]=round;purchases.push(n.name)}let enemies=round<=12?Math.min(24,6+(round-1)*2):Math.min(80,24+Math.floor((round-12)/2)*4);results.push({round,ore,yieldRate,gross,repair,purchases,bank,time:round*mins,enemies});if(bank>=30000&&!win)win=round;}
+document.querySelector('#summary').textContent=`Example route: shotgun R${unlocks.shotgun||'—'}, sentry R${unlocks.sentry||'—'}, AR R${unlocks.ar||'—'}. ${win?'Target at R'+win+' (~'+Math.round(win*mins)+' min).':'Target not reached within 90 operations.'} Expected upkeep: ${loss.toFixed(1)} destroyed defences / operation. Best available delivery/exchange price and successful sales assumed; no failed-round loss or fill delays included.`;
+document.querySelector('#cards').innerHTML=`<div class="card"><span>Shotgun / Sentry / AR</span><b>R${unlocks.shotgun||'—'} / R${unlocks.sentry||'—'} / R${unlocks.ar||'—'}</b><small>Affordability + prerequisite gated</small></div><div class="card"><span>30,000 held</span><b>${win?'Round '+win:'Not by round 90'}</b><small>${win?Math.round(win*mins)+' active minutes':'Increase yield or reduce spending'}</small></div><div class="card"><span>Five-hour deadline</span><b>${win&&win*mins<=300?'Within target':'Over budget'}</b><small>10 days × 30 active minutes</small></div>`;
+document.querySelector('#rows').innerHTML=results.map(r=>`<tr><td>${r.round}</td><td>${r.enemies} · ${r.round<3?'single lane':r.round<8?'two groups':r.round<12?'defence pressure':'coordinated push'}</td><td>${r.ore} × ${r.yieldRate.toFixed(2)}</td><td>${r.gross}</td><td>${r.repair}</td><td>${r.purchases.join(', ')||'Save for next branch'}</td><td>${r.bank.toLocaleString()}</td><td>${r.time} min</td></tr>`).join('');}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));for(let id of ['canvas','details','balance','notes'])document.getElementById(id).classList.toggle('hidden',b.dataset.tab==='tree'?!['canvas','details'].includes(id):id!==b.dataset.tab)});
+document.querySelector('#editCost').onchange=e=>{selected.cost=Math.max(0,+e.target.value||0);choose(selected.id);simulate()};for(let id of ['quote','minutes','repair'])document.getElementById(id).oninput=simulate;
+document.querySelector('#previewBuy').onclick=()=>{owned.add(selected.id);choose(selected.id)};document.querySelector('#reset').onclick=()=>{owned=new Set(['charter']);choose(selected.id)};
+document.querySelector('#download').onclick=()=>{let data={proposal:true,version:1,goal:{creditsHeld:30000,activeHours:5,displayedDays:10},assumptions:{quote:+document.querySelector('#quote').value,minutesPerRound:+document.querySelector('#minutes').value,replacementsPerRound:+document.querySelector('#repair').value},upgrades:nodes,rounds:results};let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='HazardPay-upgrade-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};choose('shotgun');simulate();
+</script></html>

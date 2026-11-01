@@ -188,7 +188,7 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     }
     public bool Owns(WeaponInstance3D weapon) => _weapons.Contains(weapon);
     public void SelectInventoryIndex(int index) { if(index>=0&&index<_weapons.Length)Select(_weapons[index].Definition!.Slot); }
-    public bool CanPickUp(WeaponInstance3D weapon) => weapon.GameObject.Scene == GameObject.Scene && weapon.Definition != null && weapon.InventoryOwner==null && !InventoryFull && !_weapons.Any(w=>w.Definition?.Slot==weapon.Definition?.Slot);
+    public bool CanPickUp(WeaponInstance3D weapon) => (weapon.Definition?.RequiredResearchId is not {Length:>0} required || GameObject.Scene?.GameObjects.SelectMany(o=>o.Components).OfType<MiningTrade3D>().Any(t=>t.HasResearch(required))==true) && weapon.GameObject.Scene == GameObject.Scene && weapon.Definition != null && weapon.InventoryOwner==null && !InventoryFull && !_weapons.Any(w=>w.Definition?.Slot==weapon.Definition?.Slot);
     public bool PickUp(WeaponPickup3D? pickup,bool equip=true)
     {
         if(pickup==null){LastPickupResult="Selected world pickup was not found";return false;}

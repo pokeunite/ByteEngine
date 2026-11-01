@@ -17,6 +17,8 @@ public sealed partial class AIBehavior3D
     [Category("Perception")] public float OccludedHearingMultiplier {get;set;}=.5f;
     [Category("Squad")] public string Squad {get;set;}="Enemies";
     [Category("Squad")] public int MaximumAttackers {get;set;}=2;
+    [Category("Squad"),SceneObjectReference,Description("Optional shared target for attack-slot accounting. Use when several contact points belong to one logical target; empty uses the actual target.")]
+    public Guid AttackReservationTargetId {get;set;}
     [Category("Squad")] public float PositionSpacing {get;set;}=1.5f;
     [Category("Position queries")] public float PositionQueryInterval {get;set;}=.5f;
     [Category("Position queries")] public int PositionCandidates {get;set;}=12;
@@ -35,15 +37,27 @@ public sealed partial class AIBehavior3D
     private void SenseAdvanced()
     {
         var scene=GameObject.Scene!;
-        var candidates=TargetObjectId!=Guid.Empty?new[]{scene.FindGameObject(TargetObjectId)}:
-            FindNearestCharacter?scene.GameObjects.Where(o=>o!=GameObject&&o.GetComponent<CharacterController3D>() is {Enabled:true}).OrderBy(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,Transform.WorldPosition)).Cast<GameObject?>().Take(32).ToArray():[];
-        var visible=candidates.FirstOrDefault(CanSee);
-        bool heard=false;
-        foreach(var noise in AIWorld.For(scene).Noises.Where(n=>n.Sequence>_noiseRead).ToArray())
+        GameObject? visible=null;
+        if(TargetObjectId!=Guid.Empty){var candidate=scene.FindGameObject(TargetObjectId);if(CanSee(candidate))visible=candidate;}
+        else if(FindNearestCharacter)
         {
-            _noiseRead=Math.Max(_noiseRead,noise.Sequence);
+            var candidates=AIWorld.For(scene).CharacterCandidates(scene);
+            float nearest=float.PositiveInfinity;
+            foreach(var candidate in candidates)
+            {
+                if(candidate.GetComponent<CharacterController3D>() is not {Enabled:true})continue;
+                float distance=Vector3.DistanceSquared(candidate.Transform.WorldPosition,Transform.WorldPosition);
+                if(distance<nearest&&CanSee(candidate)){visible=candidate;nearest=distance;}
+            }
+        }
+        bool heard=false;
+        foreach(var noise in AIWorld.For(scene).Noises)
+        {
+            if(noise.Sequence<=_noiseRead)continue;
+            _noiseRead=noise.Sequence;
             if(noise.Source==GameObject.Id||scene.SimulationTime-noise.Time>1)continue;
             float range=Math.Min(noise.Radius,Safe(HearingRange,22,0,1000));
+            if(Vector3.DistanceSquared(Transform.WorldPosition,noise.Position)>range*range)continue;
             var origin=Transform.WorldPosition+Vector3.UnitY*EyeHeight;var end=noise.Position+Vector3.UnitY*.3f;var delta=end-origin;
             if(delta.LengthSquared()>.01f&&GameplayQuery3D.Raycast(scene,origin,Vector3.Normalize(delta),out var hit,delta.Length(),GameObject,includeTriggers:false)&&hit.GameObject.Id!=noise.Source)range*=Safe(OccludedHearingMultiplier,.5f,0,1);
             if(Vector3.Distance(Transform.WorldPosition,noise.Position)>range)continue;

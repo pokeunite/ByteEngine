@@ -60,14 +60,14 @@ public sealed partial class MiningTrade3D:Component
  public MiningOperation3D? Operation=>GameObject.Scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>();
  readonly List<float> _history=[];bool initialized;float saveClock;
  readonly List<CompanyUpgrade> _research=[];readonly HashSet<string> _purchased=new(StringComparer.Ordinal);float? _baseHealth,_baseEnergy;readonly Dictionary<string,int> _ranks=new(StringComparer.Ordinal);
- readonly Dictionary<WeaponDefinition3D,(int Magazine,float Reload,float EmptyReload,int Reserve,float Rpm,int Pellets)> _weaponBaselines=[];
+ readonly Dictionary<WeaponDefinition3D,(int Magazine,float Reload,float EmptyReload,int Reserve,float Rpm,int Pellets,float Damage)> _weaponBaselines=[];
  float? _baseDashCooldown;
  public string LastError{get;private set;}="";
- public int LastSaleTotal{get;private set;}
- public float LastSaleQuote{get;private set;}
+ public int LastSaleTotal=>Operation?.LastMarketSale?.Credits??0;
+ public float LastSaleQuote=>Operation?.LastMarketSale?.Quote??0;
  protected override void OnStart()=>Initialize();
  protected override void OnUpdate()=>Tick((float)Time.DeltaTime);
- protected override void OnStop()=>Save();
+ protected override void OnStop(){StopReviewedResearch();Save();}
  public void Initialize()
  {
   if(initialized)return;initialized=true;
@@ -75,14 +75,15 @@ public sealed partial class MiningTrade3D:Component
    bool Cycle(string id,HashSet<string> path){if(!path.Add(id))return true;bool result=nodes.Single(n=>n.Id==id).Prerequisites.Any(p=>Cycle(p,new(path)));return result;}
    if(nodes.Any(n=>Cycle(n.Id,[])))throw new InvalidDataException("Company upgrade prerequisites contain a cycle.");_research.AddRange(nodes);
   }catch(Exception e)when(e is JsonException or InvalidDataException){LastError=e.Message;}
-  if(PersistProgress)try{if(File.Exists(PathName)){var d=JsonSerializer.Deserialize<State>(File.ReadAllText(PathName));if(d?.Version==1){if(d.Ranks!=null)foreach(var pair in d.Ranks){var node=_research.FirstOrDefault(n=>n.Id==pair.Key);if(node!=null)_ranks[pair.Key]=Math.Clamp(pair.Value,0,node.MaxRank);}OutputLevel=Math.Clamp(d.Output,0,MaximumLevel);StorageLevel=Math.Clamp(d.Storage,0,MaximumLevel);EfficiencyLevel=Math.Clamp(d.Efficiency,0,MaximumLevel);StoredAmmo=float.IsFinite(d.Ammo)?Math.Clamp(d.Ammo,0,Capacity):0;PriceMultiplier=float.IsFinite(d.Price)?Math.Clamp(d.Price,.1f,10):1;MarketSeed=d.Seed;PriceSamples=Math.Max(0,d.Samples);PriceClock=float.IsFinite(d.Clock)?Math.Clamp(d.Clock,0,Math.Max(.1f,PriceIntervalSeconds)):0;_history.AddRange((d.History??[]).Where(float.IsFinite).TakeLast(80));_purchased.UnionWith((d.Purchased??[]).Where(id=>_research.Any(n=>n.Id==id)));}}}catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){LastError=e.Message;}
+  if(PersistProgress)try{if(File.Exists(PathName)){var d=JsonSerializer.Deserialize<State>(File.ReadAllText(PathName));if(d?.Version==1){MigrateReviewedSave(d);if(d.Ranks!=null)foreach(var pair in d.Ranks){var node=_research.FirstOrDefault(n=>n.Id==pair.Key);if(node!=null)_ranks[pair.Key]=Math.Clamp(pair.Value,0,node.MaxRank);}OutputLevel=Math.Clamp(d.Output,0,MaximumLevel);StorageLevel=Math.Clamp(d.Storage,0,MaximumLevel);EfficiencyLevel=Math.Clamp(d.Efficiency,0,MaximumLevel);StoredAmmo=float.IsFinite(d.Ammo)?Math.Clamp(d.Ammo,0,Capacity):0;PriceMultiplier=float.IsFinite(d.Price)?Math.Clamp(d.Price,.1f,10):1;MarketSeed=d.Seed;PriceSamples=Math.Max(0,d.Samples);PriceClock=float.IsFinite(d.Clock)?Math.Clamp(d.Clock,0,Math.Max(.1f,PriceIntervalSeconds)):0;DemandClock=float.IsFinite(d.DemandClock)?Math.Clamp(d.DemandClock,0,Math.Max(3,DemandPeriodSeconds*3)):0;_history.AddRange((d.History??[]).Where(float.IsFinite).TakeLast(80));_purchased.UnionWith((d.Purchased??[]).Where(id=>_research.Any(n=>n.Id==id)));}}}catch(Exception e)when(e is IOException or JsonException or UnauthorizedAccessException){LastError=e.Message;}
+  if(HasReviewedCatalog){_purchased.Add("charter");_ranks["charter"]=1;}
   if(_history.Count==0)_history.Add(PriceMultiplier);
-  ApplyResearch();
+  ApplyResearch();if(HasReviewedCatalog)Save();
  }
  public void Tick(float delta)
  {
   if(!float.IsFinite(delta)||delta<=0)return;Initialize();var op=Operation;if(op==null)return;
-  TickShipment(delta);
+  TickShipment(delta);TickReviewedResearch(delta);
   if(op.Phase!=MiningPhase.Failed)
   {
    if(!UseProductionCycles)StoredAmmo=Math.Min(Capacity,StoredAmmo+Output*delta);
@@ -90,14 +91,16 @@ public sealed partial class MiningTrade3D:Component
    else{productionClock+=delta;int cycles=(int)Math.Min(100000,Math.Floor(productionClock/CycleDuration));if(cycles>0){StoredAmmo=Math.Min(Capacity,StoredAmmo+cycles*RoundsPerCycle);productionClock-=cycles*CycleDuration;if(StoredAmmo>=Capacity)productionClock=0;}}
   }
   if(op.Phase==MiningPhase.Preparation){if(AutomaticRefining&&op.RawOre>0&&op.RefiningAmount==0)op.BeginRefining();if(AutomaticAmmoDelivery)Collect();}
+  DemandClock=(DemandClock+delta)%Math.Max(3,DemandPeriodSeconds*3);
   PriceClock=Math.Min(PriceClock+delta,Math.Max(.1f,PriceIntervalSeconds)*4);int budget=4;while(PriceClock>=Math.Max(.1f,PriceIntervalSeconds)&&budget-->0){PriceClock-=Math.Max(.1f,PriceIntervalSeconds);StepPrice();}
   saveClock+=delta;if(saveClock>=5){saveClock=0;Save();}
  }
- void StepPrice(){MarketSeed=unchecked(MarketSeed*1664525+1013904223);float n=((MarketSeed>>8)/16777215f)*2-1;float low=Math.Clamp(MinimumMultiplier,.1f,10),high=Math.Clamp(MaximumMultiplier,low,10);PriceMultiplier=MathF.Round(Math.Clamp(PriceMultiplier+n*Math.Clamp(PriceVolatility,0,1)+(1-PriceMultiplier)*.006f,low,high),3);_history.Add(PriceMultiplier);if(_history.Count>80)_history.RemoveAt(0);PriceSamples++;}
+ void StepPrice(){MarketSeed=unchecked(MarketSeed*1664525+1013904223);float n=((MarketSeed>>8)/16777215f)*2-1;float low=Math.Clamp(MinimumMultiplier,.1f,10),high=Math.Clamp(MaximumMultiplier,low,10);PriceMultiplier=MathF.Round(Math.Clamp(PriceMultiplier+n*Math.Clamp(PriceVolatility,0,1)+(DemandTarget-PriceMultiplier)*.02f,low,high),3);_history.Add(PriceMultiplier);if(_history.Count>80)_history.RemoveAt(0);PriceSamples++;}
  public float Quote(bool refined)=>MathF.Round(Math.Max(0,refined?Operation?.RefinedOrePrice??5:Operation?.RawOrePrice??2)*PriceMultiplier+Stat("OilPriceFloor"),2);
- public int Stock(bool refined)=>Math.Max(0,(refined?Operation?.RefinedOre??0:Math.Max(0,(Operation?.RawOre??0)-(Operation?.RefiningAmount??0)))-(SaleInProgress&&SaleRefined==refined?SaleQuantity-SaleProcessed:0));
+ public int Stock(bool refined)=>Math.Max(0,(refined?Operation?.RefinedOre??0:Math.Max(0,(Operation?.RawOre??0)-(Operation?.RefiningAmount??0))));
  public int Level(int row)=>row switch{0=>OutputLevel,1=>StorageLevel,_=>EfficiencyLevel};
- public int Cost(int row)=>(int)Math.Clamp(Math.Ceiling((row switch{0=>OutputCost,1=>StorageCost,_=>EfficiencyCost})*Math.Pow(Math.Clamp(UpgradeCostGrowth,1,3),Level(row))),1,1000000000);
+ [System.ComponentModel.Category("Ammo press costs")]public float AmmoPressCostMultiplier{get;set;}=.8f;
+ public int Cost(int row)=>(int)Math.Clamp(Math.Round((row switch{0=>OutputCost,1=>StorageCost,_=>EfficiencyCost})*Math.Pow(Math.Clamp(UpgradeCostGrowth,1,3),Level(row))*Math.Clamp(float.IsFinite(AmmoPressCostMultiplier)?AmmoPressCostMultiplier:.8f,.01f,10)),1,1000000000);
  public bool Buy(int row){Initialize();if(row is <0 or >2||Level(row)>=MaximumLevel||Operation?.SpendCredits(Cost(row))!=true)return false;switch(row){case 0:OutputLevel++;break;case 1:StorageLevel++;break;default:EfficiencyLevel++;break;}Save();return true;}
  public int Collect()
  {
@@ -105,10 +108,10 @@ public sealed partial class MiningTrade3D:Component
   var player=GameObject.Scene?.FindGameObject(op.PlayerObjectId);var weapon=player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;var def=weapon?.Definition;if(weapon==null||def==null)return 0;
   int amount=Math.Min((int)StoredAmmo,Math.Max(0,def.ReserveCapacity-weapon.ReserveAmmo));if(amount<=0)return 0;weapon.SetAmmo(weapon.CurrentAmmo,weapon.ReserveAmmo+amount);StoredAmmo-=amount;Save();return amount;
  }
- public bool Sell(bool refined,int quantity){if(SaleInProgress)return false;float quote=Quote(refined);if(Operation?.SellUnits(refined,quantity,quote)!=true)return false;LastSaleQuote=quote;LastSaleTotal=MiningOperation3D.SaleTotal(quantity,quote);Save();return true;}
+ public bool Sell(bool refined,int quantity)=>BeginSale(refined,quantity);
  public bool HasResearch(string id)=>_purchased.Contains(id);
  public bool ResearchUnlocked(string id)=>_research.FirstOrDefault(n=>n.Id==id) is {} node&&node.Prerequisites.All(_purchased.Contains);
- public bool CanBuyResearch(string id)=>Operation is {Phase:MiningPhase.Preparation} op&&_research.FirstOrDefault(n=>n.Id==id) is {} node&&ResearchRank(id)<node.MaxRank&&ResearchUnlocked(id)&&op.Credits>=ResearchCost(id);
+ public bool CanBuyResearch(string id)=>Operation is {Phase:MiningPhase.Preparation} op&&_research.FirstOrDefault(n=>n.Id==id) is {} node&&node.Available&&op.CompletedRounds+1>=node.MinimumRound&&ResearchRank(id)<node.MaxRank&&ResearchUnlocked(id)&&op.Credits>=ResearchCost(id);
  public bool BuyResearch(string id){Initialize();if(!CanBuyResearch(id))return false;var node=_research.Single(n=>n.Id==id);if(Operation?.SpendCredits(ResearchCost(id))!=true)return false;_ranks[id]=ResearchRank(id)+1;_purchased.Add(id);ApplyResearch();Save();return true;}
  void ApplyResearch()
  {
@@ -121,14 +124,15 @@ public sealed partial class MiningTrade3D:Component
   float reload=1+Math.Clamp(owned.Sum(n=>n.ReloadSpeedBonus),0,10);int magazine=Math.Clamp(owned.Sum(n=>n.MagazineBonus),0,1000);
   foreach(var weapon in GameObject.Scene!.GameObjects.SelectMany(o=>o.Components).OfType<WeaponDefinition3D>())
   {
-   if(!_weaponBaselines.TryGetValue(weapon,out var baseline))_weaponBaselines[weapon]=baseline=(weapon.MagazineCapacity,weapon.ReloadSeconds,weapon.EmptyReloadSeconds,weapon.ReserveCapacity,weapon.RoundsPerMinute,weapon.PelletsPerShot);
-   weapon.MagazineCapacity=Math.Clamp(baseline.Magazine+magazine,1,10000);weapon.ReloadSeconds=baseline.Reload/reload;weapon.EmptyReloadSeconds=baseline.EmptyReload/reload;weapon.ReserveCapacity=Math.Clamp((int)((baseline.Reserve+Stat("SmallAmmoCap"))*(1+Stat("AmmoCapacityPct")/100)),12,100000);weapon.RoundsPerMinute=baseline.Rpm*(1+Stat("PistolFireRatePct")/100);weapon.PelletsPerShot=Math.Clamp(baseline.Pellets+(int)Stat("PistolPellets"),1,16);weapon.DamagePerPellet+=Stat("PistolDamageFlat");
+   if(!_weaponBaselines.TryGetValue(weapon,out var baseline))_weaponBaselines[weapon]=baseline=(weapon.MagazineCapacity,weapon.ReloadSeconds,weapon.EmptyReloadSeconds,weapon.ReserveCapacity,weapon.RoundsPerMinute,weapon.PelletsPerShot,weapon.DamagePerPellet);
+   weapon.MagazineCapacity=Math.Clamp(baseline.Magazine+magazine,1,10000);weapon.ReloadSeconds=baseline.Reload/reload;weapon.EmptyReloadSeconds=baseline.EmptyReload/reload;weapon.ReserveCapacity=Math.Clamp((int)((baseline.Reserve+Stat("SmallAmmoCap"))*(1+Stat("AmmoCapacityPct")/100)),12,100000);weapon.RoundsPerMinute=baseline.Rpm*(1+Stat("PistolFireRatePct")/100);weapon.PelletsPerShot=Math.Clamp(baseline.Pellets+(int)Stat("PistolPellets"),1,16);weapon.DamagePerPellet=baseline.Damage+Stat("PistolDamageFlat");
+   if(HasReviewedCatalog){bool shotgun=weapon.RequiredResearchId=="shotgun",rifle=weapon.RequiredResearchId=="ar";weapon.HomingTargetCount=shotgun?(int)Stat("ShotgunHomingTargets"):0;weapon.PenetrationTargets=rifle?(int)Stat("RiflePierce"):0;weapon.BurstAccuracyBonus=rifle?Stat("RifleBurstAccuracyPct")/100:0;}
   }
   if(player?.GetComponent<DashAbility3D>() is {} dash){_baseDashCooldown??=dash.Cooldown;dash.Cooldown=_baseDashCooldown.Value*(1-Math.Clamp(owned.Sum(n=>n.DashCooldownReduction),0,.8f));}
   if(player?.GetComponent<HealthComponent>() is {} hp){_baseHealth??=hp.MaxHealth;float fraction=hp.HealthPercent;hp.MaxHealth=_baseHealth.Value+Sum(CompanyUpgradeEffect.Health)+Stat("PlayerMaxHealth");hp.CurrentHealth=hp.MaxHealth*fraction;}
   if(player?.GetComponent<ResourceMeter3D>() is {} energy){_baseEnergy??=energy.Capacity;float fraction=energy.Fraction;energy.Capacity=_baseEnergy.Value+Sum(CompanyUpgradeEffect.Energy);energy.SetAmount(energy.Capacity*fraction);}
  }
  string PathName{get{if(Path.GetFileName(SaveSlot)!=SaveSlot||string.IsNullOrWhiteSpace(SaveSlot))throw new InvalidDataException("Workshop save must be a filename.");return Path.Combine(GameSaveStorage.GetDirectory(GameObject.Scene?.ProjectRoot??throw new InvalidDataException("No project save context.")),SaveSlot);}}
- public void Save(){if(!PersistProgress||!initialized)return;try{Directory.CreateDirectory(Path.GetDirectoryName(PathName)!);File.WriteAllText(PathName+".tmp",JsonSerializer.Serialize(new State{Output=OutputLevel,Storage=StorageLevel,Efficiency=EfficiencyLevel,Ammo=StoredAmmo,Price=PriceMultiplier,Seed=MarketSeed,Samples=PriceSamples,Clock=PriceClock,History=_history.ToArray(),Purchased=_purchased.ToArray(),Ranks=_ranks}));File.Move(PathName+".tmp",PathName,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastError=e.Message;}}
- public sealed class State{public Dictionary<string,int>? Ranks{get;set;}public int Version{get;set;}=1;public int Output{get;set;}public int Storage{get;set;}public int Efficiency{get;set;}public float Ammo{get;set;}public float Price{get;set;}=1;public uint Seed{get;set;}=247319;public int Samples{get;set;}public float Clock{get;set;}public float[]? History{get;set;}public string[]? Purchased{get;set;}}
+ public void Save(){if(!PersistProgress||!initialized)return;try{Directory.CreateDirectory(Path.GetDirectoryName(PathName)!);File.WriteAllText(PathName+".tmp",JsonSerializer.Serialize(new State{DemandClock=DemandClock,ResearchRevision=HasReviewedCatalog?2:0,Output=OutputLevel,Storage=StorageLevel,Efficiency=EfficiencyLevel,Ammo=StoredAmmo,Price=PriceMultiplier,Seed=MarketSeed,Samples=PriceSamples,Clock=PriceClock,History=_history.ToArray(),Purchased=_purchased.ToArray(),Ranks=_ranks}));File.Move(PathName+".tmp",PathName,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){LastError=e.Message;}}
+ public sealed class State{public float DemandClock{get;set;}public int ResearchRevision{get;set;}public Dictionary<string,int>? Ranks{get;set;}public int Version{get;set;}=1;public int Output{get;set;}public int Storage{get;set;}public int Efficiency{get;set;}public float Ammo{get;set;}public float Price{get;set;}=1;public uint Seed{get;set;}=247319;public int Samples{get;set;}public float Clock{get;set;}public float[]? History{get;set;}public string[]? Purchased{get;set;}}
 }

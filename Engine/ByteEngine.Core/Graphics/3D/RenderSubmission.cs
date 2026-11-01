@@ -15,4 +15,9 @@ public readonly record struct RenderSubmission(
     bool CastShadows,
     bool ReceiveShadows,
     float DistanceSquaredToCamera,
-    int SubmissionIndex);
+    int SubmissionIndex)
+{
+    public Mesh? ShadowMesh {get;init;}
+    public Matrix4x4? ShadowModelMatrix {get;init;}
+    internal RenderSubmission AsShadowCaster()=>ShadowMesh is {} mesh?this with{Mesh=mesh,ModelMatrix=ShadowModelMatrix??ModelMatrix,WorldBounds=mesh.LocalBounds.Transform(ShadowModelMatrix??ModelMatrix),ShadowMesh=null,ShadowModelMatrix=null}:this;
+}

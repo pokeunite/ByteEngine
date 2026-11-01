@@ -5,6 +5,8 @@ namespace ByteEngine.Core.Scene;
 public sealed partial class Scene
 {
     private bool _renderRegistryDirty = true;
+    private bool _cameraRegistryDirty=true;
+    private readonly List<Camera3D> _cameras=new();
     internal long RenderHierarchyVersion {get;private set;}
     internal void InvalidateRenderHierarchy()=>RenderHierarchyVersion++;
     private readonly List<SkyEnvironment> _environments = new();
@@ -18,6 +20,7 @@ public sealed partial class Scene
         _objectLookup=null;
         InvalidatePhysicsRegistry();
         _renderRegistryDirty = true;
+        _cameraRegistryDirty=true;
     }
     private void RefreshRenderRegistry()
     {
@@ -29,5 +32,11 @@ public sealed partial class Scene
                 else if (component is DirectionalLight sun) _directionalLights.Add(sun);
                 else if (component is PointLight point) _pointLights.Add(point);
         _renderRegistryDirty = false;
+    }
+    private void RefreshCameraRegistry()
+    {
+        if(!_cameraRegistryDirty)return;_cameras.Clear();
+        foreach(var item in _gameObjects)foreach(var component in item.Components)if(component is Camera3D camera)_cameras.Add(camera);
+        _cameraRegistryDirty=false;
     }
 }

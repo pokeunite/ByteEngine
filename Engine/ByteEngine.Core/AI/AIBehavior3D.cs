@@ -114,7 +114,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
         TickStagedCombat(delta);
         if (!dodging&&_movementOwner.HasValue){var before=Transform.WorldPosition;_ownedAgent?.Tick(delta);GameObject.GetComponent<SimpleEnemyAI3D>()?.SetBehaviorMovement(Vector3.DistanceSquared(before,Transform.WorldPosition)>.000001f);}
         _combatDriver?.TickBehaviorCombat(delta);
-        _accumulator+=delta;if(_accumulator<Interval)return;_accumulator=0;
+        _accumulator+=delta;if(_accumulator<Interval)return;_accumulator%=Interval;
         _previousRunning.Clear();foreach(var pair in _status)if(pair.Value==BehaviorStatus.Running)_previousRunning.Add(pair.Key);
         LastError="";Sense();RunServices();_visited.Clear();_status.Clear();CurrentTask="Idle";
         try { Status=Evaluate(_definition.Root,0); }
@@ -132,7 +132,16 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
         if(PerceptionMemory){SenseAdvanced();return;}
         var scene=GameObject.Scene!;float range=Safe(DetectionRange,25,0,10000);
         Target=TargetObjectId==Guid.Empty?null:scene.FindGameObject(TargetObjectId);
-        if(Target==null&&FindNearestCharacter)Target=scene.GameObjects.Where(o=>o!=GameObject&&o.ActiveInHierarchy&&o.GetComponent<CharacterController3D>() is {Enabled:true}&&o.GetComponent<HealthComponent>()?.IsDead!=true).OrderBy(o=>Vector3.DistanceSquared(Transform.WorldPosition,o.Transform.WorldPosition)).FirstOrDefault();
+        if(Target==null&&FindNearestCharacter)
+        {
+            float nearest=float.PositiveInfinity;
+            foreach(var candidate in AIWorld.For(scene).CharacterCandidates(scene))
+            {
+                if(candidate==GameObject||!candidate.ActiveInHierarchy||candidate.GetComponent<CharacterController3D>() is not {Enabled:true}||candidate.GetComponent<HealthComponent>()?.IsDead==true)continue;
+                float distance=Vector3.DistanceSquared(Transform.WorldPosition,candidate.Transform.WorldPosition);
+                if(distance<nearest){nearest=distance;Target=candidate;}
+            }
+        }
         if(Target?.ActiveInHierarchy!=true||Target==GameObject||Vector3.Distance(Transform.WorldPosition,Target.Transform.WorldPosition)>range||Target.GetComponent<HealthComponent>()?.IsDead==true)Target=null;
         Blackboard.Set("HasTarget",VariableValue.FromBoolean(Target!=null));
         Blackboard.Set("TargetDistance",VariableValue.FromNumber(Target==null?range:FlatDistance(Target.Transform.WorldPosition)));
@@ -222,7 +231,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
                 if(Target==null)return BehaviorStatus.Failure;Face(Target.Transform.WorldPosition);return BehaviorStatus.Success;
             case BehaviorNodeKind.DamageTarget:
                 if(Target?.GetComponent<HealthComponent>() is not {} health||FlatDistance(Target.Transform.WorldPosition)>Math.Max(0,n.Distance)||(n.RequireLineOfSight&&!HasSight()))return BehaviorStatus.Failure;
-                health.Damage(Math.Max(0,n.Amount));return BehaviorStatus.Success;
+                health.Damage(Math.Max(0,n.Amount),Target.Transform.WorldPosition-Transform.WorldPosition);return BehaviorStatus.Success;
             case BehaviorNodeKind.MoveToTarget:
             case BehaviorNodeKind.MoveToPoint:
             case BehaviorNodeKind.Retreat:

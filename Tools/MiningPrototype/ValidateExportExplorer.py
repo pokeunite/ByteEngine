@@ -27,10 +27,12 @@ for name in ['SHStandIdle','SHWalk','SHRun','SHWalkStrafeLeft','SHWalkStrafeRigh
   if max(extent)>3.5:raise RuntimeError('Exploded pose bounds: '+name+str(extent))
   samples.append(extent);obj.to_mesh_clear()
  results.append({'clip':name,'sampled_extents':samples})
-# Polish glass while retaining the low-poly rim/silhouette.
-for poly in body.data.polygons:
- if body.data.materials[poly.material_index].name.startswith('Explorer / Visor'):poly.use_smooth=True;poly.material_index=body.data.materials.find('Explorer / Visor teal')
-p=bpy.data.materials['Explorer / Visor teal'].node_tree.nodes.get('Principled BSDF');p.inputs['Base Color'].default_value=(.009,.055,.072,1);p.inputs['Roughness'].default_value=.23;p.inputs['Metallic'].default_value=.28;p.inputs['Coat Weight'].default_value=.3
+# Preserve the rebuilt reference materials; legacy source receives its original polish.
+if not body.get('reference_rebuild',0):
+ # Polish glass while retaining the low-poly rim/silhouette.
+ for poly in body.data.polygons:
+  if body.data.materials[poly.material_index].name.startswith('Explorer / Visor'):poly.use_smooth=True;poly.material_index=body.data.materials.find('Explorer / Visor teal')
+ p=bpy.data.materials['Explorer / Visor teal'].node_tree.nodes.get('Principled BSDF');p.inputs['Base Color'].default_value=(.009,.055,.072,1);p.inputs['Roughness'].default_value=.23;p.inputs['Metallic'].default_value=.28;p.inputs['Coat Weight'].default_value=.3
 rig.animation_data.action=None;rig.data.pose_position='REST';scene.frame_set(0)
 folder=pathlib.Path('C:/Users/codex/Documents/palclone/SourceArt/HazardPayExplorer');folder.mkdir(parents=True,exist_ok=True)
 report={'source_skeleton_unchanged':True,'bones':len(rig.data.bones),'vertices':len(body.data.vertices),'unweighted_vertices':len(unweighted),'clips':results,'source_tracks':len(rig.animation_data.nla_tracks),'fps':scene.render.fps}
@@ -40,7 +42,7 @@ bpy.ops.object.select_all(action='DESELECT');body.select_set(True);rig.select_se
 root=rig.parent
 while root:root.select_set(True);root=root.parent
 bpy.context.view_layer.objects.active=rig
-rig.data.pose_position='POSE'
-bpy.ops.export_scene.gltf(filepath=str(folder/'HazardPayExplorer.glb'),export_format='GLB',use_selection=True,export_animations=True,export_animation_mode='ACTIONS',export_merge_animation='ACTION',export_force_sampling=True,export_def_bones=False,export_rest_position_armature=True,export_apply=False)
+rig.data.pose_position='REST'
+bpy.ops.export_scene.gltf(filepath=str(folder/'HazardPayExplorer.glb'),export_format='GLB',use_selection=True,export_animations=False,export_animation_mode='ACTIONS',export_merge_animation='ACTION',export_force_sampling=True,export_def_bones=False,export_rest_position_armature=True,export_apply=False)
 rig.data.pose_position='REST'
 result={'blend':str(folder/'HazardPayExplorer.blend'),'glb':str(folder/'HazardPayExplorer.glb'),'tested_clips':len(results),'bones':len(rig.data.bones),'unweighted_vertices':len(unweighted)}

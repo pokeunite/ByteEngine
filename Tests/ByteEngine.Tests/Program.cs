@@ -22,7 +22,15 @@ try
 {
     if(args.Length==2&&args[0]=="--pixel-art-shader"){PixelArtShaderTests.Run(args[1]);return;}
     if(args.Length==2&&args[0]=="--fire-attack-benchmark"){FireAttackBenchmark.Run(args[1]);return;}
+    if(args.Contains("--ai-query")){AIQueryOptimizationTests.Run();return;}
     if(args.Contains("--engine-optimization")){EngineOptimizationTests.Run();return;}
+    if(args.Contains("--single-executable")){SingleExecutableTests.Run(root);return;}
+    if(args.Length==4&&args[0]=="--bundle-existing")
+    {
+        File.Copy(args[1],args[3],false);
+        ByteEngine.Core.Runtime.SingleExecutablePackage.Append(args[3],args[2]);
+        Console.WriteLine("BUNDLED existing exported content: "+args[3]);return;
+    }
     if(args.Contains("--drift-scoring")){DriftScoringTests.Run();return;}
     if(args.Contains("--browser-texture-lifecycle")){BrowserTextureTransferTests.Run();return;}
     if(args.Contains("--rope-winch")){RopeWinchTests.Run();return;}
@@ -46,6 +54,7 @@ try
     if(args.Length>=3&&args[0]=="--cook-diagnostic-model"){string fixture=Path.GetFullPath(args[1]);if(!fixture.StartsWith(Path.GetFullPath(".artifacts")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("Private diagnostic fixture required");using var db=new AssetDatabase(fixture,["Assets","Scenes"]);foreach(string model in args.Skip(2)){var record=db.Assets.Single(a=>a.ProjectPath==model);CookedModelStore.Save(fixture,ModelImporter.ForPath(record.FullPath).Import(record,record.Metadata.ModelImporter));Console.WriteLine("Prepared private browser diagnostic model: "+model);}return;}
     if(args.Length>=2&&args[0]=="--garage-ux"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),garage:true);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--sand-vehicle"){using var diagnostic=new DunePolishDiagnostic(args[1],false,sandVehicle:true);diagnostic.Run();return;}
+    if(args.Contains("--verify-engine-review")){EnginePerformanceIntegrationTests.Run();return;}
     if(args.Length>=2&&args[0]=="--schedule-benchmark"){SchedulingBenchmarkTests.Run(args[1]);return;}
     if(args.Length>=2&&args[0]=="--sand-lab"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),sandLab:true);diagnostic.Run();return;}
     if(args.Length>1&&args[0]=="--roadmap-fixture"){RoadmapBrowserFixture.Create(args[1]);return;}
@@ -416,3 +425,4 @@ static void WriteTriangleGltf(string path)
     """.Replace("__DATA__", data);
     File.WriteAllText(path, json);
 }
+

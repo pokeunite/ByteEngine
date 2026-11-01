@@ -42,18 +42,19 @@ public sealed partial class MiningBusinessUi3D
   var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));var bounds=CompactBounds(size.X/s,size.Y/s);mapWidth=bounds.Width;mapHeight=bounds.Height;
   if(Trade is {} trade)PrepareResearchMap(trade);
   var mouse=Input.GameViewMousePosition/s-new Vector2(bounds.X,bounds.Y);bool over=mouse.X>28&&mouse.X<mapWidth-28&&mouse.Y>135&&mouse.Y<460;
+  ScrollResearchDescription(mouse,Input.Snapshot.MouseWheel);
   bool pan=over&&Input.IsMouseButtonDown(MouseButton.Right);
   if(pan&&wasPanning)ResearchPan+=mouse-lastMapPointer;
   if(over&&Math.Abs(Input.Snapshot.MouseWheel)>.001f)
   {float old=ResearchZoom;ResearchZoom=Math.Clamp(old+Input.Snapshot.MouseWheel*.08f,.45f,1.5f);var center=new Vector2(mapWidth*.5f,300);ResearchPan=mouse-center-(mouse-center-ResearchPan)*(ResearchZoom/old);}
   ResearchPan=Vector2.Clamp(ResearchPan,new(-5000,-5000),new(5000,5000));lastMapPointer=mouse;wasPanning=pan;
  }
- string ResearchIcon(CompanyUpgrade n)=>n.Id=="company"?"company":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
+ string ResearchIcon(CompanyUpgrade n)=>n.Id is "company" or "charter"?"company":n.Branch=="Rifle"?"rifle":n.Branch=="Shotgun"?"shotgun":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
  void DrawResearchIcon(RenderContext c,CompanyUpgrade n,Vector2 p,float size,float scale,Vector4 color)
  {
   if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;
-  string icon=ResearchIcon(n);var asset=new AssetReference("Assets/UI/Mining/Artwork/"+(icon=="pistol"?"company-pistol":"research-"+icon)+".png");
-  var dimensions=icon=="pistol"?new Vector2(size,size*.5f):new Vector2(size,size);
+  string icon=ResearchIcon(n);var asset=new AssetReference(icon is "rifle" or "shotgun"?"Assets/UI/CombatHUD/weapon-"+icon+".png":"Assets/UI/Mining/Artwork/"+(icon=="pistol"?"company-pistol":"research-"+icon)+".png");
+  var dimensions=icon is "pistol" or "rifle" or "shotgun"?new Vector2(size,size*.5f):new Vector2(size,size);
   c.DrawUiImage(assets.LoadTexture(asset),(p-dimensions*.5f)*scale,dimensions*scale,color);
  }
  void DrawResearchMap(RenderContext c,float ox,float oy,float scale,MiningTrade3D trade)

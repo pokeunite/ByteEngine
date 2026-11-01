@@ -28,6 +28,8 @@ public sealed partial class MiningPauseMenu3D:Component
  bool startupHandled;
  static string? skipNextStartupProject;
  public float MouseSensitivity{get;set;}=.12f;
+ public float CameraShakeIntensity{get;set;}=1;
+ void ApplyShake(){foreach(var feel in GameObject.Scene!.GameObjects.SelectMany(o=>o.Components.OfType<MiningGameFeel3D>()))feel.ShakeIntensity=CameraShakeIntensity;}
  [Browsable(false)] public bool IsOpen{get;private set;}
  [Browsable(false)] public MiningPausePage Page{get;private set;}
  [Browsable(false)] public string Status{get;private set;}="";
@@ -36,6 +38,7 @@ public sealed partial class MiningPauseMenu3D:Component
  internal static double IgnoreEscapeAt=-1;
  readonly List<Component> suspended=[];
  readonly List<AudioSource3D> pausedAudio=[];
+ readonly List<(UiWidget Widget,bool Interactable)> pausedWidgets=[];
  float priorScale=1;int focus;float controlsScroll;Key? listening;MouseButton? listeningMouse;double listenAt;
  bool windowDropdownOpen;
  public float HoverSoundGain{get;set;}=.22f;
@@ -47,18 +50,18 @@ public sealed partial class MiningPauseMenu3D:Component
  readonly (string Label,Key Key)[] controls=[("Forward",Key.W),("Back",Key.S),("Left",Key.A),("Right",Key.D),("Sprint",Key.LeftShift),("Interact",Key.E),("Reload",Key.R),("Build defence / cycle",Key.B),("Arrange camp",Key.Tab),("Rotate camp left",Key.Q),("Sentry",Key.F1),("Rotary gun",Key.F2),("Mortar",Key.F3),("Mine",Key.F4),("Supply drop",Key.F5),("Weapon 1",Key.D1),("Weapon 2",Key.D2),("Weapon 3",Key.D3)];
  readonly Vector4 text=new(.94f,.93f,.88f,1),muted=new(.57f,.59f,.61f,1),accent=new(.91f,.71f,.15f,1),surface=new(.055f,.063f,.073f,.96f);
  string FilePath=>Path.Combine(GameSaveStorage.GetDirectory(GameObject.Scene!.ProjectRoot!),Path.GetFileName(SaveSlot));
- record Preferences(float Master,float Music,float Sfx,float Ui,float Sensitivity,Dictionary<Key,Key> Keys,Dictionary<MouseButton,MouseButton>? Mouse=null,GameWindowMode WindowMode=GameWindowMode.Fullscreen);
+ record Preferences(float Master,float Music,float Sfx,float Ui,float Sensitivity,Dictionary<Key,Key> Keys,Dictionary<MouseButton,MouseButton>? Mouse=null,GameWindowMode WindowMode=GameWindowMode.Fullscreen,float ShakeIntensity=1);
  protected override void OnStart()
  {
   Input.RegisterGameplayEscapeHandler(this,true);
   graphics=GameObject.GetComponent<GraphicsSettings3D>()??GameObject.AddComponent(new GraphicsSettings3D{SettingsKey="palclone",PreservePostEffects=true});
-  if(PersistSettings)try{if(File.Exists(FilePath)&&JsonSerializer.Deserialize<Preferences>(File.ReadAllText(FilePath)) is {} p){AudioMixer.SetVolume(AudioBus.Master,p.Master);AudioMixer.SetVolume(AudioBus.Music,p.Music);AudioMixer.SetVolume(AudioBus.Sfx,p.Sfx);AudioMixer.SetVolume(AudioBus.Ui,p.Ui);MouseSensitivity=Math.Clamp(p.Sensitivity,.02f,.4f);if(Enum.IsDefined(p.WindowMode)&&!OperatingSystem.IsBrowser())GameWindowDisplay.Request(p.WindowMode);selectedWindowMode=GameWindowDisplay.Mode;foreach(var key in p.Keys)if(key.Key!=Key.Escape&&key.Value!=Key.Escape&&Enum.IsDefined(key.Key)&&Enum.IsDefined(key.Value))Input.BindGameplayKey(key.Key,key.Value);if(p.Mouse!=null)foreach(var b in p.Mouse)if(Enum.IsDefined(b.Key)&&Enum.IsDefined(b.Value))Input.BindGameplayMouseButton(b.Key,b.Value);}}
+  if(PersistSettings)try{if(File.Exists(FilePath)&&JsonSerializer.Deserialize<Preferences>(File.ReadAllText(FilePath)) is {} p){AudioMixer.SetVolume(AudioBus.Master,p.Master);AudioMixer.SetVolume(AudioBus.Music,p.Music);AudioMixer.SetVolume(AudioBus.Sfx,p.Sfx);AudioMixer.SetVolume(AudioBus.Ui,p.Ui);MouseSensitivity=Math.Clamp(p.Sensitivity,.02f,.4f);CameraShakeIntensity=float.IsFinite(p.ShakeIntensity)?Math.Clamp(p.ShakeIntensity,0,1):1;if(Enum.IsDefined(p.WindowMode)&&!OperatingSystem.IsBrowser())GameWindowDisplay.Request(p.WindowMode);selectedWindowMode=GameWindowDisplay.Mode;foreach(var key in p.Keys)if(key.Key!=Key.Escape&&key.Value!=Key.Escape&&Enum.IsDefined(key.Key)&&Enum.IsDefined(key.Value))Input.BindGameplayKey(key.Key,key.Value);if(p.Mouse!=null)foreach(var b in p.Mouse)if(Enum.IsDefined(b.Key)&&Enum.IsDefined(b.Value))Input.BindGameplayMouseButton(b.Key,b.Value);}}
   catch(Exception e)when(e is IOException or UnauthorizedAccessException or JsonException or ArgumentException){Status=e.Message;}
-  ApplySensitivity();
+  ApplySensitivity();ApplyShake();
  }
  void ApplySensitivity(){foreach(var camera in GameObject.Scene!.GameObjects.SelectMany(o=>o.Components.OfType<MiningThirdPerson3D>())){camera.NormalSensitivity=MouseSensitivity;camera.AimSensitivity=MouseSensitivity*.625f;}}
  public static string KeyLabel(Key logical){string key=Input.GameplayKey(logical).ToString();return key.Length==2&&key[0]=='D'&&char.IsDigit(key[1])?key[1..]:key.Replace("LeftShift","Shift").Replace("LeftAlt","Alt");}
- public void SaveSettings(){if(!PersistSettings||GameObject.Scene?.ProjectRoot==null)return;try{Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);File.WriteAllText(FilePath+".tmp",JsonSerializer.Serialize(new Preferences(AudioMixer.GetVolume(AudioBus.Master),AudioMixer.GetVolume(AudioBus.Music),AudioMixer.GetVolume(AudioBus.Sfx),AudioMixer.GetVolume(AudioBus.Ui),MouseSensitivity,controls.ToDictionary(c=>c.Key,c=>Input.GameplayKey(c.Key)),Enum.GetValues<MouseButton>().ToDictionary(b=>b,b=>Input.GameplayMouseButton(b)),GameWindowDisplay.Mode)));File.Move(FilePath+".tmp",FilePath,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){Status=e.Message;}}
+ public void SaveSettings(){if(!PersistSettings||GameObject.Scene?.ProjectRoot==null)return;try{Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);File.WriteAllText(FilePath+".tmp",JsonSerializer.Serialize(new Preferences(AudioMixer.GetVolume(AudioBus.Master),AudioMixer.GetVolume(AudioBus.Music),AudioMixer.GetVolume(AudioBus.Sfx),AudioMixer.GetVolume(AudioBus.Ui),MouseSensitivity,controls.ToDictionary(c=>c.Key,c=>Input.GameplayKey(c.Key)),Enum.GetValues<MouseButton>().ToDictionary(b=>b,b=>Input.GameplayMouseButton(b)),GameWindowDisplay.Mode,CameraShakeIntensity)));File.Move(FilePath+".tmp",FilePath,true);}catch(Exception e)when(e is IOException or UnauthorizedAccessException){Status=e.Message;}}
  public void Open()
  {
   if(IsOpen)return;var scene=GameObject.Scene!;
@@ -67,6 +70,7 @@ public sealed partial class MiningPauseMenu3D:Component
   foreach(var c in scene.GameObjects.SelectMany(o=>o.Components).ToArray())
    if(c.Enabled&&c!=this&&(c is EventModuleComponent or PlayerController3D or CameraBoom3D or AIBehavior3D or SimpleEnemyAI3D or NavigationAgent3D or Projectile3D||c.GetType().Namespace==typeof(MiningPauseMenu3D).Namespace&&c is not MiningAudio3D)) {suspended.Add(c);c.Enabled=false;}
   foreach(var a in scene.GameObjects.SelectMany(o=>o.Components.OfType<AudioSource3D>()).Where(a=>a.IsPlaying&&a.Bus==AudioBus.Sfx)){a.Pause();pausedAudio.Add(a);}
+  foreach(var widget in scene.GameObjects.SelectMany(o=>o.Components.OfType<UiWidget>()).Where(w=>w.Visible)){pausedWidgets.Add((widget,widget.Interactable));widget.Visible=false;widget.Interactable=false;}
   Input.RequestUiPointer(this,true);Input.ConsumeGameplayPointer();UiNavigation.Focus(null);
  }
  public void Resume()
@@ -75,6 +79,7 @@ public sealed partial class MiningPauseMenu3D:Component
   var live=GameObject.Scene!.GameObjects.SelectMany(o=>o.Components).ToHashSet();
   foreach(var c in suspended)if(live.Contains(c))c.Enabled=true;suspended.Clear();
   foreach(var a in pausedAudio)if(live.Contains(a)&&a.IsPaused)a.Play();pausedAudio.Clear();
+  foreach(var pair in pausedWidgets)if(live.Contains(pair.Widget)){pair.Widget.Visible=true;pair.Widget.Interactable=pair.Interactable;}pausedWidgets.Clear();
   Input.ConsumeGameplayPointer();Input.RequestUiPointer(this,false);SaveSettings();
  }
  public void ShowPage(MiningPausePage page){if(page==MiningPausePage.Graphics)selectedWindowMode=GameWindowDisplay.Mode;windowDropdownOpen=false;Page=page;focus=page==MiningPausePage.Controls?1:page==MiningPausePage.Graphics?2:0;listening=null;listeningMouse=null;Status="";controlsScroll=0;}

@@ -64,7 +64,7 @@ public sealed partial class SimpleEnemyAI3D
             {
                 Transform.WorldPosition=_lockedPoint;var delta=target.Transform.WorldPosition-_lockedPoint;delta.Y=0;
                 bool hit=delta.Length()<=Math.Max(.5f,SlamRadius)&&Math.Abs(target.Transform.WorldPosition.Y-_lockedPoint.Y)<2;
-                if(hit)target.GetComponent<HealthComponent>()?.Damage(SlamDamage);else EvadedSlams++;
+                if(hit)target.GetComponent<HealthComponent>()?.Damage(SlamDamage,target.Transform.WorldPosition-Transform.WorldPosition);else EvadedSlams++;
                 ClearWarning();SpawnImpact(SlamRadius);AttackFiredThisFrame=true;Recover();
             }
             return true;

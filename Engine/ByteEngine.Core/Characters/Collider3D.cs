@@ -7,7 +7,8 @@ namespace ByteEngine.Core.Characters;
 public abstract class Collider3D : Component
 {
     public bool IsTrigger { get; set; }
-    public Vector3 Center { get; set; }
+    private Vector3 _center;
+    public Vector3 Center {get=>_center;set{if(_center==value)return;_center=value;AttachedGameObject?.Scene?.InvalidateQueryBounds();}}
     public bool UseProjectMatrix { get; set; } = true;
     public LayerMask CollisionMask { get; set; } = LayerMask.All;
     public abstract Vector3 Size { get; set; }
@@ -15,7 +16,8 @@ public abstract class Collider3D : Component
 
 public sealed class BoxCollider3D : Collider3D
 {
-    public override Vector3 Size { get; set; } = Vector3.One;
+    private Vector3 _size=Vector3.One;
+    public override Vector3 Size {get=>_size;set{if(_size==value)return;_size=value;AttachedGameObject?.Scene?.InvalidateQueryBounds();}}
 }
 
 public sealed class CapsuleCollider3D : Collider3D
@@ -43,13 +45,13 @@ public sealed class CapsuleCollider3D : Collider3D
     public float Radius
     {
         get => _radius;
-        set => _radius = Math.Max(value, .001f);
+        set {float next=Math.Max(value,.001f);if(_radius==next)return;_radius=next;AttachedGameObject?.Scene?.InvalidateQueryBounds();}
     }
 
     public float Height
     {
         get => _height;
-        set => _height = Math.Max(value, Radius * 2f);
+        set {float next=Math.Max(value,Radius*2f);if(_height==next)return;_height=next;AttachedGameObject?.Scene?.InvalidateQueryBounds();}
     }
 
     public override Vector3 Size

@@ -93,6 +93,23 @@ try
   Check(Vector3.Distance(Vertex(1,2),new(0,1.5f,0))<.0001f,"Nonuniform skin uses correct CPU fallback");
   renderer.Play("Independent rigs",false,0);renderer.Seek(.25f);
   Check(Vector3.Distance(Vertex(1,2),new(0,1.25f,0))<.0001f,"Returning to rigid animation restores source geometry");
+  renderer.ShareCrowdPoses=true;renderer.Play("Independent rigs",false,0);renderer.Seek(.5f);
+  var secondOwner=scene.CreateGameObject("Crowd copy");secondOwner.Transform.WorldPosition=new(10,0,0);
+  var second=secondOwner.AddComponent(new SkeletalMeshRenderer{Model=renderer.Model,ShareCrowdPoses=true});second.Play("Independent rigs",false,0);second.Seek(.5f);
+  object[] Slots(SkeletalMeshRenderer r)=>((System.Collections.IEnumerable)typeof(SkeletalMeshRenderer).GetField("_runtimeMeshes",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(r)!).Cast<object>().ToArray();
+  object? Shared(object slot)=>slot.GetType().GetProperty("SharedCrowdMesh")!.GetValue(slot);
+  Check(Shared(Slots(renderer)[1])!=null&&ReferenceEquals(Shared(Slots(renderer)[1]),Shared(Slots(second)[1])),"Crowd instances reuse immutable posed geometry");
+  var captured=second.CapturePoseMeshes();try{var v=captured[1].Mesh.VertexData.Span;Check(Vector3.Distance(Vector3.Transform(new(v[0],v[1],v[2]),captured[1].World),new(10,.5f,0))<.0001f,"Shared pose snapshots retain independent instance placement");}finally{foreach(var p in captured)p.Mesh.Dispose();}
+  var draws=((Array)typeof(SkeletalMeshRenderer).GetField("crowdDraws",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(renderer)!).Cast<object>().ToArray();
+  Check(draws.Length<=Slots(renderer).Length,"crowd batching does not increase submission count");
+  var shadow=(Mesh?)typeof(SkeletalMeshRenderer).GetField("crowdShadow",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(renderer);
+  Check(shadow!=null&&shadow.IndexCount==draws.Sum(d=>((Mesh)d.GetType().GetProperty("Mesh")!.GetValue(d)!).IndexCount),"opaque crowd shadow geometry retains all triangles across material groups");
+  var batchedVertices=new List<Vector3>();int batchedIndices=0;
+  foreach(var draw in draws){var mesh=(Mesh)draw.GetType().GetProperty("Mesh")!.GetValue(draw)!;var placement=(Matrix4x4)draw.GetType().GetProperty("Placement")!.GetValue(draw)!;batchedIndices+=mesh.IndexCount;var data=mesh.VertexData.Span;for(int v=0;v<data.Length;v+=8)batchedVertices.Add(Vector3.Transform(new(data[v],data[v+1],data[v+2]),placement));}
+  var originalVertices=new List<Vector3>();int originalIndices=0;var originals=renderer.CapturePoseMeshes();foreach(var part in originals){originalIndices+=part.Mesh.IndexCount;var data=part.Mesh.VertexData.Span;for(int v=0;v<data.Length;v+=8)originalVertices.Add(Vector3.Transform(new(data[v],data[v+1],data[v+2]),part.World));part.Mesh.Dispose();}
+  Check(batchedIndices==originalIndices&&batchedVertices.Count==originalVertices.Count&&originalVertices.All(v=>batchedVertices.Any(b=>Vector3.Distance(v,b)<.0001f)),"merged crowd geometry preserves independent rig placement and triangle count");
+  second.SetHiddenMeshKeys([second.ResolvedModel!.Meshes[1].Key]);Check(Slots(second).All(s=>Shared(s)==null),"Per-instance visibility leaves the shared-geometry path immediately");
+  second.SetHiddenMeshKeys([]);second.Seek(.5f);scene.DestroyGameObject(owner);captured=second.CapturePoseMeshes();Check(captured.Count==2,"Destroying one crowd actor preserves another actor's shared pose");foreach(var p in captured)p.Mesh.Dispose();scene.DestroyGameObject(secondOwner);
  }
  finally{AnimationRuntimeAssets.Clear(registration);}
 }

@@ -2,6 +2,7 @@ using System.Numerics;
 
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Navigation;
 
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
@@ -47,6 +48,9 @@ public sealed partial class PhysicsWorld3D
 
     private readonly List<int> _sweepOrder = new();
     private readonly List<(int First, int Second)> _candidatePairs = new();
+    private readonly List<(int First,int Second)> _staticCandidatePairs=new();
+    private int _staticPairRebuild=-1,_staticPairRefit=-1;
+    public int StaticCandidateRefreshes{get;private set;}
     public int LastCandidateCount { get; private set; }
     public double LastStepMilliseconds { get; private set; }
     public double LastColliderGatherMs {get;private set;}
@@ -251,9 +255,11 @@ public sealed partial class PhysicsWorld3D
     public void Reset()
     {
         _staticSolveValid = false; _staticSolveStates.Clear(); _staticSolveContacts.Clear();
-        _queryEntries.Clear();_queryIndices.Clear();_queryObjects.Clear();_queryUnique.Clear();
+        _queryRevision=-1;_queryCustomColliders.Clear();_queryStaticIndex.Clear();_queryMovingIndex.Clear();QueryCalls=QueryIndexRefreshes=QueryIndexCacheHits=0;
+        _queryEntries.Clear();_queryIndices.Clear();_queryObjects.Clear();_queryUnique.Clear();_queryBoundsCache.Clear();
         _stepBodies.Clear();_stepJoints.Clear();_primitiveStates.Clear();_primitiveContacts.Clear();_expiredPrimitiveContacts.Clear();
         _framePositions.Clear();_staticIndex.Clear();_movingIndex.Clear();
+        _staticCandidatePairs.Clear();_staticPairRebuild=_staticPairRefit=-1;StaticCandidateRefreshes=0;
         _stepColliders.Clear();
         _previousContacts.Clear();
         _frameContacts.Clear();
@@ -269,7 +275,7 @@ public sealed partial class PhysicsWorld3D
         {
             var collider=registeredColliders[i];var obj=collider.GameObject;
             if(collider.Enabled && obj.ActiveInHierarchy)
-                _stepColliders.Add(new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider)));
+                _stepColliders.Add(new(obj,collider,FindBodyForCollider(obj),CachedQueryBounds(collider)));
         }
         LastColliderGatherMs+=System.Diagnostics.Stopwatch.GetElapsedTime(gatherStart).TotalMilliseconds;
         List<ColliderEntry> colliders = _stepColliders;
@@ -370,14 +376,16 @@ public sealed partial class PhysicsWorld3D
         _movingIndex.Update(colliders, moving: true);
         LastIndexUpdateMs+=System.Diagnostics.Stopwatch.GetElapsedTime(indexStart).TotalMilliseconds;
         long queryStart=System.Diagnostics.Stopwatch.GetTimestamp();
-        for (int a = 0; a < colliders.Count; a++)
+        if(_staticPairRebuild!=_staticIndex.Rebuilds||_staticPairRefit!=_staticIndex.Refits)
         {
-            _queryResults.Clear();
-            _staticIndex.Query(colliders[a].Bounds, _queryResults);
-            _movingIndex.Query(colliders[a].Bounds, _queryResults);
-            foreach (int b in _queryResults)
-                if (b > a) _candidatePairs.Add((a, b));
+            _staticCandidatePairs.Clear();
+            for(int a=0;a<colliders.Count;a++)if(!QueryMoving(colliders[a]))
+            {_queryResults.Clear();_staticIndex.Query(colliders[a].Bounds,_queryResults);foreach(int b in _queryResults)if(b>a)_staticCandidatePairs.Add((a,b));}
+            _staticPairRebuild=_staticIndex.Rebuilds;_staticPairRefit=_staticIndex.Refits;StaticCandidateRefreshes++;
         }
+        _candidatePairs.AddRange(_staticCandidatePairs);
+        for(int a=0;a<colliders.Count;a++)if(QueryMoving(colliders[a]))
+        {_queryResults.Clear();_staticIndex.Query(colliders[a].Bounds,_queryResults);_movingIndex.Query(colliders[a].Bounds,_queryResults);foreach(int b in _queryResults)if(b!=a&&(!QueryMoving(colliders[b])||b>a))_candidatePairs.Add(a<b?(a,b):(b,a));}
         _candidatePairs.Sort((a, b) => a.First != b.First ? a.First.CompareTo(b.First) : a.Second.CompareTo(b.Second));
         LastCandidateCount += _candidatePairs.Count;
         LastCandidateQueryMs+=System.Diagnostics.Stopwatch.GetElapsedTime(queryStart).TotalMilliseconds;
@@ -388,29 +396,68 @@ public sealed partial class PhysicsWorld3D
     {
         if (!float.IsFinite(minimum.X + minimum.Y + minimum.Z + maximum.X + maximum.Y + maximum.Z))
             return scene.GameObjects;
+        QueryCalls++;
         var entries = _queryEntries;
-        entries.Clear();
         var registeredColliders=scene.PhysicsColliders;
-        for(int i=0;i<registeredColliders.Count;i++)
+        // Validate non-notifying custom geometry independently; unchanged terrain
+        // must not force every primitive collider to be gathered again.
+        bool refresh=!UseCachedQueryIndex||_queryRevision!=scene.QueryBoundsRevision;
+        if(!refresh)
+            foreach(var custom in _queryCustomColliders)
+                if(CalculateBounds(custom.Collider)!=custom.Bounds){refresh=true;break;}
+        if(refresh)
         {
-            var collider=registeredColliders[i];var obj=collider.GameObject;
-            if(collider.Enabled && obj.ActiveInHierarchy)
-                entries.Add(new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider)));
+            QueryIndexRefreshes++;entries.Clear();_queryCustomColliders.Clear();
+            if(_queryBoundsCache.Count>Math.Max(128,registeredColliders.Count*2))_queryBoundsCache.Clear();
+            for(int i=0;i<registeredColliders.Count;i++)
+            {
+                var collider=registeredColliders[i];var obj=collider.GameObject;
+                if(collider.Enabled&&obj.ActiveInHierarchy)
+                {
+                    var shapeBounds=CachedQueryBounds(collider);
+                    entries.Add(new(obj,collider,FindBodyForCollider(obj),shapeBounds));
+                    if(collider is not (BoxCollider3D or CapsuleCollider3D))_queryCustomColliders.Add((collider,shapeBounds));
+                }
+            }
+            _queryStaticIndex.Update(entries,false);_queryMovingIndex.Update(entries,true);
+            _queryRevision=scene.QueryBoundsRevision;
         }
-        _staticIndex.Update(entries,false);_movingIndex.Update(entries,true);
+        else QueryIndexCacheHits++;
         var results=_queryIndices;results.Clear();
         var bounds=new Bounds3D(Vector3.Min(minimum,maximum),Vector3.Max(minimum,maximum));
-        _staticIndex.Query(bounds,results);_movingIndex.Query(bounds,results);results.Sort();
+        _queryStaticIndex.Query(bounds,results);_queryMovingIndex.Query(bounds,results);results.Sort();
         _queryObjects.Clear();_queryUnique.Clear();
         foreach(int index in results) if(_queryUnique.Add(entries[index].GameObject))_queryObjects.Add(entries[index].GameObject);
         // The caller owns a stable snapshot, including when it starts a nested query.
         return _queryObjects.ToArray();
     }
 
+    public long QueryCalls{get;private set;}
+    public long QueryIndexRefreshes{get;private set;}
+    public long QueryIndexCacheHits{get;private set;}
+    private long _queryRevision=-1;
+    public bool UseCachedQueryIndex {get;set;}=true;
+    private readonly List<(Collider3D Collider,Bounds3D Bounds)> _queryCustomColliders=new();
+    private readonly BoundsTree _queryStaticIndex=new(),_queryMovingIndex=new();
     private readonly List<ColliderEntry> _queryEntries=new();
     private readonly List<int> _queryIndices=new();
     private readonly List<GameObject> _queryObjects=new();
     private readonly HashSet<GameObject> _queryUnique=new();
+    private readonly Dictionary<Collider3D,(Matrix4x4 World,Vector3 Center,Vector3 Size,Bounds3D Bounds)> _queryBoundsCache=new();
+    private Bounds3D CachedQueryBounds(Collider3D collider)
+    {
+        if(collider is not (BoxCollider3D or CapsuleCollider3D))return CalculateBounds(collider);
+        var world=collider.Transform.WorldMatrix;var center=collider.Center;var size=collider.Size;
+        if(_queryBoundsCache.TryGetValue(collider,out var cached)&&cached.World==world&&cached.Center==center&&cached.Size==size)return cached.Bounds;
+        var bounds=CalculateBounds(collider);_queryBoundsCache[collider]=(world,center,size,bounds);return bounds;
+    }
+    private static bool QueryMoving(ColliderEntry item)
+    {
+        if(item.Body!=null)return item.Body.BodyType!=RigidbodyBodyType3D.Static;
+        for(var owner=item.GameObject;owner!=null;owner=owner.Parent)
+            if(owner.GetComponent<NavigationAgent3D>()!=null||owner.GetComponent<CharacterController3D>()!=null)return true;
+        return false;
+    }
 
     // Median BVH: static nodes are retained until membership or bounds change.
     // Moving nodes live in a separate tree so moving one body does not rebuild scenery.
@@ -436,7 +483,7 @@ public sealed partial class PhysicsWorld3D
             for (int i = 0; i < source.Count; i++)
             {
                 var item = source[i];
-                bool isMoving = item.Body is { BodyType: not RigidbodyBodyType3D.Static };
+                bool isMoving = QueryMoving(item);
                 if (isMoving != moving) continue;
                 var value = (item.Collider, item.Bounds, i);
                 if (count >= _leaves.Count) { _leaves.Add(value); changed = membershipChanged = true; }
@@ -2027,3 +2074,4 @@ public sealed partial class PhysicsWorld3D
         Exit
     }
 }
+

@@ -12,8 +12,8 @@ public sealed partial class MiningBusinessUi3D
   Place(CloseXButtonObjectId,b.Width-52,17,36,36);Place(CloseButtonObjectId,b.Width-132,b.Height-48,104,30);
   if(Screen==MiningScreen.AudioCredits){Place(CloseXButtonObjectId,690,10,36,36);Place(CloseButtonObjectId,570,385,140,40);return;}
   if(Screen==MiningScreen.Refinery||Screen==MiningScreen.AmmoPress){for(int i=0;i<3;i++)Place(i==0?Row0ButtonObjectId:i==1?Row1ButtonObjectId:Row2ButtonObjectId,384,312+i*74,108,42);Place(PrimaryButtonObjectId,28,552,464,44);return;}
-  if(Screen==MiningScreen.Market){Place(SecondaryButtonObjectId,28,80,242,36);Place(RawButtonObjectId,28,140,98,28);Place(RefinedButtonObjectId,136,140,130,28);Place(QuantitySliderObjectId,30,454,500,32);Place(PrimaryButtonObjectId,28,558,504,46);return;}
-  if(Screen==MiningScreen.Research){Place(SecondaryButtonObjectId,280,80,242,36);Place(CreditsButtonObjectId,28,612,150,25);Place(PrimaryButtonObjectId,584,541,208,45);
+  if(Screen==MiningScreen.Market){Place(Row2ButtonObjectId,280,179,252,28);Place(SecondaryButtonObjectId,28,80,242,36);Place(Row0ButtonObjectId,28,132,242,36);Place(Row1ButtonObjectId,280,132,252,36);Place(RawButtonObjectId,28,179,98,28);Place(RefinedButtonObjectId,136,179,130,28);Place(QuantitySliderObjectId,30,394,500,32);Place(PrimaryButtonObjectId,28,558,504,46);for(int i=0;i<3;i++)Place(ContractButton(i),28,212+i*88,504,76);return;}
+  if(Screen==MiningScreen.Research){Place(SecondaryButtonObjectId,280,80,242,36);Place(CreditsButtonObjectId,584,600,150,23);Place(PrimaryButtonObjectId,584,541,208,45);
    if(Trade is {} trade)for(int i=0;i<Math.Min(ResearchButtonObjectIds.Count,trade.Research.Count);i++){var n=trade.Research[i];var p=NodePoint(n);float r=NodeRadius;Place(ResearchButtonObjectIds[i],p.X-r,p.Y-r,r*2,r*2);if(W(ResearchButtonObjectIds[i]) is {} w)w.Visible=mapShown.Contains(n.Id)&&NodeVisible(p);}
    return;
   }

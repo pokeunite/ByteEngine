@@ -25,7 +25,7 @@ public sealed partial class Scene
         new();
     private Dictionary<Guid,GameObject>? _objectLookup;
 
-    private readonly HashSet<Guid> _pendingDestroy =
+    private readonly HashSet<GameObject> _pendingDestroy =
         new();
     private readonly Dictionary<Guid, HashSet<GameObject>> _tagIndex = new();
     private readonly HashSet<GameObject>[] _layerIndex = Enumerable.Range(0, 32).Select(_ => new HashSet<GameObject>()).ToArray();
@@ -74,11 +74,9 @@ public sealed partial class Scene
     {
         get
         {
+            RefreshCameraRegistry();
             Camera3D? fallback=null;
-            for(int i=0;i<_gameObjects.Count;i++){
-                var obj=_gameObjects[i];if(!obj.ActiveInHierarchy)continue;
-                var components=obj.Components;for(int j=0;j<components.Count;j++)if(components[j] is Camera3D camera&&camera.Enabled){if(camera.ActiveGameCamera)return camera;fallback??=camera;}
-            }
+            foreach(var camera in _cameras){if(!camera.GameObject.ActiveInHierarchy||!camera.Enabled)continue;if(camera.ActiveGameCamera)return camera;fallback??=camera;}
             return fallback;
         }
     }
@@ -88,7 +86,8 @@ public sealed partial class Scene
         if (camera != null && camera.GameObject.Scene != this)
             throw new InvalidOperationException("The active camera must belong to this scene.");
 
-        foreach (Camera3D candidate in _gameObjects.SelectMany(item => item.Components.OfType<Camera3D>()))
+        RefreshCameraRegistry();
+        foreach (Camera3D candidate in _cameras)
             candidate.SetActiveGameCameraWithoutNotification(ReferenceEquals(candidate, camera));
     }
 
@@ -272,7 +271,7 @@ public sealed partial class Scene
         if (_isUpdating)
         {
             _pendingDestroy.Add(
-                gameObject.Id);
+                gameObject);
 
             gameObject.Active =
                 false;
@@ -387,7 +386,7 @@ public sealed partial class Scene
 
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject.Id)) continue;
+                if (_pendingDestroy.Contains(gameObject)) continue;
                 gameObject.UpdateInternal();
             }
 
@@ -408,7 +407,7 @@ public sealed partial class Scene
                         if (gameObject.GetComponent<Rigidbody3D>() is { BodyType: not RigidbodyBodyType3D.Static }) gameObject.Transform.CaptureSimulationPose();
                     Time.FixedDeltaTime = delta;
                     foreach (var gameObject in frameObjects)
-                        if (!_pendingDestroy.Contains(gameObject.Id)) gameObject.FixedUpdateInternal();
+                        if (!_pendingDestroy.Contains(gameObject)) gameObject.FixedUpdateInternal();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;
                 });
@@ -433,7 +432,7 @@ public sealed partial class Scene
              */
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject.Id)) continue;
+                if (_pendingDestroy.Contains(gameObject)) continue;
                 gameObject.LateUpdateInternal();
             }
 
@@ -497,7 +496,7 @@ public sealed partial class Scene
         ClearHostRequests();
         if (!_loaded) return;
 
-        Console.WriteLine($"Unloading scene: {Name}");
+
 
         for (int index = _gameObjects.Count - 1; index >= 0; index--)
             _gameObjects[index].StopInternal();
@@ -521,7 +520,7 @@ public sealed partial class Scene
             DestroyGameObjectImmediate(child);
         }
 
-        _pendingDestroy.Remove(gameObject.Id);
+        _pendingDestroy.Remove(gameObject);
 
         InvalidateComponentRegistries();
         _gameObjects.Remove(gameObject);
@@ -550,15 +549,13 @@ public sealed partial class Scene
     {
         if (_pendingDestroy.Count == 0) return;
 
-        Guid[] pending =
+        GameObject[] pending =
             _pendingDestroy.ToArray();
 
         _pendingDestroy.Clear();
 
-        foreach (Guid id in pending)
+        foreach (GameObject gameObject in pending)
         {
-            GameObject? gameObject =
-                FindGameObject(id);
 
             if (gameObject != null)
                 DestroyGameObjectImmediate(gameObject);

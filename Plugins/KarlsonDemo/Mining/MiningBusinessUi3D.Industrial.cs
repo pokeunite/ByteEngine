@@ -38,7 +38,7 @@ if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;var refer
   else if(Screen==MiningScreen.Research&&Trade is {} research)DrawIndustrialResearch(p,c,b.X,b.Y,b.Width,b.Height,scale,research);
   else if(Screen==MiningScreen.Market&&Trade is {} market)DrawIndustrialMarket(p,market);
   else DrawIndustrialMachine(p,op,Trade,Screen==MiningScreen.AmmoPress);
-  if(Screen!=MiningScreen.Drill){p.T("ESC  CLOSE",b.Width-28,b.Height-42,15,MenuMuted,UiAnchor.TopRight);if(Feedback.Length>0&&Screen!=MiningScreen.Research)p.T(Feedback.Length>57?Feedback[..54]+"...":Feedback,28,b.Height-73,14,Accent);}
+  if(Screen!=MiningScreen.Drill){if(Screen!=MiningScreen.Research)p.T("ESC  CLOSE",b.Width-28,b.Height-42,15,MenuMuted,UiAnchor.TopRight);if(Feedback.Length>0&&Screen!=MiningScreen.Research&&Screen!=MiningScreen.Market)p.T(Feedback.Length>57?Feedback[..54]+"...":Feedback,28,b.Height-73,14,Accent);}
  }
  void DrawIndustrialMachine(BusinessPainter p,MiningOperation3D op,MiningTrade3D? trade,bool ammo)
  {
@@ -59,18 +59,41 @@ if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;var refer
  void DrawIndustrialMarket(BusinessPainter p,MiningTrade3D trade)
  {
   DrawTerminalTabs(p,true,560);
-  p.Q(28,140,98,28,!RefinedSelected?Accent:MenuInset);p.T("RAW",77,146,15,!RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);p.Q(136,140,130,28,RefinedSelected?Accent:MenuInset);p.T("REFINED",201,146,15,RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);
-  p.IconFrame(RefinedSelected?"ingot":"ore",28,187,54);p.T(RefinedSelected?"REFINED ORE":"RAW ORE",100,183,20);float quote=trade.Quote(RefinedSelected),change=(trade.PriceMultiplier-1)*100;p.T($"{quote:0.00}",100,211,31);p.T("cr / unit",221,223,17,MenuMuted);p.T($"{change:+0.0;-0.0;0.0}%",532,218,19,Accent,UiAnchor.TopRight);p.T("LIVE PRICE",28,266,13,MenuMuted);
-  float gx=53,gy=292,gw=479,gh=98;float price=RefinedSelected?Op!.RefinedOrePrice:Op!.RawOrePrice,low=price*trade.MinimumMultiplier,high=price*trade.MaximumMultiplier;for(int i=0;i<3;i++){float yy=gy+i*gh/2;p.L(gx,yy,gx+gw,yy,new(.17f,.19f,.22f,1));p.T((high-(high-low)*i/2).ToString("0.0"),gx-8,yy-7,12,MenuMuted,UiAnchor.TopRight);}var history=trade.History;for(int i=1;i<history.Count;i++){float x1=gx+(i-1)*gw/Math.Max(1,history.Count-1),x2=gx+i*gw/Math.Max(1,history.Count-1);float y1=gy+gh*(1-Math.Clamp((history[i-1]*price-low)/Math.Max(.001f,high-low),0,1)),y2=gy+gh*(1-Math.Clamp((history[i]*price-low)/Math.Max(.001f,high-low),0,1));p.L(x1,y1,x2,y2,Accent,1.6f);if(i==history.Count-1)p.Q(x2-3,y2-3,6,6,Accent);}p.T("EARLIER",53,395,11,MenuMuted);p.T("NOW",532,395,11,MenuMuted,UiAnchor.TopRight);
-  p.T($"{trade.Stock(RefinedSelected):N0} IN STOCK",28,418,18);p.T("SELL QUANTITY",28,449,14,MenuMuted);p.T(Quantity.ToString(),532,445,21,TextColor,UiAnchor.TopRight);float fraction=Quantity/(float)Math.Max(1,trade.Stock(RefinedSelected));p.Bar(30,476,500,5,fraction);p.Q(30+500*fraction-5,468,10,21,Accent);
-  if(trade.SaleInProgress){p.T($"SELLING {trade.SaleProcessed} / {trade.SaleQuantity} ORE",28,506,16);p.T($"{trade.SaleQuantity-trade.SaleProcessed} remaining",532,508,13,MenuMuted,UiAnchor.TopRight);p.Bar(28,537,504,7,trade.SaleProgress);}else p.T("Select an amount to sell at the current price",28,518,15,MenuMuted);
-  p.Button(PrimaryButtonObjectId,trade.SaleInProgress?"SHIPMENT IN PROGRESS":$"SELL {Quantity} FOR {MiningOperation3D.SaleTotal(Quantity,quote):N0} cr",28,558,504,46,true,18);
+  p.Button(Row0ButtonObjectId,"LIVE MARKET",28,132,242,36,!GuaranteedSelected,17);p.Button(Row1ButtonObjectId,"DELIVERY CONTRACTS",280,132,252,36,GuaranteedSelected,16);
+  if(GuaranteedSelected){DrawDeliveryContracts(p,trade);return;}
+  p.Q(28,179,98,28,!RefinedSelected?Accent:MenuInset);p.T("RAW",77,185,15,!RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);p.Q(136,179,130,28,RefinedSelected?Accent:MenuInset);p.T("REFINED",201,185,15,RefinedSelected?new(.04f,.05f,.06f,1):TextColor,UiAnchor.TopCenter);
+  p.Button(Row2ButtonObjectId,BuyingOre?"MODE: BUY ORE":"MODE: SELL ORE",280,179,252,28,true,14);
+  float live=trade.LiveQuote(RefinedSelected),guaranteed=trade.GuaranteedQuote(RefinedSelected),offer=BuyingOre?trade.BuyQuote(RefinedSelected):GuaranteedSelected?guaranteed:live;
+  p.IconFrame(RefinedSelected?"ingot":"ore",28,220,48);p.T(BuyingOre?"CURRENT BUY PRICE":GuaranteedSelected?"GUARANTEED BUYER":"CURRENT LIVE OFFER",92,217,18);p.T($"{offer:0.00} cr / ore",92,241,27);
+  p.T(BuyingOre?"BUY FEE INCLUDED":GuaranteedSelected?$"UP TO {trade.DeliveryCapacity} ORE / DISPATCH":live<guaranteed?"DELIVERY PAYS MORE":live>guaranteed*1.1f?"HIGH PRICE":"FAIR PRICE",532,250,14,live<guaranteed&&!GuaranteedSelected?new(1,.55f,.4f,1):Accent,UiAnchor.TopRight);
+  p.T(GuaranteedSelected?"Fixed payout / no exchange fee":trade.HasDemandScanner?$"NEXT: {trade.NextDemandDescription} in {trade.DemandSecondsRemaining:0}s":trade.DemandDescription+" / live fees included",28,280,13,MenuMuted);
+  float gx=53,gy=310,gw=479,gh=50,price=RefinedSelected?Op!.RefinedOrePrice:Op!.RawOrePrice,low=price*trade.MinimumMultiplier*(BuyingOre?1+trade.BuyFeePercent/100:1-trade.ExchangeFeePercent/100),high=price*trade.MaximumMultiplier*(BuyingOre?1+trade.BuyFeePercent/100:1);
+  float Y(float value)=>gy+gh*(1-Math.Clamp((value-low)/Math.Max(.001f,high-low),0,1));
+  for(int i=0;i<3;i++){float yy=gy+i*gh/2;p.L(gx,yy,gx+gw,yy,MenuEdge);p.T((high-(high-low)*i/2).ToString("0.0"),gx-8,yy-6,11,MenuMuted,UiAnchor.TopRight);}
+  p.L(gx,Y(guaranteed),gx+gw,Y(guaranteed),new(.6f,.8f,.55f,1),1);
+  var history=trade.History;for(int i=1;i<history.Count;i++){float x1=gx+(i-1)*gw/Math.Max(1,history.Count-1),x2=gx+i*gw/Math.Max(1,history.Count-1);p.L(x1,Y(history[i-1]*price*(BuyingOre?1+trade.BuyFeePercent/100:1-trade.ExchangeFeePercent/100)),x2,Y(history[i]*price*(BuyingOre?1+trade.BuyFeePercent/100:1-trade.ExchangeFeePercent/100)),Accent,1.7f);}
+  p.T(BuyingOre?"BUY PRICE / GREEN = STANDARD CONTRACT":"SELL PRICE / GREEN = STANDARD CONTRACT",53,363,11,MenuMuted);
+  if(trade.SaleInProgress){p.T($"{trade.SaleQuantity} ORE IN TRANSIT",28,383,18);p.T($"{trade.Stock(RefinedSelected):N0} AVAILABLE",532,383,16,MenuMuted,UiAnchor.TopRight);p.T("ACCEPTED PAYOUT",28,432,16,MenuMuted);p.T($"{trade.LockedSaleCredits:N0} cr",532,430,25,Accent,UiAnchor.TopRight);p.T(trade.ShippingGuaranteedDelivery?"Guaranteed buyer / fixed payout":"Live sale / accepted price locked",28,481,18);p.T($"{trade.SaleProcessed} / {trade.SaleQuantity} ORE / {trade.SaleSecondsRemaining:0}s REMAINING",28,515,16);p.Bar(28,542,504,6,trade.SaleProgress);p.Button(PrimaryButtonObjectId,"SALE IN PROGRESS",28,558,504,46,true,18);return;}
+  if(BuyingOre)
+  {
+   p.T($"CARGO SPACE {Math.Max(0,Op!.CargoCapacity-Op.CargoUsed-Op.CargoReservedSpace)}",28,383,16);p.T($"QUANTITY {Quantity}",532,383,18,TextColor,UiAnchor.TopRight);float buyFraction=Quantity/(float)Math.Max(1,MarketQuantityLimit);p.Bar(30,410,500,5,buyFraction);p.Q(30+500*buyFraction-5,402,10,21,Accent);
+   p.T($"BUY FEE INCLUDED: {trade.BuyFeePercent:0.#}%",28,438,16,MenuMuted);p.T($"NET SELL PRICE NOW: {live:0.00} cr",28,464,18);p.T($"To profit, sell above {offer:0.00} cr net per ore",28,491,15,Accent);p.T(Feedback.Length>0?Feedback:"Buying uses credits and cargo space immediately.",28,526,14,MenuMuted);
+   p.Button(PrimaryButtonObjectId,$"BUY {Quantity} FOR {(long)Math.Ceiling(Quantity*(double)offer-.00001):N0} cr",28,558,504,46,true,18);return;
+  }
+  p.T($"{trade.Stock(RefinedSelected):N0} ORE AVAILABLE",28,383,16);p.T($"QUANTITY {Quantity}",532,383,18,TextColor,UiAnchor.TopRight);float fraction=Quantity/(float)Math.Max(1,MarketQuantityLimit);p.Bar(30,410,500,5,fraction);p.Q(30+500*fraction-5,402,10,21,Accent);
+  int baseline=MiningOperation3D.SaleTotal(Quantity,guaranteed),total=MiningOperation3D.SaleTotal(Quantity,live),advantage=total-baseline;var comparison=advantage<0?new Vector4(1,.55f,.4f,1):new Vector4(.65f,.85f,.55f,1);
+  p.T("Standard contract rate",28,432,17,MenuMuted);p.T($"{baseline:N0} cr",532,432,18,TextColor,UiAnchor.TopRight);p.T("Live market now",28,456,17,MenuMuted);p.T($"{total:N0} cr",532,456,18,TextColor,UiAnchor.TopRight);p.T(advantage<0?$"Live pays {-advantage:N0} cr LESS":advantage>0?$"Live pays {advantage:N0} cr MORE":"Both methods pay the same",28,481,19,comparison);
+  if(trade.SaleInProgress){p.T($"SELLING {trade.SaleProcessed} / {trade.SaleQuantity} - {trade.LockedSaleCredits:N0} cr LOCKED",28,515,16);p.Bar(28,542,504,6,trade.SaleProgress);}
+  else if(Feedback.Length>0)p.T(Feedback.Length>57?Feedback[..54]+"...":Feedback,28,517,16,Accent);
+  else if(trade.LastSaleQuantity>0){p.T($"SOLD {trade.LastSaleQuantity} ORE / EARNED {trade.LastSaleTotal:N0} cr",28,511,16);p.T(trade.LastSaleWasGuaranteed?"Delivery contract paid":$"MARKET {(trade.LastSaleAdvantage<0?"SHORTFALL":"GAIN")}: {trade.LastSaleAdvantage:+#,0;-#,0;0} cr vs delivery",28,534,15,trade.LastSaleAdvantage<0?new(1,.55f,.4f,1):new(.65f,.85f,.55f,1));}
+  else p.T("Payout locks when you sell. Keep drilling while it ships.",28,526,14,MenuMuted);
+  p.Button(PrimaryButtonObjectId,trade.SaleInProgress?"SALE IN PROGRESS":$"SELL {Quantity} FOR {MiningOperation3D.SaleTotal(Quantity,offer):N0} cr",28,558,504,46,true,18);
  }
  void DrawIndustrialResearch(BusinessPainter p,RenderContext c,float x,float y,float width,float height,float scale,MiningTrade3D trade)
  {
   DrawTerminalTabs(p,false,width);DrawResearchMap(c,x,y,scale,trade);p.Rule(490,width);
-  if(trade.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is {} chosen){p.IconFrame(ResearchIcon(chosen),28,513,48);p.T(chosen.Name,96,508,23);p.Wrap(chosen.Description,96,541,49,16);int rank=trade.ResearchRank(chosen.Id);string missing=string.Join(", ",chosen.Prerequisites.Where(id=>!trade.HasResearch(id)).Select(id=>trade.Research.FirstOrDefault(n=>n.Id==id)?.Name??id));p.T(missing.Length>0?"REQUIRES "+(missing.Length>45?missing[..42]+"...":missing):$"RANK {rank} / {chosen.MaxRank}  /  PERMANENT",96,590,13,MenuMuted);p.Button(PrimaryButtonObjectId,rank>=chosen.MaxRank?"MAX RANK":$"UNLOCK {trade.ResearchCost(chosen.Id):N0} cr",584,541,208,45,true,17);}
-  p.T("AUDIO CREDITS",28,616,12,MenuMuted);if(Feedback.Length>0){p.Q(28,459,width-56,29,MenuInset);p.T(Feedback,width/2,464,18,Accent,UiAnchor.TopCenter);}else p.T("Drag to pan / Scroll to zoom / Enter to buy",width/2,470,12,MenuMuted,UiAnchor.TopCenter);
+  if(trade.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is {} chosen){p.IconFrame(ResearchIcon(chosen),28,513,48);p.T(chosen.Name,96,503,23);DrawResearchDescription(p,chosen.Description);int rank=trade.ResearchRank(chosen.Id);string missing=string.Join(", ",chosen.Prerequisites.Where(id=>!trade.HasResearch(id)).Select(id=>trade.Research.FirstOrDefault(n=>n.Id==id)?.Name??id));p.T(trade.ResearchRequirement(chosen.Id).Length>0?trade.ResearchRequirement(chosen.Id):missing.Length>0?"REQUIRES "+(missing.Length>45?missing[..42]+"...":missing):$"RANK {rank} / {chosen.MaxRank}  /  PERMANENT",96,535,13,MenuMuted);p.Button(PrimaryButtonObjectId,!chosen.Available?"COMING SOON":rank>=chosen.MaxRank?"MAX RANK":$"UNLOCK {trade.ResearchCost(chosen.Id):N0} cr",584,541,208,45,true,17);}
+  p.T("ASSET CREDITS",584,604,12,MenuMuted);p.T("ESC CLOSE",792,637,12,MenuMuted,UiAnchor.TopRight);if(Feedback.Length>0){p.Q(28,459,width-56,29,MenuInset);p.T(Feedback,width/2,464,18,Accent,UiAnchor.TopCenter);}else p.T("Drag to pan / Scroll to zoom / Enter to buy",width/2,470,12,MenuMuted,UiAnchor.TopCenter);
  }
  void DrawIndustrialContracts(BusinessPainter p,MiningOperation3D op)
  {

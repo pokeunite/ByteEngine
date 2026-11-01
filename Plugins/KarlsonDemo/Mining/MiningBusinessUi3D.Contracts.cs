@@ -8,5 +8,5 @@ public sealed partial class MiningBusinessUi3D
  [ByteEngine.Core.Scene.SceneObjectReference] public Guid Contract1ButtonObjectId{get;set;}
  [ByteEngine.Core.Scene.SceneObjectReference] public Guid Contract2ButtonObjectId{get;set;}
  Guid ContractButton(int i)=>i==0?Contract0ButtonObjectId:i==1?Contract1ButtonObjectId:Contract2ButtonObjectId;
- public void SelectContract(int index){if(Screen==MiningScreen.Drill&&Op?.SelectContract(index)==true){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.Confirm);Feedback="";}}
+ public void SelectContract(int index){if(Screen==MiningScreen.Market&&GuaranteedSelected){if(Trade?.AcceptDeliveryContract(index)==true){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalPurchase);Notice("CONTRACT ACCEPTED — gather the required refined ore.");}return;}if(Screen==MiningScreen.Drill&&Op?.SelectContract(index)==true){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.Confirm);Feedback="";}}
 }

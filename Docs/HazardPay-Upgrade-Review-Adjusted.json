@@ -1,0 +1,351 @@
+{
+  "proposal": true,
+  "version": 2,
+  "sourceReview": "C:\\Users\\codex\\Downloads\\HazardPay-upgrade-review.json",
+  "goal": {
+    "creditsHeld": 30000,
+    "activeHours": 5,
+    "displayedDays": 10
+  },
+  "assumptions": {
+    "quote": 5,
+    "minutesPerRound": 4,
+    "replacementsPerRound": 0.1
+  },
+  "upgrades": [
+    {
+      "id": "charter",
+      "name": "Mining licence",
+      "icon": "camp",
+      "x": 500,
+      "y": 65,
+      "cost": 0,
+      "r": 0,
+      "pre": [],
+      "effect": "Pistol, drill, refinery and ammo press. Start with 20 credits. Full HP restores after a successful round. Guaranteed delivery and live selling are available from the start.",
+      "reason": "The core loop is available immediately."
+    },
+    {
+      "id": "survey",
+      "name": "Deeper bite",
+      "icon": "drill",
+      "x": 160,
+      "y": 225,
+      "cost": 30,
+      "r": 1,
+      "pre": [
+        "charter"
+      ],
+      "effect": "Drill extraction +7 raw ore per operation.",
+      "reason": "An investment choice before automatic firepower."
+    },
+    {
+      "id": "shotgun",
+      "name": "Breach licence",
+      "icon": "shotgun",
+      "x": 615,
+      "y": 225,
+      "cost": 150,
+      "r": 3,
+      "pre": [
+        "charter"
+      ],
+      "effect": "Unlock shotgun and shell recipe; 6-shell magazine, strong close-range stagger.",
+      "reason": "A different solution to close packs, not a pistol damage multiplier."
+    },
+    {
+      "id": "vest",
+      "name": "Worksite armour",
+      "icon": "shield",
+      "x": 840,
+      "y": 225,
+      "cost": 120,
+      "r": 2,
+      "pre": [
+        "charter"
+      ],
+      "effect": "Maximum HP +15. Full HP restores after a successful round.",
+      "reason": "Survivability has an opportunity cost."
+    },
+    {
+      "id": "mine",
+      "name": "Tripwire licence",
+      "icon": "mine",
+      "x": 385,
+      "y": 405,
+      "cost": 150,
+      "r": 4,
+      "pre": [
+        "charter"
+      ],
+      "effect": "Unlock one mine. Normal detonations re-arm next operation.",
+      "reason": "Area denial before permanent autonomous firepower."
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry licence",
+      "icon": "turret",
+      "x": 615,
+      "y": 405,
+      "cost": 150,
+      "r": 5,
+      "pre": [
+        "shotgun"
+      ],
+      "effect": "Unlock one sentry; destructible, 20 refined ore to replace.",
+      "reason": "The first autonomous defence should feel earned."
+    },
+    {
+      "id": "ar",
+      "name": "Survey rifle licence",
+      "icon": "rifle",
+      "x": 385,
+      "y": 585,
+      "cost": 400,
+      "r": 7,
+      "pre": [
+        "mine"
+      ],
+      "effect": "Unlock AR and rifle recipe; 24-round magazine and sustained-fire bloom.",
+      "reason": "Adds mid-range sustained fire, with its own supply pressure."
+    },
+    {
+      "id": "tracking",
+      "name": "Tracking assembly",
+      "icon": "turret",
+      "x": 615,
+      "y": 585,
+      "cost": 400,
+      "r": 7,
+      "pre": [
+        "sentry"
+      ],
+      "effect": "Sentry prioritises nearby drill threats; +25% projectile speed.",
+      "reason": "Reliability, not a large universal DPS multiplier."
+    },
+    {
+      "id": "boots",
+      "name": "Sure footing",
+      "icon": "boots",
+      "x": 840,
+      "y": 585,
+      "cost": 360,
+      "r": 6,
+      "pre": [
+        "vest"
+      ],
+      "effect": "Reduce hit slow duration by 40%; no movement-speed stacking.",
+      "reason": "Removes frustrating stunlock without removing threat."
+    },
+    {
+      "id": "deep",
+      "name": "Core survey",
+      "icon": "drill",
+      "x": 160,
+      "y": 765,
+      "cost": 650,
+      "r": 8,
+      "pre": [
+        "survey"
+      ],
+      "effect": "Extraction +14 raw ore per operation.",
+      "reason": "Funds the later defensive and weapon choices."
+    },
+    {
+      "id": "pellet",
+      "name": "Scatter specialist",
+      "icon": "shotgun",
+      "x": 385,
+      "y": 765,
+      "cost": 540,
+      "r": 9,
+      "pre": [
+        "shotgun"
+      ],
+      "effect": "Shotgun pellets gently home across up to 3 visible enemies in a 25-degree aiming cone within 12 metres. Split the existing pellet count across targets; no extra pellets or damage and no through-wall targeting.",
+      "reason": "Requested multi-target homing replaces the old lunge-interruption effect. Values remain proposed."
+    },
+    {
+      "id": "mortar",
+      "name": "Indirect fire licence",
+      "icon": "mortar",
+      "x": 615,
+      "y": 765,
+      "cost": 1050,
+      "r": 10,
+      "pre": [
+        "tracking"
+      ],
+      "effect": "Unlock one mortar. Slow travel and fixed impact point; can miss moving targets.",
+      "reason": "A deliberate group-clear answer, not a universal solution."
+    },
+    {
+      "id": "pierce",
+      "name": "Armour breaker",
+      "icon": "rifle",
+      "x": 385,
+      "y": 945,
+      "cost": 900,
+      "r": 12,
+      "pre": [
+        "ar"
+      ],
+      "effect": "AR rounds penetrate one target at 50% damage.",
+      "reason": "Changes positioning and rewards lining up targets."
+    },
+    {
+      "id": "second",
+      "name": "Redundant coverage",
+      "icon": "turret",
+      "x": 615,
+      "y": 945,
+      "cost": 1200,
+      "r": 12,
+      "pre": [
+        "mortar"
+      ],
+      "effect": "Unlock a second sentry slot, with independent health and replacement.",
+      "reason": "Coverage is powerful and arrives after multiple roles exist."
+    },
+    {
+      "id": "reclaim",
+      "name": "Salvage protocol",
+      "icon": "health",
+      "x": 840,
+      "y": 945,
+      "cost": 1000,
+      "r": 12,
+      "pre": [
+        "boots"
+      ],
+      "effect": "Failed operations retain 25% unrefined cargo.",
+      "reason": "Softens failure costs; does not make winning easier."
+    },
+    {
+      "id": "industrial",
+      "name": "Deep-core permit",
+      "icon": "drill",
+      "x": 160,
+      "y": 1125,
+      "cost": 2100,
+      "r": 16,
+      "pre": [
+        "deep"
+      ],
+      "effect": "Extraction +70 raw ore; requires a pressure contract.",
+      "reason": "Later extraction growth is paid for with danger."
+    },
+    {
+      "id": "precision",
+      "name": "Controlled burst",
+      "icon": "rifle",
+      "x": 385,
+      "y": 1125,
+      "cost": 1350,
+      "r": 15,
+      "pre": [
+        "pierce"
+      ],
+      "effect": "First 3 AR shots after a pause have 30% less spread.",
+      "reason": "Rewards trigger discipline."
+    },
+    {
+      "id": "rotary",
+      "name": "Rotary emplacement",
+      "icon": "turret",
+      "x": 615,
+      "y": 1125,
+      "cost": 2500,
+      "r": 17,
+      "pre": [
+        "second"
+      ],
+      "effect": "Unlock rotary defence; higher output, slower tracking and wider spread.",
+      "reason": "An alternative defensive role with clear limitations."
+    },
+    {
+      "id": "terminal",
+      "name": "Business continuity",
+      "icon": "camp",
+      "x": 840,
+      "y": 1125,
+      "cost": 1500,
+      "r": 16,
+      "pre": [
+        "reclaim"
+      ],
+      "effect": "One emergency drill repair: 25% health, once per operation.",
+      "reason": "A late safety net, not an early free win."
+    },
+    {
+      "id": "freight",
+      "name": "Freight licence",
+      "cost": 120,
+      "r": 4,
+      "pre": [
+        "charter"
+      ],
+      "icon": "contract",
+      "effect": "Guaranteed delivery dispatch size: 40 to 80 ore.",
+      "reason": "New market branch: proposed price, not part of the submitted price edits."
+    },
+    {
+      "id": "scanner",
+      "name": "Demand scanner",
+      "cost": 300,
+      "r": 7,
+      "pre": [
+        "freight"
+      ],
+      "icon": "chart",
+      "effect": "Shows upcoming demand-event notices on the live market. No guaranteed price forecast.",
+      "reason": "New market branch: proposed price, not part of the submitted price edits."
+    },
+    {
+      "id": "broker",
+      "name": "Broker agreement",
+      "cost": 650,
+      "r": 10,
+      "pre": [
+        "scanner"
+      ],
+      "icon": "chart",
+      "effect": "Improves live-sale proceeds through a fee reduction from 3% to 1%; all displayed payouts already include fees.",
+      "reason": "New market branch: proposed price, not part of the submitted price edits."
+    }
+  ],
+  "reviewNotes": [
+    "Original prices and earliest-round values retained for every surviving submitted node.",
+    "Machine stat upgrades remain at their own stations, outside company research.",
+    "Removed nodes have been bypassed in prerequisites; shotgun and AR specialisations use their own weapon branches.",
+    "Market upgrade prices are proposals. Market design awaits approval.",
+    "Previous rounds forecast intentionally omitted: it includes removed upgrades and must be recalculated before balancing or implementation.",
+    "No in-game research assets or source download modified."
+  ],
+  "removedUpgrades": [
+    {
+      "id": "batch",
+      "name": "Batch feeder"
+    },
+    {
+      "id": "conveyor",
+      "name": "Industrial loader"
+    },
+    {
+      "id": "feed",
+      "name": "Steady supply"
+    },
+    {
+      "id": "medkit",
+      "name": "Field dressing"
+    },
+    {
+      "id": "plating",
+      "name": "Emergency plating"
+    },
+    {
+      "id": "yield",
+      "name": "Cleaner separation"
+    }
+  ]
+}

@@ -23,10 +23,11 @@ public sealed class Camera3D : Component
     public float OrthographicWidth { get; set; } = 40f;
     public float NearClip { get; set; } = .1f;
     public float FarClip { get; set; } = 1000f;
+    [System.ComponentModel.Browsable(false)] public Quaternion PresentationRotationOffset{get;set;}=Quaternion.Identity;
     public Matrix4x4 GetViewMatrix() => Matrix4x4.CreateLookAt(Transform.WorldPosition, Transform.WorldPosition + Transform.Forward, Transform.Up);
     public Matrix4x4 GetRenderViewMatrix()
     {
-        Matrix4x4 world=Transform.RenderMatrix;
+        Matrix4x4 world=Matrix4x4.CreateFromQuaternion(PresentationRotationOffset)*Transform.RenderMatrix;
         return Matrix4x4.CreateLookAt(world.Translation,world.Translation+Vector3.Normalize(Vector3.TransformNormal(-Vector3.UnitZ,world)),Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY,world)));
     }
 

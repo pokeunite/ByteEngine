@@ -31,12 +31,12 @@ public sealed partial class MiningBusinessUi3D
   void T(string text,float x,float y,int size,Vector4 color,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(text,BodyFont,Math.Max(12,(int)(size*scale)),new(x*scale,y*scale),color,anchor);
   for(int i=0;i<5;i++)
   {
-   var kind=(MiningDefenseKind)i;int count=planner.Available(kind);if(count<=0)continue;float x=width-268,y=100+row++*72;bool glow=count>0&&readyGlow.GetValueOrDefault(kind)>Time.TotalTime;
-   Q(x-1,y-1,250,66,glow||(planner.BuildMode&&planner.SelectedKind==kind)?Accent:new(.26f,.29f,.32f,1));Q(x,y,248,64,Surface);
+   var kind=(MiningDefenseKind)i;int count=planner.Available(kind);if(count<=0)continue;float x=width-328,y=120+row++*80;bool glow=count>0&&readyGlow.GetValueOrDefault(kind)>Time.TotalTime;
+   Q(x-1,y-1,310,74,glow||(planner.BuildMode&&planner.SelectedKind==kind)?Accent:new(.26f,.29f,.32f,1));Q(x,y,308,72,Surface);
    string icon=kind is MiningDefenseKind.Sentry or MiningDefenseKind.Repeater?"turret":kind==MiningDefenseKind.Mortar?"mortar":kind==MiningDefenseKind.Mine?"mine":"crate";
    if(AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)c.DrawUiImage(assets.LoadTexture(new AssetReference("Assets/UI/Mining/Artwork/research-"+icon+".png")),new((x+9)*scale,(y+13)*scale),new(38*scale),count>0?TextColor:new(.4f,.45f,.36f,1));
    string name=kind switch{MiningDefenseKind.Sentry=>"SENTRY",MiningDefenseKind.Repeater=>"ROTARY GUN",MiningDefenseKind.Mortar=>"MORTAR",MiningDefenseKind.Mine=>"MINE",_=>"SUPPLY DROP"};
-   T(name,x+56,y+7,18,TextColor);var shortcut=new[]{planner.SentryKey,planner.RepeaterKey,planner.MortarKey,planner.MineKey,planner.SupplyKey}[i];T($"[{MiningPauseMenu3D.KeyLabel(shortcut)}] PLACE",x+56,y+36,14,Accent);T($"{count} READY",x+234,y+36,14,TextColor,UiAnchor.TopRight);
+   T(name,x+56,y+7,18,TextColor);var shortcut=new[]{planner.SentryKey,planner.RepeaterKey,planner.MortarKey,planner.MineKey,planner.SupplyKey}[i];T($"[{MiningPauseMenu3D.KeyLabel(shortcut)}] PLACE",x+56,y+36,14,Accent);T(planner.ReplacementCost(kind)>0?$"{planner.ReplacementCost(kind)} REFINED ORE":$"{count} READY",x+294,y+53,14,TextColor,UiAnchor.TopRight);
   }
 
   if(planner.BuildMode)

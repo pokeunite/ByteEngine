@@ -57,7 +57,8 @@ public sealed partial class MiningOperation3D
   var contracts=Contracts;if(index<0||index>=contracts.Count)return null;var c=contracts[index];
   int total=(int)Math.Clamp(Math.Ceiling(((long)Math.Max(1,BaseEnemies)+(long)CompletedRounds*Math.Max(0,ExtraEnemiesPerRound)+Math.Max(0,HazardContractLevel)*2)*c.EnemyMultiplier),1,Math.Clamp(MaximumEnemiesPerRound,1,200));
   int hunters=(int)Math.Clamp(Math.Round(total*c.HunterFraction,MidpointRounding.AwayFromZero),0,total);
-  int ore=(int)Math.Clamp(Math.Floor(((long)BaseOrePerOperation+(long)DrillLevel*OrePerDrillLevel)*(1d+PermanentExtractionBonus+HazardContractLevel*.15f)*c.OreMultiplier),1,100000);
+  int researchOre=GameObject.GetComponent<MiningTrade3D>()?.ExtractionBonus(c.OreMultiplier>1)??0;
+  int ore=(int)Math.Clamp(researchOre+Math.Floor(((long)BaseOrePerOperation+(long)DrillLevel*OrePerDrillLevel)*(1d+PermanentExtractionBonus+HazardContractLevel*.15f)*c.OreMultiplier),1,100000);
   float healthScale=Math.Clamp(1+CompletedRounds*Math.Max(0,HealthGrowthPerOperation),1,Math.Max(1,MaximumHealthGrowth))*c.HealthMultiplier;
   return new(c.Id,c.Name,c.Difficulty,c.Description,total-hunters,hunters,ore,Math.Max(.05f,SpawnInterval*c.SpawnIntervalMultiplier),c.SpeedMultiplier,c.DamageMultiplier){HunterHealth=healthScale*Math.Clamp(float.IsFinite(HunterHealth)?HunterHealth:50,1,10000),RaiderHealth=healthScale*Math.Clamp(float.IsFinite(RaiderHealth)?RaiderHealth:75,1,10000),HunterSpeed=Math.Clamp(HunterMoveSpeed,.1f,12)*c.SpeedMultiplier,RaiderSpeed=Math.Clamp(RaiderMoveSpeed,.1f,12)*c.SpeedMultiplier};
  }
@@ -72,6 +73,7 @@ public sealed partial class MiningOperation3D
   ai.MovementSpeedMultiplier=speed/Math.Max(.1f,combat.MoveSpeed);combat.MoveSpeed=speed;
   if(enemy.GetComponent<NavigationAgent3D>() is {} agent)agent.Speed=speed;
   combat.WindupSeconds=Math.Clamp(hunter?HunterWindup:RaiderWindup,.2f,5);combat.RecoverySeconds=Math.Clamp(hunter?HunterRecovery:RaiderRecovery,.2f,5);combat.AttackCooldown=Math.Clamp(hunter?HunterAttackCooldown:RaiderAttackCooldown,.3f,10);
+  if(!hunter){var priority=enemy.GetComponent<MiningRaiderPriorities3D>()??enemy.AddComponent(new MiningRaiderPriorities3D());priority.DrillObjectId=DrillObjectId;priority.DefenceNoticeRadius=RaiderDefenceNoticeRadius;priority.MeleeReach=RaiderMeleeReach;combat.AttackRange=RaiderMeleeReach;combat.StopDistance=Math.Min(combat.StopDistance,RaiderMeleeReach*.8f);}
   combat.Damage=Math.Clamp(hunter?HunterDamage:RaiderDamage,0,1000)*(ActiveWave?.DamageMultiplier??1);ai.DecisionInterval=.08f;ai.MaximumAttackers=Math.Clamp(hunter?HunterAttackSlots:RaiderAttackSlots,1,12);
   if(!hunter&&RaiderDodging){combat.DodgeEnabled=true;combat.DodgeCooldown=Math.Clamp(RaiderDodgeCooldown,2,15);combat.DodgeSpeed=5;combat.DodgeSeconds=.18f;var evade=enemy.GetComponent<MiningEnemyEvasion3D>()??enemy.AddComponent(new MiningEnemyEvasion3D{PlayerObjectId=PlayerObjectId,Chance=Math.Clamp(RaiderDodgeChance,0,1),Cooldown=combat.DodgeCooldown,ReactionSeconds=Math.Clamp(RaiderDodgeReaction,.1f,.5f)});}
  }

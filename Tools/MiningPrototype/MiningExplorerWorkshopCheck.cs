@@ -22,6 +22,7 @@ internal static class MiningExplorerWorkshopCheck
   Check(renderers.Any(r=>r.ResolvedModel?.Skeleton?.Bones.Count==51&&r.ResolvedModel.Animations.Count==76),"new explorer is instantiated on the existing player with source animations");
   var controller=player.GetComponent<AnimationController>()!;Check(!controller.AnimationProfile.IsEmpty,"existing locomotion profile remains assigned");
   Check(gun.SelectedWeapon?.Definition!=null,"default pistol is still carried after replacing the model");
+  Check(gun.RefreshWeaponAttachment()&&string.IsNullOrEmpty(gun.WeaponAttachmentError),"carried pistol resolves the replacement character's grip socket");
   Check(op.RefineryBatch==3&&op.QueueRefineryBatches&&op.RefineryDuration==3,"authored refinery uses the new small-batch queue");Check(trade.UseProductionCycles&&trade.CycleDuration==5&&trade.Capacity==35,"authored press uses five-second cycles and 35 storage");
   var bucket=scene.GameObjects.SelectMany(o=>o.Components).OfType<MiningAmmoBucket3D>().Single();
   trade.Tick(10);var weapon=gun.SelectedWeapon!;weapon.SetAmmo(weapon.CurrentAmmo,0);var machine=bucket.GameObject.GetComponent<SkeletalMeshRenderer>()!;

@@ -41,7 +41,8 @@ public sealed class GameObject
 
     public Guid Id { get; private set; }
     public string Name { get; set; }
-    public bool Active { get; set; } = true;
+    private bool _active=true;
+    public bool Active {get=>_active;set{if(_active==value)return;_active=value;_scene?.InvalidateQueryBounds();}}
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
@@ -103,6 +104,7 @@ public sealed class GameObject
         var scale = Transform.WorldScale;
         Parent?._children.Remove(this);
         Parent = parent;
+        _scene?.InvalidatePhysicsRegistry();
         if (parent == null) ParentSocket = string.Empty;
         Parent?._children.Add(this);
         _scene?.InvalidateRenderHierarchy();

@@ -26,6 +26,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  [Category("Playback")] public float MaximumWalkSpeed{get;set;}=1.8f;
  [Category("Playback")] public float BlendSeconds{get;set;}=.1f;
  [Category("Playback")] public float AnimationInterval{get;set;}=1f/24;
+ [Category("Playback")] public bool ShareCrowdAnimationPoses{get;set;}=true;
  [Category("Playback")] public bool AutomaticPlayback{get;set;}=true;
  [Category("Death")] public float CorpseSeconds{get;set;}=3;
  [Category("Death")] public int MaximumCorpses{get;set;}=12;
@@ -38,14 +39,15 @@ public sealed partial class MiningSpiderAnimation3D:Component
  [Browsable(false)] public SkeletalMeshRenderer? Renderer=>renderer;
  public override int UpdateOrder=>100;
  SkeletalMeshRenderer? renderer;GameObject? visual;HealthComponent? health;Vector3 previous;float held;bool dead;string phase="Ready";
+ MiningAudio3D? spiderAudio;
  protected override void OnStart()
  {
-  previous=Transform.WorldPosition;health=GameObject.GetComponent<HealthComponent>();if(health!=null)health.Died+=OnDeath;
+  spiderAudio=MiningAudio3D.Find(GameObject);previous=Transform.WorldPosition;health=GameObject.GetComponent<HealthComponent>();if(health!=null){health.Died+=OnDeath;health.Damaged+=OnHitFeedback;}
   if(BodyHitboxEnabled){var hit=GameObject.Scene!.CreateGameObject("Spider body damage hitbox");hit.Layer=GameObject.Layer;hit.SetParent(GameObject,false);hit.AddComponent(new BoxCollider3D{IsTrigger=true,Size=BodyHitboxSize,Center=BodyHitboxCenter});hit.AddComponent(new DamageRegion3D{HealthOwnerId=GameObject.Id,IsWeakPoint=false});}
   if(!AnimationRuntimeAssets.IsConfigured){LastError="Model asset service is unavailable";return;}
   try{
    visual=GameObject.Scene!.CreateGameObject("Animated spider");visual.SetParent(GameObject,false);visual.Transform.LocalScale=new(Math.Clamp(ModelScale,.1f,3));
-   renderer=visual.AddComponent(new SkeletalMeshRenderer{Model=Model,PlayOnStart=false,AnimationUpdateInterval=Math.Clamp(AnimationInterval,0,.2f),TransitionDuration=BlendSeconds});
+   renderer=visual.AddComponent(new SkeletalMeshRenderer{Model=Model,PlayOnStart=false,ShareCrowdPoses=ShareCrowdAnimationPoses,CrowdPoseFramesPerSecond=20,AnimationUpdateInterval=Math.Clamp(AnimationInterval,0,.2f),TransitionDuration=BlendSeconds});
    if(renderer.ResolvedModel==null)throw new InvalidDataException("Spider model could not load: "+Model.ProjectPath);
    PlayClip(IdleClip,true);
   }catch(Exception e){LastError=e.Message;}
@@ -59,7 +61,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  protected override void OnUpdate()
  {
   if(dead||renderer==null)return;float dt=(float)Time.DeltaTime;if(dt<=0||!float.IsFinite(dt))return;
-  if(TickBlastKnockdown(dt))return;
+  TickHitFeedback(dt);if(TickBlastKnockdown(dt))return;
   Vector3 now=Transform.WorldPosition,delta=now-previous;previous=now;float speed=new Vector2(delta.X,delta.Z).Length()/dt;
   var combat=GameObject.GetComponent<SimpleEnemyAI3D>();string next= combat?.AttackPhase??"Ready";held=Math.Max(0,held-dt);
   if(health?.IsDead==true){OnDeath(health);return;}
@@ -72,7 +74,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  }
  void OnDeath(HealthComponent _)
  {
-  if(dead)return;dead=true;State=DeathClip;if(visual==null||renderer==null||visual.Scene==null)return;
+  if(dead)return;spiderAudio?.PlayCue(MiningSoundCue.SpiderDeath,Transform.WorldPosition);RestoreHitFeedback();dead=true;State=DeathClip;if(visual==null||renderer==null||visual.Scene==null)return;
   var scene=visual.Scene;
   var corpses=scene.GameObjects.Where(o=>o.Name=="Spider death remains").ToArray();
   foreach(var old in corpses.Take(Math.Max(0,corpses.Length-Math.Clamp(MaximumCorpses,1,32)+1)))scene.DestroyGameObject(old);
@@ -84,6 +86,6 @@ public sealed partial class MiningSpiderAnimation3D:Component
   visual.AddComponent(new LifetimeComponent{LifetimeSeconds=Math.Max(renderer.Duration+.2f,Math.Clamp(CorpseSeconds,.5f,10))});
   visual=null;
  }
- protected override void OnStop(){if(health!=null)health.Died-=OnDeath;}
- protected override void OnDestroy(){if(health!=null)health.Died-=OnDeath;}
+ protected override void OnStop(){if(health!=null){health.Died-=OnDeath;health.Damaged-=OnHitFeedback;}RestoreHitFeedback();}
+ protected override void OnDestroy(){if(health!=null){health.Died-=OnDeath;health.Damaged-=OnHitFeedback;}RestoreHitFeedback();}
 }

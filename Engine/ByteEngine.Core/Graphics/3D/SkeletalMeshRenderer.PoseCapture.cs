@@ -11,7 +11,7 @@ public sealed partial class SkeletalMeshRenderer
         if (!ResolveRuntimeResources()) return Array.Empty<(Mesh, Matrix4x4)>();
         if (_poseDirty) UpdatePoseAndMeshes();
         return _runtimeMeshes.Select(runtime => (
-            new Mesh((float[])runtime.DeformedVertices.Clone(), runtime.Mesh.IndexData.ToArray()),
+            new Mesh((runtime.SharedCrowdMesh??runtime.Mesh).VertexData.ToArray(), (runtime.SharedCrowdMesh??runtime.Mesh).IndexData.ToArray()),
             runtime.MeshToModelMatrix * Transform.WorldMatrix)).ToArray();
     }
 }

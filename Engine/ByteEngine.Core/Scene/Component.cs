@@ -38,7 +38,8 @@ public abstract class Component
 
     protected GameObject? AttachedGameObject => _gameObject;
 
-    public bool Enabled { get; set; } = true;
+    private bool _enabled=true;
+    public bool Enabled {get=>_enabled;set{if(_enabled==value)return;_enabled=value;_gameObject?.Scene?.InvalidateQueryBounds();}}
 
     public virtual int? RenderOrder => null;
     public virtual int UpdateOrder => 0;

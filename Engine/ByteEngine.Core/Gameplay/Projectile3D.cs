@@ -22,6 +22,7 @@ public sealed class Projectile3D : Component
     public Guid OwnerId { get; set; }
     public LayerMask CollisionMask { get; set; } = LayerMask.All;
     public event Action<RaycastHit3D>? Hit;
+    public event Action<CombatDamageReceipt>? DamageApplied;
 
     protected override void OnUpdate() { if (AttachedGameObject?.Scene?.FixedSimulation != true) Simulate((float)Time.DeltaTime); }
     protected override void OnFixedUpdate() { Simulate((float)Time.FixedDeltaTime); }
@@ -82,8 +83,7 @@ public sealed class Projectile3D : Component
             projectile.Transform.WorldPosition = hit.Point;
             healthOwner?.GetComponent<SkeletalRagdoll3D>()?.ApplyImpact(direction,
                 Math.Clamp(Damage / 25f, .1f, 3f));
-            if(hit.GameObject.GetComponent<DamageRegion3D>() is {} region)region.ApplyDamage(Damage,Velocity);
-            else healthOwner?.GetComponent<HealthComponent>()?.Damage(Damage, Velocity);
+            if(CombatDamageReceipt.Apply(hit.GameObject,Damage,Velocity) is {} receipt)DamageApplied?.Invoke(receipt);
             Hit?.Invoke(hit);
             if (DestroyOnHit) scene.DestroyGameObject(projectile);
             else { Velocity = Vector3.Zero; _stopped = true; }

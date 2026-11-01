@@ -18,17 +18,17 @@ public sealed class Transform
     public Vector3 LocalPosition
     {
         get => _localPosition;
-        set { if (_localPosition != value) { _localPosition = value; _localVersion++; } }
+        set { if (_localPosition != value) { _localPosition = value; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
     public Quaternion LocalRotation
     {
         get => _localRotation;
-        set { var normalized = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value); if (_localRotation != normalized) { _localRotation = normalized; _localVersion++; } }
+        set { var normalized = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value); if (_localRotation != normalized) { _localRotation = normalized; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
     public Vector3 LocalScale
     {
         get => _localScale;
-        set { var scale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z)); if (_localScale != scale) { _localScale = scale; _localVersion++; } }
+        set { var scale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z)); if (_localScale != scale) { _localScale = scale; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
 
     public Vector3 WorldPosition

@@ -5,8 +5,9 @@ namespace ByteEngine.Core.Physics;
 
 public sealed partial class PhysicsWorld3D
 {
-    // Only immovable primitive pairs are retained. Dynamic/kinematic bodies,
-    // meshes and heightfields continue through the normal narrow phase.
+    // Immutable primitive and mesh pairs are retained. Mesh geometry identity
+    // participates in the key, so reimport/shape/transform edits invalidate it.
+    // Dynamic/kinematic bodies and heightfields keep the normal narrow phase.
     private readonly Dictionary<Collider3D, PrimitiveState> _primitiveStates = new();
     private readonly Dictionary<(Collider3D, Collider3D), CachedPrimitiveContact> _primitiveContacts = new();
     private readonly List<(Collider3D, Collider3D)> _expiredPrimitiveContacts = new();
@@ -47,7 +48,7 @@ public sealed partial class PhysicsWorld3D
     }
 
     private readonly record struct PrimitiveState(Matrix4x4 World, Vector3 Center,
-        Vector3 Size, bool Trigger, int Ordinal);
+        Vector3 Size, bool Trigger, int Ordinal,object? Geometry);
     private readonly record struct CachedPrimitiveContact(PrimitiveState First,
         PrimitiveState Second, bool Intersects, PhysicsContactPair3D Pair, ContactKey Key);
 
@@ -57,10 +58,10 @@ public sealed partial class PhysicsWorld3D
         foreach (var entry in entries)
         {
             if (entry.Body is { BodyType: not RigidbodyBodyType3D.Static } ||
-                entry.Collider is not (BoxCollider3D or CapsuleCollider3D)) continue;
+                entry.Collider is not (BoxCollider3D or CapsuleCollider3D or MeshCollider3D)) continue;
             var collider = entry.Collider;
             _primitiveStates[collider] = new(collider.Transform.WorldMatrix, collider.Center,
-                collider.Size, collider.IsTrigger, ComponentOrdinal(entry.GameObject, collider));
+                collider.Size, collider.IsTrigger, ComponentOrdinal(entry.GameObject, collider),collider is MeshCollider3D mesh?mesh.Geometry:null);
         }
         // Removed/disabled colliders must not be retained by the cache.
         _expiredPrimitiveContacts.Clear();

@@ -13,8 +13,9 @@ using ByteEngine.Core.Scene;
 namespace KarlsonDemo.Plugin;
 
 /// <summary>Per-object ammunition and state; reused for every weapon archetype.</summary>
-public sealed class WeaponInstance3D : Component
+public sealed partial class WeaponInstance3D : Component
 {
+    int reviewedBurst;
     [System.ComponentModel.Category("Inventory"),System.ComponentModel.Description("Include this weapon when Play starts, unless equipment starts empty. Unowned rigs remain available for pickups.")]
     public bool StartInInventory { get; set; } = true;
     public bool Carried => InventoryOwner != null;
@@ -61,6 +62,7 @@ public sealed class WeaponInstance3D : Component
     public event Action<WeaponInstance3D>? Fired;
     public event Action<WeaponInstance3D>? ReloadCompleted;
     public event Action<RaycastHit3D>? Hit;
+    public event Action<CombatDamageReceipt>? DamageConfirmed;
     private float _cooldown, _reloadRemaining, _reloadDuration;
     private Random? _random;
     private VfxPlayer? _muzzleFlash;
@@ -152,7 +154,16 @@ public sealed class WeaponInstance3D : Component
         CurrentInaccuracyDegrees=WeaponDefinition3D.Bound(d.AccuracyDegrees,0,0,45)+AccuracyBloom+
             WeaponDefinition3D.Bound(d.MovingInaccuracyDegrees,0,0,45)*Math.Clamp(moving/2,0,1);
         _random ??= new Random(RandomSeed);
+        if(_sinceShot>=.3f)reviewedBurst=0;
+        float burstAccuracy=reviewedBurst<3?Math.Clamp(d.BurstAccuracyBonus,0,.9f):0;
+        CurrentInaccuracyDegrees*=1-burstAccuracy;
+        reviewedBurst++;
         int count = Math.Clamp(d.PelletsPerShot, 1, 32);
+        var homingCandidates=d.HomingTargetCount>0?scene.GameObjects.Where(o=>o.GetComponent<SimpleEnemyAI3D>()!=null&&o.GetComponent<HealthComponent>() is {IsDead:false})
+            .Where(o=>{var v=o.Transform.WorldPosition+Vector3.UnitY*.55f-muzzleForTargets();return v.LengthSquared()>.01f&&v.LengthSquared()<=d.HomingRange*d.HomingRange&&Vector3.Dot(Vector3.Normalize(v),direction)>=MathF.Cos(d.HomingConeDegrees*MathF.PI/180);})
+            .Where(o=>{var v=o.Transform.WorldPosition+Vector3.UnitY*.55f-origin;return !GameplayQuery3D.Raycast(scene,origin,v,out var wall,v.Length(),owner,includeTriggers:false)||wall.GameObject==o||wall.GameObject.IsDescendantOf(o);})
+            .OrderBy(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,origin)).Take(Math.Clamp(d.HomingTargetCount,1,4)).ToArray():[];
+        Vector3 muzzleForTargets()=>origin;
         if (d.ShotMode == WeaponShotMode.Projectile && scene.GameObjects.Count(o =>
                 o.GetComponent<Projectile3D>()?.OwnerId == owner.Id) + count > Math.Clamp(d.MaxActiveProjectiles, 1, 512))
             return false;
@@ -163,17 +174,14 @@ public sealed class WeaponInstance3D : Component
         var mask = LayerMask.FromLayers(Enumerable.Range(0, 32).Where(bit => (d.HitMaskBits & (1 << bit)) != 0).ToArray());
         for (int n = 0; n < count; n++)
         {
-            Vector3 shot = Spread(direction, d.SpreadDegrees+CurrentInaccuracyDegrees);
+            Vector3 shot = Spread(direction, d.SpreadDegrees*(1-burstAccuracy)+CurrentInaccuracyDegrees);
             Vector3 end = origin + shot * range;
             if (d.ShotMode == WeaponShotMode.Hitscan)
             {
                 if (GameplayQuery3D.RaycastWithDamageHits(scene, origin, shot, out var hit, range, owner, mask, includeTriggers: false,includeDamageTriggers:true))
                 {
                     end = hit.Point; HitCount++; HitThisFrame = true;_shotHits.Add(new(hit,shot)); Hit?.Invoke(hit);
-                    if(hit.GameObject.GetComponent<DamageRegion3D>() is {} region)region.ApplyDamage(WeaponDefinition3D.Bound(d.DamagePerPellet,25,0,100000),shot);
-                    else for (GameObject? target = hit.GameObject; target != null; target = target.Parent)
-                        if (target.GetComponent<HealthComponent>() is {} health)
-                        { health.Damage(WeaponDefinition3D.Bound(d.DamagePerPellet, 25, 0, 100000), shot); break; }
+                    if(CombatDamageReceipt.Apply(hit.GameObject,WeaponDefinition3D.Bound(d.DamagePerPellet,25,0,100000),shot) is {} receipt){DamageConfirmed?.Invoke(receipt);ApplyEnemyKnockback(receipt,shot,d);}
                     hit.GameObject.GetComponent<Rigidbody3D>()?.AddImpulseAtPosition(shot * WeaponDefinition3D.Bound(d.HitImpulse, 3, 0, 1000), end);
                 }
             }
@@ -191,7 +199,10 @@ public sealed class WeaponInstance3D : Component
                 if (launcher.Fire(end - muzzle) is {} projectile)
                 {
                     var flight=projectile.GetComponent<Projectile3D>()!;
+                    flight.DamageApplied+=receipt=>{DamageConfirmed?.Invoke(receipt);ApplyEnemyKnockback(receipt,shot,d);};
                     flight.CollisionMask = mask;
+                    if(homingCandidates.Length>0&&n<homingCandidates.Length*3)projectile.AddComponent(new WeaponFlightUpgrade3D{Target=homingCandidates[n%homingCandidates.Length],TurnDegrees=d.HomingTurnDegreesPerSecond});
+                    if(d.PenetrationTargets>0)AddPenetration(projectile,flight,d.PenetrationTargets);
                     if(d.ProjectileBlueprint.IsEmpty)flight.Radius = WeaponDefinition3D.Bound(d.ProjectileRadius,.025f,.005f,.2f);
                     BulletTrail3D? trail=null;
                     flight.Hit += impact => {
@@ -239,6 +250,20 @@ public sealed class WeaponInstance3D : Component
         _sinceShot=0;
         ByteEngine.Core.AI.AIWorld.ReportNoise(scene,muzzlePosition,WeaponDefinition3D.Bound(d.NoiseRadius,24,0,1000),owner.Id,"Gunshot");
         ShotsFired++; FiredThisFrame = true; Flash(TryGetMuzzleWorldPosition(out var flashPosition) ? flashPosition : muzzlePosition, direction); Fired?.Invoke(this); return true;
+    }
+    void AddPenetration(GameObject bullet,Projectile3D flight,int remaining)
+    {
+        flight.Hit+=hit=>{
+            if(remaining<=0||Definition is not {} def||bullet.Scene is not {} scene)return;
+            GameObject? target=hit.GameObject;while(target!=null&&target.GetComponent<HealthComponent>()==null)target=target.Parent;
+            if(target==null)return;
+            var dir=flight.Velocity.LengthSquared()>.001f?Vector3.Normalize(flight.Velocity):Vector3.UnitZ;
+            var next=scene.CreateGameObject("Penetrating round");next.Transform.WorldPosition=hit.Point+dir*.06f;
+            var f=next.AddComponent(new Projectile3D{OwnerId=target.Id,Velocity=dir*def.ProjectileSpeed,Damage=flight.Damage*Math.Clamp(def.PenetrationDamageMultiplier,0,1),Radius=flight.Radius,CollisionMask=flight.CollisionMask});
+            f.DamageApplied+=receipt=>DamageConfirmed?.Invoke(receipt);
+            next.AddComponent(new BulletTrail3D{Length=def.ProjectileTrailLength,Width=def.TraceWidth,CoreColor=def.TrailCoreColor,GlowColor=def.TrailGlowColor,GlowScale=def.TrailGlowScale,Brightness=def.TrailBrightness});
+            next.AddComponent(new LifetimeComponent{LifetimeSeconds=Math.Min(2,def.ProjectileLifetime)});AddPenetration(next,f,remaining-1);
+        };
     }
     public Vector3 RecoiledDirection(Vector3 direction)
     {

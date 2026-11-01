@@ -6,6 +6,9 @@ internal static class MiningEvents
 {
  public static void Register(ByteEnginePluginContext c)
  {
+  MiningCleanupEvents.Register(c);
+  MiningMarketEvents.Register(c);
+  MiningGameFeelEvents.Register(c);
   const string prefix="bytebard.karlsondemo.mining.";var target=new VisualArgumentDefinition("target","Mining operation",VariableValue.FromString("Self")){IsObjectReference=true};
   c.RegisterAction(new(){Id=prefix+"playEffect",Category="Mining",MenuGroup="Mining Effects",DisplayName="Play mining effect at object",Arguments=[new("target","Effect location",VariableValue.FromString("Self")){IsObjectReference=true},new("effect","Effect",VariableValue.FromString("MortarExplosion")){Choices=Enum.GetNames<MiningEffectCue>()},new("size","Size multiplier",VariableValue.FromNumber(1))],Execute=(i,e)=>{var location=WeaponEvents.ResolveObject(i,e);if(location!=null&&Enum.TryParse<MiningEffectCue>(EventValueResolver.GetString(i,"effect",e,"MortarExplosion"),out var cue))MiningEffects3D.Find(location)?.Emit(cue,location.Transform.WorldPosition,size:(float)EventValueResolver.GetNumber(i,"size",e));}});
   c.RegisterAction(new(){Id=prefix+"campMusicMix",Category="Mining",MenuGroup="Mining Audio",DisplayName="Set camp music volume",Arguments=[target,new("volume","Volume (0 to 1)",VariableValue.FromNumber(.38))],Execute=(i,e)=>{var audio=MiningAudio3D.Find(WeaponEvents.ResolveObject(i,e));if(audio!=null)audio.CampMusicVolume=Math.Clamp((float)EventValueResolver.GetNumber(i,"volume",e),0,1);}});

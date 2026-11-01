@@ -70,6 +70,6 @@ public sealed partial class MiningDefense3D
   return Transform.WorldPosition+Vector3.UnitY*1.1f;
  }
  void PlayShotVisual(){if(VisualReady)PlayVisual(FireClip);}
- void DetonateVisual(){Spent=true;if(VisualReady)PlayVisual(TriggerClip);else GameObject.Scene!.DestroyGameObject(GameObject);}
+ void DetonateVisual(){Spent=true;NotifyRetired(false);if(VisualReady)PlayVisual(TriggerClip);else GameObject.Scene!.DestroyGameObject(GameObject);}
  bool CollectVisual(){if(!VisualReady)return false;Spent=true;visualCollecting=true;PlayVisual(OpenClip);return true;}
 }

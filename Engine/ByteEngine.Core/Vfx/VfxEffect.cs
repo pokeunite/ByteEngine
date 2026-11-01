@@ -8,7 +8,7 @@ namespace ByteEngine.Core.Vfx;
 public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot, Fireball, WaterBolt, LightningStrike, ClawSlash, HealingPulse, PoisonCloud, IceBurst, Shield }
 public enum VfxShape { Point, Sphere, Box, Cone, Ring }
 public enum VfxRenderMode { Billboard, Stretched, Trail, Beam, Horizontal, EmitterPlane }
-public enum VfxSprite { SoftDisc, Spark, Ring, Solid, Smoke, Flame, Star, Arc, Lightning, Ripple }
+public enum VfxSprite { SoftDisc, Spark, Ring, Solid, Smoke, Flame, Star, Arc, Lightning, Ripple, ToonPuff }
 
 /// <summary>Portable, versioned effect. Layers share a bounded per-instance budget.</summary>
 public sealed class VfxEffect

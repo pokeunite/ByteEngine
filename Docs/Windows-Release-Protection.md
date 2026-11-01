@@ -48,3 +48,7 @@ export should retain its complete Runtime folder until a new format is tested.
 
 Use `Tools/AuditWindowsRelease.ps1 -BuildDirectory <existing build>` for a
 nonmutating inventory check. Keep its report with release validation evidence.
+# Packaging update
+
+Single-executable packaging is now implemented; see [Single-executable Windows games](Single-Executable-Windows.md). The staged security recommendations below still apply. Bundling does not make client code secret.
+

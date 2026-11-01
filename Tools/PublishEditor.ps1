@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Release",
-    [switch]$SkipBrowser
+    [switch]$SkipBrowser,
+    [switch]$IncludeBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,16 @@ $output = Join-Path $repositoryRoot "Dist\ByteEngine"
 $publishedExecutable = Join-Path $output "ByteEngine.Editor.exe"
 $publishedOpenAL = Join-Path $output "openal32.dll"
 $rootExecutable = Join-Path $repositoryRoot "ByteEngine.Editor.exe"
+$SkipBrowser=$SkipBrowser -or !$IncludeBrowser
+# Preserve the previously published web runtime during a Windows-only refresh.
+$preservedBrowser=Join-Path $repositoryRoot ('.artifacts/browser-preserve/'+[guid]::NewGuid().ToString('N'))
+$oldBrowser=Join-Path $output 'BrowserRuntime'
+if($SkipBrowser-and(Test-Path -LiteralPath $oldBrowser)){
+    $safe=[IO.Path]::GetFullPath($preservedBrowser)
+    if(!$safe.StartsWith([IO.Path]::GetFullPath((Join-Path $repositoryRoot '.artifacts/browser-preserve'))+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe browser preservation folder.'}
+    New-Item -ItemType Directory -Force (Split-Path -Parent $safe)|Out-Null
+    Move-Item -LiteralPath $oldBrowser -Destination $safe
+}
 
 $expectedOutput = [System.IO.Path]::GetFullPath(
     (Join-Path $repositoryRoot "Dist\ByteEngine"))
@@ -162,3 +173,4 @@ if (-not $SkipBrowser) {
 & (Join-Path $toolsDirectory "PublishBrowser.ps1") -Configuration $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Browser player packaging failed." }
 }
+elseif(Test-Path -LiteralPath $preservedBrowser){Move-Item -LiteralPath $preservedBrowser -Destination (Join-Path $resolvedOutput 'BrowserRuntime')}

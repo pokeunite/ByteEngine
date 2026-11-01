@@ -21,6 +21,7 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         context.RegisterSimpleComponent<MiningRigVisual3D>("MiningRigVisual3D",new("Mining Drill Visual","Mining","Rotate an authored drill part only while extracting.","drill animation spin"));
         context.RegisterSimpleComponent<MiningEnemyEvasion3D>("MiningEnemyEvasion3D",new("Mining Enemy Evasion","Mining","Delayed occasional sidesteps when fired upon; editable probability and cooldown.","enemy dodge evade bullets"));
         context.RegisterSimpleComponent<MiningAudio3D>("MiningAudio3D",new("Mining Audio","Mining","Editable selected sound assets, machine loops, combat cues and bounded spatial voices.","sound audio machines combat interface"));
+        context.RegisterSimpleComponent<MiningGameFeel3D>("MiningGameFeel3D",new("Mining Game Feel","Mining","Actual-damage confirmation, directional hurt, rig tells, reward feedback and bounded camera impulses.","hit kill shake feedback rewards"));
         MiningEvents.Register(context);
         context.RegisterSimpleComponent<MiningEffects3D>("MiningEffects3D",new("Mining Effects Library","Mining","Editable muzzle, tracer, explosion and machine VFX assets with bounded prewarmed playback.","effects explosion dust smoke tracer"));
         context.RegisterSimpleComponent<MiningMachineVfx3D>("MiningMachineVfx3D",new("Mining Machine Effects","Mining","Dust, exhaust and small material effects linked to machine operation and delivery markers.","drill refinery press dust steam"));
@@ -33,6 +34,7 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
         context.RegisterSimpleComponent<MiningRefineryOutput3D>("MiningRefineryOutput3D",new("Refinery Output Conveyor and Bin","Mining","Carry completed refined cargo along model markers into a bounded ingot pile. The pile follows actual stock and market sales.","refinery ingot conveyor bin pile"));
         context.RegisterSimpleComponent<MiningDefensePlanner3D>("MiningDefensePlanner3D",new("Defence Placement","Mining","Place researched company defences with B and left mouse.","turret mine mortar placement"));
         context.RegisterSimpleComponent<MiningDefense3D>("MiningDefense3D",new("Company Defence","Mining","Configurable sentry, rotary gun, mortar or proximity mine.","turret mine mortar"));
+        context.RegisterSimpleComponent<MiningRaiderPriorities3D>("MiningRaiderPriorities3D",new("Drill Raider Priorities","Mining","Nearby defences are attacked before the drill; configurable notice radius and melee reach.","spider target defence priority"));
         context.RegisterSimpleComponent<MiningTrade3D>("MiningTrade3D",new("Mining Workshop and Market","Mining","Editable ammo production, separate upgrades and saved commodity price history.","market ammo production"));
         context.RegisterSimpleComponent<MiningBusinessUi3D>("MiningBusinessUi3D",new("Mining Business Interface","Mining","Scalable combat HUD, contextual machine panels and market. Native buttons are wired through Event Sheets.","ui mining shop market"));
         WeaponEvents.Register(context);

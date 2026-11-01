@@ -29,3 +29,6 @@ layout.ini
 /engine_startup_error.txt
 /parts-before-cleanup.csv
 /parts-removed.txt
+# Retained local plugin backups are not release packages.
+/PluginLibrary/*.byteplugin.previous-*
+/PluginLibrary/*.byteplugin.before-*

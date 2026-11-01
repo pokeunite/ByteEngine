@@ -58,7 +58,7 @@ public sealed partial class MiningCampLayout3D:Component
   if(GameObject.Scene!.ActiveCamera is {} camera){oldCameraId=camera.GameObject.Id;oldCameraActive=camera.ActiveGameCamera;camera.ActiveGameCamera=false;}
   editCamera=GameObject.Scene.CreateGameObject("Temporary camp arrangement camera");var eye=new Vector3((BuildMinimum.X+BuildMaximum.X)/2,45,(BuildMinimum.Y+BuildMaximum.Y)/2+24);var target=new Vector3(eye.X,GroundHeight,(BuildMinimum.Y+BuildMaximum.Y)/2);
   editCamera.Transform.WorldPosition=eye;Matrix4x4.Invert(Matrix4x4.CreateLookAt(eye,target,Vector3.UnitY),out var matrix);editCamera.Transform.WorldRotation=Quaternion.CreateFromRotationMatrix(matrix);editCamera.AddComponent(new Camera3D{ActiveGameCamera=true,Orthographic=true,OrthographicWidth=Math.Clamp(CameraWidth,30,100)});
-  IsEditing=true;Input.RequestUiPointer(this,true);UiNavigation.Focus(null);Status="Choose a machine or placed defence to move.";return true;
+  draggingView=false;IsEditing=true;Input.RequestUiPointer(this,true);UiNavigation.Focus(null);Status="Choose a machine or placed defence to move.";return true;
  }
  public void ExitEdit()
  {
@@ -90,9 +90,10 @@ public sealed partial class MiningCampLayout3D:Component
   if(Input.IsKeyPressed(EditKey)&&Ui?.Screen==MiningScreen.None)ToggleEdit();
   UpdateButton();
   if(!IsEditing)return;
+  bool panningView=UpdateCampCamera();
   if(Input.IsKeyPressed(Key.Escape)||Input.IsMouseButtonPressed(MouseButton.Right)){if(Selected!=null)CancelMove();else ExitEdit();return;}
   if(Input.IsKeyPressed(Key.Q))RotatePreview(-Math.Clamp(RotationStep,1,90));if(Input.IsKeyPressed(Key.E))RotatePreview(Math.Clamp(RotationStep,1,90));
-  if(!PointerGround(out var point))return;
+  if(panningView||!PointerGround(out var point))return;
   if(Selected!=null&&followPointer){var p=point-grabOffset;float grid=Math.Clamp(GridSize,.1f,4);p.X=MathF.Round(p.X/grid)*grid;p.Z=MathF.Round(p.Z/grid)*grid;SetPreview(p,PreviewYaw);}
   if(!Input.IsMouseButtonPressedForUi(MouseButton.Left)||ButtonHovered())return;
   if(Selected!=null){ConfirmMove();return;}
@@ -131,11 +132,11 @@ public sealed partial class MiningCampLayout3D:Component
  string Name(GameObject o)=>o.GetComponent<MiningCampObject3D>()?.DisplayName??o.GetComponent<MiningDefense3D>()?.Kind.ToString()??o.Name;
  protected override void OnRender(RenderContext c)
  {
-  if(!IsEditing)return;float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;
+  if(!IsEditing)return;DrawDefenceRanges(c);float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;
   void Q(float x,float y,float width,float height,Vector4 color)=>c.DrawUiQuad(new(x*s,y*s),new(width*s,height*s),color);
   void T(string text,float x,float y,int size,Vector4 color)=>c.DrawUiText(text,Font,Math.Max(12,(int)(size*s)),new(x*s,y*s),color,UiAnchor.TopLeft);
   var light=new Vector4(.94f,.94f,.84f,1);Q(16,16,410,49,new(.045f,.065f,.05f,.93f));T("ARRANGE CAMP",28,20,23,light);T("Select a machine or defence to move it",28,44,17,light);
-  float strip=Math.Min(w-32,760),left=(w-strip)/2;Q(left,h-68,strip,52,new(.045f,.065f,.05f,.93f));T(Selected is {} root?$"{Name(root)} — {Status}":Status,left+12,h-63,18,Selected==null||PreviewValid?new(.86f,.91f,.65f,1):new(1,.46f,.29f,1));T("Click: place   Q / E: rotate   Esc: cancel   Tab: finish",left+12,h-40,17,light);
+  float strip=Math.Min(w-32,760),left=(w-strip)/2;Q(left,h-88,strip,72,new(.045f,.065f,.05f,.93f));T(Selected is {} root?$"{Name(root)} — {Status}":Status,left+12,h-83,18,Selected==null||PreviewValid?new(.86f,.91f,.65f,1):new(1,.46f,.29f,1));T("WASD / Arrows: pan   Middle drag: pan   Wheel: zoom",left+12,h-59,16,light);T("Click: place   Q / E: rotate   Esc: cancel   Tab: finish",left+12,h-36,16,light);
   if(Selected is {} selected)
   {
    var b=WorldBounds(selected,PreviewPosition,PreviewYaw);outline.BaseColor=PreviewValid?new(.25f,1,.45f,1):new(1,.24f,.1f,1);

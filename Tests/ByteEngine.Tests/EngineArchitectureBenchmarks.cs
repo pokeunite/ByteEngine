@@ -59,14 +59,14 @@ internal static class EngineArchitectureBenchmarks
         scene.LoadInternal();
         for(int i=0;i<24;i++){Time.Update(1.0/60);scene.UpdateInternal();}
         var times=new double[120];long allocated=GC.GetAllocatedBytesForCurrentThread();
-        int gen0=GC.CollectionCount(0);
+        long totalAllocated=GC.GetTotalAllocatedBytes(precise:true);int gen0=GC.CollectionCount(0);
         for(int i=0;i<times.Length;i++)
         {
             Time.Update(1.0/60);long start=Stopwatch.GetTimestamp();scene.UpdateInternal();
             times[i]=Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         }
         long bytes=GC.GetAllocatedBytesForCurrentThread()-allocated;int collections=GC.CollectionCount(0)-gen0;
-        Array.Sort(times);var result=new Sample(scenario,count,scene.GameObjectCount,times.Average(),times[60],times[113],bytes/120.0,collections);results.Add(result);
+        Array.Sort(times);var result=new Sample(scenario,count,scene.GameObjectCount,times.Average(),times[60],times[113],bytes/120.0,collections){AllThreadsAllocatedBytesPerFrame=(GC.GetTotalAllocatedBytes(precise:true)-totalAllocated)/120.0,PhysicsGatherMs=scene.Physics.LastColliderGatherMs,PhysicsIndexMs=scene.Physics.LastIndexUpdateMs,CandidateQueryMs=scene.Physics.LastCandidateQueryMs,Candidates=scene.Physics.LastCandidateCount,AnimationMs=scene.LastFrameMetrics.AnimationMs,AnimatedComponents=scene.LastFrameMetrics.AnimatedComponents};results.Add(result);
         Console.WriteLine($"{scenario,-30} {count,6}: median {result.MedianMs,7:F3} ms, p95 {result.P95Ms,7:F3} ms, allocated {result.AllocatedBytesPerFrame/1024,8:F1} KiB/frame");
         scene.UnloadInternal();
     }
@@ -76,5 +76,5 @@ internal static class EngineArchitectureBenchmarks
         public Matrix4x4 Observed;
         protected override void OnUpdate(){Observed=Transform.WorldMatrix;_ = Transform.WorldPosition;}
     }
-    private sealed record Sample(string Scenario,int Count,int SceneObjects,double MeanMs,double MedianMs,double P95Ms,double AllocatedBytesPerFrame,int Gen0Collections);
+    private sealed record Sample(string Scenario,int Count,int SceneObjects,double MeanMs,double MedianMs,double P95Ms,double AllocatedBytesPerFrame,int Gen0Collections){public double AllThreadsAllocatedBytesPerFrame{get;init;}public double PhysicsGatherMs{get;init;}public double PhysicsIndexMs{get;init;}public double CandidateQueryMs{get;init;}public int Candidates{get;init;}public double AnimationMs{get;init;}public int AnimatedComponents{get;init;}}
 }

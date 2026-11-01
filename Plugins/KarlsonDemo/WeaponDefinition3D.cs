@@ -27,6 +27,15 @@ public sealed class WeaponDefinition3D : Component
     public string LocomotionBlendSpace { get; set; } = string.Empty;
     public string DisplayName { get; set; } = "Pistol";
     public int Slot { get; set; }
+    [System.ComponentModel.Category("Company research"),System.ComponentModel.Description("Optional company research required before this weapon may be carried. Empty allows normal world pickups.")]
+    public string RequiredResearchId { get; set; } = "";
+    [System.ComponentModel.Category("Projectile upgrades")] public int HomingTargetCount {get;set;}
+    [System.ComponentModel.Category("Projectile upgrades")] public float HomingRange {get;set;}=12;
+    [System.ComponentModel.Category("Projectile upgrades")] public float HomingConeDegrees {get;set;}=25;
+    [System.ComponentModel.Category("Projectile upgrades")] public float HomingTurnDegreesPerSecond {get;set;}=180;
+    [System.ComponentModel.Category("Projectile upgrades")] public int PenetrationTargets {get;set;}
+    [System.ComponentModel.Category("Projectile upgrades")] public float PenetrationDamageMultiplier {get;set;}=.5f;
+    [System.ComponentModel.Category("Accuracy")] public float BurstAccuracyBonus {get;set;}
     public WeaponShotMode ShotMode { get; set; }
     public WeaponTriggerMode TriggerMode { get; set; }
     public WeaponReloadMode ReloadMode { get; set; }
@@ -58,6 +67,7 @@ public sealed class WeaponDefinition3D : Component
     public float Range { get; set; } = 80;
     public int HitMaskBits { get; set; } = -1;
     public float HitImpulse { get; set; } = 3;
+    public float EnemyKnockbackSeconds{get;set;}=0;
     public float ReloadSeconds { get; set; } = 1.6f;
     public float EmptyReloadSeconds { get; set; } = 1.6f;
     public bool AllowReloadInterrupt { get; set; } = true;

@@ -48,6 +48,14 @@ public static class GamePackageExporter
         }
 
         string[] roots = new[] { project.AssetDirectory, project.SceneDirectory }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        string bundledPlayer=Path.Combine(runtimeDirectory,"Bundled","ByteEngine.Player.exe");
+        bool singleExecutable=File.Exists(bundledPlayer);
+        if(singleExecutable)
+        {
+            string identity=Path.Combine(runtimeDirectory,"Bundled","core-mvid.txt");
+            if(!File.Exists(identity)||!Guid.TryParse(File.ReadAllText(identity).Trim(),out var id)||id!=typeof(GamePackageExporter).Assembly.ManifestModule.ModuleVersionId)
+                throw new InvalidOperationException("Bundled Windows player differs from the editor. Refresh PlayerRuntime before exporting.");
+        }
         foreach (string directory in roots)
         {
             string source = ResolveInside(root, directory);
@@ -74,8 +82,9 @@ public static class GamePackageExporter
         try
         {
             progress?.Report("Copying standalone Windows runtime...");
-            CopyTree(runtimeDirectory, Path.Combine(destination,"Runtime"), false);
-            File.Move(Path.Combine(destination,"Runtime","ByteEngine.Launcher.exe"),Path.Combine(destination,safeName+".exe"));
+            if(singleExecutable)File.Copy(bundledPlayer,Path.Combine(destination,safeName+".exe"));
+            else{CopyTree(runtimeDirectory, Path.Combine(destination,"Runtime"), false);
+            File.Move(Path.Combine(destination,"Runtime","ByteEngine.Launcher.exe"),Path.Combine(destination,safeName+".exe"));}
             System.IO.Directory.CreateDirectory(content);
             foreach (string directory in roots)
             {
@@ -114,22 +123,24 @@ public static class GamePackageExporter
             progress?.Report("Compressing game assets into Game.bytepak...");
             string package = Path.Combine(destination, ByteAssetPackage.FileName);
             ByteAssetPackage.Create(content, package);
-            var entries = new[] { new PackageFile(ByteAssetPackage.FileName,
-                new FileInfo(package).Length, HashFile(package)) };
+            string executable = Path.Combine(destination, safeName + ".exe");
+            if(singleExecutable){progress?.Report("Bundling runtime and game content into one executable...");SingleExecutablePackage.Append(executable,package);File.Delete(package);}
+            string packagedFile=singleExecutable?executable:package;
+            var entries = new[] { new PackageFile(Path.GetFileName(packagedFile),
+                new FileInfo(packagedFile).Length, HashFile(packagedFile)) };
             System.IO.Directory.Delete(content, true);
             CopyAssetNotice(root, destination);
             File.WriteAllText(Path.Combine(destination, "game-package.json"),
                 JsonSerializer.Serialize(new { formatVersion = 2, target = "win-x64",
                     engineVersion = ByteEngineInfo.Version, project.Name, startupScene = project.StartupScene,
                     files = entries }, new JsonSerializerOptions { WriteIndented = true }));
-            string executable = Path.Combine(destination, safeName + ".exe");
             File.WriteAllText(Path.Combine(destination, "README.txt"),
-                $"Launch {safeName}.exe. Keep this ENTIRE folder together; zip the folder to share it.\r\n" +
+                (singleExecutable?$"Launch {safeName}.exe. The runtime and game assets are inside this executable. Keep attribution notices when distributing.\r\n":$"Launch {safeName}.exe. Keep this ENTIRE folder together; zip the folder to share it.\r\n") +
                 "Windows x64 with a compatible OpenGL graphics driver is required. .NET installation is not required.\r\n" +
                 "Native libraries require the Microsoft Visual C++ x64 v14 Redistributable. Use the included official install link if the game reports a missing native dependency.\r\n" +
                 "Escape releases the mouse; click to recapture. Use the window close button to quit.\r\n" +
                 "Game logs: %LOCALAPPDATA%\\ByteEngine\\Games\\Logs\r\n" +
-                "Game assets/scenes and project-local runtime plugins are stored in Game.bytepak. Keep that file beside the executable.\r\n");
+                (singleExecutable?"Native runtime files use a private extraction cache. Bundling is not encryption.\r\n":"Game assets/scenes and project-local runtime plugins are stored in Game.bytepak. Keep that file beside the executable.\r\n"));
             File.WriteAllText(Path.Combine(destination, "Install Visual C++ Runtime.url"),
                 "[InternetShortcut]\r\nURL=https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist\r\n");
             File.Delete(marker);

@@ -31,6 +31,7 @@ public sealed partial class MiningOperation3D:Component
  [Category("Extraction")] public float DrillSpeedPerLevel {get;set;}=.12f;
  [Category("Extraction")] public float BaseDrillHealth {get;set;}=180;
  [Category("Extraction")] public float DrillHealthPerLevel {get;set;}=30;
+ [Category("Round recovery")] public bool RestoreHealthAfterOperation {get;set;}=true;
  [Category("Enemies")] public int BaseEnemies {get;set;}=6;
  [Category("Enemies")] public int ExtraEnemiesPerRound {get;set;}=2;
  [Category("Enemies")] public int MaximumEnemiesPerRound {get;set;}=24;
@@ -112,8 +113,8 @@ public sealed partial class MiningOperation3D:Component
  GameObject? Player=>GameObject.Scene?.FindGameObject(PlayerObjectId);
  HealthComponent? Drill=>GameObject.Scene?.FindGameObject(DrillObjectId)?.GetComponent<HealthComponent>();
  protected override void OnStart()=>Initialize();
- protected override void OnUpdate(){Tick((float)Time.DeltaTime);TickRecovery((float)Time.UnscaledDeltaTime);}
- protected override void OnStop()=>CleanupEnemies(true);
+ protected override void OnUpdate(){Tick((float)Time.DeltaTime);TickRecovery((float)Time.UnscaledDeltaTime);TickCampTutorial((float)Time.DeltaTime);}
+ protected override void OnStop(){SaveProgress();CleanupEnemies(true);}
  public void Initialize()
  {
   if(_initialized)return;_initialized=true;Credits=Math.Max(0,StartingCredits);if(PersistProgress)LoadProgress();
@@ -121,11 +122,14 @@ public sealed partial class MiningOperation3D:Component
   Message=CompletedRounds==0?"Ready: start drilling, protect the drill, then sell your haul.":"Company progress loaded. Ready for the next operation.";
  }
  public int Level(MiningUpgrade kind)=>kind switch{MiningUpgrade.Drill=>DrillLevel,MiningUpgrade.AmmoPress=>AmmoPressLevel,MiningUpgrade.Refinery=>RefineryLevel,MiningUpgrade.RefinerySpeed=>RefinerySpeedLevel,MiningUpgrade.RefineryYield=>RefineryYieldLevel,_=>CompanyLevel};
+ [Category("Upgrade costs")]public float RefineryCostMultiplier{get;set;}=.8f;
  public int Cost(MiningUpgrade kind)
  {
   int basis=kind switch{MiningUpgrade.Drill=>DrillBaseCost,MiningUpgrade.AmmoPress=>AmmoPressBaseCost,MiningUpgrade.Refinery=>RefineryBaseCost,MiningUpgrade.RefinerySpeed=>RefinerySpeedBaseCost,MiningUpgrade.RefineryYield=>RefineryYieldBaseCost,_=>ResearchBaseCost};
   float growth=kind is MiningUpgrade.Refinery or MiningUpgrade.RefinerySpeed or MiningUpgrade.RefineryYield?RefineryCostGrowth:UpgradeCostGrowth;
-  return (int)Math.Clamp(Math.Ceiling(Math.Max(1,basis)*Math.Pow(Math.Clamp(growth,1,3),Level(kind))),1,1_000_000_000);
+  double amount=Math.Max(1,basis)*Math.Pow(Math.Clamp(growth,1,3),Level(kind));
+  if(kind is MiningUpgrade.Refinery or MiningUpgrade.RefinerySpeed or MiningUpgrade.RefineryYield)amount=Math.Round(amount*Math.Clamp(float.IsFinite(RefineryCostMultiplier)?RefineryCostMultiplier:.8f,.01f,10),MidpointRounding.AwayFromZero);
+  return (int)Math.Clamp(Math.Ceiling(amount),1,1_000_000_000);
  }
  public bool StartOperation()
  {
@@ -134,18 +138,19 @@ public sealed partial class MiningOperation3D:Component
   var points=SpawnPoints();if(Player?.GetComponent<HealthComponent>()==null||Drill==null||points.Length==0||RaiderBlueprint.IsEmpty||HunterBlueprint.IsEmpty||!RuntimeSpawnService.IsBlueprintSpawnerConfigured)return Reject("Setup incomplete: check player, drill, alien blueprints and spawn points.");
   var preview=SelectedContract;if(preview==null)return Reject("Choose a valid extraction contract. Check Contracts JSON.");
   if((long)RawOre+RefinedOre+preview.Ore>CargoCapacity)return Reject("Cargo hold is full. Sell ore or upgrade storage.");
-  CleanupEnemies();RecoverActors();RestockAmmo();
-  ActiveWave=preview;RoundQuota=preview.Ore;EnemiesScheduled=preview.Total;
+  if(TargetEnabled&&(TargetWon||TargetExpired))return Reject("The contract has ended. Start a new game.");TargetStarted=true;
+  CleanupEnemies();RecoverActors();RestockAmmo();foreach(var planner in GameObject.Scene!.GameObjects.Select(o=>o.GetComponent<MiningDefensePlanner3D>()).OfType<MiningDefensePlanner3D>())planner.RearmMines();
+  ActiveWave=preview;RoundQuota=preview.Ore;EnemiesScheduled=preview.Total;GameObject.GetComponent<MiningTrade3D>()?.ResetReviewedOperation();
   EnemiesSpawned=0;ExtractionProgress=0;_spawnClock=0;Phase=MiningPhase.Drilling;Message="Drill running. Protect it and clear every attacker.";return true;
  }
  public void Tick(float delta)
  {
-  if(!float.IsFinite(delta)||delta<=0||AttachedGameObject?.Scene==null)return;Initialize();
+  if(!float.IsFinite(delta)||delta<=0||AttachedGameObject?.Scene==null)return;Initialize();TickTarget(delta);if(TargetWon||TargetExpired)return;
   _roamingEnemies.RemoveAll(o=>o.Scene!=GameObject.Scene);
   if(RoamingEnemiesAlive>0&&Player?.GetComponent<HealthComponent>()?.IsDead==true){Fail("You disturbed a spider nest. Operator down; company upgrades kept.");return;}
   if(Phase==MiningPhase.Drilling)
   {
-   if(Drill?.IsDead!=false){Fail("Drill destroyed. Unbanked ore lost; company upgrades kept.");return;}
+   if(Drill?.IsDead!=false&&GameObject.GetComponent<MiningTrade3D>()?.TryEmergencyDrillRepair()!=true){Fail("Drill destroyed. Unbanked ore lost; company upgrades kept.");return;}
    if(Player?.GetComponent<HealthComponent>()?.IsDead!=false){Fail("Operator down. Unbanked ore lost; company upgrades kept.");return;}
    ExtractionProgress=Math.Min(1,ExtractionProgress+delta*(1+DrillLevel*Math.Max(0,DrillSpeedPerLevel))/Math.Max(1,ExtractionSeconds));
    _spawnClock-=delta;
@@ -161,7 +166,7 @@ public sealed partial class MiningOperation3D:Component
     _enemies.Add(enemy);EnemiesSpawned++;_spawnClock=ActiveWave?.SpawnSeconds??Math.Max(.05f,SpawnInterval);
    }
    if(ExtractionProgress>=1&&EnemiesSpawned==EnemiesScheduled&&AliveEnemies==0)
-   {RawOre=Add(RawOre,RoundQuota);CompletedRounds++;Phase=MiningPhase.Preparation;Message=$"Operation complete: +{RoundQuota} ore. Refine or sell, then reinvest.";CleanupEnemies();SaveProgress();}
+   {RawOre=Add(RawOre,RoundQuota);CompletedRounds++;Phase=MiningPhase.Preparation;if(RestoreHealthAfterOperation&&Player?.GetComponent<HealthComponent>() is {IsDead:false} health)health.Heal(health.MaxHealth);Message=$"Operation complete: +{RoundQuota} ore. Refine or sell, then reinvest.";CleanupEnemies();SaveProgress();}
   }
   if(Phase!=MiningPhase.Failed&&RefiningAmount>0)
   {
@@ -177,7 +182,7 @@ public sealed partial class MiningOperation3D:Component
  }
  bool StartRefineryBatch(bool quietWhenEmpty=false)
  {
-  var shipping=GameObject.GetComponent<MiningTrade3D>();int available=RawOre-(shipping is {SaleInProgress:true,SaleRefined:false}?shipping.SaleQuantity-shipping.SaleProcessed:0);if(available<=0)return quietWhenEmpty?false:Reject("No unreserved raw ore to refine.");
+  int available=RawOre;if(available<=0)return quietWhenEmpty?false:Reject("No unreserved raw ore to refine.");
   int input=Math.Min(available,Math.Clamp(RefineryBatch+RefineryLevel*ExtraBatchPerLevel,1,100000));int output=(int)Math.Clamp(Math.Floor(input*(double)RefineryYieldMultiplier+refineryYieldRemainder),0,1000000000);if((long)RawOre+RefinedOre-input+output>CargoCapacity)return Reject("Make room in the cargo hold before refining.");
   refiningNextRemainder=Math.Clamp(input*(double)RefineryYieldMultiplier+refineryYieldRemainder-output,0,.999999);RefiningAmount=input;RefiningOutput=output;RefiningRemaining=RefiningTotalSeconds=RefineryDuration;Message=$"Refining {RefiningAmount} ore...";return true;
  }
@@ -188,6 +193,7 @@ public sealed partial class MiningOperation3D:Component
   long income=(long)availableRaw*Math.Max(0,RawOrePrice)+(long)RefinedOre*Math.Max(0,RefinedOrePrice);
   Credits=Add(Credits,income);RawOre-=availableRaw;RefinedOre=0;Message=$"Cargo sold for {income} credits.";SaveProgress();return true;
  }
+ public void RefundResearchCredits(int amount){Initialize();Credits=Add(Credits,Math.Max(0,amount));SaveProgress();}
  public bool SpendCredits(int amount)
  {Initialize();if(Phase!=MiningPhase.Preparation||amount<0||Credits<amount)return false;Credits-=amount;SaveProgress();return true;}
  public bool SellUnits(bool refined,int quantity,float quote,int processedBefore=0)=>SellUnitsCore(refined,quantity,quote,processedBefore,false);
@@ -209,7 +215,7 @@ public sealed partial class MiningOperation3D:Component
   Message=$"{kind} upgraded to level {Level(kind)}.";SaveProgress();return true;
  }
  public void Retry()
- {if(Phase!=MiningPhase.Failed)return;CleanupEnemies(true);ReturnToRecoverySpawn();RecoverActors();RestockAmmo();Phase=MiningPhase.Preparation;ExtractionProgress=0;Message="Site recovered. Company progress kept. Start the drill when ready.";}
+ {if(Phase!=MiningPhase.Failed||TargetWon||TargetExpired)return;CleanupEnemies(true);ReturnToRecoverySpawn();RecoverActors();RestockAmmo();Phase=MiningPhase.Preparation;ExtractionProgress=0;Message="Site recovered. Company progress kept. Start the drill when ready.";}
  void RecoverActors(){Player?.GetComponent<HealthComponent>()?.Revive();if(Drill is {} h){h.MaxHealth=Math.Max(1,BaseDrillHealth*BaseDrillHealthResearchMultiplier+DrillLevel*DrillHealthPerLevel);h.Revive();}}
  void RestockAmmo()
  {
@@ -224,7 +230,7 @@ public sealed partial class MiningOperation3D:Component
   foreach(var def in scene.GameObjects.Select(o=>o.GetComponent<WeaponDefinition3D>()).OfType<WeaponDefinition3D>())
   {if(!_baseDamage.ContainsKey(def))_baseDamage[def]=def.DamagePerPellet;def.DamagePerPellet=_baseDamage[def]*(1+CompanyLevel*Math.Max(0,DamageBonusPerResearch)+PermanentDamageBonus);}
  }
- void Fail(string reason){Phase=MiningPhase.Failed;ExtractionProgress=0;Message=reason;CleanupEnemies(true);RefineryQueueActive=false;BeginRecovery();SaveProgress();}
+ void Fail(string reason){RawOre=(int)Math.Floor(RawOre*(GameObject.GetComponent<MiningTrade3D>()?.CargoSalvageFraction??0));RefiningAmount=0;RefiningRemaining=0;RefiningOutput=0;Phase=MiningPhase.Failed;ExtractionProgress=0;Message=reason;CleanupEnemies(true);RefineryQueueActive=false;BeginRecovery();SaveProgress();}
  void CleanupEnemies(bool includeRoaming=false){foreach(var enemy in _enemies.ToArray())if(enemy.Scene==AttachedGameObject?.Scene&&enemy.Scene!=null)enemy.Scene.DestroyGameObject(enemy);_enemies.Clear();if(includeRoaming){foreach(var enemy in _roamingEnemies.ToArray())if(enemy.Scene==AttachedGameObject?.Scene&&enemy.Scene!=null)enemy.Scene.DestroyGameObject(enemy);_roamingEnemies.Clear();}}
  bool Reject(string reason){Message=reason;return false;}
  static int Add(int value,long amount)=>(int)Math.Clamp((long)value+amount,0,1_000_000_000);
@@ -235,13 +241,13 @@ public sealed partial class MiningOperation3D:Component
  public void SaveProgress()
  {
   if(!PersistProgress)return;
-  try{var path=SavePath;Directory.CreateDirectory(Path.GetDirectoryName(path)!);var data=new MiningSave{Credits=Credits,Raw=RawOre,Refined=RefinedOre,Rounds=CompletedRounds,Drill=DrillLevel,Ammo=AmmoPressLevel,Refinery=RefineryLevel,Company=CompanyLevel,RefinerySpeed=RefinerySpeedLevel,RefineryYield=RefineryYieldLevel,YieldRemainder=refineryYieldRemainder};File.WriteAllText(path+".tmp",JsonSerializer.Serialize(data));File.Move(path+".tmp",path,true);}
+  try{var path=SavePath;Directory.CreateDirectory(Path.GetDirectoryName(path)!);var data=new MiningSave{TutorialStep=(int)TutorialStep,TutorialAmmoPrepared=tutorialAmmoPrepared,ActiveDeliveryContract=ActiveDeliveryContract,DeliveryContractsCompleted=DeliveryContractsCompleted,PendingMarketSale=PendingMarketSale,LastMarketSale=LastMarketSale,Credits=Credits,Raw=RawOre,Refined=RefinedOre,Rounds=CompletedRounds,Drill=DrillLevel,Ammo=AmmoPressLevel,Refinery=RefineryLevel,Company=CompanyLevel,RefinerySpeed=RefinerySpeedLevel,RefineryYield=RefineryYieldLevel,TargetElapsed=TargetElapsedSeconds,TargetStarted=TargetStarted,TargetWon=TargetWon,TargetExpired=TargetExpired,YieldRemainder=refineryYieldRemainder};File.WriteAllText(path+".tmp",JsonSerializer.Serialize(data));File.Move(path+".tmp",path,true);}
   catch(Exception e)when(e is IOException or UnauthorizedAccessException or InvalidDataException){Message+=" Progress could not be saved: "+e.Message;}
  }
  void LoadProgress()
  {
-  try{var path=SavePath;if(!File.Exists(path))return;var d=JsonSerializer.Deserialize<MiningSave>(File.ReadAllText(path));if(d?.Version!=1)throw new InvalidDataException("Unsupported company save.");Credits=Add(0,d.Credits);RawOre=Add(0,d.Raw);RefinedOre=Add(0,d.Refined);CompletedRounds=Math.Clamp(d.Rounds,0,100000);int max=Math.Clamp(MaximumUpgradeLevel,1,50);DrillLevel=Math.Clamp(d.Drill,0,max);AmmoPressLevel=Math.Clamp(d.Ammo,0,max);RefineryLevel=Math.Clamp(d.Refinery,0,max);CompanyLevel=Math.Clamp(d.Company,0,max);refineryYieldRemainder=double.IsFinite(d.YieldRemainder)?Math.Clamp(d.YieldRemainder,0,.999999):0;RefinerySpeedLevel=Math.Clamp(d.RefinerySpeed,0,max);RefineryYieldLevel=Math.Clamp(d.RefineryYield,0,max);}
+  try{var path=SavePath;if(!File.Exists(path))return;var d=JsonSerializer.Deserialize<MiningSave>(File.ReadAllText(path));if(d?.Version!=1)throw new InvalidDataException("Unsupported company save.");TutorialStep=d.TutorialStep>=0&&Enum.IsDefined(typeof(CampTutorialStep),d.TutorialStep)?(CampTutorialStep)d.TutorialStep:CampTutorialStep.Complete;tutorialAmmoPrepared=d.TutorialAmmoPrepared;ActiveDeliveryContract=d.ActiveDeliveryContract is {Valid:true} contract?contract:null;DeliveryContractsCompleted=Math.Max(0,d.DeliveryContractsCompleted);PendingMarketSale=d.PendingMarketSale is {Valid:true} pending?pending:null;LastMarketSale=d.LastMarketSale is {Valid:true} receipt?receipt:null;TargetElapsedSeconds=double.IsFinite(d.TargetElapsed)?Math.Clamp(d.TargetElapsed,0,Math.Max(1,TargetPlaySeconds)):0;TargetStarted=d.TargetStarted;TargetWon=d.TargetWon;TargetExpired=d.TargetExpired;Credits=Add(0,d.Credits);RawOre=Add(0,d.Raw);RefinedOre=Add(0,d.Refined);CompletedRounds=Math.Clamp(d.Rounds,0,100000);int max=Math.Clamp(MaximumUpgradeLevel,1,50);DrillLevel=Math.Clamp(d.Drill,0,max);AmmoPressLevel=Math.Clamp(d.Ammo,0,max);RefineryLevel=Math.Clamp(d.Refinery,0,max);CompanyLevel=Math.Clamp(d.Company,0,max);refineryYieldRemainder=double.IsFinite(d.YieldRemainder)?Math.Clamp(d.YieldRemainder,0,.999999):0;RefinerySpeedLevel=Math.Clamp(d.RefinerySpeed,0,max);RefineryYieldLevel=Math.Clamp(d.RefineryYield,0,max);}
   catch(Exception e)when(e is IOException or UnauthorizedAccessException or InvalidDataException or JsonException){Message="Company save could not be read: "+e.Message;}
  }
- public sealed class MiningSave{public double YieldRemainder{get;set;}public int Version{get;set;}=1;public int Credits{get;set;}public int Raw{get;set;}public int Refined{get;set;}public int Rounds{get;set;}public int Drill{get;set;}public int Ammo{get;set;}public int Refinery{get;set;}public int Company{get;set;}public int RefinerySpeed{get;set;}public int RefineryYield{get;set;}}
+ public sealed class MiningSave{public int TutorialStep{get;set;}=-1;public bool TutorialAmmoPrepared{get;set;}public OreDeliveryContract? ActiveDeliveryContract{get;set;}public int DeliveryContractsCompleted{get;set;}public MiningSale? PendingMarketSale{get;set;}public MiningSale? LastMarketSale{get;set;}public double TargetElapsed{get;set;}public bool TargetStarted{get;set;}public bool TargetWon{get;set;}public bool TargetExpired{get;set;}public double YieldRemainder{get;set;}public int Version{get;set;}=1;public int Credits{get;set;}public int Raw{get;set;}public int Refined{get;set;}public int Rounds{get;set;}public int Drill{get;set;}public int Ammo{get;set;}public int Refinery{get;set;}public int Company{get;set;}public int RefinerySpeed{get;set;}public int RefineryYield{get;set;}}
 }
