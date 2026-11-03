@@ -11,6 +11,9 @@
     <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
     <WasmEnableSIMD>true</WasmEnableSIMD>
     <WasmDedup>true</WasmDedup>
+    <!-- Optimize the shipped module for execution speed. Keep debug builds on
+         the SDK defaults; do not enable fast-math or relaxed semantics. -->
+    <EmccLinkOptimizationFlag Condition="'$(Configuration)' == 'Release'">-O3</EmccLinkOptimizationFlag>
     <!-- Keep a private function-index map for CPU captures; the publisher archives it outside the shipped runtime. -->
     <WasmEmitSymbolMap>true</WasmEmitSymbolMap>
     <PublishTrimmed>true</PublishTrimmed>

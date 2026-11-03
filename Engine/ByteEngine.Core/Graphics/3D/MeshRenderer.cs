@@ -16,7 +16,7 @@ public sealed class MeshRenderer : Component
     private BoundingBox3D _worldBounds;
     private void RefreshHierarchy()
     {
-        var scene=GameObject.Scene;long version=scene?.RenderHierarchyVersion??-1;
+        var scene=GameObject.Scene;long version=GameObject.RenderHierarchyVersion;
         if(scene!=null&&ReferenceEquals(scene,_hierarchyScene)&&version==_hierarchyVersion)return;
         _hierarchyScene=scene;_hierarchyVersion=version;_materialHierarchy=null;_hasLodAncestor=false;
         for(GameObject? item=GameObject;item!=null;item=item.Parent){

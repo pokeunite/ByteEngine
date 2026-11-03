@@ -20,10 +20,7 @@ public sealed partial class MiningAudio3D
  [Browsable(false)] public long PressImpactCues{get;private set;}
  [Browsable(false)] public long PressStrokeCues{get;private set;}
  long pressLandings;float pressPreviousTime;int pressPreviousContact;bool pressWasRunning;
- AssetReference PressImpactClip()
- {
-  var clips=new[]{PressBucketImpact1,PressBucketImpact2,PressBucketImpact3}.Where(a=>!a.IsEmpty).ToArray();return clips.Length>0?clips[random.Next(clips.Length)]:AssetReference.Empty;
- }
+ AssetReference PressImpactClip()=>ChooseClip(PressBucketImpact1,PressBucketImpact2,PressBucketImpact3);
  void TickPressLayers(GameObject? press,MiningOperation3D op,MiningTrade3D trade,float dt)
  {
   var bucket=press?.GetComponent<MiningAmmoBucket3D>();bool running=op.Phase!=MiningPhase.Failed&&trade.StoredAmmo<trade.Capacity;

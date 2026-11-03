@@ -28,6 +28,11 @@ public readonly record struct SkeletalSocketTransform(
 /// </summary>
 public static class SkeletalSocketResolver
 {
+    private readonly record struct SocketPoseKey(Matrix4x4 Bone,string BoneName,Vector3 Position,Vector3 Rotation,Vector3 Scale,bool Inherit);
+    private readonly record struct SocketPoseEntry(SocketPoseKey Key,SkeletalSocketTransform Transform);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SkeletalMeshRenderer,Dictionary<Guid,SocketPoseEntry>> PoseCache=new();
+    internal static long DiagnosticPoseCacheHits;
+    internal static long DiagnosticPoseCacheMisses;
     public static bool TryGetSocketModelTransform(
         GameObject target,
         string socketName,
@@ -78,16 +83,12 @@ public static class SkeletalSocketResolver
         ArgumentNullException.ThrowIfNull(socket);
 
         Matrix4x4 boneModel=Matrix4x4.Identity;
-        if ((!string.IsNullOrWhiteSpace(socket.BoneName) &&
-            !renderer.TryGetBoneModelMatrix(socket.BoneName,out boneModel)) ||
-            !TryExtractStableBoneFrame(
-                boneModel,
-                out Vector3 bonePosition,
-                out Quaternion boneRotation,
-                out Vector3 boneScale))
-        {
-            return false;
-        }
+        if(!string.IsNullOrWhiteSpace(socket.BoneName)&&!renderer.TryGetBoneModelMatrix(socket.BoneName,out boneModel))return false;
+        var key=new SocketPoseKey(boneModel,socket.BoneName,socket.PositionOffset,socket.RotationOffsetDegrees,socket.Scale,socket.InheritBoneScale);
+        var cache=PoseCache.GetOrCreateValue(renderer);
+        if(cache.TryGetValue(socket.Id,out var cached)&&cached.Key==key){transform=cached.Transform;DiagnosticPoseCacheHits++;return true;}
+        DiagnosticPoseCacheMisses++;
+        if(!TryExtractStableBoneFrame(boneModel,out Vector3 bonePosition,out Quaternion boneRotation,out Vector3 boneScale))return false;
 
         Vector3 inheritedScale =
             socket.InheritBoneScale
@@ -135,6 +136,9 @@ public static class SkeletalSocketResolver
                 modelRotation,
                 modelScale);
 
+        // Bound mutable editor socket IDs without retaining removed definitions forever.
+        if(cache.Count>=128&&!cache.ContainsKey(socket.Id))cache.Clear();
+        cache[socket.Id]=new(key,transform);
         return true;
     }
 

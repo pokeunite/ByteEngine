@@ -17,9 +17,10 @@ export function performanceTrace(report){
     for(const f of report.frames){
         const start=f.startT??f.t-f.frameMs;
         span('Frame','frame',start,f.frameMs,{id:f.id,intervalMs:f.intervalMs,sampleId:f.sampleId,deep:f.deep});
-        let t=start;for(const [name,key] of [['WASM simulation + encoding','managedMs'],['Frame JSON decode','parseMs'],['Audio commands','audioMs'],['Video update','videoMs'],['Audio position feedback','audioPositionMs'],['Browser rendering','renderMs']]){span(name,'cpu',t,f[key],{});t+=f[key]||0;}
+        let t=start;for(const [name,key] of [['WASM simulation + encoding','managedMs'],['Frame JSON decode','parseMs'],['Audio commands','audioMs'],['Video update','videoMs'],['Audio position feedback','audioPositionMs'],[f.rendererThreaded?'Frame transfer to renderer':'Browser rendering','renderMs']]){span(name,'cpu',t,f[key],{});t+=f[key]||0;}
         traceEvents.push({name:'Frame counters',cat:'counters',ph:'C',pid:1,tid:1,ts:start*1000,args:{draws:f.draws||0,triangles:f.triangles||0,...(Number.isFinite(f.gpuMs)?{gpuMs:f.gpuMs}:{}),uploads:f.pending||0}});
     }
+    for(const f of report.renderFrames??[])span('Worker GL + UI submission','renderer-worker',f.startT,f.renderMs,{rendererFrameId:f.id,drawCalls:f.drawCalls,triangles:f.triangles,gpuMs:f.gpuMs},4);
     for(const e of report.events){
         if(e.kind==='long-task'||e.kind==='long-animation-frame')span(e.kind,'browser',e.startMs,e.durationMs,{},2);
         else if(e.kind==='resource')span('Resource','network',e.startMs,e.durationMs,{url:e.url,transferBytes:e.transferBytes},3);
@@ -29,7 +30,7 @@ export function performanceTrace(report){
 }
 export function createPerformanceCapture(){
     const epoch=performance.now(),windowSeconds=120;
-    const frames=new CaptureRing(18000),events=new CaptureRing(4096),samples=new CaptureRing(512),inventories=new CaptureRing(4);
+    const frames=new CaptureRing(18000),renderFrames=new CaptureRing(18000),events=new CaptureRing(4096),samples=new CaptureRing(512),inventories=new CaptureRing(4);
     const probes={skipGeometry:false,skipUi:false};
     let recording=true,frozenAt=0,lastSample=-Infinity,lastStats=0,serial=0,sampleSerial=0,lastScene='',diagnostics=null,hardware=null,build=null;
     let sources={},deepUntil=0,profileOn=false,lastSamplingMs=0,lastInventory=-Infinity,readBasic=()=>diagnostics??{};
@@ -57,16 +58,17 @@ export function createPerformanceCapture(){
     const controls=document.createElement('div');controls.style.cssText='display:flex;gap:8px;flex-wrap:wrap';panel.append(controls);
     const button=(text,action)=>{const b=document.createElement('button');b.textContent=text;b.style.cssText='padding:7px 10px;background:#28332d;color:#fff;border:1px solid #67766b;cursor:pointer';b.onclick=action;controls.append(b);return b;};
     function report(){const list=recent();return {format:'ByteEngine-performance',version:2,createdAt:new Date().toISOString(),windowSeconds,recording,
-        droppedFrames:frames.dropped,droppedEvents:events.dropped,droppedSamples:samples.dropped,droppedInventories:inventories.dropped,
+        droppedFrames:frames.dropped,droppedRenderFrames:renderFrames.dropped,droppedEvents:events.dropped,droppedSamples:samples.dropped,droppedInventories:inventories.dropped,
         limits:{frames:frames.capacity,events:events.capacity,samples:samples.capacity,inventories:inventories.capacity,objectRowsPerSample:256,objectRowsTrackedPerWindow:4096,systemRowsPerWindow:1024,inventoryObjects:20000},
             summary:summarizeFrames(list),modeSummaries:{normal:summarizeFrames(list.filter(f=>!f.deep)),deep:summarizeFrames(list.filter(f=>f.deep))},hardware,build,environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency,deviceMemoryGiB:navigator.deviceMemory??null,
             dpr:devicePixelRatio,viewport:[innerWidth,innerHeight],host:location.host,visibility:document.visibilityState,crossOriginIsolated:globalThis.crossOriginIsolated??false},
-        probes:{...probes},diagnostics,frames:list,events:events.values(),samples:samples.values(),inventories:inventories.values(),
+        probes:{...probes},diagnostics,frames:list,renderFrames:renderFrames.values().filter(f=>f.finishT>=(recording?time():frozenAt)-windowSeconds*1000),events:events.values(),samples:samples.values(),inventories:inventories.values(),
         availability:{observers:globalThis.PerformanceObserver?.supportedEntryTypes??[],jsHeap:!!performance.memory,gpuTimer:hardware?.gpuTimer??null},
         notes:['Deep callback/system timings and allocations are inclusive; nested scopes must not be summed as exclusive cost.',
             'Deep mode and diagnostic sampling add overhead; compare against normal recording. captureOverheadMs records recorder work; profile callback overhead is not subtracted.',
-            'Deep samples aggregate every profiled frame in their firstFrameId/frameId window, retaining maximum callback times. Transfer cadence adapts to sampling cost (500–3000ms).',
+            'Deep samples aggregate every profiled frame in their firstFrameId/frameId window, retaining maximum callback times. Deep transfer cadence adapts to sampling cost (500–3000ms). Normal detail samples adapt between 1000–5000ms to limit recorder overhead; frame timings are still recorded every frame.',
             'GPU timing is asynchronous world/shadow time; null is unavailable/disjoint. Browser UI uses Canvas CPU timing.',
+            'Threaded rendering has a separate measured renderFrames timeline. Frame renderMs is main-thread transfer time; rendererFrameId identifies the last completed worker profile, which can precede renderSubmittedId. Worker spans are CPU/GL submission time, not GPU execution spans.',
             'GPU VRAM, OS scheduling, temperatures, and arbitrary function stacks are not exposed by ordinary browser pages. Missing measurements are not zero.',
             'No save files, account data, cookies, input text, screenshots or asset contents are collected. Errors and object names may contain project information.',
             'Rings and row counts are bounded; dropped counters and limits disclose truncation. Download before the issue leaves the 120-second frame window.']};}
@@ -77,7 +79,7 @@ export function createPerformanceCapture(){
         }catch(e){notice.textContent='Could not save recording: '+String(e);}
     }
     const toggle=button('Pause capture',()=>{if(recording){setProfile(false);frozenAt=time();recording=false;}else{recording=true;event('capture-resumed');}toggle.textContent=recording?'Pause capture':'Resume capture';});
-    function reset(){setProfile(false);for(const ring of [frames,events,samples,inventories])ring.clear();lastSample=lastInventory=-Infinity;serial=sampleSerial=0;lastScene='';diagnostics=null;recording=true;deepUntil=0;toggle.textContent='Pause capture';event('capture-start');}
+    function reset(){setProfile(false);for(const ring of [frames,renderFrames,events,samples,inventories])ring.clear();lastSample=lastInventory=-Infinity;serial=sampleSerial=0;lastScene='';diagnostics=null;recording=true;deepUntil=0;toggle.textContent='Pause capture';event('capture-start');}
     button('New capture',reset);button('Mark slowdown',()=>event('user-marker',{label:'Observed slowdown'}));
     button('Deep profile · 30s',()=>startDeep());button('Scene inventory',inventory);button('Download report',()=>save());button('Download trace',()=>save('trace'));
     for(const [key,label] of [['skipGeometry','3D'],['skipUi','UI']]){const b=button(label+' on',()=>{probes[key]=!probes[key];b.textContent=label+(probes[key]?' off':' on');event('render-probe',{...probes});});}
@@ -96,9 +98,10 @@ export function createPerformanceCapture(){
     const api={event,probes,report,save,startDeep,beforeFrame,inventory,reset,get deep(){return profileOn;},
         configure(value){sources=value;build=value.build??build;sources.profileComponents?.(profileOn);},setHardware(value){hardware=value;},setBuildIdentity(value){build={...build,...value};event('build-identity',value);},
         failure(detail){const was=recording;recording=true;event('error',detail);setProfile(false);recording=false;if(was)frozenAt=time();toggle.textContent='Resume capture';},
+        renderedFrame(value){if(!recording)return;const finishT=value.finishMs-performance.timeOrigin-epoch,p=value.profile;renderFrames.push({id:value.id,startT:finishT-value.renderMs,finishT,renderMs:value.renderMs,cpu3DMs:p.cpu3DMs,uiCpuMs:p.uiCpuMs,uploadMs:p.uploadMs,gpuMs:p.gpuMs,drawCalls:p.drawCalls,triangles:p.triangles});},
         frame(value,readDiagnostics){
             if(!recording)return;readBasic=readDiagnostics;const start=performance.now(),deep=value.deep??beforeFrame(),id=++serial;
-            const due=start-lastSample>=(deep?Math.min(3000,Math.max(500,lastSamplingMs*20)):1000);
+            const due=start-lastSample>=(deep?Math.min(3000,Math.max(500,lastSamplingMs*20)):Math.min(5000,Math.max(1000,lastSamplingMs*80)));
             if(due)collect(id,deep);
             const copy={...value};delete copy.startMs;
             const f={...copy,id,t:time(),startT:Number.isFinite(value.startMs)?value.startMs-epoch:null,visible:!document.hidden,deep,skipGeometry:probes.skipGeometry,skipUi:probes.skipUi,sampleId:sampleSerial,samplingMs:due?lastSamplingMs:0};

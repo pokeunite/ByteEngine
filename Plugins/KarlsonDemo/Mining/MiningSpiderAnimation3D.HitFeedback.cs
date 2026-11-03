@@ -13,7 +13,7 @@ public sealed partial class MiningSpiderAnimation3D
  [Browsable(false)]public bool HitResponseActive=>hitFlash>0;
  void OnHitFeedback(HealthComponent hp,float amount)
  {
-  if(amount>0&&!hp.IsDead&&!dead)spiderAudio?.PlayCue(MiningSoundCue.SpiderHit,Transform.WorldPosition);
+  if(amount>0&&!hp.IsDead&&!dead)(spiderAudio??=MiningAudio3D.Find(GameObject))?.PlayCue(MiningSoundCue.SpiderHit,Transform.WorldPosition);
   if(!HitResponseEnabled||amount<=0||renderer==null||visual==null||dead)return;
   if(hitFlash<=0){hitBase=visual.Transform.LocalPosition;hitMaterials=new (Vector3?,float?)[renderer.SkinnedMeshCount];for(int i=0;i<hitMaterials.Length;i++){var m=renderer.GetMaterialOverrides(i);hitMaterials[i]=(m.EmissionColor,m.EmissionIntensity);}}
   hitFlash=Math.Clamp(HitFlashSeconds,.03f,.2f);var d=hp.LastDamageDirection;d.Y=0;hitRecoil=d.LengthSquared()>.001f?Vector3.Transform(Vector3.Normalize(d),Quaternion.Inverse(Transform.WorldRotation))*Math.Clamp(BodyRecoilDistance,0,.08f):Vector3.Zero;

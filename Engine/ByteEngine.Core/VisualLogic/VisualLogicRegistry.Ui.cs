@@ -134,7 +134,7 @@ public sealed partial class VisualLogicRegistry
                     StringComparison.OrdinalIgnoreCase);
         });
         Condition("ui.buttonClicked", "On Button Clicked", (i, c) =>
-            ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is
+            UiWidget.ButtonActivationRequested && ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is
                 { Kind: UiWidgetKind.Button } button && button.WasClicked);
         Condition("ui.buttonHovered", "Is Button Hovered", (i, c) =>
             ResolveUiTarget(i, c)?.GetComponent<UiWidget>() is

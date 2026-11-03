@@ -24,9 +24,11 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public sealed partial class SkeletalMeshRenderer : Component
 {
+    internal int GpuSkinnedMeshCount=>_runtimeMeshes.Count(m=>m.SharedCrowdMesh==null&&m.Mesh.GpuSkinning!=null);
     internal static long DiagnosticPoseUpdates;
     internal static long DiagnosticPoseTicks;
     internal static long DiagnosticSkinTicks;
+    internal static long DiagnosticUploadTicks;
     private readonly List<RuntimeSkinnedMesh> _runtimeMeshes = new();
     private readonly Dictionary<int, (AssetReference Reference, Material? Material)>
         _resolvedMaterialSlots = new();
@@ -45,6 +47,10 @@ public sealed partial class SkeletalMeshRenderer : Component
     }
     public void ClearPhysicalBoneDeformations(){_physicalBoneDeformations.Clear();_poseDirty=true;}
     private SkeletonAsset? _skeleton;
+    private SkeletonAsset? _boneLookupSkeleton;
+    private int _boneLookupCount;
+    private readonly Dictionary<string,int> _exactBoneLookup=new(StringComparer.Ordinal);
+    private readonly Dictionary<string,int> _foldedBoneLookup=new(StringComparer.OrdinalIgnoreCase);
 
     private ImportedNode[] _nodes = Array.Empty<ImportedNode>();
     private int[] _parentIndices = Array.Empty<int>();
@@ -227,24 +233,13 @@ public sealed partial class SkeletalMeshRenderer : Component
             return false;
         }
 
-        int boneIndex =
-            _skeleton.Bones.FindIndex(
-                bone =>
-                    string.Equals(
-                        bone.Name,
-                        boneName,
-                        StringComparison.Ordinal));
-
-        if (boneIndex < 0)
+        if(!ReferenceEquals(_boneLookupSkeleton,_skeleton)||_boneLookupCount!=_skeleton.Bones.Count)
         {
-            boneIndex =
-                _skeleton.Bones.FindIndex(
-                    bone =>
-                        string.Equals(
-                            bone.Name,
-                            boneName,
-                            StringComparison.OrdinalIgnoreCase));
+            _boneLookupSkeleton=_skeleton;_boneLookupCount=_skeleton.Bones.Count;_exactBoneLookup.Clear();_foldedBoneLookup.Clear();
+            for(int i=0;i<_skeleton.Bones.Count;i++){string name=_skeleton.Bones[i].Name;_exactBoneLookup.TryAdd(name,i);_foldedBoneLookup.TryAdd(name,i);}
         }
+        int boneIndex;
+        if(!_exactBoneLookup.TryGetValue(boneName,out boneIndex)&&!_foldedBoneLookup.TryGetValue(boneName,out boneIndex))return false;
 
         if (boneIndex < 0 ||
             boneIndex >= _boneNodeIndices.Length)
@@ -1185,18 +1180,27 @@ public sealed partial class SkeletalMeshRenderer : Component
             // vertex buffer instead of skinning and uploading it again.
             bool rigid=runtime.RigidBoneIndex>=0&&runtime.RigidBoneIndex<skinMatrices.Length&&
                 SupportsRigidTransform(skinMatrices[runtime.RigidBoneIndex]);
+            bool gpu=!storeCrowd&&!rigid&&GpuSkinningCapabilities.MaximumBones>=skinMatrices.Length&&skinMatrices.Length>0;
+            bool wasGpu=runtime.Mesh.GpuSkinning!=null;
+            if(!gpu)runtime.Mesh.SetGpuSkinning(null);
             bool skinChanged = !runtime.HasPreviousSkinPose||runtime.PreviousSkinMatrices.Length != skinMatrices.Length;
             if (!skinChanged)
                 foreach (int bone in runtime.UsedBones)
                     if (bone >= 0 && bone < skinMatrices.Length &&
                         runtime.PreviousSkinMatrices[bone] != skinMatrices[bone])
                     { skinChanged = true; break; }
-            if(rigid)
+            if(gpu)
+            {
+                if(runtime.CpuDeformed){runtime.Source.Vertices.CopyTo(runtime.DeformedVertices,0);runtime.Mesh.UpdateVertices(runtime.DeformedVertices);runtime.CpuDeformed=false;}
+                runtime.GpuData??=runtime.CreateGpuData(skinMatrices.Length);
+                runtime.GpuData.Bones=skinMatrices;runtime.Mesh.SetGpuSkinning(runtime.GpuData);runtime.Mesh.SetAnimationBounds(runtime.GpuData.Bounds());
+            }
+            else if(rigid)
             {
                 // One common bone is a model transform, not a vertex deformation.
                 // Restore source geometry once if an earlier non-uniform pose
                 // required CPU skinning. Bounds and pose captures use this matrix.
-                if(runtime.CpuDeformed){runtime.Source.Vertices.CopyTo(runtime.DeformedVertices,0);runtime.Mesh.UpdateVertices(runtime.DeformedVertices);runtime.CpuDeformed=false;}
+                if(runtime.CpuDeformed||wasGpu){runtime.Source.Vertices.CopyTo(runtime.DeformedVertices,0);runtime.Mesh.UpdateVertices(runtime.DeformedVertices);runtime.CpuDeformed=false;}
             }
             else if (skinChanged||!runtime.CpuDeformed)
             {
@@ -1537,18 +1541,18 @@ public sealed partial class SkeletalMeshRenderer : Component
         Matrix4x4.CreateTranslation(pose.Position);
 
     private Matrix4x4[] ComputeGlobals(
-        IReadOnlyList<Matrix4x4> locals)
+        Matrix4x4[] locals)
     {
-        Matrix4x4[] globals = _globalPoseMatrices.Length == locals.Count
+        Matrix4x4[] globals = _globalPoseMatrices.Length == locals.Length
             ? _globalPoseMatrices
-            : _globalPoseMatrices = new Matrix4x4[locals.Count];
+            : _globalPoseMatrices = new Matrix4x4[locals.Length];
 
-        byte[] states = _globalPoseStates.Length == locals.Count
+        byte[] states = _globalPoseStates.Length == locals.Length
             ? _globalPoseStates
-            : _globalPoseStates = new byte[locals.Count];
+            : _globalPoseStates = new byte[locals.Length];
         Array.Clear(states);
 
-        for (int index = 0; index < locals.Count; index++)
+        for (int index = 0; index < locals.Length; index++)
         {
             ResolveGlobal(
                 index,
@@ -1562,7 +1566,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private Matrix4x4 ResolveGlobal(
         int index,
-        IReadOnlyList<Matrix4x4> locals,
+        Matrix4x4[] locals,
         Matrix4x4[] globals,
         byte[] states)
     {
@@ -1583,7 +1587,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         int parent = _parentIndices[index];
 
         globals[index] =
-            parent >= 0 && parent < locals.Count
+            parent >= 0 && parent < locals.Length
                 ? locals[index] *
                   ResolveGlobal(
                       parent,
@@ -1607,9 +1611,43 @@ public sealed partial class SkeletalMeshRenderer : Component
             Math.Abs(Vector3.Dot(x,y))<tolerance&&Math.Abs(Vector3.Dot(x,z))<tolerance&&Math.Abs(Vector3.Dot(y,z))<tolerance&&
             matrix.M14==0&&matrix.M24==0&&matrix.M34==0&&matrix.M44==1;
     }
-    private static void SkinMesh(
-        RuntimeSkinnedMesh runtime,
-        Matrix4x4[] skinMatrices)
+    private static void SkinMesh(RuntimeSkinnedMesh runtime,Matrix4x4[] skinMatrices)
+    {
+        int count=runtime.DeformedVertices.Length/8;
+        if(!runtime.AllSingleBone)
+        {
+            for(int i=0;i<runtime.GroupInfluences.Length;i++)
+            {
+                var g=runtime.GroupInfluences[i];var blend=default(Matrix4x4);float total=0;
+                BlendSkinMatrix(g.Bone0,g.Weight0,skinMatrices,ref blend,ref total);BlendSkinMatrix(g.Bone1,g.Weight1,skinMatrices,ref blend,ref total);BlendSkinMatrix(g.Bone2,g.Weight2,skinMatrices,ref blend,ref total);BlendSkinMatrix(g.Bone3,g.Weight3,skinMatrices,ref blend,ref total);
+                runtime.GroupMatrices[i]=total<=.000001f?Matrix4x4.Identity:MathF.Abs(total-1)>.0001f?blend*(1/total):blend;
+            }
+        }
+        SkinBounds bounds;
+        if(!OperatingSystem.IsBrowser()&&ByteEngine.Core.Runtime.JobRunner.ParallelExecutionEnabled&&ByteEngine.Core.Runtime.JobRunner.ParallelSkinningEnabled&&count>=65536&&Environment.ProcessorCount>1)
+        {
+            int chunks=(count+SkinChunkSize-1)/SkinChunkSize;
+            if(runtime.ChunkBounds.Length<chunks)runtime.ChunkBounds=new SkinBounds[chunks];
+            runtime.WorkerMatrices=skinMatrices;
+            System.Threading.Tasks.Parallel.For(0,chunks,runtime.SkinChunk);
+            var min=new Vector3(float.PositiveInfinity);var max=new Vector3(float.NegativeInfinity);bool valid=false;
+            for(int i=0;i<chunks;i++){var part=runtime.ChunkBounds[i];if(!part.Valid)continue;min=Vector3.Min(min,part.Minimum);max=Vector3.Max(max,part.Maximum);valid=true;}
+            bounds=new(min,max,valid);
+        }
+        else bounds=SkinRange(runtime,skinMatrices,0,count);
+        // Worker completion precedes vertex-buffer staging and all graphics calls.
+        long uploadStart=System.Diagnostics.Stopwatch.GetTimestamp();
+        runtime.Mesh.UpdateVertices(runtime.DeformedVertices,updateBounds:false,knownBounds:bounds.Valid?new BoundingBox3D(bounds.Minimum,bounds.Maximum):BoundingBox3D.Empty);
+        DiagnosticUploadTicks+=System.Diagnostics.Stopwatch.GetTimestamp()-uploadStart;
+    }
+    private static void BlendSkinMatrix(int bone,float amount,Matrix4x4[] matrices,ref Matrix4x4 blend,ref float total)
+    {
+        float weight=Math.Max(amount,0);if(weight<=.000001f||bone<0||bone>=matrices.Length)return;
+        blend+=matrices[bone]*weight;total+=weight;
+    }
+    private const int SkinChunkSize=2048;
+    private readonly record struct SkinBounds(Vector3 Minimum,Vector3 Maximum,bool Valid);
+    private static SkinBounds SkinRange(RuntimeSkinnedMesh runtime,Matrix4x4[] skinMatrices,int start,int end)
     {
         ImportedMesh source =
             runtime.Source;
@@ -1626,9 +1664,9 @@ public sealed partial class SkeletalMeshRenderer : Component
         bool hasFinitePosition = false;
 
         for (int vertexIndex =
-                 0;
+                 start;
              vertexIndex <
-             vertexCount;
+             end;
              vertexIndex++)
         {
             int offset =
@@ -1667,20 +1705,10 @@ public sealed partial class SkeletalMeshRenderer : Component
                 normal = Vector3.TransformNormal(sourceNormal, matrix);
                 totalWeight = 1.0f;
             }
-            else
+            else if(!runtime.AllSingleBone)
             {
-                ApplyInfluence(influences.Bone0, influences.Weight0,
-                    sourcePosition, sourceNormal, skinMatrices,
-                    ref position, ref normal, ref totalWeight);
-                ApplyInfluence(influences.Bone1, influences.Weight1,
-                    sourcePosition, sourceNormal, skinMatrices,
-                    ref position, ref normal, ref totalWeight);
-                ApplyInfluence(influences.Bone2, influences.Weight2,
-                    sourcePosition, sourceNormal, skinMatrices,
-                    ref position, ref normal, ref totalWeight);
-                ApplyInfluence(influences.Bone3, influences.Weight3,
-                    sourcePosition, sourceNormal, skinMatrices,
-                    ref position, ref normal, ref totalWeight);
+                ref readonly var blend=ref runtime.GroupMatrices[runtime.VertexGroups[vertexIndex]];
+                position=Vector3.Transform(sourcePosition,blend);normal=Vector3.TransformNormal(sourceNormal,blend);totalWeight=1;
             }
 
             if (totalWeight <=
@@ -1744,12 +1772,7 @@ public sealed partial class SkeletalMeshRenderer : Component
              */
         }
 
-        runtime.Mesh.UpdateVertices(
-            vertices,
-            updateBounds: false,
-            knownBounds: hasFinitePosition
-                ? new BoundingBox3D(minimum, maximum)
-                : BoundingBox3D.Empty);
+        return new(minimum,maximum,hasFinitePosition);
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
@@ -1892,38 +1915,97 @@ public sealed partial class SkeletalMeshRenderer : Component
         /// eliminates a full float[] allocation on every animation tick.
         /// </summary>
         public float[] DeformedVertices { get; }
-        public SkinInfluences[] Influences { get; }
-        public int[] SingleBoneIndices { get; }
-        public bool AllSingleBone { get; }
-        public int RigidBoneIndex {get;}
+        private readonly SharedSkinDefinition _skin;
+        public SkinInfluences[] Influences => _skin.Influences;
+        public int[] SingleBoneIndices => _skin.SingleBoneIndices;
+        public bool AllSingleBone => _skin.AllSingleBone;
+        public int RigidBoneIndex => _skin.RigidBoneIndex;
         public bool CpuDeformed {get;set;}
         public bool HasPreviousSkinPose {get;set;}
-        public int[] UsedBones { get; }
+        internal GpuSkinningData? GpuData;
+        internal GpuSkinningData CreateGpuData(int boneCount)
+        {
+            return new(Source.Vertices,_skin.GpuInfluences(boneCount));
+        }
+        public int[] UsedBones => _skin.UsedBones;
         public Matrix4x4[] PreviousSkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
         public Matrix4x4[] SkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
+        public SkinInfluences[] GroupInfluences => _skin.GroupInfluences;
+        public int[] VertexGroups => _skin.VertexGroups;
+        public Matrix4x4[] GroupMatrices {get;}
+        public SkinBounds[] ChunkBounds=Array.Empty<SkinBounds>();
+        public Matrix4x4[] WorkerMatrices=Array.Empty<Matrix4x4>();
+        public Action<int> SkinChunk {get;}
 
-        public Matrix4x4 MeshToModelMatrix { get; set; } =
-            Matrix4x4.Identity;
+        public Matrix4x4 MeshToModelMatrix { get; set; } = Matrix4x4.Identity;
 
-        public RuntimeSkinnedMesh(
-            ImportedMesh source,
-            int meshNodeIndex,
-            Mesh mesh,
-            Material material,
-            float[] deformedVertices)
+        public RuntimeSkinnedMesh(ImportedMesh source,int meshNodeIndex,Mesh mesh,
+            Material material,float[] deformedVertices)
         {
-            Source = source;
-            MeshNodeIndex = meshNodeIndex;
-            Mesh = mesh;
-            Material = material;
-            DeformedVertices = deformedVertices;
-            Influences = new SkinInfluences[source.JointIndices.Length];
+            SkinChunk=index=>ChunkBounds[index]=SkinRange(this,WorkerMatrices,index*SkinChunkSize,Math.Min((index+1)*SkinChunkSize,DeformedVertices.Length/8));
+            Source=source;MeshNodeIndex=meshNodeIndex;Mesh=mesh;Material=material;
+            DeformedVertices=deformedVertices;
+            _skin=SharedSkinDefinition.Get(source);
+            // Only immutable binding data is shared. Every actor retains its own
+            // blended matrices, pose, bounds and writable deformation buffers.
+            GroupMatrices=new Matrix4x4[_skin.GroupInfluences.Length];
+        }
+    }
+
+    private sealed class SharedSkinDefinition
+    {
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ImportedMesh,SharedSkinDefinition> Cache=new();
+        private readonly Vector4[] _indices;
+        private readonly Vector4[] _weights;
+        private readonly Dictionary<int,float[]> _gpuInfluences=new();
+        public SkinInfluences[] Influences {get;}
+        public int[] SingleBoneIndices {get;}
+        public bool AllSingleBone {get;}
+        public int RigidBoneIndex {get;}
+        public int[] UsedBones {get;}
+        public SkinInfluences[] GroupInfluences {get;}
+        public int[] VertexGroups {get;}
+
+        public static SharedSkinDefinition Get(ImportedMesh source)
+        {
+            lock(Cache)
+            {
+                if(Cache.TryGetValue(source,out var cached)&&
+                    source.JointIndices.AsSpan().SequenceEqual(cached._indices)&&
+                    source.JointWeights.AsSpan().SequenceEqual(cached._weights))return cached;
+                // Import tools can edit arrays in place. New actors observe those
+                // edits; existing actors keep their original binding snapshot.
+                var definition=new SharedSkinDefinition(source);
+                Cache.Remove(source);Cache.Add(source,definition);return definition;
+            }
+        }
+        public float[] GpuInfluences(int boneCount)
+        {
+            lock(_gpuInfluences)
+            {
+            if(_gpuInfluences.TryGetValue(boneCount,out var cached))return cached;
+            var values=new float[Influences.Length*8];
+            for(int v=0;v<Influences.Length;v++){
+                var i=Influences[v];int at=v*8;
+                values[at]=i.Bone0;values[at+1]=i.Bone1;values[at+2]=i.Bone2;values[at+3]=i.Bone3;
+                values[at+4]=i.Bone0>=0&&i.Bone0<boneCount?Math.Max(0,i.Weight0):0;
+                values[at+5]=i.Bone1>=0&&i.Bone1<boneCount?Math.Max(0,i.Weight1):0;
+                values[at+6]=i.Bone2>=0&&i.Bone2<boneCount?Math.Max(0,i.Weight2):0;
+                values[at+7]=i.Bone3>=0&&i.Bone3<boneCount?Math.Max(0,i.Weight3):0;
+            }
+            _gpuInfluences.Add(boneCount,values);return values;
+            }
+        }
+        private SharedSkinDefinition(ImportedMesh source)
+        {
+            _indices=source.JointIndices.ToArray();_weights=source.JointWeights.ToArray();
+            Influences = new SkinInfluences[_indices.Length];
             SingleBoneIndices = new int[Influences.Length];
             bool allSingleBone = true;
             for (int i = 0; i < Influences.Length; i++)
             {
-                Vector4 indices = source.JointIndices[i];
-                Vector4 weights = source.JointWeights[i];
+                Vector4 indices = _indices[i];
+                Vector4 weights = _weights[i];
                 Influences[i] = new SkinInfluences(
                     (int)MathF.Round(indices.X), weights.X,
                     (int)MathF.Round(indices.Y), weights.Y,
@@ -1939,6 +2021,13 @@ public sealed partial class SkeletalMeshRenderer : Component
                 allSingleBone &= count == 1;
             }
             AllSingleBone = allSingleBone;
+            if(!AllSingleBone)
+            {
+                var lookup=new Dictionary<SkinInfluences,int>();var groups=new List<SkinInfluences>();VertexGroups=new int[Influences.Length];
+                for(int i=0;i<Influences.Length;i++){var value=Influences[i];if(!lookup.TryGetValue(value,out int group)){group=groups.Count;groups.Add(value);lookup.Add(value,group);}VertexGroups[i]=group;}
+                GroupInfluences=groups.ToArray();
+            }
+            else{VertexGroups=Array.Empty<int>();GroupInfluences=Array.Empty<SkinInfluences>();}
             RigidBoneIndex=allSingleBone&&SingleBoneIndices.Length>0&&SingleBoneIndices.All(i=>i==SingleBoneIndices[0])?SingleBoneIndices[0]:-1;
             UsedBones = Influences.SelectMany(i => new[] {
                 (i.Bone0,i.Weight0), (i.Bone1,i.Weight1),

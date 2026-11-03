@@ -12,7 +12,9 @@ public sealed class MeshLodGroup : Component
     public bool ScreenSize {get;set;}
     public Vector2 ScreenHeightThresholds {get;set;}=new(160,45);
     private int _level=-2;
-    private readonly Dictionary<(string Viewport,int Width,int Height,bool Perspective),int> _viewLevels=new();
+    private sealed class ViewLevel(string viewport,int width,int height,bool perspective)
+    {internal readonly string Viewport=viewport;internal readonly int Width=width,Height=height;internal readonly bool Perspective=perspective;internal int Level=-2;}
+    private readonly List<ViewLevel> _viewLevels=new();
     private readonly List<Mesh> _generated=new();
     private readonly List<GameObject> _generatedChildren=new();
     private MeshRenderer? _source;
@@ -43,9 +45,13 @@ public sealed class MeshLodGroup : Component
     }
     internal int SelectForViewport(string viewport,RenderView3D view,float distance,float projectedHeight)
     {
-        var key=(viewport,view.TargetWidth,view.TargetHeight,view.ProjectionMatrix.M44==0);
-        int saved=_level;_level=_viewLevels.GetValueOrDefault(key,-2);
-        int result=SelectStableLevel(distance,projectedHeight);_viewLevels[key]=_level;_level=saved;return result;
+        bool perspective=view.ProjectionMatrix.M44==0;ViewLevel? entry=null;
+        // Usually one or two views. Avoid interpreted shared-value-type generic
+        // dictionary wrappers in WASM for every static submesh on every frame.
+        for(int i=0;i<_viewLevels.Count;i++){var candidate=_viewLevels[i];if(candidate.Viewport==viewport&&candidate.Width==view.TargetWidth&&candidate.Height==view.TargetHeight&&candidate.Perspective==perspective){entry=candidate;break;}}
+        if(entry==null){entry=new(viewport,view.TargetWidth,view.TargetHeight,perspective);_viewLevels.Add(entry);}
+        int saved=_level;_level=entry.Level;
+        int result=SelectStableLevel(distance,projectedHeight);entry.Level=_level;_level=saved;return result;
     }
     protected override void OnStart()
     {

@@ -15,8 +15,8 @@ export class BrowserAudio {
         const state=this.state(c.id);this.halt(state);const generation=++state.generation;
         if(state.path!==c.path)state.offset=0;state.path=c.path;state.loop=c.loop;state.wantsPlay=true;
         const bytes=this.files.get(c.path);if(!bytes)throw new Error('Audio was not packaged: '+c.path);
-        if(c.stream||bytes.byteLength>2*1024*1024){
-            let url=this.urls.get(c.path);if(!url){url=URL.createObjectURL(new Blob([bytes],{type:/\.ogg$/i.test(c.path)?'audio/ogg':'audio/wav'}));this.urls.set(c.path,url);}
+        if(c.stream||(bytes.size??bytes.byteLength)>2*1024*1024){
+            let url=this.urls.get(c.path);if(!url){url=URL.createObjectURL(bytes instanceof Blob?bytes:new Blob([bytes],{type:/\.ogg$/i.test(c.path)?'audio/ogg':'audio/wav'}));this.urls.set(c.path,url);}
             const media=new Audio(url);media.preload='metadata';media.loop=c.loop;media.playbackRate=state.pitch;media.preservesPitch=false;
             const node=this.context.createMediaElementSource(media);node.connect(state.gain);state.media=media;state.mediaNode=node;state.mediaUrl=url;this.prune();
             if(state.offset)media.addEventListener('loadedmetadata',()=>{media.currentTime=state.offset%Math.max(.001,media.duration);},{once:true});
@@ -24,7 +24,7 @@ export class BrowserAudio {
             await media.play().catch(error=>{if(this.sources.get(c.id)!==state||state.generation!==generation||!state.wantsPlay)return;if(error.name!=='NotAllowedError')throw error;});return;
         }
         let pending=this.buffers.get(c.path);
-        if(!pending){pending=this.context.decodeAudioData(bytes.slice(0)).then(buffer=>{this.bufferBytes.set(c.path,buffer.length*buffer.numberOfChannels*4);this.prune();return buffer;}).catch(error=>{this.buffers.delete(c.path);this.bufferBytes.delete(c.path);throw error;});this.buffers.set(c.path,pending);}
+        if(!pending){pending=(async()=>this.context.decodeAudioData(bytes instanceof Blob?await bytes.arrayBuffer():bytes.slice(0)))().then(buffer=>{this.bufferBytes.set(c.path,buffer.length*buffer.numberOfChannels*4);this.prune();return buffer;}).catch(error=>{this.buffers.delete(c.path);this.bufferBytes.delete(c.path);throw error;});this.buffers.set(c.path,pending);}
         const buffer=await pending;
         if(this.sources.get(c.id)!==state||state.generation!==generation||!state.wantsPlay)return;
         const source=this.context.createBufferSource();source.buffer=buffer;source.loop=state.loop;source.playbackRate.value=state.pitch;source.connect(state.gain);

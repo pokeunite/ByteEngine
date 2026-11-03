@@ -1933,7 +1933,7 @@ public sealed class ComponentSerializer
                 ["model"] = new JsonObject { ["guid"] = collider.Model.Guid.ToString(), ["path"] = collider.Model.CachedProjectPath },
                 ["meshKey"] = collider.MeshKey, ["mode"] = collider.Mode.ToString(),
                 ["size"] = Array(collider.Size), ["center"] = Array(collider.Center),
-                ["isTrigger"] = collider.IsTrigger, ["useProjectMatrix"] = collider.UseProjectMatrix,
+                ["queryOnly"] = collider.QueryOnly, ["isTrigger"] = collider.IsTrigger, ["useProjectMatrix"] = collider.UseProjectMatrix,
                 ["collisionMask"] = collider.CollisionMask.Bits
             });
         }
@@ -1949,6 +1949,7 @@ public sealed class ComponentSerializer
                 Model = guid != Guid.Empty ? new AssetReference(guid, path) : !string.IsNullOrWhiteSpace(path) ? context.AssetDatabase.ResolveReference(path) : AssetReference.Empty,
                 MeshKey = p["meshKey"]?.GetValue<string>() ?? string.Empty, Mode = mode,
                 Size = Vector3(p["size"], System.Numerics.Vector3.One), Center = Vector3(p["center"], System.Numerics.Vector3.Zero),
+                QueryOnly = p["queryOnly"]?.GetValue<bool>() ?? false,
                 IsTrigger = p["isTrigger"]?.GetValue<bool>() ?? false,
                 UseProjectMatrix = p["useProjectMatrix"]?.GetValue<bool>() ?? true,
                 CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(p["collisionMask"]?.GetValue<uint>() ?? uint.MaxValue)
@@ -1986,6 +1987,7 @@ public sealed class ComponentSerializer
                             collider.Center
                         ),
 
+                    ["queryOnly"] = collider.QueryOnly,
                     ["isTrigger"] =
                         collider.IsTrigger,
                     ["useProjectMatrix"] = collider.UseProjectMatrix,
@@ -2012,6 +2014,7 @@ public sealed class ComponentSerializer
                         System.Numerics.Vector3.Zero
                     ),
 
+                QueryOnly = data.Properties["queryOnly"]?.GetValue<bool>() ?? false,
                 IsTrigger =
                     data.Properties["isTrigger"]?
                         .GetValue<bool>() ??
@@ -2227,6 +2230,7 @@ public sealed class ComponentSerializer
                             collider.Center
                         ),
 
+                    ["queryOnly"] = collider.QueryOnly,
                     ["isTrigger"] =
                         collider.IsTrigger,
                     ["useProjectMatrix"] = collider.UseProjectMatrix,
@@ -2274,6 +2278,7 @@ public sealed class ComponentSerializer
                         System.Numerics.Vector3.Zero
                     ),
 
+                QueryOnly = data.Properties["queryOnly"]?.GetValue<bool>() ?? false,
                 IsTrigger =
                     data.Properties["isTrigger"]?
                         .GetValue<bool>() ??

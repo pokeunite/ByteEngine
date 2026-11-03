@@ -10,6 +10,7 @@ public sealed class SimulationRate3D : Component
     public Guid SourceObjectId {get;set;}
     internal static float Resolve(GameObject obj)
     {
+        if(obj.Scene is {HasSimulationRates:false})return 1;
         for(var current=obj;current!=null;current=current.Parent)
             if(current.GetComponent<SimulationRate3D>() is {Enabled:true} clock)
             {

@@ -76,8 +76,9 @@ public sealed class UiWidget : Component
 
     public bool IsFocused => ReferenceEquals(UiNavigation.Focused, this);
 
+    internal static bool ButtonActivationRequested=>Input.IsMouseButtonPressedForUi(MouseButton.Left)||Input.IsKeyPressed(Key.Enter)||Input.IsKeyPressed(Key.Space)||UiNavigation.SouthPressed;
     public bool WasClicked =>
-        Enabled && GameObject.ActiveInHierarchy && Visible && Interactable && UiLayout.IsVisible(GameObject) && ((IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left)) ||
+        ButtonActivationRequested && Enabled && GameObject.ActiveInHierarchy && Visible && Interactable && UiLayout.IsVisible(GameObject) && ((IsHovered && Input.IsMouseButtonPressedForUi(MouseButton.Left)) ||
         (IsFocused && (Input.IsKeyPressed(Key.Enter) ||
             (ActivateWithSpace && Input.IsKeyPressed(Key.Space)) || UiNavigation.SouthPressed)));
 

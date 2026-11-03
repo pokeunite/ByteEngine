@@ -274,104 +274,43 @@ public sealed class RenderContext
         RenderView3D? view,
         RenderEnvironment3D environment)
     {
-        var directionalList=new List<DirectionalLight>();var pointList=new List<PointLight>();
-        foreach(var sun in Scene.DirectionalLights)
-            if(sun.Enabled && sun.GameObject.ActiveInHierarchy)directionalList.Add(sun);
-        foreach(var lamp in Scene.PointLights)
-            if(lamp.Enabled && lamp.GameObject.ActiveInHierarchy)pointList.Add(lamp);
-        var directional=directionalList.ToArray();var point=pointList.ToArray();
-
-        RenderDirectionalLight3D[] directionalSnapshots =
-            directional
-                .Take(
-                    RenderLighting3D.MaxDirectionalLights)
-                .Select(
-                    light =>
-                        new RenderDirectionalLight3D(
-                            light.Direction,
-                            light.Color,
-                            Math.Max(
-                                0.0f,
-                                light.Intensity),
-                            Math.Max(
-                                0.0f,
-                                light.AmbientIntensity),
-                            light.CastShadows,
-                            Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),
-                            light.ShadowDistance,
-                            light.ShadowBias,
-                            light.ShadowStrength,
-                            light.ShadowSoftness))
-                .ToArray();
-
-        Vector3 cameraPosition =
-            view?.CameraPosition ??
-            Vector3.Zero;
-
-        RenderPointLight3D[] pointSnapshots =
-            point
-                .OrderBy(
-                    light =>
-                        Vector3.DistanceSquared(
-                            light.Position,
-                            cameraPosition))
-                .Take(
-                    RenderLighting3D.MaxPointLights)
-                .Select(
-                    light =>
-                        new RenderPointLight3D(
-                            light.Position,
-                            light.Color,
-                            Math.Max(
-                                0.0f,
-                                light.Intensity),
-                            Math.Max(
-                                0.05f,
-                                light.Range),
-                            light.CastShadows && environment.Look.PointShadowLimit>0,
-                            Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),
-                            light.ShadowBias,
-                            light.ShadowStrength,
-                            light.ShadowSoftness))
-                .ToArray();
-
-        float ambientIntensity =
-            directionalSnapshots.Length >
-            0
-                ? Math.Clamp(
-                    directionalSnapshots.Sum(
-                        light =>
-                            light.AmbientIntensity),
-                    0.0f,
-                    4.0f)
-                : 0.05f;
-
-        RenderLighting3D lighting =
-            directional.Length ==
-                    0 &&
-                point.Length ==
-                    0
-                ? RenderLighting3D.Default
-                : new RenderLighting3D(
-                    directionalSnapshots,
-                    pointSnapshots,
-                    ambientIntensity,
-                    directional.Length,
-                    point.Length);
-
-        if (!environment.OverrideAmbient)
+        int directionalCount=0,pointCount=0;
+        foreach(var light in Scene.DirectionalLights)if(light.Enabled&&light.GameObject.ActiveInHierarchy)directionalCount++;
+        foreach(var light in Scene.PointLights)if(light.Enabled&&light.GameObject.ActiveInHierarchy)pointCount++;
+        if(directionalCount==0&&pointCount==0)
         {
-            lighting.PointShadowLimit=environment.Look.PointShadowLimit;
-            return lighting;
+            var fallback=RenderLighting3D.Default;
+            return RenderLighting3D.OwnSnapshot(fallback.DirectionalLights.ToArray(),Array.Empty<RenderPointLight3D>(),
+                environment.OverrideAmbient?environment.AmbientIntensity:fallback.AmbientIntensity,0,0,environment.Look.PointShadowLimit);
         }
-
-        return
-            new RenderLighting3D(
-                lighting.DirectionalLights,
-                lighting.PointLights,
-                environment.AmbientIntensity,
-                lighting.SubmittedDirectionalLights,
-                lighting.SubmittedPointLights) { PointShadowLimit=environment.Look.PointShadowLimit };
+        var suns=directionalCount==0?Array.Empty<RenderDirectionalLight3D>():new RenderDirectionalLight3D[Math.Min(directionalCount,RenderLighting3D.MaxDirectionalLights)];
+        var lamps=pointCount==0?Array.Empty<RenderPointLight3D>():new RenderPointLight3D[Math.Min(pointCount,RenderLighting3D.MaxPointLights)];
+        int used=0;float ambient=0;
+        foreach(var light in Scene.DirectionalLights)
+        {
+            if(!light.Enabled||!light.GameObject.ActiveInHierarchy)continue;
+            if(used==suns.Length)break;
+            suns[used++]=new(light.Direction,light.Color,Math.Max(0,light.Intensity),Math.Max(0,light.AmbientIntensity),light.CastShadows,
+                Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),light.ShadowDistance,light.ShadowBias,light.ShadowStrength,light.ShadowSoftness);
+            ambient+=Math.Max(0,light.AmbientIntensity);
+        }
+        // Bounded stable insertion avoids sorting/allocating a list of every scene light.
+        Span<float> distances=stackalloc float[RenderLighting3D.MaxPointLights];
+        used=0;var cameraPosition=view?.CameraPosition??Vector3.Zero;
+        foreach(var light in Scene.PointLights)
+        {
+            if(!light.Enabled||!light.GameObject.ActiveInHierarchy)continue;
+            float distance=Vector3.DistanceSquared(light.Position,cameraPosition);int index=used;
+            while(index>0&&distance.CompareTo(distances[index-1])<0)index--;
+            if(index>=lamps.Length)continue;
+            int last=Math.Min(used,lamps.Length-1);
+            for(int i=last;i>index;i--){lamps[i]=lamps[i-1];distances[i]=distances[i-1];}
+            distances[index]=distance;lamps[index]=new(light.Position,light.Color,Math.Max(0,light.Intensity),Math.Max(.05f,light.Range),
+                light.CastShadows&&environment.Look.PointShadowLimit>0,Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),light.ShadowBias,light.ShadowStrength,light.ShadowSoftness);
+            used=Math.Min(used+1,lamps.Length);
+        }
+        return RenderLighting3D.OwnSnapshot(suns,lamps,environment.OverrideAmbient?environment.AmbientIntensity:suns.Length>0?Math.Clamp(ambient,0,4):.05f,
+            directionalCount,pointCount,environment.Look.PointShadowLimit);
     }
 
     internal void Begin3DFrame()

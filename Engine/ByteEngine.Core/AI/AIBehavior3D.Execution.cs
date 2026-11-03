@@ -164,7 +164,7 @@ public sealed partial class AIBehavior3D
         var agent=GameObject.GetComponent<NavigationAgent3D>();if(agent is not {Enabled:true}){LastError="Search needs Navigation Agent.";return BehaviorStatus.Failure;}
         _movementOwner=node.Id;_ownedAgent=agent;agent.ExternallyDriven=true;agent.Destination=value.Vector3;agent.Speed=speed*SafeMovementMultiplier;agent.Moving=true;Face(value.Vector3);return BehaviorStatus.Running;
     }
-    private NavigationRegion3D? GetRegion(){var agent=GameObject.GetComponent<NavigationAgent3D>();return agent==null?null:agent.RegionObject==Guid.Empty?GameObject.Scene?.GameObjects.Select(o=>o.GetComponent<NavigationRegion3D>()).FirstOrDefault(r=>r is {Enabled:true}):GameObject.Scene?.FindGameObject(agent.RegionObject)?.GetComponent<NavigationRegion3D>();}
+    private NavigationRegion3D? GetRegion(){var agent=GameObject.GetComponent<NavigationAgent3D>();return agent==null?null:GameObject.Scene?.FindNavigationRegion(agent.RegionObject);}
     private BehaviorStatus RunSubtree(BehaviorNode node)
     {
         string identity=node.SubBehavior.Guid!=Guid.Empty?node.SubBehavior.Guid.ToString():node.SubBehavior.ProjectPath;

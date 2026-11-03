@@ -1,9 +1,19 @@
 import {waterUniforms,waterVertex,waterFragment} from './water.js';
 import {decodeDrawPacket} from './frame-wire.js';
+import {cacheUniforms} from './uniform-cache.js';
+function imageCanvas(){return typeof document==='undefined'?new OffscreenCanvas(1,1):document.createElement('canvas');}
 export class BrowserRenderer {
     constructor(canvas, overlay) {
         const gl=this.gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
         if(!gl) throw new Error('WebGL 2 is unavailable on this browser/device.');
+        this.uniformCache=cacheUniforms(gl);
+        this.maximumSkinningBones=Math.max(1,Math.min(128,Math.floor((gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS)-128)/4)));
+        const skinVertex=`layout(location=3) in vec4 skinIndices;layout(location=4) in vec4 skinWeights;
+        uniform int skinBoneCount;uniform mat4 skinBones[${this.maximumSkinningBones}];
+        void deformSkin(inout vec3 p,inout vec3 N){if(skinBoneCount==0)return;mat4 blended=mat4(0.0);float total=0.0;
+            for(int j=0;j<4;j++){int i=int(skinIndices[j]);float w=max(0.0,skinWeights[j]);if(w>.000001&&i>=0&&i<skinBoneCount){blended+=skinBones[i]*w;total+=w;}}
+            if(total>.000001){p=(blended*vec4(p,1.0)).xyz/total;N=mat3(blended)*N/total;}}
+        `;
         this.gpuTimer=gl.getExtension('EXT_disjoint_timer_query_webgl2');this.gpuQueries=[];this.profile={gpuMs:null,cpu3DMs:0,uiCpuMs:0,drawCalls:0};
         this.ui=overlay.getContext('2d');this.meshes=new Map();this.textures=new Map();
         this.anisotropy=gl.getExtension('EXT_texture_filter_anisotropic');this.floatLinear=gl.getExtension('OES_texture_float_linear');
@@ -14,16 +24,18 @@ export class BrowserRenderer {
         gl.attachShader(program,compile(gl.VERTEX_SHADER,`#version 300 es
         layout(location=0) in vec3 position;layout(location=1) in vec3 normal;layout(location=2) in vec2 uv;
         layout(location=5) in mat4 instanceModel;uniform bool instanced;uniform mat4 vp,model;out vec3 n,world;out vec2 texcoord;
+        ${skinVertex}
         ${waterUniforms}
         ${waterVertex}
         uniform sampler2D heightField;uniform bool hasHeight;uniform vec4 heightUv;uniform float heightRange,heightBias;uniform vec2 heightSize;
         float surfaceHeight(vec2 coord){vec2 rg=textureLod(heightField,clamp(coord,vec2(0.0),vec2(1.0)),0.0).rg;return dot(rg,vec2(65280.0,255.0))/65535.0*heightRange+heightBias;}
-        void main(){vec3 pos=position,N=normal;if(hasHeight){vec2 coord=uv*heightUv.xy+heightUv.zw;vec2 step=1.0/vec2(textureSize(heightField,0));pos.y+=surfaceHeight(coord);vec2 gradient=vec2(surfaceHeight(coord+vec2(step.x,0.0))-surfaceHeight(coord-vec2(step.x,0.0)),surfaceHeight(coord+vec2(0.0,step.y))-surfaceHeight(coord-vec2(0.0,step.y)))/(2.0*step*heightSize);N=normalize(vec3(-gradient.x,1.0,-gradient.y));}mat4 M=instanced?instanceModel:model;vec4 p=M*vec4(pos,1.0);world=p.xyz;n=mat3(transpose(inverse(M)))*N;displaceWater(world,n);p=vec4(world,1.0);
+        void main(){vec3 pos=position,N=normal;deformSkin(pos,N);if(hasHeight){vec2 coord=uv*heightUv.xy+heightUv.zw;vec2 step=1.0/vec2(textureSize(heightField,0));pos.y+=surfaceHeight(coord);vec2 gradient=vec2(surfaceHeight(coord+vec2(step.x,0.0))-surfaceHeight(coord-vec2(step.x,0.0)),surfaceHeight(coord+vec2(0.0,step.y))-surfaceHeight(coord-vec2(0.0,step.y)))/(2.0*step*heightSize);N=normalize(vec3(-gradient.x,1.0,-gradient.y));}mat4 M=instanced?instanceModel:model;vec4 p=M*vec4(pos,1.0);world=p.xyz;n=mat3(transpose(inverse(M)))*N;displaceWater(world,n);p=vec4(world,1.0);
         texcoord=uv;gl_Position=vp*p;gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`));
         gl.attachShader(program,compile(gl.FRAGMENT_SHADER,`#version 300 es
         precision highp float;
         in vec3 n,world;in vec2 texcoord;out vec4 fragment;
         uniform vec4 color;uniform vec3 eye,emission;uniform vec2 tiling,offset;
+        uniform int colorPaletteCount;uniform vec4 colorPalette[16];
         uniform sampler2D tex0,tex1,tex2,tex3,tex4,tex5,tex6;
         uniform sampler2D sandImprint;uniform bool hasSandImprint;uniform vec2 sandOrigin;
         uniform bool has0,has1,has2,has3,has4,has5,has6,unlit,srgb,directX,packed;
@@ -52,7 +64,7 @@ export class BrowserRenderer {
             return ((1.0-F)*(1.0-metal)*base/PI+D*G*F/max(4.0*nv*nl,.001))*radiance*nl;
         }
         void main(){
-            vec2 uv=texcoord*tiling+offset;vec4 sampleColor=has0?texture(tex0,uv):vec4(1.0);if(srgb&&has0)sampleColor.rgb=pow(max(sampleColor.rgb,vec3(0.0)),vec3(2.2));vec4 base=color*sampleColor;
+            vec2 uv=texcoord*tiling+offset;vec4 sampleColor=has0?texture(tex0,uv):vec4(1.0);if(srgb&&has0)sampleColor.rgb=pow(max(sampleColor.rgb,vec3(0.0)),vec3(2.2));vec4 base=(colorPaletteCount>0?colorPalette[clamp(int(texcoord.x+.5),0,colorPaletteCount-1)]:color)*sampleColor;
             if(cutoff>=0.0&&base.a<cutoff)discard;
             vec3 N=normalize(n);if(has1){
                 vec3 map=texture(tex1,uv).xyz*2.0-1.0;if(directX)map.y=-map.y;map.xy*=normalStrength;
@@ -71,7 +83,7 @@ export class BrowserRenderer {
             vec3 outColor=base.rgb;if(!unlit){
                 outColor=base.rgb*ambient*mix(1.0,occlusion,clamp(ao,0.0,1.0));vec3 V=normalize(eye-world);
                 for(int i=0;i<4;i++){if(i>=lightCount)break;vec3 L=normalize(-lightDirection[i]);outColor+=illuminate(base.rgb,N,V,L,lightColor[i],metal,rough)*(i==shadowLight?visibility(N,L):1.0);}
-                for(int i=0;i<8;i++){if(i>=pointCount)break;vec3 diff=pointPosition[i]-world;float distance=length(diff),range=max(pointRange[i],.001);
+                for(int i=0;i<8;i++){if(i>=pointCount)break;vec3 diff=pointPosition[i]-world;float distance=length(diff),range=max(pointRange[i],.001);if(distance>=range)continue;
                     float attenuation=pow(clamp(1.0-distance/range,0.0,1.0),2.0);
                     outColor+=illuminate(base.rgb,N,V,normalize(diff),pointColor[i]*attenuation,metal,rough);}
             }
@@ -82,6 +94,20 @@ export class BrowserRenderer {
             fragment=vec4(max(outColor,vec3(0)),base.a);
         }`));
         gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+        // Select per draw, preserving transparent order. One mapped VFX or water
+        // surface must not force every ordinary mesh through the universal shader.
+        this.fastSurfaceEnabled=true;
+        const variant=stripMaps=>{
+            const result=gl.createProgram();
+            for(const shader of gl.getAttachedShaders(program)){
+                let source=gl.getShaderSource(shader).replace('uniform bool waterSurface,waterVolume,waterReflections,hasWaterDepth;','const bool waterSurface=false,waterVolume=false;uniform bool waterReflections,hasWaterDepth;').replace('uniform bool hasHeight;','const bool hasHeight=false;').replace('uniform bool hasSandImprint;','const bool hasSandImprint=false;');
+                if(stripMaps)source=source.replace('uniform bool has0,has1,has2,has3,has4,has5,has6,unlit,srgb,directX,packed;','uniform bool has0,unlit,srgb,directX,packed;const bool has1=false,has2=false,has3=false,has4=false,has5=false,has6=false;');
+                gl.attachShader(result,compile(gl.getShaderParameter(shader,gl.SHADER_TYPE),source));
+            }
+            gl.linkProgram(result);if(!gl.getProgramParameter(result,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(result));return result;
+        };
+        this.fastSurfaceProgram=variant(true);this.mappedSurfaceProgram=variant(false);
+        this.programLocations=new Map();
         const sky=this.skyProgram=gl.createProgram();this.skyVao=gl.createVertexArray();
         gl.attachShader(sky,compile(gl.VERTEX_SHADER,`#version 300 es
         out vec2 screen;void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);screen=p*2.0-1.0;gl_Position=vec4(screen,1.0,1.0);}`));
@@ -123,13 +149,14 @@ export class BrowserRenderer {
         const shadow=this.shadowProgram=gl.createProgram();
         gl.attachShader(shadow,compile(gl.VERTEX_SHADER,`#version 300 es
         layout(location=0) in vec3 position;layout(location=2) in vec2 uv;layout(location=5) in mat4 instanceModel;
+        ${skinVertex}
         uniform mat4 vp;uniform sampler2D heightField;uniform bool hasHeight;uniform vec4 heightUv;uniform float heightRange,heightBias;out vec2 texcoord;
-        void main(){vec3 p=position;texcoord=uv;if(hasHeight){vec2 rg=textureLod(heightField,clamp(uv*heightUv.xy+heightUv.zw,vec2(0.0),vec2(1.0)),0.0).rg;p.y+=dot(rg,vec2(65280.0,255.0))/65535.0*heightRange+heightBias;}gl_Position=vp*instanceModel*vec4(p,1.0);gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`));
+        void main(){vec3 p=position,unusedNormal=vec3(0);deformSkin(p,unusedNormal);texcoord=uv;if(hasHeight){vec2 rg=textureLod(heightField,clamp(uv*heightUv.xy+heightUv.zw,vec2(0.0),vec2(1.0)),0.0).rg;p.y+=dot(rg,vec2(65280.0,255.0))/65535.0*heightRange+heightBias;}gl_Position=vp*instanceModel*vec4(p,1.0);gl_Position.z=2.0*gl_Position.z-gl_Position.w;}`));
         gl.attachShader(shadow,compile(gl.FRAGMENT_SHADER,`#version 300 es
         precision highp float;in vec2 texcoord;uniform sampler2D albedo;uniform bool hasAlbedo;uniform float cutoff;uniform vec2 tiling,offset;
         void main(){if(cutoff>=0.0&&hasAlbedo&&texture(albedo,texcoord*tiling+offset).a<cutoff)discard;}`));
         gl.linkProgram(shadow);if(!gl.getProgramParameter(shadow,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(shadow));
-        this.shadowLocations=Object.fromEntries(['vp','heightField','hasHeight','heightUv','heightRange','heightBias','albedo','hasAlbedo','cutoff','tiling','offset'].map(n=>[n,gl.getUniformLocation(shadow,n)]));
+        this.shadowLocations=Object.fromEntries(['vp','heightField','hasHeight','heightUv','heightRange','heightBias','albedo','hasAlbedo','cutoff','tiling','offset','skinBoneCount','skinBones[0]'].map(n=>[n,gl.getUniformLocation(shadow,n)]));
     }
     prepareTargets(){
         const gl=this.gl,w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;if(this.targetWidth===w&&this.targetHeight===h)return;
@@ -170,7 +197,7 @@ export class BrowserRenderer {
         const u=this.shadowLocations;gl.uniformMatrix4fv(u.vp,false,s.matrix);
         for(const command of data.draws){
             const count=(command.shadowInstances?.length||0)/16;if(!count)continue;const m=this.meshes.get(command.id),d=command.material===undefined?command:this.materials.get(command.material);if(!m||!d)continue;
-            gl.bindVertexArray(m.vao);this.instanceBuffer??=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.instanceBuffer);gl.bufferData(gl.ARRAY_BUFFER,command.shadowInstances instanceof Float32Array?command.shadowInstances:new Float32Array(command.shadowInstances),gl.STREAM_DRAW);
+            gl.bindVertexArray(m.vao);this.bindSkin(command,u);this.instanceBuffer??=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.instanceBuffer);gl.bufferData(gl.ARRAY_BUFFER,command.shadowInstances instanceof Float32Array?command.shadowInstances:new Float32Array(command.shadowInstances),gl.STREAM_DRAW);
             for(let column=0;column<4;column++){const loc=5+column;gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,4,gl.FLOAT,false,64,column*16);gl.vertexAttribDivisor(loc,1);}
             gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(d.heightField)?.gpu||null);gl.uniform1i(u.heightField,7);gl.uniform1i(u.hasHeight,d.heightField?1:0);gl.uniform4fv(u.heightUv,d.heightUv);gl.uniform1f(u.heightRange,d.heightRange);gl.uniform1f(u.heightBias,d.heightBias);
             gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(d.texture)?.gpu||null);gl.uniform1i(u.albedo,0);gl.uniform1i(u.hasAlbedo,d.texture?1:0);gl.uniform1f(u.cutoff,d.cutoff);gl.uniform2fv(u.tiling,d.tiling);gl.uniform2fv(u.offset,d.offset);
@@ -180,15 +207,21 @@ export class BrowserRenderer {
         gl.bindFramebuffer(gl.FRAMEBUFFER,null);
     }
     deleteTint(key){const c=this.tints.get(key);if(c){this.tintBytes-=c.width*c.height*4;this.tints.delete(key);}}
-    location(name){if(!this.locations.has(name))this.locations.set(name,this.gl.getUniformLocation(this.program,name));return this.locations.get(name);}
+    location(name){if(!this.locations.has(name))this.locations.set(name,this.gl.getUniformLocation(this.activeProgram||this.program,name));return this.locations.get(name);}
     bytes(value){return typeof value==='number'?this.readBuffer(value):Uint8Array.from(atob(value),c=>c.charCodeAt(0));}
+    bindSkin(command,locations){
+        const gl=this.gl,bytes=command.skinBuffer>=0?this.bytes(command.skinBuffer):null,count=(bytes?.byteLength??0)/64;
+        if(!Number.isInteger(count)||count>this.maximumSkinningBones)throw new Error('Unsupported skinning palette size');
+        gl.uniform1i(locations?locations.skinBoneCount:this.location('skinBoneCount'),count);
+        if(count)gl.uniformMatrix4fv(locations?locations['skinBones[0]']:this.location('skinBones[0]'),false,new Float32Array(bytes.buffer,bytes.byteOffset,bytes.byteLength/4));
+    }
     draw(data,width,height){
         for(const command of data.draws??[])if(command.dataBuffer!==undefined)decodeDrawPacket(this.bytes(command.dataBuffer),command);
         this.renderFrame=(this.renderFrame||0)+1;this.profile.renderFrame=this.renderFrame;this.gpuQueryFrames??=new Map();
         for(const material of data.materials??[])this.materials.set(material.material,material);
         for(const id of data.deadMaterials??[])this.materials.delete(id);
         const gl=this.gl,uploadStart=performance.now();let meshBytes=0,textureBytes=0;
-        for(const id of data.deadMeshes){const m=this.meshes.get(id);if(m){gl.deleteVertexArray(m.vao);for(const b of m.vertexSlots??[m.vbo])gl.deleteBuffer(b);gl.deleteBuffer(m.ibo);this.extraVertexBytes=Math.max(0,(this.extraVertexBytes||0)-(m.extraBytes||0));this.meshes.delete(id);}}
+        for(const id of data.deadMeshes){const m=this.meshes.get(id);if(m){gl.deleteVertexArray(m.vao);for(const b of m.vertexSlots??[m.vbo])gl.deleteBuffer(b);gl.deleteBuffer(m.ibo);if(m.skinVbo)gl.deleteBuffer(m.skinVbo);this.extraVertexBytes=Math.max(0,(this.extraVertexBytes||0)-(m.extraBytes||0));this.meshes.delete(id);}}
         for(const id of data.deadTextures){const t=this.textures.get(id);if(t){gl.deleteTexture(t.gpu);this.textures.delete(id);for(const key of this.tints.keys())if(key.startsWith(id+':'))this.deleteTint(key);}}
         for(const upload of data.uploads){
             let m=this.meshes.get(upload.id);
@@ -212,12 +245,13 @@ export class BrowserRenderer {
             for(const [index,count,offset] of [[0,3,0],[1,3,12],[2,2,24]]){
                 gl.enableVertexAttribArray(index);gl.vertexAttribPointer(index,count,gl.FLOAT,false,32,offset);
             }
+            if(upload.skin>=0){const skin=this.bytes(upload.skin);meshBytes+=skin.byteLength;m.skinBytes=skin.byteLength;m.skinVbo??=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,m.skinVbo);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(skin.buffer,skin.byteOffset,skin.byteLength/4),gl.STATIC_DRAW);for(const [index,offset] of [[3,0],[4,16]]){gl.enableVertexAttribArray(index);gl.vertexAttribPointer(index,4,gl.FLOAT,false,32,offset);}}
         }
         this.touchedTextures??=new Set();this.touchedTextures.clear();
         for(const upload of data.textures){
             for(const key of this.tints.keys())if(key.startsWith(upload.id+':'))this.deleteTint(key);
             let t=this.textures.get(upload.id);
-            if(!t){t={gpu:gl.createTexture(),image:document.createElement('canvas')};this.textures.set(upload.id,t);}
+            if(!t){t={gpu:gl.createTexture(),image:imageCanvas()};this.textures.set(upload.id,t);}
             const raw=this.bytes(upload.pixels),bytes=upload.hdr?new Float32Array(raw.buffer,raw.byteOffset,raw.byteLength/4):raw;const format=upload.hdr?gl.RGBA16F:gl.RGBA8,type=upload.hdr?gl.FLOAT:gl.UNSIGNED_BYTE;
             textureBytes+=raw.byteLength;
             gl.bindTexture(gl.TEXTURE_2D,t.gpu);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
@@ -254,7 +288,13 @@ export class BrowserRenderer {
         gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
         if(data.sky){const sky=data.sky,u=this.skyLocations;gl.useProgram(this.skyProgram);gl.bindVertexArray(this.skyVao);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);gl.depthMask(false);gl.uniformMatrix4fv(u.inverseVp,false,sky.inverseVp);gl.uniform3fv(u.eye,data.eye);
          for(const name of ['zenith','horizon','ground'])gl.uniform3fv(u[name],sky[name]);for(const name of ['rotation','intensity','sharpness'])gl.uniform1f(u[name],sky[name]);gl.uniform1f(u.exposure,data.exposure??1);gl.uniform1i(u.hdr,sky.hdr?1:0);gl.uniform1i(u.hasMap,sky.texture&&this.textures.has(sky.texture)?1:0);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(sky.texture)?.gpu||null);gl.uniform1i(u.environment,0);gl.drawArrays(gl.TRIANGLES,0,3);}
-        gl.useProgram(this.program);gl.uniform1f(this.location('exposure'),data.exposure??1);
+        this.activeProgram=null;this.profile.surfaceVariant=true;this.profile.surfaceDraws={basic:0,mapped:0,general:0};
+        const initialized=new Set();
+        const bindProgram=program=>{
+            this.activeProgram=program;gl.useProgram(program);
+            if(!this.programLocations.has(program))this.programLocations.set(program,new Map());this.locations=this.programLocations.get(program);
+            if(initialized.has(program))return;initialized.add(program);
+        gl.uniform1f(this.location('exposure'),data.exposure??1);
         gl.activeTexture(gl.TEXTURE9);gl.bindTexture(gl.TEXTURE_2D,this.shadowTexture||null);gl.uniform1i(this.location('shadowMap'),9);
         gl.uniform1i(this.location('shadowLight'),data.shadow?.light??-1);gl.uniformMatrix4fv(this.location('shadowMatrix'),false,data.shadow?.matrix||data.vp);
         gl.uniform1f(this.location('shadowBias'),data.shadow?.bias??0);gl.uniform1f(this.location('shadowStrength'),data.shadow?.strength??0);gl.uniform1f(this.location('shadowTexel'),1/(data.shadow?.resolution||1));
@@ -268,13 +308,19 @@ export class BrowserRenderer {
             gl.uniform3fv(this.location('pointColor[0]'),data.points.flatMap(l=>l.color));gl.uniform1fv(this.location('pointRange[0]'),data.points.map(l=>l.range));}
         gl.uniformMatrix4fv(this.location('inverseVp'),false,data.inverseVp||data.vp);gl.uniform2f(this.location('viewport'),gl.drawingBufferWidth,gl.drawingBufferHeight);gl.uniform1i(this.location('waterDetail'),data.quality==='High'?2:data.quality==='Fast'?0:1);
         gl.activeTexture(gl.TEXTURE10);gl.bindTexture(gl.TEXTURE_2D,this.waterTarget.color);gl.uniform1i(this.location('sceneColor'),10);gl.activeTexture(gl.TEXTURE11);gl.bindTexture(gl.TEXTURE_2D,this.waterTarget.depth);gl.uniform1i(this.location('sceneDepth'),11);
+        };
         let previousMaterial=null,waterCaptured=false;
         for(const command of data.draws){
             if(command.water?.surface&&!waterCaptured){gl.bindFramebuffer(gl.READ_FRAMEBUFFER,this.worldTarget.framebuffer);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,this.waterTarget.framebuffer);gl.blitFramebuffer(0,0,this.targetWidth,this.targetHeight,0,0,this.targetWidth,this.targetHeight,gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT,gl.NEAREST);gl.bindFramebuffer(gl.FRAMEBUFFER,this.worldTarget.framebuffer);waterCaptured=true;}
-            this.bindWater(command.water,data);const wet=command.wet||[];gl.uniform4fv(this.location('wetContact[0]'),wet.length===16?wet.slice(0,12):new Float32Array(12));gl.uniform4fv(this.location('wetLevels'),wet.length===16?wet.slice(12):[0,0,0,0]);
             const draw=command.material===undefined?command:this.materials.get(command.material);
             if(!draw)throw new Error('Missing browser material '+command.material);
-            const m=this.meshes.get(command.id);gl.bindVertexArray(m.vao);
+            const general=!this.fastSurfaceEnabled||command.water||draw.heightField||draw.sandImprint;
+            const mapped=draw.normal||draw.metallicTexture||draw.roughnessTexture||draw.aoTexture||draw.packedTexture||draw.emissionTexture;
+            const simple=!general&&!mapped,program=general?this.program:mapped?this.mappedSurfaceProgram:this.fastSurfaceProgram;
+            this.profile.surfaceDraws[general?'general':mapped?'mapped':'basic']++;if(!simple)this.profile.surfaceVariant=false;
+            if(this.activeProgram!==program){bindProgram(program);previousMaterial=null;}
+            this.bindWater(command.water,data);const wet=command.wet||[];gl.uniform4fv(this.location('wetContact[0]'),wet.length===16?wet.slice(0,12):new Float32Array(12));gl.uniform4fv(this.location('wetLevels'),wet.length===16?wet.slice(12):[0,0,0,0]);
+            const m=this.meshes.get(command.id);gl.bindVertexArray(m.vao);this.bindSkin(command);
             gl.uniform1i(this.location('receiveShadow'),data.shadow&&command.receiveShadows?1:0);
             const instanceCount=(command.instances?.length??0)/16;
             this.profile.triangles+=m.count/3*Math.max(1,instanceCount);this.profile.instances+=Math.max(1,instanceCount);
@@ -288,6 +334,7 @@ export class BrowserRenderer {
             gl.uniformMatrix4fv(this.location('model'),false,command.model);gl.uniform4fv(this.location('color'),draw.color);
             const material=command.material??[draw.metallic,draw.roughness,draw.ao,draw.normalStrength,draw.cutoff,draw.unlit,draw.srgb,draw.directX,draw.packed,draw.channels,draw.emission,draw.tiling,draw.offset,draw.heightField,draw.heightUv,draw.heightSize,draw.heightRange,draw.heightBias,draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture,draw.depth,draw.write,draw.blend,draw.cull,draw.front].join('|');
             if(material!==previousMaterial){previousMaterial=material;this.profile.materialChanges++;
+            gl.uniform1i(this.location('colorPaletteCount'),(draw.palette?.length??0)/4);if(draw.palette?.length)gl.uniform4fv(this.location('colorPalette[0]'),draw.palette);
             for(const name of ['metallic','roughness','ao','normalStrength','cutoff'])gl.uniform1f(this.location(name),draw[name]);
             for(const name of ['unlit','srgb','directX','packed'])gl.uniform1i(this.location(name),draw[name]?1:0);
             gl.uniform3iv(this.location('channels'),draw.channels);gl.uniform3fv(this.location('emission'),draw.emission);
@@ -295,7 +342,7 @@ export class BrowserRenderer {
             gl.activeTexture(gl.TEXTURE8);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(draw.sandImprint)?.gpu||null);gl.uniform1i(this.location('sandImprint'),8);gl.uniform1i(this.location('hasSandImprint'),draw.sandImprint?1:0);gl.uniform2fv(this.location('sandOrigin'),draw.sandOrigin||[0,0]);
             gl.activeTexture(gl.TEXTURE7);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(draw.heightField)?.gpu||null);gl.uniform1i(this.location('heightField'),7);gl.uniform1i(this.location('hasHeight'),draw.heightField?1:0);gl.uniform4fv(this.location('heightUv'),draw.heightUv);gl.uniform2fv(this.location('heightSize'),draw.heightSize);gl.uniform1f(this.location('heightRange'),draw.heightRange);gl.uniform1f(this.location('heightBias'),draw.heightBias);
             const maps=[draw.texture,draw.normal,draw.metallicTexture,draw.roughnessTexture,draw.aoTexture,draw.packedTexture,draw.emissionTexture];
-            for(let i=0;i<maps.length;i++){
+            for(let i=0;i<(simple?1:maps.length);i++){
                 gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,this.textures.get(maps[i])?.gpu||null);
                 gl.uniform1i(this.location('tex'+i),i);gl.uniform1i(this.location('has'+i),maps[i]?1:0);
             }
@@ -331,7 +378,7 @@ export class BrowserRenderer {
                 else{
                     const key=c.texture+':'+c.color.slice(0,3).join(',');let tinted=this.tints.get(key);
                     if(!tinted){
-                        tinted=document.createElement('canvas');tinted.width=t.image.width;tinted.height=t.image.height;
+                        tinted=imageCanvas();tinted.width=t.image.width;tinted.height=t.image.height;
                         const ctx=tinted.getContext('2d');ctx.drawImage(t.image,0,0);ctx.globalCompositeOperation='multiply';ctx.fillStyle=`rgb(${c.color[0]*255},${c.color[1]*255},${c.color[2]*255})`;ctx.fillRect(0,0,tinted.width,tinted.height);ctx.globalCompositeOperation='destination-in';ctx.drawImage(t.image,0,0);
                         const bytes=tinted.width*tinted.height*4;
                         while(this.tints.size&&(this.tints.size>=32||this.tintBytes+bytes>64*1024*1024))this.deleteTint(this.tints.keys().next().value);

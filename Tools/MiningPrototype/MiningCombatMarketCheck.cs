@@ -22,6 +22,15 @@ internal static class MiningCombatMarketCheck
   check(shotgun.DamagePerPellet*shotgun.PelletsPerShot>=70&&shotgun.HitImpulse>=10&&shotgun.EnemyKnockbackSeconds>=.2f,"shotgun combines meaningful damage with crowd-clearing knockback");
   check(rifle.DamagePerPellet>=23&&rifle.RecoilPitchPerShot<=.2f&&rifle.MaximumRecoilDegrees<=2,"AR gains damage and has controlled recoil");
   check(op.RaiderMoveSpeed<op.HunterMoveSpeed,"rig raiders are slower than player hunters");
+  var ui=scene.GameObjects.SelectMany(o=>o.Components.OfType<MiningBusinessUi3D>()).Single();
+  var defenceRoot=scene.CreateGameObject("Modal health bar test");
+  var defence=defenceRoot.AddComponent(new MiningDefense3D{Kind=MiningDefenseKind.Sentry,OperationObjectId=op.GameObject.Id});
+  var screen=ui.Screen;typeof(MiningBusinessUi3D).GetProperty("Screen")!.SetValue(ui,MiningScreen.None);
+  check(defence.HealthBarVisible,"healthy defence displays bar during gameplay");
+  foreach(var page in new[]{MiningScreen.Drill,MiningScreen.Research,MiningScreen.Market,MiningScreen.Refinery,MiningScreen.AmmoPress,MiningScreen.Company}){
+   typeof(MiningBusinessUi3D).GetProperty("Screen")!.SetValue(ui,page);check(!defence.HealthBarVisible,"defence health bar hidden behind "+page);
+  }
+  typeof(MiningBusinessUi3D).GetProperty("Screen")!.SetValue(ui,screen);scene.DestroyGameObject(defenceRoot);
   var enemy=scene.CreateGameObject("knockback fixture");enemy.Transform.WorldPosition=new(600,0,0);var motor=enemy.AddComponent(new CharacterController3D());enemy.AddComponent(new SimpleEnemyAI3D{Enabled=false});var owner=scene.CreateGameObject("knockback weapon");var weapon=owner.AddComponent(new WeaponInstance3D());
   typeof(WeaponInstance3D).GetMethod("ApplyEnemyKnockback",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(weapon,[new CombatDamageReceipt(enemy.Id,enemy.Transform.WorldPosition,9,false,true),-Vector3.UnitZ,shotgun]);
   check(motor.HasBurstMotion,"shotgun hit starts collision-swept physical displacement on the enemy");scene.DestroyGameObject(enemy);scene.DestroyGameObject(owner);

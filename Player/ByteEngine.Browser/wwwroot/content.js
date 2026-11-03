@@ -8,7 +8,7 @@ export async function loadContent(game, status) {
     if (![1,2,3].includes(manifest.formatVersion) || !Array.isArray(manifest.files)) throw new Error('Unsupported web package.');
     const audio = new Map();
     if (manifest.formatVersion === 3 && (!Number.isSafeInteger(manifest.packageSize) || manifest.packageSize < 8 || manifest.packageSize > 500*1024*1024)) throw new Error('Invalid package size.');
-    const packageBytes = manifest.formatVersion === 3 ? new Uint8Array(manifest.packageSize) : null;
+    let packageBytes = manifest.formatVersion === 3 ? new Uint8Array(manifest.packageSize) : null;
     let index = 0;
     const progress=new Map();
     const update=(path,loaded)=>{if(status.dataset?.failed)return;progress.set(path,loaded);const total=manifest.files.reduce((sum,file)=>sum+file.size,0),done=[...progress.values()].reduce((sum,n)=>sum+n,0),fraction=Math.min(1,done/Math.max(1,total)),label=`Loading game · ${Math.floor(fraction*100)}%`;if(status.setProgress)status.setProgress(fraction,label);else status.textContent=label;};
@@ -24,6 +24,7 @@ export async function loadContent(game, status) {
         await Promise.all(Array.from({length:Math.min(3,manifest.files.length)},worker));
         if(await digest(packageBytes)!==manifest.packageSha256.toLowerCase())throw new Error('Asset package integrity mismatch.');
         await mountPackage(await mountedGame,packageBytes,audio,status);
+        packageBytes=null; // Release the assembled download, including worker closures.
         return {manifest,audio};
     }
     for (const file of manifest.files) {
@@ -35,7 +36,7 @@ export async function loadContent(game, status) {
             await mountPackage(await mountedGame, data, audio, status);
         } else {
             mountFile(await mountedGame,file.path,data);
-            if (/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(file.path)) audio.set(file.path, data.buffer);
+            if (/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(file.path)) audio.set(file.path, mediaBlob(file.path,data));
         }
     }
     return { manifest, audio };
@@ -140,7 +141,8 @@ async function mountPackage(game, bytes, audio, status) {
         const actual=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
         if(actual.some((value,i)=>value!==expected[i]))throw new Error('Corrupted asset: '+path);
         mountFile(game,path,data);trace('asset-mounted',{path,bytes:data.length,compressedBytes:compressed.length,durationMs:performance.now()-unpackStart});
-        if(/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(path))audio.set(path,data.buffer);
+        if(/\.(wav|ogg|mp4|m4v|webm|ogv)$/i.test(path))audio.set(path,mediaBlob(path,data));
     }
     if(offset!==bytes.length)throw new Error('Unexpected package trailing data.');
 }
+function mediaBlob(path,data){const extension=path.split('.').pop().toLowerCase(),type={wav:'audio/wav',ogg:'audio/ogg',mp4:'video/mp4',m4v:'video/mp4',webm:'video/webm',ogv:'video/ogg'}[extension];return new Blob([data],{type});}

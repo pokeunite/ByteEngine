@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {createFrameReader} from '../Player/ByteEngine.Browser/wwwroot/frame-buffers.js';
+const memory=new WebAssembly.Memory({initial:1,maximum:3});let copies=0;
+const runtime={localHeapViewU8:()=>new Uint8Array(memory.buffer)},game={ReadBuffer:()=>{copies++;return new Uint8Array([91]);}};
+const reader=createFrameReader(runtime,game);reader.beginFrame({bufferViews:[32,8]});
+const heap=runtime.localHeapViewU8();heap.set([1,2,3,4],32);
+const first=reader.read(0);assert.equal(first.buffer,memory.buffer);assert.deepEqual([...first.subarray(0,4)],[1,2,3,4]);assert.equal(copies,0);
+memory.grow(1);assert.equal(first.byteLength,0);const grown=reader.read(0);assert.equal(grown.buffer,memory.buffer);assert.equal(grown[2],3);
+runtime.localHeapViewU8()[34]=79;assert.equal(reader.read(0)[2],79);
+assert.throws(()=>reader.read(-1));assert.throws(()=>reader.read(.5));assert.throws(()=>reader.read(1));
+reader.beginFrame({bufferViews:[131070,8]});assert.throws(()=>reader.read(0));
+reader.beginFrame({});assert.equal(reader.read(0)[0],91);assert.equal(copies,1);
+reader.enabled=false;reader.beginFrame({bufferViews:[32,8]});assert.equal(reader.read(0)[0],91);assert.equal(copies,2);
+console.log('PASS frame views: no copy, live data, memory growth, invalid ranges/indices, old-runtime fallback and diagnostic copy switch');

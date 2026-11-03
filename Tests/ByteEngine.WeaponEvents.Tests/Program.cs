@@ -14,6 +14,8 @@ using KarlsonDemo.Plugin;
 using ByteEngine.Editor.Panels;
 using ByteEngine.Core.Animation;
 
+if(args.Contains("--ai-only")){AIBehaviorTests.Run();AICombatRoleTests.Run();RusherTests.Run();AIAdvancedTests.Run();return;}
+if(args.Contains("--pc-query-movement")){MiningPcPolishTests.Run();GunProjectileTests.Run();CombatPolishTests.Run();return;}
 MiningPauseTests.Run();
 MiningPcPolishTests.Run();
 MiningWorkshopBalanceTests.Run();

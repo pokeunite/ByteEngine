@@ -62,7 +62,7 @@ foreach ($pluginName in @('DesertTerrain','DuneCompany','KarlsonDemo')) {
     $pluginBuilds[$manifest.id] = @{ version=$manifest.version; sha256=(Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash }
 }
 [IO.File]::WriteAllText((Join-Path $source 'browser-plugin-builds.json'),($pluginBuilds | ConvertTo-Json -Depth 4))
-foreach ($file in @('index.html','main.js','renderer.js','water.js','graphics.js','frame-wire.js','audio.js','video.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
+foreach ($file in @('index.html','main.js','renderer.js','render-worker.js','render-worker-client.js','packed-frame.js','uniform-cache.js','frame-buffers.js','water.js','graphics.js','frame-wire.js','audio.js','video.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
 $runtimeFiles = [ordered]@{}
@@ -86,7 +86,8 @@ foreach ($target in @((Join-Path $repoRoot 'Dist/ByteEngine/BrowserRuntime'),
         Copy-Item -LiteralPath $item.FullName -Destination $resolved -Recurse -Force
     }
 }
-Write-Host 'Browser game runtime bundled with Dist and Debug editor.'
+& (Join-Path $PSScriptRoot 'SyncBrowserPluginPackages.ps1') -SourceRoot $repoRoot
+Write-Host 'Browser game runtime and matching plugin inputs bundled with Dist and Debug editor.'
 }
 finally {
     if ($publishLockHeld) { $publishMutex.ReleaseMutex() }

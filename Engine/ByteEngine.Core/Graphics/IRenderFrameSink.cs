@@ -10,6 +10,7 @@ namespace ByteEngine.Core.Graphics;
 /// </summary>
 public interface IRenderFrameSink
 {
+    int MaximumSkinningBones => 0;
     void Draw3D(RenderView3D? view, RenderLighting3D lighting,
         RenderEnvironment3D environment, IReadOnlyList<RenderSubmission> submissions);
     void SetUiClip(Vector4? rectangle) { }

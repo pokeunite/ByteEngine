@@ -71,7 +71,7 @@ public sealed partial class MiningOperation3D
   float baseSpeed=hunter?HunterMoveSpeed:RaiderMoveSpeed;float speed=ActiveWave is {} forecast?(hunter?forecast.HunterSpeed:forecast.RaiderSpeed):Math.Clamp(float.IsFinite(baseSpeed)?baseSpeed:3,.1f,12);
   if(enemy.GetComponent<HealthComponent>() is {} health){health.MaxHealth=ActiveWave is {} active?(hunter?active.HunterHealth:active.RaiderHealth):(hunter?HunterHealth:RaiderHealth);health.Revive();}
   ai.MovementSpeedMultiplier=speed/Math.Max(.1f,combat.MoveSpeed);combat.MoveSpeed=speed;
-  if(enemy.GetComponent<NavigationAgent3D>() is {} agent)agent.Speed=speed;
+  if(enemy.GetComponent<NavigationAgent3D>() is {} agent){agent.Speed=speed;if(enemy.GetComponent<ByteEngine.Core.Characters.CapsuleCollider3D>() is {} capsule) capsule.QueryOnly=EnemyMovementQueriesOnly&&enemy.GetComponent<ByteEngine.Core.Physics.Rigidbody3D>() is not {BodyType:ByteEngine.Core.Physics.RigidbodyBodyType3D.Dynamic};}
   combat.WindupSeconds=Math.Clamp(hunter?HunterWindup:RaiderWindup,.2f,5);combat.RecoverySeconds=Math.Clamp(hunter?HunterRecovery:RaiderRecovery,.2f,5);combat.AttackCooldown=Math.Clamp(hunter?HunterAttackCooldown:RaiderAttackCooldown,.3f,10);
   if(!hunter){var priority=enemy.GetComponent<MiningRaiderPriorities3D>()??enemy.AddComponent(new MiningRaiderPriorities3D());priority.DrillObjectId=DrillObjectId;priority.DefenceNoticeRadius=RaiderDefenceNoticeRadius;priority.MeleeReach=RaiderMeleeReach;combat.AttackRange=RaiderMeleeReach;combat.StopDistance=Math.Min(combat.StopDistance,RaiderMeleeReach*.8f);}
   combat.Damage=Math.Clamp(hunter?HunterDamage:RaiderDamage,0,1000)*(ActiveWave?.DamageMultiplier??1);ai.DecisionInterval=.08f;ai.MaximumAttackers=Math.Clamp(hunter?HunterAttackSlots:RaiderAttackSlots,1,12);

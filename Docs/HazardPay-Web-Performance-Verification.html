@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hazard Pay — web performance verification</title>
+<style>body{margin:0;background:#101311;color:#e7e8df;font:16px/1.55 system-ui}main{max-width:1080px;margin:auto;padding:42px 24px}h1{font-size:34px;line-height:1.2}h2{margin-top:34px}a{color:#f2cf61}p{max-width:85ch}.status{padding:20px;border-left:5px solid #e7b42b;background:#20251d}table{border-collapse:collapse;width:100%;background:#171d18}th,td{padding:13px;text-align:left;border-bottom:1px solid #384033}th{color:#f2cf61}code{overflow-wrap:anywhere}li{margin:9px 0}.muted{color:#b3b9ab}details{margin:16px 0;padding:16px;background:#181e18}summary{cursor:pointer;font-weight:650}.pass{color:#afd38a}</style>
+<main><p class="muted">Hazard Pay · 3 November 2026 · local diagnostic testing</p><h1>Web performance verification</h1>
+<p class="status" id="target-status"><strong>Wrap-up: the repeatable 40 FPS target is not achieved.</strong> The installed working build measured 37.95 FPS with 100 spiders. Earlier runs reached 41.40 and 43.48 FPS, but later repeats fell below target. The failed cache-budget experiment has been removed from source and installed runtimes. Further optimization was stopped at the user's wrap-up request.</p>
+<p>The target is 100 active animated spiders with correct gameplay, controls and effects. Tests use real Chrome/WebGL hardware on this laptop, at 1280 × 720 native world resolution. No game has been uploaded.</p>
+<h2>Measured normal game loop</h2><p>These runs include real elapsed simulation time, audio and the normal performance recorder. Each measured run follows 600 warm-up frames and records 1,200–2,400 rendering completions. Completion intervals measure renderer throughput; they are not an operating-system display scanout measurement. Run-to-run variance remains material. The controlled stress scene uses a fixed camera, an invulnerable stationary player and 100 pursuing/attacking spiders; it does not replace a full moving-player playtest.</p>
+<table id="results"><thead><tr><th>Build/test</th><th>Quality</th><th>FPS</th><th>Mean interval</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>Worker renderer + event lookup cache</td><td>High</td><td>36.86</td><td>27.13 ms</td><td><a href="../artifacts/normal-game-high-100/game.json">Full capture</a></td></tr>
+<tr><td>Same normal loop, quality comparison</td><td>Balanced</td><td>34.86</td><td>28.69 ms</td><td><a href="../artifacts/normal-game-balanced-100/game.json">Full capture</a></td></tr>
+<tr><td>Visual-only physics invalidation fixed</td><td>High</td><td>29.85</td><td>33.50 ms</td><td><a href="../artifacts/normal-game-physics-invalidation-100/game.json">Full capture</a></td></tr>
+<tr><td>Query-driven spider movement capsules</td><td>High</td><td>37.61</td><td>26.59 ms</td><td><a href="../artifacts/normal-game-query-movement-100/game.json">Full capture</a></td></tr>
+<tr><td>Scoped scene/hierarchy caches</td><td>High</td><td>33.63</td><td>29.73 ms</td><td><a href="../artifacts/normal-game-scoped-caches-100/game.json">Full capture</a></td></tr>
+<tr><td>Media buffer lifetime improvements (1,200 frames)</td><td>High</td><td>41.40</td><td>24.16 ms</td><td><a href="../artifacts/normal-game-media-memory-100/game.json">Full capture</a></td></tr>
+<tr><td>Visible Chrome repeat (1,800 frames)</td><td>High</td><td>43.48</td><td>23.00 ms</td><td><a href="../artifacts/normal-game-media-visible-100/game.json">Full capture</a></td></tr>
+<tr><td>Packaged repeat + worker trace (1,800 frames)</td><td>High</td><td>38.49</td><td>25.98 ms</td><td><a href="../artifacts/normal-game-packaged-100/game.json">Full capture</a></td></tr>
+<tr><td>Stronger final compiler optimization (2,400 frames)</td><td>High</td><td>37.69</td><td>26.53 ms</td><td><a href="../artifacts/normal-game-speed-link-100/game.json">Full capture</a></td></tr>
+<tr><td>Installed working build: shared immutable skin bindings (2,400 frames)</td><td>High</td><td>37.95</td><td>26.35 ms</td><td><a href="../artifacts/normal-game-shared-skin-100/game.json">Full capture</a></td></tr>
+<tr><td>Rejected pose-budget experiment (600 measured frames)</td><td>High</td><td>4.49</td><td>222.58 ms</td><td><a href="../artifacts/normal-game-crowd-cache-diagnostic/game.json">Failure evidence — rolled back</a></td></tr>
+</tbody></table><p class="muted">The collision-index fix reduced full query rebuilds from 484 to 2, but did not establish an overall FPS improvement. The media change reduces duplicated live buffers, but run variance prevents attributing the entire FPS difference to it. Stronger final compilation alone did not resolve the target. Shared skin bindings reduced reported managed memory from 932.84 MB to 722.00 MB, without establishing a sufficient FPS gain.</p>
+<h2>Installed build and remaining work</h2><p><a href="../artifacts/hazardpay-web-shared-skin/Hazard_Pay-Web-20261103-012506-6213e3/Hazard_Pay-Web.zip">Working local web ZIP</a> · <a href="../artifacts/normal-game-shared-skin-100/game.png">100-spider screenshot</a>. This is a diagnostic export, not an uploaded release. Its native runtime SHA-256 is <code>38e91ab4e63e2d40f0555877718d49c2627e47aa9cf18a74f9fb9a198ca641fc</code>.</p><p>Windows/editor/player runtimes were rebuilt after removing the rejected experiment. The tested browser runtime was restored to Dist and both Debug/Release editor copies, in the workspace and installed engine. Plugin fingerprints were checked.</p><p>The separate profiled run found continuing work in scene update, rendering preparation, AI sight queries, navigation and frame packing. Profiling slows the run and is not the FPS acceptance measurement. Windows paging counters during that diagnostic run ranged from roughly 194 to 25,185 pages read per second, with 293–693 MB available RAM. This establishes host memory pressure during that diagnostic window; it does not establish that paging is the sole cause of the remaining slowdown.</p>
+<h2>Verified changes</h2><ul>
+<li class="pass">Off-thread WebGL and UI rendering with a bounded two-frame queue. Frame data is copied from WASM before the next managed frame, packed in aligned owned buffers, transferred and reused within a 64 MiB pool.</li>
+<li class="pass">Automatic main-thread fallback when worker graphics are unsupported or the capability probe fails, before transferring the canvases.</li>
+<li class="pass">Per-draw shader variants: ordinary objects keep the fast shader even when an advanced material, water or an additive effect is visible.</li>
+<li class="pass">AI decisions spread across frames without changing their average frequency or interrupting committed attacks.</li>
+<li class="pass">Event instruction lookups retained until their membership/identities change; live list replacement, instruction edits, timers and reset behavior tested.</li>
+<li class="pass">Visual-only changes no longer rebuild the collision query index. Actual collider, geometry and parent activity changes remain immediate.</li>
+<li class="pass">Typed scene/component and model-hierarchy caches invalidate only for relevant membership changes; duplicate object identities, reparenting and unload behavior are covered by regressions.</li>
+<li class="pass">The mounted content package releases its assembly buffer. Large audio remains in browser-managed media blobs instead of duplicated JavaScript buffers.</li>
+<li class="pass">Actors share immutable skin weights, vertex groups and packed GPU influences. Pose matrices and deformation buffers remain independent. Live imported-weight edits and model unloading are tested.</li>
+<li class="pass">Navigation-driven spiders can use query-only movement capsules. They remain detectable by movement, aiming and projectile queries. This is editable under Mining Operation → Enemy collision → Enemy Movement Queries Only; dynamic rigid bodies retain normal solver contacts.</li>
+<li class="pass">Purple hunter attacks, backs off approximately 2.7 metres, pauses, then pursues again. The sequence remains editable in its AI asset.</li>
+</ul>
+<h2>Correctness checks</h2><ul>
+<li>Aim and fire held together; releasing one mouse button independently; Escape pause/resume; three viewport sizes.</li>
+<li>Visible muzzle particles verified by comparing framebuffer pixels with and without effect draws.</li>
+<li>Ordinary, normal-mapped, heightfield, sand, water and additive effects compared against the universal shader: maximum channel error 0.</li>
+<li>CPU/GPU animated positions and shadow positions agree within 0.00001; palette batching preserves exact rendered colours.</li>
+<li>Projectile sweep hits, knockback, collider query visibility, editable solver-contact opt-in and dynamic-body contact preservation tested.</li>
+<li>Worker render completions have their own measured trace timeline. Main-thread transfer time is identified separately, and asynchronous GPU timings are not treated as synchronous frame costs.</li>
+</ul>
+<details><summary>Evidence and repeatable tools</summary><ul>
+<li><a href="../artifacts/production-worker-input-verified.log">Normal web controls/effects/resize checks</a></li>
+<li><a href="../artifacts/production-main-fallback-input.log">Fallback controls/effects checks</a></li>
+<li><a href="../artifacts/worker-compatibility-tests.log">Worker capability/failure fallback checks</a></li>
+<li><a href="../artifacts/mixed-surface-tests.log">Mixed shader and skin/shadow comparisons</a></li>
+<li><a href="../artifacts/query-movement-tests.log">Movement collider/projectile/knockback checks</a></li>
+<li><a href="../artifacts/query-movement-ai-tests.log">AI and combat regressions</a></li>
+<li><a href="../artifacts/wrapup-shared-skin-controls.log">Working restored build: browser controls and visible effects</a></li>
+<li><a href="../artifacts/shared-skin-tests.log">Skin binding ownership, animation, GPU bounds and unload tests</a></li>
+<li><a href="../artifacts/normal-game-shared-skin-profile/cpu-methods.json">Latest CPU profile mapped to exact runtime methods</a></li>
+<li><a href="../artifacts/shared-skin-host-counters.jsonl">Windows memory/paging/processor diagnostic samples</a></li>
+<li><a href="../artifacts/wrapup-browser-restore.json">Restored browser runtime identities</a></li>
+<li><a href="../artifacts/normal-game-cpu-mapped/cpu-methods.json">CPU methods resolved using the exact WASM hash</a></li>
+<li><code>Tools/ControlledMiningGameBrowser.cjs</code>: normal-loop benchmark, including audio and recording. <code>BYTEENGINE_CPU_PROFILE=1</code> adds a separate CPU profile; profiling overhead means that run is not the FPS acceptance run.</li>
+<li><code>Tools/Performance/AnalyzeV8CpuProfile.py CAPTURE_DIRECTORY</code>: resolves sampled methods against the private symbol map matching the capture's runtime SHA-256. Inclusive method estimates overlap and must not be added together.</li>
+</ul></details>
+<p class="muted">Private test assets, symbol maps and full captures remain local. The source and rebuild workflow preserve desktop, player and browser plugin fingerprints. Web exports still require user authorization.</p></main></html>

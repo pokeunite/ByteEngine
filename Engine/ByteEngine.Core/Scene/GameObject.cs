@@ -8,41 +8,52 @@ public sealed class GameObject
 {
     private readonly List<Component> _components = new();
     private Component[]? _contactComponents;
-    private Component[] ContactComponents => _contactComponents ??= _components.ToArray();
+    private Component[] ContactComponents => _contactComponents ??= _components.Where(c=>c.HasContactCallbacks).ToArray();
     private readonly List<GameObject> _children = new();
     private readonly HashSet<Guid> _tags = new();
     private int _layer;
     private bool _started;
     private Scene? _scene;
-    private bool _hasUpdateCallbacks, _hasLateCallbacks, _hasFixedCallbacks;
-    private Dictionary<Type, Component?>? _componentLookup;
+    private bool _hasUpdateCallbacks, _hasLateCallbacks, _hasFixedCallbacks, _hasRenderCallbacks;
+    private Component[]? _renderOrderProviders;
+    // Integer tags avoid Type hashing/reflection on every hot lookup. A bounded
+    // direct-mapped cache also stores misses without rooting collectible types.
+    private static int _nextLookupKey;
+    private static class LookupKey<T> where T:Component
+    { internal static readonly int Value=Interlocked.Increment(ref _nextLookupKey); }
+    private struct LookupSlot {internal int Key;internal Component? Value;}
+    private LookupSlot[]? _componentLookupSlots;
     private Component[]? _updateSchedule;
     private Component[] _lateSchedule = [], _fixedSchedule = [];
     private int[] _scheduledOrders = [];
+    internal long RenderHierarchyVersion {get;private set;}
+    internal void InvalidateRenderHierarchy(){RenderHierarchyVersion++;for(int i=0;i<_children.Count;i++)_children[i].InvalidateRenderHierarchy();}
 
     private void InvalidateComponentCaches()
     {
-        _componentLookup?.Clear();
+        if(_componentLookupSlots!=null)Array.Clear(_componentLookupSlots);
         _updateSchedule = null;
         _lateSchedule = _fixedSchedule = [];
         _scheduledOrders = [];
+        _renderOrderProviders=null;
     }
 
     private void RefreshCallbacks()
     {
-        _hasUpdateCallbacks = _hasLateCallbacks = _hasFixedCallbacks = false;
+        _hasUpdateCallbacks = _hasLateCallbacks = _hasFixedCallbacks = _hasRenderCallbacks = false;
         foreach (var component in _components)
         {
             _hasUpdateCallbacks |= component.HasUpdateCallback;
             _hasLateCallbacks |= component.HasLateUpdateCallback;
             _hasFixedCallbacks |= component.HasFixedUpdateCallback;
+            _hasRenderCallbacks |= component.HasRenderCallback;
         }
     }
 
     public Guid Id { get; private set; }
     public string Name { get; set; }
     private bool _active=true;
-    public bool Active {get=>_active;set{if(_active==value)return;_active=value;_scene?.InvalidateQueryBounds();}}
+    public bool Active {get=>_active;set{if(_active==value)return;_active=value;_scene?.NotifyPhysicsActiveChanged(this);}}
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
@@ -50,8 +61,9 @@ public sealed class GameObject
     {
         get
         {
-            for (int i = 0; i < _components.Count; i++)
-                if (_components[i].RenderOrder is int order) return order;
+            var providers=_renderOrderProviders??=_components.Where(c=>c.HasRenderOrderOverride).ToArray();
+            for (int i = 0; i < providers.Length; i++)
+                if (providers[i].RenderOrder is int order) return order;
             return 0;
         }
     }
@@ -104,10 +116,11 @@ public sealed class GameObject
         var scale = Transform.WorldScale;
         Parent?._children.Remove(this);
         Parent = parent;
-        _scene?.InvalidatePhysicsRegistry();
+        _scene?.NotifyPhysicsHierarchyChanged(this);
         if (parent == null) ParentSocket = string.Empty;
         Parent?._children.Add(this);
-        _scene?.InvalidateRenderHierarchy();
+        Transform.InvalidateWorld();
+        InvalidateRenderHierarchy();
 
         _scene?.MoveObjectToEndOfSiblingGroup(this);
 
@@ -212,13 +225,14 @@ public sealed class GameObject
         ArgumentNullException.ThrowIfNull(component);
         component.Attach(this);
         _components.Add(component);
-        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)_scene?.InvalidateRenderHierarchy();
+        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)InvalidateRenderHierarchy();
         InvalidateComponentCaches();
         _hasUpdateCallbacks |= component.HasUpdateCallback;
         _hasLateCallbacks |= component.HasLateUpdateCallback;
         _hasFixedCallbacks |= component.HasFixedUpdateCallback;
+        _hasRenderCallbacks |= component.HasRenderCallback;
         _contactComponents=null;
-        _scene?.InvalidateComponentRegistries();
+        _scene?.InvalidateComponentRegistries(component);
 
         if (component is Camera3D { ActiveGameCamera: true } camera && _scene != null)
             _scene.SetActiveCamera(camera);
@@ -232,18 +246,13 @@ public sealed class GameObject
         int count = _components.Count;
         if (count == 0) return null;
         if (count == 1) return _components[0] as T;
-        var type = typeof(T);
-        if (_componentLookup != null && _componentLookup.TryGetValue(type, out var cached)) return (T?)cached;
+        int key=LookupKey<T>.Value,slot=key&31;
+        var slots=_componentLookupSlots??=new LookupSlot[32];
+        if(slots[slot].Key==key)return (T?)slots[slot].Value;
         T? result = null;
         for (int i = 0; i < count; i++)
             if (_components[i] is T match) { result = match; break; }
-        // Cache misses too: most ancestor searches ask for an absent engine component.
-        // Do not root types from collectible editor plugin contexts through a negative cache.
-        if (!type.Assembly.IsCollectible)
-        {
-            _componentLookup ??= new();
-            if (_componentLookup.Count < 32) _componentLookup[type] = result;
-        }
+        slots[slot]=new LookupSlot{Key=key,Value=result};
         return result;
     }
 
@@ -263,7 +272,7 @@ public sealed class GameObject
         if(ordered.Count!=_components.Count||ordered.Distinct().Count()!=ordered.Count||ordered.Any(c=>!_components.Contains(c)))throw new ArgumentException("Component order must contain every attached component once.");
         _components.Clear();_contactComponents=null;
         _scene?.InvalidateComponentRegistries();_components.AddRange(ordered);
-        if(_components.Any(c=>c is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance))_scene?.InvalidateRenderHierarchy();
+        if(_components.Any(c=>c is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance))InvalidateRenderHierarchy();
         InvalidateComponentCaches();
     }
 
@@ -271,11 +280,11 @@ public sealed class GameObject
     {
         ArgumentNullException.ThrowIfNull(component);
         if (!_components.Remove(component)) return false;
-        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)_scene?.InvalidateRenderHierarchy();
+        if(component is Graphics.ThreeD.MeshLodGroup or Assets.ModelHierarchyInstance)InvalidateRenderHierarchy();
         InvalidateComponentCaches();
         RefreshCallbacks();
         _contactComponents=null;
-        _scene?.InvalidateComponentRegistries();
+        _scene?.InvalidateComponentRegistries(component);
 
         CrashDebugLog.Write(
             $"GameObject.RemoveComponent: object='{Name}' component='{component.GetType().FullName}' BEGIN.");
@@ -298,6 +307,7 @@ public sealed class GameObject
 
     internal void UpdateInternal()
     {
+        if (_started && !_hasUpdateCallbacks) return;
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
@@ -316,6 +326,7 @@ public sealed class GameObject
 
     internal void LateUpdateInternal()
     {
+        if (_started && !_hasLateCallbacks) return;
         if (!ActiveInHierarchy) return;
 
         if (!_started) StartInternal();
@@ -334,6 +345,7 @@ public sealed class GameObject
 
     internal void FixedUpdateInternal()
     {
+        if (_started && !_hasFixedCallbacks) return;
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
         if (!_hasFixedCallbacks) return;
@@ -393,8 +405,10 @@ public sealed class GameObject
 
     internal void RenderInternal(Graphics.RenderContext context)
     {
+        if (_started && !_hasRenderCallbacks) return;
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
+        if (!_hasRenderCallbacks) return;
         foreach (Component component in _components) component.RenderInternal(context);
     }
 

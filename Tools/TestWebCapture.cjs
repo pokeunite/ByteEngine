@@ -11,7 +11,7 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- browser=await chromium.launch({channel:'msedge',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+ browser=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
  const page=await browser.newPage({viewport:{width:1280,height:720},acceptDownloads:true});
  page.on('pageerror',e=>failures.push(String(e)));page.on('console',m=>{if(m.type()==='error')failures.push(m.text());});
  await page.goto('http://127.0.0.1:'+server.address().port+'/');
@@ -41,6 +41,7 @@ const server=http.createServer((req,res)=>{
  assert.equal(report.version,2);assert(report.modeSummaries.normal.frames>0);assert(report.modeSummaries.deep.frames>0);
  assert.equal(report.samples.filter(s=>s.deep).reduce((sum,s)=>sum+s.core.profiler.frames,0),report.frames.filter(f=>f.deep).length,'profile windows lost a deep frame');
  assert(trace.traceEvents.some(e=>e.ph==='X'&&e.name==='Frame'));
+ if(report.frames.some(f=>f.rendererThreaded)){assert(report.renderFrames.length>0,'worker render timings missing');assert(trace.traceEvents.some(e=>e.tid===4&&e.name==='Worker GL + UI submission'),'worker render trace missing');}
  assert(!report.events.some(e=>e.kind==='diagnostic-error'),JSON.stringify(report.events.filter(e=>e.kind==='diagnostic-error')));
  assert.equal(failures.length,0,failures.join('\n'));
  console.log(JSON.stringify({result:'WEB_CAPTURE_PASS',frames:report.frames.length,samples:report.samples.length,deepSamples:report.samples.filter(s=>s.deep).length,

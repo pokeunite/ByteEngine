@@ -17,6 +17,9 @@ public static class JobRunner
     public const int DefaultParallelThreshold = 64;
     /// <summary>Diagnostic switch for controlled serial/worker comparisons. Does not affect result ordering.</summary>
     public static bool ParallelExecutionEnabled{get;set;}=true;
+    /// <summary>Opt-in: grouped CPU skinning can be memory-bandwidth bound on small CPUs.
+    /// Keep serial skinning as the default until a target-machine benchmark shows a win.</summary>
+    public static bool ParallelSkinningEnabled{get;set;}=false;
 
     public static void For(int count, Action<int> body)
     {

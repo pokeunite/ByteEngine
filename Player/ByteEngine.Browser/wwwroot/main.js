@@ -1,7 +1,8 @@
 import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
-import { BrowserRenderer } from './renderer.js';
+import { createBrowserRenderer } from './render-worker-client.js';
 import { decodeUiPacket } from './frame-wire.js';
+import { createFrameReader } from './frame-buffers.js';
 import { BrowserAudio } from './audio.js';
 import { BrowserVideos } from './video.js';
 import { createPerformanceCapture } from './performance.js';
@@ -27,17 +28,20 @@ function fail(error){
 window.addEventListener('error',e=>fail(e.error||e.message));
 window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
-    const renderer=new BrowserRenderer(canvas,overlay);
+    const renderer=await createBrowserRenderer(canvas,overlay,{forceMain:new URLSearchParams(location.search).get('renderer')==='main',onError:fail});
+    if(renderer.isThreaded)renderer.oncompleted=completion=>capture.renderedFrame(completion);
     const presentation=new BrowserPresentation();let graphics={quality:'Balanced',worldResolution:'Auto'};
-    globalThis.byteEngineGraphics=()=>{const gl=renderer.gl,ext=gl.getExtension('WEBGL_debug_renderer_info');return {renderer:gl.getParameter(ext?ext.UNMASKED_RENDERER_WEBGL:gl.RENDERER),error:gl.getError(),meshes:renderer.meshes.size,textures:renderer.textures.size,tintBytes:renderer.tintBytes,gpuTimer:!!renderer.gpuTimer,limits:{maxTextureSize:gl.getParameter(gl.MAX_TEXTURE_SIZE),maxVertexAttributes:gl.getParameter(gl.MAX_VERTEX_ATTRIBS),maxTextureUnits:gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)},extensions:gl.getSupportedExtensions()};};
+    globalThis.byteEngineGraphics=()=>({...renderer.hardware,...renderer.diagnostics(false)});
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fail('Graphics context lost. Reload this page.');});
     capture.setHardware(byteEngineGraphics());
     const runtimeReady=dotnet.create().then(runtime=>{capture.event('runtime-ready');return runtime;});
     const gameReady=runtimeReady.then(async runtime=>{const config=runtime.getConfig();const exports=await runtime.getAssemblyExports(config.mainAssemblyName);await runtime.runMain();return exports.BrowserGame;});
     const contentReady=loadContent(gameReady,status);
     const [runtime,game,content]=await Promise.all([runtimeReady,gameReady,contentReady]);
+    game.ConfigureSkinning?.(renderer.maximumSkinningBones);
     readManagedError=()=>game.LastFrameError();
-    renderer.readBuffer=index=>game.ReadBuffer(index);
+    const transfers=createFrameReader(runtime,game);
+    renderer.readBuffer=index=>transfers.read(index);
     globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
     const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();
     const previewQuality=new URLSearchParams(location.search).get('previewQuality');const exportGraphics={...(manifest.graphics||{})};if(['High','Balanced','Fast'].includes(previewQuality))exportGraphics.quality=previewQuality;game.ConfigurePresentation(JSON.stringify(exportGraphics));
@@ -118,31 +122,36 @@ try{
         pointer=document.pointerLockElement===canvas?[.5,.5]:[(e.clientX-rect.left)/rect.width,(e.clientY-rect.top)/rect.height];
         delta[0]+=e.movementX;delta[1]+=e.movementY;
     });
-    const uiCommands=[];
+    const uiCommands=[];let scheduled=false;
+    const channel=renderer.isThreaded?new MessageChannel():null;
+    function schedule(){if(scheduled||stopped||document.hidden||!renderer.canAcceptFrame)return;scheduled=true;if(channel)channel.port2.postMessage(0);else requestAnimationFrame(frame);}
+    if(channel){channel.port1.onmessage=()=>frame(performance.now());renderer.onavailable=schedule;}
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){previous=performance.now();schedule();}});
     function frame(now){
+        scheduled=false;
         if(stopped){status.hidden=false;return;}
         try{
-            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_SIZE));
+            if(document.hidden||!renderer.canAcceptFrame)return;
+            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.hardware.limits.maxTextureSize);
             const {width,height,worldWidth,worldHeight,uiWidth,uiHeight}=size;
-            if(canvas.width!==worldWidth||canvas.height!==worldHeight){canvas.width=worldWidth;canvas.height=worldHeight;}
-            if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
+            renderer.setSize(size);
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
             const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
             const deepProfile=capture.beforeFrame();
             const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas||pauseFromCapture,gamepad);
-            const wasmEnd=performance.now();const data=JSON.parse(payload);
+            const wasmEnd=performance.now();const data=JSON.parse(payload);transfers.beginFrame(data);
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
-            if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount,uiCommands);
+            if(!renderer.isThreaded&&data.uiBuffer>=0)data.ui=decodeUiPacket(transfers.read(data.uiBuffer),data.uiCount,uiCommands);
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();pauseFromCapture=false;
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};
             const audioStart=performance.now();audio.commands(data.audio);const audioEnd=performance.now();
             videos.update();const videoEnd=performance.now();
             for(const [id,state] of audio.sources){const seconds=state.media?state.media.currentTime:state.offset+(state.node?(audio.context.currentTime-state.started)*state.pitch:0);game.AudioPosition(id,seconds);}
-            const drawCount=data.draws.length,uiCount=data.ui.length,drawStart=performance.now();
-            if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi)data.ui=[];
+            const drawCount=data.draws.length,uiCount=data.uiCount,drawStart=performance.now();
+            if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi){data.ui=[];data.uiCount=0;}
             renderer.draw(data,width,height);
             presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures);
             globalThis.byteEnginePresentation={...size,...graphics,adaptiveScale:presentation.factor};
@@ -156,15 +165,16 @@ try{
                 draws:drawCount,uiCommands:uiCount,audioCommands:data.audio.length,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,
                 directionalLights:data.lights.length,pointLights:data.points.length,shadowResolution:data.shadow?.resolution??0,
                 sceneMetrics:data.sceneMetrics,inputMs:data.inputMs,updateStepMs:data.updateStepMs,renderPreparationMs:data.renderPreparationMs,renderAllocatedBytes:data.renderAllocatedBytes,
-                focused:document.activeElement===canvas,captured:document.pointerLockElement===canvas,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
+                focused:document.activeElement===canvas,captured:document.pointerLockElement===canvas,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,
+                rendererThreaded:renderer.isThreaded,renderSubmittedId:renderer.submittedFrameId,rendererFrameId:renderer.lastCompletion?.id,...renderer.profile},()=>JSON.parse(game.Diagnostics()));
             if(data.pendingTextures!==previousPending){capture.event('graphics-queue',{pending:data.pendingTextures,reason:graphicsReady?'background asset uploads':'initial graphics'});previousPending=data.pendingTextures;}
             if(!graphicsReady&&data.pendingTextures===0){graphicsReady=true;capture.event('first-ready-frame');}
             // A background upload must not replace gameplay with the startup splash.
             status.hidden=graphicsReady;status.style.pointerEvents="none";
             if(!graphicsReady)status.textContent='Preparing graphics... '+data.pendingTextures+' uploads';
-            requestAnimationFrame(frame);
+            schedule();
         }catch(error){fail(error);}
     }
     // Initial capture is requested from the next click (browser user-gesture requirement).
-    requestAnimationFrame(frame);
+    schedule();
 }catch(error){fail(error);}

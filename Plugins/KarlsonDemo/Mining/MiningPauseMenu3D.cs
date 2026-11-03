@@ -41,7 +41,7 @@ public sealed partial class MiningPauseMenu3D:Component
  readonly List<(UiWidget Widget,bool Interactable)> pausedWidgets=[];
  float priorScale=1;int focus;float controlsScroll;Key? listening;MouseButton? listeningMouse;double listenAt;
  bool windowDropdownOpen;
- public float HoverSoundGain{get;set;}=.22f;
+ public float HoverSoundGain{get;set;}=1;
  string? hoveredMenuItem;
  GraphicsSettings3D? graphics;GameWindowMode selectedWindowMode=GameWindowMode.Fullscreen;
  readonly record struct Item(string Label,float X,float Y,float W,float H,Action Click,bool Selected=false,bool Overlay=false);
@@ -109,8 +109,8 @@ public sealed partial class MiningPauseMenu3D:Component
   string? hovered=items.FirstOrDefault(i=>Inside(i.X,i.Y,i.W,i.H)).Label;
   if(hovered!=hoveredMenuItem){if(hovered!=null)MiningAudio3D.Find(GameObject)?.PlayHoverCue(HoverSoundGain);hoveredMenuItem=hovered;}
   if(Input.IsKeyPressed(Key.Down))focus=(focus+1)%Math.Max(1,items.Count);if(Input.IsKeyPressed(Key.Up))focus=(focus+items.Count-1)%Math.Max(1,items.Count);
-  if(Input.IsKeyPressed(Key.Enter)&&items.Count>focus)items[focus].Click();
-  if(click){var hit=items.FirstOrDefault(i=>Inside(i.X,i.Y,i.W,i.H));if(hit.Click==null)windowDropdownOpen=false;hit.Click?.Invoke();}
+  if(Input.IsKeyPressed(Key.Enter)&&items.Count>focus){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalSelect);items[focus].Click();}
+  if(click){var hit=items.FirstOrDefault(i=>Inside(i.X,i.Y,i.W,i.H));if(hit.Click==null)windowDropdownOpen=false;if(hit.Click!=null){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalSelect);hit.Click();}}
  }
  bool Inside(float x,float y,float w,float h)=>pointer.X>=x&&pointer.X<x+w&&pointer.Y>=y&&pointer.Y<y+h;
  void Build(float w,float h,bool interactive)=>BuildIndustrial(w,h,interactive);

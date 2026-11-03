@@ -5,7 +5,7 @@ namespace ByteEngine.Core.Scene;
 
 public abstract class Component
 {
-    private sealed record Callbacks(bool Update, bool Late, bool Fixed);
+    private sealed record Callbacks(bool Update, bool Late, bool Fixed,bool Render,bool RenderOrder,int Contacts);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, Callbacks> CallbackTypes = new();
     private Callbacks? _callbacks;
     private Callbacks RuntimeCallbacks => _callbacks ??= CallbackTypes.GetValue(GetType(), static type =>
@@ -13,11 +13,18 @@ public abstract class Component
         bool Overrides(string name) => type.GetMethod(name,
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
             null, Type.EmptyTypes, null)?.DeclaringType != typeof(Component);
-        return new(Overrides(nameof(OnUpdate)), Overrides(nameof(OnLateUpdate)), Overrides(nameof(OnFixedUpdate)));
+        bool render=type.GetMethod(nameof(OnRender),System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,[typeof(RenderContext)],null)?.DeclaringType!=typeof(Component);
+        bool Contact(string name)=>type.GetMethod(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,[typeof(PhysicsContact3D)],null)?.DeclaringType!=typeof(Component);
+        int contacts=(Contact(nameof(OnCollisionEnter))?1:0)|(Contact(nameof(OnCollisionStay))?2:0)|(Contact(nameof(OnCollisionExit))?4:0)|(Contact(nameof(OnTriggerEnter))?8:0)|(Contact(nameof(OnTriggerStay))?16:0)|(Contact(nameof(OnTriggerExit))?32:0);
+        bool renderOrder=type.GetProperty(nameof(RenderOrder))?.GetMethod?.DeclaringType!=typeof(Component);
+        return new(Overrides(nameof(OnUpdate)), Overrides(nameof(OnLateUpdate)), Overrides(nameof(OnFixedUpdate)),render,renderOrder,contacts);
     });
     internal bool HasUpdateCallback => RuntimeCallbacks.Update;
     internal bool HasLateUpdateCallback => RuntimeCallbacks.Late;
     internal bool HasFixedUpdateCallback => RuntimeCallbacks.Fixed;
+    internal bool HasRenderCallback => RuntimeCallbacks.Render;
+    internal bool HasRenderOrderOverride => RuntimeCallbacks.RenderOrder;
+    internal bool HasContactCallbacks=>RuntimeCallbacks.Contacts!=0;
     private GameObject? _gameObject;
 
     private bool _started;
@@ -39,7 +46,7 @@ public abstract class Component
     protected GameObject? AttachedGameObject => _gameObject;
 
     private bool _enabled=true;
-    public bool Enabled {get=>_enabled;set{if(_enabled==value)return;_enabled=value;_gameObject?.Scene?.InvalidateQueryBounds();}}
+    public bool Enabled {get=>_enabled;set{if(_enabled==value)return;_enabled=value;if(Scene.AffectsPhysics(this))_gameObject?.Scene?.InvalidateQueryBounds();}}
 
     public virtual int? RenderOrder => null;
     public virtual int UpdateOrder => 0;
@@ -121,7 +128,7 @@ public abstract class Component
     internal void RenderInternal(
         RenderContext context)
     {
-        if (!Enabled)
+        if (!Enabled || !HasRenderCallback)
         {
             return;
         }
@@ -140,7 +147,7 @@ public abstract class Component
     internal void RenderEditorInternal(
         RenderContext context)
     {
-        if (!Enabled)
+        if (!Enabled || !HasRenderCallback)
         {
             return;
         }
@@ -170,7 +177,7 @@ public abstract class Component
     internal void CollisionEnterInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&1)!=0)
         {
             OnCollisionEnter(contact);
         }
@@ -179,7 +186,7 @@ public abstract class Component
     internal void CollisionStayInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&2)!=0)
         {
             OnCollisionStay(contact);
         }
@@ -188,7 +195,7 @@ public abstract class Component
     internal void CollisionExitInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&4)!=0)
         {
             OnCollisionExit(contact);
         }
@@ -197,7 +204,7 @@ public abstract class Component
     internal void TriggerEnterInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&8)!=0)
         {
             OnTriggerEnter(contact);
         }
@@ -206,7 +213,7 @@ public abstract class Component
     internal void TriggerStayInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&16)!=0)
         {
             OnTriggerStay(contact);
         }
@@ -215,7 +222,7 @@ public abstract class Component
     internal void TriggerExitInternal(
         PhysicsContact3D contact)
     {
-        if (Enabled)
+        if (Enabled&&(RuntimeCallbacks.Contacts&32)!=0)
         {
             OnTriggerExit(contact);
         }

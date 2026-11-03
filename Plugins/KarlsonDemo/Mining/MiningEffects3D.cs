@@ -29,7 +29,7 @@ public sealed class MiningEffects3D:Component
  [Browsable(false)] public int DroppedEffects{get;private set;}
  [Browsable(false)] public string LastError{get;private set;}="";
  readonly List<(MiningEffectCue Cue,VfxPlayer Player)> pool=[];
- public static MiningEffects3D? Find(GameObject? context)=>context?.Scene?.GameObjects.SelectMany(o=>o.Components.OfType<MiningEffects3D>()).FirstOrDefault(c=>c.Enabled);
+ public static MiningEffects3D? Find(GameObject? context){if(context?.Scene is not {} scene)return null;var effects=scene.GetComponentsSnapshot<MiningEffects3D>();for(int i=0;i<effects.Count;i++)if(effects[i].Enabled)return effects[i];return null;}
  AssetReference Asset(MiningEffectCue cue)=>cue switch{MiningEffectCue.TurretMuzzle=>TurretMuzzle,MiningEffectCue.Tracer=>Tracer,MiningEffectCue.MineExplosion=>MineExplosion,MiningEffectCue.MortarExplosion=>MortarExplosion,MiningEffectCue.MachineStamp=>MachineStamp,_=>MaterialLanding};
  VfxPlayer? Create(MiningEffectCue cue)
  {

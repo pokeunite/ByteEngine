@@ -19,9 +19,9 @@ internal static class AnimationPoseSampler
             return fallback;
         }
 
-        IReadOnlyList<ImportedVectorKey> keys = track.Keys;
+        ReadOnlySpan<ImportedVectorKey> keys = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(track.Keys);
 
-        if (keys.Count == 1 || time <= keys[0].Time)
+        if (keys.Length == 1 || time <= keys[0].Time)
         {
             return keys[0].Value;
         }
@@ -32,8 +32,8 @@ internal static class AnimationPoseSampler
         }
 
         int upper = FindUpperKey(keys, time);
-        ImportedVectorKey left = keys[upper - 1];
-        ImportedVectorKey right = keys[upper];
+        ref readonly ImportedVectorKey left = ref keys[upper - 1];
+        ref readonly ImportedVectorKey right = ref keys[upper];
 
         float duration = Math.Max(right.Time - left.Time, 0.000001f);
         float amount = Math.Clamp((time - left.Time) / duration, 0.0f, 1.0f);
@@ -63,9 +63,9 @@ internal static class AnimationPoseSampler
             return NormalizeSafe(fallback);
         }
 
-        IReadOnlyList<ImportedQuaternionKey> keys = track.Keys;
+        ReadOnlySpan<ImportedQuaternionKey> keys = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(track.Keys);
 
-        if (keys.Count == 1 || time <= keys[0].Time)
+        if (keys.Length == 1 || time <= keys[0].Time)
         {
             return NormalizeSafe(keys[0].Value);
         }
@@ -76,8 +76,8 @@ internal static class AnimationPoseSampler
         }
 
         int upper = FindUpperKey(keys, time);
-        ImportedQuaternionKey left = keys[upper - 1];
-        ImportedQuaternionKey right = keys[upper];
+        ref readonly ImportedQuaternionKey left = ref keys[upper - 1];
+        ref readonly ImportedQuaternionKey right = ref keys[upper];
 
         float duration = Math.Max(right.Time - left.Time, 0.000001f);
         float amount = Math.Clamp((time - left.Time) / duration, 0.0f, 1.0f);
@@ -108,11 +108,11 @@ internal static class AnimationPoseSampler
     }
 
     private static int FindUpperKey(
-        IReadOnlyList<ImportedVectorKey> keys,
+        ReadOnlySpan<ImportedVectorKey> keys,
         float time)
     {
         int low = 1;
-        int high = keys.Count - 1;
+        int high = keys.Length - 1;
 
         while (low < high)
         {
@@ -132,11 +132,11 @@ internal static class AnimationPoseSampler
     }
 
     private static int FindUpperKey(
-        IReadOnlyList<ImportedQuaternionKey> keys,
+        ReadOnlySpan<ImportedQuaternionKey> keys,
         float time)
     {
         int low = 1;
-        int high = keys.Count - 1;
+        int high = keys.Length - 1;
 
         while (low < high)
         {

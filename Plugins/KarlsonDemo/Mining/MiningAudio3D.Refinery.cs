@@ -14,11 +14,7 @@ public sealed partial class MiningAudio3D
  [Category("Interface sounds")] public AssetReference MenuClose{get;set;}=AssetReference.Empty;
  [Browsable(false)] public long RefineryImpactCues{get;private set;}
  long refineryLandings;
- AssetReference OreImpactClip()
- {
-  var clips=new[]{RefineryOreImpact1,RefineryOreImpact2,RefineryOreImpact3}.Where(a=>!a.IsEmpty).ToArray();
-  return clips.Length>0?clips[random.Next(clips.Length)]:AssetReference.Empty;
- }
+ AssetReference OreImpactClip()=>ChooseClip(RefineryOreImpact1,RefineryOreImpact2,RefineryOreImpact3);
  void TickRefineryLayers(GameObject? refinery,MiningOperation3D op,float dt)
  {
   var output=refinery?.GetComponent<MiningRefineryOutput3D>();

@@ -53,7 +53,7 @@ public sealed class NavigationAgent3D : Component
         if(!float.IsFinite(delta)||delta<=0)return;
         if(GameObject.GetComponent<ByteEngine.Core.Physics.Rigidbody3D>() is {BodyType:ByteEngine.Core.Physics.RigidbodyBodyType3D.Dynamic}) return;
         var scene=GameObject.Scene;
-        var region=RegionObject==Guid.Empty ? scene?.GameObjects.Select(o=>o.GetComponent<NavigationRegion3D>()).FirstOrDefault(r=>r is {Enabled:true}) : scene?.FindGameObject(RegionObject)?.GetComponent<NavigationRegion3D>();
+        var region=scene?.FindNavigationRegion(RegionObject);
         if(region?.Ready!=true){Status=NavigationAgentStatus.MissingRegion;return;}
         _timer-=delta;
         if(_timer<=0 && (_path.Count==0 || Destination!=_lastDestination || _version!=region.BakeVersion))

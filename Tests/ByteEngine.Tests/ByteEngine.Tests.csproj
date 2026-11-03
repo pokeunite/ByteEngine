@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../../Player/ByteEngine.Browser/BrowserMatrixPacking.cs" Link="BrowserMatrixPacking.cs" />
     <Compile Include="../../Player/ByteEngine.Browser/BrowserTextureTransfer.cs" Link="BrowserTextureTransfer.cs" />
     <ProjectReference Include="../../Plugins/DesertTerrain/DesertTerrain.Plugin.csproj" />
     <ProjectReference Include="../../Plugins/GoblinScrapper/GoblinScrapper.Plugin.csproj" />

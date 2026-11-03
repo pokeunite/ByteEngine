@@ -1,3 +1,4 @@
+using ByteEngine.Core.Graphics;
 using System.Numerics;
 using System.Text.Json;
 using ByteEngine.Core;
@@ -12,8 +13,8 @@ using KarlsonDemo.Plugin;
 using OpenTK.Graphics.OpenGL4;
 internal sealed class MiningSpiderStressRun
 {
- readonly List<double> frames=[],render=[],physics=[],updates=[];readonly Scene scene;readonly RenderWorld? renderWorld;int tick,attachmentCount;long allocated;
- public MiningSpiderStressRun(Scene scene,MiningOperation3D op,bool optimized,int requestedCount=120,RenderWorld? world=null,bool profiling=true,bool batchCrowds=true)
+ readonly List<double> frames=[],render=[],physics=[],updates=[],animations=[];readonly Scene scene;readonly RenderWorld? renderWorld;int tick,attachmentCount;long allocated;
+ public MiningSpiderStressRun(Scene scene,MiningOperation3D op,bool optimized,int requestedCount=120,RenderWorld? world=null,bool profiling=true,bool batchCrowds=true,string mode="baseline")
  {
   this.scene=scene;renderWorld=world;op.Enabled=false;var player=scene.FindGameObject(op.PlayerObjectId)!;
   player.GetComponent<HealthComponent>()!.MaxHealth=10000000;player.GetComponent<HealthComponent>()!.Revive();player.GetComponent<PlayerController3D>()!.Enabled=false;player.GetComponent<CameraBoom3D>()!.Enabled=false;player.GetComponent<MiningThirdPerson3D>()!.Enabled=false;
@@ -26,15 +27,21 @@ internal sealed class MiningSpiderStressRun
    var prop=scene.CreateGameObject("Benchmark skeletal attachment");prop.Transform.LocalScale=new(.08f);prop.AddComponent(new MeshRenderer{UsePrimitive=true,CastShadows=false});
    if(!SkeletalAttachmentService.AttachToSocket(prop,renderer.GameObject,socket))throw new Exception("Benchmark socket attachment failed");attachmentCount++;
   }
+  foreach(var o in scene.GameObjects.ToArray()){
+   if(mode=="no-ai"){if(o.GetComponent<AIBehavior3D>() is {} ai)ai.Enabled=false;if(o.GetComponent<SimpleEnemyAI3D>() is {} simple)simple.Enabled=false;if(o.GetComponent<ByteEngine.Core.Navigation.NavigationAgent3D>() is {} nav)nav.Enabled=false;}
+   if(mode=="frozen"){if(o.GetComponent<MiningSpiderAnimation3D>() is {} driver)driver.Enabled=false;if(o.GetComponent<SkeletalMeshRenderer>() is {} skin)skin.Pause();}
+   if(mode=="no-shadows"){if(o.GetComponent<DirectionalLight>() is {} sun)sun.CastShadows=false;if(o.GetComponent<PointLight>() is {} lamp)lamp.CastShadows=false;}
+   if(mode=="hidden-spiders"&&o.GetComponent<MiningSpiderAnimation3D>()?.Renderer is {} sk)sk.Visible=false;
+  }
   scene.ComponentProfiler.Enabled=profiling;scene.ComponentProfiler.AccumulateFrames=true;Console.WriteLine($"STRESS: {requestedCount} fully animated, navigating spiders with socket attachments in the real scene; 1280x720, VSync off.");
  }
  public bool Tick(double renderMs,string suffix)
  {
   if(++tick==61){scene.ComponentProfiler.ClearSamples();allocated=GC.GetTotalAllocatedBytes();}
-  if(tick>60){frames.Add(Time.UnscaledDeltaTime*1000);render.Add(renderMs);physics.Add(scene.LastFrameMetrics.PhysicsMs);updates.Add(scene.LastFrameMetrics.UpdateMs);}
+  if(tick>60){frames.Add(Time.UnscaledDeltaTime*1000);render.Add(renderMs);physics.Add(scene.LastFrameMetrics.PhysicsMs);updates.Add(scene.LastFrameMetrics.UpdateMs);animations.Add(scene.LastFrameMetrics.AnimationMs);}
   if(tick<240)return false;
   var sorted=frames.Order().ToArray();int count=scene.GameObjects.SelectMany(o=>o.Components).OfType<MiningSpiderAnimation3D>().Count();
-  var result=new{crowdBatches=scene.GameObjects.SelectMany(o=>o.Components.OfType<SkeletalMeshRenderer>()).Count(r=>r.BatchCrowdSubmeshes),cachedQueries=scene.Physics.UseCachedQueryIndex,parallelCulling=JobRunner.ParallelExecutionEnabled,profiling=scene.ComponentProfiler.Enabled,spiders=count,attachments=attachmentCount,width=1280,height=720,frames=frames.Count,meanMs=frames.Average(),fps=1000/frames.Average(),medianMs=sorted[sorted.Length/2],p95Ms=sorted[(int)(sorted.Length*.95)],renderMeanMs=render.Average(),physicsMeanMs=physics.Average(),updateMeanMs=updates.Average(),allocatedBytes=GC.GetTotalAllocatedBytes()-allocated,queryCalls=scene.Physics.QueryCalls,queryIndexRefreshes=scene.Physics.QueryIndexRefreshes,queryCacheHits=scene.Physics.QueryIndexCacheHits,physicsGatherMs=scene.Physics.LastColliderGatherMs,physicsIndexMs=scene.Physics.LastIndexUpdateMs,physicsCandidates=scene.Physics.LastCandidateCount,animationMs=scene.LastFrameMetrics.AnimationMs,animatedComponents=scene.LastFrameMetrics.AnimatedComponents,renderStats=renderWorld?.LastStats,mainTriangles=renderWorld?.MainTriangles,instancedObjects=renderWorld?.InstancedObjects,occlusionMs=renderWorld?.OcclusionMilliseconds,occludedMeshes=renderWorld?.OccludedMeshes,gpu=GL.GetString(StringName.Renderer),components=scene.ComponentProfiler.Snapshot(),systems=scene.ComponentProfiler.SystemSnapshot()};
+  var result=new{crowdBatches=scene.GameObjects.SelectMany(o=>o.Components.OfType<SkeletalMeshRenderer>()).Count(r=>r.BatchCrowdSubmeshes),cachedQueries=scene.Physics.UseCachedQueryIndex,parallelCulling=JobRunner.ParallelExecutionEnabled,profiling=scene.ComponentProfiler.Enabled,spiders=count,attachments=attachmentCount,width=1280,height=720,frames=frames.Count,meanMs=frames.Average(),fps=1000/frames.Average(),medianMs=sorted[sorted.Length/2],p95Ms=sorted[(int)(sorted.Length*.95)],renderMeanMs=render.Average(),physicsMeanMs=physics.Average(),updateMeanMs=updates.Average(),allocatedBytes=GC.GetTotalAllocatedBytes()-allocated,queryCalls=scene.Physics.QueryCalls,queryIndexRefreshes=scene.Physics.QueryIndexRefreshes,queryCacheHits=scene.Physics.QueryIndexCacheHits,physicsGatherMs=scene.Physics.LastColliderGatherMs,physicsIndexMs=scene.Physics.LastIndexUpdateMs,physicsCandidates=scene.Physics.LastCandidateCount,animationMeanMs=animations.Average(),animationMs=scene.LastFrameMetrics.AnimationMs,animatedComponents=scene.LastFrameMetrics.AnimatedComponents,renderStats=renderWorld?.LastStats,mainTriangles=renderWorld?.MainTriangles,instancedObjects=renderWorld?.InstancedObjects,occlusionMs=renderWorld?.OcclusionMilliseconds,occludedMeshes=renderWorld?.OccludedMeshes,gpu=GL.GetString(StringName.Renderer),components=scene.ComponentProfiler.Snapshot(),systems=scene.ComponentProfiler.SystemSnapshot()};
   Directory.CreateDirectory("artifacts");File.WriteAllText("artifacts/spider-stress-"+count+"-"+suffix+(scene.ComponentProfiler.Enabled?"":"-unprofiled")+(JobRunner.ParallelExecutionEnabled?"":"-serial")+".json",JsonSerializer.Serialize(result,new JsonSerializerOptions{WriteIndented=true}));Console.WriteLine($"STRESS RESULT {result.fps:0.0} FPS / {result.meanMs:0.0} ms / p95 {result.p95Ms:0.0} ms / {count} spiders");return true;
  }
 }

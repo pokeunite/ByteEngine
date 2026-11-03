@@ -56,7 +56,7 @@ public sealed partial class MiningBusinessUi3D:Component
  public string Feedback{get;private set;}="";
  public MiningScreen NearestScreen{get;private set;}
  public string SelectedResearchId{get;private set;}="company";
- public float HoverSoundGain{get;set;}=.22f;
+ public float HoverSoundGain{get;set;}=1;
  Guid hoveredButton;
  MiningCampLayout3D? CampLayout=>GameObject.Scene?.FindGameObject(Op?.PlayerObjectId??Guid.Empty)?.GetComponent<MiningCampLayout3D>();
  bool CampEditing=>CampLayout?.IsEditing==true;

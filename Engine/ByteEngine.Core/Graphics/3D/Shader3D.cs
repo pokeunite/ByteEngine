@@ -154,7 +154,7 @@ internal sealed class Shader3D : IDisposable
                 float t=uWaterMotion.x;vec2 q=vWorldPosition.xz;
                 if(uWaterStyle.w>.5){
                     float shoreAmplitude=1.;
-                    if(uWaterDepthEnabled==1){vec2 fieldUv=(q-uWaterDepthRect.xy)/uWaterDepthRect.zw;if(all(greaterThanEqual(fieldUv,vec2(0)))&&all(lessThanEqual(fieldUv,vec2(1)))){vec2 dim=vec2(textureSize(uWaterDepthTexture,0));vec2 texUv=(fieldUv*(dim-1.)+.5)/dim;vec2 packed=textureLod(uWaterDepthTexture,texUv,0.).rg;float bed=mix(uWaterDepthSettings.x,uWaterDepthSettings.y,dot(packed,vec2(65280.,255.))/65535.);shoreAmplitude=smoothstep(0.,max(.01,uWaterDepthSettings.w),uWaterDepthSettings.z-bed);}}
+                    if(uWaterDepthEnabled==1){vec2 fieldUv=(q-uWaterDepthRect.xy)/uWaterDepthRect.zw;if(all(greaterThanEqual(fieldUv,vec2(0)))&&all(lessThanEqual(fieldUv,vec2(1)))){vec2 dim=vec2(textureSize(uWaterDepthTexture,0));vec2 texUv=(fieldUv*(dim-1.)+.5)/dim;vec2 depthPacked=textureLod(uWaterDepthTexture,texUv,0.).rg;float bed=mix(uWaterDepthSettings.x,uWaterDepthSettings.y,dot(depthPacked,vec2(65280.,255.))/65535.);shoreAmplitude=smoothstep(0.,max(.01,uWaterDepthSettings.w),uWaterDepthSettings.z-bed);}}
                     vec2 d=length(uWaterOceanWaves.zw)>.001?normalize(uWaterOceanWaves.zw):vec2(1,0);vec3 disp=vec3(0),tx=vec3(1,0,0),tz=vec3(0,0,1);
                     oceanWave(disp,tx,tz,q,d,uWaterOceanWaves.x*shoreAmplitude,uWaterOceanWaves.y,0.);
                     oceanWave(disp,tx,tz,q,vec2(-d.y,d.x),uWaterOceanWaves.x*.52*shoreAmplitude,uWaterOceanWaves.y*.492,1.7);
@@ -184,6 +184,8 @@ internal sealed class Shader3D : IDisposable
         out vec4 FragColor;
 
         uniform vec4 uBaseColor;
+        uniform int uBaseColorPaletteCount;
+        uniform vec4 uBaseColorPalette[16];
         uniform float uMetallicFactor;
         uniform float uRoughnessFactor;
         uniform float uAlphaCutoff;
@@ -979,9 +981,10 @@ internal sealed class Shader3D : IDisposable
             vec4 baseTexture=uUseTexture==1
                 ? sampleMaterialTexture(uTexture)
                 : vec4(1.0);
+            vec4 surfaceColor=uBaseColorPaletteCount>0?uBaseColorPalette[clamp(int(vUV.x+.5),0,uBaseColorPaletteCount-1)]:uBaseColor;
             vec4 base=vec4(
-                uBaseColor.rgb*decodeColor(baseTexture.rgb),
-                uBaseColor.a*baseTexture.a);
+                surfaceColor.rgb*decodeColor(baseTexture.rgb),
+                surfaceColor.a*baseTexture.a);
 
             if(
                 uAlphaCutoff>0.0 &&

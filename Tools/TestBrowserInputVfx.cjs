@@ -6,7 +6,8 @@ fs.mkdirSync(out,{recursive:true});
 const errors=[];
 const server=http.createServer((req,res)=>{
  const name=decodeURIComponent(req.url.split('?')[0]);
- const base=name.startsWith('/Game.bytepak')||name==='/web-game.json'?site:runtime;
+ const override=process.env.BYTEENGINE_RENDERER_OVERRIDE&&path.resolve(process.env.BYTEENGINE_RENDERER_OVERRIDE);
+ const base=name.startsWith('/Game.bytepak')||name==='/web-game.json'?site:override&&fs.existsSync(path.resolve(override,'.'+name))?override:runtime;
  const file=path.resolve(base,'.'+(name==='/'?'/index.html':name));
  if(!file.startsWith(base+path.sep)){res.writeHead(403);return res.end();}
  fs.readFile(file,(error,data)=>{
@@ -20,11 +21,11 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- browser=await chromium.launch({channel:'msedge',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+ browser=await chromium.launch({channel:'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
  const page=await browser.newPage({viewport:{width:1280,height:720}});
  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
- page.on('requestfailed',r=>errors.push(r.url()+': '+r.failure()?.errorText));
- await page.goto('http://127.0.0.1:'+server.address().port+'/');
+ page.on('requestfailed',r=>{if(r.url().startsWith('blob:')&&r.failure()?.errorText==='net::ERR_ABORTED')return;errors.push(r.url()+': '+r.failure()?.errorText);});
+ await page.goto('http://127.0.0.1:'+server.address().port+'/'+(process.env.BYTEENGINE_FORCE_MAIN==='1'?'?renderer=main':''));
  await page.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('Click to start'),null,{timeout:240000});
  await page.locator('#status').click();
  await page.waitForFunction(()=>globalThis.parityFrame?.pendingTextures===0,null,{timeout:240000});
@@ -36,8 +37,9 @@ const server=http.createServer((req,res)=>{
  await page.mouse.down({button:'right'});await page.mouse.down({button:'left'});
  await page.waitForFunction(()=>parityInput.buttons.includes('Right')&&parityInput.buttons.includes('Left'));
  await page.waitForTimeout(250);
- const particlePixels=await page.evaluate(()=>{
+ const particlePixels=await page.evaluate(async()=>{
   const renderer=parityRenderer,gl=renderer.gl,frame=parityFrame;
+  if(renderer.isThreaded)return {...await renderer.compareNextFrame(),vfx:parityVfx.filter(v=>v.RenderedParticles>0)};
   const transparent=frame.draws.filter(d=>{const m=parityMaterials[d.material];return m?.unlit&&(m.blend==='Additive'||m.blend==='AlphaBlend');});
   const width=gl.drawingBufferWidth,height=gl.drawingBufferHeight;
   const original=new Uint8Array(width*height*4),without=new Uint8Array(original.length);
@@ -73,6 +75,12 @@ const server=http.createServer((req,res)=>{
   for(const layer of effect.layers)assert(!layer.error,layer.error);
  }
  assert(effects.some(v=>v.layers.some(l=>l.color?.[3]>0)),'particle assets must retain nonzero opacity');
+ for(const size of [{width:960,height:600},{width:1440,height:900},{width:1280,height:720}]){
+  await page.setViewportSize(size);await page.waitForTimeout(600);
+  const state=await page.evaluate(async()=>({presentation:byteEnginePresentation,report:parityRenderer.isThreaded?await parityRenderer.report():{diagnostics:parityRenderer.diagnostics(),error:parityRenderer.gl.getError()}}));
+  assert.equal(state.report.error,0,'resize graphics error');assert.deepEqual(state.report.diagnostics.worldTarget,[state.presentation.worldWidth,state.presentation.worldHeight]);
+ }
+ fs.writeFileSync(path.join(out,'renderer.json'),JSON.stringify(await page.evaluate(()=>({threaded:parityRenderer.isThreaded,graphics:byteEngineGraphics(),diagnostics:parityRenderer.diagnostics()})),null,2));
  assert.equal(errors.length,0,errors.join('\n'));
- console.log('PASS real browser aim+fire, independent button release, Escape pause/resume and VFX geometry/asset opacity');
+ console.log('PASS real browser aim+fire, independent button release, Escape pause/resume, resizing and VFX pixels/asset opacity');
 }catch(e){console.error(e);process.exitCode=1;}finally{fs.writeFileSync(path.join(out,'errors.json'),JSON.stringify(errors,null,2));await browser?.close();server.close();}})();

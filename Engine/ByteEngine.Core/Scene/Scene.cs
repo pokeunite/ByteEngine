@@ -24,6 +24,8 @@ public sealed partial class Scene
     private readonly List<GameObject> _gameObjects =
         new();
     private Dictionary<Guid,GameObject>? _objectLookup;
+    private readonly HashSet<Guid> _duplicateObjectIds=new();
+    private void InvalidateObjectLookupOrder(){if(_duplicateObjectIds.Count>0)_objectLookup=null;}
 
     private readonly HashSet<GameObject> _pendingDestroy =
         new();
@@ -160,9 +162,10 @@ public sealed partial class Scene
             return;
         }
 
-        InvalidateComponentRegistries();
+        InvalidateComponentRegistries(physics:gameObject.Components.Any(AffectsPhysics),membership:gameObject.Components);
         _gameObjects.Add(
             gameObject);
+        if(_objectLookup!=null&&!_objectLookup.TryAdd(gameObject.Id,gameObject))_duplicateObjectIds.Add(gameObject.Id);
 
         gameObject.AttachToScene(
             this);
@@ -195,7 +198,8 @@ public sealed partial class Scene
         GameObject parent =
             gameObject.Parent;
 
-        InvalidateComponentRegistries();
+        InvalidateComponentRegistries(physics:_physicsRegistryDirty||_physicsTransformOwners.Contains(gameObject),membership:gameObject.Components);
+        InvalidateObjectLookupOrder();
         _gameObjects.Remove(gameObject);
 
         int insertAfter =
@@ -238,7 +242,8 @@ public sealed partial class Scene
             return false;
         }
 
-        InvalidateComponentRegistries();
+        InvalidateComponentRegistries(physics:_physicsRegistryDirty||_physicsTransformOwners.Contains(moving),membership:moving.Components);
+        InvalidateObjectLookupOrder();
         _gameObjects.Remove(moving);
 
         int siblingIndex =
@@ -286,7 +291,7 @@ public sealed partial class Scene
 
     public GameObject? FindGameObject(Guid id)
     {
-        if(_objectLookup==null){_objectLookup=new();foreach(var item in _gameObjects)_objectLookup.TryAdd(item.Id,item);}
+        if(_objectLookup==null){_objectLookup=new();_duplicateObjectIds.Clear();foreach(var item in _gameObjects)if(!_objectLookup.TryAdd(item.Id,item))_duplicateObjectIds.Add(item.Id);}
         return _objectLookup.GetValueOrDefault(id);
     }
 
@@ -386,7 +391,7 @@ public sealed partial class Scene
 
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject)) continue;
+                if (_pendingDestroy.Count!=0 && _pendingDestroy.Contains(gameObject)) continue;
                 gameObject.UpdateInternal();
             }
 
@@ -407,7 +412,7 @@ public sealed partial class Scene
                         if (gameObject.GetComponent<Rigidbody3D>() is { BodyType: not RigidbodyBodyType3D.Static }) gameObject.Transform.CaptureSimulationPose();
                     Time.FixedDeltaTime = delta;
                     foreach (var gameObject in frameObjects)
-                        if (!_pendingDestroy.Contains(gameObject)) gameObject.FixedUpdateInternal();
+                        if (_pendingDestroy.Count==0 || !_pendingDestroy.Contains(gameObject)) gameObject.FixedUpdateInternal();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;
                 });
@@ -432,7 +437,7 @@ public sealed partial class Scene
              */
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject)) continue;
+                if (_pendingDestroy.Count!=0 && _pendingDestroy.Contains(gameObject)) continue;
                 gameObject.LateUpdateInternal();
             }
 
@@ -522,10 +527,14 @@ public sealed partial class Scene
 
         _pendingDestroy.Remove(gameObject);
 
-        InvalidateComponentRegistries();
+        InvalidateComponentRegistries(physics:gameObject.Components.Any(AffectsPhysics),membership:gameObject.Components);
         _gameObjects.Remove(gameObject);
 
         UnregisterClassification(gameObject);
+        if(_objectLookup!=null&&_objectLookup.TryGetValue(gameObject.Id,out var found)&&ReferenceEquals(found,gameObject)){
+            _objectLookup.Remove(gameObject.Id);
+            if(_duplicateObjectIds.Contains(gameObject.Id)){var next=_gameObjects.FirstOrDefault(o=>o.Id==gameObject.Id);if(next!=null)_objectLookup[gameObject.Id]=next;else _duplicateObjectIds.Remove(gameObject.Id);}
+        }
 
         gameObject.DetachFromScene();
         gameObject.DestroyInternal();

@@ -23,6 +23,8 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     [Category("Perception")] public float EyeHeight { get; set; } = .8f;
     [Category("Behaviour"), Description("Decision/perception interval; navigation still moves smoothly each frame.")]
     public float DecisionInterval { get; set; } = .1f;
+    [Category("Behaviour"),Description("Spread agents' initial decision times across the decision interval, avoiding synchronized horde spikes. Movement and committed attacks still update every frame. Disable for deliberately synchronized decisions.")]
+    public bool StaggerDecisions {get;set;}=true;
     [Category("Behaviour"), Description("Scales all movement task speeds without changing the shared behaviour asset.")] public float MovementSpeedMultiplier {get;set;}=1;
     internal float SafeMovementMultiplier=>float.IsFinite(MovementSpeedMultiplier)?Math.Clamp(MovementSpeedMultiplier,.1f,10):1;
     [Category("Behaviour")] public bool Paused { get; set; }
@@ -49,6 +51,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     private SimpleEnemyAI3D? _combatDriver;
     private Guid? _combatNode;
     private double _clock, _accumulator;
+    private bool _decisionPhaseInitialized;
     private bool _attemptedLoad;
     private Vector3? _wanderHome;
     public override int UpdateOrder => -1050;
@@ -69,6 +72,7 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
     {
         CancelMovement(); CancelCombat(); ResetAdvanced(); _indices.Clear(); _started.Clear(); _cooldowns.Clear(); _status.Clear(); _visited.Clear();
         Status = BehaviorStatus.Idle; CurrentTask = "Idle"; _clock = _accumulator = 0;
+        _decisionPhaseInitialized=false;
     }
     public void SetPaused(bool paused) { Paused=paused; if(paused){CancelMovement();CancelCombat();CancelAdvanced("Paused");} }
     protected override void OnUpdate() { if(GameObject.Scene?.FixedSimulation!=true)Tick((float)Time.DeltaTime); }
@@ -108,6 +112,13 @@ public sealed partial class AIBehavior3D : Component, ICharacterDebugSource
             catch(Exception e)when(e is IOException or InvalidDataException or System.Text.Json.JsonException or ArgumentException){LastError=e.Message;CancelMovement();return;}
         }
         if(_definition==null)return;
+        if(!_decisionPhaseInitialized)
+        {
+            _decisionPhaseInitialized=true;
+            // Stable per actor; no random stream, scheduling order or allocation.
+            // Adding an offset never delays an explicitly requested SetMemory decision.
+            if(StaggerDecisions)_accumulator+=((uint)GameObject.Id.GetHashCode()&65535)*(1.0/65536)*Interval;
+        }
         _wanderHome??=Transform.WorldPosition;
         _clock+=delta;
         bool dodging=_combatDriver==null&&GameObject.GetComponent<SimpleEnemyAI3D>() is {BehaviorControlled:true} background&&background.TickBehaviorBackground(delta);

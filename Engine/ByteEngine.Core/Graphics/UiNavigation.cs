@@ -12,6 +12,7 @@ public static class UiNavigation
     private static bool _previousDown;
     private static bool _southPressed;
     private static System.Numerics.Vector2 _lastPointer;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ByteEngine.Core.Scene.Scene,List<UiWidget>> Buttons = new();
     public static bool UsingKeyboardNavigation { get; private set; }
 
     public static UiWidget? Focused =>
@@ -42,16 +43,18 @@ public static class UiNavigation
         _previousUp = up;
         _previousDown = down;
 
-        UiWidget[] buttons = scene.GameObjects
-            .Select(obj => obj.GetComponent<UiWidget>())
-            .Where(widget => widget is { Enabled: true, Visible: true,
-                Interactable: true, Kind: UiWidgetKind.Button })
-            .Cast<UiWidget>()
-            .Where(widget => widget.GameObject.ActiveInHierarchy &&
-                UiLayout.IsVisible(widget.GameObject))
-            .ToArray();
-        Input.SetUiPointerBlocked(buttons.Any(widget => widget.IsHovered)||scene.GameObjects.Any(o=>o.ActiveInHierarchy&&o.GetComponent<UiWidget>() is {Enabled:true,Visible:true,BlocksWorldPointer:true} panel&&UiLayout.IsVisible(o)&&panel.Contains(Input.GameViewMousePosition,Input.GameViewSize)));
-        if (buttons.Length == 0)
+        var buttons=Buttons.GetValue(scene,_=>new());buttons.Clear();bool pointerBlocked=false;
+        var widgets=scene.GetComponentsSnapshot<UiWidget>();
+        for(int i=0;i<widgets.Count;i++)
+        {
+            var widget=widgets[i];var owner=widget.GameObject;
+            // Navigation historically uses the first widget on each object.
+            if(!ReferenceEquals(owner.GetComponent<UiWidget>(),widget)||!widget.Enabled||!widget.Visible||!owner.ActiveInHierarchy||!UiLayout.IsVisible(owner))continue;
+            if(widget is {Interactable:true,Kind:UiWidgetKind.Button}){buttons.Add(widget);pointerBlocked|=widget.IsHovered;}
+            if(!pointerBlocked&&widget.BlocksWorldPointer)pointerBlocked=widget.Contains(Input.GameViewMousePosition,Input.GameViewSize);
+        }
+        Input.SetUiPointerBlocked(pointerBlocked);
+        if (buttons.Count == 0)
         {
             Focus(null);
             return;
@@ -73,8 +76,8 @@ public static class UiNavigation
         if (step != 0)
         {
             UsingKeyboardNavigation=true;
-            int index = Array.IndexOf(buttons, Focused);
-            Focus(buttons[(index + step + buttons.Length) % buttons.Length]);
+            int index = buttons.IndexOf(Focused!);
+            Focus(buttons[(index + step + buttons.Count) % buttons.Count]);
         }
         if(_southPressed)UsingKeyboardNavigation=true;
     }

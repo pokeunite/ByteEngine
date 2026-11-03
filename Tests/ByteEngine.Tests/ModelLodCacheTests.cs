@@ -45,6 +45,9 @@ internal static class ModelLodCacheTests
         Check(assets.PendingImports == 0, "Asynchronous reimport did not finish");
         var lod = assets.GetModelLodMesh(meshReference, 1);
         Check(!ReferenceEquals(lod, original) && lod.IndexCount < original.IndexCount, "Reimport leaves stale missing-LOD fallback");
+        Check(ReferenceEquals(lod,assets.GetModelLodMesh(new(reference,meshReference.SubAssetKey),1)),"Equivalent model references lost shared LOD identity");
+        Check(ReferenceEquals(lod,assets.GetModelLodMesh(meshReference,0)),"Clamped first LOD changed");
+        Check(ReferenceEquals(assets.GetModelLodMesh(meshReference,2),assets.GetModelLodMesh(meshReference,9)),"Clamped second LOD changed");
         for (int i = 0; i < 100; i++) assets.GetModelLodMesh(meshReference, 1);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 10000; i++)

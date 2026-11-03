@@ -10,20 +10,39 @@ namespace ByteEngine.Core.VisualLogic;
 public sealed partial class EventModuleRuntime
 {
     private readonly VisualLogicRegistry _registry;
-    // Each recursive evaluation owns its scratch data until it returns. Rebuilding
-    // the maps still observes live sheet edits; pooling only removes allocations.
+    // Recursive evaluations own separate result scratch. Instruction membership
+    // lookups are retained, with identity checks preserving live sheet edits.
     private readonly Stack<RuleScratch> _scratchPool = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<EventRuleDefinition,RuleLookup> _ruleLookups=new();
+    private sealed class InstructionLookup
+    {
+        private VisualInstruction[] _items=[];
+        private Guid[] _ids=[];
+        internal Dictionary<Guid,VisualInstruction> Map=new();
+        internal List<Guid> Roots=new();
+        internal void Refresh(List<VisualInstruction> items)
+        {
+            bool same=items.Count==_items.Length;
+            if(same)for(int i=0;i<items.Count;i++)if(!ReferenceEquals(items[i],_items[i])||items[i].InstanceId!=_ids[i]){same=false;break;}
+            if(same)return;
+            // Replace rather than mutate: a recursive call can still be using
+            // the prior lookup while a live-edit callback changes the sheet.
+            var map=new Dictionary<Guid,VisualInstruction>(items.Count);var roots=new List<Guid>(items.Count);
+            var snapshot=new VisualInstruction[items.Count];var ids=new Guid[items.Count];
+            for(int i=0;i<items.Count;i++){var item=items[i];map.Add(item.InstanceId,item);roots.Add(item.InstanceId);snapshot[i]=item;ids[i]=item.InstanceId;}
+            Map=map;Roots=roots;_items=snapshot;_ids=ids;
+        }
+    }
+    private sealed class RuleLookup {internal readonly InstructionLookup Conditions=new(),Actions=new();}
     private sealed class RuleScratch
     {
-        public readonly Dictionary<Guid, VisualInstruction> Conditions = new(), Actions = new();
         public readonly Dictionary<Guid, bool> Results = new();
         public readonly HashSet<Guid> Evaluating = new(), Evaluated = new(), VisitedActions = new();
-        public readonly List<Guid> Roots = new();
         public readonly List<VisualInstruction> Triggers = new();
         public void Clear()
         {
-            Conditions.Clear(); Actions.Clear(); Results.Clear(); Evaluating.Clear();
-            Evaluated.Clear(); VisitedActions.Clear(); Roots.Clear(); Triggers.Clear();
+            Results.Clear(); Evaluating.Clear();
+            Evaluated.Clear(); VisitedActions.Clear(); Triggers.Clear();
         }
     }
 
@@ -83,6 +102,7 @@ public sealed partial class EventModuleRuntime
         _timers.Clear();
         _continuations.Clear();
         _reportedWarnings.Clear();
+        _ruleLookups.Clear();
         _activeModule = null;
         _activeGlobals = null;
         _activeScene = null;
@@ -298,11 +318,9 @@ public sealed partial class EventModuleRuntime
             return false;
         }
 
-        var conditionMap = scratch.Conditions;
-        foreach (var condition in rule.Conditions) conditionMap.Add(condition.InstanceId, condition);
-        if (!rule.HasExplicitConditionFlow)
-            foreach (var condition in rule.Conditions) scratch.Roots.Add(condition.InstanceId);
-        IReadOnlyList<Guid> rootConditionIds = rule.HasExplicitConditionFlow ? rule.ConnectedConditionIds : scratch.Roots;
+        var lookup=_ruleLookups.GetValue(rule,static _=>new RuleLookup()).Conditions;lookup.Refresh(rule.Conditions);
+        var conditionMap=lookup.Map;
+        List<Guid> rootConditionIds = rule.HasExplicitConditionFlow ? rule.ConnectedConditionIds : lookup.Roots;
         var results = scratch.Results;
         var evaluating = scratch.Evaluating;
         var evaluated = scratch.Evaluated;
@@ -442,7 +460,7 @@ public sealed partial class EventModuleRuntime
         EventModuleDefinition module,
         EventRuleDefinition rule,
         Guid conditionId,
-        IReadOnlyDictionary<Guid, VisualInstruction> conditionMap,
+        Dictionary<Guid, VisualInstruction> conditionMap,
         EventExecutionContext context,
         Dictionary<Guid, bool> results,
         HashSet<Guid> evaluating,
@@ -668,8 +686,8 @@ public sealed partial class EventModuleRuntime
             return;
         }
 
-        var actions = scratch.Actions;
-        foreach (var action in rule.Actions) actions.Add(action.InstanceId, action);
+        var lookup=_ruleLookups.GetValue(rule,static _=>new RuleLookup()).Actions;lookup.Refresh(rule.Actions);
+        var actions=lookup.Map;
         var visited = scratch.VisitedActions;
 
         ExecuteActionFlow(

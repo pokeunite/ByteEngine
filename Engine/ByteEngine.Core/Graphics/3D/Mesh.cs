@@ -18,6 +18,10 @@ public sealed class Mesh : IDisposable
 
     private readonly bool _dynamicVertices;
     internal bool IsDynamic=>_dynamicVertices;
+    internal GpuSkinningData? GpuSkinning {get;private set;}
+    internal void SetGpuSkinning(GpuSkinningData? data)
+    {if(ReferenceEquals(GpuSkinning,data))return;GpuSkinning=data;GeometryVersion++;}
+    internal void SetAnimationBounds(BoundingBox3D bounds)=>LocalBounds=bounds;
     private bool _vertexDataDirty;
 
     /*

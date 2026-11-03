@@ -36,6 +36,11 @@ internal static class RoadmapUiVisualTests
   }
   if(scroll.ScrollY<=0||UiNavigation.Focused!=buttons[^1])throw new Exception("Controller focus does not reveal last row");
   var activate=new ByteEngine.Core.InputSystem.RawInputSnapshot();activate.Gamepad.ButtonsDown.Add(ByteEngine.Core.InputSystem.GamepadControl.South);ByteEngine.Core.Input.UpdatePortable(activate,false);ByteEngine.Core.Time.Update(1d/60);UiNavigation.Update(scene);if(!buttons[^1].WasClicked)throw new Exception("Controller confirm does not activate focused button");UiNavigation.Focus(null);
+  void InputFrame(ByteEngine.Core.InputSystem.RawInputSnapshot input){ByteEngine.Core.Input.UpdatePortable(input,false);ByteEngine.Core.Time.Update(1d/60);UiNavigation.Update(scene);}
+  InputFrame(new());UiNavigation.Focus(buttons[^1]);if(buttons[^1].WasClicked)throw new Exception("Idle input activated button");
+  var enter=new ByteEngine.Core.InputSystem.RawInputSnapshot();enter.KeysDown.Add(ByteEngine.Core.Key.Enter);InputFrame(enter);if(!buttons[^1].WasClicked)throw new Exception("Keyboard Enter was lost by activation fast path");
+  InputFrame(new());var space=new ByteEngine.Core.InputSystem.RawInputSnapshot();space.KeysDown.Add(ByteEngine.Core.Key.Space);buttons[^1].ActivateWithSpace=false;InputFrame(space);if(buttons[^1].WasClicked)throw new Exception("Space activated a button that disables Space");buttons[^1].ActivateWithSpace=true;if(!buttons[^1].WasClicked)throw new Exception("Space activation was lost");
+  panel.GetComponent<UiWidget>()!.Visible=false;if(buttons[^1].WasClicked)throw new Exception("Hidden parent remained clickable");panel.GetComponent<UiWidget>()!.Visible=true;UiNavigation.Focus(null);
   Console.WriteLine("PASS actual UI authoring framebuffer at five sizes, long German/French labels, shared hit testing and focus reveal; screenshots saved");
  }
     internal static void Png(string file,byte[] rgba,int width,int height)

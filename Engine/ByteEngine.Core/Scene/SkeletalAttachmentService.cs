@@ -398,48 +398,28 @@ public static class SkeletalAttachmentService
             return;
         }
 
-        WeakReference<GameObject>[] followers;
-
-        lock (set.SyncRoot)
+        WeakReference<GameObject>? single=null;WeakReference<GameObject>[]? followers=null;int count;
+        lock(set.SyncRoot)
         {
-            followers =
-                set.Children.ToArray();
+            count=set.Children.Count;
+            if(count==1)single=set.Children[0];
+            else if(count>1){followers=System.Buffers.ArrayPool<WeakReference<GameObject>>.Shared.Rent(count);set.Children.CopyTo(followers);}
         }
-
-        bool prune = false;
-
-        foreach (WeakReference<GameObject> weak
-                 in followers)
+        bool prune=false;
+        try
         {
-            if (!weak.TryGetTarget(
-                    out GameObject? child))
+            for(int i=0;i<count;i++)
             {
-                prune = true;
-                continue;
+                var weak=single??followers![i];
+                if(!weak.TryGetTarget(out var child)||!Bindings.TryGetValue(child,out var binding)||!ReferenceEquals(binding.Renderer,renderer)){prune=true;continue;}
+                ApplyBinding(child,binding);
             }
-
-            if (!Bindings.TryGetValue(
-                    child,
-                    out Binding? binding) ||
-                !ReferenceEquals(
-                    binding.Renderer,
-                    renderer))
-            {
-                prune = true;
-                continue;
-            }
-
-            ApplyBinding(
-                child,
-                binding);
         }
-
-        if (prune)
+        finally
         {
-            PruneRendererSet(
-                renderer,
-                set);
+            if(followers!=null){Array.Clear(followers,0,count);System.Buffers.ArrayPool<WeakReference<GameObject>>.Shared.Return(followers);}
         }
+        if(prune)PruneRendererSet(renderer,set);
     }
 
     public static void Invalidate(

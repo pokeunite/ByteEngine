@@ -11,6 +11,9 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public sealed class Material
 {
+    // Generated opaque crowd geometry encodes a flat colour slot in UV.x.
+    // Immutable, renderer-owned palette; ordinary authored materials keep null.
+    internal Vector4[]? SolidColorPalette {get;set;}
 
     public Vector4 BaseColor { get; set; } =
         Vector4.One;
@@ -137,6 +140,7 @@ public sealed class Material
     /// </summary>
     public void CopyFrom(Material source)
     {
+        SolidColorPalette=source.SolidColorPalette;
         BaseColor = source.BaseColor;
         WetContact0=source.WetContact0;WetContact1=source.WetContact1;WetContact2=source.WetContact2;WetLevels=source.WetLevels;
         WaterDepthTexture=source.WaterDepthTexture;WaterDepthRect=source.WaterDepthRect;WaterDepthSettings=source.WaterDepthSettings;WaterOceanWaves=source.WaterOceanWaves;WaterAbsorption=source.WaterAbsorption;WaterScattering=source.WaterScattering;WaterStyle=source.WaterStyle;WaterReflections=source.WaterReflections;WaterSurface=source.WaterSurface;WaterVolume=source.WaterVolume;WaterColumn=source.WaterColumn;WaterMotion=source.WaterMotion;WaterWake=source.WaterWake;WaterFlow=source.WaterFlow;WaterImpact=source.WaterImpact;WaterSize=source.WaterSize;
@@ -178,6 +182,7 @@ public sealed class Material
         return
             new Material
             {
+                SolidColorPalette=SolidColorPalette,
                 WetContact0=WetContact0,WetContact1=WetContact1,WetContact2=WetContact2,WetLevels=WetLevels,
                 WaterSurface=WaterSurface,WaterVolume=WaterVolume,WaterColumn=WaterColumn,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterFlow=WaterFlow,WaterImpact=WaterImpact,WaterSize=WaterSize,
                 BaseColor =

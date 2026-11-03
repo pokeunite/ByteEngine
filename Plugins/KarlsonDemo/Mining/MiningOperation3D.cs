@@ -38,6 +38,8 @@ public sealed partial class MiningOperation3D:Component
  [Category("Enemies")] public int MaximumAlive {get;set;}=12;
  [Browsable(false)] public int HunterEvery {get;set;}=3;
  [Category("Enemies")] public float SpawnInterval {get;set;}=.9f;
+ [Category("Enemy collision"),Description("Navigation-driven spider capsules remain solid to movement, aiming and projectile queries without generating unused solver/trigger contacts. Disable if custom events need those contact callbacks. Dynamic rigid bodies always keep normal contacts.")]
+ public bool EnemyMovementQueriesOnly {get;set;}=true;
  [Category("Economy")] public int StartingCredits {get;set;}=20;
  [Category("Economy")] public int RawOrePrice {get;set;}=2;
  [Category("Economy")] public int RefinedOrePrice {get;set;}=5;

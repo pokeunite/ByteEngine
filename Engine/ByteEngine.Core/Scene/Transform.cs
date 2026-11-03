@@ -15,20 +15,30 @@ public sealed class Transform
     private Vector3 _worldPosition, _worldScale;
     private Quaternion _worldRotation;
     private Matrix4x4 _worldMatrix, _localMatrix;
+    private bool _worldDirty = true;
+    // Propagate once when an ancestor changes, instead of walking ancestors on
+    // every position, scale, bounds and matrix read of an unchanged hierarchy.
+    internal void InvalidateWorld()
+    {
+        if (_worldDirty) return;
+        _worldDirty = true;
+        var children = _owner.Children;
+        for (int i = 0; i < children.Count; i++) children[i].Transform.InvalidateWorld();
+    }
     public Vector3 LocalPosition
     {
         get => _localPosition;
-        set { if (_localPosition != value) { _localPosition = value; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
+        set { if (_localPosition != value) { _localPosition = value; _localVersion++; InvalidateWorld(); _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
     public Quaternion LocalRotation
     {
         get => _localRotation;
-        set { var normalized = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value); if (_localRotation != normalized) { _localRotation = normalized; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
+        set { var normalized = Quaternion.Normalize(value.LengthSquared() < .0001f ? Quaternion.Identity : value); if (_localRotation != normalized) { _localRotation = normalized; _localVersion++; InvalidateWorld(); _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
     public Vector3 LocalScale
     {
         get => _localScale;
-        set { var scale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z)); if (_localScale != scale) { _localScale = scale; _localVersion++; _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
+        set { var scale = new Vector3(NonZero(value.X), NonZero(value.Y), NonZero(value.Z)); if (_localScale != scale) { _localScale = scale; _localVersion++; InvalidateWorld(); _owner.Scene?.NotifyPhysicsTransformChanged(_owner); } }
     }
 
     public Vector3 WorldPosition
@@ -85,6 +95,7 @@ public sealed class Transform
 
     private void EnsureWorld()
     {
+        if (!_worldDirty) return;
         var parent = _owner.Parent?.Transform;
         parent?.EnsureWorld();
         long parentVersion = parent?._worldVersion ?? 0;
@@ -96,6 +107,7 @@ public sealed class Transform
         _worldScale = parent == null ? _localScale : _localScale * parent._worldScale;
         _cachedLocalVersion = _localVersion; _cachedParent = parent; _cachedParentVersion = parentVersion;
         _worldVersion++;
+        _worldDirty = false;
     }
 
     private Vector3 _previousPosition;
@@ -117,7 +129,11 @@ public sealed class Transform
         get
         {
             var scene = _owner.Scene;
-            if (!_hasSimulationPose || scene is not { FixedSimulation: true, IsLoaded: true })
+            // Without fixed-step interpolation, WorldMatrix already contains
+            // the complete cached hierarchy. Rebuilding it recursively here
+            // multiplied scenery matrices again for every draw and every frame.
+            if(scene is not { FixedSimulation:true,IsLoaded:true })return WorldMatrix;
+            if (!_hasSimulationPose)
                 return _owner.Parent == null ? WorldMatrix : LocalMatrix * _owner.Parent.Transform.RenderMatrix;
             float alpha = scene is { FixedSimulation: true, IsLoaded: true } && _hasSimulationPose
                 ? (float)scene.SimulationClock.InterpolationAlpha : 1;

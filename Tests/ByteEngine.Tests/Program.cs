@@ -20,9 +20,21 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Contains("--event-lookups")){EventLookupTests.Run();return;}
+    if(args.Contains("--dispatch-performance")){DispatchPerformanceTests.Run();return;}
+    if(args.Contains("--animation-optimization")){AnimationOptimizationTests.Run();return;}
+    if(args.Contains("--shader-portability")){ShaderPortabilityTests.Run();return;}
     if(args.Length==2&&args[0]=="--pixel-art-shader"){PixelArtShaderTests.Run(args[1]);return;}
     if(args.Length==2&&args[0]=="--fire-attack-benchmark"){FireAttackBenchmark.Run(args[1]);return;}
     if(args.Contains("--ai-query")){AIQueryOptimizationTests.Run();return;}
+    if(args.Length==3&&args[0]=="--browser-plugin-inputs")
+    {
+        var installed=ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ListInstalled(args[1]).Where(p=>p.Enabled&&ByteEngine.Core.Plugins.ByteEnginePluginPackageManager.ReadManifest(File.ReadAllText(p.ManifestPath)).Runtime).ToArray();
+        ByteEngine.Core.Runtime.WebGamePackageExporter.ValidatePluginBuilds(args[2],installed);
+        Console.WriteLine("PASS actual export plugin fingerprint guard: "+installed.Length+" enabled runtime plugins");
+        int resources=ByteEngine.Core.Runtime.BrowserRuntimeIntegrity.Validate(args[2]);
+        Console.WriteLine("PASS installed browser integrity and boot resources: "+resources+"; no game exported");return;
+    }
     if(args.Contains("--engine-optimization")){EngineOptimizationTests.Run();return;}
     if(args.Contains("--single-executable")){SingleExecutableTests.Run(root);return;}
     if(args.Length==4&&args[0]=="--bundle-existing")

@@ -5,23 +5,28 @@ internal static class BrowserMatrixPacking
 {
     internal static void WriteMatrix(Span<float> target,Matrix4x4 m)
     {
-        target[0]=m.M11;target[1]=m.M12;target[2]=m.M13;target[3]=m.M14;
-        target[4]=m.M21;target[5]=m.M22;target[6]=m.M23;target[7]=m.M24;
-        target[8]=m.M31;target[9]=m.M32;target[10]=m.M33;target[11]=m.M34;
-        target[12]=m.M41;target[13]=m.M42;target[14]=m.M43;target[15]=m.M44;
+        // Matrix4x4 is sixteen sequential floats in the existing wire order.
+        System.Runtime.InteropServices.MemoryMarshal.Write(System.Runtime.InteropServices.MemoryMarshal.AsBytes(target[..16]),in m);
     }
-    // Version 1: two int32 counts, model matrix, 4 wet-contact vectors,
-    // then visible and opaque shadow instance matrices. No float JSON conversion.
+    private static ReadOnlySpan<RenderSubmission> View(IReadOnlyList<RenderSubmission> items)=>items switch {
+        List<RenderSubmission> list=>System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list),
+        RenderSubmission[] array=>array,
+        _=>items.ToArray()
+    };
+    private static int Shadows(ReadOnlySpan<RenderSubmission> items)
+    {
+        int count=0;for(int i=0;i<items.Length;i++){ref readonly var item=ref items[i];if(item.CastShadows&&item.Queue==RenderQueue3D.Opaque)count++;}return count;
+    }
+    // Version 1: two int32 counts, model matrix, four wet-contact vectors,
+    // then visible and opaque shadow matrices. No boxed struct enumerators.
     internal static int PacketLength(IReadOnlyList<RenderSubmission> items)
     {
-        int shadows=0;foreach(var item in items)if(item.CastShadows&&item.Queue==RenderQueue3D.Opaque)shadows++;
-        return checked(8+4*(32+16*((items.Count>1?items.Count:0)+shadows)));
+        var view=View(items);return checked(136+64*((view.Length>1?view.Length:0)+Shadows(view)));
     }
-    internal static void WritePacket(Span<byte> bytes,IReadOnlyList<RenderSubmission> items)
+    internal static void WritePacket(Span<byte> bytes,IReadOnlyList<RenderSubmission> source)
     {
-        if(items.Count==0||bytes.Length!=PacketLength(items))throw new ArgumentException("Invalid draw packet destination");
-        int instances=items.Count>1?items.Count:0,shadows=0;
-        foreach(var item in items)if(item.CastShadows&&item.Queue==RenderQueue3D.Opaque)shadows++;
+        var items=View(source);int shadows=Shadows(items),instances=items.Length>1?items.Length:0;
+        if(items.Length==0||bytes.Length!=checked(136+64*(instances+shadows)))throw new ArgumentException("Invalid draw packet destination");
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes,instances);
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes[4..],shadows);
         var floats=System.Runtime.InteropServices.MemoryMarshal.Cast<byte,float>(bytes[8..]);
@@ -29,8 +34,9 @@ internal static class BrowserMatrixPacking
         var m=items[0].Material;
         static void V(Span<float> span,Vector4 v){span[0]=v.X;span[1]=v.Y;span[2]=v.Z;span[3]=v.W;}
         V(floats[16..],m.WetContact0);V(floats[20..],m.WetContact1);V(floats[24..],m.WetContact2);V(floats[28..],m.WetLevels);
-        int offset=32;if(instances>0)foreach(var item in items){WriteMatrix(floats[offset..],item.ModelMatrix);offset+=16;}
-        foreach(var item in items)if(item.CastShadows&&item.Queue==RenderQueue3D.Opaque){WriteMatrix(floats[offset..],item.ModelMatrix);offset+=16;}
+        int offset=32;
+        if(instances>0)for(int i=0;i<items.Length;i++){WriteMatrix(floats[offset..],items[i].ModelMatrix);offset+=16;}
+        for(int i=0;i<items.Length;i++){ref readonly var item=ref items[i];if(item.CastShadows&&item.Queue==RenderQueue3D.Opaque){WriteMatrix(floats[offset..],item.ModelMatrix);offset+=16;}}
     }
     internal static int Compare(RenderSubmission a, RenderSubmission b)
     {

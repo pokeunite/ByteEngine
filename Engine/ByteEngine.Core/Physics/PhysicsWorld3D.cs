@@ -223,7 +223,7 @@ public sealed partial class PhysicsWorld3D
             if (ReferenceEquals(FindBodyForCollider(obj), body))
                 foreach (var collider in obj.Components.OfType<Collider3D>())
                 {
-                    if (!collider.Enabled || collider.IsTrigger) continue;
+                    if (!collider.Enabled || collider.IsTrigger || collider.QueryOnly) continue;
                     var bounds = CalculateBounds(collider);
                     Vector3 half = (bounds.Maximum - bounds.Minimum) * .5f;
                     // Capsule endpoints preserve the complete long shape. Boxes use a conservative enclosing sphere,
@@ -255,7 +255,7 @@ public sealed partial class PhysicsWorld3D
     public void Reset()
     {
         _staticSolveValid = false; _staticSolveStates.Clear(); _staticSolveContacts.Clear();
-        _queryRevision=-1;_queryCustomColliders.Clear();_queryStaticIndex.Clear();_queryMovingIndex.Clear();QueryCalls=QueryIndexRefreshes=QueryIndexCacheHits=0;
+        _queryRevision=-1;_queryCustomColliders.Clear();_queryStaticIndex.Clear();_queryMovingIndex.Clear();QueryCalls=QueryIndexRefreshes=QueryIndexCacheHits=0;QueryIncrementalBoundsUpdates=QueryFullIndexRefreshes=0;_queryStructureRevision=-1;_queryColliderIndices.Clear();
         _queryEntries.Clear();_queryIndices.Clear();_queryObjects.Clear();_queryUnique.Clear();_queryBoundsCache.Clear();
         _stepBodies.Clear();_stepJoints.Clear();_primitiveStates.Clear();_primitiveContacts.Clear();_expiredPrimitiveContacts.Clear();
         _framePositions.Clear();_staticIndex.Clear();_movingIndex.Clear();
@@ -274,7 +274,7 @@ public sealed partial class PhysicsWorld3D
         for(int i=0;i<registeredColliders.Count;i++)
         {
             var collider=registeredColliders[i];var obj=collider.GameObject;
-            if(collider.Enabled && obj.ActiveInHierarchy)
+            if(collider.Enabled && !collider.QueryOnly && obj.ActiveInHierarchy)
                 _stepColliders.Add(new(obj,collider,FindBodyForCollider(obj),CachedQueryBounds(collider)));
         }
         LastColliderGatherMs+=System.Diagnostics.Stopwatch.GetElapsedTime(gatherStart).TotalMilliseconds;
@@ -402,12 +402,26 @@ public sealed partial class PhysicsWorld3D
         // Validate non-notifying custom geometry independently; unchanged terrain
         // must not force every primitive collider to be gathered again.
         bool refresh=!UseCachedQueryIndex||_queryRevision!=scene.QueryBoundsRevision;
-        if(!refresh)
-            foreach(var custom in _queryCustomColliders)
-                if(CalculateBounds(custom.Collider)!=custom.Bounds){refresh=true;break;}
+        bool customChanged=false,incrementalRefreshed=false;
+        foreach(var custom in _queryCustomColliders)
+            if(CalculateBounds(custom.Collider)!=custom.Bounds){refresh=true;customChanged=true;break;}
+        bool primary=ReferenceEquals(this,scene.Physics);
+        if(refresh&&UseCachedQueryIndex&&UseIncrementalQueryIndex&&primary&&_queryRevision>=0&&_queryStructureRevision==scene.QueryStructureRevision&&!customChanged)
+        {
+            foreach(var collider in scene.ChangedQueryColliders)
+                if(_queryColliderIndices.TryGetValue(collider,out int index))
+                {
+                    var entry=entries[index];var changedBounds=CachedQueryBounds(collider);entries[index]=entry with{Bounds=changedBounds};
+                    _queryStaticIndex.UpdateBounds(index,changedBounds);_queryMovingIndex.UpdateBounds(index,changedBounds);QueryIncrementalBoundsUpdates++;
+                }
+            _queryStaticIndex.RebalanceIfNeeded();_queryMovingIndex.RebalanceIfNeeded();
+            // Custom geometry has a separately checked snapshot for non-notifying edits.
+            if(_queryCustomColliders.Count>0){for(int i=0;i<_queryCustomColliders.Count;i++){var item=_queryCustomColliders[i];if(_queryColliderIndices.TryGetValue(item.Collider,out int index))_queryCustomColliders[i]=(item.Collider,entries[index].Bounds);}}
+            scene.ChangedQueryColliders.Clear();_queryRevision=scene.QueryBoundsRevision;QueryIndexRefreshes++;refresh=false;incrementalRefreshed=true;
+        }
         if(refresh)
         {
-            QueryIndexRefreshes++;entries.Clear();_queryCustomColliders.Clear();
+            QueryIndexRefreshes++;QueryFullIndexRefreshes++;entries.Clear();_queryCustomColliders.Clear();_queryColliderIndices.Clear();
             if(_queryBoundsCache.Count>Math.Max(128,registeredColliders.Count*2))_queryBoundsCache.Clear();
             for(int i=0;i<registeredColliders.Count;i++)
             {
@@ -415,14 +429,14 @@ public sealed partial class PhysicsWorld3D
                 if(collider.Enabled&&obj.ActiveInHierarchy)
                 {
                     var shapeBounds=CachedQueryBounds(collider);
-                    entries.Add(new(obj,collider,FindBodyForCollider(obj),shapeBounds));
+                    _queryColliderIndices[collider]=entries.Count;entries.Add(new(obj,collider,FindBodyForCollider(obj),shapeBounds));
                     if(collider is not (BoxCollider3D or CapsuleCollider3D))_queryCustomColliders.Add((collider,shapeBounds));
                 }
             }
             _queryStaticIndex.Update(entries,false);_queryMovingIndex.Update(entries,true);
-            _queryRevision=scene.QueryBoundsRevision;
+            _queryRevision=scene.QueryBoundsRevision;_queryStructureRevision=scene.QueryStructureRevision;if(primary)scene.ChangedQueryColliders.Clear();
         }
-        else QueryIndexCacheHits++;
+        else if(!incrementalRefreshed)QueryIndexCacheHits++;
         var results=_queryIndices;results.Clear();
         var bounds=new Bounds3D(Vector3.Min(minimum,maximum),Vector3.Max(minimum,maximum));
         _queryStaticIndex.Query(bounds,results);_queryMovingIndex.Query(bounds,results);results.Sort();
@@ -435,8 +449,12 @@ public sealed partial class PhysicsWorld3D
     public long QueryCalls{get;private set;}
     public long QueryIndexRefreshes{get;private set;}
     public long QueryIndexCacheHits{get;private set;}
-    private long _queryRevision=-1;
+    private long _queryRevision=-1,_queryStructureRevision=-1;
+    private readonly Dictionary<Collider3D,int> _queryColliderIndices=new();
+    public long QueryIncrementalBoundsUpdates{get;private set;}
+    public long QueryFullIndexRefreshes{get;private set;}
     public bool UseCachedQueryIndex {get;set;}=true;
+    public bool UseIncrementalQueryIndex {get;set;}=true;
     private readonly List<(Collider3D Collider,Bounds3D Bounds)> _queryCustomColliders=new();
     private readonly BoundsTree _queryStaticIndex=new(),_queryMovingIndex=new();
     private readonly List<ColliderEntry> _queryEntries=new();
@@ -465,14 +483,16 @@ public sealed partial class PhysicsWorld3D
     {
         private readonly List<(Collider3D Collider, Bounds3D Bounds, int Index)> _leaves = new();
         private Node? _root;
+        private readonly Dictionary<int,Node> _sourceLeafNodes=new();
         public int Rebuilds { get; private set; }
         public int Refits { get; private set; }
         private int _refitsSinceBuild;
-        public void Clear(){_leaves.Clear();_root=null;Rebuilds=Refits=_refitsSinceBuild=0;}
+        public void Clear(){_leaves.Clear();_sourceLeafNodes.Clear();_root=null;Rebuilds=Refits=_refitsSinceBuild=0;}
         private sealed class Node(Bounds3D bounds, int index, int leaf = -1, Node? left = null, Node? right = null)
         {
             public Bounds3D Bounds = bounds;
             public int Index = index;
+            public Node? Parent;
             public readonly int Leaf = leaf;
             public readonly Node? Left = left, Right = right;
         }
@@ -503,7 +523,7 @@ public sealed partial class PhysicsWorld3D
             }
             _refitsSinceBuild = 0;
             var order = Enumerable.Range(0, count).ToArray();
-            _root = Build(order, 0, count);
+            _sourceLeafNodes.Clear();_root = Build(order, 0, count);
             Rebuilds++;
         }
         private Node? Build(int[] order, int start, int count)
@@ -515,14 +535,30 @@ public sealed partial class PhysicsWorld3D
                 var b = _leaves[order[i]].Bounds;
                 bounds = new(Vector3.Min(bounds.Minimum, b.Minimum), Vector3.Max(bounds.Maximum, b.Maximum));
             }
-            if (count == 1) return new(bounds, _leaves[order[start]].Index, order[start]);
+            if (count == 1){var leaf=new Node(bounds,_leaves[order[start]].Index,order[start]);_sourceLeafNodes[leaf.Index]=leaf;return leaf;}
             var span = bounds.Maximum - bounds.Minimum;
             int axis = span.Y > span.X ? 1 : 0;
             if (span.Z > (axis == 0 ? span.X : span.Y)) axis = 2;
             float Center(int index) { var b = _leaves[index].Bounds; var c = b.Minimum + b.Maximum; return axis == 0 ? c.X : axis == 1 ? c.Y : c.Z; }
             Array.Sort(order, start, count, Comparer<int>.Create((a,b) => { int c = Center(a).CompareTo(Center(b)); return c != 0 ? c : a.CompareTo(b); }));
             int half = count / 2;
-            return new(bounds, -1, -1, Build(order, start, half), Build(order, start + half, count - half));
+            var node=new Node(bounds,-1,-1,Build(order,start,half),Build(order,start+half,count-half));node.Left!.Parent=node;node.Right!.Parent=node;return node;
+        }
+        public void UpdateBounds(int sourceIndex,Bounds3D bounds)
+        {
+            if(!_sourceLeafNodes.TryGetValue(sourceIndex,out var node)||node.Bounds==bounds)return;
+            var old=_leaves[node.Leaf];_leaves[node.Leaf]=(old.Collider,bounds,old.Index);node.Bounds=bounds;
+            for(var parent=node.Parent;parent!=null;parent=parent.Parent)
+            {
+                var left=parent.Left!.Bounds;var right=parent.Right!.Bounds;
+                parent.Bounds=new(Vector3.Min(left.Minimum,right.Minimum),Vector3.Max(left.Maximum,right.Maximum));
+            }
+            Refits++;_refitsSinceBuild++;
+        }
+        public void RebalanceIfNeeded()
+        {
+            if(_refitsSinceBuild<2048||_root==null)return;
+            var order=Enumerable.Range(0,_leaves.Count).ToArray();_sourceLeafNodes.Clear();_root=Build(order,0,order.Length);_refitsSinceBuild=0;Rebuilds++;
         }
         private Bounds3D Refit(Node node)
         {

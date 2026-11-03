@@ -7,6 +7,9 @@ namespace ByteEngine.Core.Characters;
 public abstract class Collider3D : Component
 {
     public bool IsTrigger { get; set; }
+    private bool _queryOnly;
+    [System.ComponentModel.Description("Participates in raycasts and shape queries, but produces no physical contacts or trigger events. Useful for damage hitboxes.")]
+    public bool QueryOnly {get=>_queryOnly;set{if(_queryOnly==value)return;_queryOnly=value;AttachedGameObject?.Scene?.InvalidateQueryBounds();}}
     private Vector3 _center;
     public Vector3 Center {get=>_center;set{if(_center==value)return;_center=value;AttachedGameObject?.Scene?.InvalidateQueryBounds();}}
     public bool UseProjectMatrix { get; set; } = true;

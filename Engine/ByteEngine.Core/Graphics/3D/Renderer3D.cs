@@ -710,6 +710,9 @@ public sealed class Renderer3D : IDisposable
             _shader.SetVector4(
                 "uBaseColor",
                 material.BaseColor);
+            _shader.SetInt("uBaseColorPaletteCount",material.SolidColorPalette?.Length??0);
+            if(material.SolidColorPalette is {} palette)
+                for(int i=0;i<palette.Length;i++)_shader.SetVector4("uBaseColorPalette["+i+"]",palette[i]);
 
             _shader.SetFloat(
                 "uMetallicFactor",

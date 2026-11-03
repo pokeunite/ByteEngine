@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 internal sealed class BrowserFrame
 {
+    public uint[] bufferViews {get;set;}=[];
     public string quality { get; set; } = "Balanced";
     public string worldResolution { get; set; } = "Auto";
     public BrowserSky? sky { get; set; }
@@ -69,6 +70,7 @@ internal sealed class BrowserLight
 
 internal sealed class BrowserMeshUpload
 {
+    public int skin {get;set;}=-1;
     public int id { get; set; }
     public int vertices { get; set; }
     public int indices { get; set; }
@@ -93,6 +95,7 @@ internal sealed class BrowserTextureUpload
 
 internal sealed class BrowserDraw
 {
+    public float[] palette {get;set;}=[];
     public int material { get; set; }
     public float[] instances {get;set;}=[];
     public int id { get; set; }
@@ -134,6 +137,7 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public int skinBuffer {get;set;}=-1;
     public BrowserWater? water {get;set;}
     public bool receiveShadows { get; set; }
     public int id { get; set; }

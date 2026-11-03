@@ -28,18 +28,27 @@ public sealed class CombatFeedback3D : Component
     private sealed class Number { public Guid Owner; public Vector3 Position; public float Amount, Age; public bool Weak,Armoured; }
     private readonly List<Number> _numbers=[];
     private readonly HashSet<HealthComponent> _observed=[];
+    private IReadOnlyList<HealthComponent>? _healthSnapshot;
     private readonly Dictionary<GameObject,Vector3> _velocities=[];
     public override int UpdateOrder => 100;
     public override int? RenderOrder => 12000;
     protected override void OnStart() => Observe();
     private void Observe()
     {
-        foreach(var o in GameObject.Scene!.GameObjects)
+        var snapshot=GameObject.Scene!.GetComponentsSnapshot<HealthComponent>();
+        // Runtime enable/disable does not change subscriptions. Membership does.
+        if(ReferenceEquals(snapshot,_healthSnapshot)&&_observedEnemyOnly==EnemyAIOnly)return;
+        _healthSnapshot=snapshot;_observedEnemyOnly=EnemyAIOnly;
+        foreach(var old in _observed)old.Damaged-=OnDamage;
+        _observed.Clear();
+        foreach(var h in snapshot)
         {
+            var o=h.GameObject;
             if(EnemyAIOnly && o.GetComponent<SimpleEnemyAI3D>()==null)continue;
-            if(o.GetComponent<HealthComponent>() is {} h && _observed.Add(h))h.Damaged+=OnDamage;
+            if(ReferenceEquals(o.GetComponent<HealthComponent>(),h)&&_observed.Add(h))h.Damaged+=OnDamage;
         }
     }
+    private bool _observedEnemyOnly;
     private void OnDamage(HealthComponent health,float amount)
     {
         if(amount<=0)return;
@@ -92,5 +101,5 @@ public sealed class CombatFeedback3D : Component
         }
     }
     protected override void OnStop()
-    {foreach(var h in _observed)h.Damaged-=OnDamage;_observed.Clear();_numbers.Clear();_velocities.Clear();}
+    {foreach(var h in _observed)h.Damaged-=OnDamage;_observed.Clear();_healthSnapshot=null;_numbers.Clear();_velocities.Clear();}
 }

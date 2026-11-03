@@ -87,6 +87,15 @@ public sealed class RenderLighting3D
                 _pointLights.Length);
     }
 
+    // Only freshly allocated internal buffers may use this path. Public construction still copies.
+    internal static RenderLighting3D OwnSnapshot(RenderDirectionalLight3D[] suns,RenderPointLight3D[] lamps,float ambient,int submittedSuns,int submittedLamps,int shadowLimit)
+        =>new(suns,lamps,ambient,submittedSuns,submittedLamps,shadowLimit);
+    private RenderLighting3D(RenderDirectionalLight3D[] suns,RenderPointLight3D[] lamps,float ambient,int submittedSuns,int submittedLamps,int shadowLimit)
+    {
+        _directionalLights=suns;_pointLights=lamps;AmbientIntensity=Math.Clamp(ambient,0,4);
+        SubmittedDirectionalLights=Math.Max(submittedSuns,suns.Length);SubmittedPointLights=Math.Max(submittedLamps,lamps.Length);PointShadowLimit=shadowLimit;
+    }
+
     public int FindShadowDirectionalLightIndex()
     {
         for (int index =
@@ -114,38 +123,25 @@ public sealed class RenderLighting3D
     public IReadOnlyList<int> FindShadowPointLightIndices(
         Vector3 cameraPosition)
     {
-        return
-            _pointLights
-                .Select(
-                    (light, index) =>
-                        new
-                        {
-                            Light = light,
-                            Index = index,
-                            InfluenceDistance =
-                                Vector3.Distance(
-                                    light.Position,
-                                    cameraPosition) -
-                                light.Range
-                        })
-                .Where(
-                    candidate =>
-                        candidate.Light.CastShadows)
-                .OrderBy(
-                    candidate =>
-                        candidate.InfluenceDistance)
-                .ThenByDescending(
-                    candidate =>
-                        candidate.Light.Intensity)
-                .ThenBy(
-                    candidate =>
-                        candidate.Index)
-                .Take(
-                    Math.Clamp(PointShadowLimit,0,MaxPointShadowLights))
-                .Select(
-                    candidate =>
-                        candidate.Index)
-                .ToArray();
+        int limit=Math.Clamp(PointShadowLimit,0,MaxPointShadowLights);
+        if(limit==0)return Array.Empty<int>();
+        Span<int> selected=stackalloc int[MaxPointShadowLights];int count=0;
+        for(int i=0;i<_pointLights.Length;i++)
+        {
+            if(!_pointLights[i].CastShadows)continue;int index=count;
+            while(index>0&&Compare(i,selected[index-1])<0)index--;
+            if(index>=limit)continue;
+            for(int j=Math.Min(count,limit-1);j>index;j--)selected[j]=selected[j-1];
+            selected[index]=i;count=Math.Min(count+1,limit);
+        }
+        if(count==0)return Array.Empty<int>();
+        return selected[..count].ToArray();
+        int Compare(int a,int b)
+        {
+            var x=_pointLights[a];var y=_pointLights[b];
+            int order=(Vector3.Distance(x.Position,cameraPosition)-x.Range).CompareTo(Vector3.Distance(y.Position,cameraPosition)-y.Range);
+            if(order!=0)return order;order=y.Intensity.CompareTo(x.Intensity);return order!=0?order:a.CompareTo(b);
+        }
     }
 
     /// <summary>

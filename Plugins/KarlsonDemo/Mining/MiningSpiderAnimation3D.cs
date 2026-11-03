@@ -31,6 +31,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  [Category("Death")] public float CorpseSeconds{get;set;}=3;
  [Category("Death")] public int MaximumCorpses{get;set;}=12;
  [Category("Damage hitbox")] public bool BodyHitboxEnabled{get;set;}=true;
+ [Category("Damage hitbox"),Description("Damage hitbox remains hittable without generating unused overlap contacts. Turn off only if events need its trigger overlaps.")] public bool BodyHitboxQueryOnly{get;set;}=true;
  [Category("Damage hitbox")] public Vector3 BodyHitboxSize{get;set;}=new(.9f,.85f,1.45f);
  [Category("Damage hitbox")] public Vector3 BodyHitboxCenter{get;set;}=new(0,.55f,.1f);
  public string State{get;private set;}="";
@@ -43,7 +44,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  protected override void OnStart()
  {
   spiderAudio=MiningAudio3D.Find(GameObject);previous=Transform.WorldPosition;health=GameObject.GetComponent<HealthComponent>();if(health!=null){health.Died+=OnDeath;health.Damaged+=OnHitFeedback;}
-  if(BodyHitboxEnabled){var hit=GameObject.Scene!.CreateGameObject("Spider body damage hitbox");hit.Layer=GameObject.Layer;hit.SetParent(GameObject,false);hit.AddComponent(new BoxCollider3D{IsTrigger=true,Size=BodyHitboxSize,Center=BodyHitboxCenter});hit.AddComponent(new DamageRegion3D{HealthOwnerId=GameObject.Id,IsWeakPoint=false});}
+  if(BodyHitboxEnabled){var hit=GameObject.Scene!.CreateGameObject("Spider body damage hitbox");hit.Layer=GameObject.Layer;hit.SetParent(GameObject,false);hit.AddComponent(new BoxCollider3D{IsTrigger=true,QueryOnly=BodyHitboxQueryOnly,Size=BodyHitboxSize,Center=BodyHitboxCenter});hit.AddComponent(new DamageRegion3D{HealthOwnerId=GameObject.Id,IsWeakPoint=false});}
   if(!AnimationRuntimeAssets.IsConfigured){LastError="Model asset service is unavailable";return;}
   try{
    visual=GameObject.Scene!.CreateGameObject("Animated spider");visual.SetParent(GameObject,false);visual.Transform.LocalScale=new(Math.Clamp(ModelScale,.1f,3));
@@ -74,7 +75,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  }
  void OnDeath(HealthComponent _)
  {
-  if(dead)return;spiderAudio?.PlayCue(MiningSoundCue.SpiderDeath,Transform.WorldPosition);RestoreHitFeedback();dead=true;State=DeathClip;if(visual==null||renderer==null||visual.Scene==null)return;
+  if(dead)return;(spiderAudio??=MiningAudio3D.Find(GameObject))?.PlayCue(MiningSoundCue.SpiderDeath,Transform.WorldPosition);RestoreHitFeedback();dead=true;State=DeathClip;if(visual==null||renderer==null||visual.Scene==null)return;
   var scene=visual.Scene;
   var corpses=scene.GameObjects.Where(o=>o.Name=="Spider death remains").ToArray();
   foreach(var old in corpses.Take(Math.Max(0,corpses.Length-Math.Clamp(MaximumCorpses,1,32)+1)))scene.DestroyGameObject(old);

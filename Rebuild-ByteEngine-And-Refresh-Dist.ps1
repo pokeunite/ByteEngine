@@ -33,7 +33,7 @@ if(!$InstallRoot){$InstallRoot=$PSScriptRoot}
 $SourceRoot=[IO.Path]::GetFullPath($SourceRoot)
 $InstallRoot=[IO.Path]::GetFullPath($InstallRoot)
 $syncBrowser=($IncludeBrowser -and !$SkipBrowser) -or $BrowserOnly
-foreach($relative in @('ByteEngine.sln','Tools/PublishEditor.ps1','Tools/PublishPlayer.ps1','Plugins/KarlsonDemo/KarlsonDemo.Plugin.csproj')){
+foreach($relative in @('ByteEngine.sln','Tools/PublishEditor.ps1','Tools/PublishPlayer.ps1','Tools/SyncBrowserPluginPackages.ps1','Plugins/KarlsonDemo/KarlsonDemo.Plugin.csproj')){
  if(!(Test-Path -LiteralPath (Join-Path $SourceRoot $relative))){throw "Current source is incomplete: $SourceRoot ($relative). Pass -SourceRoot with the maintained checkout."}
 }
 if($VerifyOnly){
@@ -93,7 +93,8 @@ try{
   if($LASTEXITCODE-ne 0){throw 'Browser runtime refresh failed.'}
   $browser=Join-Path $SourceRoot 'Dist/ByteEngine/BrowserRuntime'
   foreach($relative in @('Dist/ByteEngine/BrowserRuntime','Editor/ByteEngine.Editor/bin/Debug/net9.0-windows/win-x64/BrowserRuntime','Editor/ByteEngine.Editor/bin/Release/net9.0-windows/win-x64/BrowserRuntime')){SyncFolder $browser (Join-Path $InstallRoot $relative)}
-  Write-Host 'SUCCESS: browser runtime refreshed and installed. No game was exported.' -ForegroundColor Green
+  & (Join-Path $SourceRoot 'Tools/SyncBrowserPluginPackages.ps1') -SourceRoot $SourceRoot -InstallRoot $InstallRoot -ProjectFile $ProjectFile
+  Write-Host 'SUCCESS: browser runtime and matching project plugin packages refreshed. No game was exported.' -ForegroundColor Green
   return
  }
  $buildBrowser=$IncludeBrowser -and !$SkipBrowser
@@ -123,6 +124,7 @@ try{
   $gameRoot=Split-Path -Parent ([IO.Path]::GetFullPath($ProjectFile))
   foreach($name in @('Plugins','PluginLibrary')){$to=Join-Path $gameRoot $name;New-Item -ItemType Directory -Path $to -Force | Out-Null;CopyPluginPackage $package (Join-Path $to 'KarlsonDemo.byteplugin')}
  }
+ if($buildBrowser){& (Join-Path $SourceRoot 'Tools/SyncBrowserPluginPackages.ps1') -SourceRoot $SourceRoot -InstallRoot $InstallRoot -ProjectFile $ProjectFile}
  $dist=Join-Path $InstallRoot 'Dist/ByteEngine'
  foreach($required in @('ByteEngine.Editor.exe','ByteEngine.Core.dll','PlayerRuntime/ByteEngine.Player.exe','PlayerRuntime/ByteEngine.Launcher.exe','PlayerRuntime/ByteEngine.Core.dll','PlayerRuntime/openal32.dll')){if(!(Test-Path -LiteralPath (Join-Path $dist $required))){throw "Missing rebuilt file: $required"}}
  $editorHash=(Get-FileHash -LiteralPath (Join-Path $dist 'ByteEngine.Core.dll')).Hash

@@ -11,7 +11,7 @@ internal sealed class NavigationSearchWorkspace
     private readonly Dictionary<int,float> _sparseCost=new();
     private readonly Dictionary<int,int> _sparseParents=new();
     private readonly HashSet<int> _sparseClosed=new();
-    public PriorityQueue<int,(float,int)> Open {get;}=new();
+    public NavigationOpenQueue Open {get;}=new();
     public int ClosedCount {get;private set;}
     public NavigationSearchWorkspace(int cells){if(cells<=262144){_seen=new uint[cells];_closed=new uint[cells];_cost=new float[cells];_parents=new int[cells];}}
     public void Begin(){Open.Clear();ClosedCount=0;if(_seen!=null){if(++_generation==0){Array.Clear(_seen);Array.Clear(_closed!);_generation=1;}}else{_sparseCost.Clear();_sparseParents.Clear();_sparseClosed.Clear();}}

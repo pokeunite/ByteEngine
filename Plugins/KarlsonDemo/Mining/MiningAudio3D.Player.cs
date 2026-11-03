@@ -17,7 +17,7 @@ public sealed partial class MiningAudio3D
  public float AmmoPickupPitch{get;set;}=1.15f;
  public float AmmoPickupVolume{get;set;}=.5f;
  Vector3 previousStepPosition;bool stepReady;float stepDistance;int stepIndex;
- AssetReference StepClip(){var clips=new[]{Footstep1,Footstep2,Footstep3,Footstep4}.Where(c=>!c.IsEmpty).ToArray();return clips.Length==0?AssetReference.Empty:clips[(stepIndex++)%clips.Length];}
+ AssetReference StepClip()=>ChooseClip(Footstep1,Footstep2,Footstep3,Footstep4,stepIndex++);
  void TickFootsteps(GameObject? player,float dt)
  {
   if(player==null){stepReady=false;return;}var position=player.Transform.WorldPosition;

@@ -30,6 +30,7 @@ public sealed class PortableGameLoop : IDisposable
         if (!double.IsFinite(seconds) || seconds < 0)
             throw new ArgumentOutOfRangeException(nameof(seconds));
         long start=System.Diagnostics.Stopwatch.GetTimestamp();
+        Graphics.ThreeD.GpuSkinningCapabilities.MaximumBones=sink.MaximumSkinningBones;
         Time.Update(Math.Min(seconds, .1)); // No catch-up burst after a suspended tab.
         Input.UpdatePortable(input, captured);
         Input.SetGameViewPointer(pointer, new(width, height), focused, focused, pointer * new Vector2(width, height));
