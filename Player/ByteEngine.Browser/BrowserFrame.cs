@@ -3,9 +3,11 @@ using System.Text.Json.Serialization;
 
 internal sealed class BrowserFrame
 {
+    public bool separateShadows {get;set;}=true;
+    public List<BrowserRuntimeMarker> runtimeMarkers {get;set;}=[];
     public uint[] bufferViews {get;set;}=[];
     public string quality { get; set; } = "Balanced";
-    public string worldResolution { get; set; } = "Auto";
+    public string worldResolution { get; set; } = "720p";
     public BrowserSky? sky { get; set; }
     public BrowserShadow? shadow { get; set; }
     public float exposure { get; set; } = 1;
@@ -38,6 +40,8 @@ internal sealed class BrowserFrame
     public int[] deadTextures { get; set; } = [];
     public JsonElement audio { get; set; }
 }
+
+internal sealed record BrowserRuntimeMarker(string kind,double durationMs);
 
 internal sealed class BrowserShadow
 {
@@ -89,6 +93,7 @@ internal sealed class BrowserTextureUpload
     public int pixels { get; set; }
     public bool allocate { get; set; }
     public bool partial { get; set; }
+    public bool ui { get; set; }
     public bool nearest { get; set; }
     public bool hdr { get; set; }
 }
@@ -137,6 +142,9 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public int packetSlot {get;set;}=-1;
+    public bool shadowOnly {get;set;}
+    public bool skinned {get;set;}
     public int skinBuffer {get;set;}=-1;
     public BrowserWater? water {get;set;}
     public bool receiveShadows { get; set; }

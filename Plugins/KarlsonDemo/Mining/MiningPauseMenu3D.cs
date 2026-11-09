@@ -47,12 +47,13 @@ public sealed partial class MiningPauseMenu3D:Component
  readonly record struct Item(string Label,float X,float Y,float W,float H,Action Click,bool Selected=false,bool Overlay=false);
  readonly List<Item> items=[];
  Vector2 pointer;bool click,down;float width=1280,height=720;
- readonly (string Label,Key Key)[] controls=[("Forward",Key.W),("Back",Key.S),("Left",Key.A),("Right",Key.D),("Sprint",Key.LeftShift),("Interact",Key.E),("Reload",Key.R),("Build defence / cycle",Key.B),("Arrange camp",Key.Tab),("Rotate camp left",Key.Q),("Sentry",Key.F1),("Rotary gun",Key.F2),("Mortar",Key.F3),("Mine",Key.F4),("Supply drop",Key.F5),("Weapon 1",Key.D1),("Weapon 2",Key.D2),("Weapon 3",Key.D3)];
+ readonly (string Label,Key Key)[] controls=[("Forward",Key.W),("Back",Key.S),("Left",Key.A),("Right",Key.D),("Sprint",Key.LeftShift),("Interact",Key.E),("Reload",Key.R),("Build defence / cycle",Key.B),("Arrange camp",Key.Tab),("Rotate camp left",Key.Q),("Sentry",Key.F1),("Rotary gun",Key.F2),("Mortar",Key.F3),("Mine",Key.F4),("Supply drop",Key.F5),("Barricade",Key.F6),("Extra refinery",Key.F7),("Field R&D station",Key.F8),("Weapon 1",Key.D1),("Weapon 2",Key.D2),("Weapon 3",Key.D3)];
  readonly Vector4 text=new(.94f,.93f,.88f,1),muted=new(.57f,.59f,.61f,1),accent=new(.91f,.71f,.15f,1),surface=new(.055f,.063f,.073f,.96f);
  string FilePath=>Path.Combine(GameSaveStorage.GetDirectory(GameObject.Scene!.ProjectRoot!),Path.GetFileName(SaveSlot));
  record Preferences(float Master,float Music,float Sfx,float Ui,float Sensitivity,Dictionary<Key,Key> Keys,Dictionary<MouseButton,MouseButton>? Mouse=null,GameWindowMode WindowMode=GameWindowMode.Fullscreen,float ShakeIntensity=1);
  protected override void OnStart()
  {
+  GameScreenshots.OutputDirectory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),"Hazard Pay","Screenshots");
   Input.RegisterGameplayEscapeHandler(this,true);
   graphics=GameObject.GetComponent<GraphicsSettings3D>()??GameObject.AddComponent(new GraphicsSettings3D{SettingsKey="palclone",PreservePostEffects=true});
   if(PersistSettings)try{if(File.Exists(FilePath)&&JsonSerializer.Deserialize<Preferences>(File.ReadAllText(FilePath)) is {} p){AudioMixer.SetVolume(AudioBus.Master,p.Master);AudioMixer.SetVolume(AudioBus.Music,p.Music);AudioMixer.SetVolume(AudioBus.Sfx,p.Sfx);AudioMixer.SetVolume(AudioBus.Ui,p.Ui);MouseSensitivity=Math.Clamp(p.Sensitivity,.02f,.4f);CameraShakeIntensity=float.IsFinite(p.ShakeIntensity)?Math.Clamp(p.ShakeIntensity,0,1):1;if(Enum.IsDefined(p.WindowMode)&&!OperatingSystem.IsBrowser())GameWindowDisplay.Request(p.WindowMode);selectedWindowMode=GameWindowDisplay.Mode;foreach(var key in p.Keys)if(key.Key!=Key.Escape&&key.Value!=Key.Escape&&Enum.IsDefined(key.Key)&&Enum.IsDefined(key.Value))Input.BindGameplayKey(key.Key,key.Value);if(p.Mouse!=null)foreach(var b in p.Mouse)if(Enum.IsDefined(b.Key)&&Enum.IsDefined(b.Value))Input.BindGameplayMouseButton(b.Key,b.Value);}}
@@ -92,6 +93,7 @@ public sealed partial class MiningPauseMenu3D:Component
  }
  protected override void OnUpdate()
  {
+  if(!MainMenuMode&&!IsOpen&&Input.IsKeyPressed(Key.F12))GameScreenshots.Request();
   if(!startupHandled){startupHandled=true;if(ShowMainMenuOnStart){if(skipNextStartupProject!=null&&skipNextStartupProject==GameObject.Scene?.ProjectRoot)skipNextStartupProject=null;else{Open();MainMenuMode=true;BeginMainPresentation();return;}}}
   if(Input.IsKeyPressed(Key.Escape)&&(Input.IsGameInputCaptured||IsOpen)&&IgnoreEscapeAt!=Time.TotalTime)
   {
@@ -117,7 +119,17 @@ public sealed partial class MiningPauseMenu3D:Component
  readonly List<(string Label,float X,float Y,float W,float Value)> sliderDraw=[];
  void Slider(string label,float x,float y,float w,float value,Action<float> change,bool interactive)
  {if(interactive&&down&&Inside(x,y-8,w,34)){value=Math.Clamp((pointer.X-x)/w,0,1);change(value);}if(!interactive)sliderDraw.Add((label,x,y,w,value));}
- protected override void OnRender(RenderContext c)=>RenderIndustrial(c);
+ protected override void OnRender(RenderContext c)
+ {
+  RenderIndustrial(c);
+  if(!GameScreenshots.IsBusy&&DateTime.UtcNow<GameScreenshots.MessageUntilUtc)
+  {
+   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f);
+   c.DrawUiQuad(new(24*s,80*s),new(720*s,42*s),surface);
+   c.DrawUiText(GameScreenshots.LastMessage,BodyFont,(int)(17*s),new(38*s,91*s),accent,UiAnchor.TopLeft);
+  }
+ }
+ void TakeScreenshot(){Resume();GameScreenshots.Request();}
  void Cleanup(){Resume();Input.RequestUiPointer(this,false);Input.RegisterGameplayEscapeHandler(this,false);Input.ClearGameplayKeyBindings();}
  protected override void OnStop()=>Cleanup();
  protected override void OnDestroy()=>Cleanup();

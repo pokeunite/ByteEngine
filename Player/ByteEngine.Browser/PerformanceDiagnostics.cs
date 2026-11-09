@@ -11,6 +11,20 @@ public static partial class BrowserGame
     private static bool _captureAccumulate;
 
     [JSExport]
+    public static string PerformancePulse()
+    {
+        var scene=Loop.Scenes.ActiveScene;if(scene==null)return "{}";
+        var p=scene.Physics;
+        return JsonSerializer.Serialize(new {
+            coverage="lightweight-normal; full component, asset and callback details available in Deep profile",
+            scene=scene.Name,scene.SimulationTime,frame=scene.LastFrameMetrics,
+            memory=new{managedBytes=GC.GetTotalMemory(false),totalAllocatedBytes=GC.GetTotalAllocatedBytes(false),gc0=GC.CollectionCount(0),gc1=GC.CollectionCount(1),gc2=GC.CollectionCount(2)},
+            objects=new{total=scene.GameObjectCount},
+            physics=new{p.LastStepMilliseconds,p.LastColliderCount,p.LastCandidateCount,p.QueryCalls,p.QueryFullIndexRefreshes,p.QueryIncrementalBoundsUpdates},
+        });
+    }
+
+    [JSExport]
     public static void CaptureProfileComponents(bool enabled)
     {
         _captureComponents=enabled;_captureAccumulate=enabled;

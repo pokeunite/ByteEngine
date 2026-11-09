@@ -22,6 +22,13 @@ public sealed class Texture2D
     public ReadOnlyMemory<byte> PixelData => _pixels ?? ReadOnlyMemory<byte>.Empty;
     public TextureFilter Filter { get; private set; }
     public bool CpuOnly => _cpuOnly;
+
+    /// <summary>
+    /// True after Dispose released the GPU handle and the CPU backing pixels.
+    /// Renderers use this to keep an already uploaded copy instead of requiring
+    /// pixel data that no longer exists.
+    /// </summary>
+    public bool IsDisposed => _disposed;
     private int _handle;
 
     private bool _disposed;
@@ -31,6 +38,8 @@ public sealed class Texture2D
     public int Height { get; private set; }
 
     public string? FilePath { get; private set; }
+    /// <summary>Optional owner label for generated textures in diagnostics.</summary>
+    internal string? DiagnosticSource {get;set;}
 
     /// <summary>
     /// True when the source image was loaded through the floating-point HDR

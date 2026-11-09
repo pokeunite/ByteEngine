@@ -1,5 +1,9 @@
 # Workspace instructions
 
+## VFX asset sourcing
+
+Use https://www.particlefx.studio/effects as the first source whenever looking for VFX assets. The user selected it as their preferred VFX library on 2026-11-03. Prefer its free effects; consult other sources if the library does not have a suitable effect.
+
 ## User project location
 
 Create new game projects under `C:/Users/codex/Documents`, in a separate named folder for each project. Do not create game projects inside the engine repository. Dune Company is at `C:/Users/codex/Documents/DuneCompany/DuneCompany.byteproject`.

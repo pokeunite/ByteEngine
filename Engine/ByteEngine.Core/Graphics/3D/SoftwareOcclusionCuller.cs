@@ -26,6 +26,8 @@ public sealed class SoftwareOcclusionCuller
         selected.Version=mesh.GeometryVersion;return selected.Indices;
     }
     private readonly float[] _depth=new float[Width*Height];
+    private const int Tile=8;
+    private readonly float[] _tileDepth=new float[(Width/Tile)*(Height/Tile)];
     private readonly List<OccluderState> _cachedOccluders=new();
     private Matrix4x4 _cachedView;
     private bool _hasDepth;
@@ -67,6 +69,13 @@ public sealed class SoftwareOcclusionCuller
                 var item=_occluders[i].Item;Rasterize(item,view.ViewProjectionMatrix);
                 _cachedOccluders.Add(new(item.Mesh,item.ModelMatrix,item.Mesh.GeometryVersion,item.Material.CullMode,item.Material.FrontFace));
             }
+            // A tile stores the farthest depth, so skipping its cells is conservative.
+            for(int ty=0;ty<Height/Tile;ty++)for(int tx=0;tx<Width/Tile;tx++)
+            {
+                float far=float.NegativeInfinity;
+                for(int y=ty*Tile;y<(ty+1)*Tile;y++)for(int x=tx*Tile;x<(tx+1)*Tile;x++)far=Math.Max(far,_depth[y*Width+x]);
+                _tileDepth[ty*(Width/Tile)+tx]=far;
+            }
             _cachedView=view.ViewProjectionMatrix;_hasDepth=true;
         }
         int write=0;
@@ -85,8 +94,14 @@ public sealed class SoftwareOcclusionCuller
         // Expand to complete cells around the projected bounds. Empty, offscreen,
         // near-plane-intersecting and camera-containing bounds are never rejected.
         if(r.X0<0||r.Y0<0||r.X1>=Width||r.Y1>=Height)return false;
-        for(int y=r.Y0;y<=r.Y1;y++)for(int x=r.X0;x<=r.X1;x++)
-            if(!(_depth[y*Width+x]+.0001f<r.Near))return false;
+        for(int ty=r.Y0/Tile;ty<=r.Y1/Tile;ty++)for(int tx=r.X0/Tile;tx<=r.X1/Tile;tx++)
+        {
+            if(_tileDepth[ty*(Width/Tile)+tx]+.0001f<r.Near)continue;
+            int y0=Math.Max(r.Y0,ty*Tile),y1=Math.Min(r.Y1,(ty+1)*Tile-1);
+            int x0=Math.Max(r.X0,tx*Tile),x1=Math.Min(r.X1,(tx+1)*Tile-1);
+            for(int y=y0;y<=y1;y++)for(int x=x0;x<=x1;x++)
+                if(!(_depth[y*Width+x]+.0001f<r.Near))return false;
+        }
         return true;
     }
     private static bool ProjectBounds(BoundingBox3D bounds,Matrix4x4 vp,out Rect result)

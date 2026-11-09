@@ -18,7 +18,7 @@ public sealed partial class MiningOperation3D
  [Browsable(false)]public bool TutorialActive=>TutorialEnabled&&TutorialStep!=CampTutorialStep.Complete;
  bool tutorialAmmoPrepared;float tutorialPopupClock,tutorialPathClock;const long tutorialCollection=0;
  IReadOnlyList<Vector3> tutorialPath=[];
- readonly Material tutorialLineMaterial=new(){BaseColor=new(1,.76f,.12f,1),EmissionEnabled=true,EmissionColor=new(1,.64f,.05f),EmissionIntensity=.7f};
+ readonly Material tutorialLineMaterial=new(){Shading=MaterialShadingMode.Unlit,BaseColor=new(1,.76f,.12f,1),EmissionEnabled=true,EmissionColor=new(1,.64f,.05f),EmissionIntensity=.7f};
  MiningBusinessUi3D? TutorialUi=>GameObject.Scene?.GameObjects.SelectMany(o=>o.Components.OfType<MiningBusinessUi3D>()).FirstOrDefault();
  public string TutorialInstruction=>TutorialStep switch{
  CampTutorialStep.AmmoPress=>"Collect ammo from the ammo press bucket",
@@ -28,9 +28,9 @@ public sealed partial class MiningOperation3D
  CampTutorialStep.WaitForRefining=>"The refinery is turning raw ore into refined ore",
  CampTutorialStep.CompanyHub=>"Use the company tent: MARKET / sell refined ore",
  CampTutorialStep.WaitForSale=>"Your ore is shipping / payout arrives automatically",_=>"Camp basics complete"};
- public void SkipCampTutorial(){TutorialStep=CampTutorialStep.Complete;tutorialPath=[];SaveProgress();}
+ public void SkipCampTutorial(){TutorialStep=CampTutorialStep.Complete;DisposeTutorialRoute();tutorialPath=[];SaveProgress();}
  void TutorialAdvance(CampTutorialStep next,string popup="")
- {TutorialStep=next;tutorialPath=[];tutorialPathClock=0;TutorialPopup=popup;tutorialPopupClock=5;SaveProgress();}
+ {TutorialStep=next;DisposeTutorialRoute();tutorialPath=[];tutorialPathClock=0;TutorialPopup=popup;tutorialPopupClock=5;SaveProgress();}
  public void TickCampTutorial(float delta)
  {
   if(!float.IsFinite(delta)||delta<=0||GameObject.Scene is not {} scene)return;
@@ -52,19 +52,19 @@ public sealed partial class MiningOperation3D
   if(TutorialStep==CampTutorialStep.CompanyHub&&PendingMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.WaitForSale);
   if(TutorialStep is CampTutorialStep.CompanyHub or CampTutorialStep.WaitForSale&&PendingMarketSale==null&&LastMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.Complete,"FIRST SALE COMPLETE / reinvest your credits to grow the camp.");
   tutorialPathClock-=delta;
-  if(tutorialPathClock<=0){tutorialPathClock=1;UpdateTutorialPath(ui);}
+  if(tutorialPathClock<=0){tutorialPathClock=Math.Clamp(TutorialRouteRefreshSeconds,.1f,2);if(Player is {} moving&&TutorialDestination(ui) is {} goal&&(!TutorialRouteReady||tutorialRibbon==null||Vector3.DistanceSquared(moving.Transform.WorldPosition,tutorialLastStart)>.16f||Vector3.DistanceSquared(goal.Transform.WorldPosition,tutorialLastTarget)>.16f)){tutorialLastStart=moving.Transform.WorldPosition;tutorialLastTarget=goal.Transform.WorldPosition;UpdateTutorialPath(ui);BuildTutorialRoute();}}
  }
  GameObject? TutorialDestination(MiningBusinessUi3D? ui)=>GameObject.Scene?.FindGameObject(TutorialStep switch{CampTutorialStep.AmmoPress=>ui?.AmmoMachineObjectId??Guid.Empty,CampTutorialStep.StartDrill=>DrillObjectId,CampTutorialStep.Refinery=>ui?.RefineryMachineObjectId??Guid.Empty,CampTutorialStep.CompanyHub=>ui?.TerminalObjectId??Guid.Empty,_=>Guid.Empty});
  void UpdateTutorialPath(MiningBusinessUi3D? ui)
  {
-  tutorialPath=[];if(Player is not {} player||TutorialDestination(ui) is not {} target)return;
+  TutorialRouteReady=false;tutorialPath=[];if(Player is not {} player||TutorialDestination(ui) is not {} target)return;
   Vector3 start=player.Transform.WorldPosition;
   var bounds=MiningCampGeometry.Transform(MiningCampGeometry.LocalBounds(target),target.Transform.WorldMatrix);
   var centre=(bounds.Minimum+bounds.Maximum)/2;centre.Y=start.Y;
   // End outside the machine footprint, on the nearest reachable side.
   var candidates=new[]{new Vector3(bounds.Minimum.X-1.4f,start.Y,Math.Clamp(start.Z,bounds.Minimum.Z,bounds.Maximum.Z)),new Vector3(bounds.Maximum.X+1.4f,start.Y,Math.Clamp(start.Z,bounds.Minimum.Z,bounds.Maximum.Z)),new Vector3(Math.Clamp(start.X,bounds.Minimum.X,bounds.Maximum.X),start.Y,bounds.Minimum.Z-1.4f),new Vector3(Math.Clamp(start.X,bounds.Minimum.X,bounds.Maximum.X),start.Y,bounds.Maximum.Z+1.4f)};
   var region=GameObject.Scene!.GameObjects.SelectMany(o=>o.Components.OfType<NavigationRegion3D>()).FirstOrDefault(r=>r.Enabled&&r.Ready);
-  foreach(var end in candidates.OrderBy(p=>Vector3.DistanceSquared(p,start))){var path=region?.FindPath(start,end,4000);if(path is {Count:>1}){tutorialPath=path;return;}}
+  foreach(var end in candidates.OrderBy(p=>Vector3.DistanceSquared(p,start))){var path=region?.FindPath(start,end,4000);if(path is {Count:>1}){tutorialPath=path;TutorialRouteReady=true;return;}}
   // No baked navigation: a short direction marker, never a fake route through walls.
   var dir=centre-start;if(dir.LengthSquared()>1)tutorialPath=[start,start+Vector3.Normalize(dir)*Math.Min(2,dir.Length())];
  }
@@ -75,14 +75,8 @@ public sealed partial class MiningOperation3D
   void Text(string t,float y,int size,Vector4 color)=>c.DrawUiText(t,font,(int)(size*s),new(w*.5f*s,y*s),color,UiAnchor.TopCenter);
   if(TutorialActive){c.DrawUiQuad(new((w/2-300)*s,128*s),new(600*s,54*s),new(.035f,.045f,.055f,.94f));Text("CAMP BASICS",133,13,new(1,.76f,.12f,1));Text(TutorialInstruction,153,18,new(.95f,.95f,.9f,1));}
   if(TutorialPopup.Length>0&&tutorialPopupClock>0){c.DrawUiQuad(new((w/2-350)*s,192*s),new(700*s,36*s),new(.035f,.045f,.055f,.96f));Text(TutorialPopup,201,16,new(1,.83f,.35f,1));}
+  if(showWorld&&TutorialActive&&ShowTutorialRoute)DrawTutorialDestination(c,font);
   if(!showWorld||!TutorialActive||!ShowTutorialRoute||tutorialPath.Count<2||Player is not {} player)return;
-  float budget=24;Vector3 a=player.Transform.WorldPosition;
-  foreach(var b0 in tutorialPath.Skip(1))
-  {
-   var b=b0;float distance=Vector3.Distance(a,b);if(distance<.01f){a=b;continue;}var dir=(b-a)/distance;
-   for(float d=0;d<distance&&budget>0;d+=.9f,budget-=.9f){float length=Math.Min(.5f,distance-d);var mid=a+dir*(d+length/2)+Vector3.UnitY*.16f;float yaw=MathF.Atan2(dir.X,dir.Z);c.RenderWorld.Submit(c.Renderer3D.GetPrimitive(PrimitiveMeshType.Cube),tutorialLineMaterial,Matrix4x4.CreateScale(.12f,.025f,length)*Matrix4x4.CreateRotationY(yaw)*Matrix4x4.CreateTranslation(mid),RenderQueue3D.Opaque,true,false,false);}
-   if(budget<=0)break;a=b;
-  }
+  DrawTutorialRoute(c);
  }
 }
-

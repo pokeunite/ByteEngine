@@ -20,9 +20,13 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if(args.Length==3&&args[0]=="--mining-explosion-preview"){MiningExplosionPreview.Run(args[1],args[2]);return;}
+    if(args.Contains("--screenshots")){ScreenshotTests.Run();return;}
     if(args.Contains("--event-lookups")){EventLookupTests.Run();return;}
     if(args.Contains("--dispatch-performance")){DispatchPerformanceTests.Run();return;}
     if(args.Contains("--animation-optimization")){AnimationOptimizationTests.Run();return;}
+    if(args.Contains("--render-pipeline")){RenderPipelineRegressionTests.Run();return;}
+    if(args.Contains("--native-skinning")){NativeSkinningRenderTests.Run();return;}
     if(args.Contains("--shader-portability")){ShaderPortabilityTests.Run();return;}
     if(args.Length==2&&args[0]=="--pixel-art-shader"){PixelArtShaderTests.Run(args[1]);return;}
     if(args.Length==2&&args[0]=="--fire-attack-benchmark"){FireAttackBenchmark.Run(args[1]);return;}
@@ -84,7 +88,11 @@ try
     if(args.Contains("--surface-debug")){SurfaceDiagnosticTests.Run();return;}
     if(args.Contains("--scene-navigation")){SceneNavigationTests.Run();return;}
     if(args.Length>=2&&args[0]=="--dune-menu"){using var diagnostic=new DunePolishDiagnostic(args[1],args.Contains("--prepare"),menu:true);diagnostic.Run();return;}
-    if(args.Length>=4&&args[0]=="--export-web"){var data=new ProjectSerializer().Load(args[1]);var result=ByteEngine.Core.Runtime.WebGamePackageExporter.Export(args[1],args[2],args[3],data.StartupScene);Console.WriteLine("EXPORTED "+result.Directory);return;}
+    if(args.Length>=4&&args[0]=="--export-web"){
+        var data=new ProjectSerializer().Load(args[1]);
+        var graphics=args.Length>=5?new ByteEngine.Core.Runtime.WebExportGraphics{Quality=args[4],WorldResolution=args.Length>=6?args[5]:"Auto"}:null;
+        var result=ByteEngine.Core.Runtime.WebGamePackageExporter.Export(args[1],args[2],args[3],data.StartupScene,graphics:graphics);Console.WriteLine("EXPORTED "+result.Directory);return;
+    }
     if(args.Length>=4&&args[0]=="--export-game"){var data=new ProjectSerializer().Load(args[1]);var result=ByteEngine.Core.Runtime.GamePackageExporter.Export(args[1],args[2],args[3],data.StartupScene);Console.WriteLine("EXPORTED "+result.Directory);return;}
     if(args.Length>=2&&args[0]=="--desert-package"){using var diagnostic=new DunePackageDiagnostic(args[1]);diagnostic.Run();return;}
     if(args.Length>=2&&args[0]=="--runtime-compatibility"){RuntimeCompatibilityTests.Run(root,args[1]);return;}

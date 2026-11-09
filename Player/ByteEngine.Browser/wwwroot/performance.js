@@ -32,10 +32,17 @@ export function createPerformanceCapture(){
     const epoch=performance.now(),windowSeconds=120;
     const frames=new CaptureRing(18000),renderFrames=new CaptureRing(18000),events=new CaptureRing(4096),samples=new CaptureRing(512),inventories=new CaptureRing(4);
     const probes={skipGeometry:false,skipUi:false};
+    const incidents=new CaptureRing(4);let pendingIncident=null;
     let recording=true,frozenAt=0,lastSample=-Infinity,lastStats=0,serial=0,sampleSerial=0,lastScene='',diagnostics=null,hardware=null,build=null;
     let sources={},deepUntil=0,profileOn=false,lastSamplingMs=0,lastInventory=-Infinity,readBasic=()=>diagnostics??{};
     const time=()=>performance.now()-epoch;
     function event(kind,detail={}){if(recording)events.push({...detail,t:time(),kind});}
+    function trigger(kind,detail={}){
+        event(kind,detail);if(!recording)return;
+        const marker={kind,t:time(),...detail};
+        if(pendingIncident){if(pendingIncident.triggers.length<32)pendingIncident.triggers.push(marker);return;}
+        pendingIncident={triggers:[marker],before:frames.values().slice(-120),after:[],deadline:time()+10000,complete:false};
+    }
     function setProfile(value){if(profileOn===value)return;if(profileOn&&!value&&recording&&sources.readDetails){const start=performance.now();collect(serial,true,true);event('profile-tail',{durationMs:performance.now()-start});}profileOn=value;try{sources.profileComponents?.(value);}catch(e){event('diagnostic-error',{message:String(e)});}}
     function startDeep(seconds=30){deepUntil=performance.now()+Math.max(1,Math.min(30,Number(seconds)||30))*1000;event('deep-start',{seconds:(deepUntil-performance.now())/1000});inventory();beforeFrame();}
     function beforeFrame(){const deep=recording&&performance.now()<deepUntil;setProfile(deep);if(deepUntil&&performance.now()>=deepUntil){deepUntil=0;event('deep-finished');}return deep;}
@@ -62,7 +69,7 @@ export function createPerformanceCapture(){
         limits:{frames:frames.capacity,events:events.capacity,samples:samples.capacity,inventories:inventories.capacity,objectRowsPerSample:256,objectRowsTrackedPerWindow:4096,systemRowsPerWindow:1024,inventoryObjects:20000},
             summary:summarizeFrames(list),modeSummaries:{normal:summarizeFrames(list.filter(f=>!f.deep)),deep:summarizeFrames(list.filter(f=>f.deep))},hardware,build,environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency,deviceMemoryGiB:navigator.deviceMemory??null,
             dpr:devicePixelRatio,viewport:[innerWidth,innerHeight],host:location.host,visibility:document.visibilityState,crossOriginIsolated:globalThis.crossOriginIsolated??false},
-        probes:{...probes},diagnostics,frames:list,renderFrames:renderFrames.values().filter(f=>f.finishT>=(recording?time():frozenAt)-windowSeconds*1000),events:events.values(),samples:samples.values(),inventories:inventories.values(),
+            incidents:[...incidents.values(),...(pendingIncident?[pendingIncident]:[])],probes:{...probes},diagnostics,frames:list,renderFrames:renderFrames.values().filter(f=>f.finishT>=(recording?time():frozenAt)-windowSeconds*1000),events:events.values(),samples:samples.values(),inventories:inventories.values(),
         availability:{observers:globalThis.PerformanceObserver?.supportedEntryTypes??[],jsHeap:!!performance.memory,gpuTimer:hardware?.gpuTimer??null},
         notes:['Deep callback/system timings and allocations are inclusive; nested scopes must not be summed as exclusive cost.',
             'Deep mode and diagnostic sampling add overhead; compare against normal recording. captureOverheadMs records recorder work; profile callback overhead is not subtracted.',
@@ -79,7 +86,7 @@ export function createPerformanceCapture(){
         }catch(e){notice.textContent='Could not save recording: '+String(e);}
     }
     const toggle=button('Pause capture',()=>{if(recording){setProfile(false);frozenAt=time();recording=false;}else{recording=true;event('capture-resumed');}toggle.textContent=recording?'Pause capture':'Resume capture';});
-    function reset(){setProfile(false);for(const ring of [frames,renderFrames,events,samples,inventories])ring.clear();lastSample=lastInventory=-Infinity;serial=sampleSerial=0;lastScene='';diagnostics=null;recording=true;deepUntil=0;toggle.textContent='Pause capture';event('capture-start');}
+    function reset(){setProfile(false);for(const ring of [frames,renderFrames,events,samples,inventories,incidents])ring.clear();pendingIncident=null;lastSample=lastInventory=-Infinity;serial=sampleSerial=0;lastScene='';diagnostics=null;recording=true;deepUntil=0;toggle.textContent='Pause capture';event('capture-start');}
     button('New capture',reset);button('Mark slowdown',()=>event('user-marker',{label:'Observed slowdown'}));
     button('Deep profile · 30s',()=>startDeep());button('Scene inventory',inventory);button('Download report',()=>save());button('Download trace',()=>save('trace'));
     for(const [key,label] of [['skipGeometry','3D'],['skipUi','UI']]){const b=button(label+' on',()=>{probes[key]=!probes[key];b.textContent=label+(probes[key]?' off':' on');event('render-probe',{...probes});});}
@@ -87,6 +94,8 @@ export function createPerformanceCapture(){
     const show=()=>{panel.hidden=!panel.hidden;if(!panel.hidden&&document.pointerLockElement)document.exitPointerLock();};
     window.addEventListener('keydown',e=>{if(e.code==='F8'||e.code==='F9'){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat){if(e.code==='F8')show();else startDeep();}}},true);
     document.addEventListener('visibilitychange',()=>event('visibility',{state:document.visibilityState}));
+    document.addEventListener('fullscreenchange',()=>trigger('fullscreen-change',{active:!!document.fullscreenElement,width:innerWidth,height:innerHeight,dpr:devicePixelRatio}));
+    window.addEventListener('resize',()=>trigger('viewport-resize',{width:innerWidth,height:innerHeight,dpr:devicePixelRatio}));
     const safeUrl=value=>{try{const u=new URL(value,location.href);return u.origin+u.pathname;}catch{return String(value).slice(0,200);}};
     const observe=(type,handler,extra={})=>{try{if(globalThis.PerformanceObserver?.supportedEntryTypes?.includes(type))new PerformanceObserver(list=>{for(const item of list.getEntries())handler(item);}).observe({type,buffered:true,...extra});}catch(e){event('observer-unavailable',{type,message:String(e)});}};
     observe('longtask',e=>event('long-task',{startMs:e.startTime-epoch,durationMs:e.duration,attribution:(e.attribution??[]).map(a=>({name:a.name,containerType:a.containerType}))}));
@@ -95,7 +104,7 @@ export function createPerformanceCapture(){
     observe('resource',e=>event('resource',{url:safeUrl(e.name),initiator:e.initiatorType,startMs:e.startTime-epoch,durationMs:e.duration,
         transferBytes:e.transferSize,encodedBytes:e.encodedBodySize,decodedBytes:e.decodedBodySize,protocol:e.nextHopProtocol,status:e.responseStatus??null}));
     observe('event',e=>event('input-latency',{name:e.name,startMs:e.startTime-epoch,durationMs:e.duration,processingDelayMs:e.processingStart-e.startTime,interactionId:e.interactionId}),{durationThreshold:16});
-    const api={event,probes,report,save,startDeep,beforeFrame,inventory,reset,get deep(){return profileOn;},
+    const api={event,trigger,probes,report,save,startDeep,beforeFrame,inventory,reset,get deep(){return profileOn;},
         configure(value){sources=value;build=value.build??build;sources.profileComponents?.(profileOn);},setHardware(value){hardware=value;},setBuildIdentity(value){build={...build,...value};event('build-identity',value);},
         failure(detail){const was=recording;recording=true;event('error',detail);setProfile(false);recording=false;if(was)frozenAt=time();toggle.textContent='Resume capture';},
         renderedFrame(value){if(!recording)return;const finishT=value.finishMs-performance.timeOrigin-epoch,p=value.profile;renderFrames.push({id:value.id,startT:finishT-value.renderMs,finishT,renderMs:value.renderMs,cpu3DMs:p.cpu3DMs,uiCpuMs:p.uiCpuMs,uploadMs:p.uploadMs,gpuMs:p.gpuMs,drawCalls:p.drawCalls,triangles:p.triangles});},
@@ -106,6 +115,7 @@ export function createPerformanceCapture(){
             const copy={...value};delete copy.startMs;
             const f={...copy,id,t:time(),startT:Number.isFinite(value.startMs)?value.startMs-epoch:null,visible:!document.hidden,deep,skipGeometry:probes.skipGeometry,skipUi:probes.skipUi,sampleId:sampleSerial,samplingMs:due?lastSamplingMs:0};
             f.captureOverheadMs=performance.now()-start;frames.push(f);
+            if(pendingIncident){pendingIncident.after.push(f);if(pendingIncident.after.length>=120||time()>=pendingIncident.deadline){pendingIncident.complete=true;incidents.push(pendingIncident);pendingIncident=null;}}
             if(!panel.hidden&&start-lastStats>1000){lastStats=start;const s=summarizeFrames(recent());stats.textContent=(deep?'DEEP PROFILE · ':'Recording · ')+(s.fps?.toFixed(1)??'—')+' FPS · p95 '+(s.p95Ms?.toFixed(1)??'—')+' ms · '+s.hitchesOver50Ms+' slow frames';}
         }};
     globalThis.byteEngineCapture=api;event('capture-start');return api;

@@ -26,6 +26,7 @@ public sealed class MiningRaiderPriorities3D:ByteEngine.Core.Scene.Component
   float radius=Math.Max(0,DefenceNoticeRadius);
   planner??=scene.GameObjects.Select(o=>o.GetComponent<MiningDefensePlanner3D>()).OfType<MiningDefensePlanner3D>().FirstOrDefault();
   var target=(planner?.LiveDefences??Enumerable.Empty<MiningDefense3D>()).Where(d=>d.CanBeAttacked).Select(d=>d.GameObject)
+   .Concat(scene.GetComponentsSnapshot<MiningResearchStation3D>().SelectMany(r=>r.DeployedBarricades).Where(b=>b.Scene==scene&&b.GetComponent<HealthComponent>() is {IsDead:false}))
    .Where(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,Transform.WorldPosition)<=radius*radius)
    .OrderBy(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,Transform.WorldPosition)).FirstOrDefault();
   if(target==null&&scene.FindGameObject(DrillObjectId) is {} drill)

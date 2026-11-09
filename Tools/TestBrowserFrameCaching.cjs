@@ -1,0 +1,30 @@
+const fs=require('fs'),http=require('http'),path=require('path'),assert=require('assert/strict');
+const {chromium}=require(process.env.BYTEENGINE_PLAYWRIGHT||'playwright');
+const root=path.resolve('Player/ByteEngine.Browser/wwwroot');
+const html=`<canvas id="g" width="64" height="64"></canvas><canvas id="u" width="64" height="64"></canvas><script type="module">
+import {BrowserRenderer} from './renderer.js';
+try{
+ const canvas=document.querySelector('#g'),r=new BrowserRenderer(canvas,document.querySelector('#u')),gl=r.gl;
+ const I=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+ const vertices=new Float32Array([-.4,-.4,0,0,0,1,0,0,.4,-.4,0,0,0,1,1,0,0,.4,0,0,0,1,.5,1]),indices=new Uint32Array([0,1,2]);
+ const packet=new Uint8Array(200);new DataView(packet.buffer).setInt32(4,1,true);const floats=new Float32Array(packet.buffer,8);floats.set(I);floats.set(I,32);
+ const skin=new Uint8Array(new Float32Array(I).buffer),buffers=[new Uint8Array(vertices.buffer),new Uint8Array(indices.buffer),packet,skin];r.readBuffer=i=>buffers[i];
+ const material={material:1,color:[.7,.2,.1,1],palette:[],heightUv:[1,1,0,0],heightSize:[1,1],heightRange:0,heightBias:0,normalStrength:1,metallic:0,roughness:.7,ao:1,cutoff:-1,channels:[-1,-1,-1],unlit:true,srgb:false,depth:true,write:true,blend:'Opaque',cull:'None',front:'CounterClockwise',tiling:[1,1],offset:[0,0],emission:[0,0,0],sandOrigin:[0,0]};
+ const shadow={matrix:I,resolution:64,light:0,bias:.001,strength:1};
+ const base={quality:'Balanced',vp:I,inverseVp:I,eye:[0,0,2],background:[0,0,0],ambient:1,exposure:1,look:[1,1,0],lights:[],points:[],uploads:[],materials:[],textures:[],deadMaterials:[],deadMeshes:[],deadTextures:[],ui:[],shadow,separateShadows:false};
+ const command=()=>({id:1,material:1,packetSlot:0,dataBuffer:-1,skinBuffer:-1,skinned:false});
+ const draw=(changes={})=>r.draw({...base,...changes},64,64);
+ draw({uploads:[{id:1,vertices:0,indices:1,skin:-1}],materials:[material],draws:[{...command(),dataBuffer:2}]});
+ if(r.profile.shadowDrawCalls!==1)throw Error('Initial shadow was not rendered');
+ draw({draws:[command()]});if(r.profile.shadowDrawCalls!==0||r.profile.shadowCacheSkips!==1)throw Error('Unchanged shadow was not cached');
+ shadow.matrix=I.slice();shadow.matrix[12]=.05;draw({draws:[command()]});if(r.profile.shadowDrawCalls!==1)throw Error('Light matrix change reused stale shadow');
+ draw({draws:[command()]});if(r.profile.shadowDrawCalls!==0)throw Error('Changed light matrix was not cached');
+ floats[13]=.2;draw({draws:[{...command(),dataBuffer:2}]});if(r.profile.shadowDrawCalls!==1)throw Error('Instance change reused stale shadow');
+ draw({draws:[{...command(),skinBuffer:3,skinned:true}]});if(r.profile.shadowDrawCalls!==1)throw Error('Skin change reused stale shadow');
+ draw({draws:[{...command(),skinned:true}]});if(r.profile.shadowDrawCalls!==0)throw Error('Unchanged retained skin was not cached');
+ draw({uploads:[{id:1,vertices:0,indices:1,skin:-1}],draws:[{...command(),skinned:true}]});if(r.profile.shadowDrawCalls!==1)throw Error('Mesh upload reused stale shadow');
+ draw({shadow:null,draws:[{...command(),skinned:true}]});draw({draws:[{...command(),skinned:true}]});if(r.profile.shadowDrawCalls!==1)throw Error('Re-enabled shadow reused stale state');
+ if(gl.getError())throw Error('WebGL error');window.result={staticShadowSkip:true,lightInvalidation:true,instanceInvalidation:true,skinInvalidation:true,meshInvalidation:true,disableEnable:true,uiSkips:r.profile.uiSkips};
+}catch(e){window.failure=String(e.stack||e);}</script>`;
+const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Content-Type','text/html');return res.end(html);}const file=path.resolve(root,'.'+req.url);if(!file.startsWith(root+path.sep)){res.writeHead(403);return res.end();}fs.readFile(file,(e,b)=>{res.statusCode=e?404:200;res.setHeader('Content-Type','application/javascript');res.end(e?'Missing':b);});});
+(async()=>{let browser;try{await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage();await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.result||window.failure,null,{timeout:90000});const result=await page.evaluate(()=>window.result||{failure:window.failure});assert(!result.failure,result.failure);console.log('PASS frame caches '+JSON.stringify(result));}catch(e){console.error(e);process.exitCode=1;}finally{await browser?.close();server.close();}})();

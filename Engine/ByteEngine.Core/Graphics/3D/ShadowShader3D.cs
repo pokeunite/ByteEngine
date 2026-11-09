@@ -58,6 +58,18 @@ internal sealed class ShadowShader3D : IDisposable
         """
         #version 330 core
 
+        layout(location=3) in vec4 skinIndices;
+        layout(location=4) in vec4 skinWeights;
+        uniform int uSkinBoneCount;
+        uniform samplerBuffer uSkinBones;
+        mat4 boneMatrix(int i){int k=i*4;return mat4(texelFetch(uSkinBones,k),texelFetch(uSkinBones,k+1),texelFetch(uSkinBones,k+2),texelFetch(uSkinBones,k+3));}
+        mat4 skinMatrix(){
+            if(uSkinBoneCount==0)return mat4(1.0);
+            mat4 blend=mat4(0.0);float total=0.0;
+            for(int j=0;j<4;j++){int i=int(skinIndices[j]);float w=max(0.0,skinWeights[j]);if(w>.000001&&i>=0&&i<uSkinBoneCount){blend+=boneMatrix(i)*w;total+=w;}}
+            return total>.000001?blend/total:mat4(1.0);
+        }
+
         layout(location=0) in vec3 aPosition;
         layout(location=2) in vec2 aUV;
 
@@ -74,7 +86,7 @@ internal sealed class ShadowShader3D : IDisposable
             gl_Position=
                 uLightViewProjection*
                 (uInstanced==1?aInstanceModel:uModel)*
-                vec4(aPosition,1.0);
+                skinMatrix()*vec4(aPosition,1.0);
         }
         """;
 

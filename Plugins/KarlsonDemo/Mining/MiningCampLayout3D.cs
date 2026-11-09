@@ -16,8 +16,8 @@ public sealed partial class MiningCampLayout3D:Component
  [SceneObjectReference] public Guid EditButtonObjectId{get;set;}
  [SceneObjectReference] public Guid SpawnClearanceObjectId{get;set;}
  public Key EditKey{get;set;}=Key.Tab;
- public Vector2 BuildMinimum{get;set;}=new(-21,-16);
- public Vector2 BuildMaximum{get;set;}=new(21,16);
+ public Vector2 BuildMinimum{get;set;}=new(-25,-85);
+ public Vector2 BuildMaximum{get;set;}=new(45,26);
  public float GroundHeight{get;set;}
  public float GridSize{get;set;}=.5f;
  public float RotationStep{get;set;}=15;
@@ -93,6 +93,7 @@ public sealed partial class MiningCampLayout3D:Component
   bool panningView=UpdateCampCamera();
   if(Input.IsKeyPressed(Key.Escape)||Input.IsMouseButtonPressed(MouseButton.Right)){if(Selected!=null)CancelMove();else ExitEdit();return;}
   if(Input.IsKeyPressed(Key.Q))RotatePreview(-Math.Clamp(RotationStep,1,90));if(Input.IsKeyPressed(Key.E))RotatePreview(Math.Clamp(RotationStep,1,90));
+  if(!panningView&&PickCampIcon())return;
   if(panningView||!PointerGround(out var point))return;
   if(Selected!=null&&followPointer){var p=point-grabOffset;float grid=Math.Clamp(GridSize,.1f,4);p.X=MathF.Round(p.X/grid)*grid;p.Z=MathF.Round(p.Z/grid)*grid;SetPreview(p,PreviewYaw);}
   if(!Input.IsMouseButtonPressedForUi(MouseButton.Left)||ButtonHovered())return;
@@ -103,7 +104,7 @@ public sealed partial class MiningCampLayout3D:Component
  {
   if(GameObject.Scene?.FindGameObject(EditButtonObjectId)?.GetComponent<UiWidget>() is not {} button)return;
   var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));float w=size.X/s,h=size.Y/s;
-  button.Visible=IsEditing||CanEdit;button.Interactable=button.Visible&&(IsEditing||Input.IsUiPointerRequested||!Input.IsGameInputCaptured);button.Label=IsEditing?$"DONE [{MiningPauseMenu3D.KeyLabel(EditKey)}]":$"[{MiningPauseMenu3D.KeyLabel(EditKey)}] ARRANGE CAMP";button.Size=new(230,42);button.Anchor=UiAnchor.Center;button.Offset=IsEditing?new(w/2-135,41-h/2):new(0,100-h/2);
+  button.Visible=(IsEditing||CanEdit)&&GameObject.Scene?.GetComponentsSnapshot<MiningAuxiliaryRefinery3D>().Any(r=>r.IsOpen)!=true&&GameObject.Scene?.GetComponentsSnapshot<MiningResearchStation3D>().Any(r=>r.IsOpen)!=true;button.Interactable=button.Visible&&(IsEditing||Input.IsUiPointerRequested||!Input.IsGameInputCaptured);button.Label=IsEditing?$"DONE [{MiningPauseMenu3D.KeyLabel(EditKey)}]":$"[{MiningPauseMenu3D.KeyLabel(EditKey)}] ARRANGE CAMP";button.Size=new(230,42);button.Anchor=UiAnchor.Center;button.Offset=IsEditing?new(w/2-135,41-h/2):new(0,100-h/2);
   if(button.WasClicked)ToggleEdit();
  }
  bool ButtonHovered()=>GameObject.Scene?.FindGameObject(EditButtonObjectId)?.GetComponent<UiWidget>()?.IsHovered==true;
@@ -143,9 +144,6 @@ public sealed partial class MiningCampLayout3D:Component
    void Bar(Vector3 p,Vector3 size)=>c.RenderWorld.Submit(c.Renderer3D.GetPrimitive(PrimitiveMeshType.Cube),outline,Matrix4x4.CreateScale(size)*Matrix4x4.CreateTranslation(p),RenderQueue3D.Opaque,true,false,false);
    foreach(float x in new[]{b.Minimum.X,b.Maximum.X})Bar(new(x,GroundHeight+.08f,(b.Minimum.Z+b.Maximum.Z)/2),new(.08f,.05f,b.Size.Z));foreach(float z in new[]{b.Minimum.Z,b.Maximum.Z})Bar(new((b.Minimum.X+b.Maximum.X)/2,GroundHeight+.08f,z),new(b.Size.X,.05f,.08f));
   }
-  if(editCamera?.GetComponent<Camera3D>() is {} camera)foreach(var o in Objects)
-  {
-   var p=o.Transform.WorldPosition;var clip=Vector4.Transform(new Vector4(p+Vector3.UnitY*.2f,1),camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(c.TargetWidth/(float)c.TargetHeight));if(clip.W<=0)continue;float x=(clip.X/clip.W+1)*w*.5f,y=(1-clip.Y/clip.W)*h*.5f;string text=Name(o);float label=Math.Clamp(text.Length*8+16,58,150);Q(x-label/2,y-11,label,23,new(.04f,.06f,.04f,.85f));T(text,x-label/2+8,y-10,17,light);
-  }
+  if(editCamera?.GetComponent<Camera3D>() is {} camera)DrawCampIcons(c,camera,s,w,h);
  }
 }

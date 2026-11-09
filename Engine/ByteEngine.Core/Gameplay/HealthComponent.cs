@@ -77,9 +77,18 @@ public sealed class HealthComponent : Component
     {
         if (!IsDead || _deathTriggered) return;
         _deathTriggered = true;
-        Died?.Invoke(this);
-        GameObject? owner = AttachedGameObject;
-        if (DestroyOnDeath && owner?.Scene != null) owner.Scene.DestroyGameObject(owner);
+        var observer=Runtime.RuntimePerformanceMarkers.Observer;
+        long start=observer==null?0:System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            Died?.Invoke(this);
+            GameObject? owner = AttachedGameObject;
+            if (DestroyOnDeath && owner?.Scene != null) owner.Scene.DestroyGameObject(owner);
+        }
+        finally
+        {
+            observer?.Invoke("health-death",System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+        }
     }
 
     private static float Safe(float value) => float.IsFinite(value) ? Math.Max(0f, value) : 0f;

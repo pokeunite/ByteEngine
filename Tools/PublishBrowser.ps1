@@ -65,6 +65,7 @@ foreach ($pluginName in @('DesertTerrain','DuneCompany','KarlsonDemo')) {
 foreach ($file in @('index.html','main.js','renderer.js','render-worker.js','render-worker-client.js','packed-frame.js','uniform-cache.js','frame-buffers.js','water.js','graphics.js','frame-wire.js','audio.js','video.js','content.js','performance.js','_framework/dotnet.js','Resources/Fonts/TypeLightSans.ttf')) {
     if (!(Test-Path -LiteralPath (Join-Path $source $file))) { throw "Browser runtime missing: $file" }
 }
+[IO.File]::WriteAllText((Join-Path $source 'browser-source-identity.json'),(@{sourceRoot=$repoRoot;configuration=$Configuration;revision=(& git -C $repoRoot rev-parse HEAD);builtUtc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json))
 $runtimeFiles = [ordered]@{}
 foreach ($file in Get-ChildItem -LiteralPath $source -File -Recurse | Sort-Object FullName) {
     $relative = $file.FullName.Substring($source.Length).TrimStart('\','/').Replace('\','/')

@@ -5,6 +5,15 @@ namespace ByteEngine.Core.Scene;
 public sealed partial class Scene
 {
     private bool _renderRegistryDirty = true;
+    private bool _renderMembershipDirty=true;
+    private readonly List<GameObject> _renderMembers=new();
+    internal void InvalidateRenderMembership()=>_renderMembershipDirty=true;
+    private List<GameObject> RenderMembers {
+        get {
+            if(_renderMembershipDirty){_renderMembers.Clear();foreach(var item in _gameObjects)if(item.HasRenderWork)_renderMembers.Add(item);_renderMembershipDirty=false;}
+            return _renderMembers;
+        }
+    }
     private bool _cameraRegistryDirty=true;
     private readonly List<Camera3D> _cameras=new();
     private readonly List<SkyEnvironment> _environments = new();
@@ -25,6 +34,7 @@ public sealed partial class Scene
     internal IReadOnlyList<PointLight> PointLights { get { RefreshRenderRegistry(); return _pointLights; } }
     internal void InvalidateComponentRegistries(Component? changed=null,bool physics=true,IReadOnlyList<Component>? membership=null)
     {
+        InvalidateRenderMembership();
         InvalidateComponentSnapshots(changed,membership);
         if(physics&&(changed==null||AffectsPhysics(changed)))InvalidatePhysicsRegistry();
         else if(changed is ByteEngine.Core.Characters.CharacterController3D||membership?.Any(c=>c is ByteEngine.Core.Characters.CharacterController3D)==true||changed==null&&membership==null)AIRegistryRevision++;

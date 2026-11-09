@@ -16,12 +16,16 @@ public sealed class MiningEnemyEvasion3D:Component
  public float ThreatRange{get;set;}=24;
  public float LaneWidth{get;set;}=1.6f;
  public int DodgeRequests{get;private set;}
+ public bool VariedApproach{get;set;}=true;
+ float wanderClock;
  float clock,pending=-1;WeaponInstance3D? observed;int shots;Random? random;
  protected override void OnUpdate()=>Tick((float)Time.DeltaTime);
  public void Tick(float delta)
  {
   if(!float.IsFinite(delta)||delta<=0||GameObject.Scene==null||GameObject.GetComponent<HealthComponent>()?.IsDead==true)return;
   clock=Math.Max(0,clock-delta);var combat=GameObject.GetComponent<SimpleEnemyAI3D>();if(combat==null)return;
+  random??=new Random(GameObject.Id.GetHashCode());
+  if(VariedApproach&&(wanderClock-=delta)<=0){wanderClock=2.5f+(float)random.NextDouble()*3;if(combat.AttackPhase=="Ready"&&GameObject.Scene.FindGameObject(PlayerObjectId) is {} player&&Vector3.DistanceSquared(player.Transform.WorldPosition,Transform.WorldPosition)>36&&random.NextDouble()<.5){combat.RequestDodge();}}
   if(pending>=0){pending-=delta;if(pending<=0){pending=-1;combat.RequestDodge();DodgeRequests++;}return;}
   var gun=GameObject.Scene.FindGameObject(PlayerObjectId)?.GetComponent<FpsGunLab3D>();var weapon=gun?.SelectedWeapon;
   if(weapon!=observed){observed=weapon;shots=weapon?.ShotsFired??0;return;}

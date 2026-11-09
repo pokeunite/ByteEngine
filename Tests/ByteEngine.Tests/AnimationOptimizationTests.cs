@@ -12,7 +12,17 @@ internal static class AnimationOptimizationTests
 {
  public static void Run()
  {
-  Sockets();Skinning();SharedBindings();CrowdMerge();CrowdColors();GpuBounds();Sampling();
+  RuntimeMarkers();Sockets();Skinning();SharedBindings();CrowdMerge();CrowdColors();GpuBounds();Sampling();
+ }
+ static void RuntimeMarkers()
+ {
+  var original=RuntimePerformanceMarkers.Observer;var markers=new List<(string,double)>();
+  try{
+   RuntimePerformanceMarkers.Observer=(kind,ms)=>markers.Add((kind,ms));
+   var scene=new Scene("Death marker regression");var owner=scene.CreateGameObject("Health owner");var hp=owner.AddComponent(new ByteEngine.Core.Gameplay.HealthComponent());int deaths=0;hp.Died+=_=>deaths++;
+   hp.Kill();hp.Kill();Check(deaths==1&&markers.Count==1&&markers[0].Item1=="health-death"&&markers[0].Item2>=0,"death timing preserves once-per-life events");
+   hp.Revive();hp.DestroyOnDeath=true;hp.Kill();Check(deaths==2&&markers.Count==2&&owner.Scene==null,"death timing preserves revive and destruction");
+  }finally{RuntimePerformanceMarkers.Observer=original;}
  }
  static void SharedBindings()
  {
@@ -34,6 +44,15 @@ internal static class AnimationOptimizationTests
   var createGpu=type.GetMethod("CreateGpuData",BindingFlags.NonPublic|BindingFlags.Instance)!;
   var gpuA=(GpuSkinningData)createGpu.Invoke(a,[2])!;var gpuB=(GpuSkinningData)createGpu.Invoke(b,[2])!;
   Check(ReferenceEquals(gpuA.Influences,gpuB.Influences),"GPU actors share immutable packed weights");
+  gpuA.Bones=[Matrix4x4.CreateTranslation(1,0,0),Matrix4x4.CreateTranslation(1,0,0)];
+  gpuB.Bones=[Matrix4x4.CreateTranslation(4,0,0),Matrix4x4.CreateTranslation(4,0,0)];
+  Check(Math.Abs(gpuA.Bounds().Minimum.X-2)<.00001f&&Math.Abs(gpuB.Bounds().Minimum.X-5)<.00001f,"shared GPU binding bounds retain independent actor palettes");
+  for(int i=0;i<3;i++)createGpu.Invoke(a,[2]);
+  long gpuBefore=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<100;i++)createGpu.Invoke(a,[2]);
+  long gpuAllocated=GC.GetAllocatedBytesForCurrentThread()-gpuBefore;
+  Check(gpuAllocated<128000,"100 warm GPU bounds instances allocate under 128 KB ("+gpuAllocated+")");
+  vertices[0]=3;var updatedBounds=(GpuSkinningData)createGpu.Invoke(a,[2])!;updatedBounds.Bones=[Matrix4x4.Identity,Matrix4x4.Identity];
+  Check(updatedBounds.Bounds().Maximum.X>=3,"live source vertex edits invalidate cached GPU binding bounds");vertices[0]=1;
   var limited=(GpuSkinningData)createGpu.Invoke(a,[1])!;
   Check(limited.Influences[5]==0&&gpuA.Influences[5]==.6f,"GPU weight validity remains specific to skeleton bone count");
   for(int i=0;i<5;i++)New(vertices);

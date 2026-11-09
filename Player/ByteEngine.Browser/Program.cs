@@ -22,6 +22,7 @@ public static partial class BrowserGame
     private static GameProjectRuntime? _project;
     private static bool _started;
     private static double _lastLoopMilliseconds, _lastEncodeMilliseconds;
+    private static readonly List<BrowserRuntimeMarker> RuntimeMarkers=[];
 
     [JSExport]
     public static void MountFile(string path, string base64)
@@ -78,13 +79,14 @@ public static partial class BrowserGame
     {
         using var doc=JsonDocument.Parse(json);var e=doc.RootElement;
         if(e.TryGetProperty("quality",out var q)&&Enum.TryParse<GraphicsQuality>(q.GetString(),out var quality))BrowserPresentationSettings.Quality=quality;
-        if(e.TryGetProperty("worldResolution",out var res))BrowserPresentationSettings.WorldResolution=res.GetString()??"Auto";
+        if(e.TryGetProperty("worldResolution",out var res))BrowserPresentationSettings.WorldResolution=res.GetString()??"720p";
         if(e.TryGetProperty("textureLimit",out var size))BrowserPresentationSettings.TextureLimit=Math.Clamp(size.GetInt32(),256,8192);
     }
 
     [JSExport]
     public static void Start(bool demo)
     {
+        RuntimePerformanceMarkers.Observer=(kind,duration)=>{if(RuntimeMarkers.Count<128)RuntimeMarkers.Add(new(kind,duration));};
         // Editor node highlighting has no consumer in a packaged game.
         ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Enabled = false;
         ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Clear();
@@ -224,7 +226,7 @@ public static partial class BrowserGame
                 if (values[i] > .5 && Enum.TryParse<GamepadControl>(names[i], out var control))
                     Snapshot.Gamepad.ButtonsDown.Add(control);
         }
-        Sink.ProfileStages=_captureComponents;Sink.Begin();
+        Sink.ProfileStages=true;Sink.Begin();
         phase="scene update and rendering";
         if(Loop.Scenes.ActiveScene is {} profiledScene){profiledScene.ComponentProfiler.Enabled=_captureComponents;profiledScene.ComponentProfiler.AccumulateFrames=_captureAccumulate;}
         long start=System.Diagnostics.Stopwatch.GetTimestamp();
@@ -232,7 +234,8 @@ public static partial class BrowserGame
         _lastLoopMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         start=System.Diagnostics.Stopwatch.GetTimestamp();
         phase="deferred uploads and frame encoding";
-        string result=Sink.Finish(Audio.Drain(),_lastLoopMilliseconds,Loop);
+        string result=Sink.Finish(Audio.Drain(),_lastLoopMilliseconds,Loop,RuntimeMarkers);
+        RuntimeMarkers.Clear();
         _lastEncodeMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         return result;
         }
@@ -274,6 +277,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     }
     private int _submittedCount,_visibleCount;
     public object CaptureStats()=>new {submitted=_submittedCount,visible=_visibleCount,culled=_submittedCount-_visibleCount,batches=_draws.Count,profiledFrames=_profileStageFrames,stagesMs=_stageTimes.ToDictionary(p=>p.Key,p=>p.Value/Math.Max(1,_profileStageFrames)),
+        staticCacheHits=_staticCacheHits,staticCacheMisses=_staticCacheMisses,staticDraws=_cachedStaticDraws.Count,dynamicSubmissions=_dynamicRender.Count,
         buffers=_buffers.Count,bufferBytes=_buffers.ActiveBytes,transferPoolBytes=_buffers.RetainedBytes,transferCreatedBytes=_buffers.CreatedBytes,transferReuseHits=_buffers.ReuseHits,pendingTextureChunks=_pendingTextureUploads.Count,
         residentMeshes=_meshes.Count,residentTextures=_textures.Count,materials=_materials.Count,fontAtlases=_fonts.Count,
         cpuMeshBytes=_meshes.Keys.Sum(m=>(long)m.VertexData.Length*4+(long)m.IndexData.Length*4),
@@ -294,8 +298,31 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     private readonly List<BrowserMeshUpload> _uploads = new();
     private readonly List<BrowserTextureUpload> _textureUploads = new();
     private readonly List<BrowserDrawCommand> _draws = new();
-    private readonly RenderBatcher.Builder _batchBuilder = new();
+    private readonly List<BrowserDrawCommand> _drawPool = new();
+    private readonly RenderBatcher.Builder _batchBuilder = new(){MaterialAffinity=true};
     private readonly List<RenderSubmission> _visible = new();
+    private readonly List<RenderSubmission> _shadowVisible = new();
+    private readonly List<RenderSubmission> _staticRender = new(), _dynamicRender = new(), _cachedStaticRender = new();
+    private readonly List<BrowserDrawCommand> _cachedStaticDraws = new();
+    private readonly List<Mesh> _cachedStaticMeshes = new();
+    private readonly List<int> _cachedStaticVersions = new();
+    private readonly List<Texture2D> _cachedStaticTextures = new();
+    private readonly List<MaterialKey> _cachedStaticMaterialKeys = new();
+    private readonly Dictionary<Material,Material> _cachedStaticMaterials = new(ReferenceEqualityComparer.Instance);
+    private readonly RenderBatcher.Builder _staticBatchBuilder = new(){MaterialAffinity=true};
+    private bool _staticCacheValid;
+    private int _staticCacheHits, _staticCacheMisses, _staticMissStreak, _staticCacheCooldown;
+    private readonly RenderBatcher.Builder _shadowBatchBuilder = new();
+    private readonly SoftwareOcclusionCuller _occlusion = new();
+    private Matrix4x4? _shadowViewProjection;
+    private readonly List<byte[]> _retainedPackets=new(),_retainedSkins=new();
+    private byte[] _packetScratch=Array.Empty<byte>();
+    private int RetainPacket(List<byte[]> cache,int slot,ReadOnlySpan<byte> bytes){
+        while(cache.Count<=slot)cache.Add(Array.Empty<byte>());
+        if(cache[slot].AsSpan().SequenceEqual(bytes))return -1;
+        if(cache[slot].Length!=bytes.Length)cache[slot]=new byte[bytes.Length];
+        bytes.CopyTo(cache[slot]);return Buffer(bytes);
+    }
     private readonly List<RenderSubmission> _otherVisible = new();
     private readonly Dictionary<MaterialKey, int> _materials = new();
     private readonly Dictionary<Material,int> _frameMaterialIds = new(ReferenceEqualityComparer.Instance);
@@ -309,7 +336,15 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         int MetallicChannel, bool DirectX, bool Packed, bool Unlit, bool Srgb, bool Depth, bool Write,
         BlendMode3D Blend, CullMode3D Cull, FrontFaceWinding3D Front, int SandImprint, Vector2 SandOrigin,Vector4[]? Palette);
     private readonly List<BrowserUi> _ui = new();
-    private readonly FrameTransferBuffers _buffers = new(pinned:true);
+    private readonly List<BrowserUi> _uiPool = new();
+    private int _uiUsed;
+    private BrowserUi ReuseUi()
+    {
+        var command=_uiUsed<_uiPool.Count?_uiPool[_uiUsed]:new BrowserUi();
+        if(_uiUsed==_uiPool.Count)_uiPool.Add(command);
+        _uiUsed++;_ui.Add(command);return command;
+    }
+    private readonly FrameTransferBuffers _buffers = new(32L*1024*1024,pinned:true);
     public byte[] ReadBuffer(int index) => _buffers[index];
     private int Buffer(ReadOnlySpan<byte> data) => _buffers.Copy(data);
     readonly Queue<(Texture2D Texture,int Id,int X,int Y,int W,int H,bool Allocate)> _pendingTextureUploads=new();
@@ -327,24 +362,51 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         if(ProfileStages)_profileStageFrames++;
         _frameNumber++;
         _submittedCount=_visibleCount=0;
-        _uploads.Clear(); _textureUploads.Clear(); _draws.Clear(); _ui.Clear(); _buffers.BeginFrame();
-        _usedMeshes.Clear(); _usedTextures.Clear(); _usedFonts.Clear(); _sky=null;_shadow=null;
+        _uploads.Clear(); _textureUploads.Clear(); _draws.Clear(); _ui.Clear(); _uiUsed=0; _buffers.BeginFrame();
+        _revalidatedTextures.Clear();
+        _usedMeshes.Clear(); _usedTextures.Clear(); _usedFonts.Clear(); _sky=null;_shadow=null;_shadowViewProjection=null;
         _usedMaterials.Clear(); _frameMaterialIds.Clear(); _materialUploads.Clear();
     }
 
+    private readonly HashSet<Texture2D> _uiTextures=new();
+    private int UiTexture(Texture2D texture){if(_uiTextures.Add(texture)&&_textures.TryGetValue(texture,out var cached))_textures[texture]=(cached.Id,-1);return Texture(texture);}
     private int Texture(Texture2D? texture)
     {
         if (texture == null) return 0;
         _usedTextures.Add(texture);_textureLastFrame[texture]=_frameNumber;
-        if (!_textures.TryGetValue(texture, out var cached)) cached = (++_nextTexture, -1);
-        if (cached.Version != texture.ContentVersion)
+        bool resident=_textures.TryGetValue(texture,out var cached);
+        if (resident && cached.Version == texture.ContentVersion) return cached.Id;
+        if (texture.PixelData.IsEmpty && texture.FloatPixelData.IsEmpty)
         {
-            if (texture.PixelData.IsEmpty && texture.FloatPixelData.IsEmpty) throw new InvalidOperationException("Browser texture has no CPU pixels.");
-            bool allocate=cached.Version<0;
-            foreach(var r in texture.ChangedRegionsSince(cached.Version))for(int y=r.Y;y<r.Y+r.Height;y+=128)for(int x=r.X;x<r.X+r.Width;x+=128){_pendingTextureUploads.Enqueue((texture,cached.Id,x,y,Math.Min(128,r.X+r.Width-x),Math.Min(128,r.Y+r.Height-y),allocate));allocate=false;}
-            _textures[texture] = (cached.Id, texture.ContentVersion);
+            // Disposal released the CPU pixels. A resident copy is already correct in
+            // the worker; an unuploaded texture degrades to untextured instead of
+            // failing the whole frame when teardown or atlas eviction disposes it.
+            if (resident) { _textures[texture]=(cached.Id,texture.ContentVersion); return cached.Id; }
+            _usedTextures.Remove(texture);_textureLastFrame.Remove(texture);_uiTextures.Remove(texture);
+            ReportMissingPixels(texture);return 0;
         }
+        if (!resident) cached = (++_nextTexture, -1);
+        bool allocate=cached.Version<0;
+        foreach(var r in texture.ChangedRegionsSince(cached.Version))for(int y=r.Y;y<r.Y+r.Height;y+=128)for(int x=r.X;x<r.X+r.Width;x+=128){_pendingTextureUploads.Enqueue((texture,cached.Id,x,y,Math.Min(128,r.X+r.Width-x),Math.Min(128,r.Y+r.Height-y),allocate));allocate=false;}
+        _textures[texture] = (cached.Id, texture.ContentVersion);
         return cached.Id;
+    }
+    private readonly HashSet<Texture2D> _reportedMissingTextures=new();
+    private void ReportMissingPixels(Texture2D texture)
+    {
+        // Bounded diagnostics: a texture disposed before upload must never fail a
+        // frame, but the first occurrences still name the owner of the bug.
+        if(_reportedMissingTextures.Count>=32||!_reportedMissingTextures.Add(texture))return;
+        string source=texture.DiagnosticSource??(string.IsNullOrEmpty(texture.FilePath)?"generated texture":Path.GetFileName(texture.FilePath));
+        Console.WriteLine($"Browser texture '{source}' ({texture.Width}x{texture.Height}) was disposed before it was uploaded; drawing it untextured.");
+    }
+    private readonly HashSet<Texture2D> _revalidatedTextures=new();
+    private void InvalidateTexture(Texture2D texture,int id)
+    {
+        // One invalidation per texture per frame is enough: the next request stages
+        // the whole image again from ChangedRegionsSince(-1).
+        if(!_revalidatedTextures.Add(texture))return;
+        if(_textures.TryGetValue(texture,out var resident)&&resident.Id==id)_textures[texture]=(id,-1);
     }
 
     public void Draw3D(RenderView3D? view, RenderLighting3D lighting,
@@ -365,7 +427,8 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             for(int i=0;i<lighting.DirectionalLights.Count;i++){
                 var sun=lighting.DirectionalLights[i];if(!sun.CastShadows||sun.ShadowStrength<=0)continue;
                 sun=sun with {ShadowResolution=BrowserPresentationSettings.Quality==GraphicsQuality.High?2048:1024,ShadowDistance=Math.Min(40,sun.ShadowDistance)};
-                _shadow=new BrowserShadow{matrix=Matrix(Renderer3D.BuildDirectionalShadowMatrix(camera,sun)),resolution=sun.ShadowResolution,light=i,bias=sun.ShadowBias,strength=sun.ShadowStrength};break;
+                _shadowViewProjection=Renderer3D.BuildDirectionalShadowMatrix(camera,sun);
+                _shadow=new BrowserShadow{matrix=Matrix(_shadowViewProjection.Value),resolution=sun.ShadowResolution,light=i,bias=sun.ShadowBias,strength=sun.ShadowStrength};break;
             }
         }
         if(environment.DrawSky){Matrix4x4.Invert(camera.ViewProjectionMatrix,out var inverse);var map=environment.SkyMode==SkyMode3D.EnvironmentMap?environment.EnvironmentMapTexture:null;
@@ -376,17 +439,98 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         _points = lighting.PointLights.Select(l => new BrowserLight { position = V3(l.Position),
             color = V3(l.Color * l.Intensity), range = l.Range }).ToArray();
         ProfileEnd("view and lights",stage);stage=ProfileStart();
-        _visible.Clear();_otherVisible.Clear();
-        for (int i = 0; i < submissions.Count; i++)
+        _staticRender.Clear();_dynamicRender.Clear();
+        if(BrowserPresentationSettings.Quality==GraphicsQuality.Fast)
         {
-            var item = submissions[i];
-            if (!item.FrustumCullingEnabled || camera.Frustum.Intersects(item.WorldBounds)) (PortableRenderOrdering.IsOpaque(item)?_visible:_otherVisible).Add(item);
+            for(int i=0;i<submissions.Count;i++){var item=submissions[i];if(CacheableStatic(item))_staticRender.Add(item);else _dynamicRender.Add(item);}
+            if(_staticCacheCooldown>0){_staticCacheCooldown--;_dynamicRender.AddRange(_staticRender);_staticRender.Clear();}
+            else if(StaticCacheMatches()){_staticMissStreak=0;TouchStaticCache();}
+            else
+            {
+                _staticMissStreak++;
+                if(_staticMissStreak>3){_staticCacheCooldown=120;_staticCacheValid=false;_dynamicRender.AddRange(_staticRender);_staticRender.Clear();}
+                else BuildStaticCache();
+            }
         }
-        PortableRenderOrdering.Complete(_visible,_otherVisible);
-        _visibleCount=_visible.Count;
+        else {_staticCacheValid=false;_staticMissStreak=0;_dynamicRender.AddRange(submissions);}
+        RenderVisibility.Collect(_dynamicRender,camera,_visible);_otherVisible.Clear();_shadowVisible.Clear();
+        Frustum3D? shadowFrustum=_shadowViewProjection is {} shadowVp?new Frustum3D(shadowVp):null;
+        for (int i = 0; i < _dynamicRender.Count; i++)
+        {
+            var item = _dynamicRender[i];
+            if(shadowFrustum is {} sf&&item.CastShadows&&item.Queue==RenderQueue3D.Opaque){
+                var caster=item.AsShadowCaster();
+                if(sf.Intersects(caster.WorldBounds))_shadowVisible.Add(caster);
+            }
+
+        }
+        if(BrowserPresentationSettings.Quality!=GraphicsQuality.Fast)_occlusion.Cull(_visible,camera);
+        _visible.Sort(PortableRenderOrdering.Compare);
+        _visibleCount=_visible.Count+_staticRender.Count;
         ProfileEnd("cull and order",stage);stage=ProfileStart();
-        var batches=_batchBuilder.Build(_visible);ProfileEnd("build batches",stage);
-        foreach (var batch in batches)
+        var mainBatches=_batchBuilder.Build(_visible);
+        var shadowBatches=_shadowBatchBuilder.Build(_shadowVisible,shadows:true);ProfileEnd("build batches",stage);
+        EmitBatches(mainBatches,0);EmitBatches(shadowBatches,1);
+        if(_retainedPackets.Count>_draws.Count)_retainedPackets.RemoveRange(_draws.Count,_retainedPackets.Count-_draws.Count);
+        if(_retainedSkins.Count>_draws.Count)_retainedSkins.RemoveRange(_draws.Count,_retainedSkins.Count-_draws.Count);
+    }
+    private BrowserDrawCommand ReuseDraw(int slot,int id,int material,int dataBuffer,bool shadowOnly,bool skinned,int skinBuffer,bool receiveShadows,BrowserWater? water)
+    {
+        var command=slot<_drawPool.Count?_drawPool[slot]:new BrowserDrawCommand();
+        if(slot==_drawPool.Count)_drawPool.Add(command);
+        command.packetSlot=slot;command.id=id;command.material=material;command.dataBuffer=dataBuffer;command.shadowOnly=shadowOnly;
+        command.skinned=skinned;command.skinBuffer=skinBuffer;command.receiveShadows=receiveShadows;command.water=water;
+        return command;
+    }
+
+    private static bool CacheableStatic(RenderSubmission item) =>
+        item.Queue==RenderQueue3D.Opaque && !item.Mesh.IsDynamic && item.Mesh.GpuSkinning==null &&
+        !item.Material.WaterSurface && !item.Material.WaterVolume && item.Material.BlendMode==BlendMode3D.Opaque;
+    private bool StaticCacheMatches()
+    {
+        if(!_staticCacheValid||_staticRender.Count!=_cachedStaticRender.Count)return false;
+        for(int i=0;i<_staticRender.Count;i++)
+        {
+            var a=_staticRender[i];var b=_cachedStaticRender[i];
+            if(!ReferenceEquals(a.Mesh,b.Mesh)||a.Mesh.GeometryVersion!=_cachedStaticVersions[i]||
+               a.ModelMatrix!=b.ModelMatrix||a.Queue!=b.Queue||a.ReceiveShadows!=b.ReceiveShadows||
+               a.CastShadows!=b.CastShadows||!ReferenceEquals(a.ShadowMesh,b.ShadowMesh)||a.ShadowModelMatrix!=b.ShadowModelMatrix||
+               !_cachedStaticMaterials.TryGetValue(a.Material,out var material)||
+               !MaterialRenderStateComparer.Instance.Equals(material,a.Material))return false;
+        }
+        return true;
+    }
+    private void TouchStaticCache()
+    {
+        foreach(var mesh in _cachedStaticMeshes){_usedMeshes.Add(mesh);_meshLastFrame[mesh]=_frameNumber;}
+        foreach(var texture in _cachedStaticTextures)Texture(texture);
+        foreach(var key in _cachedStaticMaterialKeys)_usedMaterials.Add(key);
+        foreach(var command in _cachedStaticDraws){command.dataBuffer=-1;command.skinBuffer=-1;}
+        _staticCacheHits++;_draws.AddRange(_cachedStaticDraws);
+    }
+    private void BuildStaticCache()
+    {
+        _staticCacheMisses++;_staticCacheValid=false;
+        _cachedStaticRender.Clear();_cachedStaticDraws.Clear();_cachedStaticMeshes.Clear();_cachedStaticVersions.Clear();_cachedStaticTextures.Clear();_cachedStaticMaterials.Clear();
+        foreach(var item in _staticRender){_cachedStaticRender.Add(item);_cachedStaticVersions.Add(item.Mesh.GeometryVersion);}
+        foreach(var item in _staticRender)
+        {
+            if(!_cachedStaticMeshes.Contains(item.Mesh))_cachedStaticMeshes.Add(item.Mesh);
+            if(!_cachedStaticMaterials.ContainsKey(item.Material))_cachedStaticMaterials.Add(item.Material,item.Material.Clone());
+            void Keep(Texture2D? texture){if(texture!=null&&!_cachedStaticTextures.Contains(texture))_cachedStaticTextures.Add(texture);}
+            var m=item.Material;Keep(m.HeightFieldTexture);Keep(m.MainTexture);Keep(m.NormalTexture);Keep(m.MetallicTexture);
+            Keep(m.RoughnessTexture);Keep(m.AmbientOcclusionTexture);Keep(m.PackedPbrTexture);Keep(m.EmissionTexture);Keep(m.SandImprintTexture);
+        }
+        int before=_draws.Count;EmitBatches(_staticBatchBuilder.Build(_staticRender),0);
+        for(int i=before;i<_draws.Count;i++)_cachedStaticDraws.Add(_draws[i]);
+        _cachedStaticMaterialKeys.Clear();_cachedStaticMaterialKeys.AddRange(_usedMaterials);
+        _staticCacheValid=true;
+    }
+
+    private void EmitBatches(IReadOnlyList<RenderBatcher.Batch> batches,int pass)
+    {
+        long stage;
+        foreach(var batch in batches)
         {
             stage=ProfileStart();
             var draw=batch.First;
@@ -435,12 +579,14 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             _frameMaterialIds.Add(m,materialId);
             }
             ProfileEnd("material staging",stage);stage=ProfileStart();
-            int drawBuffer=_buffers.Allocate(BrowserMatrixPacking.PacketLength(batch.Instances),out var drawBytes);
-            BrowserMatrixPacking.WritePacket(drawBytes,batch.Instances);
-            _draws.Add(new BrowserDrawCommand { id = cached.Id, material = materialId, dataBuffer=drawBuffer,
-                skinBuffer=draw.Mesh.GpuSkinning is {} gpu?Buffer(System.Runtime.InteropServices.MemoryMarshal.AsBytes(gpu.Bones.AsSpan())):-1,
-                water=m.WaterSurface||m.WaterVolume?new BrowserWater{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null,
-                receiveShadows=draw.ReceiveShadows });
+            int slot=_draws.Count,length=BrowserMatrixPacking.PacketLength(batch.Instances);
+            if(_packetScratch.Length<length)_packetScratch=new byte[length];
+            var drawBytes=_packetScratch.AsSpan(0,length);BrowserMatrixPacking.WritePacket(drawBytes,batch.Instances);
+            int drawBuffer=RetainPacket(_retainedPackets,slot,drawBytes);
+            ReadOnlySpan<byte> skinBytes=draw.Mesh.GpuSkinning is {} palette?System.Runtime.InteropServices.MemoryMarshal.AsBytes(palette.Bones.AsSpan()):ReadOnlySpan<byte>.Empty;
+            int skinBuffer=RetainPacket(_retainedSkins,slot,skinBytes);
+            _draws.Add(ReuseDraw(slot, cached.Id, materialId, drawBuffer, pass==1, !skinBytes.IsEmpty, skinBuffer, draw.ReceiveShadows,
+                m.WaterSurface||m.WaterVolume?new BrowserWater{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null));
             ProfileEnd("matrix packets",stage);
         }
     }
@@ -448,15 +594,16 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
     public void SetUiClip(Vector4? rectangle)
     {
         var r=rectangle??Vector4.Zero;
-        _ui.Add(new BrowserUi{kind=rectangle.HasValue?"clip":"unclip",x=r.X,y=r.Y,w=r.Z,h=r.W,color=[1,1,1,1]});
+        var clip=ReuseUi();clip.kind=rectangle.HasValue?"clip":"unclip";clip.x=r.X;clip.y=r.Y;clip.w=r.Z;clip.h=r.W;clip.color=[1,1,1,1];
     }
     public Vector2 MeasureText(string text,string? fontPath,int size)
     {
         string path=string.IsNullOrWhiteSpace(fontPath)?"/game/Resources/Fonts/TypeLightSans.ttf":fontPath;
-        size=Math.Clamp(size,8,96);var key=(path,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size:size*2);
-        if(!_fonts.TryGetValue(key,out var atlas)){atlas=FontAtlas.Load(path,key.Item2);_fonts.Add(key,atlas);}
+        size=Math.Clamp(size,8,96);bool bitmap=path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase);
+        int raster=bitmap?size:Math.Clamp((int)MathF.Ceiling(size*2f/16)*16,16,64);var key=(path,raster);
+        if(!_fonts.TryGetValue(key,out var atlas)){atlas=FontAtlas.Load(path,raster);_fonts.Add(key,atlas);}
         _usedFonts.Add(atlas);
-        return atlas.Measure(text,path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size/Math.Max(1,atlas.LineHeight):.5f);
+        return atlas.Measure(text,bitmap?size/Math.Max(1,atlas.LineHeight):size/(float)raster);
     }
     public void DrawText(string value, string? fontPath, int size, Vector2 position,
         Vector4 color, float wrapWidth, UiAnchor anchor)
@@ -464,10 +611,11 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         if (string.IsNullOrEmpty(value)) return;
         string path = string.IsNullOrWhiteSpace(fontPath) ? "/game/Resources/Fonts/TypeLightSans.ttf" : fontPath;
         size = Math.Clamp(size, 8, 96);
-        var key = (path, path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase)?size:size*2);
-        if (!_fonts.TryGetValue(key, out var atlas)) { atlas = FontAtlas.Load(path, key.Item2); _fonts.Add(key, atlas); }
+        bool bitmap=path.EndsWith(".fnt",StringComparison.OrdinalIgnoreCase);
+        int raster=bitmap?size:Math.Clamp((int)MathF.Ceiling(size*2f/16)*16,16,64);var key = (path, raster);
+        if (!_fonts.TryGetValue(key, out var atlas)) { atlas = FontAtlas.Load(path, raster); _fonts.Add(key, atlas); }
         _usedFonts.Add(atlas);
-        float scale = path.EndsWith(".fnt", StringComparison.OrdinalIgnoreCase) ? size / Math.Max(1, atlas.LineHeight) : .5f;
+        float scale = bitmap ? size / Math.Max(1, atlas.LineHeight) : size/(float)raster;
         float Measure(string line)
         {
             float width = 0; int previous = -1;
@@ -485,7 +633,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         float vertical = anchor == UiAnchor.Center ? .5f :
             anchor is UiAnchor.BottomLeft or UiAnchor.BottomCenter or UiAnchor.BottomRight ? 1 : 0;
         float top = position.Y - lines.Count * atlas.LineHeight * scale * vertical;
-        int texture = Texture(atlas.Texture);
+        int texture = UiTexture(atlas.Texture);
         for (int i = 0; i < lines.Count; i++)
         {
             float x = position.X - Measure(lines[i]) * horizontal;
@@ -496,27 +644,36 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
                 if (!atlas.TryGetGlyph(c, out var g) && !atlas.TryGetGlyph('?', out g)) continue;
                 x += (previous < 0 ? 0 : atlas.GetKerning(previous, c)) * scale;
                 if (g.Width > 0 && g.Height > 0)
-                    _ui.Add(new BrowserUi { kind = "image", texture = texture, x = x + g.OffsetX * scale, y = baseline + g.OffsetY * scale,
-                        w = g.Width * scale, h = g.Height * scale, sx = g.X, sy = g.Y, sw = g.Width, sh = g.Height, color = V4(color) });
+                    {var glyph=ReuseUi();glyph.kind="image";glyph.texture=texture;glyph.x=x+g.OffsetX*scale;glyph.y=baseline+g.OffsetY*scale;glyph.w=g.Width*scale;glyph.h=g.Height*scale;glyph.sx=g.X;glyph.sy=g.Y;glyph.sw=g.Width;glyph.sh=g.Height;glyph.color=V4(color);}
                 x += g.Advance * scale; previous = c;
             }
         }
     }
 
-    public void DrawQuad(Vector2 position, Vector2 size, Vector4 color) =>
-        _ui.Add(new BrowserUi { kind = "quad", x = position.X, y = position.Y, w = size.X, h = size.Y, color = V4(color) });
-    public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color) =>
-        _ui.Add(new BrowserUi { kind = "image", texture = Texture(texture), x = position.X, y = position.Y, w = size.X, h = size.Y,
-            sx = 0, sy = 0, sw = texture.Width, sh = texture.Height, color = V4(color) });
+    public void DrawQuad(Vector2 position, Vector2 size, Vector4 color)
+    {var quad=ReuseUi();quad.kind="quad";quad.x=position.X;quad.y=position.Y;quad.w=size.X;quad.h=size.Y;quad.color=V4(color);}
+    public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Vector4 color)
+    {var image=ReuseUi();image.kind="image";image.texture=UiTexture(texture);image.x=position.X;image.y=position.Y;image.w=size.X;image.h=size.Y;image.sx=0;image.sy=0;image.sw=texture.Width;image.sh=texture.Height;image.color=V4(color);}
 
-    public void DrawLine(Vector2 from, Vector2 to, float thickness, Vector4 color) =>
-        _ui.Add(new BrowserUi { kind="line",x=from.X,y=from.Y,w=to.X,h=to.Y,sx=thickness,color=V4(color) });
+    public void DrawLine(Vector2 from, Vector2 to, float thickness, Vector4 color)
+        {var line=ReuseUi();line.kind="line";line.x=from.X;line.y=from.Y;line.w=to.X;line.h=to.Y;line.sx=thickness;line.color=V4(color);}
 
-    public string Finish(object[] audio,double loopMs,PortableGameLoop loop)
+    public string Finish(object[] audio,double loopMs,PortableGameLoop loop,List<BrowserRuntimeMarker> markers)
     {
         long stage=ProfileStart();
         int budget=4*1024*1024;
-        while(budget>0&&_pendingTextureUploads.TryDequeue(out var r)){if(!_textures.TryGetValue(r.Texture,out var resident)||resident.Id!=r.Id)continue;if(!BrowserTextureTransfer.TryGetLength(r.Texture,r.X,r.Y,r.W,r.H,out int length,out bool hdr))continue;int pixelBuffer=_buffers.Allocate(length,out var pixels);if(!BrowserTextureTransfer.TryCopy(r.Texture,r.X,r.Y,r.W,r.H,pixels,out hdr))continue;budget-=length;_textureUploads.Add(new BrowserTextureUpload {source=string.IsNullOrEmpty(r.Texture.FilePath)?"dynamic/embedded texture":Path.GetFileName(r.Texture.FilePath),id=r.Id,width=r.Texture.Width,height=r.Texture.Height,x=r.X,y=r.Y,w=r.W,h=r.H,allocate=r.Allocate,partial=true,pixels=pixelBuffer,hdr=hdr,nearest=r.Texture.Filter==TextureFilter.Nearest});}
+        while(budget>0&&_pendingTextureUploads.TryDequeue(out var r))
+        {
+            if(!_textures.TryGetValue(r.Texture,out var resident)||resident.Id!=r.Id)continue;
+            // A texture disposed between staging and this drain has no pixels left to
+            // copy, and a resized reload invalidates the queued rectangles. Never leave
+            // the resident copy recorded as current: re-stage instead of blanking it.
+            if(!BrowserTextureTransfer.TryGetLength(r.Texture,r.X,r.Y,r.W,r.H,out int length,out bool hdr)){InvalidateTexture(r.Texture,r.Id);continue;}
+            int pixelBuffer=_buffers.Allocate(length,out var pixels);
+            if(!BrowserTextureTransfer.TryCopy(r.Texture,r.X,r.Y,r.W,r.H,pixels,out hdr)){InvalidateTexture(r.Texture,r.Id);continue;}
+            budget-=length;
+            _textureUploads.Add(new BrowserTextureUpload {source=r.Texture.DiagnosticSource??(string.IsNullOrEmpty(r.Texture.FilePath)?"generated texture":Path.GetFileName(r.Texture.FilePath)),id=r.Id,width=r.Texture.Width,height=r.Texture.Height,x=r.X,y=r.Y,w=r.W,h=r.H,allocate=r.Allocate,partial=true,pixels=pixelBuffer,hdr=hdr,ui=_uiTextures.Contains(r.Texture),nearest=r.Texture.Filter==TextureFilter.Nearest});
+        }
         // Retain a small cache; size animations must not accumulate large atlas textures forever.
         foreach (var key in (_fonts.Count>32?_fonts.Keys.Where(k => !_usedFonts.Contains(_fonts[k])).ToArray():[]))
         {
@@ -539,7 +696,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         int unusedCount=_unusedTextures.Count;
         if(unusedBytes>16L*1024*1024||unusedCount>128)_unusedTextures.Sort((a,b)=>_textureLastFrame[a].CompareTo(_textureLastFrame[b]));
         var expired=new List<int>();
-        foreach(var key in _unusedTextures)if((key.PixelData.IsEmpty&&key.FloatPixelData.IsEmpty)||_frameNumber-_textureLastFrame[key]>600||unusedBytes>16L*1024*1024||unusedCount>128){expired.Add(_textures[key].Id);unusedBytes-=(long)key.PixelData.Length+(long)key.FloatPixelData.Length*4;unusedCount--;_textures.Remove(key);_textureLastFrame.Remove(key);}
+        foreach(var key in _unusedTextures)if((key.PixelData.IsEmpty&&key.FloatPixelData.IsEmpty)||_frameNumber-_textureLastFrame[key]>600||unusedBytes>16L*1024*1024||unusedCount>128){expired.Add(_textures[key].Id);unusedBytes-=(long)key.PixelData.Length+(long)key.FloatPixelData.Length*4;unusedCount--;_textures.Remove(key);_textureLastFrame.Remove(key);_uiTextures.Remove(key);}
         var deadTextures=expired.ToArray();
         _unusedMaterials.Clear();foreach(var key in _materials.Keys)if(!_usedMaterials.Contains(key))_unusedMaterials.Add(key);
         var deadMaterials = new int[_unusedMaterials.Count];
@@ -565,7 +722,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             renderPreparationMs=loop.LastRenderMilliseconds,renderAllocatedBytes=loop.LastRenderAllocatedBytes,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,
             draws = _draws, materials = _materialUploads, deadMaterials = deadMaterials, uiBuffer = uiBuffer, uiCount = _ui.Count,
-            deadMeshes=deadMeshes, deadTextures=deadTextures, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);
+            deadMeshes=deadMeshes, deadTextures=deadTextures, runtimeMarkers=markers, audio=JsonSerializer.SerializeToElement(audio) },BrowserJsonContext.Default.BrowserFrame);
         ProfileEnd("JSON encoding",stage);return encoded;
     }
     private static float[] V3(Vector3 v) => [v.X,v.Y,v.Z];

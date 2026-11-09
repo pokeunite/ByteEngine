@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hazard Pay — fullscreen and death investigation</title>
+<style>body{margin:40px auto;padding:0 24px;max-width:1050px;background:#11161b;color:#e4e8ec;font:16px/1.6 system-ui}h1,h2{color:#f0c547}table{border-collapse:collapse;width:100%;margin:24px 0}td,th{padding:12px;border-bottom:1px solid #39424b;text-align:left}a{color:#8dd3ff}code{overflow-wrap:anywhere}.note{border-left:4px solid #f0c547;padding:12px 20px;background:#20272d}small{color:#b6c0ca}</style>
+<h1>Fullscreen and spider-death investigation</h1><p>3 November 2026 · Local Chrome tests · Hazard Pay / ByteEngine</p>
+<p class="note"><strong>Result:</strong> the updated local test reached 59.6 FPS in fullscreen Auto. Native rendering averaged 31.4 FPS. The reported near-zero itch.io collapse was <strong>not reproduced</strong> under these controlled conditions, including with the published runtime. This is a measured improvement pass and diagnostic build, not proof that every reported failure is resolved.</p>
+<h2>What changed</h2><ul>
+<li>GPU skin binding bounds are shared between compatible actors; bone poses remain independent. Tests check distinct poses, changed source vertices and unloaded meshes.</li>
+<li>Spider death clips use private animated poses by default instead of retaining many unique crowd-cache poses. Living crowd animation sharing remains enabled. The complete death animation is preserved. Gameplay plugin version: 3.66.0.</li>
+<li>Normal performance recording uses a lightweight pulse. Full object/component inventories and detailed timings remain available in Deep profile. Earlier diagnostic sampling itself reached over a second under pressure, so it could distort the slowdown being investigated.</li>
+<li>No water render target is allocated until a water draw needs it. Fullscreen Fast UI is capped at 1920×1080, independently of world resolution. Explicit Native world resolution remains available. Auto can respond sooner to sustained GPU pressure.</li>
+<li>Deaths, resize and fullscreen changes trigger bounded in-memory captures of the preceding 120 and following 120 frames (or up to 10 seconds after the event). Four completed incidents are retained, plus one pending incident; overlapping triggers share a capture. F8 downloads the report. These captures do not automatically upload or persist after closing the page.</li>
+<li>Audio decode timing markers help distinguish first-use sound work from animation and rendering work.</li></ul>
+<h2>Controlled fullscreen comparison</h2>
+<p>Same exported content, same 30-spider diagnostic setup, Fast quality, cross-origin iframe, actual fullscreen transitions, warm-up, then 10-second windows. The second itch.io copy was unloaded. These are sequential runs on this laptop, not statistical confidence intervals. Settings and animation workload evolve during the diagnostic; these are not a guarantee of 30 visible, simultaneously animating spiders throughout every window.</p>
+<table><thead><tr><th>Stage</th><th>Published runtime FPS</th><th>Updated runtime FPS</th><th>World pixels</th></tr></thead><tbody>
+<tr><td>Embedded Auto</td><td>56.8</td><td>49.7</td><td>960×540</td></tr>
+<tr><td>Fullscreen fixed 720p</td><td>48.7</td><td>53.8</td><td>1280×720</td></tr>
+<tr><td>Fullscreen Auto</td><td>57.3</td><td>59.6</td><td>1280×720</td></tr>
+<tr><td>Fullscreen Native</td><td>30.4</td><td>31.4</td><td>2880×1620</td></tr>
+<tr><td>Returned to embedded 720p</td><td>61.8</td><td>60.8</td><td>960×540</td></tr>
+<tr><td>Large viewport Native</td><td>23.2</td><td>31.5</td><td>2880×1620</td></tr></tbody></table>
+<p>Fullscreen Auto p95 rendering interval was 23.9 ms, maximum 39.6 ms in the updated run. Other stages still contained isolated hitches: fullscreen fixed 720p reached 333 ms. The published run also avoided the near-zero collapse. Host load, browser memory pressure and the exact deployed session remain possible factors requiring a capture of the real failure; these tests do not establish a single root cause.</p>
+<p>At 150% display scaling, Native renders five times as many world pixels as 1280×720. Updated Fast UI uses 1920×1080 rather than 2880×1620. The captured renderer reported no WebGL error and no allocated water target in this dry scene.</p>
+<h2>Death isolation</h2>
+<p>A clean three-spider run measured 71.0 / 76.3 / 68.3 FPS in the three death windows; maximum intervals were 48.6 / 25.1 / 39.8 ms. Callbacks took 12.8 / 1.4 / 1.4 ms. A matching-size cached-pose ablation also ran smoothly, so caching alone does not explain the originally reported severe hitches.</p>
+<p>The cached ablation allocated about 1.44 MB and 1.30 MB in its first two death callbacks, compared with 124 KB and 3.6 KB in the default path. Its maximum animation work was 8.3 / 7.3 / 5.9 ms versus 1.4 / 1.2 / 1.5 ms. Managed memory after the third death was about 604 MB versus 540 MB. These are sequential observations, not exclusive memory attribution.</p>
+<p>The clean 30-spider default setup measured 39.0 / 55.1 / 48.5 FPS through three scripted death windows; the first maximum interval was 127 ms. A separate cached run changed viewport size and is excluded from direct comparison. Scripted deaths use Health.Kill and include death subscribers and corpses, but do not reproduce a projectile's lethal hit or the entire live combat sequence.</p>
+<h2>Verification and delivery</h2><ul>
+<li>Native animation optimization checks passed, including death/revive/destruction behavior, independent GPU palettes, live binding edits and 100 warm GPU instances allocating 12,800 bytes.</li>
+<li>CPU/GPU/water rendering regression checks passed. Presentation sizing and synthetic incident-capture tests passed.</li>
+<li>The fresh export passed real DOM aim+fire, independent mouse release, Escape pause/resume, resizing and VFX pixel checks.</li>
+<li>Downloaded report/trace checks passed, including Deep per-object/component/query timings. Deep profiling adds overhead and must not be used as the normal FPS result.</li>
+<li>Export guard verified one enabled runtime plugin and 59 browser integrity/boot resources.</li></ul>
+<p><a href="../artifacts/hazardpay-web-fullscreen-death-fixed/Hazard_Pay-Web-20261103-121155-ee4e73/Hazard_Pay-Web.zip">Fresh diagnostic web ZIP</a> · <a href="../artifacts/fullscreen-clean-fast-auto/summary.json">Updated fullscreen results</a> · <a href="../artifacts/fullscreen-clean-published-runtime/summary.json">Published runtime comparison</a> · <a href="../artifacts/death-last-spider-fixed/summary.json">Three-spider deaths</a></p>
+<p>Fast / Auto / 2048 texture limit. Native module SHA-256: <code>5BA538A4D66DF4954DD7EF5E1A77F6A8740CD37228833EC579E6B9960EA0EBE6</code>. The inspected itch.io module matched the previous local module <code>38e91ab4e63e2d40f0555877718d49c2627e47aa9cf18a74f9fb9a198ca641fc</code>; it was not simply an unrelated old upload.</p>
+<p class="note">The ZIP has not been uploaded to itch.io. A 100-spider / sustained 40 FPS target is not certified by these tests. If the real failure recurs with this build, download F8's report immediately after the death/fullscreen transition; its incident frames and build identity now preserve that context.</p>
+</html>

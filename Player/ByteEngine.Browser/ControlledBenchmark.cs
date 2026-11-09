@@ -10,6 +10,27 @@ using ByteEngine.Core.VisualLogic;
 using KarlsonDemo.Plugin;
 public static partial class BrowserGame
 {
+ // Explicit diagnostic command, never called by ordinary gameplay. Each call
+ // kills one living spider through the same HealthComponent death event.
+ [JSExport]
+ public static string BenchmarkDeath(string mode)
+ {
+  var scene=Loop.Scenes.ActiveScene??throw new InvalidOperationException("Start game first");
+  var driver=scene.GetComponentsSnapshot<MiningSpiderAnimation3D>().FirstOrDefault(d=>d.GameObject.GetComponent<HealthComponent>() is {IsDead:false});
+  if(driver==null)return "{\"killed\":false}";
+  var owner=driver.GameObject;var health=owner.GetComponent<HealthComponent>()!;
+  var audio=MiningAudio3D.Find(owner);var deathSound=audio?.SpiderDeathSound;var growl=audio?.AlienGrowl;
+  if(mode=="no-audio"&&audio!=null){audio.SpiderDeathSound=ByteEngine.Core.Assets.AssetReference.Empty;audio.AlienGrowl=ByteEngine.Core.Assets.AssetReference.Empty;}
+  if(mode=="cached-animation")driver.CacheDeathAnimationPoses=true;
+  if(mode=="no-animation")driver.DeathClip="__diagnostic_missing_clip";
+  if(mode=="private-animation"&&driver.Renderer is {} skin)skin.ShareCrowdPoses=false;
+  if(mode=="no-presentation")owner.RemoveComponent(driver);
+  long before=GC.GetAllocatedBytesForCurrentThread();var watch=System.Diagnostics.Stopwatch.StartNew();
+  try{health.Kill();}finally{if(audio!=null&&deathSound!=null&&growl!=null){audio.SpiderDeathSound=deathSound;audio.AlienGrowl=growl;}}
+  watch.Stop();
+  if(mode=="no-corpse")foreach(var corpse in scene.GameObjects.Where(o=>o.Name=="Spider death remains").ToArray())scene.DestroyGameObject(corpse);
+  return System.Text.Json.JsonSerializer.Serialize(new{killed=true,mode,callbackMs=watch.Elapsed.TotalMilliseconds,allocatedBytes=GC.GetAllocatedBytesForCurrentThread()-before});
+ }
  [JSExport]
  public static void ConfigureBenchmark(int count,string mode)
  {

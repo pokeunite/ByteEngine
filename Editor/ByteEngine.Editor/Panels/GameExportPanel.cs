@@ -13,7 +13,7 @@ internal sealed class GameExportPanel
     private string _output = string.Empty;
     private Guid _project;
     private bool _web;
-    private int _quality=2,_resolution,_textures=2;
+    private int _quality=0,_resolution=3,_textures=2; // Fast, fixed 720p, 2048 textures.
     private WebExportPreview? _preview;
     private Task<GamePackageResult>? _task;
     private volatile string _progress = string.Empty;

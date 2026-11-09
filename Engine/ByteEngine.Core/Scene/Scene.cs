@@ -482,7 +482,7 @@ public sealed partial class Scene
             context.Begin3DFrame();
             SkeletalAttachmentService.UpdateScene(this);
 
-            foreach (GameObject gameObject in GetRenderOrder())
+            foreach (GameObject gameObject in GetRenderOrder(editor:true))
                 gameObject.RenderEditorInternal(context);
 
             skeletalPreview?.Render(context);
@@ -571,17 +571,18 @@ public sealed partial class Scene
         }
     }
 
-    private List<GameObject> GetRenderOrder()
+    private List<GameObject> GetRenderOrder(bool editor=false)
     {
-        bool same=_renderOrderInputs.Count==_gameObjects.Count;
-        if(same)for(int i=0;i<_gameObjects.Count;i++)if(!ReferenceEquals(_renderOrderInputs[i].Object,_gameObjects[i])||_renderOrderInputs[i].Order!=_gameObjects[i].RenderOrder){same=false;break;}
+        var members=editor?_gameObjects:RenderMembers;
+        bool same=_renderOrderInputs.Count==members.Count;
+        if(same)for(int i=0;i<members.Count;i++)if(!ReferenceEquals(_renderOrderInputs[i].Object,members[i])||_renderOrderInputs[i].Order!=members[i].RenderOrder){same=false;break;}
         if(same)return _renderOrderCache;
         _renderOrderInputs.Clear();_renderOrderCache.Clear();
         _renderObjects.Clear();
-        for (int i = 0; i < _gameObjects.Count; i++)
+        for (int i = 0; i < members.Count; i++)
         {
-            _renderObjects.Add((_gameObjects[i], _gameObjects[i].RenderOrder, i));
-            _renderOrderInputs.Add((_gameObjects[i],_gameObjects[i].RenderOrder));
+            _renderObjects.Add((members[i], members[i].RenderOrder, i));
+            _renderOrderInputs.Add((members[i],members[i].RenderOrder));
         }
         _renderObjects.Sort(static (a, b) =>
         {

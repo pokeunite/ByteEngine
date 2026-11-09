@@ -50,7 +50,7 @@ internal sealed class FontAtlas : IDisposable
     private static FontAtlas LoadTrueType(string path, int size)
     {
         byte[] font = File.ReadAllBytes(path);
-        int atlasSize = OperatingSystem.IsBrowser()&&size<=64?1024:2048;
+        int atlasSize = OperatingSystem.IsBrowser()?(size<=16?512:size<=64?1024:2048):2048;
         byte[] coverage = new byte[atlasSize * atlasSize];
         var chars = new StbTrueType.stbtt_bakedchar[224];
         if (!StbTrueType.stbtt_BakeFontBitmap(font, 0, size, coverage, atlasSize, atlasSize, 32, chars.Length, chars))
@@ -66,6 +66,7 @@ internal sealed class FontAtlas : IDisposable
         }
 
         var atlas = new FontAtlas(Texture2D.FromPixels(atlasSize, atlasSize, rgba), size * 1.25f, size);
+        atlas.Texture.DiagnosticSource=$"font:{Path.GetFileName(path)}@{size}";
         for (int i = 0; i < chars.Length; i++)
         {
             var ch = chars[i];

@@ -10,6 +10,10 @@ internal sealed class GpuSkinningData
     internal Matrix4x4[] Bones=Array.Empty<Matrix4x4>();
     private readonly (int Bone,BoundingBox3D Bounds)[] _bounds;
     private readonly BoundingBox3D? _unweighted;
+    private GpuSkinningData(GpuSkinningData template)
+    {Influences=template.Influences;_bounds=template._bounds;_unweighted=template._unweighted;}
+    // Binding bounds are immutable. Only the pose palette belongs to an actor.
+    internal GpuSkinningData CreatePoseInstance()=>new(this);
     internal GpuSkinningData(float[] vertices,float[] influences)
     {
         Influences=influences;

@@ -16,6 +16,7 @@ public sealed class GameObject
     private Scene? _scene;
     private bool _hasUpdateCallbacks, _hasLateCallbacks, _hasFixedCallbacks, _hasRenderCallbacks;
     private Component[]? _renderOrderProviders;
+    private Component[]? _renderSchedule;
     // Integer tags avoid Type hashing/reflection on every hot lookup. A bounded
     // direct-mapped cache also stores misses without rooting collectible types.
     private static int _nextLookupKey;
@@ -35,7 +36,7 @@ public sealed class GameObject
         _updateSchedule = null;
         _lateSchedule = _fixedSchedule = [];
         _scheduledOrders = [];
-        _renderOrderProviders=null;
+        _renderOrderProviders=null;_renderSchedule=null;
     }
 
     private void RefreshCallbacks()
@@ -57,6 +58,7 @@ public sealed class GameObject
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
     public Transform Transform { get; }
     public IReadOnlyList<Component> Components => _components;
+    internal bool HasRenderWork=>!_started||_hasRenderCallbacks;
     internal int RenderOrder
     {
         get
@@ -301,6 +303,7 @@ public sealed class GameObject
     {
         if (_started) return;
         _started = true;
+        _scene?.InvalidateRenderMembership();
         // Components may create renderers during OnStart. Added components start immediately.
         foreach (Component component in _components.ToArray()) component.StartInternal();
     }
@@ -409,7 +412,8 @@ public sealed class GameObject
         if (!ActiveInHierarchy) return;
         if (!_started) StartInternal();
         if (!_hasRenderCallbacks) return;
-        foreach (Component component in _components) component.RenderInternal(context);
+        var schedule=_renderSchedule??=_components.Where(c=>c.HasRenderCallback).ToArray();
+        foreach (Component component in schedule)if(component.IsAttachedTo(this))component.RenderInternal(context);
     }
 
     internal void RenderEditorInternal(Graphics.RenderContext context)

@@ -8,7 +8,7 @@ using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using Component=ByteEngine.Core.Scene.Component;
 namespace KarlsonDemo.Plugin;
-public enum MiningSoundCue{DryTrigger,AmmoClink,AlienGrowl,MetalHit,BodyHit,PlayerHurt,Confirm,Notification,Alert,Error,Credits,Explosion,Cannon,DefenceShot,RefineryOpen,PanelClose,RefineryOreImpact,PressOpen,PressStroke,PressBucketImpact,RepeaterShot,TerminalOpen,TerminalSelect,TerminalPurchase,Footstep,AmmoPickup,SpiderHit,SpiderDeath,InterfaceHover,DrillDamage}
+public enum MiningSoundCue{DryTrigger,AmmoClink,AlienGrowl,MetalHit,BodyHit,PlayerHurt,Confirm,Notification,Alert,Error,Credits,Explosion,Cannon,DefenceShot,RefineryOpen,PanelClose,RefineryOreImpact,PressOpen,PressStroke,PressBucketImpact,RepeaterShot,TerminalOpen,TerminalSelect,TerminalPurchase,Footstep,AmmoPickup,SpiderHit,SpiderDeath,InterfaceHover,DrillDamage,MineBeep}
 /// <summary>Authored audio bindings and bounded voices for mining state transitions. Reload audio stays in the existing weapon Event Sheet.</summary>
 public sealed partial class MiningAudio3D:Component
 {
@@ -17,6 +17,7 @@ public sealed partial class MiningAudio3D:Component
  [SceneObjectReference] public Guid PressObjectId{get;set;}
  [SceneObjectReference] public Guid RefineryObjectId{get;set;}
  [Category("Weapon sounds")] public AssetReference PistolShot{get;set;}=AssetReference.Empty;
+ public AssetReference MineBeep{get;set;}=AssetReference.Empty;
  public AssetReference DryTrigger{get;set;}=AssetReference.Empty;
  public AssetReference AmmoClink{get;set;}=AssetReference.Empty;
  [Category("Creature sounds")] public AssetReference AlienGrowl{get;set;}=AssetReference.Empty;
@@ -91,7 +92,7 @@ public sealed partial class MiningAudio3D:Component
   if(!a.IsEmpty&&index--==0)return a;if(!b.IsEmpty&&index--==0)return b;if(!c.IsEmpty&&index--==0)return c;return d??AssetReference.Empty;
  }
  AssetReference Clip(MiningSoundCue cue)=>cue switch
- {
+ {MiningSoundCue.MineBeep=>MineBeep,
   MiningSoundCue.InterfaceHover=>TerminalSelect,MiningSoundCue.DrillDamage=>DrillDamageSound.IsEmpty?MetalHit:DrillDamageSound,MiningSoundCue.Footstep=>StepClip(),MiningSoundCue.AmmoPickup=>AmmoPickupSound,MiningSoundCue.DryTrigger=>DryTrigger,MiningSoundCue.AmmoClink=>AmmoClink,MiningSoundCue.AlienGrowl=>AlienGrowl,MiningSoundCue.MetalHit=>MetalHit,
   MiningSoundCue.SpiderHit=>SpiderHitSound.IsEmpty?BodyHit:SpiderHitSound,MiningSoundCue.SpiderDeath=>SpiderDeathSound.IsEmpty?AlienGrowl:SpiderDeathSound,
   MiningSoundCue.BodyHit=>ChooseClip(BodyHit,BodyHit2,BodyHit3),
@@ -106,7 +107,7 @@ public sealed partial class MiningAudio3D:Component
   double now=Time.TotalTime;if(deadlines.TryGetValue(cue,out var until)&&now<until)return false;
   var clip=Clip(cue);if(clip.IsEmpty)return false;
   float gap=cue switch{MiningSoundCue.InterfaceHover=>.055f,MiningSoundCue.DrillDamage=>.2f,MiningSoundCue.SpiderHit=>.08f,MiningSoundCue.SpiderDeath=>.08f,MiningSoundCue.Footstep=>.15f,MiningSoundCue.AmmoPickup=>.8f,MiningSoundCue.AlienGrowl=>.8f,MiningSoundCue.PlayerHurt=>.3f,MiningSoundCue.DryTrigger=>.25f,MiningSoundCue.AmmoClink=>.18f,MiningSoundCue.MetalHit=>.12f,MiningSoundCue.BodyHit=>.065f,MiningSoundCue.DefenceShot or MiningSoundCue.RepeaterShot=>.045f,_=>.10f};
-  bool spatial=cue is MiningSoundCue.DrillDamage or MiningSoundCue.SpiderHit or MiningSoundCue.SpiderDeath or MiningSoundCue.AlienGrowl or MiningSoundCue.MetalHit or MiningSoundCue.BodyHit or MiningSoundCue.Explosion or MiningSoundCue.Cannon or MiningSoundCue.AmmoClink or MiningSoundCue.DefenceShot or MiningSoundCue.RepeaterShot or MiningSoundCue.RefineryOreImpact or MiningSoundCue.PressStroke or MiningSoundCue.PressBucketImpact;
+  bool spatial=cue is MiningSoundCue.MineBeep or MiningSoundCue.DrillDamage or MiningSoundCue.SpiderHit or MiningSoundCue.SpiderDeath or MiningSoundCue.AlienGrowl or MiningSoundCue.MetalHit or MiningSoundCue.BodyHit or MiningSoundCue.Explosion or MiningSoundCue.Cannon or MiningSoundCue.AmmoClink or MiningSoundCue.DefenceShot or MiningSoundCue.RepeaterShot or MiningSoundCue.RefineryOreImpact or MiningSoundCue.PressStroke or MiningSoundCue.PressBucketImpact;
   int priority=cue is MiningSoundCue.PlayerHurt or MiningSoundCue.Alert?15:cue==MiningSoundCue.DrillDamage?14:cue==MiningSoundCue.SpiderDeath?10:cue==MiningSoundCue.SpiderHit?8:cue==MiningSoundCue.InterfaceHover?9:spatial?3:14;
   int sameCount=0;AudioSource3D? source=null;for(int i=0;i<voices.Count;i++){var v=voices[i];if(v.Cue!=cue)continue;sameCount++;if(source==null&&!v.Source.IsPlaying)source=v.Source;}
   if(source==null&&sameCount>=(cue is MiningSoundCue.SpiderHit?6:cue is MiningSoundCue.SpiderDeath?4:cue is MiningSoundCue.BodyHit or MiningSoundCue.DefenceShot or MiningSoundCue.RepeaterShot?4:cue is MiningSoundCue.MetalHit or MiningSoundCue.RefineryOreImpact or MiningSoundCue.PressBucketImpact?3:2))return false;
@@ -170,6 +171,7 @@ public sealed partial class MiningAudio3D:Component
   var scene=GameObject.Scene!;var player=scene.FindGameObject(op.PlayerObjectId);var drill=scene.FindGameObject(op.DrillObjectId);var press=scene.FindGameObject(PressObjectId);var refinery=scene.FindGameObject(RefineryObjectId);
   TickDrillLoop(drill,player,op.Phase==MiningPhase.Drilling,dt);
   SetLoop("Refinery",RefineryLoop,refinery,op.RefiningAmount>0,MachineVolume*RefineryVolumeMultiplier,dt);
+  TickAuxiliaryRefineryAudio(op,dt);
   TickRefineryLayers(refinery,op,dt);
   SetLoop("Press",PressLoop,press,op.Phase!=MiningPhase.Failed&&trade.StoredAmmo<trade.Capacity,MachineVolume*PressVolumeMultiplier,dt);
   TickPressLayers(press,op,trade,dt);

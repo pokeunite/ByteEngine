@@ -30,6 +30,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
  [Category("Playback")] public bool AutomaticPlayback{get;set;}=true;
  [Category("Death")] public float CorpseSeconds{get;set;}=3;
  [Category("Death")] public int MaximumCorpses{get;set;}=12;
+ [Category("Death"),Description("Cache baked death poses for repeated corpses. Off avoids cold CPU mesh baking and uses the normal GPU/private animation path instead.")] public bool CacheDeathAnimationPoses{get;set;}
  [Category("Damage hitbox")] public bool BodyHitboxEnabled{get;set;}=true;
  [Category("Damage hitbox"),Description("Damage hitbox remains hittable without generating unused overlap contacts. Turn off only if events need its trigger overlaps.")] public bool BodyHitboxQueryOnly{get;set;}=true;
  [Category("Damage hitbox")] public Vector3 BodyHitboxSize{get;set;}=new(.9f,.85f,1.45f);
@@ -80,7 +81,7 @@ public sealed partial class MiningSpiderAnimation3D:Component
   var corpses=scene.GameObjects.Where(o=>o.Name=="Spider death remains").ToArray();
   foreach(var old in corpses.Take(Math.Max(0,corpses.Length-Math.Clamp(MaximumCorpses,1,32)+1)))scene.DestroyGameObject(old);
   // Detach before Health destroys the gameplay root, including the final enemy of a wave.
-  visual.SetParent(null,true);visual.Name="Spider death remains";renderer.Speed=1;
+  visual.SetParent(null,true);visual.Name="Spider death remains";renderer.Speed=1;renderer.ShareCrowdPoses=CacheDeathAnimationPoses;
   if(TryBlastDeath(scene)){visual=null;return;}
   string clip=DeathClip.Contains('_')?DeathClip:ClipPrefix+"_"+DeathClip;
   if(!renderer.Play(clip,false,0))LastError="Missing spider death clip: "+clip;

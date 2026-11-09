@@ -38,16 +38,17 @@ public sealed class MiningRefineryOutput3D:ByteEngine.Core.Scene.Component
  {
   var op=GameObject.Scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>();var renderer=GameObject.GetComponent<SkeletalMeshRenderer>();
   if(op==null||renderer==null)return;
+  int refined=GameObject.GetComponent<MiningAuxiliaryRefinery3D>()?.CompletedOre??op.RefinedOre;
   bool Anchor(string name,out Vector3 p){p=default;if(!renderer.TryGetBoneWorldMatrix(name,out var m))return false;p=m.Translation;return true;}
   ModelAnchorsResolved=Anchor(OutputStartMarker,out start)&Anchor(OutputEndMarker,out end)&Anchor(BinMarker,out bin);
   if(!ModelAnchorsResolved){poseCount=0;return;}
   float dt=Math.Clamp((float)Time.DeltaTime,0,1),duration=Vector3.Distance(start,end)/Math.Max(.1f,ConveyorSpeed)+Math.Max(.1f,DropSeconds);
-  if(initialized&&op.RefinedOre<previous){pending=0;flights.Clear();}
+  if(initialized&&refined<previous){pending=0;flights.Clear();}
   for(int i=flights.Count-1;i>=0;i--){flights[i]+=dt;if(flights[i]>=duration){LastLandingPosition=Pile(VisiblePileIngots+i);LandedIngotSequence++;flights.RemoveAt(i);}}
   float unit=Math.Max(Math.Max(1,UnitsPerIngot),op.CargoCapacity/(float)Math.Clamp(MaximumVisibleIngots,1,Limit));
-  int total=Math.Clamp((int)Math.Ceiling(op.RefinedOre/unit),0,Math.Clamp(MaximumVisibleIngots,0,Limit));
-  if(initialized){if(op.RefinedOre<previous){pending=0;flights.Clear();}else if(op.RefinedOre>previous)pending+=Math.Max(0,total-(int)Math.Ceiling(previous/unit));}
-  initialized=true;previous=op.RefinedOre;pending=Math.Min(pending,Math.Max(0,total-flights.Count));
+  int total=Math.Clamp((int)Math.Ceiling(refined/unit),0,Math.Clamp(MaximumVisibleIngots,0,Limit));
+  if(initialized){if(refined<previous){pending=0;flights.Clear();}else if(refined>previous)pending+=Math.Max(0,total-(int)Math.Ceiling(previous/unit));}
+  initialized=true;previous=refined;pending=Math.Min(pending,Math.Max(0,total-flights.Count));
   emit-=dt;
   if(pending>0&&emit<=0&&flights.Count<Math.Clamp(MaximumTravellingIngots,1,12)){flights.Add(0);pending--;emit=Math.Max(.05f,DeliveryInterval);}
   while(flights.Count>total)flights.RemoveAt(flights.Count-1);

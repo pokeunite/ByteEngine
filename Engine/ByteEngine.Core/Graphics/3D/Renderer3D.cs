@@ -88,8 +88,11 @@ public sealed class Renderer3D : IDisposable
     private readonly PointShadowMap3D?[] _pointShadowMaps =
         new PointShadowMap3D?[RenderLighting3D.MaxPointShadowLights];
 
+    private int _nativeSkinningLimit;
     internal void Initialize()
     {
+        if(_nativeSkinningLimit==0)_nativeSkinningLimit=Math.Min(2048,GL.GetInteger(GetPName.MaxTextureBufferSize)/4);
+        GpuSkinningCapabilities.MaximumBones=_nativeSkinningLimit;
         _shader ??=
             new Shader3D();
 
@@ -418,6 +421,7 @@ public sealed class Renderer3D : IDisposable
                 }
 
                 submission.Mesh.Bind();
+                _shadowShader!.SetInt("uSkinBoneCount",submission.Mesh.GpuSkinning?.Bones.Length??0);_shadowShader.SetInt("uSkinBones",16);
 
                 DrawMeshInstances(submission.Mesh, batch.Instances);
 
@@ -611,6 +615,7 @@ public sealed class Renderer3D : IDisposable
                         }
 
                         submission.Mesh.Bind();
+                        _pointShadowShader!.SetInt("uSkinBoneCount",submission.Mesh.GpuSkinning?.Bones.Length??0);_pointShadowShader.SetInt("uSkinBones",16);
 
                         DrawMeshInstances(submission.Mesh, batch.Instances);
 
@@ -818,6 +823,7 @@ public sealed class Renderer3D : IDisposable
             UploadStandardMaterialMaps(material);
 
             mesh.Bind();
+            _shader!.SetInt("uSkinBoneCount",mesh.GpuSkinning?.Bones.Length??0);_shader.SetInt("uSkinBones",16);
 
             DrawMeshInstances(mesh, instances);
 

@@ -30,7 +30,7 @@ public sealed class MiningThirdPerson3D:Component
  protected override void OnUpdate()
  {
   var control=GameObject.GetComponent<PlayerController3D>();var boom=GameObject.GetComponent<CameraBoom3D>();var gun=GameObject.GetComponent<FpsGunLab3D>();if(control==null||boom==null)return;
-  bool modal=GameObject.Scene?.FindGameObject(InterfaceObjectId)?.GetComponent<MiningBusinessUi3D>() is {Screen:not MiningScreen.None};
+  bool modal=Input.IsUiPointerRequested||GameObject.Scene?.FindGameObject(InterfaceObjectId)?.GetComponent<MiningBusinessUi3D>() is {Screen:not MiningScreen.None};
   Aiming=!modal&&control.Enabled&&InputActions.IsDown(AimAction);
   bool armed=gun?.HasWeapon==true;
   control.CharacterRotation=armed&&(FaceCameraWhileArmed||Aiming)?CharacterRotationMode.FaceCamera:CharacterRotationMode.FaceMovement;
@@ -42,7 +42,7 @@ public sealed class MiningThirdPerson3D:Component
  }
  protected override void OnRender(RenderContext c)
  {
-  if(!ShowCrosshair||GameObject.GetComponent<FpsGunLab3D>()?.HasWeapon!=true||GameObject.Scene?.FindGameObject(InterfaceObjectId)?.GetComponent<MiningBusinessUi3D>() is {Screen:not MiningScreen.None})return;
+  if(Input.IsUiPointerRequested||!ShowCrosshair||GameObject.GetComponent<FpsGunLab3D>()?.HasWeapon!=true||GameObject.Scene?.FindGameObject(InterfaceObjectId)?.GetComponent<MiningBusinessUi3D>() is {Screen:not MiningScreen.None})return;
   Vector2 p=new(c.TargetWidth/2f,c.TargetHeight/2f);var color=CrosshairColor;
   if(GameObject.Scene?.ActiveCamera is {} camera&&GameObject.GetComponent<FpsGunLab3D>() is {} gun)
   {

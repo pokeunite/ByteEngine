@@ -66,6 +66,23 @@ internal static class VfxRenderTests
         {
             if(!ReferenceEquals(first.Texture,same.Texture) || ReferenceEquals(first.Texture,different.Texture)) throw new Exception("Atlas sharing must distinguish lifetime curves.");
         }
+        // Retained atlas eviction must never dispose an atlas a lease still renders:
+        // the portable renderer has no CPU pixels left to re-upload after disposal,
+        // so the browser frame failed with "texture has no CPU pixels".
+        var retained=new List<VfxAtlas.Lease>();
+        try
+        {
+            for(int i=0;i<5;i++)
+            {
+                var layer=new VfxLayer { Sprite=VfxSprite.Solid,SpriteResolution=256,FlipbookColumns=8,FlipbookRows=8,PatternScale=1+i*.1f };
+                retained.Add(VfxAtlas.Acquire(layer,null));
+                for(int lease=0;lease<retained.Count;lease++)
+                    if(retained[lease].Texture.IsDisposed) throw new Exception($"Leased VFX atlas {lease} was disposed by retained-cache trimming.");
+            }
+            using(var again=VfxAtlas.Acquire(new VfxLayer { Sprite=VfxSprite.Solid,SpriteResolution=256,FlipbookColumns=8,FlipbookRows=8,PatternScale=1 },null))
+                if(!ReferenceEquals(retained[0].Texture,again.Texture)) throw new Exception("A leased atlas must stay cached for reuse.");
+        }
+        finally { foreach(var lease in retained) lease.Dispose(); }
         if(GL.GetError()!=ErrorCode.NoError) throw new Exception("OpenGL error in quality, trail or beam tests.");
         effect.Layers[0].RenderMode=VfxRenderMode.Horizontal;effect.Layers[0].Brightness=3;
         player.SetDefinition(effect);player.Tint=new(.2f,.5f,1,.7f);player.Brightness=2;player.Play();
@@ -91,6 +108,6 @@ internal static class VfxRenderTests
             if(pixels[n+1]<240 || pixels[n]>10) throw new Exception("Desktop custom VFX sprite decode failed.");
         }
         finally { texture.Dispose(); scene.DestroyGameObject(player.GameObject); }
-        Console.WriteLine("VFX offscreen GL: sprite pixels, batched draw, custom texture, distance quality, ribbon continuity, beam targeting and curve atlas sharing passed.");
+        Console.WriteLine("VFX offscreen GL: sprite pixels, batched draw, custom texture, distance quality, ribbon continuity, beam targeting, curve atlas sharing and retained atlas leasing passed.");
     }
 }

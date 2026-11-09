@@ -7,6 +7,8 @@ public sealed class MiningSale
  public bool Refined{get;set;}public bool Guaranteed{get;set;}
  public int Quantity{get;set;}public int Credits{get;set;}public int BaselineCredits{get;set;}
  public float Quote{get;set;}public float Seconds{get;set;}=30;public float Age{get;set;}
+ public int? CompanyDepositPercent{get;set;}
+ public int CompanyDeposit{get;set;}public int CampPayout{get;set;}
  public int Advantage=>Credits-BaselineCredits;
  public bool Valid=>Id is {Length:32}&&Quantity>0&&Quantity<=1000000&&Credits>=0&&Credits<=1000000000&&BaselineCredits>=0&&BaselineCredits<=1000000000&&float.IsFinite(Quote)&&Quote>=0&&Quote<=1000000&&float.IsFinite(Seconds)&&Seconds>=.1f&&float.IsFinite(Age)&&Age>=0;
 }
@@ -20,6 +22,7 @@ public sealed partial class MiningOperation3D
   int available=refined?RefinedOre:Math.Max(0,RawOre-RefiningAmount);if(quantity>available)return false;
   if(delivery&&(ActiveDeliveryContract is not {} order||!refined||quantity!=order.Quantity||Math.Abs(quote-order.UnitPrice)>.001f))return false;
   var sale=new MiningSale{Refined=refined,Guaranteed=delivery,Quantity=quantity,Quote=quote,Credits=SaleTotal(quantity,quote),BaselineCredits=SaleTotal(quantity,guaranteed),Seconds=Math.Clamp(seconds,.1f,3600)};
+  sale.CompanyDepositPercent=CompanyDepositPercent;
   if(refined)RefinedOre-=quantity;else RawOre-=quantity;if(delivery)ActiveDeliveryContract=null;PendingMarketSale=sale;SaveProgress();return true;
  }
  public void AdvanceMarketSale(float delta)
@@ -27,7 +30,8 @@ public sealed partial class MiningOperation3D
   if(PendingMarketSale is not {} sale||!float.IsFinite(delta)||delta<=0)return;
   sale.Age=Math.Min(sale.Seconds,sale.Age+delta);
   if(sale.Age<sale.Seconds)return;
-  Credits=Add(Credits,sale.Credits);LastMarketSale=sale;PendingMarketSale=null;if(sale.Guaranteed)DeliveryContractsCompleted++;
-  Message=$"Sold {sale.Quantity} ore for {sale.Credits:N0} credits.";SaveProgress();
+  var split=CreditSaleIncome(sale.Credits,sale.CompanyDepositPercent);sale.CompanyDeposit=split.Company;sale.CampPayout=split.Camp;
+  LastMarketSale=sale;PendingMarketSale=null;if(sale.Guaranteed)DeliveryContractsCompleted++;
+  Message=$"Sale paid: {split.Camp:N0} camp / {split.Company:N0} company credits.";SaveProgress();
  }
 }

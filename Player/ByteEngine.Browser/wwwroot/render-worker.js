@@ -13,7 +13,7 @@ onmessage=e=>{const m=e.data;try{
         renderer=new BrowserRenderer(world,overlay);postMessage({kind:'ready',maximumSkinningBones:renderer.maximumSkinningBones,hardware:hardware(renderer.gl)});
     }else if(m.kind==='frame'){
         for(const [canvas,w,h] of [[world,m.size.worldWidth,m.size.worldHeight],[overlay,m.size.uiWidth,m.size.uiHeight]]){if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;}
-        const frame=m.frame;renderer.readBuffer=packedFrameReader(m.packed,m.ranges);frame.ui=decodeUiPacket(renderer.readBuffer(frame.uiBuffer),frame.uiCount);
+        const frame=m.frame;renderer.readBuffer=packedFrameReader(m.packed,m.ranges);frame.ui=frame.uiCount?decodeUiPacket(renderer.readBuffer(frame.uiBuffer),frame.uiCount):[];
         const start=performance.now();renderer.draw(frame,m.width,m.height);const finish=performance.now();
         let comparison;
         if(m.compare){
@@ -24,6 +24,9 @@ onmessage=e=>{const m=e.data;try{
             let changedPixels=0;for(let i=0;i<a.length;i+=4)if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>3)changedPixels++;
             comparison={draws:transparent.length,changedPixels};
         }
-        postMessage({kind:'frame',id:m.id,finishMs:performance.timeOrigin+finish,renderMs:finish-start,profile:renderer.profile,comparison,diagnostics:m.report?renderer.diagnostics(m.deep):undefined,packed:m.packed},[m.packed]);
+        const complete=()=>postMessage({kind:'frame',id:m.id,finishMs:performance.timeOrigin+finish,renderMs:finish-start,profile:renderer.profile,comparison,diagnostics:m.report?renderer.diagnostics(m.deep):undefined,packed:m.packed},[m.packed]);
+        const gl=renderer.gl,sync=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0);gl.flush();
+        if(!sync)throw Error('Unable to track GPU completion');
+        const submitted=performance.now();const poll=()=>{const state=gl.clientWaitSync(sync,0,0);if(state===gl.WAIT_FAILED||gl.isContextLost()||performance.now()-submitted>15000){gl.deleteSync(sync);postMessage({kind:'error',message:'GPU completion failed or timed out'});return;}if(state===gl.TIMEOUT_EXPIRED){setTimeout(poll,1);return;}gl.deleteSync(sync);complete();};poll();
     }else if(m.kind==='report')postMessage({kind:'report',diagnostics:renderer.diagnostics(m.deep),error:renderer.gl.getError()});
 }catch(error){postMessage({kind:'error',message:String(error.stack||error)});}};

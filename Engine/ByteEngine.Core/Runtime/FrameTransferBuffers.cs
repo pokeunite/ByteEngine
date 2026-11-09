@@ -32,14 +32,14 @@ public sealed class FrameTransferBuffers
             // Retain recently consumed sizes, rather than letting old burst
             // buffers occupy the budget forever and force allocations each frame.
             while(_oldestFirst.First is {} oldest&&(RetainedBytes+length>_maximumRetainedBytes||(!_available.ContainsKey(length)&&_available.Count>=256)))RemoveAvailable(oldest.Value);
-            if(!_available.TryGetValue(length,out var pool))_available.Add(length,pool=new());
+            if(!_available.TryGetValue(length,out var pool)){ if(_available.Count>=256){int empty=-1;foreach(var pair in _available)if(pair.Value.Count==0){empty=pair.Key;break;}if(empty>=0)_available.Remove(empty);} _available.Add(length,pool=new()); }
             pool.AddLast(entry.SizeNode);_oldestFirst.AddLast(entry.AgeNode);RetainedBytes+=length;
         }
         _active.Clear();ActiveBytes=0;
     }
     private void RemoveAvailable(Entry entry)
     {
-        var pool=_available[entry.Bytes.Length];pool.Remove(entry.SizeNode);if(pool.Count==0)_available.Remove(entry.Bytes.Length);
+        var pool=_available[entry.Bytes.Length];pool.Remove(entry.SizeNode);
         _oldestFirst.Remove(entry.AgeNode);RetainedBytes-=entry.Bytes.Length;
     }
     public int Allocate(int length,out byte[] buffer)

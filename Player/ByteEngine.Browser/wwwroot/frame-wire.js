@@ -23,3 +23,25 @@ export function decodeUiPacket(bytes,count,output=[]){
     }
     output.length=count;return output;
 }
+
+// Own only changed packets: transferred frame storage is returned after rendering.
+export class RetainedDrawPackets {
+    constructor(){this.packets=[];this.skins=[];}
+    apply(commands,read,slotCount=commands.length){
+        if(!Number.isSafeInteger(slotCount)||slotCount<0)throw Error("Invalid retained slot count");
+        for(const command of commands){
+            if(command.packetSlot===undefined||command.packetSlot<0){if(command.dataBuffer!==undefined)decodeDrawPacket(read(command.dataBuffer),command);continue;}
+            const slot=command.packetSlot;
+            if(!Number.isSafeInteger(slot)||slot<0||slot>=slotCount)throw Error('Invalid retained packet slot');
+            command.packetChanged=command.dataBuffer>=0;
+            if(command.packetChanged){const bytes=read(command.dataBuffer);if(this.packets[slot]?.length!==bytes.length)this.packets[slot]=new Uint8Array(bytes.length);this.packets[slot].set(bytes);}
+            const packet=this.packets[slot];if(!packet)throw Error('Missing retained draw packet');
+            decodeDrawPacket(packet,command);
+            if(command.skinBuffer>=0){const bytes=read(command.skinBuffer);if(this.skins[slot]?.length!==bytes.length)this.skins[slot]=new Uint8Array(bytes.length);this.skins[slot].set(bytes);}
+            if(!command.skinned)this.skins[slot]=null;
+            command.skinPacket=this.skins[slot];
+            if(command.skinned&&!command.skinPacket)throw Error('Missing retained skin packet');
+        }
+        this.packets.length=slotCount;this.skins.length=slotCount;
+    }
+}

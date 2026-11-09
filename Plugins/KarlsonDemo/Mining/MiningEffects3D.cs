@@ -18,8 +18,8 @@ public sealed class MiningEffects3D:Component
  public AssetReference MortarTrail{get;set;}=AssetReference.Empty;
  public int MaximumTransientEffects{get;set;}=40;
  public float TurretFlashScale{get;set;}=.75f;
- public float MineExplosionScale{get;set;}=1.8f;
- public float MortarExplosionScale{get;set;}=2.3f;
+ public float MineExplosionScale{get;set;}=2.5f;
+ public float MortarExplosionScale{get;set;}=3.2f;
  public float ExplosionLaunchSpeed{get;set;}=7;
  public float ExplosionLift{get;set;}=3.5f;
  public bool ExplosionKnockdowns{get;set;}=true;

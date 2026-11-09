@@ -49,7 +49,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Shotgun",
-    "MinimumRound": 3,
+    "MinimumRound": 2,
     "Available": true,
     "X": 615,
     "Y": 225
@@ -87,7 +87,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Mines",
-    "MinimumRound": 4,
+    "MinimumRound": 2,
     "Available": true,
     "X": 385,
     "Y": 405
@@ -106,7 +106,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Defence",
-    "MinimumRound": 5,
+    "MinimumRound": 3,
     "Available": true,
     "X": 615,
     "Y": 405
@@ -117,7 +117,7 @@
     "Description": "Unlock AR and rifle recipe; 24-round magazine and sustained-fire bloom.",
     "Cost": 400,
     "Prerequisites": [
-      "mine"
+      "shotgun"
     ],
     "Effect": 0,
     "Amount": 1,
@@ -125,7 +125,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Rifle",
-    "MinimumRound": 7,
+    "MinimumRound": 4,
     "Available": true,
     "X": 385,
     "Y": 585
@@ -144,7 +144,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Defence",
-    "MinimumRound": 7,
+    "MinimumRound": 3,
     "Available": true,
     "X": 615,
     "Y": 585
@@ -182,7 +182,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Base",
-    "MinimumRound": 8,
+    "MinimumRound": 6,
     "Available": true,
     "X": 160,
     "Y": 765
@@ -201,7 +201,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Shotgun",
-    "MinimumRound": 9,
+    "MinimumRound": 4,
     "Available": true,
     "X": 385,
     "Y": 765
@@ -212,7 +212,7 @@
     "Description": "Unlock one mortar. Slow travel and fixed impact point; can miss moving targets.",
     "Cost": 1050,
     "Prerequisites": [
-      "tracking"
+      "sentry"
     ],
     "Effect": 0,
     "Amount": 1,
@@ -220,7 +220,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Artillery",
-    "MinimumRound": 10,
+    "MinimumRound": 5,
     "Available": true,
     "X": 615,
     "Y": 765
@@ -239,7 +239,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Rifle",
-    "MinimumRound": 12,
+    "MinimumRound": 6,
     "Available": true,
     "X": 385,
     "Y": 945
@@ -258,7 +258,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Defence",
-    "MinimumRound": 12,
+    "MinimumRound": 6,
     "Available": true,
     "X": 615,
     "Y": 945
@@ -277,7 +277,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Health",
-    "MinimumRound": 12,
+    "MinimumRound": 6,
     "Available": true,
     "X": 840,
     "Y": 945
@@ -296,7 +296,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Base",
-    "MinimumRound": 16,
+    "MinimumRound": 6,
     "Available": true,
     "X": 160,
     "Y": 1125
@@ -315,7 +315,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Rifle",
-    "MinimumRound": 15,
+    "MinimumRound": 6,
     "Available": true,
     "X": 385,
     "Y": 1125
@@ -334,7 +334,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Defence",
-    "MinimumRound": 17,
+    "MinimumRound": 6,
     "Available": true,
     "X": 615,
     "Y": 1125
@@ -353,7 +353,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Health",
-    "MinimumRound": 16,
+    "MinimumRound": 6,
     "Available": true,
     "X": 840,
     "Y": 1125
@@ -391,7 +391,7 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Market",
-    "MinimumRound": 7,
+    "MinimumRound": 6,
     "Available": true,
     "X": 0,
     "Y": 0
@@ -410,9 +410,28 @@
     "MaxRank": 1,
     "RankCosts": [],
     "Branch": "Market",
-    "MinimumRound": 10,
+    "MinimumRound": 6,
     "Available": true,
     "X": 0,
     "Y": 0
+  },
+  {
+    "Id": "rd",
+    "Name": "Field R&D",
+    "Description": "Place a field research station. Order finite-battery security drones and destructible barricades. Available after the first operation.",
+    "Cost": 200,
+    "Prerequisites": [
+      "charter"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "ResearchStationGrant",
+    "MaxRank": 1,
+    "RankCosts": [],
+    "Branch": "Base",
+    "MinimumRound": 2,
+    "Available": true,
+    "X": 840,
+    "Y": 65
   }
 ]

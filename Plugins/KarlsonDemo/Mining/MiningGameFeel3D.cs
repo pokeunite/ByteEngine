@@ -56,6 +56,7 @@ public sealed partial class MiningGameFeel3D:Component
  [Browsable(false)]public int VisibleRigWarnings=>threats.Count;
  public override int UpdateOrder=>500;
  public string DefenceLossMessage{get;private set;}="";double defenceLossUntil;string defenceLossTitle="",defenceLossDetail="";
+ public void NotifyDroneDestroyed(){defenceLossTitle="SECURITY DRONE DESTROYED";defenceLossDetail="BATTERY DEPLETED / REORDER AT FIELD R&D";DefenceLossMessage=defenceLossTitle+" / "+defenceLossDetail;defenceLossUntil=Time.TotalTime+6;}
  public void NotifyDefenceDestroyed(string name,int cost){defenceLossTitle=name.ToUpperInvariant()+" DESTROYED";defenceLossDetail=$"REPLACE: {cost} REFINED ORE";DefenceLossMessage=defenceLossTitle+" / "+defenceLossDetail;defenceLossUntil=Time.TotalTime+5;}
  public override int? RenderOrder=>950;
  MiningOperation3D? Op=>GameObject.GetComponent<MiningOperation3D>();

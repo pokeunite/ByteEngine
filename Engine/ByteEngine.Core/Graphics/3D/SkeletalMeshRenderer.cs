@@ -142,6 +142,19 @@ public sealed partial class SkeletalMeshRenderer : Component
     /// <summary>Runtime animation sampling interval; zero evaluates every frame.
     /// Playback time still advances normally. Physical poses and reactions remain immediate.</summary>
     public float AnimationUpdateInterval { get; set; }
+    /// <summary>Reduce distant visual sampling while keeping playback clocks and queried bones current.</summary>
+    public bool AutomaticAnimationLod {get;set;}=true;
+    private float EffectiveAnimationInterval(){
+        float interval=Math.Max(0,AnimationUpdateInterval);
+        if(!AutomaticAnimationLod||_lightRagdollActive||_recoveryDuration>0||_hitReaction>.001f||GameObject.Scene?.ActiveCamera is not {} camera)return interval;
+        float distance=Vector3.Distance(Transform.WorldPosition,camera.Transform.WorldPosition);
+        // Preserve full-rate close views; larger characters keep full-rate animation farther away.
+        float radius=.5f;
+        foreach(var mesh in _runtimeMeshes)radius=Math.Max(radius,mesh.Mesh.LocalBounds.Size.Length()*.5f);
+        radius*=Math.Max(.001f,Vector3.Abs(Transform.WorldScale).Length()/MathF.Sqrt(3));
+        float relativeDistance=distance/Math.Max(.5f,radius);
+        return Math.Max(interval,relativeDistance>120?1f/15:relativeDistance>50?1f/30:0);
+    }
     /// <summary>Batch animation and post-physics IK changes into one pose evaluation.
     /// Bone queries still resolve immediately; rendering always receives the completed pose.</summary>
     public bool EvaluatePoseAfterPhysics { get; set; }
@@ -222,7 +235,7 @@ public sealed partial class SkeletalMeshRenderer : Component
             return false;
         }
 
-        if (_poseDirty)
+        if (_poseDirty||_animationPoseElapsed>0f)
         {
             UpdatePoseAndMeshes();
         }
@@ -506,8 +519,9 @@ public sealed partial class SkeletalMeshRenderer : Component
             }
 
             _animationPoseElapsed += Math.Max((float)ByteEngine.Core.Time.DeltaTime, 0f);
-            if (finished || AnimationUpdateInterval <= 0f ||
-                _animationPoseElapsed >= AnimationUpdateInterval)
+            float interval=EffectiveAnimationInterval();
+            if (finished || interval <= 0f ||
+                _animationPoseElapsed >= interval)
             {
                 _poseDirty = true;
                 _animationPoseElapsed = 0f;
@@ -1083,6 +1097,7 @@ public sealed partial class SkeletalMeshRenderer : Component
     {
         long diagnosticStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _poseDirty = false;
+        _animationPoseElapsed=0f;
 
         if (_model == null ||
             _skeleton == null ||
@@ -1925,7 +1940,7 @@ public sealed partial class SkeletalMeshRenderer : Component
         internal GpuSkinningData? GpuData;
         internal GpuSkinningData CreateGpuData(int boneCount)
         {
-            return new(Source.Vertices,_skin.GpuInfluences(boneCount));
+            return _skin.CreateGpuData(Source.Vertices,boneCount);
         }
         public int[] UsedBones => _skin.UsedBones;
         public Matrix4x4[] PreviousSkinMatrices { get; set; } = Array.Empty<Matrix4x4>();
@@ -1958,6 +1973,8 @@ public sealed partial class SkeletalMeshRenderer : Component
         private readonly Vector4[] _indices;
         private readonly Vector4[] _weights;
         private readonly Dictionary<int,float[]> _gpuInfluences=new();
+        private readonly Dictionary<int,GpuSkinningData> _gpuTemplates=new();
+        private float[]? _gpuVertices;
         public SkinInfluences[] Influences {get;}
         public int[] SingleBoneIndices {get;}
         public bool AllSingleBone {get;}
@@ -1977,6 +1994,17 @@ public sealed partial class SkeletalMeshRenderer : Component
                 // edits; existing actors keep their original binding snapshot.
                 var definition=new SharedSkinDefinition(source);
                 Cache.Remove(source);Cache.Add(source,definition);return definition;
+            }
+        }
+        public GpuSkinningData CreateGpuData(float[] vertices,int boneCount)
+        {
+            lock(_gpuTemplates)
+            {
+                if(_gpuVertices==null||!vertices.AsSpan().SequenceEqual(_gpuVertices))
+                {_gpuVertices=vertices.ToArray();_gpuTemplates.Clear();}
+                if(!_gpuTemplates.TryGetValue(boneCount,out var template))
+                {_gpuTemplates.Add(boneCount,template=new GpuSkinningData(vertices,GpuInfluences(boneCount)));}
+                return template.CreatePoseInstance();
             }
         }
         public float[] GpuInfluences(int boneCount)

@@ -8,7 +8,16 @@ namespace KarlsonDemo.Plugin;
 public sealed partial class MiningDefense3D
 {
  [Category("Model and animation")] public AssetReference VisualModel{get;set;}=AssetReference.Empty;
+ [Category("Model and animation")] public AssetReference MortarRoundModel{get;set;}=new("Assets/Models/Mining/Research/MortarRound.glb");
+ void AttachMortarRound(){if(Kind!=MiningDefenseKind.Mortar||shell==null||MortarRoundModel.IsEmpty)return;try{var model=shell.AddComponent(new SkeletalMeshRenderer{Model=MortarRoundModel});if(model.ResolvedModel==null){shell.RemoveComponent(model);return;}if(shell.GetComponent<MeshRenderer>() is {} old)old.Enabled=false;shell.Transform.LocalScale=new(.45f);}catch(Exception e){VisualError="Mortar round: "+e.Message;}}
  [Category("Model and animation")] public float VisualScale{get;set;}=.65f;
+ [Category("Model and animation")] public float MinimumGunMuzzleHeight{get;set;}=1.4f;
+ internal static float RequiredGunSupport(SkeletalMeshRenderer model,MiningDefenseKind kind,float ground,float height)
+ {
+  if(kind is not (MiningDefenseKind.Sentry or MiningDefenseKind.Repeater))return 0;
+  string muzzle=kind==MiningDefenseKind.Repeater?"MuzzleLeft":"Muzzle";
+  return model.TryGetBoneWorldMatrix(muzzle,out var pose)?Math.Clamp(height-(pose.Translation.Y-ground),0,1.2f):0;
+ }
  [Category("Model and animation")] public string AnimationPrefix{get;set;}="";
  [Category("Model and animation")] public string DeployClip{get;set;}="Deploy";
  [Category("Model and animation")] public string IdleClip{get;set;}="Idle";
@@ -33,6 +42,8 @@ public sealed partial class MiningDefense3D
    visualRoot=GameObject.Scene!.CreateGameObject("Animated "+Kind+" model");visualRoot.SetParent(GameObject,false);visualRoot.Transform.LocalScale=new(Math.Clamp(VisualScale,.05f,10));
    visual=visualRoot.AddComponent(new SkeletalMeshRenderer{Model=asset,PlayOnStart=false,AnimationUpdateInterval=1f/30,TransitionDuration=.06f});
    if(visual.ResolvedModel==null)throw new InvalidDataException("Defence model could not load: "+asset.ProjectPath);
+   float support=RequiredGunSupport(visual,Kind,Transform.WorldPosition.Y,MinimumGunMuzzleHeight);
+   if(support>.01f){visualRoot.Transform.LocalPosition=Vector3.UnitY*support;Part("Raised firing support",new(0,support/2,0),new(.78f,support,.78f),new(.12f,.16f,.18f,1),PrimitiveMeshType.Cylinder);}
    // The inactive layer enables native procedural bone offsets, preserving recoil and child pivots.
    visual.ConfigurePoseProfile(new(){Name="Mechanical defence aiming",Layers=[new(){Name="Runtime pivot control",Enabled=false,Weight=0}]});
    VisualReady=true;PlayVisual(DeployClip,false);
@@ -41,7 +52,7 @@ public sealed partial class MiningDefense3D
   }
   catch(Exception e){VisualError=e.Message;if(visualRoot!=null)GameObject.Scene!.DestroyGameObject(visualRoot);visual=null;visualRoot=null;return false;}
  }
- void CreateShotEffects(){if(Kind is MiningDefenseKind.Mine or MiningDefenseKind.SupplyCache)return;beam=Part("Shot trace",Vector3.Zero,new(.025f),new(1,.8f,.25f,1));beam.Active=false;shell=Part("Mortar round",Vector3.Zero,new(.2f),new(.65f,.42f,.08f,1),PrimitiveMeshType.Sphere);shell.Active=false;}
+ void CreateShotEffects(){if(Kind is MiningDefenseKind.Mine or MiningDefenseKind.SupplyCache)return;beam=Part("Shot trace",Vector3.Zero,new(.025f),new(1,.8f,.25f,1));beam.Active=false;shell=Part("Mortar round",Vector3.Zero,new(.2f),new(.65f,.42f,.08f,1),PrimitiveMeshType.Sphere);AttachMortarRound();shell.Active=false;}
  public bool PlayVisual(string clip,bool loop=false)
  {
   if(visual==null)return false;string name=clip.Contains('_')?clip:Prefix+"_"+clip;

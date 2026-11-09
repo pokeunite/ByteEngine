@@ -13,7 +13,7 @@ public static class RenderBatcher
             return HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value.Mesh),hash,value.Shadows);
         }
     }
-    public sealed record Batch(RenderSubmission First, IReadOnlyList<RenderSubmission> Instances);
+    public readonly record struct Batch(RenderSubmission First, IReadOnlyList<RenderSubmission> Instances);
     public static IReadOnlyList<Batch> Build(IReadOnlyList<RenderSubmission> submissions) => new Builder().Build(submissions);
     internal static IReadOnlyList<Batch> BuildShadows(IReadOnlyList<RenderSubmission> submissions) => new Builder().Build(submissions, shadows:true);
 
@@ -29,6 +29,32 @@ public static class RenderBatcher
         private readonly Dictionary<(Mesh,Texture2D?,float),List<RenderSubmission>> _shadowGroups=new();
         private readonly List<List<RenderSubmission>> _pool=new();
         private readonly List<Batch> _result=new();
+        private readonly List<Batch> _opaqueOrder=new();
+        private readonly Dictionary<Material,int> _materialHashes=new(MaterialRenderStateComparer.Instance);
+        internal bool MaterialAffinity;
+        private int MaterialHash(Material material)
+        {
+            if(!_materialHashes.TryGetValue(material,out int hash))
+                _materialHashes[material]=hash=_materialHashes.Count+1;
+            return hash;
+        }
+        private void OrderOpaqueByMaterial()
+        {
+            if(!MaterialAffinity||_result.Count<2)return;
+            int count=0;
+            while(count<_result.Count){var first=_result[count].First;if(first.Queue!=RenderQueue3D.Opaque||first.Material.WaterSurface||first.Material.BlendMode!=BlendMode3D.Opaque)break;count++;}
+            if(count<2)return;
+            _materialHashes.Clear();_opaqueOrder.Clear();for(int i=0;i<count;i++)_opaqueOrder.Add(_result[i]);
+            _opaqueOrder.Sort(CompareMaterialAffinity);
+            for(int i=0;i<count;i++)_result[i]=_opaqueOrder[i];
+        }
+        private int CompareMaterialAffinity(Batch a,Batch b)
+        {
+            int ha=MaterialHash(a.First.Material),hb=MaterialHash(b.First.Material);
+            if(ha!=hb)return ha.CompareTo(hb);
+            int depth=a.First.DistanceSquaredToCamera.CompareTo(b.First.DistanceSquaredToCamera);
+            return depth!=0?depth:a.First.SubmissionIndex.CompareTo(b.First.SubmissionIndex);
+        }
         private int _used;
         internal Builder(){_groups=new(_comparer);}
         private List<RenderSubmission> Rent()
@@ -87,6 +113,7 @@ public static class RenderBatcher
                 }
                 else {var list=Rent();list.Add(item);_result.Add(new(item,list));}
             }
+            OrderOpaqueByMaterial();
             return _result;
         }
     }

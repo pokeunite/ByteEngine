@@ -30,7 +30,7 @@ public sealed partial class MiningDefense3D
    for(int i=0;i<scene.GameObjects.Count;i++)
    {
     var o=scene.GameObjects[i];if(!o.ActiveInHierarchy)continue;
-    if(o.GetComponent<MiningBusinessUi3D>() is {Enabled:true,Screen:not MiningScreen.None}||o.GetComponent<MiningPauseMenu3D>() is {Enabled:true,IsOpen:true})return false;
+    if(o.GetComponent<MiningBusinessUi3D>() is {Enabled:true,Screen:not MiningScreen.None}||o.GetComponent<MiningPauseMenu3D>() is {Enabled:true,IsOpen:true}||o.GetComponent<MiningResearchStation3D>() is {Enabled:true,IsOpen:true})return false;
    }
    return true;
   }

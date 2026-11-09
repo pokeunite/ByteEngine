@@ -267,6 +267,7 @@ public sealed class FpsGunLab3D : Component, ICharacterDebugSource
     }
     public bool Fire()
     {
+        if(Input.IsUiPointerRequested || (Input.IsMouseButtonDownForUi(MouseButton.Left)&&!Input.IsMouseButtonDown(MouseButton.Left)))return false;
         if(GameObject.GetComponent<MiningDefensePlanner3D>()?.SuppressWeaponFire==true)return false;
         _eye = GameObject.Scene?.FindGameObject(CameraObjectId);
         if (SelectedWeapon is not {} weapon) return false;

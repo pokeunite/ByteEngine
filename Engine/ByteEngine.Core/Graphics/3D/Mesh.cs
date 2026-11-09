@@ -36,6 +36,31 @@ public sealed class Mesh : IDisposable
     private readonly Dictionary<int, VertexArrayState> _vertexArrays =
         new();
 
+    private int _skinInfluencesBuffer,_skinPaletteBuffer,_skinPaletteTexture;
+    private float[]? _uploadedInfluences;
+    private Matrix4x4[] _uploadedBones=Array.Empty<Matrix4x4>();
+    private void BindNativeSkinning()
+    {
+        if(GpuSkinning is not { } skin)return;
+        if(_skinInfluencesBuffer==0)_skinInfluencesBuffer=GL.GenBuffer();
+        GL.BindBuffer(BufferTarget.ArrayBuffer,_skinInfluencesBuffer);
+        if(!ReferenceEquals(_uploadedInfluences,skin.Influences)){
+            GL.BufferData(BufferTarget.ArrayBuffer,skin.Influences.Length*sizeof(float),skin.Influences,BufferUsageHint.StaticDraw);
+            _uploadedInfluences=skin.Influences;
+        }
+        for(int j=0;j<2;j++){GL.EnableVertexAttribArray(3+j);GL.VertexAttribPointer(3+j,4,VertexAttribPointerType.Float,false,32,j*16);}
+        if(_skinPaletteBuffer==0)_skinPaletteBuffer=GL.GenBuffer();
+        if(_skinPaletteTexture==0)_skinPaletteTexture=GL.GenTexture();
+        GL.BindBuffer(BufferTarget.TextureBuffer,_skinPaletteBuffer);
+        if(!_uploadedBones.AsSpan().SequenceEqual(skin.Bones)){
+            GL.BufferData(BufferTarget.TextureBuffer,skin.Bones.Length*64,skin.Bones,BufferUsageHint.StreamDraw);
+            if(_uploadedBones.Length!=skin.Bones.Length)_uploadedBones=new Matrix4x4[skin.Bones.Length];
+            skin.Bones.CopyTo(_uploadedBones,0);
+        }
+        GL.ActiveTexture(TextureUnit.Texture16);GL.BindTexture(TextureTarget.TextureBuffer,_skinPaletteTexture);
+        GL.TexBuffer(TextureBufferTarget.TextureBuffer,SizedInternalFormat.Rgba32f,_skinPaletteBuffer);
+        GL.ActiveTexture(TextureUnit.Texture0);
+    }
     private int _vertexBuffer;
     private int _elementBuffer;
     private int _bufferGeneration;
@@ -109,6 +134,7 @@ public sealed class Mesh : IDisposable
         }
 
         BindVertexArrayForCurrentContext();
+        BindNativeSkinning();
     }
 
     /// <summary>
@@ -401,6 +427,11 @@ public sealed class Mesh : IDisposable
 
     private void ReleaseSharedBuffers()
     {
+        if(_skinInfluencesBuffer!=0)GL.DeleteBuffer(_skinInfluencesBuffer);
+        if(_skinPaletteBuffer!=0)GL.DeleteBuffer(_skinPaletteBuffer);
+        if(_skinPaletteTexture!=0)GL.DeleteTexture(_skinPaletteTexture);
+        _skinInfluencesBuffer=_skinPaletteBuffer=_skinPaletteTexture=0;
+        _uploadedInfluences=null;_uploadedBones=Array.Empty<Matrix4x4>();
         if (_elementBuffer !=
             0)
         {

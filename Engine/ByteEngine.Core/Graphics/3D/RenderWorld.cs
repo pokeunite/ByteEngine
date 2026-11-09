@@ -19,16 +19,7 @@ public sealed class RenderWorld
     public bool EnableOcclusionCulling {get;set;}=true;
     public int OccludedMeshes {get;private set;}
     public double OcclusionMilliseconds {get;private set;}
-    private static readonly Comparison<RenderSubmission> SubmissionComparison = (a, b) =>
-    {
-        int queue = ((int)a.Queue).CompareTo((int)b.Queue);
-        if (queue != 0) return queue;
-        int distance = a.Queue == RenderQueue3D.Transparent
-            ? b.DistanceSquaredToCamera.CompareTo(a.DistanceSquaredToCamera)
-            : a.Queue == RenderQueue3D.Opaque
-                ? a.DistanceSquaredToCamera.CompareTo(b.DistanceSquaredToCamera) : 0;
-        return distance != 0 ? distance : a.SubmissionIndex.CompareTo(b.SubmissionIndex);
-    };
+    private static readonly Comparison<RenderSubmission> SubmissionComparison=PortableRenderOrdering.Compare;
 
     private RenderLighting3D _lighting =
         RenderLighting3D.Default;
@@ -257,39 +248,7 @@ public sealed class RenderWorld
         List<RenderSubmission> visible = _visible;
         visible.Clear();
 
-        int culled =
-            0;
-
-        int submissionCount = _submissions.Count;
-        if (submissionCount == 0)
-        {
-            // Keep the remainder of the pass unchanged for empty submissions.
-        }
-        else
-        {
-            bool[] flags = System.Buffers.ArrayPool<bool>.Shared.Rent(submissionCount);
-            try
-            {
-                JobRunner.For(submissionCount, i =>
-                {
-                    RenderSubmission submission = _submissions[i];
-                    flags[i] = !(submission.FrustumCullingEnabled &&
-                                 !view.Frustum.Intersects(submission.WorldBounds));
-                });
-
-                for (int i = 0; i < submissionCount; i++)
-                {
-                    if (flags[i])
-                        visible.Add(_submissions[i]);
-                    else
-                        culled++;
-                }
-            }
-            finally
-            {
-                System.Buffers.ArrayPool<bool>.Shared.Return(flags, clearArray: true);
-            }
-        }
+        int culled=RenderVisibility.Collect(_submissions,view,visible);
 
         /*
          * Asset previews do not need shadow maps. Keeping this decision on the

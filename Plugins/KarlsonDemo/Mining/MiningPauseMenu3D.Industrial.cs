@@ -10,9 +10,9 @@ public sealed partial class MiningPauseMenu3D
  {
   items.Clear();if(MainMenuMode&&Page==MiningPausePage.Pause){BuildMain(w,h);return;}
   if(Page is MiningPausePage.Pause or MiningPausePage.Quit or MiningPausePage.NewCompany){
-   bool pause=Page==MiningPausePage.Pause;float sw=pause?440:520,sh=pause?360:300,sx=(w-sw)/2,sy=(h-sh)/2;
+   bool pause=Page==MiningPausePage.Pause;float sw=pause?440:520,sh=pause?404:300,sx=(w-sw)/2,sy=(h-sh)/2;
    void Small(string label,float yy,Action action)=>items.Add(new(label,sx+48,sy+yy,sw-96,44,action));
-   if(pause){Small("RESUME",112,Resume);Small("SETTINGS",176,()=>ShowPage(MiningPausePage.Sound));Small("QUIT",240,()=>ShowPage(MiningPausePage.Quit));}
+   if(pause){Small("RESUME",112,Resume);Small("SETTINGS",176,()=>ShowPage(MiningPausePage.Sound));Small("SCREENSHOT  [F12]",240,TakeScreenshot);Small("QUIT",304,()=>ShowPage(MiningPausePage.Quit));}
    else{Small(Page==MiningPausePage.Quit?"QUIT TO DESKTOP":"NEW GAME",146,()=>{if(Page==MiningPausePage.NewCompany)StartNewCompany();else{SaveSettings();if(!MainMenuMode)foreach(var op in GameObject.Scene!.GameObjects.SelectMany(o=>o.Components.OfType<MiningOperation3D>()))op.SaveProgress();GameObject.Scene!.RequestQuit();}});Small("CANCEL",210,()=>ShowPage(MiningPausePage.Pause));}return;
   }
   float x=(w-940)/2,y=(h-540)/2;
@@ -36,7 +36,7 @@ public sealed partial class MiningPauseMenu3D
   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s,x=(w-940)/2,y=(h-540)/2;
   void Q(float a,float b,float ww,float hh,Vector4 color)=>c.DrawUiQuad(new(a*s,b*s),new(ww*s,hh*s),color);
   void T(string t,float a,float b,int size=20,Vector4? color=null)=>c.DrawUiText(t,BodyFont,(int)(size*s),new(a*s,b*s),color??text,UiAnchor.TopLeft);
-  if(Page is MiningPausePage.Pause or MiningPausePage.Quit or MiningPausePage.NewCompany){bool pause=Page==MiningPausePage.Pause;float sw=pause?440:520,sh=pause?360:300,sx=(w-sw)/2,sy=(h-sh)/2;Q(0,0,w,h,new(0,0,0,.28f));Q(sx,sy,sw,sh,surface);Q(sx,sy,12,2,accent);Q(sx+sw-12,sy+sh-2,12,2,accent);T(pause?"PAUSED":Page==MiningPausePage.Quit?"QUIT GAME?":"NEW GAME?",sx+48,sy+30,28);Q(sx+48,sy+79,sw-96,1,new(.28f,.30f,.32f,1));if(!pause)T(Page==MiningPausePage.Quit?"Progress is saved automatically.":"Your previous save will be backed up.",sx+48,sy+100,16,muted);BuildIndustrial(w,h,false);bool hoverAny=items.Any(a=>Inside(a.X,a.Y,a.W,a.H));for(int i=0;i<items.Count;i++){var a=items[i];bool selected=Inside(a.X,a.Y,a.W,a.H)||!hoverAny&&focus==i;Q(a.X,a.Y,a.W,a.H,selected?accent:new(.09f,.10f,.12f,1));T(a.Label,a.X+20,a.Y+11,20,selected?new(.045f,.05f,.055f,1):text);}return;}
+  if(Page is MiningPausePage.Pause or MiningPausePage.Quit or MiningPausePage.NewCompany){bool pause=Page==MiningPausePage.Pause;float sw=pause?440:520,sh=pause?404:300,sx=(w-sw)/2,sy=(h-sh)/2;Q(0,0,w,h,new(0,0,0,.28f));Q(sx,sy,sw,sh,surface);Q(sx,sy,12,2,accent);Q(sx+sw-12,sy+sh-2,12,2,accent);T(pause?"PAUSED":Page==MiningPausePage.Quit?"QUIT GAME?":"NEW GAME?",sx+48,sy+30,28);Q(sx+48,sy+79,sw-96,1,new(.28f,.30f,.32f,1));if(!pause)T(Page==MiningPausePage.Quit?"Progress is saved automatically.":"Your previous save will be backed up.",sx+48,sy+100,16,muted);BuildIndustrial(w,h,false);bool hoverAny=items.Any(a=>Inside(a.X,a.Y,a.W,a.H));for(int i=0;i<items.Count;i++){var a=items[i];bool selected=Inside(a.X,a.Y,a.W,a.H)||!hoverAny&&focus==i;Q(a.X,a.Y,a.W,a.H,selected?accent:new(.09f,.10f,.12f,1));T(a.Label,a.X+20,a.Y+11,20,selected?new(.045f,.05f,.055f,1):text);}return;}
   Q(0,0,w,h,new(0,0,0,.32f));Q(x,y,940,540,surface);
   Q(x,y,940,1,new(.32f,.34f,.36f,1));Q(x,y+539,940,1,new(.32f,.34f,.36f,1));
   foreach(float cx in new[]{x,x+928})foreach(float cy in new[]{y,y+538})Q(cx,cy,12,2,accent);

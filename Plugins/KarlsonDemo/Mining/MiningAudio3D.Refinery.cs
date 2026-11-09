@@ -15,6 +15,13 @@ public sealed partial class MiningAudio3D
  [Browsable(false)] public long RefineryImpactCues{get;private set;}
  long refineryLandings;
  AssetReference OreImpactClip()=>ChooseClip(RefineryOreImpact1,RefineryOreImpact2,RefineryOreImpact3);
+ readonly Dictionary<Guid,long> auxiliaryLandings=[];
+ void TickAuxiliaryRefineryAudio(MiningOperation3D op,float dt){foreach(var extra in GameObject.Scene!.GetComponentsSnapshot<MiningAuxiliaryRefinery3D>()){
+  if(extra.OperationObjectId!=op.GameObject.Id)continue;var output=extra.GameObject.GetComponent<MiningRefineryOutput3D>();bool running=op.Phase!=MiningPhase.Failed&&extra.LoadedRaw>0;
+  SetLoop("Additional refinery "+extra.GameObject.Id,RefineryLoop,extra.GameObject,running,MachineVolume*RefineryVolumeMultiplier,dt);
+  SetLoop("Additional conveyor "+extra.GameObject.Id,RefineryConveyorLoop,extra.GameObject,running||output?.HasDeliveryWork==true,RefineryConveyorVolume,dt);
+  if(output!=null){if(output.LandedIngotSequence>auxiliaryLandings.GetValueOrDefault(extra.GameObject.Id))PlayCue(MiningSoundCue.RefineryOreImpact,output.LastLandingPosition);auxiliaryLandings[extra.GameObject.Id]=output.LandedIngotSequence;}
+ }}
  void TickRefineryLayers(GameObject? refinery,MiningOperation3D op,float dt)
  {
   var output=refinery?.GetComponent<MiningRefineryOutput3D>();

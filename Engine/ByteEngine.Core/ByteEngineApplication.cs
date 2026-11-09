@@ -329,6 +329,20 @@ public class ByteEngineApplication : GameWindow
 
         OnEngineRender();
 
+        if (Runtime.GameScreenshots.BeginCapture())
+        {
+            try
+            {
+                int w=Math.Max(1,WindowWidth),h=Math.Max(1,WindowHeight);
+                byte[] pixels=new byte[checked(w*h*4)];
+                GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer,0);
+                GL.ReadBuffer(ReadBufferMode.Back);
+                GL.ReadPixels(0,0,w,h,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);
+                Runtime.GameScreenshots.Save(pixels,w,h);
+            }
+            catch(Exception e){Runtime.GameScreenshots.Failed(e);}
+        }
+
         ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.EndGpu();
         LastRenderCpuMilliseconds=frameWatch.Elapsed.TotalMilliseconds;
         frameWatch.Restart();

@@ -30,7 +30,7 @@ window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
     const renderer=await createBrowserRenderer(canvas,overlay,{forceMain:new URLSearchParams(location.search).get('renderer')==='main',onError:fail});
     if(renderer.isThreaded)renderer.oncompleted=completion=>capture.renderedFrame(completion);
-    const presentation=new BrowserPresentation();let graphics={quality:'Balanced',worldResolution:'Auto'};
+    const presentation=new BrowserPresentation();let graphics={quality:'Balanced',worldResolution:'720p'};
     globalThis.byteEngineGraphics=()=>({...renderer.hardware,...renderer.diagnostics(false)});
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();fail('Graphics context lost. Reload this page.');});
     capture.setHardware(byteEngineGraphics());
@@ -48,7 +48,7 @@ try{
     document.title=manifest.name||'ByteEngine Game';
     const audio=new BrowserAudio(files,id=>game.AudioEnded(id));
     const videos=new BrowserVideos(files,overlay,(id,seconds,paused,ended,error)=>game.VideoState(id,seconds,paused,ended,error));audio.videos=videos;
-    capture.configure({profileComponents:value=>game.CaptureProfileComponents(value),readDetails:()=>JSON.parse(game.PerformanceDetails()),
+    capture.configure({profileComponents:value=>game.CaptureProfileComponents(value),readDetails:()=>JSON.parse(capture.deep?game.PerformanceDetails():game.PerformancePulse()),
         readInventory:()=>JSON.parse(game.PerformanceInventory()),build:{name:manifest.name,runtime:runtime.getConfig().mainAssemblyName},
         readBrowser:()=>({graphics:renderer.diagnostics(capture.deep),audio:{state:audio.context.state,sources:audio.sources.size,
             playing:[...audio.sources.values()].filter(s=>s.wantsPlay).length,decodedBuffers:audio.bufferBytes.size,
@@ -123,16 +123,15 @@ try{
         delta[0]+=e.movementX;delta[1]+=e.movementY;
     });
     const uiCommands=[];let scheduled=false;
-    const channel=renderer.isThreaded?new MessageChannel():null;
-    function schedule(){if(scheduled||stopped||document.hidden||!renderer.canAcceptFrame)return;scheduled=true;if(channel)channel.port2.postMessage(0);else requestAnimationFrame(frame);}
-    if(channel){channel.port1.onmessage=()=>frame(performance.now());renderer.onavailable=schedule;}
+    function schedule(){if(scheduled||stopped||document.hidden||!renderer.canAcceptFrame)return;scheduled=true;requestAnimationFrame(frame);}
+    renderer.onavailable=schedule;
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){previous=performance.now();schedule();}});
     function frame(now){
         scheduled=false;
         if(stopped){status.hidden=false;return;}
         try{
             if(document.hidden||!renderer.canAcceptFrame)return;
-            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.hardware.limits.maxTextureSize);
+            const size=presentation.dimensions(canvas.clientWidth,canvas.clientHeight,devicePixelRatio,graphics.quality,graphics.worldResolution,renderer.hardware.limits.maxTextureSize,renderer.hardware.extensions?.includes('EXT_disjoint_timer_query_webgl2')!==false);
             const {width,height,worldWidth,worldHeight,uiWidth,uiHeight}=size;
             renderer.setSize(size);
             const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
@@ -142,7 +141,8 @@ try{
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas||pauseFromCapture,gamepad);
             const wasmEnd=performance.now();const data=JSON.parse(payload);transfers.beginFrame(data);
-            graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'Auto'};
+            for(const marker of data.runtimeMarkers??[])capture.trigger(marker.kind,{callbackMs:marker.durationMs});
+            graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'720p'};
             if(!renderer.isThreaded&&data.uiBuffer>=0)data.ui=decodeUiPacket(transfers.read(data.uiBuffer),data.uiCount,uiCommands);
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();pauseFromCapture=false;
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
@@ -153,7 +153,7 @@ try{
             const drawCount=data.draws.length,uiCount=data.uiCount,drawStart=performance.now();
             if(capture.probes.skipGeometry)data.draws=[];if(capture.probes.skipUi){data.ui=[];data.uiCount=0;}
             renderer.draw(data,width,height);
-            presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures);
+            presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures,renderer.profile.gpuRenderFrame,renderer.profile.gpuWidth,renderer.profile.gpuHeight);
             globalThis.byteEnginePresentation={...size,...graphics,adaptiveScale:presentation.factor};
             const renderEnd=performance.now();
             const allocations=data.textures.filter(t=>t.allocate||!t.partial);

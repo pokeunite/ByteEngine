@@ -27,8 +27,31 @@ internal static class VfxAtlas
         return new(tile,columns,rows,frames);
     }
     private readonly record struct Key(Texture2D? Source,int Revision,string Settings);
-    private sealed class Entry { public required Texture2D Texture; public int Users; }
-    private static readonly Dictionary<Key,Entry> Cache=new();
+    private sealed class Entry { public required Texture2D Texture; public int Users; public long LastUsed; public long Bytes; }
+    private static readonly Dictionary<Key,Entry> Cache=new();private static long CacheBytes;private const long RetainedBudgetBytes=32L*1024*1024;private const long RetainedIdleMilliseconds=30000;
+    /// <summary>
+    /// Retained atlases are live render inputs: an evicted atlas has no CPU pixels
+    /// left for the portable renderer, so only idle, unleased entries are collected.
+    /// </summary>
+    private static void Trim(long now)
+    {
+        bool idle=false;
+        foreach(var entry in Cache.Values)if(entry.Users==0&&now-entry.LastUsed>RetainedIdleMilliseconds){idle=true;break;}
+        if(idle)foreach(var pair in Cache.Where(p=>p.Value.Users==0&&now-p.Value.LastUsed>RetainedIdleMilliseconds).ToArray())Evict(pair.Key,pair.Value);
+        if(CacheBytes<=RetainedBudgetBytes)return;
+        foreach(var pair in Cache.Where(p=>p.Value.Users==0).OrderBy(p=>p.Value.LastUsed).ToArray())
+        {
+            if(CacheBytes<=RetainedBudgetBytes)break;
+            Evict(pair.Key,pair.Value);
+        }
+    }
+    /// <summary>Evict one retained atlas. Only idle entries are ever passed here.</summary>
+    private static void Evict(Key key,Entry entry)
+    {
+        if(!Cache.Remove(key))return;
+        CacheBytes-=entry.Bytes;
+        entry.Texture.Dispose();
+    }
     internal sealed class Lease : IDisposable
     {
         private Action? _release;
@@ -43,9 +66,17 @@ internal static class VfxAtlas
             layer.Sprite,layer.StartColor,layer.EndColor,layer.FlipbookColumns,layer.FlipbookRows,layer.SpriteResolution,
             layer.OpacityOverLife,layer.ColorBlendOverLife,layer.Dissolve,layer.PatternStrength,layer.PatternScale
         },VfxEffectSerializer.Options));
-        if(!Cache.TryGetValue(key,out var entry)) Cache[key]=entry=new Entry {Texture=Build(layer,source)};
-        entry.Users++;
-        return new(entry.Texture,GetLayout(layer),()=>{if(--entry.Users==0){Cache.Remove(key);entry.Texture.Dispose();}});
+        if(!Cache.TryGetValue(key,out var entry))
+        {
+            var texture=Build(layer,source);texture.DiagnosticSource=$"vfx:{layer.Sprite}@{key.Settings.GetHashCode():X8}";
+            entry=new Entry {Texture=texture,LastUsed=Environment.TickCount64,Bytes=(long)texture.Width*texture.Height*4};
+            Cache[key]=entry;CacheBytes+=entry.Bytes;
+        }
+        entry.Users++;entry.LastUsed=Environment.TickCount64;
+        // Lease before trimming: a freshly built atlas must never be evicted (and
+        // disposed) by its own insertion while its batch is about to render it.
+        Trim(entry.LastUsed);
+        return new(entry.Texture,GetLayout(layer),()=>{if(--entry.Users==0){entry.LastUsed=Environment.TickCount64;Trim(Environment.TickCount64);}});
     }
     internal static Texture2D Build(VfxLayer layer,Texture2D? source)
     { var pixels=GeneratePixels(layer,source,out int width,out int height);return Texture2D.FromPixels(width,height,pixels,TextureFilter.Linear); }

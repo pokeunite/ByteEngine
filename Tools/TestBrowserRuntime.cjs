@@ -1,4 +1,4 @@
-// Automated runtime check: no editor interaction or visible browser window.
+﻿// Automated runtime check: no editor interaction or visible browser window.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -18,7 +18,7 @@ try {
  const game=exports.BrowserGame;
  const {audio:files}=await loadContent(game,document.querySelector('#status'));
  const audio=new BrowserAudio(files,id=>game.AudioEnded(id));await audio.decode();await audio.activate();
- game.Start(false);
+ game.Start(false);renderer.readBuffer=index=>game.ReadBuffer(index);
  const frames=[];let sound=false;
  for(let i=0;i<20;i++){
   const data=JSON.parse(game.Frame(.05,640,480,'','',.5,.5,0,0,0,true,false,''));

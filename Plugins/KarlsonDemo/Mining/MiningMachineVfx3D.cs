@@ -26,7 +26,7 @@ public sealed class MiningMachineVfx3D:Component
  protected override void OnUpdate()
  {
   var scene=GameObject.Scene;if(scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>() is not {} op)return;var trade=scene.FindGameObject(WorkshopObjectId)?.GetComponent<MiningTrade3D>();
-  var renderer=GameObject.GetComponent<SkeletalMeshRenderer>();Running=op.Phase!=MiningPhase.Failed&&(Machine==MiningMachineKind.Drill?op.Phase==MiningPhase.Drilling:Machine==MiningMachineKind.Refinery?op.RefiningAmount>0:trade!=null&&trade.StoredAmmo<trade.Capacity);
+  var renderer=GameObject.GetComponent<SkeletalMeshRenderer>();Running=op.Phase!=MiningPhase.Failed&&(Machine==MiningMachineKind.Drill?op.Phase==MiningPhase.Drilling:Machine==MiningMachineKind.Refinery?(GameObject.GetComponent<MiningAuxiliaryRefinery3D>() is {} extra?extra.LoadedRaw>0:op.RefiningAmount>0):trade!=null&&trade.StoredAmmo<trade.Capacity);
   Vector3 point=Transform.WorldPosition+Vector3.TransformNormal(AnchorOffset,Transform.WorldMatrix);
   if(!string.IsNullOrEmpty(AnchorBone)&&renderer?.TryGetBoneWorldMatrix(AnchorBone,out var bone)==true)point=Vector3.Transform(AnchorOffset,bone);
   if(operating!=null){operating.Transform.WorldPosition=point;operating.Transform.WorldScale=Vector3.One;operating.Size=EffectSize;if(Running&&!operating.IsEmitting)operating.Play();else if(!Running&&operating.IsEmitting)operating.Stop();}

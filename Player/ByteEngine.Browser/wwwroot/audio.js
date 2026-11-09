@@ -24,7 +24,7 @@ export class BrowserAudio {
             await media.play().catch(error=>{if(this.sources.get(c.id)!==state||state.generation!==generation||!state.wantsPlay)return;if(error.name!=='NotAllowedError')throw error;});return;
         }
         let pending=this.buffers.get(c.path);
-        if(!pending){pending=(async()=>this.context.decodeAudioData(bytes instanceof Blob?await bytes.arrayBuffer():bytes.slice(0)))().then(buffer=>{this.bufferBytes.set(c.path,buffer.length*buffer.numberOfChannels*4);this.prune();return buffer;}).catch(error=>{this.buffers.delete(c.path);this.bufferBytes.delete(c.path);throw error;});this.buffers.set(c.path,pending);}
+        if(!pending){const decodeStarted=performance.now();globalThis.byteEngineCapture?.event('audio-decode-start',{path:c.path,encodedBytes:bytes.size??bytes.byteLength});pending=(async()=>this.context.decodeAudioData(bytes instanceof Blob?await bytes.arrayBuffer():bytes.slice(0)))().then(buffer=>{globalThis.byteEngineCapture?.event('audio-decode-finished',{path:c.path,durationMs:performance.now()-decodeStarted,decodedBytes:buffer.length*buffer.numberOfChannels*4});this.bufferBytes.set(c.path,buffer.length*buffer.numberOfChannels*4);this.prune();return buffer;}).catch(error=>{this.buffers.delete(c.path);this.bufferBytes.delete(c.path);throw error;});this.buffers.set(c.path,pending);}
         const buffer=await pending;
         if(this.sources.get(c.id)!==state||state.generation!==generation||!state.wantsPlay)return;
         const source=this.context.createBufferSource();source.buffer=buffer;source.loop=state.loop;source.playbackRate.value=state.pitch;source.connect(state.gain);

@@ -9,8 +9,8 @@ namespace ByteEngine.Core.Runtime;
 
 public sealed record WebExportGraphics
 {
- public string Quality {get;init;}="High";
- public string WorldResolution {get;init;}="Auto";
+ public string Quality {get;init;}="Fast";
+ public string WorldResolution {get;init;}="720p";
  public int TextureLimit {get;init;}=2048;
  public void Validate(){if(Quality is not ("High" or "Balanced" or "Fast")||WorldResolution is not ("Auto" or "720p" or "1080p" or "Native")||TextureLimit is not (512 or 1024 or 2048 or 4096))throw new ArgumentException("Invalid browser graphics settings.");}
 }

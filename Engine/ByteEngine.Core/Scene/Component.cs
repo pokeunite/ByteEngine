@@ -44,6 +44,7 @@ public abstract class Component
         GameObject.Transform;
 
     protected GameObject? AttachedGameObject => _gameObject;
+    internal bool IsAttachedTo(GameObject owner)=>ReferenceEquals(_gameObject,owner);
 
     private bool _enabled=true;
     public bool Enabled {get=>_enabled;set{if(_enabled==value)return;_enabled=value;if(Scene.AffectsPhysics(this))_gameObject?.Scene?.InvalidateQueryBounds();}}

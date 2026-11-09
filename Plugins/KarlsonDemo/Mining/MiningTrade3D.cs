@@ -32,6 +32,7 @@ public sealed partial class MiningTrade3D:Component
  [Category("Ammo press")] public int EfficiencyCost{get;set;}=180;
  [Category("Ammo press")] public float UpgradeCostGrowth{get;set;}=2.15f;
  [Category("Ammo press")] public int MaximumLevel{get;set;}=5;
+ [Category("Market")] public float LiveMarketPriceBonus{get;set;}=1.2f;
  [Category("Market")] public float MinimumMultiplier{get;set;}=.65f;
  [Category("Market")] public float MaximumMultiplier{get;set;}=1.6f;
  [Category("Market")] public float PriceIntervalSeconds{get;set;}=1;
@@ -56,7 +57,7 @@ public sealed partial class MiningTrade3D:Component
  public float Output=>OutputAt(OutputLevel,EfficiencyLevel);
  public float OutputAt(int speedLevel,int payloadLevel)=>UseProductionCycles?RoundsAt(payloadLevel)/CycleDurationAt(speedLevel):Math.Max(0,BaseOutputPerSecond+speedLevel*ExtraOutputPerLevel)*(1+payloadLevel*Math.Max(0,EfficiencyPerLevel))*(1+ProductionResearchBonus);
  public int Capacity=>Math.Max(1,BaseStorage+StorageLevel*ExtraStoragePerLevel);
- public int CollectibleAmmo{get{var op=Operation;var weapon=op==null?null:GameObject.Scene?.FindGameObject(op.PlayerObjectId)?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;return weapon?.Definition is {} d?Math.Min((int)StoredAmmo,Math.Max(0,d.ReserveCapacity-weapon.ReserveAmmo)):0;}}
+ public int CollectibleAmmo{get{var gun=Operation is {} op?GameObject.Scene?.FindGameObject(op.PlayerObjectId)?.GetComponent<FpsGunLab3D>():null;long room=0;if(gun!=null)foreach(var w in gun.CarriedWeapons)if(w.Definition is {} d)room+=Math.Max(0,d.ReserveCapacity-w.ReserveAmmo);return (int)Math.Min((int)StoredAmmo,room);}}
  public MiningOperation3D? Operation=>GameObject.Scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>();
  readonly List<float> _history=[];bool initialized;float saveClock;
  readonly List<CompanyUpgrade> _research=[];readonly HashSet<string> _purchased=new(StringComparer.Ordinal);float? _baseHealth,_baseEnergy;readonly Dictionary<string,int> _ranks=new(StringComparer.Ordinal);
@@ -96,7 +97,7 @@ public sealed partial class MiningTrade3D:Component
   saveClock+=delta;if(saveClock>=5){saveClock=0;Save();}
  }
  void StepPrice(){MarketSeed=unchecked(MarketSeed*1664525+1013904223);float n=((MarketSeed>>8)/16777215f)*2-1;float low=Math.Clamp(MinimumMultiplier,.1f,10),high=Math.Clamp(MaximumMultiplier,low,10);PriceMultiplier=MathF.Round(Math.Clamp(PriceMultiplier+n*Math.Clamp(PriceVolatility,0,1)+(DemandTarget-PriceMultiplier)*.02f,low,high),3);_history.Add(PriceMultiplier);if(_history.Count>80)_history.RemoveAt(0);PriceSamples++;}
- public float Quote(bool refined)=>MathF.Round(Math.Max(0,refined?Operation?.RefinedOrePrice??5:Operation?.RawOrePrice??2)*PriceMultiplier+Stat("OilPriceFloor"),2);
+ public float Quote(bool refined)=>MathF.Round(Math.Max(0,refined?Operation?.RefinedOrePrice??5:Operation?.RawOrePrice??2)*PriceMultiplier*Math.Clamp(LiveMarketPriceBonus,.1f,5)+Stat("OilPriceFloor"),2);
  public int Stock(bool refined)=>Math.Max(0,(refined?Operation?.RefinedOre??0:Math.Max(0,(Operation?.RawOre??0)-(Operation?.RefiningAmount??0))));
  public int Level(int row)=>row switch{0=>OutputLevel,1=>StorageLevel,_=>EfficiencyLevel};
  [System.ComponentModel.Category("Ammo press costs")]public float AmmoPressCostMultiplier{get;set;}=.8f;
@@ -105,8 +106,10 @@ public sealed partial class MiningTrade3D:Component
  public int Collect()
  {
   if(Operation is not {} op||op.Phase==MiningPhase.Failed)return 0;
-  var player=GameObject.Scene?.FindGameObject(op.PlayerObjectId);var weapon=player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;var def=weapon?.Definition;if(weapon==null||def==null)return 0;
-  int amount=Math.Min((int)StoredAmmo,Math.Max(0,def.ReserveCapacity-weapon.ReserveAmmo));if(amount<=0)return 0;weapon.SetAmmo(weapon.CurrentAmmo,weapon.ReserveAmmo+amount);StoredAmmo-=amount;Save();return amount;
+  var gun=GameObject.Scene?.FindGameObject(op.PlayerObjectId)?.GetComponent<FpsGunLab3D>();if(gun==null)return 0;
+  int total=0;void Fill(WeaponInstance3D w){if(w.Definition is not {} d)return;int n=Math.Min((int)StoredAmmo,Math.Max(0,d.ReserveCapacity-w.ReserveAmmo));if(n<=0)return;w.SetAmmo(w.CurrentAmmo,w.ReserveAmmo+n);StoredAmmo-=n;total+=n;}
+  if(gun.SelectedWeapon is {} selected)Fill(selected);foreach(var w in gun.CarriedWeapons)if(w!=gun.SelectedWeapon)Fill(w);
+  if(total>0)Save();return total;
  }
  public bool Sell(bool refined,int quantity)=>BeginSale(refined,quantity);
  public bool HasResearch(string id)=>_purchased.Contains(id);

@@ -40,7 +40,7 @@ public sealed partial class MiningGameFeel3D
  }
  protected override void OnRender(RenderContext c)
  {
-  if(Player?.GetComponent<MiningCampLayout3D>()?.IsEditing==true||Interface is {Screen:not MiningScreen.None})return;
+  if(GameObject.Scene?.GetComponentsSnapshot<MiningAuxiliaryRefinery3D>().Any(r=>r.IsOpen)==true||GameObject.GetComponent<MiningResearchStation3D>()?.IsOpen==true||Player?.GetComponent<MiningCampLayout3D>()?.IsEditing==true||Interface is {Screen:not MiningScreen.None})return;
   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;var gold=new Vector4(1,.79f,.2f,1);var white=new Vector4(.97f,.96f,.9f,1);
   void Q(float x,float y,float width,float height,Vector4 color)=>c.DrawUiQuad(new(x*s,y*s),new(width*s,height*s),color);
   void T(string text,float x,float y,int size,Vector4 color,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(text,Font,(int)(size*s),new(x*s,y*s),color,anchor);
@@ -67,6 +67,6 @@ public sealed partial class MiningGameFeel3D
   }
   if(AmmoGainPopup&&ammoClock>0){Q(20,h-205,285,30,new(.04f,.05f,.06f,.94f));T($"+{AmmoGain} RESERVE AMMO",32,h-199,17,gold);}
   if(CreditGainPopup&&creditClock>0){Q(20,250,280,30,new(.04f,.05f,.06f,.94f));T($"+{CreditGain:N0} CREDITS RECEIVED",30,256,17,gold);}
-  if(RoundResults&&resultClock>0){Q(w/2-270,h-159,540,50,new(.04f,.05f,.06f,.95f));T(RoundResult,w/2,h-153,16,gold,UiAnchor.TopCenter);T("Refine your ore or return to the company tent",w/2,h-130,15,white,UiAnchor.TopCenter);}
+  if(RoundResults&&Player?.GetComponent<MiningDefensePlanner3D>()?.BuildMode!=true&&resultClock>0&&Op?.OverclockAvailable!=true&&Op?.IsOverclockActive!=true){Q(w/2-270,h-159,540,50,new(.04f,.05f,.06f,.95f));T(RoundResult,w/2,h-153,16,gold,UiAnchor.TopCenter);T("Refine your ore or return to the company tent",w/2,h-130,15,white,UiAnchor.TopCenter);}
  }
 }
