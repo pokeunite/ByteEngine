@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Runtime;
 
 namespace ByteEngine.Core.Graphics.ThreeD;
 
@@ -256,20 +257,35 @@ public sealed class RenderWorld
         int culled =
             0;
 
-        foreach (RenderSubmission submission
-                 in _submissions)
+        int submissionCount = _submissions.Count;
+        if (submissionCount == 0)
         {
-            if (submission.FrustumCullingEnabled &&
-                !view.Frustum.Intersects(
-                    submission.WorldBounds))
+            // Keep the remainder of the pass unchanged for empty submissions.
+        }
+        else
+        {
+            bool[] flags = System.Buffers.ArrayPool<bool>.Shared.Rent(submissionCount);
+            try
             {
-                culled++;
+                JobRunner.For(submissionCount, i =>
+                {
+                    RenderSubmission submission = _submissions[i];
+                    flags[i] = !(submission.FrustumCullingEnabled &&
+                                 !view.Frustum.Intersects(submission.WorldBounds));
+                });
 
-                continue;
+                for (int i = 0; i < submissionCount; i++)
+                {
+                    if (flags[i])
+                        visible.Add(_submissions[i]);
+                    else
+                        culled++;
+                }
             }
-
-            visible.Add(
-                submission);
+            finally
+            {
+                System.Buffers.ArrayPool<bool>.Shared.Return(flags, clearArray: true);
+            }
         }
 
         /*

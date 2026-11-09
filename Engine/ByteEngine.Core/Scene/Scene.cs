@@ -1,4 +1,5 @@
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Runtime;
 using ByteEngine.Core.Variables;
 using ByteEngine.Core.Classification;
 using ByteEngine.Core.Diagnostics;
@@ -20,7 +21,7 @@ public sealed partial class Scene
     private readonly List<GameObject> _gameObjects =
         new();
 
-    private readonly HashSet<Guid> _pendingDestroy =
+    private readonly HashSet<GameObject> _pendingDestroy =
         new();
     private readonly Dictionary<Guid, HashSet<GameObject>> _tagIndex = new();
     private readonly HashSet<GameObject>[] _layerIndex = Enumerable.Range(0, 32).Select(_ => new HashSet<GameObject>()).ToArray();
@@ -69,10 +70,13 @@ public sealed partial class Scene
     {
         get
         {
+            RefreshCameraRegistry();
             Camera3D? fallback=null;
-            for(int i=0;i<_gameObjects.Count;i++){
-                var obj=_gameObjects[i];if(!obj.ActiveInHierarchy)continue;
-                var components=obj.Components;for(int j=0;j<components.Count;j++)if(components[j] is Camera3D camera&&camera.Enabled){if(camera.ActiveGameCamera)return camera;fallback??=camera;}
+            foreach (Camera3D camera in _cameras)
+            {
+                if (!camera.GameObject.ActiveInHierarchy || !camera.Enabled) continue;
+                if (camera.ActiveGameCamera) return camera;
+                fallback ??= camera;
             }
             return fallback;
         }
@@ -83,7 +87,8 @@ public sealed partial class Scene
         if (camera != null && camera.GameObject.Scene != this)
             throw new InvalidOperationException("The active camera must belong to this scene.");
 
-        foreach (Camera3D candidate in _gameObjects.SelectMany(item => item.Components.OfType<Camera3D>()))
+        RefreshCameraRegistry();
+        foreach (Camera3D candidate in _cameras)
             candidate.SetActiveGameCameraWithoutNotification(ReferenceEquals(candidate, camera));
     }
 
@@ -267,7 +272,7 @@ public sealed partial class Scene
         if (_isUpdating)
         {
             _pendingDestroy.Add(
-                gameObject.Id);
+                gameObject);
 
             gameObject.Active =
                 false;
@@ -346,7 +351,8 @@ public sealed partial class Scene
         if (_loaded) return;
 
         SimulationClock.Reset();
-        foreach(var item in _gameObjects)item.Transform.ClearSimulationPose();
+        int clearPoseCount=_gameObjects.Count;
+        JobRunner.For(clearPoseCount,i=>_gameObjects[i].Transform.ClearSimulationPose());
         _loaded = true;
 
         Console.WriteLine($"Loading scene: {Name}");
@@ -358,6 +364,7 @@ public sealed partial class Scene
 
     private readonly List<GameObject> _frameObjects = new();
     private readonly List<(GameObject Object, int Order, int Index)> _renderObjects = new();
+    private readonly List<GameObject> _renderGameObjects = new();
 
     internal void UpdateInternal()
     {
@@ -380,7 +387,7 @@ public sealed partial class Scene
 
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject.Id)) continue;
+                if (_pendingDestroy.Contains(gameObject)) continue;
                 gameObject.UpdateInternal();
             }
 
@@ -399,9 +406,9 @@ public sealed partial class Scene
                 ticks = SimulationClock.Advance(Time.DeltaTime, delta =>
                 {
                     RefreshFixedDispatch();
-                    foreach (var (gameObject,body) in _poseDispatch)
-                        if (body.BodyType!=RigidbodyBodyType3D.Static) gameObject.Transform.CaptureSimulationPose();
-                    Time.FixedDeltaTime = delta;
+                     int poseCount=_poseDispatch.Count;
+                     JobRunner.For(poseCount,i=>{var entry=_poseDispatch[i];if(entry.Body.BodyType!=RigidbodyBodyType3D.Static)entry.Object.Transform.CaptureSimulationPose();});
+                     // pose capture parallelized above
                     DispatchFixedUpdate();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;
@@ -427,7 +434,7 @@ public sealed partial class Scene
              */
             foreach (GameObject gameObject in frameObjects)
             {
-                if (_pendingDestroy.Contains(gameObject.Id)) continue;
+                if (_pendingDestroy.Contains(gameObject)) continue;
                 gameObject.LateUpdateInternal();
             }
 
@@ -490,7 +497,7 @@ public sealed partial class Scene
         ClearHostRequests();
         if (!_loaded) return;
 
-        Console.WriteLine($"Unloading scene: {Name}");
+
 
         for (int index = _gameObjects.Count - 1; index >= 0; index--)
             _gameObjects[index].StopInternal();
@@ -514,7 +521,7 @@ public sealed partial class Scene
             DestroyGameObjectImmediate(child);
         }
 
-        _pendingDestroy.Remove(gameObject.Id);
+        _pendingDestroy.Remove(gameObject);
 
         InvalidateComponentRegistries();
         _gameObjects.Remove(gameObject);
@@ -543,24 +550,22 @@ public sealed partial class Scene
     {
         if (_pendingDestroy.Count == 0) return;
 
-        Guid[] pending =
+        GameObject[] pending =
             _pendingDestroy.ToArray();
 
         _pendingDestroy.Clear();
 
-        foreach (Guid id in pending)
+        foreach (GameObject gameObject in pending)
         {
-            GameObject? gameObject =
-                FindGameObject(id);
-
             if (gameObject != null)
                 DestroyGameObjectImmediate(gameObject);
         }
     }
 
-    private IEnumerable<GameObject> GetRenderOrder()
+    private List<GameObject> GetRenderOrder()
     {
         _renderObjects.Clear();
+        _renderGameObjects.Clear();
         for (int i = 0; i < _gameObjects.Count; i++)
             _renderObjects.Add((_gameObjects[i], _gameObjects[i].RenderOrder, i));
         _renderObjects.Sort(static (a, b) =>
@@ -568,6 +573,11 @@ public sealed partial class Scene
             int order = a.Order.CompareTo(b.Order);
             return order != 0 ? order : a.Index.CompareTo(b.Index);
         });
-        for (int i = 0; i < _renderObjects.Count; i++) yield return _renderObjects[i].Object;
+        for (int i = 0; i < _renderObjects.Count; i++)
+            _renderGameObjects.Add(_renderObjects[i].Object);
+        return _renderGameObjects;
     }
 }
+
+
+

@@ -35,7 +35,7 @@ public sealed partial class Scene
             }
             if(position>=_fixedDispatch.Count)return;
             var (item,index)=_fixedDispatch[position++];cursor=index;
-            if(!_pendingDestroy.Contains(item.Id))item.FixedUpdateInternal();
+            if(!_pendingDestroy.Contains(item))item.FixedUpdateInternal();
         }
     }
 }

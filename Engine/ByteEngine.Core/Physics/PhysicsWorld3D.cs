@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using ByteEngine.Core.Characters;
+using ByteEngine.Core.Runtime;
 using ByteEngine.Core.Scene;
 
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
@@ -265,11 +266,36 @@ public sealed partial class PhysicsWorld3D
         long gatherStart=System.Diagnostics.Stopwatch.GetTimestamp();
         _stepColliders.Clear();
         var registeredColliders=scene.PhysicsColliders;
-        for(int i=0;i<registeredColliders.Count;i++)
+        int registeredCount=registeredColliders.Count;
+        if (registeredCount > 0)
         {
-            var collider=registeredColliders[i];var obj=collider.GameObject;
-            if(collider.Enabled && obj.ActiveInHierarchy)
-                _stepColliders.Add(new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider)));
+            bool[] included=System.Buffers.ArrayPool<bool>.Shared.Rent(registeredCount);
+            ColliderEntry[] entries=System.Buffers.ArrayPool<ColliderEntry>.Shared.Rent(registeredCount);
+            try
+            {
+                JobRunner.For(registeredCount, i =>
+                {
+                    var collider=registeredColliders[i];
+                    var obj=collider.GameObject;
+                    if (collider.Enabled && obj.ActiveInHierarchy)
+                    {
+                        included[i]=true;
+                        entries[i]=new(obj,collider,FindBodyForCollider(obj),CalculateBounds(collider));
+                    }
+                    else
+                    {
+                        included[i]=false;
+                    }
+                });
+
+                for (int i=0;i<registeredCount;i++)
+                    if (included[i]) _stepColliders.Add(entries[i]);
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<bool>.Shared.Return(included, clearArray:true);
+                System.Buffers.ArrayPool<ColliderEntry>.Shared.Return(entries, clearArray:true);
+            }
         }
         LastColliderGatherMs+=System.Diagnostics.Stopwatch.GetElapsedTime(gatherStart).TotalMilliseconds;
         List<ColliderEntry> colliders = _stepColliders;
