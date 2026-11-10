@@ -332,7 +332,8 @@ public sealed class SceneSerializer
                 _classification
             );
 
-        scene.ProjectRoot = _components.ProjectRoot;
+        scene.ProjectRoot = _components.ProjectRoot;        if(data.GameObjects.Any(o=>o.Components.Any(c=>c.Type=="NetworkSettings")))
+            scene.NetworkSceneIdentity=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new{data.SceneId,data.GameObjects,data.Variables,data.FixedSimulation,data.FixedStepSeconds,data.MaximumCatchUpSteps},new JsonSerializerOptions(JsonSerialization.Options){WriteIndented=false}))));
         scene.SerializationContext = this;
         scene.FixedSimulation = data.FixedSimulation;
         scene.SimulationClock.StepSeconds = double.IsFinite(data.FixedStepSeconds) ? Math.Clamp(data.FixedStepSeconds, .001, .1) : 1.0 / 60;

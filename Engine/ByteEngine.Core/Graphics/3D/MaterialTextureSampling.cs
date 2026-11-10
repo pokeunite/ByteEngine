@@ -17,9 +17,37 @@ internal sealed class MaterialTextureSampling : IDisposable
     private static readonly ConditionalWeakTable<Texture2D, SamplingState> States = new();
     private static readonly int[] MaterialSlots = { 0, 1, 8, 9, 10, 11, 12 };
     private int _sampler;
+    private bool _batch;
+    private int _context;
+    private readonly Texture2D?[] _bound = new Texture2D?[16];
+    private readonly int[] _versions = new int[16];
+    internal long BindCalls { get; private set; }
+    internal long SkippedBinds { get; private set; }
+
+    // Only cache the material-owned units during an uninterrupted native main
+    // pass. Shadow, post, UI and public standalone draws retain normal binding.
+    internal void BeginBatch()
+    {
+        Array.Clear(_bound);
+        _context = GraphicsContextScope.CurrentContextId;
+        _batch = true;
+    }
+
+    internal void EndBatch()
+    {
+        _batch = false;
+        Array.Clear(_bound);
+    }
 
     public void Bind(Texture2D texture, int slot)
     {
+        if (_context != GraphicsContextScope.CurrentContextId) EndBatch();
+        if (_batch && ReferenceEquals(_bound[slot], texture) && _versions[slot] == texture.ContentVersion)
+        {
+            SkippedBinds++;
+            return;
+        }
+        BindCalls++;
         // Only rendering requires a GL context; Material setters are pure data.
         texture.Bind(slot);
         SamplingState state = States.GetValue(texture, static _ => new SamplingState());
@@ -54,6 +82,11 @@ internal sealed class MaterialTextureSampling : IDisposable
         }
 
         GL.BindSampler(slot, _sampler);
+        if (_batch)
+        {
+            _bound[slot] = texture;
+            _versions[slot] = texture.ContentVersion;
+        }
     }
 
     public static void Unbind()

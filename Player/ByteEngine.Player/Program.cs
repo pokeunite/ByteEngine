@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        ByteEngine.Core.Net.NetworkRuntime.CreateLink=()=>new ByteEngine.Network.Native.WebRtcNetworkLink(ByteEngine.Core.Net.NetworkRuntime.IceServers);
+
         string logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ByteEngine", "Games", "Logs");
         try { Directory.CreateDirectory(logDirectory); }
@@ -52,8 +54,10 @@ internal static class Program
             if(string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(gameDirectory)),"Runtime",StringComparison.OrdinalIgnoreCase))
                 gameDirectory=Directory.GetParent(Path.TrimEndingDirectorySeparator(gameDirectory))!.FullName;
             if (validate) GamePackageExporter.ValidatePackage(gameDirectory);
-            using var content = new GameContentSession(gameDirectory);
-            using var project = new GameProjectRuntime(content.ProjectFile, CrashDebugLog.Write);
+            // Direct source-project preview requires no game export.
+            string? previewProject = args.Length == 2 && args[0] == "--project" ? Path.GetFullPath(args[1]) : null;
+            using var content = previewProject == null ? new GameContentSession(gameDirectory) : null;
+            using var project = new GameProjectRuntime(previewProject ?? content!.ProjectFile, CrashDebugLog.Write);
             using var game = new StandaloneGame(project,smokeTest,validate, () => splash?.Dispose());
             game.Run();
             return 0;
@@ -63,8 +67,7 @@ internal static class Program
             CrashDebugLog.WriteException("GAME FAILURE", error);
             splash?.Dispose();
             if (!validate && !smokeTest)
-                MessageBox.Show($"The game could not continue.\n\n{error.Message}\n\nDiagnostic log:\n{log}",
-                    "Game Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ErrorReportDialog.Show(error,log);
             return 1;
         }
     }

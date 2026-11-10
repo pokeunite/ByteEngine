@@ -37,11 +37,14 @@ internal static class ComponentMetadataRegistry
     public static readonly string[] CategoryOrder =
     {
         "Character", "Camera", "Rendering", "Physics", "Gameplay",
-        "AI", "Navigation", "Audio", "UI", "World", "Utility", "Advanced"
+        "AI", "Network", "Navigation", "Audio", "UI", "World", "Utility", "Advanced"
     };
 
     private static readonly Dictionary<Type, ComponentMetadata> Components = new()
     {
+        [typeof(ByteEngine.Core.Net.NetworkSettings)] = new("Network Settings", "Network", "Compatibility versions, ICE servers and host-authoritative movement settings.", "multiplayer pvp crossplay"),
+        [typeof(ByteEngine.Core.Net.NetworkIdentity)] = new("Network Identity", "Network", "Assign an avatar peer slot (host0, clients1–3).", "multiplayer owner"),
+        [typeof(ByteEngine.Core.Net.NetworkTransform)] = new("Network Transform", "Network", "Applies authoritative avatar state, local prediction and remote interpolation.", "replication", RequiresComponents:new[]{typeof(ByteEngine.Core.Net.NetworkIdentity)}),
         [typeof(CharacterController3D)] = new("Character Movement", "Character", "Controls grounded movement, jumping, slopes and air control.", "controller motor walking jump"),
         [typeof(PlayerController3D)] = new("Player Input", "Character", "Creates camera-relative movement intent and player control rotation.", "controls wasd mouse control yaw pitch", true, false, new[] { typeof(CharacterController3D) }),
         [typeof(CharacterMotionDebugHud3D)] = new("Character Motion Debug HUD", "Character", "Shows cursor aim, velocity, local direction, actual blend clips, layers and turning in Play mode. F8 toggles the overlay.", "movement debug animation direction cursor hud"),

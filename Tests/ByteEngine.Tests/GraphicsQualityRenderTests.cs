@@ -54,7 +54,7 @@ internal static class GraphicsQualityRenderTests
             if(occluded[0]>=unoccluded[0]) throw new Exception("Depth step did not produce contact shading.");
             var quality=new SkyEnvironment { Quality=GraphicsQuality.High,ProfileGraphicsGpu=true };
             for(int i=0;i<12;i++) { post.Render(source,0,size,size,true,1,true,depth,projection,quality.CaptureLook()); GL.Finish(); }
-            if(GraphicsDiagnostics.ExtraPasses!=5 || GraphicsDiagnostics.PostGpuMs==null) throw new Exception("High pass budget/GPU timer failed.");
+            if(GraphicsDiagnostics.ExtraPasses!=6 || GraphicsDiagnostics.PostGpuMs==null) throw new Exception("High pass budget/GPU timer failed.");
             Console.WriteLine($"Offscreen post GPU at 128x128: {GraphicsDiagnostics.PostGpuMs:0.###} ms (synthetic, not game FPS).");
             post.Render(source,0,size,size,false,5,true,depth,projection,quality.CaptureLook()); var legacy=Read(20,20);
             if(Math.Abs(legacy[0]-38)>1 || GraphicsDiagnostics.ExtraPasses!=0) throw new Exception("Legacy 2D must remain a raw copy.");

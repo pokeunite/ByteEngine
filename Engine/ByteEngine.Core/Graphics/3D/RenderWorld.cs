@@ -9,6 +9,9 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 /// </summary>
 public sealed class RenderWorld
 {
+    internal static Action<RenderView3D, int>? DiagnosticMainBegin;
+    internal static Action? DiagnosticMainEnd;
+
     private readonly List<RenderSubmission> _submissions =
         new();
 
@@ -296,12 +299,39 @@ public sealed class RenderWorld
         using var mainTiming=context.Renderer3D.ProfilePass(context,"Main geometry");
         var batches=_batchBuilder.Build(visible);
         context.Renderer3D.PrepareInstanceStream(batches);
-        bool waterBackgroundCaptured=false;bool hasWater=visible.Any(s=>s.Material.WaterSurface);context.Renderer3D.ResetWaterCapture();
+        bool waterBackgroundCaptured = false;
+        bool hasWater = false;
+        for (int i = 0; i < visible.Count; i++)
+            if (visible[i].Material.WaterSurface) { hasWater = true; break; }
+        context.Renderer3D.ResetWaterCapture();
+        DiagnosticMainBegin?.Invoke(view, visible.Count);
         context.Renderer3D.BeginMainBatch();
         try {
+        static bool PrepassEligible(RenderSubmission item) => item.Queue == RenderQueue3D.Opaque &&
+            item.Material.DepthTest && item.Material.ResolveDepthWrite() &&
+            item.Material.BlendMode is BlendMode3D.Opaque or BlendMode3D.Cutout &&
+            item.Material.PolygonMode == PolygonMode3D.Fill && !item.Material.WaterSurface && !item.Material.WaterVolume;
+        if (context.Renderer3D.DiagnosticDepthPrepass)
+        {
+            bool previousFlat = context.Renderer3D.DiagnosticFlatFragments;
+            context.Renderer3D.DiagnosticFlatFragments = true;
+            OpenTK.Graphics.OpenGL4.GL.ColorMask(false, false, false, false);
+            OpenTK.Graphics.OpenGL4.GL.DepthFunc(OpenTK.Graphics.OpenGL4.DepthFunction.Less);
+            try {
+                foreach (var batch in batches)
+                    if (PrepassEligible(batch.First))
+                        context.Renderer3D.Draw(batch.First.Mesh, batch.First.Material, batch.First.ModelMatrix,
+                            view.ViewMatrix, view.ProjectionMatrix, _lighting, null,
+                            Array.Empty<RenderPointShadow3D>(), false, _environment, batch.Instances);
+            }
+            finally { OpenTK.Graphics.OpenGL4.GL.ColorMask(true, true, true, true); context.Renderer3D.DiagnosticFlatFragments = previousFlat; }
+        }
         foreach (var batch in batches)
         {
             var submission=batch.First;
+            if (context.Renderer3D.DiagnosticDepthPrepass)
+                OpenTK.Graphics.OpenGL4.GL.DepthFunc(PrepassEligible(submission)
+                    ? OpenTK.Graphics.OpenGL4.DepthFunction.Lequal : OpenTK.Graphics.OpenGL4.DepthFunction.Less);
             if(hasWater&&!waterBackgroundCaptured&&submission.Queue>=RenderQueue3D.Transparent){context.Renderer3D.CaptureOpaqueWaterBackground();waterBackgroundCaptured=true;}
             MainTriangles+=(long)submission.Mesh.IndexCount/3*batch.Instances.Count;
             if(batch.Instances.Count>1)InstancedObjects+=batch.Instances.Count;
@@ -326,7 +356,10 @@ public sealed class RenderWorld
             drawCalls++;
         }
 
-        } finally { context.Renderer3D.EndMainBatch(); }
+         } finally {
+            if (context.Renderer3D.DiagnosticDepthPrepass) OpenTK.Graphics.OpenGL4.GL.DepthFunc(OpenTK.Graphics.OpenGL4.DepthFunction.Less);
+            context.Renderer3D.EndMainBatch(); DiagnosticMainEnd?.Invoke();
+        }
 
         LastStats =
             CreateStats(

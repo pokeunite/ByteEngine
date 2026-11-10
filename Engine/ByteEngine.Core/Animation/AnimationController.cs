@@ -359,8 +359,16 @@ public sealed partial class AnimationController : Component
         return true;
     }
 
+    public Vector3? ReplicatedVelocity {get;set;}
+    public bool ReplicatedGrounded {get;set;}=true;
     private void ObserveLocomotion()
     {
+        if(ReplicatedVelocity is {} velocity){
+            float value=new Vector2(velocity.X,velocity.Z).Length();LocomotionSpeed=value;
+            State=!ReplicatedGrounded?(velocity.Y>0?LocomotionState.Jump:LocomotionState.Fall):value<MoveThreshold?LocomotionState.Idle:value>=RunThreshold?LocomotionState.Run:LocomotionState.Walk;
+            Direction=DirectionalMovement&&value>MoveThreshold?ResolveDirection(Direction,velocity,Transform.Forward,Transform.Right,DirectionHysteresis):LocomotionDirection.None;
+            _currentLocomotionClip=GetClipName(State,Direction);LocomotionPlaybackRate=ResolvePlaybackRate(State,value,MatchPlaybackToSpeed,WalkReferenceSpeed,RunReferenceSpeed,MinimumPlaybackRate,MaximumPlaybackRate);return;
+        }
         CharacterController3D? controller = null;
         for(var source=GameObject;source!=null;source=source.Parent)
             if(source.GetComponent<CharacterController3D>() is {Enabled:true} candidate){controller=candidate;break;}

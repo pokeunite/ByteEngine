@@ -12,7 +12,7 @@
     <PublishTrimmed>false</PublishTrimmed>
     <ByteEngineOpenALSoftPath>$(NuGetPackageRoot)silk.net.openal.soft.native\1.23.1\runtimes\win-x64\native\soft_oal.dll</ByteEngineOpenALSoftPath>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup><ProjectReference Include="../../Engine/ByteEngine.Network.Native/ByteEngine.Network.Native.csproj" />
     <ProjectReference Include="..\..\Engine\ByteEngine.Core\ByteEngine.Core.csproj" />
     <Content Include="..\..\Editor\ByteEngine.Editor\Resources\Fonts\**\*" Link="Resources\Fonts\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(ByteEngineOpenALSoftPath)" Link="openal32.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

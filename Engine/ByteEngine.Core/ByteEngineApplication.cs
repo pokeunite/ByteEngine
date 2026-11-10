@@ -13,6 +13,7 @@ namespace ByteEngine.Core;
 
 public class ByteEngineApplication : GameWindow
 {
+    internal static Action? DiagnosticFrameBegin, DiagnosticFrameEnd;
     public static double LastRenderCpuMilliseconds {get;private set;}
     public static double LastSwapMilliseconds {get;private set;}
     protected virtual bool UseWholeWindowForUiInput => true;
@@ -200,6 +201,7 @@ public class ByteEngineApplication : GameWindow
             return;
         }
 
+        ByteEngine.Core.Net.NetworkRuntime.Update(args.Time);
         OnEngineUpdate();
 
         if (ShouldUpdateScene)
@@ -244,6 +246,7 @@ public class ByteEngineApplication : GameWindow
             ClearBufferMask.DepthBufferBit
         );
 
+        DiagnosticFrameBegin?.Invoke();
         if (ShouldRenderSceneToWindow)
         {
             ByteEngine.Core.Scene.Scene? activeScene =
@@ -327,6 +330,7 @@ public class ByteEngineApplication : GameWindow
             }
         }
 
+        DiagnosticFrameEnd?.Invoke();
         OnEngineRender();
 
         if (Runtime.GameScreenshots.BeginCapture())

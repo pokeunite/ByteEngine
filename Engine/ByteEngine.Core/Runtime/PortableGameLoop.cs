@@ -37,6 +37,7 @@ public sealed class PortableGameLoop : IDisposable
         InputActions.Update(Input.Snapshot, focused);
         LastInputMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         start=System.Diagnostics.Stopwatch.GetTimestamp();
+        ByteEngine.Core.Net.NetworkRuntime.Update(seconds);
         Scenes.UpdateInternal();
         LastUpdateMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         LastRenderMilliseconds=0;LastRenderAllocatedBytes=0;

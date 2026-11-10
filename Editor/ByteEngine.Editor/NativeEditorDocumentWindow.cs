@@ -75,7 +75,7 @@ internal sealed class NativeEditorDocumentWindow : GameWindow
             MakeCurrent();
 
             VSync =
-                VSyncMode.On;
+                EditorPreferences.EditorVSync ? VSyncMode.On : VSyncMode.Off;
 
             GL.ClearColor(
                 0.055f,

@@ -9,6 +9,7 @@ namespace ByteEngine.Core.Scene;
 public sealed partial class Scene
 {
     public string? ProjectRoot { get; internal set; }
+    internal string? NetworkSceneIdentity {get;set;}
     internal Serialization.SceneSerializer? SerializationContext { get; set; }
     internal (Scene Scene,Variables.VariableStore Globals)? PendingRestore {get;set;}
     public Runtime.FixedStepClock SimulationClock { get; } = new();

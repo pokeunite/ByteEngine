@@ -27,6 +27,11 @@ internal static class NativeSkinningRenderTests {
    skin.Bones[299]=Matrix4x4.CreateRotationY(.25f*(pose+1))*Matrix4x4.CreateTranslation(0,.05f*pose,0);
    var output=vertices.ToArray();for(int v=0;v<3;v++){var p=new Vector3(vertices[v*8],vertices[v*8+1],vertices[v*8+2]);var q=Vector3.Transform(p,skin.Bones[0])*weights[v*8+4]+Vector3.Transform(p,skin.Bones[299])*weights[v*8+5];output[v*8]=q.X;output[v*8+1]=q.Y;output[v*8+2]=q.Z;}cpu.UpdateVertices(output);
    var expected=Image(cpu);var actual=Image(gpu);if(!actual.Where((v,i)=>i%4!=3&&v>10).Any()||expected.Zip(actual).Any(x=>Math.Abs(x.First-x.Second)>1))throw new Exception("Native skinned color pixels differ");
+   material.Shading=MaterialShadingMode.Lit;
+   renderer.DiagnosticSolidLit=false; var genericLit=Image(gpu);
+   renderer.DiagnosticSolidLit=true; var variantLit=Image(gpu);
+   if(genericLit.Zip(variantLit).Any(p=>Math.Abs(p.First-p.Second)>1))throw new Exception("Solid-lit variant changed animated GPU skinning pixels");
+   renderer.DiagnosticSolidLit=null; material.Shading=MaterialShadingMode.Unlit;
    var a=renderer.RenderDirectionalShadowMap([Item(cpu)],view,lighting);var da=Depth(a.Shadow!.Value.DepthTextureId,false);var b=renderer.RenderDirectionalShadowMap([Item(gpu)],view,lighting);Equal(da,Depth(b.Shadow!.Value.DepthTextureId,false),"Directional");
    var pa=renderer.RenderPointShadowMaps([Item(cpu)],view,lighting);var pda=Depth(pa.Shadows[0].DepthCubeTextureId,true);var pb=renderer.RenderPointShadowMaps([Item(gpu)],view,lighting);Equal(pda,Depth(pb.Shadows[0].DepthCubeTextureId,true),"Point");
    var after=Image(cpu);if(!expected.SequenceEqual(after))throw new Exception("Skin state leaked into static draw");

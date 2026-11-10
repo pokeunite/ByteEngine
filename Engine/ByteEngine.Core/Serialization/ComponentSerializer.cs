@@ -349,6 +349,9 @@ public sealed class ComponentSerializer
                 warningSink
             );
 
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Net.NetworkSettings>("NetworkSettings"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Net.NetworkIdentity>("NetworkIdentity"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Net.NetworkTransform>("NetworkTransform"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Media.VideoPlayer>("VideoPlayer"));
 
         Register(

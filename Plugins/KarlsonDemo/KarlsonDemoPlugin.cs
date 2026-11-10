@@ -7,6 +7,7 @@ public sealed class KarlsonDemoPlugin : IByteEnginePlugin
 {
     public void Register(ByteEnginePluginContext context)
     {
+        context.RegisterSimpleComponent<PvpMatch3D>("PvpMatch3D",new("PvP Match","Network","Configurable host/join free-for-all, authoritative weapons, health, respawn and match HUD.","multiplayer pvp lobby"));
         context.RegisterSimpleComponent<MiningPauseMenu3D>("MiningPauseMenu3D",new("Mining Pause Menu","Mining","Escape pause menu with persistent sound, key bindings and graphics settings.","pause settings controls graphics audio"));
         context.RegisterSimpleComponent<FpsGunLab3D>("FpsGunLab3D", new("Weapon Equipment", "Weapons", "Choose the view camera and weapon root. Input, animations and HUD text are authored in Event Sheets. Live values are available as component references.", "fps inventory guns ammo hud"));
         context.RegisterSimpleComponent<WeaponDefinition3D>("WeaponDefinition3D", new("Weapon Definition", "Weapons", "Damage, ammo and timing. Equip/fire/reload animations are authored in Event Sheets.", "ammo hitscan projectile pistol spread"));

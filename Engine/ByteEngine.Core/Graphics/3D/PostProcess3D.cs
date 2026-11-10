@@ -16,8 +16,31 @@ public sealed class PostProcess3D
     : IDisposable
 {
     private Shader? _shader;
+    private Shader? _resolvedAaShader;
 
     private int _vertexArray;
+    // Kept switchable for same-process, identical-input A/B measurement.
+    internal bool ResolveAntiAliasing { get; set; } = true;
+    internal static bool? ResolveAntiAliasingOverride;
+    internal static Action<int, int, int, int, float, bool, System.Numerics.Matrix4x4, GraphicsLook>? CaptureInput;
+    private int _resolvedFramebuffer, _resolvedTexture, _resolvedWidth, _resolvedHeight;
+
+    private void ResizeResolved(int width, int height)
+    {
+        if (_resolvedTexture != 0 && _resolvedWidth == width && _resolvedHeight == height) return;
+        if (_resolvedTexture == 0) { _resolvedTexture = GL.GenTexture(); _resolvedFramebuffer = GL.GenFramebuffer(); }
+        GL.BindTexture(TextureTarget.Texture2D, _resolvedTexture);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba16f, width, height, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _resolvedFramebuffer);
+        GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _resolvedTexture, 0);
+        if (GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != FramebufferErrorCode.FramebufferComplete)
+            throw new InvalidOperationException("Resolved post framebuffer incomplete");
+        _resolvedWidth = width; _resolvedHeight = height;
+    }
     private readonly PostEffects3D _effects=new();
 
     public void Render(
@@ -41,6 +64,8 @@ public sealed class PostProcess3D
         EnsureResources();
         var settings=look??GraphicsLook.Default;
         bool pixelArt=applyToneMapping && settings.ShaderStyle==BuiltInSceneShader.PixelArt;
+        CaptureInput?.Invoke(sourceTexture, depthTexture, width, height, exposure, smoothEdges,
+            projection ?? System.Numerics.Matrix4x4.Identity, settings);
         _effects.Begin(applyToneMapping && settings.ProfileGpu);
         try
         {
@@ -74,6 +99,8 @@ public sealed class PostProcess3D
             EnableCap.CullFace);
 
         _shader!.Use();
+        _shader.SetInt("uResolvedInput", 0);
+        _shader.SetInt("uResolveOnly", 0);
         _shader.SetInt("uPixelArt",pixelArt?1:0);
         _shader.SetInt("uPixelSize",Math.Clamp(settings.PixelSize,1,32));
         _shader.SetInt("uPixelLevels",Math.Clamp(settings.PixelColorLevels,2,32));
@@ -110,8 +137,40 @@ public sealed class PostProcess3D
                 exposure,
                 0.0f));
 
+        int sourceWidth = 1, sourceHeight = 1;
+        if (applyToneMapping && smoothEdges && !pixelArt)
+        {
+            GL.GetTexLevelParameter(TextureTarget.Texture2D, 0, GetTextureParameter.TextureWidth, out sourceWidth);
+            GL.GetTexLevelParameter(TextureTarget.Texture2D, 0, GetTextureParameter.TextureHeight, out sourceHeight);
+            _shader.SetVector2("uEdgePixel", new System.Numerics.Vector2(1f / Math.Max(1, sourceWidth), 1f / Math.Max(1, sourceHeight)));
+        }
+
         GL.BindVertexArray(
             _vertexArray);
+        if ((ResolveAntiAliasingOverride ?? ResolveAntiAliasing) && applyToneMapping && smoothEdges && !pixelArt)
+        {
+            // Grade once at output resolution. Preserve the old source-pixel AA
+            // footprint and apply dithering only in the final output pass.
+            ResizeResolved(width, height);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _resolvedFramebuffer);
+            GL.BindTexture(TextureTarget.Texture2D, sourceTexture);
+            _shader.SetInt("uSmoothEdges", 0);
+            _shader.SetInt("uResolveOnly", 1);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+            GraphicsDiagnostics.ExtraPasses++;
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, targetFramebuffer);
+            GL.BindTexture(TextureTarget.Texture2D, _resolvedTexture);
+            // A separate compiled program lets the driver eliminate all grading
+            // arithmetic and AO/bloom samplers from the AA pass.
+            _resolvedAaShader ??= new Shader(VertexSource, FragmentSource.Replace(
+                "if(uResolvedInput==1) return texture(uSceneTexture,uv).rgb;",
+                "return texture(uSceneTexture,uv).rgb;", StringComparison.Ordinal));
+            _resolvedAaShader.Use();
+            _resolvedAaShader.SetInt("uSceneTexture", 0);
+            _resolvedAaShader.SetInt("uApplyToneMapping", 1);
+            _resolvedAaShader.SetInt("uSmoothEdges", 1);
+            _resolvedAaShader.SetVector2("uEdgePixel", new System.Numerics.Vector2(1f / Math.Max(1, sourceWidth), 1f / Math.Max(1, sourceHeight)));
+        }
 
         GL.DrawArrays(
             PrimitiveType.Triangles,
@@ -161,6 +220,12 @@ public sealed class PostProcess3D
 
     public void Dispose()
     {
+        if (_resolvedFramebuffer != 0) GL.DeleteFramebuffer(_resolvedFramebuffer);
+        if (_resolvedTexture != 0) GL.DeleteTexture(_resolvedTexture);
+        _resolvedFramebuffer = _resolvedTexture = 0;
+        _resolvedWidth = _resolvedHeight = 0;
+        _resolvedAaShader?.Dispose();
+        _resolvedAaShader = null;
         _effects.Dispose();
         _shader?.Dispose();
         _shader =
@@ -228,6 +293,8 @@ public sealed class PostProcess3D
         uniform int uApplyToneMapping;
         uniform float uExposure;
         uniform int uSmoothEdges;
+        uniform int uResolvedInput,uResolveOnly;
+        uniform vec2 uEdgePixel;
         uniform sampler2D uAo,uBloom;
         uniform float uAoStrength,uBloomStrength,uSaturation,uContrast,uWarmth;
         uniform int uPixelArt,uPixelSize,uPixelLevels;
@@ -278,6 +345,7 @@ public sealed class PostProcess3D
 
         vec3 displaySample(vec2 uv)
         {
+            if(uResolvedInput==1) return texture(uSceneTexture,uv).rgb;
             vec3 sampleColor;
             if(uPixelArt==1){
                 ivec2 size=textureSize(uSceneTexture,0);
@@ -295,7 +363,7 @@ public sealed class PostProcess3D
         // Edge-directed spatial smoothing in display space, before final dithering.
         vec3 smoothEdges(vec2 uv)
         {
-            vec2 pixel = 1.0 / vec2(textureSize(uSceneTexture, 0));
+            vec2 pixel = uEdgePixel;
             vec3 center = displaySample(uv);
             vec3 nw = displaySample(uv + vec2(-1.0, -1.0) * pixel);
             vec3 ne = displaySample(uv + vec2( 1.0, -1.0) * pixel);
@@ -377,6 +445,7 @@ public sealed class PostProcess3D
                         2.2));
 
             displayColor = uSmoothEdges == 1 ? smoothEdges(vUV) : displaySample(vUV);
+            if(uResolveOnly==1){FragColor=vec4(displayColor,source.a);return;}
             if(uPixelArt==1){
                 // Anchor to output pixels, independent of 3D render scale. One
                 // source texel and one ordered threshold per complete block.

@@ -65,8 +65,17 @@ internal sealed class StandaloneGame : ByteEngineApplication
         CaptureGameInput(grab);
     }
 
+    private NetworkLobbyForm? networkLobby;
     protected override void OnEngineUpdate()
-    {
+    {        System.Windows.Forms.Application.DoEvents();
+        if(!Scenes.ActiveScene!.GameObjects.Any(o=>o.Components.Any(c=>c.GetType().Name=="PvpMatch3D"))&&Input.IsKeyPressed(Key.F10) && Scenes.ActiveScene?.GameObjects.Select(o=>o.GetComponent<ByteEngine.Core.Net.NetworkSettings>()).FirstOrDefault(s=>s!=null) is {} networkSettings){
+            if(networkLobby is null || networkLobby.IsDisposed)networkLobby=new NetworkLobbyForm(networkSettings);
+            networkLobby.Show();networkLobby.Activate();ReleaseGameInput();
+        }
+        // Menu closure can change mouse-look ownership after startup captured a free cursor.
+        if (IsGameInputCaptured && Scenes.ActiveScene is { } activeScene)
+            CaptureGameInput(WantsMouseLook(activeScene));
+
         if (!IsGameInputCaptured && Input.IsMouseButtonPressed(MouseButton.Left))
         {
             bool grab = Scenes.ActiveScene is {} scene && WantsMouseLook(scene);
@@ -76,8 +85,9 @@ internal sealed class StandaloneGame : ByteEngineApplication
 
     private static bool WantsMouseLook(Scene scene) =>
         scene.ActiveCamera?.GameObject.GetComponent<TopDownCamera3D>()?.Enabled != true &&
+        (scene.GameObjects.Any(item => item.ActiveInHierarchy && item.Components.Any(c=>c.Enabled && c.GetType().Name=="PvpMatch3D")) && ByteEngine.Core.Net.NetworkRuntime.Session is {IsActive:true} ||
         scene.GameObjects.Any(item => item.ActiveInHierarchy &&
-            item.GetComponent<PlayerController3D>() is { Enabled: true, AcceptLookInput: true });
+            item.GetComponent<PlayerController3D>() is { Enabled: true, AcceptLookInput: true }));
 
     protected override void OnEngineRender()
     {
@@ -106,6 +116,8 @@ internal sealed class StandaloneGame : ByteEngineApplication
     }
     protected override void OnEngineShutdown()
     {
+        networkLobby?.Dispose();ByteEngine.Core.Net.NetworkRuntime.Stop();
+
         displayLease?.Dispose();displayLease=null;
         ReleaseGameInput();
         // Release GPU assets while the window still owns its live graphics context.

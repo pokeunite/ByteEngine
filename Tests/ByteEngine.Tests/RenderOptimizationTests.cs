@@ -8,6 +8,7 @@ internal static class RenderOptimizationTests
     private static void Check(bool value,string message) { if(!value)throw new Exception(message); }
     public static void Run(Renderer3D renderer,Mesh mesh)
     {
+        MaterialSamplingTests.Run();
         using var texture=Texture2D.FromPixels(2,2,[255,255,255,255,255,255,255,0,255,255,255,0,255,255,255,255]);
         var original=new Material();
         Material Clone(){var m=new Material();foreach(var p in typeof(Material).GetProperties().Where(p=>p.CanRead&&p.CanWrite))p.SetValue(m,p.GetValue(original));return m;}
@@ -121,14 +122,14 @@ internal static class RenderOptimizationTests
         var multi=new List<RenderSubmission>();var red=new Material{Shading=ByteEngine.Core.Assets.MaterialShadingMode.Unlit,BaseColor=new(1,0,0,1)};var blue=new Material{Shading=ByteEngine.Core.Assets.MaterialShadingMode.Unlit,BaseColor=new(0,0,1,1)};
         for(int i=0;i<16;i++)multi.Add(Submission(i%2==0?red:blue) with{ModelMatrix=Matrix4x4.CreateScale(.3f)*Matrix4x4.CreateTranslation((i%4-1.5f)*.45f,(i/4-1.5f)*.45f,0)});
         byte[] Main(bool grouped){GL.Viewport(0,0,128,128);GL.ClearColor(0,0,0,1);GL.Clear(ClearBufferMask.ColorBufferBit|ClearBufferMask.DepthBufferBit);
-            if(grouped){var batches=RenderBatcher.Build(multi);renderer.PrepareInstanceStream(batches);foreach(var batch in batches)renderer.Draw(batch.First.Mesh,batch.First.Material,batch.First.ModelMatrix,Matrix4x4.Identity,Matrix4x4.Identity,RenderLighting3D.Default,null,Array.Empty<RenderPointShadow3D>(),false,null,batch.Instances);}
+            if(grouped){var batches=RenderBatcher.Build(multi);renderer.PrepareInstanceStream(batches);renderer.BeginMainBatch();try{foreach(var batch in batches)renderer.Draw(batch.First.Mesh,batch.First.Material,batch.First.ModelMatrix,Matrix4x4.Identity,Matrix4x4.Identity,RenderLighting3D.Default,null,Array.Empty<RenderPointShadow3D>(),false,null,batch.Instances);}finally{renderer.EndMainBatch();}}
             else foreach(var item in multi)renderer.Draw(item.Mesh,item.Material,item.ModelMatrix,Matrix4x4.Identity,Matrix4x4.Identity,RenderLighting3D.Default);
             GL.Finish();var pixels=new byte[128*128*4];GL.ReadPixels(0,0,128,128,PixelFormat.Rgba,PixelType.UnsignedByte,pixels);return pixels;}
         var reference=Main(false);var streamed=Main(true);Check(reference.Zip(streamed).All(p=>Math.Abs(p.First-p.Second)<=1),"Shared instance-stream offsets change pixels");
         // The instance normal transform must match the CPU normal matrix for signed,
         // nonuniform, rotated and sheared transforms, across distinct stream offsets.
-        var litRed=new Material{BaseColor=new(.8f,.3f,.1f,1),CullMode=CullMode3D.None};
-        var litBlue=new Material{BaseColor=new(.1f,.3f,.8f,1),CullMode=CullMode3D.None};
+        var litRed=new Material{BaseColor=new(.8f,.3f,.1f,1),CullMode=CullMode3D.None,MainTexture=texture};
+        var litBlue=new Material{BaseColor=new(.1f,.3f,.8f,1),CullMode=CullMode3D.None,MainTexture=texture};
         multi.Clear();
         for(int i=0;i<16;i++)
         {
@@ -141,6 +142,28 @@ internal static class RenderOptimizationTests
         Check(reference.Zip(streamed).All(p=>Math.Abs(p.First-p.Second)<=1),"Fast instance normals change lit pixels");
         Check(reference.Where((v,i)=>i%4!=3&&v>10).Count()>100,"Normal-stream fixture is blank");
         Console.WriteLine("PASS fast instance normals: signed/nonuniform scale, rotation, shear and multiple material offsets");
+        var previousSolid = renderer.DiagnosticSolidLit;
+        void CompareSolidVariant()
+        {
+            renderer.DiagnosticSolidLit = false; var expected = Main(true);
+            renderer.DiagnosticSolidLit = true; var actual = Main(true);
+            Check(expected.Zip(actual).All(p => Math.Abs(p.First - p.Second) <= 1), "Solid shader variant changed material/transform pixels");
+        }
+        try
+        {
+            litRed.MainTexture = litBlue.MainTexture = null;
+            CompareSolidVariant();
+            litRed.Shading = ByteEngine.Core.Assets.MaterialShadingMode.Unlit; CompareSolidVariant();
+            litRed.Shading = ByteEngine.Core.Assets.MaterialShadingMode.Lit;
+            litRed.WetLevels = new(0, 0, 0, 1); CompareSolidVariant(); litRed.WetLevels = Vector4.Zero;
+            litRed.NormalTexture = texture; CompareSolidVariant(); litRed.NormalTexture = null;
+            litRed.MetallicTexture = texture; CompareSolidVariant(); litRed.MetallicTexture = null;
+            litRed.EmissionEnabled = true; CompareSolidVariant(); litRed.EmissionEnabled = false;
+            litRed.WaterVolume = true; CompareSolidVariant(); litRed.WaterVolume = false;
+            CompareSolidVariant();
+        }
+        finally { renderer.DiagnosticSolidLit = previousSolid; }
+        Console.WriteLine("PASS solid-lit shader: signed/sheared transforms, palette-compatible batching and live fallback for unlit/wet/textured/emissive/water materials");
         Check(GL.GetError()==ErrorCode.NoError,"Shadow instancing GL error");
         Console.WriteLine("PASS all material states, transparent ordering, independent shadow flags, and pixel-equivalent opaque/cutout directional and six-face point shadows");
     }

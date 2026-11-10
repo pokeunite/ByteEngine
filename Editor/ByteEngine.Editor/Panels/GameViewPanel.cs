@@ -12,6 +12,7 @@ internal sealed class GameViewPanel : IDisposable
     private readonly SceneFramebuffer _framebuffer = new();
     private bool _focusRequested;
     private bool _pointerAimInputCaptured;
+    private bool _matchWindowResolution;
     private bool _uiPointerLease;
     private bool _restoreGrabAfterUi;
 
@@ -88,6 +89,8 @@ internal sealed class GameViewPanel : IDisposable
                 ? "Game camera preview"
                 : "Runtime game camera"));
 
+        ImGui.Checkbox("Match window resolution", ref _matchWindowResolution);
+
         if (state.Mode == EditorMode.Play)
         {
             ImGui.TextDisabled(
@@ -132,6 +135,13 @@ internal sealed class GameViewPanel : IDisposable
                     available.Y),
                 1,
                 4096);
+
+        if (!_matchWindowResolution)
+        {
+            float scale = Math.Min(1f, Math.Min(1280f / renderWidth, 720f / renderHeight));
+            renderWidth = Math.Max(1, (int)MathF.Round(renderWidth * scale));
+            renderHeight = Math.Max(1, (int)MathF.Round(renderHeight * scale));
+        }
 
         _framebuffer.RenderGame(
             renderer,

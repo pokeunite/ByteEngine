@@ -107,6 +107,9 @@ public static class WebGamePackageExporter
             }
             new ProjectSerializer().Save(project, Path.Combine(content, "Game.byteproject"));
             int contentCount = GamePackageExporter.WalkFiles(content).Count();
+            string networkManifest=Path.Combine(content,ByteEngine.Core.Net.NetworkContentIdentity.BrowserManifest);
+            Directory.CreateDirectory(Path.GetDirectoryName(networkManifest)!);
+            File.WriteAllText(networkManifest,JsonSerializer.Serialize(ByteEngine.Core.Net.NetworkContentIdentity.Plugins(root)));
             string packageRoot = Path.Combine(destination, "PackageStaging");
             Directory.CreateDirectory(packageRoot);
             Directory.Move(content, Path.Combine(packageRoot, "Content"));

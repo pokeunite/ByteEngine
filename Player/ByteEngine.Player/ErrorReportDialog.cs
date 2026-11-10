@@ -1,0 +1,5 @@
+namespace ByteEngine.Player;
+internal static class ErrorReportDialog
+{
+ internal static void Show(Exception error,string sourceLog){using var form=new Form{Text="Game error",Width=680,Height=430,StartPosition=FormStartPosition.CenterScreen};var text=new TextBox{Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Text="The game could not continue.\r\n\r\n"+error+"\r\n\r\nDiagnostic log: "+sourceLog};var save=new Button{Text="Download / Save error log",Dock=DockStyle.Bottom,Height=46};save.Click+=(_,_)=>{using var dialog=new SaveFileDialog{FileName="ByteEngine-errors.log",Filter="Log files|*.log|All files|*.*",OverwritePrompt=true};if(dialog.ShowDialog(form)!=DialogResult.OK)return;try{string full=File.Exists(sourceLog)?File.ReadAllText(sourceLog):error.ToString();File.WriteAllText(dialog.FileName,full+"\r\n\r\n"+ByteEngine.Core.Net.NetworkDiagnostics.Export());}catch(Exception e){MessageBox.Show(form,e.Message,"Unable to save log");}};form.Controls.Add(text);form.Controls.Add(save);form.ShowDialog();}
+}

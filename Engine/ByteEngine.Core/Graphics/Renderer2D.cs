@@ -156,6 +156,9 @@ public sealed class Renderer2D : IDisposable
             return;
         }
 
+        if (_viewportWidth == Math.Max(1, width) && _viewportHeight == Math.Max(1, height))
+            return;
+
         _viewportWidth =
             Math.Max(
                 1,

@@ -29,4 +29,25 @@
     <None Include="$(PkgSilk_NET_OpenAL_Soft_Native)\runtimes\win-x64\native\soft_oal.dll" Link="soft_oal.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('$(PkgSilk_NET_OpenAL_Soft_Native)\runtimes\win-x64\native\soft_oal.dll')" />
   </ItemGroup>
 
+  <UsingTask TaskName="ComputeByteNetworkIdentity" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup><Sources ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true"/><Root ParameterType="System.String" Required="true"/><OutputFile ParameterType="System.String" Required="true"/></ParameterGroup>
+    <Task><Using Namespace="System"/><Using Namespace="System.IO"/><Using Namespace="System.Linq"/><Using Namespace="System.Text"/><Using Namespace="System.Security.Cryptography"/>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        string root = Path.GetFullPath(Root);
+        var files = Sources.Select(s => Path.GetFullPath(s.ItemSpec)).Where(p => p.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            .Where(p => { var relative = p.Substring(root.Length + 1).Replace('\\','/'); return !relative.StartsWith("obj/") && !relative.StartsWith("bin/"); }).Distinct().OrderBy(p => p, StringComparer.Ordinal).ToArray();
+        var text = new StringBuilder();
+        foreach(var file in files) { text.Append(file.Substring(root.Length+1).Replace('\\','/')).Append('\n').Append(File.ReadAllText(file).Replace("\r\n","\n")).Append('\n'); }
+        text.Append(File.ReadAllText(Path.Combine(root,"ByteEngine.Core.csproj")).Replace("\r\n","\n"));
+        string hash; using(var sha = SHA256.Create()) hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(text.ToString()))).Replace("-","").ToLowerInvariant();
+        string content = "// Generated: portable engine-source identity, independent of target assembly MVID.\nnamespace ByteEngine.Core.Net { public static class NetworkBuildIdentity { public const string Value = \"" + hash + "\"; } }\n";
+        Directory.CreateDirectory(Path.GetDirectoryName(OutputFile));
+        if(!File.Exists(OutputFile) || File.ReadAllText(OutputFile)!=content) File.WriteAllText(OutputFile,content);
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="GenerateByteNetworkIdentity" BeforeTargets="CoreCompile">
+    <ComputeByteNetworkIdentity Sources="@(Compile)" Root="$(MSBuildProjectDirectory)" OutputFile="$(IntermediateOutputPath)NetworkBuildIdentity.g.cs"/>
+    <ItemGroup><Compile Include="$(IntermediateOutputPath)NetworkBuildIdentity.g.cs"/></ItemGroup>
+  </Target>
 </Project>

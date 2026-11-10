@@ -1,3 +1,5 @@
+const runtimeErrors=[];let errorGame=null;const errorDownload=document.createElement('button');errorDownload.textContent='Download error log';errorDownload.style='position:fixed;bottom:8px;right:8px;z-index:20000';document.body.appendChild(errorDownload);errorDownload.onclick=()=>{let managed='';try{managed=errorGame?.NetworkExportLog()||'';}catch{}const url=URL.createObjectURL(new Blob([managed+'\n'+runtimeErrors.join('\n')],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='ByteEngine-errors.log';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};window.addEventListener('error',e=>runtimeErrors.push(new Date().toISOString()+' '+e.message));window.addEventListener('unhandledrejection',e=>runtimeErrors.push(new Date().toISOString()+' '+String(e.reason)));
+import { BrowserNetworkBridge } from './network-bridge.js';
 import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
 import { createBrowserRenderer } from './render-worker-client.js';
@@ -17,7 +19,7 @@ let readManagedError=()=>'';
 function fail(error){
     if(stopped)return;
     let managed='';try{managed=readManagedError();}catch{}
-    const detail=[managed,String(error?.stack||error)].filter(Boolean).join('\n');
+    const detail=[managed,String(error?.stack||error)].filter(Boolean).join('\n');runtimeErrors.push(new Date().toISOString()+' '+detail);
     capture.failure({message:detail.slice(0,16000)});
     stopped=true;progress.hidden=true;status.dataset.failed='true';status.hidden=false;status.style.pointerEvents='auto';
     if(retry)retry.hidden=false;
@@ -38,10 +40,14 @@ try{
     const gameReady=runtimeReady.then(async runtime=>{const config=runtime.getConfig();const exports=await runtime.getAssemblyExports(config.mainAssemblyName);await runtime.runMain();return exports.BrowserGame;});
     const contentReady=loadContent(gameReady,status);
     const [runtime,game,content]=await Promise.all([runtimeReady,gameReady,contentReady]);
+    errorGame=game;
     game.ConfigureSkinning?.(renderer.maximumSkinningBones);
     readManagedError=()=>game.LastFrameError();
     const transfers=createFrameReader(runtime,game);
     renderer.readBuffer=index=>transfers.read(index);
+    const networking=new BrowserNetworkBridge(game,index=>transfers.read(index));
+    globalThis.byteEngineNetwork=networking;
+
     globalThis.byteEngineDebug=()=>JSON.parse(game.Diagnostics());
     const {manifest,audio:files}=content;byteEnginePerf.unpackEnd=performance.now();
     const previewQuality=new URLSearchParams(location.search).get('previewQuality');const exportGraphics={...(manifest.graphics||{})};if(['High','Balanced','Fast'].includes(previewQuality))exportGraphics.quality=previewQuality;game.ConfigurePresentation(JSON.stringify(exportGraphics));
@@ -69,7 +75,7 @@ try{
     if(!manifest.demo){saveKey=game.SaveKey();try{const stored=localStorage.getItem(saveKey);if(stored)game.RestoreSaves(stored);}catch(error){console.warn('Browser save restore unavailable',error);}}
     status.setProgress(null,'Preparing workshop…');
     await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
-    const startMs=performance.now();game.Start(!!manifest.demo);byteEnginePerf.startMs=performance.now()-startMs;capture.event('scene-start',{durationMs:byteEnginePerf.startMs});
+    const startMs=performance.now();game.Start(!!manifest.demo);networking.installLobby();byteEnginePerf.startMs=performance.now()-startMs;capture.event('scene-start',{durationMs:byteEnginePerf.startMs});
     const persist=()=>{if(!saveKey)return;try{const data=game.SaveData();if(data!==lastSave){localStorage.setItem(saveKey,data);lastSave=data;}}catch(error){console.warn('Browser save persistence unavailable',error);}};
     setInterval(persist,5000);window.addEventListener('pagehide',persist);
     if(stopped)throw new Error("Startup failed; use Retry loading.");
@@ -140,7 +146,7 @@ try{
             const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas||pauseFromCapture,gamepad);
-            const wasmEnd=performance.now();const data=JSON.parse(payload);transfers.beginFrame(data);
+            const wasmEnd=performance.now();const data=JSON.parse(payload);transfers.beginFrame(data);networking.commands(data.net);
             for(const marker of data.runtimeMarkers??[])capture.trigger(marker.kind,{callbackMs:marker.durationMs});
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'720p'};
             if(!renderer.isThreaded&&data.uiBuffer>=0)data.ui=decodeUiPacket(transfers.read(data.uiBuffer),data.uiCount,uiCommands);

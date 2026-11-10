@@ -9,6 +9,8 @@ internal sealed class HierarchyPanel
     private Guid? _renaming;
     private string _renameBuffer = string.Empty;
     private bool _focusRename;
+    private string _search = string.Empty;
+    private readonly HashSet<GameObject> _searchBranches = new();
     public bool IsOpen { get; set; } = true;
 
     public void Draw(
@@ -93,6 +95,22 @@ internal sealed class HierarchyPanel
         ImGui.PopStyleColor();
         ImGui.Spacing();
 
+        ImGui.SetNextItemWidth(-1f);
+        ImGui.InputTextWithHint("##HierarchySearch", "Search scene objects...", ref _search, 256);
+        if (ImGui.IsItemActive() && ImGui.IsKeyPressed(ImGuiKey.Escape))
+            _search = string.Empty;
+        _searchBranches.Clear();
+        string query = _search.Trim();
+        if (query.Length > 0)
+        {
+            foreach (GameObject item in state.DisplayedScene.GameObjects)
+                if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    for (GameObject? branch = item; branch != null; branch = branch.Parent)
+                        if (!_searchBranches.Add(branch)) break;
+            if (_searchBranches.Count == 0)
+                ImGui.TextDisabled("No matching objects");
+        }
+
         /*
          * Hierarchy commands are allowed to delete/reparent objects while the
          * panel is being drawn. Always iterate a snapshot so those mutations
@@ -106,6 +124,7 @@ internal sealed class HierarchyPanel
                         null)
                 .ToArray();
 
+        ImGui.PushID(query.Length > 0 ? "SearchResults" : "SceneTree");
         DrawSiblingGroup(
             roots,
             state,
@@ -115,6 +134,7 @@ internal sealed class HierarchyPanel
             pasteObjects,
             createChild,
             instantiateAsset);
+        ImGui.PopID();
 
         if (state.Mode == EditorMode.Edit)
         {
@@ -145,7 +165,7 @@ internal sealed class HierarchyPanel
             ImGui.EndPopup();
         }
 
-        if (state.Mode == EditorMode.Edit && state.Selection.Count > 0 && ImGui.IsWindowFocused() && ImGui.IsKeyPressed(ImGuiKey.Delete)) deleteObjects();
+        if (state.Mode == EditorMode.Edit && state.Selection.Count > 0 && ImGui.IsWindowFocused() && !ImGui.GetIO().WantTextInput && ImGui.IsKeyPressed(ImGuiKey.Delete)) deleteObjects();
         ImGui.End();
     }
 
@@ -185,6 +205,8 @@ internal sealed class HierarchyPanel
                 4.0f,
                 4.0f));
 
+        if (_search.Trim().Length > 0)
+            ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         bool open =
             ImGui.TreeNodeEx(
                 $"  {gameObject.Name}##{gameObject.Id}",
@@ -352,6 +374,8 @@ internal sealed class HierarchyPanel
         Action<GameObject> createChild,
         Action<Guid, GameObject?> instantiateAsset)
     {
+        if (_search.Trim().Length > 0)
+            siblings = siblings.Where(_searchBranches.Contains).ToArray();
         if (siblings.Length ==
             0)
         {

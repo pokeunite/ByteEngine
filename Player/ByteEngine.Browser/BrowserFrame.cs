@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 internal sealed class BrowserFrame
 {
+    public List<BrowserNetworkCommand> net {get;set;}=[];
     public bool separateShadows {get;set;}=true;
     public List<BrowserRuntimeMarker> runtimeMarkers {get;set;}=[];
     public uint[] bufferViews {get;set;}=[];

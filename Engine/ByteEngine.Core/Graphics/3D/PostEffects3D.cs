@@ -87,16 +87,20 @@ internal sealed class PostEffects3D : IDisposable
         _shader.Use(); _shader.SetInt("uColor",0); _shader.SetInt("uDepth",1); _shader.SetInt("uInput",2);
         Matrix4x4.Invert(projection,out var inverse); _shader.SetMatrix4("uInverseProjection",new OpenTK.Mathematics.Matrix4(inverse.M11,inverse.M12,inverse.M13,inverse.M14,inverse.M21,inverse.M22,inverse.M23,inverse.M24,inverse.M31,inverse.M32,inverse.M33,inverse.M34,inverse.M41,inverse.M42,inverse.M43,inverse.M44)); _shader.SetFloat("uProjectionY",Math.Abs(projection.M22));
         _shader.SetFloat("uRadius",look.Radius); _shader.SetInt("uSamples",look.AoSamples); _shader.SetFloat("uThreshold",look.Threshold);
+        // Allocate before binding the source units: Target.Resize binds its new
+        // texture on the active unit. Allocating after Bind(depth,1) overwrote
+        // the depth input on the first frame/resize and could create feedback.
+        bool useAo = look.Occlusion>0 && depth!=0 && projection!=Matrix4x4.Identity;
+        if (useAo) { _ao.Resize(width/2,height/2,true); _aoBlur.Resize(width/2,height/2,true); }
+        if (look.Bloom>0) { _bloom.Resize(width/4,height/4,false); _blur.Resize(width/4,height/4,false); }
         Bind(color,0); Bind(depth,1); GL.BindVertexArray(_vao);
-        if(look.Occlusion>0 && depth!=0 && projection!=Matrix4x4.Identity)
+        if(useAo)
         {
-            _ao.Resize(width/2,height/2,true); _aoBlur.Resize(width/2,height/2,true);
             Draw(_ao,0,0); Draw(_aoBlur,1,_ao.Texture); AoTexture=_aoBlur.Texture;
         }
         else { _ao.Dispose(); _aoBlur.Dispose(); }
         if(look.Bloom>0)
         {
-            _bloom.Resize(width/4,height/4,false); _blur.Resize(width/4,height/4,false);
             Draw(_bloom,2,0); Draw(_blur,3,_bloom.Texture); Draw(_bloom,4,_blur.Texture); BloomTexture=_bloom.Texture;
         }
         else { _bloom.Dispose(); _blur.Dispose(); }

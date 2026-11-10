@@ -97,6 +97,8 @@ public static partial class BrowserGame
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.dunecompany", new DuneCompany.DuneCompanyPlugin());
         ByteEngine.Core.Plugins.ByteEnginePluginManager.RegisterLinkedPlugin("bytebard.karlsondemo", new KarlsonDemo.Plugin.KarlsonDemoPlugin());
         PortableAudio.Backend = Audio;
+        ByteEngine.Core.Net.NetworkRuntime.CreateLink=()=>new BrowserNetworkLink();
+        ByteEngine.Core.Net.NetworkDiagnostics.Download=(name,text)=>BrowserNetworkLink.Outbound.Enqueue((new BrowserNetworkCommand(0,"download",signal:new ByteEngine.Core.Net.NetworkSignal("log",text,name)),null));
         if (!demo)
         {
             _project = new GameProjectRuntime("/game/Content/Game.byteproject", Console.Error.WriteLine);
@@ -190,8 +192,7 @@ public static partial class BrowserGame
 
     [JSExport]
     public static bool WantsPointerLock() => !Input.KeepGameViewPointerFree &&
-        Loop.Scenes.ActiveScene?.GameObjects.Any(o => o.ActiveInHierarchy &&
-            o.Components.OfType<PlayerController3D>().Any(c => c.Enabled && c.AcceptLookInput)) == true;
+        Loop.Scenes.ActiveScene?.GameObjects.Any(o=>o.ActiveInHierarchy&&(o.Components.OfType<PlayerController3D>().Any(c=>c.Enabled&&c.AcceptLookInput)||o.Components.Any(c=>c.GetType().Name=="PvpMatch3D")&&ByteEngine.Core.Net.NetworkRuntime.Session is {IsActive:true}))==true;
 
     [JSExport]
     public static string Frame(double seconds, int width, int height, string keys,
@@ -714,10 +715,17 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             for (int j=0;j<4;j++) values[8+j]=command.color[j];
             for (int j = 0; j < values.Length; j++) System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(bytes[(8+j*4)..], values[j]);
         }
+        var networkCommands=new List<BrowserNetworkCommand>();
+        while(BrowserNetworkLink.Outbound.TryDequeue(out var outgoing)){
+            var command=outgoing.Command;
+            if(outgoing.Bytes is {} networkBytes){int buffer=_buffers.Allocate(networkBytes.Length,out var target);networkBytes.AsSpan().CopyTo(target);command=command with{buffer=buffer};}
+            networkCommands.Add(command);
+        }
+        foreach(var link in BrowserNetworkLink.Links.Values)link.Flushed();
         var bufferViews=new uint[_buffers.Count*2];
         for(int i=0;i<_buffers.Count;i++){bufferViews[i*2]=checked((uint)(nuint)_buffers.GetPinnedAddress(i));bufferViews[i*2+1]=checked((uint)_buffers[i].Length);}
         ProfileEnd("UI and buffer table",stage);stage=ProfileStart();
-        string encoded=JsonSerializer.Serialize(new BrowserFrame { bufferViews=bufferViews,quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,pixelArt=_pixelArt,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
+        string encoded=JsonSerializer.Serialize(new BrowserFrame { net=networkCommands,bufferViews=bufferViews,quality=BrowserPresentationSettings.Quality.ToString(),worldResolution=BrowserPresentationSettings.WorldResolution,shadow=_shadow,look=_look,pixelArt=_pixelArt,fog=_fog,sky=_sky, exposure=_exposure, loopMs=loopMs, pendingTextures=_pendingTextureUploads.Count, vp = _vp,inverseVp=_inverseVp, eye = _eye, background = _background, ambient = _ambient,
             sceneMetrics=loop.Scenes.ActiveScene?.LastFrameMetrics??default,inputMs=loop.LastInputMilliseconds,updateStepMs=loop.LastUpdateMilliseconds,
             renderPreparationMs=loop.LastRenderMilliseconds,renderAllocatedBytes=loop.LastRenderAllocatedBytes,
             lights = _lights, points = _points, uploads = _uploads, textures = _textureUploads,

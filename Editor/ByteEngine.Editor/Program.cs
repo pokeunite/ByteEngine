@@ -7,6 +7,8 @@ internal static class Program
     private static void Main(
         string[] args)
     {
+        ByteEngine.Core.Net.NetworkRuntime.CreateLink=()=>new ByteEngine.Network.Native.WebRtcNetworkLink(ByteEngine.Core.Net.NetworkRuntime.IceServers);
+
         using var diagnostics = CrashReportSession.Start();
         CrashDebugLog.InstallGlobalHandlers();
 

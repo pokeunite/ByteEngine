@@ -4,10 +4,25 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 
 internal sealed class Shader3D : IDisposable
 {
-    private readonly Shader _shader =
-        new(
-            VertexSource,
-            FragmentSource);
+    private readonly Shader _shader;
+    internal Shader3D(bool diagnosticFlat = false, bool solidLit = false)
+    {
+        _shader = new Shader(solidLit ? SolidLitSource(VertexSource) : VertexSource, diagnosticFlat
+            ? FragmentSource.Replace("#version 330 core", "#version 330 core\n#define DIAGNOSTIC_FLAT", StringComparison.Ordinal)
+            : solidLit ? SolidLitSource(FragmentSource) : FragmentSource);
+    }
+
+    private static string SolidLitSource(string source)
+    {
+        // Only selected when all these features are absent from the material.
+        // Retain exactly the same PBR lights, shadows, fog, IBL and palette code.
+        foreach (string name in new[] { "uWaterSurface", "uWaterVolume", "uWaterRefraction", "uSandSurface",
+            "uUseHeightField", "uUseTexture", "uUseNormalTexture", "uUseMetallicTexture", "uUseRoughnessTexture",
+            "uUseAoTexture", "uUsePackedPbrTexture", "uUseEmissionTexture", "uEmissionEnabled", "uUnlit" })
+            source = source.Replace("uniform int " + name + ";", "const int " + name + "=0;", StringComparison.Ordinal);
+        return source.Replace("uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;",
+            "const vec4 uWetContact0=vec4(0),uWetContact1=vec4(0),uWetContact2=vec4(0),uWetLevels=vec4(0);", StringComparison.Ordinal);
+    }
 
     public void Use() =>
         _shader.Use();
@@ -1005,6 +1020,10 @@ internal sealed class Shader3D : IDisposable
                 discard;
             }
 
+            #ifdef DIAGNOSTIC_FLAT
+            FragColor=vec4(vec3(0.5),base.a);
+            return;
+            #endif
             if(uWaterVolume==1){
                 float depth=max(0.0,uWaterColumn.x-vWorldPosition.y);
                 float absorption=1.0-exp(-depth*max(0.01,uWaterColumn.z));

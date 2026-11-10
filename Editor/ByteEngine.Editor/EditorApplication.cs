@@ -422,6 +422,7 @@ public sealed class EditorApplication
             DrawGameObjectMenu();
             DrawWindowMenu();
             DrawDebugMenu();
+            NetworkLobby.Draw(_state.RuntimeScene);
             DrawPlayControls();
             DrawEditorStatus();
         }

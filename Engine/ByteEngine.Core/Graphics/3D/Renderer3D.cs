@@ -62,8 +62,6 @@ public sealed class Renderer3D : IDisposable
     private readonly ShadowDepthCache _directionalDepthCache = new();
     private readonly ShadowDepthCache _staticDirectionalDepthCache = new();
     private readonly ShadowDepthCache _pendingStaticDepthInputs = new();
-    private Matrix4x4 _previousDirectionalView;
-    private bool _hasDirectionalView;
     private ShadowMap3D? _staticDirectionalMap;
     private readonly List<RenderSubmission> _staticDirectionalCasters = new();
     private readonly List<RenderSubmission> _movingDirectionalCasters = new();
@@ -95,6 +93,7 @@ public sealed class Renderer3D : IDisposable
         GpuSkinningCapabilities.MaximumBones=_nativeSkinningLimit;
         _shader ??=
             new Shader3D();
+        if (EnableSolidLitVariants) _solidLitShader ??= new Shader3D(solidLit: true);
 
         _skyShader ??=
             new SkyShader3D();
@@ -271,14 +270,14 @@ public sealed class Renderer3D : IDisposable
 
         var cacheKey = new ShadowDepthCache.Key(lightViewProjection, Vector3.Zero, 0,
             light.ShadowResolution, GraphicsContextScope.CurrentContextId);
-        bool useCache = EnableShadowCaching && _hasDirectionalView && _previousDirectionalView == view.ViewMatrix;
-        _previousDirectionalView = view.ViewMatrix;
-        _hasDirectionalView = true;
+        // The cache already compares the exact light projection and every caster.
+        // Camera motion alone cannot invalidate identical depth-map inputs.
+        bool useCache = EnableShadowCaching;
         if (useCache && _directionalDepthCache.Matches(cacheKey, casters))
             return new DirectionalShadowPassResult(new RenderDirectionalShadow3D(shadowLightIndex,
                 lightViewProjection, _shadowMap!.DepthTextureId, _shadowMap.Resolution,
                 light.ShadowBias, light.ShadowStrength, light.ShadowSoftness), 0);
-        _directionalDepthCache.Invalidate(useCache ? null : "Camera moving");
+        _directionalDepthCache.Invalidate(useCache ? null : "Caching disabled");
 
         int drawCalls;
         _staticDirectionalCasters.Clear();
@@ -655,10 +654,25 @@ public sealed class Renderer3D : IDisposable
     }
 
     public bool EnableStateBatching{get;set;}=true;
+    internal bool DiagnosticFlatFragments { get; set; }
+    /// <summary>Use a restricted shader for solid lit materials without optional surface features.</summary>
+    public bool EnableSolidLitVariants { get; set; } = true;
+    internal bool? DiagnosticSolidLit { get; set; }
+    private Shader3D? _solidLitShader;
+    private static bool SolidLitEligible(Material m) => m.Shading == ByteEngine.Core.Assets.MaterialShadingMode.Lit &&
+        !m.WaterSurface && !m.WaterVolume && !m.SandSurface && m.HeightFieldTexture == null && m.WetLevels.W <= 0 &&
+        m.MainTexture == null && m.NormalTexture == null && m.MetallicTexture == null && m.RoughnessTexture == null &&
+        m.AmbientOcclusionTexture == null && m.PackedPbrTexture == null && !m.EmissionEnabled;
+
+    internal bool DiagnosticDepthPrepass { get; set; }
+    private Shader3D? _diagnosticFlatShader;
+    public bool EnableMaterialTextureCaching { get; set; } = false;
+    public long MaterialTextureBinds => _materialSampling.BindCalls;
+    public long SkippedMaterialTextureBinds => _materialSampling.SkippedBinds;
     bool _mainBatch;
     (bool depth,bool write,BlendMode3D blend,CullMode3D cull,FrontFaceWinding3D front,PolygonMode3D polygon)? _batchState;
-    internal void BeginMainBatch(){_mainBatch=EnableStateBatching;_batchState=null;}
-    internal void EndMainBatch(){_instanceOffsets.Clear();_mainBatch=false;_batchState=null;RestoreBaselineState();}
+    internal void BeginMainBatch(){_mainBatch=EnableStateBatching;_batchState=null;if(_mainBatch&&EnableMaterialTextureCaching)_materialSampling.BeginBatch();}
+    internal void EndMainBatch(){_materialSampling.EndBatch();_instanceOffsets.Clear();_mainBatch=false;_batchState=null;RestoreBaselineState();}
     void ApplyMainState(Material material){
         var state=(material.DepthTest,material.ResolveDepthWrite(),material.BlendMode,material.CullMode,material.FrontFace,material.PolygonMode);
         if(_mainBatch&&_batchState==state)return;
@@ -688,10 +702,13 @@ public sealed class Renderer3D : IDisposable
 
         Initialize();
 
+        var regularShader = _shader;
         ApplyMainState(material);
 
         try
         {
+            if (DiagnosticFlatFragments) _shader = _diagnosticFlatShader ??= new Shader3D(diagnosticFlat: true);
+            else if ((DiagnosticSolidLit ?? EnableSolidLitVariants) && SolidLitEligible(material)) _shader = _solidLitShader ??= new Shader3D(solidLit: true);
             _shader!.Use();
             bool instanced=instances is {Count:>1};
             _shader.SetInt("uInstanced",instanced?1:0);
@@ -835,6 +852,7 @@ public sealed class Renderer3D : IDisposable
             GL.ActiveTexture(
                 TextureUnit.Texture0);
 
+            _shader = regularShader;
             if(!_mainBatch)RestoreBaselineState();
         }
     }
@@ -1722,6 +1740,10 @@ public sealed class Renderer3D : IDisposable
 
         _primitives.Clear();
 
+        _solidLitShader?.Dispose();
+        _solidLitShader = null;
+        _diagnosticFlatShader?.Dispose();
+        _diagnosticFlatShader = null;
         _shader?.Dispose();
 
         _shader =
@@ -1746,7 +1768,6 @@ public sealed class Renderer3D : IDisposable
         _staticDirectionalMap = null;
         _staticDirectionalDepthCache.Invalidate();
         _pendingStaticDepthInputs.Invalidate();
-        _hasDirectionalView = false;
         _directionalDepthCache.Invalidate();
         foreach (var cache in _pointDepthCaches) cache.Invalidate();
         _shadowMap?.Dispose();

@@ -20,6 +20,62 @@ using ByteEngine.Tests;
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
+    if (args.Length == 3 && args[0] == "--native-upgrade-frames")
+    {
+        try { using var run = new NativePostFrameBenchmark(args[1], args[2], solid: true); run.Run(); }
+        catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+        return;
+    }
+    if (args.Contains("--post-contexts")) { try { PostContextTests.Run(); } catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; } return; }
+    if (args.Length == 3 && args[0] == "--native-post-frames")
+    {
+        try { using var run = new NativePostFrameBenchmark(args[1], args[2]); run.Run(); }
+        catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+        return;
+    }
+    if (args.Length == 3 && args[0] == "--solid-lit-ablation")
+    {
+        try { using var run = new GeometryAblation(args[1], args[2], solid: true); run.Run(); }
+        catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+        return;
+    }
+    if (args.Length == 3 && args[0] == "--geometry-ablation")
+    {
+        try { using var run = new GeometryAblation(args[1], args[2]); run.Run(); }
+        catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+        return;
+    }
+    if (args.Length >= 2 && args[0] == "--post-bench")
+    {
+        try
+        {
+            if (args.Length >= 3) { using var capture = new PostReplayBenchmark.Capture(args[2], args[1]); capture.Run(); }
+            PostReplayBenchmark.Run(args[1], File.Exists(Path.Combine(args[1], "snapshot.json")));
+        }
+        catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; }
+        return;
+    }
+    if (args.Length > 0 && args[0] == "--native-bench")
+    {
+        try
+        {
+            if (args.Length < 3)
+                throw new ArgumentException("Usage: --native-bench <project.byteproject> <output.csv> [--no-material-cache]");
+            if (!File.Exists(args[1])) throw new FileNotFoundException("Benchmark project does not exist.", args[1]);
+            foreach (var size in new[] { (1280, 720), (1920, 1080) })
+            {
+                using var benchmark = new NativeBenchmark(args[1], args[2], size.Item1, size.Item2, !args.Contains("--no-material-cache"));
+                benchmark.Run();
+            }
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine("Native benchmark failed: " + error);
+            Environment.ExitCode = 1;
+        }
+        return;
+    }
+
     if(args.Length==3&&args[0]=="--mining-explosion-preview"){MiningExplosionPreview.Run(args[1],args[2]);return;}
     if(args.Contains("--screenshots")){ScreenshotTests.Run();return;}
     if(args.Contains("--event-lookups")){EventLookupTests.Run();return;}

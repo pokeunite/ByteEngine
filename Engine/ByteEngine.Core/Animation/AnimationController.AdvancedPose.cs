@@ -134,8 +134,9 @@ public sealed partial class AnimationController
         CharacterController3D? motor = GameObject.GetComponent<CharacterController3D>();
         if (_poseGraph != null)
         {
-            _poseGraph.SetFloat("Speed", motor?.Speed ?? 0f);
-            _poseGraph.SetBool("Grounded", motor?.IsGrounded ?? true);
+            _poseGraph.SetFloat("Speed", ReplicatedVelocity is { } replicatedVelocity
+                ? new Vector2(replicatedVelocity.X, replicatedVelocity.Z).Length() : motor?.Speed ?? 0f);
+            _poseGraph.SetBool("Grounded", ReplicatedVelocity.HasValue ? ReplicatedGrounded : motor?.IsGrounded ?? true);
             float phase = _renderers.Count != 0 ? _renderers[0].NormalizedPlaybackPhase : 0f;
             _poseGraph.Step((float)ByteEngine.Core.Time.DeltaTime, phase);
             AnimationGraphState? graphState = _poseGraph.Current;
@@ -166,7 +167,7 @@ public sealed partial class AnimationController
             _currentLocomotionClip = overridden.Samples[0].Clip;
         }
         if (_actionActive && !_maskedActionActive) _selectedBlendSpace = null;
-        Vector3 velocity = motor?.Velocity ?? Vector3.Zero;
+        Vector3 velocity = ReplicatedVelocity ?? motor?.Velocity ?? Vector3.Zero;
         float forward = Vector3.Dot(velocity, Transform.Forward);
         float right = Vector3.Dot(velocity, Transform.Right);
         float alpha=1-MathF.Exp(-Math.Max(0,(float)ByteEngine.Core.Time.DeltaTime)/Math.Max(.001f,DirectionBlendSmoothingSeconds));
@@ -177,7 +178,7 @@ public sealed partial class AnimationController
             ResolveBlendParameter(_selectedBlendSpace.ParameterX, motor, right, forward);
         float y = _selectedBlendSpace?.TwoDimensional == true
             ? ResolveBlendParameter(_selectedBlendSpace.ParameterY, motor, right, forward) : 0f;
-        if (MatchPlaybackToSpeed && motor != null && !_turnActive &&
+        if (MatchPlaybackToSpeed && (ReplicatedVelocity.HasValue || motor != null) && !_turnActive &&
             _selectedBlendSpace is {TwoDimensional:true,Blend2DMode:AnimationBlend2DMode.DirectionalSpeed} &&
             _selectedBlendSpace.ParameterX.Equals("Right",StringComparison.OrdinalIgnoreCase) &&
             _selectedBlendSpace.ParameterY.Equals("Forward",StringComparison.OrdinalIgnoreCase))
@@ -224,7 +225,8 @@ public sealed partial class AnimationController
             string.Equals(name, "Lateral", StringComparison.OrdinalIgnoreCase)) return right;
         if (string.Equals(name, "Forward", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(name, "Direction", StringComparison.OrdinalIgnoreCase)) return forward;
-        return motor?.Speed ?? 0f;
+        return ReplicatedVelocity is { } velocity
+            ? new Vector2(velocity.X, velocity.Z).Length() : motor?.Speed ?? 0f;
     }
 
     private void AlignSynchronizedClip(SkeletalMeshRenderer renderer, string previousClip,
