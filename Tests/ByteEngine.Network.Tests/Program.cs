@@ -65,3 +65,5 @@ static void LateJoinChecks(){
  foreach(var client in clients)client.Dispose();Console.WriteLine("PASS four-peer session: late joins, complete baseline, peer cap and departure replication.");
 }
 LateJoinChecks();
+await LobbyRecoveryChecks.Run();
+

@@ -6,6 +6,12 @@ using ByteEngine.Core.Navigation;
 namespace KarlsonDemo.Plugin;
 public sealed class MiningContract
 {
+ public int BaseEnemyCount{get;set;}
+ public int BaseOreReward{get;set;}
+ public int Sector{get;set;}
+ public int RiskLevel{get;set;}=1;
+ public string ConditionA{get;set;}="Mixed spider pressure";
+ public string ConditionB{get;set;}="Staggered reinforcements";
  public string Id{get;set;}="survey";
  public string Name{get;set;}="Shallow survey";
  public string Difficulty{get;set;}="LOW RISK";
@@ -21,14 +27,11 @@ public sealed class MiningContract
  public float HunterHealthMultiplier{get;set;}=1;
 }
 public sealed record MiningWavePreview(string Id,string Name,string Difficulty,string Description,int Raiders,int Hunters,int Ore,float SpawnSeconds,float SpeedMultiplier,float DamageMultiplier)
-{public int Total=>Raiders+Hunters;public float RaiderHealth{get;init;}public float HunterHealth{get;init;}public float RaiderSpeed{get;init;}public float HunterSpeed{get;init;}}
+{public int Disruptors{get;init;}public int Total=>Raiders+Hunters;public float RaiderHealth{get;init;}public float HunterHealth{get;init;}public float RaiderSpeed{get;init;}public float HunterSpeed{get;init;}}
 public sealed partial class MiningOperation3D
 {
- public static string TacticalContractsJson=>JsonSerializer.Serialize(new MiningContract[]{
-  new(){Id="survey",Name="Rig siege",Difficulty="LOW RISK",Description="Mostly rig raiders. Place defences in their approach lanes.",HunterFraction=.18f,RaiderHealthMultiplier=1.15f,SpeedMultiplier=.95f},
-  new(){Id="deep",Name="Hunter run",Difficulty="HIGH RISK",Description="Fast hunters pressure you. Keep moving and protect your firing space.",EnemyMultiplier=1.3f,OreMultiplier=1.7f,HunterFraction=.78f,SpawnIntervalMultiplier=.8f,SpeedMultiplier=1.1f,HunterHealthMultiplier=.85f},
-  new(){Id="overdrive",Name="Swarm site",Difficulty="SEVERE",Description="Many fragile spiders. Shotguns, mines and mortar create space.",EnemyMultiplier=2.1f,OreMultiplier=2.5f,HunterFraction=.5f,SpawnIntervalMultiplier=.55f,HealthMultiplier=.7f,DamageMultiplier=1.1f}});
- [Category("Contracts"),Description("Three editable contracts. Enemy mix, yield and pressure are previewed from these exact rules before launch.")]
+ public static string TacticalContractsJson=>JsonSerializer.Serialize(MiningSiteCatalog.Create());
+ [Category("Contracts"),Description("Editable drill-site catalog. Each site defines its sector, risk, enemy count, role mix, ore reward and combat modifiers. No mission unlock gates.")]
  public string ContractsJson{get;set;}=TacticalContractsJson;
  [Category("Contracts")] public string SelectedContractId{get;set;}="survey";
  [Category("Enemy pressure")] public float HunterMoveSpeed{get;set;}=5f;
@@ -54,21 +57,21 @@ public sealed partial class MiningOperation3D
  [Category("Live state")] public MiningWavePreview? ActiveWave{get;private set;}
  public IReadOnlyList<MiningContract> Contracts
  {
-  get{if(parsedContractsJson==ContractsJson)return parsedContracts;parsedContractsJson=ContractsJson;try{var list=JsonSerializer.Deserialize<MiningContract[]>(ContractsJson)??[];return parsedContracts=list.Length==3&&list.All(c=>c!=null)&&list.Select(c=>c.Id).Distinct().Count()==3&&list.All(c=>c!=null&&!string.IsNullOrWhiteSpace(c.Id)&&Valid(c.EnemyMultiplier,.1f,10)&&Valid(c.OreMultiplier,.1f,10)&&Valid(c.SpawnIntervalMultiplier,.1f,5)&&Valid(c.SpeedMultiplier,.1f,3)&&Valid(c.DamageMultiplier,.1f,5)&&Valid(c.HealthMultiplier,.1f,5)&&Valid(c.HunterFraction,0,1)&&Valid(c.RaiderHealthMultiplier,.1f,5)&&Valid(c.HunterHealthMultiplier,.1f,5))?list:[];}catch(JsonException){return parsedContracts=[];}}
+  get{if(parsedContractsJson==ContractsJson)return parsedContracts;parsedContractsJson=ContractsJson;try{var list=JsonSerializer.Deserialize<MiningContract[]>(ContractsJson)??[];return parsedContracts=list.Length is >=1 and <=128&&list.All(c=>c!=null)&&list.Select(c=>c.Id).Distinct().Count()==list.Length&&list.All(c=>c!=null&&!string.IsNullOrWhiteSpace(c.Id)&&c.BaseEnemyCount is >=0 and <=500&&c.BaseOreReward is >=0 and <=100000&&c.Sector is >=0 and <=20&&c.RiskLevel is >=1 and <=5&&Valid(c.EnemyMultiplier,.1f,10)&&Valid(c.OreMultiplier,.1f,10)&&Valid(c.SpawnIntervalMultiplier,.1f,5)&&Valid(c.SpeedMultiplier,.1f,3)&&Valid(c.DamageMultiplier,.1f,5)&&Valid(c.HealthMultiplier,.1f,5)&&Valid(c.HunterFraction,0,1)&&Valid(c.RaiderHealthMultiplier,.1f,5)&&Valid(c.HunterHealthMultiplier,.1f,5))?list:[];}catch(JsonException){return parsedContracts=[];}}
  }
  string? parsedContractsJson;IReadOnlyList<MiningContract> parsedContracts=[];
  static bool Valid(float n,float min,float max)=>float.IsFinite(n)&&n>=min&&n<=max;
  public MiningWavePreview? PreviewContract(int index)
  {
   var contracts=Contracts;if(index<0||index>=contracts.Count)return null;var c=contracts[index];
-  int total=(int)Math.Clamp(Math.Ceiling(((long)Math.Max(1,BaseEnemies)+(long)CompletedRounds*Math.Max(0,ExtraEnemiesPerRound)+Math.Max(0,HazardContractLevel)*2)*c.EnemyMultiplier),1,Math.Clamp(MaximumEnemiesPerRound,1,200));
+  int total=(int)Math.Clamp(Math.Ceiling(((long)Math.Max(1,c.BaseEnemyCount>0?c.BaseEnemyCount:BaseEnemies)+(long)CompletedRounds*Math.Max(0,ExtraEnemiesPerRound)+Math.Max(0,HazardContractLevel)*2)*c.EnemyMultiplier),1,Math.Clamp(MaximumEnemiesPerRound,1,500));
   int hunters=(int)Math.Clamp(Math.Round(total*c.HunterFraction,MidpointRounding.AwayFromZero),0,total);
   int researchOre=GameObject.GetComponent<MiningTrade3D>()?.ExtractionBonus(c.OreMultiplier>1)??0;
-  int ore=(int)Math.Clamp(researchOre+Math.Floor(((long)BaseOrePerOperation+(long)DrillLevel*OrePerDrillLevel)*(1d+PermanentExtractionBonus+HazardContractLevel*.15f)*c.OreMultiplier),1,100000);
+  int ore=(int)Math.Clamp(researchOre+Math.Floor(((long)(c.BaseOreReward>0?c.BaseOreReward:BaseOrePerOperation)+(long)DrillLevel*OrePerDrillLevel)*(1d+PermanentExtractionBonus+HazardContractLevel*.15f)*c.OreMultiplier),1,100000);
   float healthScale=Math.Clamp(1+CompletedRounds*Math.Max(0,HealthGrowthPerOperation),1,Math.Max(1,MaximumHealthGrowth))*c.HealthMultiplier;
   return new(c.Id,c.Name,c.Difficulty,c.Description,total-hunters,hunters,ore,Math.Max(.05f,SpawnInterval*c.SpawnIntervalMultiplier),c.SpeedMultiplier,c.DamageMultiplier){HunterHealth=healthScale*Math.Clamp(float.IsFinite(HunterHealth)?HunterHealth:50,1,10000)*c.HunterHealthMultiplier,RaiderHealth=healthScale*Math.Clamp(float.IsFinite(RaiderHealth)?RaiderHealth:75,1,10000)*c.RaiderHealthMultiplier,HunterSpeed=Math.Clamp(HunterMoveSpeed,.1f,12)*c.SpeedMultiplier,RaiderSpeed=Math.Clamp(RaiderMoveSpeed,.1f,12)*c.SpeedMultiplier};
  }
- public bool SelectContract(int index){if(Phase!=MiningPhase.Preparation||index<0||index>=Contracts.Count)return false;SelectedContractId=Contracts[index].Id;return true;}
+ public bool SelectContract(int index){if(ExpeditionActive||Phase!=MiningPhase.Preparation||index<0||index>=Contracts.Count)return false;SelectedContractId=Contracts[index].Id;return true;}
  public MiningWavePreview? SelectedContract=>PreviewContract(Contracts.ToList().FindIndex(c=>c.Id==SelectedContractId));
  public static bool IsHunterAt(MiningWavePreview wave,int index)=>index>=0&&index<wave.Total&&(index+1)*wave.Hunters/wave.Total>index*wave.Hunters/wave.Total;
  public void ConfigureEnemy(ByteEngine.Core.Scene.GameObject enemy,bool hunter)

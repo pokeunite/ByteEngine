@@ -12,8 +12,8 @@ public sealed partial class MiningBusinessUi3D
  }
  void ScrollResearchDescription(Vector2 mouse,float wheel)
  {
-  if(mouse.X<96||mouse.X>560||mouse.Y<550||mouse.Y>650||Trade?.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is not {} chosen)return;
-  descriptionScroll=Math.Clamp(descriptionScroll-(int)MathF.Sign(wheel),0,Math.Max(0,ResearchDescriptionLines(chosen.Description).Length-3));
+  if(mouse.X<30||mouse.X>600||mouse.Y<575||mouse.Y>630||Trade?.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is not {} chosen)return;
+  descriptionScroll=Math.Clamp(descriptionScroll-(int)MathF.Sign(wheel),0,Math.Max(0,ResearchDescriptionLines(Trade!.ResearchBenefit(chosen)).Length-3));
  }
  void DrawResearchDescription(BusinessPainter p,string description)
  {

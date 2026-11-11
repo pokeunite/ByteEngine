@@ -1,0 +1,7 @@
+# Hazard Pay contextual HUD and UI input — 2026-11-10
+
+Maintained source: C:/Users/codex/.codex/worktrees/52af/ByteEngine (installed .byteengine-build-source.json confirms). Game: C:/Users/codex/Documents/palclone. Plugin 3.80.0.
+
+Changes: contextual economy/target/weapon/defence HUD, smaller player vitals and interaction prompt, damaged-only defence health, compact arrangement hint. Component preferences permit persistent economy, inventory and drill health. Shared Input.RequestUiPointer and portable/native mouse state prevent UI click-through, including held closing clicks and action snapshots. No game export authorized/performed.
+
+Checks passed: native --verify-context-hud (portable browser input injection, nested UI owners, close-click latch, fresh-click recovery); --verify-support-interactions. Native preparation/combat screenshots inspected (artifacts/context-preparation.png, artifacts/mining-combat.png). Last adjustment narrows tutorial panel and replaces incorrect currency icon. Final build/install completed successfully via Rebuild-ByteEngine-And-Refresh-Dist.ps1 -IncludeBrowser, log artifacts/context-hud-runtime-refresh.log. SyncJamPolish.py completed and -VerifyOnly confirmed matching installed editor/player. Browser linked plugin package checks passed for KarlsonDemo/DuneCompany/DesertTerrain. Final package SHA256 C2F96A1F0F89D50893A1269EEB8B340912C92BB9CCB441EF479AF63A2A2975F2. No live browser gameplay claim: no new game export requested. Existing exports stay unchanged.

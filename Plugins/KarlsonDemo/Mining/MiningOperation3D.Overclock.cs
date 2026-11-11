@@ -17,6 +17,7 @@ public sealed partial class MiningOperation3D
  void HealAfterOperation(){if(RestoreHealthAfterOperation&&Player?.GetComponent<HealthComponent>() is {IsDead:false} h)h.Heal(h.MaxHealth);}
  void FinishOperationStage()
  {
+  if(ExpeditionActive){FinishExpeditionWave();return;}
   RawOre=Add(RawOre,RoundQuota);Phase=MiningPhase.Preparation;CleanupEnemies();
   if(IsOverclockActive){IsOverclockActive=false;RoundQuota=baseOperationQuota;HealAfterOperation();Message=$"Overclock cleared: +{OverclockBonusOre} bonus ore.";}
   else{

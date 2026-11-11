@@ -11,13 +11,17 @@ public sealed partial class MiningBusinessUi3D
  {
   public void Q(float x,float y,float w,float h,Vector4 color)=>c.DrawUiQuad(new((ox+x)*scale,(oy+y)*scale),new(w*scale,h*scale),color);
   public void L(float x,float y,float xx,float yy,Vector4? color=null,float thickness=1)=>c.DrawUiLine(new((ox+x)*scale,(oy+y)*scale),new((ox+xx)*scale,(oy+yy)*scale),thickness*scale,color??MenuEdge);
-  public void T(string value,float x,float y,int size=18,Vector4? color=null,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(value,ui.BodyFont,(int)(size*scale),new((ox+x)*scale,(oy+y)*scale),color??ui.TextColor,anchor);
+  public void T(string value,float x,float y,int size=18,Vector4? color=null,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(value,ui.IsCompanyScreen?ui.FieldHudFont:ui.BodyFont,(int)(size*scale),new((ox+x)*scale,(oy+y)*scale),color??ui.TextColor,anchor);
+  public void I(string name,float x,float y,float w,float h)=>ui.FieldImage(c,name,ox+x,oy+y,w,h,scale);
+  public void S(string text,float x,float y,int size=18,UiAnchor anchor=UiAnchor.TopLeft,Vector4? color=null)=>ui.FieldText(c,text,ox+x,oy+y,size,scale,true,anchor,color);
+  public void Card(float x,float y,float w,float h,bool selected=false){var edge=selected?ui.Accent:new Vector4(.75f,.73f,.67f,1);Q(x+8,y,w-16,h,new(.105f,.105f,.10f,.97f));Q(x,y+8,w,h-16,new(.105f,.105f,.10f,.97f));Vector2[] v=[new(x+8,y),new(x+w-8,y),new(x+w,y+8),new(x+w,y+h-8),new(x+w-8,y+h),new(x+8,y+h),new(x,y+h-8),new(x,y+8)];for(int i=0;i<v.Length;i++)L(v[i].X,v[i].Y,v[(i+1)%8].X,v[(i+1)%8].Y,edge,selected?2:1);}
   public void Rule(float y,float width)=>L(28,y,width-28,y);
   public void Border(float x,float y,float w,float h,Vector4 color,float thickness=1){L(x,y,x+w,y,color,thickness);L(x+w,y,x+w,y+h,color,thickness);L(x,y+h,x+w,y+h,color,thickness);L(x,y,x,y+h,color,thickness);}
   public void Bar(float x,float y,float w,float h,float fraction){Q(x,y,w,h,new(.20f,.22f,.25f,1));Q(x,y,w*Math.Clamp(fraction,0,1),h,ui.Accent);}
   public void Button(Guid id,string label,float x,float y,float w,float h,bool yellow=false,int size=18){var widget=ui.W(id);bool enabled=widget?.Interactable==true,hover=widget?.IsHovered==true||ReferenceEquals(UiNavigation.Focused,widget);Q(x,y,w,h,yellow&&enabled?ui.Accent:hover?new(.15f,.17f,.20f,1):MenuInset);if(!yellow||!enabled)Border(x,y,w,h,hover?ui.Accent:MenuEdge);T(label,x+w/2,y+(h-size)/2-1,size,yellow&&enabled?new(.045f,.05f,.06f,1):enabled?ui.TextColor:MenuMuted,UiAnchor.TopCenter);}
   void Polygon(Vector2[] points,float x,float y,float size,Vector4 color){float u=size/24;for(int row=0;row<24;row++){float yy=row+.5f;var intersections=new List<float>();for(int i=0;i<points.Length;i++){var a=points[i];var b=points[(i+1)%points.Length];if((a.Y<=yy&&b.Y>yy)||(b.Y<=yy&&a.Y>yy))intersections.Add(a.X+(yy-a.Y)*(b.X-a.X)/(b.Y-a.Y));}intersections.Sort();for(int i=0;i+1<intersections.Count;i+=2)Q(x+intersections[i]*u,y+row*u,(intersections[i+1]-intersections[i])*u,u,color);}}
   public void Icon(string icon,float x,float y,float size,Vector4? color=null){var tint=color??ui.TextColor;float u=size/24;
+   if(icon=="scatter"){I("company-scatter",x,y,size,size);return;}
    if(icon is "ore" or "ingot"){var asset=icon=="ore"?ui.RawOreIcon:ui.RefinedOreIcon;if(!asset.IsEmpty&&AnimationRuntimeAssets.TryGet(out var iconAssets)&&iconAssets!=null){c.DrawUiImage(iconAssets.LoadTexture(asset),new((ox+x)*scale,(oy+y)*scale),new(size*scale),tint);return;}}
    if(icon=="clock"){for(int i=0;i<32;i++){float a=i*MathF.PI/16,b=(i+1)*MathF.PI/16;L(x+(12+8*MathF.Cos(a))*u,y+(14+8*MathF.Sin(a))*u,x+(12+8*MathF.Cos(b))*u,y+(14+8*MathF.Sin(b))*u,tint,1.5f);}Q(x+9*u,y,6*u,3*u,tint);L(x+12*u,y+6*u,x+12*u,y+14*u,tint,1.5f);L(x+12*u,y+14*u,x+17*u,y+16*u,tint,1.5f);return;}
    if(icon=="ingot"){Polygon([new(1,15),new(6,5),new(20,5),new(23,15),new(18,21),new(4,21)],x,y,size,tint);L(x+1*u,y+15*u,x+17*u,y+15*u,MenuInset,1.5f);L(x+17*u,y+15*u,x+20*u,y+5*u,MenuInset,1.5f);L(x+17*u,y+15*u,x+18*u,y+21*u,MenuInset,1.5f);return;}
@@ -32,6 +36,9 @@ if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;var refer
  void RenderIndustrialBusiness(RenderContext c,float width,float height,float scale)
  {
   if(Screen==MiningScreen.AudioCredits){RenderAudioCredits(c,width,height,scale);return;}if(Op is not {} op)return;
+  if(Screen==MiningScreen.Drill){RenderDrillSiteMap(c,width,height,scale);return;}
+  if(Screen is MiningScreen.Refinery or MiningScreen.AmmoPress){RenderFieldMachine(c,width,height,scale);return;}
+  if(IsCompanyScreen){RenderCompanySystems(c,width,height,scale);return;}
   var b=CompactBounds(width,height);var p=new BusinessPainter(this,c,scale,b.X,b.Y);c.DrawUiQuad(Vector2.Zero,new(c.TargetWidth,c.TargetHeight),new(0,0,0,.28f));p.Q(0,0,b.Width,b.Height,Surface);p.Border(0,0,b.Width,b.Height,MenuEdge);p.Q(0,0,12,2,Accent);p.Q(b.Width-12,b.Height-2,12,2,Accent);
   string title=Screen switch{MiningScreen.AmmoPress=>"AMMO PRESS",MiningScreen.Refinery=>"REFINERY",MiningScreen.Drill=>"SELECT OPERATION",_=>"COMPANY TERMINAL"};p.Q(28,27,6,23,Accent);p.T(title,46,23,Screen==MiningScreen.Drill?27:25);p.T($"{op.Credits:N0} cr",b.Width-75,29,19,Accent,UiAnchor.TopRight);p.L(b.Width-43,28,b.Width-29,42,TextColor,1.5f);p.L(b.Width-29,28,b.Width-43,42,TextColor,1.5f);p.Rule(66,b.Width);
   if(Screen==MiningScreen.Drill)DrawIndustrialContracts(p,op);
@@ -104,3 +111,4 @@ if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;var refer
   string warning=Feedback.Length>0?Feedback:op.RefiningAmount>0&&!op.QueueRefineryBatches?"Finish refining before the next extraction.":op.SelectedContract is {} forecast&&(long)op.CargoUsed+forecast.Ore>op.CargoCapacity?"Cargo full: sell ore before starting this operation.":"Choose the risk. Prepare your defences. Start when ready.";p.T(warning,28,536,14,MenuMuted);
  }
 }
+

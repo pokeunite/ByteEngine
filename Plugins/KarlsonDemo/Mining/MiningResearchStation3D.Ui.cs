@@ -11,8 +11,8 @@ public sealed partial class MiningResearchStation3D
  int hovered=-1;bool closeHovered;
  static readonly Vector4 ShopYellow=new(1,.79f,.12f,1),ShopWhite=new(.94f,.95f,.91f,1),ShopMuted=new(.64f,.69f,.71f,1),ShopEdge=new(.29f,.33f,.35f,1);
  static readonly int[] ShopOrder=[0,1,4,3,2];
- static Vector2 ShopOrigin(float width,float height)=>new(width-588,(height-600)/2);
- static Vector4 OrderButton(int item)=>new(380,112+Array.IndexOf(ShopOrder,item)*82,152,40);
+ static Vector2 ShopOrigin(float width,float height)=>new(width-488,(height-480)/2);
+ static Vector4 OrderButton(int item)=>new(342,77+Array.IndexOf(ShopOrder,item)*67,116,34);
  static bool Inside(Vector2 p,Vector4 r)=>p.X>=r.X&&p.Y>=r.Y&&p.X<=r.X+r.Z&&p.Y<=r.Y+r.W;
  bool DroneActive=>ActiveDroneCount>=MaximumDrones;
  bool OrderAvailable(int item)=>Op is {} op&&item switch{0=>ActiveDroneCount<MaximumDrones&&op.Credits>=DroneCost,1=>(MaximumBarricades<=0||BarricadesOwned<MaximumBarricades)&&op.RefinedOre>=BarricadeOreCost,4=>op.RefinedOre>=MineOreCost,3=>op.Credits>=ExtraRefineryCost,_=>op.Credits>=op.CargoUpgradeCost&&op.CargoCapacity<1000000};
@@ -22,32 +22,24 @@ public sealed partial class MiningResearchStation3D
   int position=Array.IndexOf(ShopOrder,selected);if(Input.IsKeyPressed(Key.Up))selected=ShopOrder[Math.Max(0,position-1)];if(Input.IsKeyPressed(Key.Down))selected=ShopOrder[Math.Min(ShopOrder.Length-1,position+1)];if(Input.IsKeyPressed(Key.Enter))SubmitOrder(selected);
   float scale=Math.Max(.01f,Math.Min(Input.GameViewSize.X/1280,Input.GameViewSize.Y/720));var p=Input.GameViewMousePosition/scale-ShopOrigin(Input.GameViewSize.X/scale,Input.GameViewSize.Y/scale);
   int previous=hovered;hovered=-1;foreach(int item in ShopOrder)if(Inside(p,OrderButton(item)))hovered=item;
-  closeHovered=Inside(p,new(504,16,36,36))||Inside(p,new(432,552,104,36));if(previous!=hovered&&hovered>=0)MiningAudio3D.Find(GameObject)?.PlayHoverCue(.6f);
-  if(!Input.IsMouseButtonPressedForUi(MouseButton.Left))return;if(closeHovered){Close();return;}
+  closeHovered=Inside(p,new(432,12,32,32));if(previous!=hovered&&hovered>=0)MiningAudio3D.Find(GameObject)?.PlayHoverCue(.6f);
+  if(!Input.IsMouseButtonPressedForUi(MouseButton.Left))return;if(closeHovered){Close();return;}if(Inside(p,new(80,230,252,30))&&Op?.DefencePlanner is {DepletedMineCount:>0} planner){int count=planner.RechargeAllMines();Status=count>0?$"Recharged {count} mines in place.":$"Need {planner.MineReplacementOreCost} refined ore per depleted mine.";MiningAudio3D.Find(GameObject)?.PlayCue(count>0?MiningSoundCue.Confirm:MiningSoundCue.Error);return;}
   foreach(int item in ShopOrder)if(Inside(p,OrderButton(item))){SubmitOrder(item);return;}
  }
  void DrawShop(RenderContext c,MiningOperation3D op,float s,float width,float height)
  {
-  var origin=ShopOrigin(width,height);float ox=origin.X,oy=origin.Y;
-  void Q(float x,float y,float w,float h,Vector4 color)=>c.DrawUiQuad(new((ox+x)*s,(oy+y)*s),new(w*s,h*s),color);
-  void L(float x,float y,float xx,float yy,Vector4 color)=>c.DrawUiLine(new((ox+x)*s,(oy+y)*s),new((ox+xx)*s,(oy+yy)*s),s,color);
-  void T(string text,float x,float y,int size=20,Vector4? color=null,bool bold=false,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(text,bold?ShopHeadingFont:Ui?.BodyFont??ShopBodyFont,(int)(size*s),new((ox+x)*s,(oy+y)*s),color??ShopWhite,anchor);
-  c.DrawUiQuad(Vector2.Zero,new(c.TargetWidth,c.TargetHeight),new(0,0,0,.12f));Q(0,0,560,600,new(.025f,.035f,.045f,.985f));Q(0,0,4,54,ShopYellow);
-  T("FIELD R&D",26,23,28);T($"{op.Credits:N0} cr",356,22,21,ShopYellow);T($"{op.RefinedOre:N0} REFINED",356,50,14,ShopMuted);T("X",516,20,23,closeHovered?ShopYellow:ShopWhite);L(24,78,536,78,ShopEdge);
-  for(int row=0;row<ShopOrder.Length;row++){
-   int item=ShopOrder[row];float y=92+row*82;bool enabled=OrderAvailable(item);Q(24,y,512,72,selected==item?new(.10f,.105f,.075f,1):new(.055f,.07f,.085f,1));
+  var o=ShopOrigin(width,height);float x=o.X,y=o.Y;
+  void T(string v,float xx,float yy,int size=17,bool bold=false,Vector4? color=null,UiAnchor anchor=UiAnchor.TopLeft)=>SupportUiArt.T(c,s,v,x+xx,y+yy,size,bold,color,anchor);
+  SupportUiArt.Panel(c,s,x,y,468,480,accent:true);T("FIELD R&D",20,15,25,true);T($"{op.Credits:N0} cr",418,21,13,true,SupportUiArt.Gold,UiAnchor.TopRight);SupportUiArt.L(c,s,x+12,y+54,x+456,y+54);T("X",443,17,19);
+  for(int row=0;row<5;row++){
+   int item=ShopOrder[row];float yy=65+row*67;bool enabled=OrderAvailable(item);
    string title=item switch{0=>"Security drone",1=>"Field barricade",4=>"Proximity mine",3=>"Additional refinery",_=>"Cargo expansion"};
-   string detail=item switch{0=>$"{ActiveDroneCount} / {MaximumDrones} active / {DroneBatterySeconds:0}s combat",1=>$"{BarricadeStock} kits ready",4=>$"{MineStock} kits / 10 refined ore to replace",3=>$"50 raw per load / {RefineryStock} ready",_=>$"{op.CargoCapacity:N0} > {Math.Min(1000000,op.CargoCapacity+op.CargoCapacityPerUpgrade):N0} CAPACITY"};
-   string icon=item switch{1=>"shield",4=>"mine",2=>"crate",_=>"gear"};
-   float ix=42,iy=y+20;
-   if(item==0){Q(ix+11,iy+10,14,12,ShopWhite);foreach(var offset in new[]{new Vector2(3,3),new Vector2(33,3),new Vector2(3,29),new Vector2(33,29)}){L(ix+18,iy+16,ix+offset.X,iy+offset.Y,ShopWhite);for(int n=0;n<12;n++){float a=n*MathF.Tau/12,nextAngle=(n+1)*MathF.Tau/12;L(ix+offset.X+6*MathF.Cos(a),iy+offset.Y+4*MathF.Sin(a),ix+offset.X+6*MathF.Cos(nextAngle),iy+offset.Y+4*MathF.Sin(nextAngle),ShopWhite);}}}
-   else if(item==3){Q(ix+4,iy+11,28,21,ShopWhite);Q(ix+7,iy+1,6,11,ShopWhite);Q(ix+23,iy+3,6,9,ShopWhite);Q(ix,iy+32,37,4,ShopWhite);Q(ix+11,iy+18,5,7,ShopEdge);Q(ix+22,iy+18,5,7,ShopEdge);}
-   else if(AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)c.DrawUiImage(assets.LoadTexture(new AssetReference("Assets/UI/Mining/Artwork/research-"+icon+".png")),new((ox+ix)*s,(oy+iy)*s),new(34*s),ShopWhite);
-   T(title,96,y+11,20);T(detail,96,y+48,13,ShopMuted);
-   var b=OrderButton(item);Q(b.X,b.Y,b.Z,b.W,enabled&&hovered==item?new(.29f,.24f,.08f,1):new(.04f,.055f,.065f,1));L(b.X,b.Y,b.X+b.Z,b.Y,enabled?ShopYellow:ShopEdge);
-   string cost=item switch{0=>DroneActive?"SLOTS FULL":$"ORDER {DroneCost:N0} cr",1=>$"{BarricadeOreCost} REFINED ORE",4=>$"{MineOreCost} REFINED ORE",3=>$"ORDER {ExtraRefineryCost:N0} cr",_=>$"UPGRADE {op.CargoUpgradeCost:N0} cr"};
-   T(cost,b.X+b.Z/2,b.Y+11,15,enabled?ShopYellow:ShopMuted,true,UiAnchor.TopCenter);
+   string detail=item switch{0=>$"{ActiveDroneCount} / {MaximumDrones} active / {DroneBatterySeconds:0}s",1=>$"{BarricadeStock} ready",4=>$"{MineStock} ready / recharge 10 refined",3=>$"{RefineryStock} ready / 50 raw per load",_=>$"{op.CargoCapacity:N0} > {Math.Min(1000000,op.CargoCapacity+op.CargoCapacityPerUpgrade):N0}"};
+   string icon=item switch{0=>"support-drone",1=>"support-barricade",4=>"support-mine",3=>"support-refinery",_=>"cargo"};SupportUiArt.Image(c,s,icon,x+20,y+yy+9,46,42);T(title,82,yy+7,17,true);if(item==4&&op.DefencePlanner is {DepletedMineCount:>0} mines)T($"Recharge {mines.DepletedMineCount} / {mines.DepletedMineCount*mines.MineReplacementOreCost} refined [click]",82,yy+34,13,color:SupportUiArt.Gold);else T(detail,82,yy+34,13);var b=OrderButton(item);
+   SupportUiArt.Panel(c,s,x+b.X,y+b.Y,b.Z,b.W,enabled?hovered==item?new(1,.87f,.38f,1):SupportUiArt.Gold:new(.23f,.24f,.23f,1),enabled?SupportUiArt.Gold:SupportUiArt.Muted);
+   string cost=item switch{0=>DroneActive?"Slots full":$"{DroneCost:N0} cr",1=>$"{BarricadeOreCost} refined",4=>$"{MineOreCost} refined",3=>$"{ExtraRefineryCost:N0} cr",_=>$"{op.CargoUpgradeCost:N0} cr"};T(cost,b.X+b.Z/2,b.Y+9,15,true,enabled?new(.05f,.055f,.05f,1):SupportUiArt.Muted,UiAnchor.TopCenter);
+   SupportUiArt.L(c,s,x+12,y+yy+64,x+456,y+yy+64,new(.38f,.39f,.36f,1));
   }
-  L(24,514,536,514,ShopEdge);string feedback=Status.StartsWith("Choose support.")?"Order support here. Place kits with B or their shortcuts.":Status;T(feedback.Length>66?feedback[..63]+"...":feedback,24,530,13,ShopMuted);T("Q / E rotates placement previews",24,568,13,ShopMuted);T("Esc  Close",532,568,16,closeHovered?ShopYellow:ShopWhite,false,UiAnchor.TopRight);
+  SupportUiArt.Image(c,s,"info",x+20,y+421,20,20);T("Purchase kits, then place with [B]",52,422,16);T(Status.StartsWith("Choose support.")?$"{op.Credits:N0} cr / {op.RefinedOre:N0} refined":Status.Length>53?Status[..50]+"...":Status,20,453,13,color:SupportUiArt.Gold);T("Esc Close",448,453,13,anchor:UiAnchor.TopRight);
  }
 }

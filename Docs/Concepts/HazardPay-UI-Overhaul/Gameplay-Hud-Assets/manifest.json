@@ -1,0 +1,60 @@
+{
+  "reference": "Docs/Concepts/HazardPay-UI-Overhaul/01-Field-Systems.png",
+  "font": "Inter 4.1; closest verifiable match, generated reference has no embedded font identity",
+  "icons": [
+    "credits",
+    "raw-ore",
+    "refined-ore",
+    "cargo",
+    "health",
+    "drill",
+    "company-goal",
+    "pistol",
+    "factory",
+    "ammo",
+    "clock",
+    "recycle",
+    "info",
+    "gear"
+  ],
+  "panels": {
+    "resource-strip": [
+      560,
+      52
+    ],
+    "vitals": [
+      350,
+      84
+    ],
+    "ammunition": [
+      230,
+      60
+    ],
+    "hint": [
+      194,
+      34
+    ],
+    "goal": [
+      210,
+      66
+    ],
+    "machine": [
+      480,
+      580
+    ],
+    "upgrade-row": [
+      444,
+      62
+    ],
+    "price": [
+      98,
+      40
+    ]
+  },
+  "palette": {
+    "surface": "#202020",
+    "border": "#c3bda6",
+    "accent": "#f3c332",
+    "text": "#f5f2e9"
+  }
+}

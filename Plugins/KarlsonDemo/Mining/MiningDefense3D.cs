@@ -38,13 +38,14 @@ public sealed partial class MiningDefense3D:Component
  }
  public void Tick(float dt)
  {
-  if(dt<=0||!float.IsFinite(dt)||ResolveDestruction())return;TickVisual(dt);
+  if(dt<=0||!float.IsFinite(dt)||ResolveDestruction())return;TickVisual(dt);DisabledSeconds=Math.Max(0,DisabledSeconds-dt);
   if(Spent||Op is not {} op||Trade is not {} trade)return;
+  if(Kind==MiningDefenseKind.Mine&&DisabledSeconds>0)return;
   if(Kind==MiningDefenseKind.Mine&&mineFuse>=0){mineFuse-=dt;if(mineFuse<=0){Blast(Transform.WorldPosition,BlastRadius+trade.Stat("LandMineBlastRadius"),BaseDamage+trade.Stat("LandMineDamageFlat"));DetonateVisual();}return;}
   if(Kind==MiningDefenseKind.SupplyCache){cacheHeight=Math.Max(.6f,cacheHeight-dt*5);if(head!=null)head.Transform.LocalPosition=new(0,cacheHeight,0);if(visualRoot!=null)visualRoot.Transform.LocalPosition=new(0,cacheHeight-.6f,0);var player=GameObject.Scene!.FindGameObject(op.PlayerObjectId);var weapon=player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon;var health=player?.GetComponent<HealthComponent>();if(cacheHeight<=.6f&&player!=null&&Vector3.Distance(player.Transform.WorldPosition,Transform.WorldPosition)<1.6f&&(weapon?.ReserveAmmo<weapon?.Definition?.ReserveCapacity||health?.HealthPercent<1)){if(weapon?.Definition is {} d)weapon.SetAmmo(weapon.CurrentAmmo,Math.Min(d.ReserveCapacity,weapon.ReserveAmmo+24));health?.Heal(15);if(!CollectVisual()){Spent=true;GameObject.Scene.DestroyGameObject(GameObject);}}return;}
   cooldown=Math.Max(0,cooldown-dt);flash=Math.Max(0,flash-dt);if(beam!=null)beam.Active=flash>0;
   if(flight>=0){flight+=dt;float t=Math.Clamp(flight/.9f,0,1);if(shell!=null)shell.Transform.WorldPosition=Vector3.Lerp(start,impact,t)+Vector3.UnitY*MathF.Sin(t*MathF.PI)*6;if(t>=1){flight=-1;mortarSmoke?.Stop(true);if(shell!=null)shell.Active=false;Blast(impact,BlastRadius,BaseDamage+trade.Stat("MortarStrikeDamageFlat"));if(salvo>0){salvo--;flight=0;impact+=new Vector3(MathF.Sin(salvo*2.4f),0,MathF.Cos(salvo*2.4f));if(shell!=null){shell.Transform.WorldPosition=start;shell.Active=true;}ShotsFired++;PlayShotVisual();ShowShotEffects(start,impact,true);MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.Cannon,start);}}return;}
-  if(op.Phase!=MiningPhase.Drilling&&op.RoamingEnemiesAlive==0)return;
+  if(DisabledSeconds>0||op.Phase!=MiningPhase.Drilling&&op.RoamingEnemiesAlive==0)return;
   var targets=op.SpawnedEnemies.Where(o=>o.Scene==GameObject.Scene&&o.GetComponent<HealthComponent>() is {IsDead:false}).OrderBy(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,Transform.WorldPosition)).ToArray();
   var enemy=targets.FirstOrDefault(o=>Vector3.DistanceSquared(o.Transform.WorldPosition,Transform.WorldPosition)<=Range*Range);if(enemy==null)return;
   if(Kind==MiningDefenseKind.Mine)

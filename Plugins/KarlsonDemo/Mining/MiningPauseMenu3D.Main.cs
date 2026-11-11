@@ -38,21 +38,21 @@ public sealed partial class MiningPauseMenu3D
  }
  void BuildMain(float w,float h)
  {
-  float x=w*.13f,y=h*.38f;
-  if(HasSavedGame)items.Add(new("CONTINUE",x,y,270,46,Resume));
-  items.Add(new("NEW GAME",x,y+58,270,46,()=>ShowPage(MiningPausePage.NewCompany)));
-  items.Add(new("SETTINGS",x,y+116,270,46,()=>ShowPage(MiningPausePage.Settings)));
-  items.Add(new("QUIT",x,y+174,270,46,()=>ShowPage(MiningPausePage.Quit)));
+  float x=w*.10f,y=h*.37f;int row=0;
+  if(HasSavedGame)items.Add(new("Continue",x,y+row++*62,340,52,Resume));
+  items.Add(new("New game",x,y+row++*62,340,52,()=>ShowPage(MiningPausePage.NewCompany)));
+  items.Add(new("Settings",x,y+row++*62,340,52,()=>ShowPage(MiningPausePage.Settings)));
+  items.Add(new("Quit",x,y+row*62,340,52,()=>ShowPage(MiningPausePage.Quit)));
  }
  void RenderMain(RenderContext c)
  {
   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s,h=c.TargetHeight/s;
-  for(int i=0;i<160;i++){int x0=(int)MathF.Round(c.TargetWidth*i/160f),x1=(int)MathF.Round(c.TargetWidth*(i+1)/160f);float alpha=.95f*MathF.Pow(1-i/160f,2.1f);c.DrawUiQuad(new(x0,0),new(x1-x0,c.TargetHeight),new(0,0,0,alpha));}
-  void T(string value,float x,float y,int size,Vector4 color)=>c.DrawUiText(value,HeadingFont,(int)(size*s),new(x*s,y*s),color,UiAnchor.TopLeft);
-  T(string.IsNullOrWhiteSpace(CompanyTitle)?"MAIN MENU":CompanyTitle.ToUpperInvariant(),w*.13f,h*.22f,34,text);
-  items.Clear();BuildMain(w,h);bool hovered=items.Any(i=>Inside(i.X,i.Y,i.W,i.H));
-  for(int n=0;n<items.Count;n++){var i=items[n];bool selected=Inside(i.X,i.Y,i.W,i.H)||!hovered&&focus==n;T(i.Label,i.X,i.Y+6,28,selected?accent:text);if(selected){c.DrawUiQuad(new((i.X-90)*s,(i.Y+20)*s),new(9*s),accent);c.DrawUiLine(new((i.X-70)*s,(i.Y+24)*s),new((i.X-22)*s,(i.Y+24)*s),s,accent);}}
-
+  for(int i=0;i<128;i++){float x0=c.TargetWidth*i/128f,x1=c.TargetWidth*(i+1)/128f;float alpha=.96f*MathF.Pow(1-i/128f,2.1f);c.DrawUiQuad(new(x0,0),new(x1-x0,c.TargetHeight),new(0,0,0,alpha));}
+  string title=string.IsNullOrWhiteSpace(CompanyTitle)?"HAZARD PAY":CompanyTitle.ToUpperInvariant();
+  c.DrawUiText(title,SupportUiArt.Logo,(int)(52*s),new(w*.10f*s,h*.22f*s),SupportUiArt.White,UiAnchor.TopLeft);
+  float titleWidth=c.MeasureText(title,Path.Combine(GameObject.Scene!.ProjectRoot!,SupportUiArt.Logo.ProjectPath),(int)(52*s)).X/s;c.DrawUiText("/",SupportUiArt.Logo,(int)(52*s),new((w*.10f+titleWidth+14)*s,h*.22f*s),SupportUiArt.Gold,UiAnchor.TopLeft);
+  items.Clear();BuildMain(w,h);bool hover=items.Any(a=>Inside(a.X,a.Y,a.W,a.H));
+  for(int n=0;n<items.Count;n++){var a=items[n];bool selected=Inside(a.X,a.Y,a.W,a.H)||!hover&&focus==n;if(selected)SupportUiArt.Panel(c,s,a.X,a.Y,a.W,a.H,SupportUiArt.Gold,SupportUiArt.Gold);SupportUiArt.T(c,s,a.Label,a.X+22,a.Y+12,25,true,selected?new(.04f,.045f,.04f,1):SupportUiArt.White);}
  }
  void StartNewCompany()
  {

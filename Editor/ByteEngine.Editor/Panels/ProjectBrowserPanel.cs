@@ -8,6 +8,7 @@ internal enum ProjectTemplate
     Clean,
     Starter3D,
     ByteArena,
+    HazardPayTps,
     LastStand,
     InteractiveSand,
     KarlsonDemo
@@ -106,9 +107,9 @@ internal sealed class ProjectBrowserPanel
         if (ImGui.RadioButton("3D Starter", ref template, (int)ProjectTemplate.Starter3D))
             _template = ProjectTemplate.Starter3D;
         ImGui.TextDisabled("    Camera, lit cube, ground plane, collider and directional light.");
-        if (ImGui.RadioButton("ByteArena", ref template, (int)ProjectTemplate.ByteArena))
-            _template = ProjectTemplate.ByteArena;
-        ImGui.TextDisabled("    Playable arena shooter with player, camera, enemies and game manager.");
+        if (ImGui.RadioButton("Hazard Pay TPS", ref template, (int)ProjectTemplate.HazardPayTps))
+            _template = ProjectTemplate.HazardPayTps;
+        ImGui.TextDisabled("    Third-person character, three weapons, aiming, reloads and health HUD.");
         if (ImGui.RadioButton("Last Stand", ref template, (int)ProjectTemplate.LastStand))
             _template = ProjectTemplate.LastStand;
         ImGui.TextDisabled("    Playable zombie survival: shotgun, waves, HUD, pickups and ragdolls.");

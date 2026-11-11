@@ -63,7 +63,7 @@ public sealed partial class MiningDefense3D
  {
   if(!VisualReady||visual==null)return;visualClock=Math.Max(0,visualClock-dt);
   if(visualCollecting){if(visualClock<=0){Spent=true;GameObject.Scene!.DestroyGameObject(GameObject);}return;}
-  if(Spent){if(visualClock<=0)GameObject.Scene!.DestroyGameObject(GameObject);return;}
+  if(Spent){if(Kind==MiningDefenseKind.Mine&&RechargeableMine)return;if(visualClock<=0)GameObject.Scene!.DestroyGameObject(GameObject);return;}
   if(VisualState==DeployClip&&visualClock<=0){if(Kind==MiningDefenseKind.Mine)PlayVisual(ArmClip);else PlayVisual(IdleClip,true);}
   else if(VisualState==ArmClip&&visualClock<=0)PlayVisual(IdleClip,true);
   else if(VisualState==FireClip&&visualClock<=0)PlayVisual(IdleClip,true);
@@ -81,6 +81,6 @@ public sealed partial class MiningDefense3D
   return Transform.WorldPosition+Vector3.UnitY*1.1f;
  }
  void PlayShotVisual(){if(VisualReady)PlayVisual(FireClip);}
- void DetonateVisual(){Spent=true;NotifyRetired(false);if(VisualReady)PlayVisual(TriggerClip);else GameObject.Scene!.DestroyGameObject(GameObject);}
+ void DetonateVisual(){Spent=true;if(Kind==MiningDefenseKind.Mine&&RechargeableMine){PlayVisual(IdleClip,true);Op?.DefencePlanner?.Save();return;}NotifyRetired(false);if(VisualReady)PlayVisual(TriggerClip);else GameObject.Scene!.DestroyGameObject(GameObject);}
  bool CollectVisual(){if(!VisualReady)return false;Spent=true;visualCollecting=true;PlayVisual(OpenClip);return true;}
 }

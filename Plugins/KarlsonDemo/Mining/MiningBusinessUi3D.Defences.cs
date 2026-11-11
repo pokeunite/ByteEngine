@@ -26,20 +26,8 @@ public sealed partial class MiningBusinessUi3D
  public int ReadyDefenceHudCount=>DefencePlanner is {} p?Enum.GetValues<MiningDefenseKind>().Count(k=>p.Available(k)>0):0;
  void DrawDefenceHud(RenderContext c,float width,float height,float scale)
  {
-  if(DefencePlanner is not {} planner||Op?.Phase==MiningPhase.Failed)return;int row=0;
-  void Q(float x,float y,float w,float h,Vector4 color)=>c.DrawUiQuad(new(x*scale,y*scale),new(w*scale,h*scale),color);
-  void T(string text,float x,float y,int size,Vector4 color,UiAnchor anchor=UiAnchor.TopLeft)=>c.DrawUiText(text,BodyFont,Math.Max(12,(int)(size*scale)),new(x*scale,y*scale),color,anchor);
-  for(int i=0;i<Enum.GetValues<MiningDefenseKind>().Length;i++)
-  {
-   var kind=(MiningDefenseKind)i;int count=planner.Available(kind);if(count<=0)continue;float x=width-328,y=120+row++*80;bool glow=count>0&&readyGlow.GetValueOrDefault(kind)>Time.TotalTime;
-   Q(x-1,y-1,310,74,glow||(planner.BuildMode&&planner.SelectedKind==kind)?Accent:new(.26f,.29f,.32f,1));Q(x,y,308,72,Surface);
-   string icon=kind is MiningDefenseKind.Sentry or MiningDefenseKind.Repeater?"turret":kind==MiningDefenseKind.Mortar?"mortar":kind==MiningDefenseKind.Mine?"mine":kind==MiningDefenseKind.Barricade?"shield":kind==MiningDefenseKind.ResearchStation?"gear":"crate";
-   if(AnimationRuntimeAssets.TryGet(out var assets)&&assets!=null)c.DrawUiImage(assets.LoadTexture(new AssetReference("Assets/UI/Mining/Artwork/research-"+icon+".png")),new((x+9)*scale,(y+13)*scale),new(38*scale),count>0?TextColor:new(.4f,.45f,.36f,1));
-   string name=kind switch{MiningDefenseKind.Sentry=>"SENTRY",MiningDefenseKind.Repeater=>"ROTARY GUN",MiningDefenseKind.Mortar=>"MORTAR",MiningDefenseKind.Mine=>"MINE",MiningDefenseKind.Barricade=>"BARRICADE",MiningDefenseKind.ExtraRefinery=>"REFINERY",MiningDefenseKind.ResearchStation=>"FIELD R&D",_=>"SUPPLY DROP"};
-   T(name,x+56,y+7,18,TextColor);var shortcut=new[]{planner.SentryKey,planner.RepeaterKey,planner.MortarKey,planner.MineKey,planner.SupplyKey,planner.BarricadeKey,planner.ExtraRefineryKey,planner.ResearchStationKey}[i];T($"[{MiningPauseMenu3D.KeyLabel(shortcut)}] PLACE",x+56,y+36,14,Accent);T(planner.ReplacementCost(kind)>0?$"{planner.ReplacementCost(kind)} REFINED ORE":$"{count} READY",x+294,y+53,14,TextColor,UiAnchor.TopRight);
-  }
-
-  if(planner.BuildMode)
-  {Q(width/2-245,height-160,490,58,Surface);T($"{planner.SelectedKind.ToString().ToUpperInvariant()} / LMB PLACE / Q/E ROTATE / RMB CANCEL",width/2-230,height-151,16,Accent);T($"[{MiningPauseMenu3D.KeyLabel(planner.BuildKey)}] NEXT DEFENCE",width/2-230,height-128,14,TextColor);}
+  if(DefencePlanner is not {} planner||Op?.Phase==MiningPhase.Failed)return;
+  if(!planner.BuildMode){if(!CombatHud){FieldHint(c,$"[{MiningPauseMenu3D.KeyLabel(planner.BuildKey)}] Build",width-214,height-118,194,scale);}return;}
+  DrawSupportBuildTray(c,width,height,scale,planner);
  }
 }

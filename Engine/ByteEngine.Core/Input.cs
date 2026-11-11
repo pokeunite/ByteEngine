@@ -126,8 +126,8 @@ public static class Input
     public static void RequestUiPointer(object owner,bool visible)
     {
         ArgumentNullException.ThrowIfNull(owner);
-        if(visible)_uiPointerOwners.Add(owner);
-        else if(_uiPointerOwners.Remove(owner)&&_uiPointerOwners.Count==0){_keepGameViewPointerFreeUntil=0;_ignorePointerAimUntil=Environment.TickCount64+100;}
+        if(visible){_uiPointerOwners.Add(owner);ConsumeGameplayPointer();}
+        else if(_uiPointerOwners.Remove(owner)&&_uiPointerOwners.Count==0){ConsumeGameplayPointer();_keepGameViewPointerFreeUntil=0;_ignorePointerAimUntil=Environment.TickCount64+100;}
     }
     private static long _ignorePointerAimUntil;
     public static Vector2 MouseDelta { get; private set; }
@@ -179,9 +179,11 @@ public static class Input
             ? new Vector2(mouseState.Delta.X, mouseState.Delta.Y)
             : Vector2.Zero;
 
+        if(!MouseButtonsDown.Contains(MouseButton.Left))_uiCapturedPrimaryMouse=false;
         RawSnapshot.Clear();
         foreach (Key key in SupportedKeys) if(KeysDown.Contains(GameplayKey(key))) RawSnapshot.KeysDown.Add(key);
         foreach (MouseButton button in SupportedMouseButtons) if(MouseButtonsDown.Contains(GameplayMouseButton(button))) RawSnapshot.MouseButtonsDown.Add(button);
+        if(IsUiPointerRequested||_uiCapturedPrimaryMouse)RawSnapshot.MouseButtonsDown.Remove(MouseButton.Left);
         RawSnapshot.MouseDelta = MouseDelta;
         RawSnapshot.MouseWheel = mouseState.ScrollDelta.Y;
         PopulateGamepad(RawSnapshot.Gamepad, joystickStates);
@@ -204,9 +206,11 @@ public static class Input
         MouseButtonsDown.Clear();
         MouseButtonsDown.UnionWith(snapshot.MouseButtonsDown);
         MouseDelta = captured ? snapshot.MouseDelta : Vector2.Zero;
+        if(!MouseButtonsDown.Contains(MouseButton.Left))_uiCapturedPrimaryMouse=false;
         RawSnapshot.Clear();
         foreach (Key key in SupportedKeys) if(KeysDown.Contains(GameplayKey(key))) RawSnapshot.KeysDown.Add(key);
         foreach (MouseButton button in SupportedMouseButtons) if(MouseButtonsDown.Contains(GameplayMouseButton(button))) RawSnapshot.MouseButtonsDown.Add(button);
+        if(IsUiPointerRequested||_uiCapturedPrimaryMouse)RawSnapshot.MouseButtonsDown.Remove(MouseButton.Left);
         RawSnapshot.MouseDelta = MouseDelta;
         RawSnapshot.MouseWheel = snapshot.MouseWheel;
         RawSnapshot.Gamepad.LeftStick = snapshot.Gamepad.LeftStick;
@@ -261,12 +265,12 @@ public static class Input
     public static bool IsKeyReleased(Key key) => !KeysDown.Contains(EffectiveKey(key)) && PreviousKeysDown.Contains(EffectiveKey(key));
 
     public static bool IsMouseButtonDown(MouseButton button) =>
-        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) && MouseButtonsDown.Contains(GameplayMouseButton(button));
+        !IsUiPointerRequested && !(button == MouseButton.Left && (_uiBlocksPrimaryMouse||_uiCapturedPrimaryMouse)) && MouseButtonsDown.Contains(GameplayMouseButton(button));
     public static bool IsMouseButtonPressed(MouseButton button) =>
-        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
+        !IsUiPointerRequested && !(button == MouseButton.Left && (_uiBlocksPrimaryMouse||_uiCapturedPrimaryMouse)) &&
         IsMouseButtonPressedForUi(GameplayMouseButton(button));
     public static bool IsMouseButtonReleased(MouseButton button) =>
-        !(button == MouseButton.Left && _uiBlocksPrimaryMouse) &&
+        !IsUiPointerRequested && !(button == MouseButton.Left && (_uiBlocksPrimaryMouse||_uiCapturedPrimaryMouse)) &&
         !MouseButtonsDown.Contains(GameplayMouseButton(button)) && PreviousMouseButtonsDown.Contains(GameplayMouseButton(button));
     public static bool IsMouseButtonPressedForUi(MouseButton button) =>
         MouseButtonsDown.Contains(button) && !PreviousMouseButtonsDown.Contains(button);

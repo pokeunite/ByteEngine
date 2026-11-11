@@ -7,6 +7,7 @@ internal static class MiningEvents
  public static void Register(ByteEnginePluginContext c)
  {
   MiningCleanupEvents.Register(c);
+  MiningExpeditionEvents.Register(c);
   MiningMarketEvents.Register(c);
   MiningGameFeelEvents.Register(c);
   var researchTarget=new VisualArgumentDefinition("target","Field R&D component",VariableValue.FromString("Self")){IsObjectReference=true};
@@ -70,13 +71,13 @@ internal static class MiningEvents
   U("openNearby","Interact with nearest mining machine",ui=>ui.OpenNearby());U("closePanel","Close mining panel",ui=>ui.Close());U("openCompany","Open company terminal",ui=>ui.Open(MiningScreen.Company));U("openMarket","Open commodity market",ui=>ui.Open(MiningScreen.Market));U("openAmmo","Open ammo press",ui=>ui.Open(MiningScreen.AmmoPress));U("openRefinery","Open refinery",ui=>ui.Open(MiningScreen.Refinery));U("openDrill","Open drill panel",ui=>ui.Open(MiningScreen.Drill));
   U("primary","Activate current panel main action",ui=>ui.Primary());U("secondary","Activate current panel secondary action",ui=>ui.Secondary());U("less","Decrease sale quantity",ui=>ui.ChangeQuantity(-1));U("more","Increase sale quantity",ui=>ui.ChangeQuantity(1));U("selectRaw","Select raw ore market",ui=>ui.SelectResource(false));U("selectRefined","Select refined ore market",ui=>ui.SelectResource(true));
   for(int index=0;index<Enum.GetValues<MiningDefenseKind>().Length;index++){int choice=index;U("selectDefence"+index,"Select defence placement "+((MiningDefenseKind)index),ui=>ui.SelectDefence(choice));}
-  for(int index=0;index<3;index++){int choice=index;U("selectContract"+index,"Select extraction contract "+(index+1),ui=>ui.SelectContract(choice));A("chooseContract"+index,"Choose extraction difficulty "+(index+1),op=>op.SelectContract(choice));}
+  for(int index=0;index<30;index++){int choice=index;U("selectContract"+index,"Select extraction contract "+(index+1),ui=>ui.SelectContract(choice));A("chooseContract"+index,"Choose extraction difficulty "+(index+1),op=>op.SelectContract(choice));}
   for(int row=0;row<3;row++){int r=row;U("buyRow"+r,"Purchase machine upgrade row "+(r+1),ui=>ui.Purchase(r));}
   U("openAudioCredits","Show sound source credits",ui=>ui.Open(MiningScreen.AudioCredits));
   U("openResearch","Open permanent company upgrade map",ui=>ui.Open(MiningScreen.Research));U("openCompanyAccount","Open company deposit allocation",ui=>ui.Open(MiningScreen.Account));
   U("confirm","Confirm selected company upgrade",ui=>ui.ConfirmSelection());
   for(int node=0;node<128;node++){int n=node;U("selectResearch"+n,"Select company upgrade node "+(n+1),ui=>ui.SelectResearch(n));}
-  c.RegisterCondition(new(){Id=prefix+"contractSelected",Category="Mining",MenuGroup="Extraction Contracts",DisplayName="Selected extraction contract is",Arguments=[target,new("contract","Contract ID",VariableValue.FromString("survey")){Choices=["survey","deep","overdrive"]}],Evaluate=(i,e)=>Op(i,e)?.SelectedContractId==EventValueResolver.GetString(i,"contract",e,"survey")});
+  c.RegisterCondition(new(){Id=prefix+"contractSelected",Category="Mining",MenuGroup="Extraction Contracts",DisplayName="Selected extraction contract is",Arguments=[target,new("contract","Contract ID",VariableValue.FromString("survey")){Choices=MiningSiteCatalog.Create().Select(site=>site.Id).ToArray()}],Evaluate=(i,e)=>Op(i,e)?.SelectedContractId==EventValueResolver.GetString(i,"contract",e,"survey")});
   c.RegisterCondition(new(){Id=prefix+"cargoFull",Category="Mining",MenuGroup="Mining Business",DisplayName="Cargo hold is full or reserved",Arguments=[target],Evaluate=(i,e)=>Op(i,e)?.CargoFull==true});
   c.RegisterCondition(new(){Id=prefix+"phase",Category="Mining",MenuGroup="Mining Business",DisplayName="Mining operation phase is",Arguments=[target,new("phase","Phase",VariableValue.FromString("Preparation")){Choices=["Preparation","Drilling","Failed"]}],Evaluate=(i,e)=>Op(i,e)?.Phase.ToString().Equals(EventValueResolver.GetString(i,"phase",e,"Preparation"),StringComparison.OrdinalIgnoreCase)==true});
  }

@@ -39,21 +39,21 @@ public sealed partial class MiningBusinessUi3D
  void UpdateMapInput()
  {
   if(Screen!=MiningScreen.Research)return;
-  var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));var bounds=CompactBounds(size.X/s,size.Y/s);mapWidth=bounds.Width;mapHeight=bounds.Height;
+  var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));var bounds=CompactBounds(size.X/s,size.Y/s);mapWidth=Screen==MiningScreen.Research?610:bounds.Width;mapHeight=bounds.Height;
   if(Trade is {} trade)PrepareResearchMap(trade);
   var mouse=Input.GameViewMousePosition/s-new Vector2(bounds.X,bounds.Y);bool over=mouse.X>28&&mouse.X<mapWidth-28&&mouse.Y>135&&mouse.Y<460;
   ScrollResearchDescription(mouse,Input.Snapshot.MouseWheel);
-  bool pan=over&&Input.IsMouseButtonDown(MouseButton.Right);
+  bool pan=over&&Input.IsMouseButtonDownForUi(MouseButton.Right);
   if(pan&&wasPanning)ResearchPan+=mouse-lastMapPointer;
   if(over&&Math.Abs(Input.Snapshot.MouseWheel)>.001f)
   {float old=ResearchZoom;ResearchZoom=Math.Clamp(old+Input.Snapshot.MouseWheel*.08f,.45f,1.5f);var center=new Vector2(mapWidth*.5f,300);ResearchPan=mouse-center-(mouse-center-ResearchPan)*(ResearchZoom/old);}
   ResearchPan=Vector2.Clamp(ResearchPan,new(-5000,-5000),new(5000,5000));lastMapPointer=mouse;wasPanning=pan;
  }
- string ResearchIcon(CompanyUpgrade n)=>n.Id is "company" or "charter"?"company":n.Branch=="Rifle"?"rifle":n.Branch=="Shotgun"?"shotgun":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
+ string ResearchIcon(CompanyUpgrade n)=>n.Name.Contains("Scatter",StringComparison.OrdinalIgnoreCase)?"scatter":n.Id is "company" or "charter"?"company":n.Branch=="Rifle"?"rifle":n.Branch=="Shotgun"?"shotgun":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
  void DrawResearchIcon(RenderContext c,CompanyUpgrade n,Vector2 p,float size,float scale,Vector4 color)
  {
   if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;
-  string icon=ResearchIcon(n);var asset=new AssetReference(icon is "rifle" or "shotgun"?"Assets/UI/CombatHUD/weapon-"+icon+".png":"Assets/UI/Mining/Artwork/"+(icon=="pistol"?"company-pistol":"research-"+icon)+".png");
+  string icon=Trade?.ResearchUnlocked(n.Id)!=true&&Trade?.ResearchRank(n.Id)==0?"lock":ResearchIcon(n);var asset=new AssetReference(icon is "scatter" or "lock"?"Assets/UI/Mining/FieldHud/company-"+icon+".png":icon is "rifle" or "shotgun"?"Assets/UI/CombatHUD/weapon-"+icon+".png":"Assets/UI/Mining/Artwork/"+(icon=="pistol"?"company-pistol":"research-"+icon)+".png");
   var dimensions=icon is "pistol" or "rifle" or "shotgun"?new Vector2(size,size*.5f):new Vector2(size,size);
   c.DrawUiImage(assets.LoadTexture(asset),(p-dimensions*.5f)*scale,dimensions*scale,color);
  }
@@ -73,14 +73,15 @@ public sealed partial class MiningBusinessUi3D
   foreach(var n in trade.Research.Where(n=>mapShown.Contains(n.Id)))
   {
    var p=NodePoint(n);if(!NodeVisible(p))continue;int rank=trade.ResearchRank(n.Id);bool available=trade.ResearchUnlocked(n.Id),selected=n.Id==SelectedResearchId;float r=NodeRadius;
-   var fill=rank>=n.MaxRank?Accent:available?new(.09f,.105f,.12f,1):new(.075f,.085f,.10f,1);
+   Vector4 fill=available||rank>0?new(.10f,.10f,.095f,1):new(.075f,.075f,.07f,1);
    var edge=selected?Accent:rank>=n.MaxRank?Accent:available?new(.53f,.48f,.26f,1):new(.25f,.28f,.31f,1);
    // Clipped-corner octagons with a fine border, no heavy square frame.
    for(int y=0;y<(int)(r*2);y++){float inset=Math.Max(0,8-Math.Min(y,r*2-1-y));Q(p.X-r+inset,p.Y-r+y,r*2-inset*2,1,edge);if(y>1&&y<r*2-2)Q(p.X-r+inset+1.5f,p.Y-r+y,r*2-inset*2-3,1,fill);}
-   DrawResearchIcon(c,n,p+new Vector2(ox,oy-2),r*1.32f,scale,rank>=n.MaxRank?new(.05f,.06f,.07f,1):available?TextColor:new(.34f,.37f,.40f,1));
+   DrawResearchIcon(c,n,p+new Vector2(ox,oy-2),r*1.32f,scale,rank>=n.MaxRank?TextColor:available?TextColor:new(.34f,.37f,.40f,1));
    int pips=Math.Min(n.MaxRank,5);float start=p.X-(pips*6-2)/2f;for(int i=0;i<pips;i++)Q(start+i*6,p.Y+r-8,4,3,i<rank?Accent:muted);
    if(!available&&rank==0){Q(p.X-3,p.Y-r+5,6,5,new(.7f,.72f,.65f,1));L(new(p.X-2,p.Y-r+5),new(p.X-2,p.Y-r+2),TextColor);L(new(p.X-2,p.Y-r+2),new(p.X+2,p.Y-r+2),TextColor);L(new(p.X+2,p.Y-r+2),new(p.X+2,p.Y-r+5),TextColor);}
    if(rank>=n.MaxRank){L(new(p.X+r-12,p.Y+r-14),new(p.X+r-8,p.Y+r-10),TextColor,2);L(new(p.X+r-8,p.Y+r-10),new(p.X+r-3,p.Y+r-17),TextColor,2);}
   }
  }
 }
+

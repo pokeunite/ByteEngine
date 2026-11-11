@@ -107,12 +107,12 @@ public sealed partial class MiningPauseMenu3D:Component
   if(!IsOpen)return;Input.RequestUiPointer(this,true);Input.ConsumeGameplayPointer();
   if(listeningMouse.HasValue){if(Time.TotalTime>listenAt)foreach(var button in Enum.GetValues<MouseButton>())if(Input.IsMouseButtonPressedForUi(button)){var logical=listeningMouse.Value;var old=Input.GameplayMouseButton(logical);var other=Enum.GetValues<MouseButton>().FirstOrDefault(b=>b!=logical&&Input.GameplayMouseButton(b)==button);if(other!=logical&&Input.GameplayMouseButton(other)==button)Input.BindGameplayMouseButton(other,old);Input.BindGameplayMouseButton(logical,button);listeningMouse=null;SaveSettings();break;}return;}
   if(listening.HasValue){if(Time.TotalTime>listenAt)foreach(var key in Enum.GetValues<Key>())if(Input.IsKeyPressed(key)){if(Rebind(listening.Value,key))listening=null;listeningMouse=null;break;}return;}
-  width=Input.GameViewSize.X;height=Input.GameViewSize.Y;float scale=Math.Max(.1f,Math.Min(width/1280,height/720));pointer=Input.GameViewMousePosition/scale;click=Input.IsMouseButtonPressedForUi(MouseButton.Left);down=Input.IsMouseButtonDownForUi(MouseButton.Left);if(Page==MiningPausePage.Controls)controlsScroll=Math.Clamp(controlsScroll-Input.Snapshot.MouseWheel*2,0,Math.Max(0,controls.Length+2-7));Build(width/scale,height/scale,true);
-  string? hovered=items.FirstOrDefault(i=>Inside(i.X,i.Y,i.W,i.H)).Label;
+  width=Input.GameViewSize.X;height=Input.GameViewSize.Y;float scale=Math.Max(.1f,Math.Min(width/1280,height/720));pointer=Input.GameViewMousePosition/scale;click=Input.IsMouseButtonPressedForUi(MouseButton.Left);down=Input.IsMouseButtonDownForUi(MouseButton.Left);if(Page is MiningPausePage.Sound or MiningPausePage.Controls)controlsScroll=Math.Clamp(controlsScroll-Input.Snapshot.MouseWheel*2,0,Math.Max(0,controls.Length+2-7));Build(width/scale,height/scale,true);
+  string? hovered=items.LastOrDefault(i=>Inside(i.X,i.Y,i.W,i.H)).Label;
   if(hovered!=hoveredMenuItem){if(hovered!=null)MiningAudio3D.Find(GameObject)?.PlayHoverCue(HoverSoundGain);hoveredMenuItem=hovered;}
   if(Input.IsKeyPressed(Key.Down))focus=(focus+1)%Math.Max(1,items.Count);if(Input.IsKeyPressed(Key.Up))focus=(focus+items.Count-1)%Math.Max(1,items.Count);
   if(Input.IsKeyPressed(Key.Enter)&&items.Count>focus){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalSelect);items[focus].Click();}
-  if(click){var hit=items.FirstOrDefault(i=>Inside(i.X,i.Y,i.W,i.H));if(hit.Click==null)windowDropdownOpen=false;if(hit.Click!=null){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalSelect);hit.Click();}}
+  if(click){var hit=items.LastOrDefault(i=>Inside(i.X,i.Y,i.W,i.H));if(hit.Click==null)windowDropdownOpen=false;if(hit.Click!=null){MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalSelect);hit.Click();}}
  }
  bool Inside(float x,float y,float w,float h)=>pointer.X>=x&&pointer.X<x+w&&pointer.Y>=y&&pointer.Y<y+h;
  void Build(float w,float h,bool interactive)=>BuildIndustrial(w,h,interactive);

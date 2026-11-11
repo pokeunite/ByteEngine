@@ -32,12 +32,13 @@ internal static class MiningInteractionRegressionCheck
    foreach(var other in machines)Update(other);ui.OpenNearby();
    Check(local.IsOpen&&machines.Count(r=>r.IsOpen)==1&&ui.Screen==MiningScreen.None,"E opens only the closest refinery, not the original or neighbouring machine");
    int ammo=gun.SelectedWeapon?.CurrentAmmo??0;Check(Input.IsUiPointerRequested&&!gun.Fire()&&(gun.SelectedWeapon?.CurrentAmmo??0)==ammo,"refinery menu clicks cannot fire the weapon");
-   local.Close();Raw();
+   int speedBefore=local.SpeedLevel;Raw();Input.SetGameViewPointer(new(1180f/1280,418f/720),new(1280,720),true);var clickUpgrade=new RawInputSnapshot();clickUpgrade.MouseButtonsDown.Add(MouseButton.Left);typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[clickUpgrade,true]);Update(local);Check(local.SpeedLevel==speedBefore+1,"local refinery upgrade matches the shared menu hitbox");Raw();
+   Input.SetGameViewPointer(new(1230f/1280,98f/720),new(1280,720),true);typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[clickUpgrade,true]);Update(local);Check(!local.IsOpen,"local refinery rendered X closes the menu");Raw();
   }
   shop.Open();Check(shop.IsOpen&&!gun.Fire(),"R&D menu cannot fire the weapon");
   var click=new RawInputSnapshot();click.MouseButtonsDown.Add(MouseButton.Left);typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[click,true]);shop.Close();Check(!gun.Fire(),"closing a menu consumes its click before gameplay resumes");Raw();
   ui.Open(MiningScreen.Refinery);Check(ui.Screen==MiningScreen.Refinery&&!gun.Fire(),"original refinery also blocks firing");ui.Close();Raw();
-  int before=op.Credits;Set(op,"RawOre",70);Check(machines[0].BeginLoad()&&machines[1].BeginLoad()&&machines[0].LoadedRaw==50&&machines[1].LoadedRaw==20,"local machines reserve independent finite loads");float second=machines[1].Remaining;machines[0].Tick(1);Check(machines[1].Remaining==second,"ticking one refinery does not advance another");Check(machines[0].BuyUpgrade(1)&&machines[1].SpeedLevel==0&&op.Credits<before,"local upgrades do not upgrade other machines");
+  int before=op.Credits;Set(op,"RawOre",70);Check(machines[0].BeginLoad()&&machines[1].BeginLoad()&&machines[0].LoadedRaw==50&&machines[1].LoadedRaw==20,"local machines reserve independent finite loads");float second=machines[1].Remaining;machines[0].Tick(1);Check(machines[1].Remaining==second,"ticking one refinery does not advance another");Check(machines[0].BuyUpgrade(1)&&machines[1].SpeedLevel==1&&op.Credits<before,"local upgrades do not upgrade other machines");
   shop.PersistSupport();Check(op.ResearchSupportState.Contains("StationRotation")&&op.ResearchSupportState.Contains("Refineries"),"station placement and independent refinery state are saved");
   host.UnloadScene();
  }

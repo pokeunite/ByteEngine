@@ -150,6 +150,7 @@ try{
             for(const marker of data.runtimeMarkers??[])capture.trigger(marker.kind,{callbackMs:marker.durationMs});
             graphics={quality:data.quality||'Balanced',worldResolution:data.worldResolution||'720p'};
             if(!renderer.isThreaded&&data.uiBuffer>=0)data.ui=decodeUiPacket(transfers.read(data.uiBuffer),data.uiCount,uiCommands);
+            if(game.HasExited()){stopped=true;if(document.pointerLockElement===canvas)document.exitPointerLock();status.hidden=false;status.textContent='Game exited. Refresh this page to play again.';return;}
             const managedEnd=performance.now();previous=now;delta=[0,0];wheel=0;keyPulses.clear();buttonPulses.clear();pauseFromCapture=false;
             if(document.pointerLockElement===canvas&&!game.WantsPointerLock())document.exitPointerLock();
             globalThis.byteEngineLastFrame={pendingTextures:data.pendingTextures,draws:data.draws.length,skyTexture:data.sky?.texture||0,hdrSky:data.sky?.hdr||false};
@@ -184,3 +185,4 @@ try{
     // Initial capture is requested from the next click (browser user-gesture requirement).
     schedule();
 }catch(error){fail(error);}
+

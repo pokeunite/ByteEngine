@@ -7,7 +7,7 @@ public sealed partial class MiningCampLayout3D
  public bool ShowDefenceRanges{get;set;}=true;
  public float RangeConeDegrees{get;set;}=90;
  readonly Material rangeMaterial=new(){BaseColor=new(.24f,.5f,.56f,1),EmissionEnabled=true,EmissionColor=new(.1f,.3f,.4f),EmissionIntensity=.35f};
- readonly Material selectedRangeMaterial=new(){BaseColor=new(1,.76f,.08f,1),EmissionEnabled=true,EmissionColor=new(1,.65f,.02f),EmissionIntensity=.6f};
+ readonly Material selectedRangeMaterial=new(){BaseColor=new(.12f,.9f,1,1),EmissionEnabled=true,EmissionColor=new(.1f,.7f,1),EmissionIntensity=.6f};
  void DrawDefenceRanges(RenderContext c)
  {
   if(!ShowDefenceRanges||editCamera?.GetComponent<Camera3D>() is not {} camera)return;
@@ -30,8 +30,9 @@ public sealed partial class MiningCampLayout3D
    {
     float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f);string detail=$"{d.Kind} | {d.EffectiveDamage:0.#} DAMAGE | {radius:0.#}m RANGE";
     string help=d.Kind==MiningDefenseKind.Mine?$"Inner ring: {d.TriggerRadius:0.#}m trigger / outer: blast":d.Kind==MiningDefenseKind.Mortar?$"360° targeting / {d.EffectiveBlastRadius:0.#}m impact radius":"Cone: facing / outer ring: 360° tracking range";
-    c.DrawUiQuad(new(16*s,76*s),new(420*s,53*s),new(.035f,.045f,.045f,.94f));
-    c.DrawUiText(detail,Font,(int)(18*s),new(27*s,80*s),new(1,.84f,.3f,1),UiAnchor.TopLeft);c.DrawUiText(help,Font,(int)(16*s),new(27*s,105*s),new(.9f,.94f,.9f,1),UiAnchor.TopLeft);
+    SupportUiArt.Panel(c,s,16,76,430,53);
+    SupportUiArt.T(c,s,detail,27,82,16,true,SupportUiArt.Gold);SupportUiArt.T(c,s,help,27,107,13);
+
    }
   }
  }

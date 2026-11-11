@@ -106,7 +106,7 @@ public static partial class BrowserGame
             Loop.Scenes.SceneFactory=path=>{var fresh=_project.LoadScene(path);Sink.PrewarmTextures(_project.PreparedSpawnTextures);currentPath=path;return fresh;};
             Loop.Scenes.ProgressiveSceneFactory=path=>{currentPath=path;return PreparedSteps(path);};
             Loop.Scenes.ShowLoadingScreen=true;
-            Loop.Scenes.QuitHandler=()=>Loop.Scenes.UnloadScene();
+            Loop.Scenes.QuitHandler=()=>{_exited=true;Loop.Scenes.UnloadScene();};
             var scene = _project.LoadStartupScene();
             Sink.PrewarmTextures(_project.PreparedSpawnTextures);
             Loop.Scenes.RestartSceneFactory = () =>
@@ -190,6 +190,9 @@ public static partial class BrowserGame
         catch(Exception e) { return [new {error=e.Message}]; }
     }
 
+    [JSExport]
+    public static bool HasExited() => _exited;
+    private static bool _exited;
     [JSExport]
     public static bool WantsPointerLock() => !Input.KeepGameViewPointerFree &&
         Loop.Scenes.ActiveScene?.GameObjects.Any(o=>o.ActiveInHierarchy&&(o.Components.OfType<PlayerController3D>().Any(c=>c.Enabled&&c.AcceptLookInput)||o.Components.Any(c=>c.GetType().Name=="PvpMatch3D")&&ByteEngine.Core.Net.NetworkRuntime.Session is {IsActive:true}))==true;
@@ -780,3 +783,4 @@ internal sealed class BrowserAudio : IPortableAudio
         _commands.Add(new { kind = "listener", position = new[] {position.X,position.Y,position.Z},
             forward = new[] {forward.X,forward.Y,forward.Z}, up = new[] {up.X,up.Y,up.Z}, volume });
 }
+

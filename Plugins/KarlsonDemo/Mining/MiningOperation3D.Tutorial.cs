@@ -22,7 +22,7 @@ public sealed partial class MiningOperation3D
  MiningBusinessUi3D? TutorialUi=>GameObject.Scene?.GameObjects.SelectMany(o=>o.Components.OfType<MiningBusinessUi3D>()).FirstOrDefault();
  public string TutorialInstruction=>TutorialStep switch{
  CampTutorialStep.AmmoPress=>"Collect ammo from the ammo press bucket",
- CampTutorialStep.StartDrill=>"Approach the drill and start your first operation",
+ CampTutorialStep.StartDrill=>ExpeditionActive?$"Prepare your camp / first wave in {PreparationRemaining:0}s":"Approach the drill and start your first operation",
  CampTutorialStep.WinRound=>"Defend the drill / eliminate the incoming spiders",
  CampTutorialStep.Refinery=>"Take your raw ore to the refinery",
  CampTutorialStep.WaitForRefining=>"The refinery is turning raw ore into refined ore",
@@ -46,7 +46,7 @@ public sealed partial class MiningOperation3D
   }
   if(TutorialStep==CampTutorialStep.StartDrill&&Phase==MiningPhase.Drilling)TutorialAdvance(CampTutorialStep.WinRound);
   if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds>0&&Phase==MiningPhase.Preparation)TutorialAdvance(CampTutorialStep.Refinery,"OPERATION COMPLETE / raw ore is ready to refine.");
-  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds==0&&Phase==MiningPhase.Preparation)TutorialAdvance(CampTutorialStep.StartDrill,"Try again / return to the drill when ready.");
+  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds==0&&Phase==MiningPhase.Preparation&&!ExpeditionActive)TutorialAdvance(CampTutorialStep.StartDrill,"Try again / return to the drill when ready.");
   if(TutorialStep==CampTutorialStep.Refinery){if(RefiningAmount>0)TutorialAdvance(CampTutorialStep.WaitForRefining);else if(RefinedOre>0)TutorialAdvance(CampTutorialStep.CompanyHub);}
   if(TutorialStep==CampTutorialStep.WaitForRefining&&RefinedOre>0)TutorialAdvance(CampTutorialStep.CompanyHub,"REFINED ORE READY / sell it at the company tent.");
   if(TutorialStep==CampTutorialStep.CompanyHub&&PendingMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.WaitForSale);
@@ -73,7 +73,7 @@ public sealed partial class MiningOperation3D
   if(!TutorialEnabled||!TutorialActive&&tutorialPopupClock<=0)return;
   float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s;
   void Text(string t,float y,int size,Vector4 color)=>c.DrawUiText(t,font,(int)(size*s),new(w*.5f*s,y*s),color,UiAnchor.TopCenter);
-  if(TutorialActive){c.DrawUiQuad(new((w/2-300)*s,128*s),new(600*s,54*s),new(.035f,.045f,.055f,.94f));Text("CAMP BASICS",133,13,new(1,.76f,.12f,1));Text(TutorialInstruction,153,18,new(.95f,.95f,.9f,1));}
+  if(TutorialActive){c.DrawUiQuad(new((w/2-235)*s,99*s),new(470*s,48*s),new(.035f,.045f,.055f,.94f));Text("CAMP BASICS",104,13,new(1,.76f,.12f,1));Text(TutorialInstruction,123,18,new(.95f,.95f,.9f,1));}
   if(TutorialPopup.Length>0&&tutorialPopupClock>0){c.DrawUiQuad(new((w/2-350)*s,192*s),new(700*s,36*s),new(.035f,.045f,.055f,.96f));Text(TutorialPopup,201,16,new(1,.83f,.35f,1));}
   if(showWorld&&TutorialActive&&ShowTutorialRoute)DrawTutorialDestination(c,font);
   if(!showWorld||!TutorialActive||!ShowTutorialRoute||tutorialPath.Count<2||Player is not {} player)return;

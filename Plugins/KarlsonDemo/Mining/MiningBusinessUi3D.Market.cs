@@ -14,6 +14,7 @@ public sealed partial class MiningBusinessUi3D
  public void StartSelectedMarketSale()
  {
   if(Trade is not {} trade)return;
+  if(GuaranteedSelected&&trade.ActiveDeliveryContract==null){TransactionFeedback(trade.AcceptDeliveryContract(selectedDelivery),"CONTRACT ACCEPTED — gather refined ore.","Contract unavailable or freight capacity too low.");return;}
   if(BuyingOre&&!GuaranteedSelected){bool ok=trade.BuyOre(RefinedSelected,Quantity);TransactionFeedback(ok,$"BOUGHT {Quantity} {(RefinedSelected?"REFINED":"RAW")} ORE","Check credits and cargo space.");SetQuantity(Math.Min(20,MarketQuantityLimit));return;}
   if(GuaranteedSelected?trade.DeliverContract():trade.BeginSale(RefinedSelected,Quantity))
   {MiningAudio3D.Find(GameObject)?.PlayCue(MiningSoundCue.TerminalPurchase);Notice($"{trade.SaleQuantity} ORE ACCEPTED - {trade.LockedSaleCredits:N0} cr LOCKED");SetQuantity(Math.Min(20,MarketQuantityLimit));}

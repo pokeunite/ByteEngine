@@ -39,10 +39,38 @@ public sealed class PvpMatch3D:Component
  foreach(var canvas in GameObject.Scene.GameObjects.Where(o=>o.Name=="HUD canvas"))canvas.Active=false;
  }
  static IEnumerable<GameObject> Self(GameObject root){yield return root;foreach(var child in root.Children)foreach(var item in Self(child))yield return item;}
- public void HostMatch(){try{Start(true);lobby?.Host(MatchName);MenuOpen=false;Status="Hosting — waiting for players";}catch(Exception e){Fail(e);}}
- public void FindMatches(){try{lobby?.Refresh();Status="Finding matches";}catch(Exception e){Fail(e);}}
- public void JoinMatch(string code){try{Start(false);lobby?.Join(code);MenuOpen=false;Status="Joining "+code;}catch(Exception e){Fail(e);}}
- void Start(bool host){Initialize();NetworkRuntime.InputProvider=ReadInput;GameObject.GetComponent<NetworkSettings>()!.StartSession(host);bound=NetworkRuntime.Session!;bound.SimulatePlayer=Simulate;bound.AuthoritativeInput+=Authoritative;bound.EventReceived+=Receive;bound.SessionEnded+=reason=>{Status=reason;MenuOpen=true;NetworkDiagnostics.Record(reason,true);};bound.PeerJoined+=id=>NetworkDiagnostics.Record("Peer joined: "+id);bound.PeerLeft+=id=>NetworkDiagnostics.Record("Peer left: "+id);RemainingSeconds=RoundSeconds;Winner=-1;Array.Clear(kills);Array.Clear(deaths);Array.Clear(deadFor);Array.Clear(previousButtons);}
+ private bool connecting;
+ private double connectionAge;
+ public void HostMatch()
+ {
+  if(bound is {IsActive:true,IsHost:true} && lobby?.RoomCode.Length>0){MenuOpen=false;return;}
+  if(lobby?.IsOperationPending==true && !connecting)return;
+  try{ResetConnection();Start(true);lobby!.Host(MatchName);MenuOpen=false;Status="Creating public match...";}catch(Exception error){Fail(error);}
+ }
+ public void FindMatches(){try{lobby?.Refresh();Status="Refreshing matches...";}catch(Exception error){Fail(error);}}
+ public void JoinMatch(string code)
+ {
+  if(connecting || lobby?.IsOperationPending==true)return;
+  try{ResetConnection();Start(false);connecting=true;lobby!.Join(code);MenuOpen=true;Status="Connecting to match...";}catch(Exception error){Fail(error);}
+ }
+ private void ResetConnection()
+ {
+  if(bound!=null)bound.SessionEnded-=OnSessionEnded;
+  NetworkRuntime.Stop();bound=null;
+  lobby?.Dispose();lobby=new NetworkLobbyClient(LobbyAddress);
+  connecting=false;connectionAge=0;shownError="";NetworkDiagnostics.ClearError();
+ }
+ private void OnSessionEnded(string reason){connecting=false;Status="Connection ended: "+reason;MenuOpen=true;NetworkDiagnostics.Record(Status,true);}
+ private void CancelConnection(){ResetConnection();MenuOpen=true;Status="Disconnected. Host a match or refresh the list.";}
+ private void Start(bool host)
+ {
+  Initialize();NetworkRuntime.InputProvider=ReadInput;GameObject.GetComponent<NetworkSettings>()!.StartSession(host);
+  bound=NetworkRuntime.Session!;bound.SimulatePlayer=Simulate;bound.AuthoritativeInput+=Authoritative;bound.EventReceived+=Receive;
+  bound.SessionEnded+=OnSessionEnded;
+  bound.PeerJoined+=id=>NetworkDiagnostics.Record("Peer joined: "+id);
+  bound.PeerLeft+=id=>NetworkDiagnostics.Record("Peer left: "+id);
+  RemainingSeconds=RoundSeconds;Winner=-1;Array.Clear(kills);Array.Clear(deaths);Array.Clear(deadFor);Array.Clear(previousButtons);
+ }
  PlayerInput ReadInput(){if(MenuOpen||local>=0&&deadFor[local]>0||Winner>=0)return new(0,0,Vector2.Zero,new(yaw,pitch),0);var movement=new Vector2((Input.IsKeyDown(Key.D)?1:0)-(Input.IsKeyDown(Key.A)?1:0),(Input.IsKeyDown(Key.S)?1:0)-(Input.IsKeyDown(Key.W)?1:0));if(movement.LengthSquared()>1)movement=Vector2.Normalize(movement);
  if(Input.IsKeyPressed(Key.D1))selected=0;if(Input.IsKeyPressed(Key.D2))selected=1;if(Input.IsKeyPressed(Key.D3))selected=2;
  uint latched=queuedButtons;queuedButtons=0;uint bits=latched|(Input.IsKeyDown(Key.Space)?1u:0)|(Input.IsMouseButtonDown(MouseButton.Left)?2u:0)|(Input.IsKeyDown(Key.R)?4u:0)|(Input.IsKeyDown(Key.LeftShift)?8u:0)|(Input.IsMouseButtonDown(MouseButton.Right)?16u:0)|((uint)selected<<5);return new(0,0,movement,new(yaw,pitch),bits);}
@@ -58,8 +86,9 @@ public sealed class PvpMatch3D:Component
  previousButtons[id]=input.Buttons;}
  protected override void OnUpdate(){Initialize();
  foreach(var gun in guns)if(gun!=null)foreach(var weapon in gun.CarriedWeapons)if(observed.Add(weapon)){var owner=gun.GameObject;weapon.DamageConfirmed+=receipt=>{if(NetworkRuntime.Session?.IsHost==true&&receipt.Killed){int killer=Array.FindIndex(actors,a=>a==owner),victim=Array.FindIndex(actors,a=>a?.Id==receipt.TargetId);if(killer>=0&&victim>=0&&killer!=victim)kills[killer]++;}};}
-try{lobby?.Poll(Time.UnscaledDeltaTime);}catch(Exception e){Fail(e);}if(NetworkDiagnostics.LastError.Length>0&&shownError!=NetworkDiagnostics.LastError){shownError=NetworkDiagnostics.LastError;Status=shownError;MenuOpen=true;}bound=NetworkRuntime.Session;local=bound?.LocalPeerId??-1;
- if(Input.IsKeyPressed(Key.Escape))MenuOpen=!MenuOpen;if(!MenuOpen){if(Input.IsKeyPressed(Key.D1))selected=0;if(Input.IsKeyPressed(Key.D2))selected=1;if(Input.IsKeyPressed(Key.D3))selected=2;if(Input.IsKeyPressed(Key.R))queuedButtons|=4;if(Input.IsKeyPressed(Key.Space))queuedButtons|=1;if(Input.IsMouseButtonPressed(MouseButton.Left))queuedButtons|=2;}Input.RequestUiPointer(this,MenuOpen);if(!MenuOpen&&local>=0){yaw=MathF.IEEERemainder(yaw+Input.MouseDelta.X*LookSensitivity*MathF.PI/180,MathF.PI*2);pitch=Math.Clamp(pitch+Input.MouseDelta.Y*LookSensitivity*MathF.PI/180,-1.2f,1.2f);}
+try{lobby?.Poll(Time.UnscaledDeltaTime);}catch(Exception e){Fail(e);}if(NetworkDiagnostics.LastError.Length>0&&shownError!=NetworkDiagnostics.LastError){string error=NetworkDiagnostics.LastError;if(connecting){CancelConnection();NetworkDiagnostics.Record(error,true);}shownError=error;Status=error;MenuOpen=true;}bound=NetworkRuntime.Session;local=bound?.LocalPeerId??-1;
+ if(connecting){connectionAge+=Time.UnscaledDeltaTime;if(bound is {IsActive:true,LocalPeerId:>=0}){connecting=false;MenuOpen=false;Status="Connected";}else if(connectionAge>25){CancelConnection();Fail(new TimeoutException("Connection timed out. Refresh and retry; restrictive NAT/firewalls may require TURN."));}else{MenuOpen=true;Status=$"Connecting... {Math.Max(0,25-(int)connectionAge)}s remaining";}}
+ if(Input.IsKeyPressed(Key.Escape)&&!connecting)MenuOpen=!MenuOpen;if(!MenuOpen){if(Input.IsKeyPressed(Key.D1))selected=0;if(Input.IsKeyPressed(Key.D2))selected=1;if(Input.IsKeyPressed(Key.D3))selected=2;if(Input.IsKeyPressed(Key.R))queuedButtons|=4;if(Input.IsKeyPressed(Key.Space))queuedButtons|=1;if(Input.IsMouseButtonPressed(MouseButton.Left))queuedButtons|=2;}Input.RequestUiPointer(this,MenuOpen);if(!MenuOpen&&local>=0){yaw=MathF.IEEERemainder(yaw+Input.MouseDelta.X*LookSensitivity*MathF.PI/180,MathF.PI*2);pitch=Math.Clamp(pitch+Input.MouseDelta.Y*LookSensitivity*MathF.PI/180,-1.2f,1.2f);}
  if(bound is {IsActive:true}){foreach(var state in bound.Players.Values){int id=state.PeerId;if(actors[id] is not {} actor)continue;bool owned=id==local;actor.Transform.WorldPosition=owned&&!bound.IsHost?bound.PredictedLocal.Position+bound.PredictionErrorOffset:Vector3.Lerp(actor.Transform.WorldPosition,state.Position,1-MathF.Exp(-20*(float)Time.DeltaTime));actor.Transform.WorldRotation=Quaternion.CreateFromAxisAngle(Vector3.UnitY,-(owned?yaw:looks[id].X));
  if(actor.GetComponent<AnimationController>() is {} animator){animator.ReplicatedVelocity=state.Velocity;animator.ReplicatedGrounded=Grounded(id,state.Position);animator.SetAim(0,-(owned?pitch:looks[id].Y)*180/MathF.PI);}
  if(actor.GetComponent<CameraBoom3D>() is {} boom){boom.Enabled=owned;boom.Yaw=yaw*180/MathF.PI;boom.Pitch=pitch*180/MathF.PI;}
@@ -80,13 +109,15 @@ try{lobby?.Poll(Time.UnscaledDeltaTime);}catch(Exception e){Fail(e);}if(NetworkD
  kills[id]=BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(o+16));deaths[id]=BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(o+20));looks[id]=new(BinaryPrimitives.ReadSingleLittleEndian(bytes.AsSpan(o+24)),BinaryPrimitives.ReadSingleLittleEndian(bytes.AsSpan(o+28)));deadFor[id]=BinaryPrimitives.ReadSingleLittleEndian(bytes.AsSpan(o+32));}}
  protected override void OnRender(RenderContext c){buttons.Clear();float width=c.TargetWidth,height=c.TargetHeight;Vector4 white=new(.94f,.96f,1,1),panel=new(.045f,.06f,.085f,.96f),accent=new(.2f,.7f,1,1);void Text(string value,float x,float y,int size=20)=>c.DrawUiText(value,Font,size,new(x,y),white);
  void Button(string text,float x,float y,Action action){var p=new Vector2(x,y);var s=new Vector2(350,38);c.DrawUiQuad(p,s,new(.12f,.22f,.32f,1));Text(text,x+12,y+8,18);buttons.Add((text,p,s,action));}
- if(MenuOpen||bound is not {IsActive:true}){MenuOpen=true;c.DrawUiQuad(new(width/2-205,35),new(410,Math.Min(height-55,600)),panel);Text(MatchName,width/2-180,55,28);Text("FREE-FOR-ALL • HOST AUTHORITATIVE",width/2-180,95,14);float x=width/2-175;Button("HOST MATCH",x,130,HostMatch);Button("FIND / REFRESH MATCHES",x,176,FindMatches);float y=222;foreach(var room in lobby?.Rooms??[]){var selectedRoom=room;Button(room.Name+"  "+room.Players+"/4  ["+room.Id+"]",x,y,()=>JoinMatch(selectedRoom.Id));y+=44;if(y>height-160)break;}if(bound is {IsActive:true}){Button("RESUME MATCH",x,y,()=>MenuOpen=false);y+=44;}Button("DOWNLOAD ERROR LOG",x,Math.Min(y+8,height-112),NetworkDiagnostics.Save);Text(Status,x,height-66,14);if(NetworkDiagnostics.LastError.Length>0)Text(NetworkDiagnostics.LastError[..Math.Min(52,NetworkDiagnostics.LastError.Length)],x,height-45,12);return;}
+ if(MenuOpen||bound is not {IsActive:true}){MenuOpen=true;c.DrawUiQuad(new(width/2-205,35),new(410,Math.Min(height-55,600)),panel);Text(MatchName,width/2-180,55,28);Text("FREE-FOR-ALL • HOST AUTHORITATIVE",width/2-180,95,14);float x=width/2-175;Button("HOST MATCH",x,130,HostMatch);Button("FIND / REFRESH MATCHES",x,176,FindMatches);float y=222;foreach(var room in (lobby?.Rooms??[]).Where(room=>room.Id!=lobby?.RoomCode)){var selectedRoom=room;Button(room.Name+"  "+room.Players+"/4  ["+room.Id+"]",x,y,()=>JoinMatch(selectedRoom.Id));y+=44;if(y>height-250)break;}if(bound is {IsActive:true}&&!connecting){Button("RESUME MATCH",x,y,()=>MenuOpen=false);y+=44;}if(bound is {IsActive:true}){Button(connecting?"CANCEL CONNECTION":"LEAVE MATCH",x,y,CancelConnection);y+=44;}Button("DOWNLOAD ERROR LOG",x,Math.Min(y+8,height-158),NetworkDiagnostics.Save);Button("EXIT GAME",x,height-112,()=>GameObject.Scene!.RequestQuit());Text(Status,x,height-66,14);if(NetworkDiagnostics.LastError.Length>0)Text(NetworkDiagnostics.LastError[..Math.Min(52,NetworkDiagnostics.LastError.Length)],x,height-45,12);return;}
  if(local>=0&&actors[local]?.GetComponent<HealthComponent>() is {} hp){c.DrawUiQuad(new(24,height-70),new(230,20),panel);c.DrawUiQuad(new(26,height-68),new(226*hp.HealthPercent,16),new(.2f,.85f,.5f,1));Text($"HP {hp.CurrentHealth:0}/{hp.MaxHealth:0}",30,height-106);Text($"{guns[local]?.WeaponName}   {guns[local]?.Ammo}/{guns[local]?.ReserveAmmo}",width-340,height-70,24);Text("1 2 3  weapons   R reload   RMB aim",width-340,height-38,14);if(deadFor[local]>0)Text($"RESPAWNING {deadFor[local]:0.0}",width/2-120,height/2,26);}
  Text($"{RemainingSeconds:0}s  •  First to {ScoreToWin}  •  ESC menu",24,20,17);float row=48;foreach(int id in bound!.Players.Keys){Text($"Player {id+1}   {kills[id]} kills / {deaths[id]} deaths",24,row,16);row+=24;}c.DrawUiQuad(new(width/2-6,height/2),new(12,2),white);c.DrawUiQuad(new(width/2,height/2-6),new(2,12),white);if(Winner>=0)Text($"PLAYER {Winner+1} WINS",width/2-140,110,32);
  foreach(var state in bound.Players.Values)if(state.PeerId!=local&&actors[state.PeerId]?.GetComponent<HealthComponent>() is {} health&&GameObject.Scene!.ActiveCamera is {} camera){Vector4 clip=Vector4.Transform(new Vector4(state.Position+Vector3.UnitY*2.35f,1),camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(width/height));if(clip.W>0){var point=new Vector2((clip.X/clip.W+1)*width/2,(1-clip.Y/clip.W)*height/2);c.DrawUiQuad(point-new Vector2(35,0),new(70,7),panel);c.DrawUiQuad(point-new Vector2(34,-1),new(68*health.HealthPercent,5),accent);}}
  }
  void Fail(Exception e){Status=e.Message;MenuOpen=true;NetworkDiagnostics.Record(e.ToString(),true);}
  static void Write(Span<byte> bytes,Vector3 v){BinaryPrimitives.WriteSingleLittleEndian(bytes,v.X);BinaryPrimitives.WriteSingleLittleEndian(bytes[4..],v.Y);BinaryPrimitives.WriteSingleLittleEndian(bytes[8..],v.Z);}static Vector3 Read(ReadOnlySpan<byte> b)=>new(BinaryPrimitives.ReadSingleLittleEndian(b),BinaryPrimitives.ReadSingleLittleEndian(b[4..]),BinaryPrimitives.ReadSingleLittleEndian(b[8..]));
- void Cleanup(){lobby?.Dispose();NetworkRuntime.Stop();NetworkRuntime.InputProvider=null;Input.RequestUiPointer(this,false);Input.RegisterGameplayEscapeHandler(this,false);}
+ void Cleanup(){if(bound!=null)bound.SessionEnded-=OnSessionEnded;lobby?.Dispose();NetworkRuntime.Stop();NetworkRuntime.InputProvider=null;Input.RequestUiPointer(this,false);Input.RegisterGameplayEscapeHandler(this,false);}
  protected override void OnStop()=>Cleanup();protected override void OnDestroy()=>Cleanup();
 }
+
+

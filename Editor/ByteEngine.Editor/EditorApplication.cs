@@ -1463,16 +1463,18 @@ public sealed class EditorApplication
             if (Directory.Exists(projectDirectory) && Directory.EnumerateFileSystemEntries(projectDirectory).Any())
                 throw new IOException($"The project folder already exists and is not empty: {projectDirectory}");
 
-            if (request.Template is ProjectTemplate.LastStand or ProjectTemplate.KarlsonDemo)
+            if (request.Template is ProjectTemplate.LastStand or ProjectTemplate.KarlsonDemo or ProjectTemplate.HazardPayTps)
             {
                 bool karlson = request.Template == ProjectTemplate.KarlsonDemo;
-                string starterFile = karlson ? KarlsonStarterFactory.Install(projectDirectory, request.Name)
+                bool tps = request.Template == ProjectTemplate.HazardPayTps;
+                string starterFile = tps ? KarlsonStarterFactory.Install(projectDirectory, request.Name, Path.Combine(AppContext.BaseDirectory, "Resources", "Starters", "HazardPayTps.bytepak"))
+                    : karlson ? KarlsonStarterFactory.Install(projectDirectory, request.Name)
                     : LastStandStarterFactory.Install(projectDirectory, request.Name);
                 EditorProjectContext starter = EditorProjectContext.Open(starterFile, warning => _log.Warning(warning));
                 string startup = starter.ResolveProjectPath(starter.Project.StartupScene);
                 Scene starterScene = starter.Scenes.Load(startup);
                 SwitchProject(starter, starterScene, startup);
-                _log.Info(karlson ? $"Created Karlson Demo template '{request.Name}'. See START-HERE.txt for controls and testing."
+                _log.Info(tps ? $"Created Hazard Pay TPS starter '{request.Name}'." : karlson ? $"Created Karlson Demo template '{request.Name}'. See START-HERE.txt for controls and testing."
                     : $"Created Last Stand starter '{request.Name}'. Read ASSET-NOTICE.txt before reusing third-party assets.");
                 return;
             }

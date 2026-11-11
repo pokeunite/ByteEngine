@@ -2,7 +2,7 @@
   {
     "Id": "charter",
     "Name": "Mining licence",
-    "Description": "Pistol, drill, refinery and ammo press. Start with 20 credits. Full HP restores after a successful round. Guaranteed delivery and live selling are available from the start.",
+    "Description": "Six-wave contracts with timed preparation. Industry remains usable during combat. Health restores after the full contract. Use production upgrades to prepare faster.",
     "Cost": 0,
     "Prerequisites": [],
     "Effect": 0,
@@ -433,5 +433,80 @@
     "Available": true,
     "X": 840,
     "Y": 65
+  },
+  {
+    "Id": "pistol-handling",
+    "Name": "Pistol field handling",
+    "Description": "Each rank: +2 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
+    "Cost": 120,
+    "Prerequisites": [
+      "charter"
+    ],
+    "Effect": 0,
+    "Amount": 20,
+    "Stat": "HandlingAccuracyPct",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 2,
+    "MaxRank": 3,
+    "RankCosts": [
+      120,
+      200,
+      320
+    ],
+    "Branch": "Pistol",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 160,
+    "Y": 720
+  },
+  {
+    "Id": "rifle-handling",
+    "Name": "Rifle field handling",
+    "Description": "Each rank: +4 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
+    "Cost": 120,
+    "Prerequisites": [
+      "ar"
+    ],
+    "Effect": 0,
+    "Amount": 20,
+    "Stat": "HandlingAccuracyPct",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 4,
+    "MaxRank": 3,
+    "RankCosts": [
+      120,
+      200,
+      320
+    ],
+    "Branch": "Rifle",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 420,
+    "Y": 720
+  },
+  {
+    "Id": "shotgun-handling",
+    "Name": "Shotgun field handling",
+    "Description": "Each rank: +1 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
+    "Cost": 120,
+    "Prerequisites": [
+      "shotgun"
+    ],
+    "Effect": 0,
+    "Amount": 20,
+    "Stat": "HandlingAccuracyPct",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 1,
+    "MaxRank": 3,
+    "RankCosts": [
+      120,
+      200,
+      320
+    ],
+    "Branch": "Shotgun",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 680,
+    "Y": 720
   }
 ]

@@ -61,6 +61,7 @@ public sealed partial class MiningTrade3D:Component
  public MiningOperation3D? Operation=>GameObject.Scene?.FindGameObject(OperationObjectId)?.GetComponent<MiningOperation3D>();
  readonly List<float> _history=[];bool initialized;float saveClock;
  readonly List<CompanyUpgrade> _research=[];readonly HashSet<string> _purchased=new(StringComparer.Ordinal);float? _baseHealth,_baseEnergy;readonly Dictionary<string,int> _ranks=new(StringComparer.Ordinal);
+ readonly Dictionary<WeaponDefinition3D,float> weaponAccuracy=[];
  readonly Dictionary<WeaponDefinition3D,(int Magazine,float Reload,float EmptyReload,int Reserve,float Rpm,int Pellets,float Damage)> _weaponBaselines=[];
  float? _baseDashCooldown;
  public string LastError{get;private set;}="";
@@ -91,7 +92,7 @@ public sealed partial class MiningTrade3D:Component
    else if(StoredAmmo>=Capacity)productionClock=0;
    else{productionClock+=delta;int cycles=(int)Math.Min(100000,Math.Floor(productionClock/CycleDuration));if(cycles>0){StoredAmmo=Math.Min(Capacity,StoredAmmo+cycles*RoundsPerCycle);productionClock-=cycles*CycleDuration;if(StoredAmmo>=Capacity)productionClock=0;}}
   }
-  if(op.Phase==MiningPhase.Preparation){if(AutomaticRefining&&op.RawOre>0&&op.RefiningAmount==0)op.BeginRefining();if(AutomaticAmmoDelivery)Collect();}
+  if(op.CanUseIndustry){if(AutomaticRefining)op.AutoRefineryEnabled=true;if(AutomaticAmmoDelivery)Collect();}
   DemandClock=(DemandClock+delta)%Math.Max(3,DemandPeriodSeconds*3);
   PriceClock=Math.Min(PriceClock+delta,Math.Max(.1f,PriceIntervalSeconds)*4);int budget=4;while(PriceClock>=Math.Max(.1f,PriceIntervalSeconds)&&budget-->0){PriceClock-=Math.Max(.1f,PriceIntervalSeconds);StepPrice();}
   saveClock+=delta;if(saveClock>=5){saveClock=0;Save();}
@@ -116,6 +117,7 @@ public sealed partial class MiningTrade3D:Component
  public bool ResearchUnlocked(string id)=>_research.FirstOrDefault(n=>n.Id==id) is {} node&&node.Prerequisites.All(_purchased.Contains);
  public bool CanBuyResearch(string id)=>Operation is {Phase:MiningPhase.Preparation} op&&_research.FirstOrDefault(n=>n.Id==id) is {} node&&node.Available&&op.CompletedRounds+1>=node.MinimumRound&&ResearchRank(id)<node.MaxRank&&ResearchUnlocked(id)&&op.Credits>=ResearchCost(id);
  public bool BuyResearch(string id){Initialize();if(!CanBuyResearch(id))return false;var node=_research.Single(n=>n.Id==id);if(Operation?.SpendCredits(ResearchCost(id))!=true)return false;_ranks[id]=ResearchRank(id)+1;_purchased.Add(id);ApplyResearch();Save();return true;}
+ public string ResearchBenefit(CompanyUpgrade n){if(n.ReloadSpeedBonus<=0&&n.MagazineBonus<=0)return n.Description;var weapon=GameObject.Scene?.GetComponentsSnapshot<WeaponDefinition3D>().FirstOrDefault(w=>(w.RequiredResearchId=="shotgun"?"Shotgun":w.RequiredResearchId=="ar"?"Rifle":"Pistol")==n.Branch);if(weapon==null||!_weaponBaselines.TryGetValue(weapon,out var b))return n.Description;int rank=ResearchRank(n.Id);float speed=1+rank*n.ReloadSpeedBonus;return $"Magazine {weapon.MagazineCapacity} > {weapon.MagazineCapacity+n.MagazineBonus}. Reload {weapon.ReloadSeconds:0.00}s > {b.Reload/(speed+n.ReloadSpeedBonus):0.00}s. Accuracy +{n.Amount:0}% per rank. "+n.Description;}
  void ApplyResearch()
  {
   var op=Operation;if(op==null)return;
@@ -124,11 +126,12 @@ public sealed partial class MiningTrade3D:Component
   var player=GameObject.Scene?.FindGameObject(op.PlayerObjectId);
   var owned=_research.Where(n=>_purchased.Contains(n.Id)).ToArray();
   AutomaticRefining=owned.Any(n=>n.AutoRefine);AutomaticAmmoDelivery=owned.Any(n=>n.AutoCollectAmmo);
-  float reload=1+Math.Clamp(owned.Sum(n=>n.ReloadSpeedBonus),0,10);int magazine=Math.Clamp(owned.Sum(n=>n.MagazineBonus),0,1000);
+
   foreach(var weapon in GameObject.Scene!.GameObjects.SelectMany(o=>o.Components).OfType<WeaponDefinition3D>())
   {
+   string branch=weapon.RequiredResearchId=="shotgun"?"Shotgun":weapon.RequiredResearchId=="ar"?"Rifle":"Pistol";var matching=owned.Where(n=>n.Branch==branch||n.Branch=="Company");float reload=1+Math.Clamp(matching.Sum(n=>n.ReloadSpeedBonus*ResearchRank(n.Id)),0,10);int magazine=Math.Clamp(matching.Sum(n=>n.MagazineBonus*ResearchRank(n.Id)),0,1000);if(!weaponAccuracy.ContainsKey(weapon))weaponAccuracy[weapon]=weapon.AccuracyDegrees;weapon.AccuracyDegrees=weaponAccuracy[weapon]/(1+matching.Where(n=>n.Stat=="HandlingAccuracyPct").Sum(n=>n.Amount*ResearchRank(n.Id))/100);
    if(!_weaponBaselines.TryGetValue(weapon,out var baseline))_weaponBaselines[weapon]=baseline=(weapon.MagazineCapacity,weapon.ReloadSeconds,weapon.EmptyReloadSeconds,weapon.ReserveCapacity,weapon.RoundsPerMinute,weapon.PelletsPerShot,weapon.DamagePerPellet);
-   weapon.MagazineCapacity=Math.Clamp(baseline.Magazine+magazine,1,10000);weapon.ReloadSeconds=baseline.Reload/reload;weapon.EmptyReloadSeconds=baseline.EmptyReload/reload;weapon.ReserveCapacity=Math.Clamp((int)((baseline.Reserve+Stat("SmallAmmoCap"))*(1+Stat("AmmoCapacityPct")/100)),12,100000);weapon.RoundsPerMinute=baseline.Rpm*(1+Stat("PistolFireRatePct")/100);weapon.PelletsPerShot=Math.Clamp(baseline.Pellets+(int)Stat("PistolPellets"),1,16);weapon.DamagePerPellet=baseline.Damage+Stat("PistolDamageFlat");
+   weapon.MagazineCapacity=Math.Clamp(baseline.Magazine+magazine,1,10000);weapon.ReloadSeconds=baseline.Reload/reload;weapon.EmptyReloadSeconds=baseline.EmptyReload/reload;weapon.ReserveCapacity=Math.Clamp((int)((baseline.Reserve+Stat("SmallAmmoCap"))*(1+Stat("AmmoCapacityPct")/100)),12,100000);weapon.RoundsPerMinute=baseline.Rpm*(1+(branch=="Pistol"?Stat("PistolFireRatePct"):0)/100);weapon.PelletsPerShot=Math.Clamp(baseline.Pellets+(branch=="Pistol"?(int)Stat("PistolPellets"):0),1,16);weapon.DamagePerPellet=baseline.Damage+(branch=="Pistol"?Stat("PistolDamageFlat"):0);
    if(HasReviewedCatalog){bool shotgun=weapon.RequiredResearchId=="shotgun",rifle=weapon.RequiredResearchId=="ar";weapon.HomingTargetCount=shotgun?(int)Stat("ShotgunHomingTargets"):0;weapon.PenetrationTargets=rifle?(int)Stat("RiflePierce"):0;weapon.BurstAccuracyBonus=rifle?Stat("RifleBurstAccuracyPct")/100:0;}
   }
   if(player?.GetComponent<DashAbility3D>() is {} dash){_baseDashCooldown??=dash.Cooldown;dash.Cooldown=_baseDashCooldown.Value*(1-Math.Clamp(owned.Sum(n=>n.DashCooldownReduction),0,.8f));}

@@ -6,7 +6,7 @@ public sealed partial class MiningDefense3D
 {
  [Category("Durability")] public float MaximumHealth{get;set;}=100;
  [Browsable(false)] public bool DestroyedByEnemy{get;private set;}
- [Browsable(false)] public bool CanBeAttacked=>!Spent&&!DestroyedByEnemy&&Kind!=MiningDefenseKind.SupplyCache&&GameObject.GetComponent<HealthComponent>() is {IsDead:false};
+ [Browsable(false)] public bool CanBeAttacked=>(!Spent||Kind==MiningDefenseKind.Mine&&RechargeableMine)&&!DestroyedByEnemy&&Kind!=MiningDefenseKind.SupplyCache&&GameObject.GetComponent<HealthComponent>() is {IsDead:false};
  void InitializeDurability(){if(Kind!=MiningDefenseKind.SupplyCache&&GameObject.GetComponent<HealthComponent>()==null)GameObject.AddComponent(new HealthComponent{MaxHealth=Math.Max(1,MaximumHealth),CurrentHealth=Math.Max(1,MaximumHealth),DestroyOnDeath=false});}
  bool ResolveDestruction()
  {
@@ -25,6 +25,7 @@ public sealed partial class MiningDefense3D
  {
   get
   {
+   if(GameObject.GetComponent<HealthComponent>() is {HealthPercent:>=.999f})return false;
    if(!ShowHealthBar||Spent||Kind is MiningDefenseKind.Mine or MiningDefenseKind.SupplyCache||GameObject.GetComponent<HealthComponent>() is not {IsDead:false})return false;
    if(GameObject.Scene is not {} scene)return false;
    for(int i=0;i<scene.GameObjects.Count;i++)
@@ -37,6 +38,7 @@ public sealed partial class MiningDefense3D
  }
  protected override void OnRender(ByteEngine.Core.Graphics.RenderContext c)
  {
+  DrawReadiness(c);
   if(!HealthBarVisible||!c.Has3DCamera||GameObject.GetComponent<HealthComponent>() is not {} hp)return;
   var p=Vector4.Transform(new Vector4(Transform.WorldPosition+Vector3.UnitY*1.9f,1),c.GetViewMatrix3D()*c.GetProjectionMatrix3D());if(p.W<=0)return;
   float x=(p.X/p.W+1)*c.TargetWidth/2,y=(1-p.Y/p.W)*c.TargetHeight/2,scale=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f);if(x<0||x>c.TargetWidth||y<0||y>c.TargetHeight)return;

@@ -25,9 +25,9 @@ public sealed partial class MiningSecurityDrone3D:Component
  [Category("Tactics")] public float FiringDistance{get;set;}=5;
  [Category("Tactics")] public float MaximumLeashDistance{get;set;}=32;
  [Category("Battery")] public bool ShowBatteryBar{get;set;}=true;
- [Category("Weapon")] public float AttackRange{get;set;}=12;
- [Category("Weapon")] public float ShotDamage{get;set;}=8;
- [Category("Weapon")] public float ShotInterval{get;set;}=.5f;
+ [Category("Weapon")] public float AttackRange{get;set;}=16;
+ [Category("Weapon")] public float ShotDamage{get;set;}=12;
+ [Category("Weapon")] public float ShotInterval{get;set;}=.35f;
  [Category("Weapon")] public float ProjectileSpeed{get;set;}=45;
  [Category("Explosion")] public float ExplosionRadius{get;set;}=3;
  [Category("Explosion")] public float ExplosionDamage{get;set;}=50;
