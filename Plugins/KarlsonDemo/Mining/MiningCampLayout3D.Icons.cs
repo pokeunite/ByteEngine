@@ -26,7 +26,8 @@ public sealed partial class MiningCampLayout3D
  {
   campIconHits.Clear();if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;
   var vp=camera.GetRenderViewMatrix()*camera.GetProjectionMatrix(c.TargetWidth/(float)c.TargetHeight);
-  foreach(var obj in Objects.OrderBy(o=>o.Id==SelectedObjectId?0:1)){
+  var hovered=PointerGround(out var ground)?Pick(ground)?.Id:Guid.Empty;
+  foreach(var obj in Objects.Where(o=>o.Id==SelectedObjectId||o.Id==hovered)){
    var clip=Vector4.Transform(new Vector4((obj.Id==SelectedObjectId?PreviewPosition:obj.Transform.WorldPosition)+Vector3.UnitY*.2f,1),vp);if(clip.W<=0)continue;
    var origin=new Vector2((clip.X/clip.W+1)*width*.5f,(1-clip.Y/clip.W)*height*.5f);if(origin.X<65||origin.X>width-65||origin.Y<85||origin.Y>height-160)continue;
    var p=Vector2.Clamp(origin+new Vector2(65,-42),new(65,85),new(width-65,height-160));bool Clear(Vector2 candidate)=>campIconHits.All(h=>(Math.Abs(h.Centre.X-candidate.X)>124||Math.Abs(h.Centre.Y-candidate.Y)>38));

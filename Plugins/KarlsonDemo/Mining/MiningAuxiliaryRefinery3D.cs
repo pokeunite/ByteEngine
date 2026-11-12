@@ -44,6 +44,6 @@ public sealed partial class MiningOperation3D
  public int AuxiliaryRawReserved=>GameObject.Scene?.GetComponentsSnapshot<MiningAuxiliaryRefinery3D>().Where(r=>r.OperationObjectId==GameObject.Id).Sum(r=>r.LoadedRaw)??0;
  internal int LoadAuxiliaryRaw(int maximum){Initialize();if(!CanUseIndustry)return 0;int amount=Math.Min(maximum,Math.Max(0,RawOre-RefiningAmount));RawOre-=amount;return amount;}
  internal void ReturnAuxiliaryRaw(int amount){RawOre=Add(RawOre,Math.Max(0,amount));}
- internal bool CompleteAuxiliaryBatch(int amount){if(amount<0||(long)CargoUsed+amount>CargoCapacity)return false;RefinedOre=Add(RefinedOre,amount);return true;}
+ internal bool CompleteAuxiliaryBatch(int amount){if(amount<0)return false;RefinedOre=Add(RefinedOre,amount);return true;}
  public void AddTestingRefinedOre(int amount){Initialize();RefinedOre=Add(RefinedOre,Math.Clamp(amount,0,1000000));SaveProgress();}
 }

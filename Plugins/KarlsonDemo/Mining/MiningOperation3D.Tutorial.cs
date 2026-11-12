@@ -40,17 +40,17 @@ public sealed partial class MiningOperation3D
   if(TutorialStep==CampTutorialStep.AmmoPress)
   {
    if((bucket?.CollectionSequence??0)<=tutorialCollection&&Player?.GetComponent<FpsGunLab3D>()?.SelectedWeapon is {} weapon&&(!tutorialAmmoPrepared||weapon.Definition is {} definition&&weapon.ReserveAmmo>=definition.ReserveCapacity)){weapon.SetAmmo(weapon.CurrentAmmo,Math.Min(weapon.ReserveAmmo,Math.Max(0,TutorialStartingReserve)));tutorialAmmoPrepared=true;SaveProgress();}
-   if(bucket!=null&&bucket.CollectionSequence>tutorialCollection)TutorialAdvance(CampTutorialStep.StartDrill,"AMMO COLLECTED / the press makes reserve ammo automatically.");
+   if(bucket!=null&&bucket.CollectionSequence>tutorialCollection)TutorialAdvance(CampTutorialStep.StartDrill,"Ammo collected. The press produces reserve ammo.");
    // If the player starts a round first, don't strand them in an irrelevant step.
    else if(Phase==MiningPhase.Drilling)TutorialAdvance(CampTutorialStep.WinRound);
   }
   if(TutorialStep==CampTutorialStep.StartDrill&&Phase==MiningPhase.Drilling)TutorialAdvance(CampTutorialStep.WinRound);
-  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds>0&&Phase==MiningPhase.Preparation)TutorialAdvance(CampTutorialStep.Refinery,"OPERATION COMPLETE / raw ore is ready to refine.");
-  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds==0&&Phase==MiningPhase.Preparation&&!ExpeditionActive)TutorialAdvance(CampTutorialStep.StartDrill,"Try again / return to the drill when ready.");
+  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds>0&&Phase==MiningPhase.Preparation)TutorialAdvance(CampTutorialStep.Refinery,"Wave cleared. Your raw ore is ready to refine.");
+  if(TutorialStep==CampTutorialStep.WinRound&&CompletedRounds==0&&Phase==MiningPhase.Preparation&&!ExpeditionActive)TutorialAdvance(CampTutorialStep.StartDrill,"Try again. Return to the drill when ready.");
   if(TutorialStep==CampTutorialStep.Refinery){if(RefiningAmount>0)TutorialAdvance(CampTutorialStep.WaitForRefining);else if(RefinedOre>0)TutorialAdvance(CampTutorialStep.CompanyHub);}
-  if(TutorialStep==CampTutorialStep.WaitForRefining&&RefinedOre>0)TutorialAdvance(CampTutorialStep.CompanyHub,"REFINED ORE READY / sell it at the company tent.");
+  if(TutorialStep==CampTutorialStep.WaitForRefining&&RefinedOre>0)TutorialAdvance(CampTutorialStep.CompanyHub,"Refined ore ready. Sell it at the company terminal.");
   if(TutorialStep==CampTutorialStep.CompanyHub&&PendingMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.WaitForSale);
-  if(TutorialStep is CampTutorialStep.CompanyHub or CampTutorialStep.WaitForSale&&PendingMarketSale==null&&LastMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.Complete,"FIRST SALE COMPLETE / reinvest your credits to grow the camp.");
+  if(TutorialStep is CampTutorialStep.CompanyHub or CampTutorialStep.WaitForSale&&PendingMarketSale==null&&LastMarketSale is {Refined:true})TutorialAdvance(CampTutorialStep.Complete,"First sale complete. Reinvest in your camp.");
   tutorialPathClock-=delta;
   if(tutorialPathClock<=0){tutorialPathClock=Math.Clamp(TutorialRouteRefreshSeconds,.1f,2);if(Player is {} moving&&TutorialDestination(ui) is {} goal&&(!TutorialRouteReady||tutorialRibbon==null||Vector3.DistanceSquared(moving.Transform.WorldPosition,tutorialLastStart)>.16f||Vector3.DistanceSquared(goal.Transform.WorldPosition,tutorialLastTarget)>.16f)){tutorialLastStart=moving.Transform.WorldPosition;tutorialLastTarget=goal.Transform.WorldPosition;UpdateTutorialPath(ui);BuildTutorialRoute();}}
  }
@@ -71,10 +71,13 @@ public sealed partial class MiningOperation3D
  public void DrawCampTutorial(RenderContext c,AssetReference font,bool showWorld)
  {
   if(!TutorialEnabled||!TutorialActive&&tutorialPopupClock<=0)return;
-  float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),w=c.TargetWidth/s;
-  void Text(string t,float y,int size,Vector4 color)=>c.DrawUiText(t,font,(int)(size*s),new(w*.5f*s,y*s),color,UiAnchor.TopCenter);
-  if(TutorialActive){c.DrawUiQuad(new((w/2-235)*s,99*s),new(470*s,48*s),new(.035f,.045f,.055f,.94f));Text("CAMP BASICS",104,13,new(1,.76f,.12f,1));Text(TutorialInstruction,123,18,new(.95f,.95f,.9f,1));}
-  if(TutorialPopup.Length>0&&tutorialPopupClock>0){c.DrawUiQuad(new((w/2-350)*s,192*s),new(700*s,36*s),new(.035f,.045f,.055f,.96f));Text(TutorialPopup,201,16,new(1,.83f,.35f,1));}
+  float s=Math.Min(c.TargetWidth/1280f,c.TargetHeight/720f),h=c.TargetHeight/s;
+  bool card=TutorialActive&&!(ExpeditionActive&&Phase==MiningPhase.Preparation&&TutorialStep is CampTutorialStep.StartDrill or CampTutorialStep.WinRound);
+  int step=TutorialStep==CampTutorialStep.AmmoPress?1:TutorialStep is CampTutorialStep.StartDrill or CampTutorialStep.WinRound?2:TutorialStep is CampTutorialStep.Refinery or CampTutorialStep.WaitForRefining?3:4;
+  string title=TutorialStep switch{CampTutorialStep.AmmoPress=>"Collect your ammunition",CampTutorialStep.StartDrill=>"Begin your first contract",CampTutorialStep.WinRound=>"Defend the drill",CampTutorialStep.Refinery=>"Refine your ore",CampTutorialStep.WaitForRefining=>"Refining in progress",CampTutorialStep.CompanyHub=>"Sell your refined ore",_=>"Shipment on its way"};
+  string detail=TutorialStep switch{CampTutorialStep.AmmoPress=>"Walk up to the ammo press bucket.",CampTutorialStep.StartDrill=>"Choose a site at the drill.",CampTutorialStep.WinRound=>"Clear the incoming spiders.",CampTutorialStep.Refinery=>"Load raw ore at a refinery.",CampTutorialStep.WaitForRefining=>"Prepare while the machine processes.",CampTutorialStep.CompanyHub=>"Use Trade in the company terminal.",_=>"Payout arrives automatically."};
+  if(card){SupportUiArt.Panel(c,s,20,90,340,116);SupportUiArt.Q(c,s,20,102,3,92,SupportUiArt.Gold);SupportUiArt.T(c,s,$"CAMP BASICS  {step} / 4",34,101,13,false,SupportUiArt.Muted);SupportUiArt.T(c,s,title,34,126,20,true);SupportUiArt.T(c,s,detail,34,155,16);for(int i=0;i<4;i++)SupportUiArt.Q(c,s,34+i*17,185,11,6,i<step?SupportUiArt.Gold:new(.3f,.32f,.32f,1));}
+  if(TutorialPopup.Length>0&&tutorialPopupClock>0){SupportUiArt.Panel(c,s,20,h-272,340,58);var words=TutorialPopup.Split(' ',StringSplitOptions.RemoveEmptyEntries);string line="";int row=0;foreach(string word in words){if(line.Length+word.Length>38&&line.Length>0){SupportUiArt.T(c,s,line,32,h-261+row*21,14);line="";if(++row>=2)break;}line+=(line.Length>0?" ":"")+word;}if(row<2&&line.Length>0)SupportUiArt.T(c,s,line,32,h-261+row*21,14);}
   if(showWorld&&TutorialActive&&ShowTutorialRoute)DrawTutorialDestination(c,font);
   if(!showWorld||!TutorialActive||!ShowTutorialRoute||tutorialPath.Count<2||Player is not {} player)return;
   DrawTutorialRoute(c);

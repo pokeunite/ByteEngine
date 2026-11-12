@@ -4,7 +4,7 @@ using ByteEngine.Core.Graphics;
 namespace KarlsonDemo.Plugin;
 public sealed partial class MiningBusinessUi3D
 {
- (float X,float Y,float Width,float Height) CompactBounds(float width,float height)=>IsCompanyScreen?(width-(Screen==MiningScreen.Research?968:588),(height-660)/2,Screen==MiningScreen.Research?940:560,660):Screen==MiningScreen.Account?(width-588,(height-580)/2,560,580):Screen==MiningScreen.AudioCredits?((width-740)/2,(height-450)/2,740,450):Screen==MiningScreen.Drill?((width-1120)/2,(height-640)/2,1120,640):Screen==MiningScreen.Research?(width-848,(height-660)/2,820,660):Screen==MiningScreen.Market?(width-588,(height-660)/2,560,660):(width-500,(height-580)/2,480,580);
+ (float X,float Y,float Width,float Height) CompactBounds(float width,float height)=>IsCompanyScreen?(20,12,width-40,height-24):Screen==MiningScreen.Account?(width-588,(height-580)/2,560,580):Screen==MiningScreen.AudioCredits?((width-740)/2,(height-450)/2,740,450):Screen==MiningScreen.Drill?((width-1120)/2,(height-640)/2,1120,640):Screen==MiningScreen.Research?(width-848,(height-660)/2,820,660):Screen==MiningScreen.Market?(width-588,(height-660)/2,560,660):(width-500,(height-580)/2,480,580);
  void LayoutCompact()
  {
   var size=Input.GameViewSize;float scale=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));float width=size.X/scale,height=size.Y/scale;var b=CompactBounds(width,height);

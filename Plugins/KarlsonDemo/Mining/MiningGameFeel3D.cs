@@ -67,6 +67,7 @@ public sealed partial class MiningGameFeel3D:Component
  readonly List<(Vector3 Position,float Age)> threats=[];
  GameObject[] enemies=[];HealthComponent? playerHealth;Camera3D? presentationCamera;
  float scanClock,hitClock,killClock,hurtClock,ammoClock,creditClock,resultClock,duck,duckHold,kick,kickAge,soundClock,rigSoundClock;
+ string resultTitle="";int resultOre,resultLost;float resultRig;
  Vector3 hurtDirection;int previousCredits,previousRounds;long collection;float creditDisplay;bool initialized;
  protected override void OnStart()=>Tick(0);
  protected override void OnUpdate()=>Tick(Math.Max(0,(float)Time.DeltaTime));
@@ -85,7 +86,7 @@ public sealed partial class MiningGameFeel3D:Component
   if(scene.FindGameObject(AmmoBucketObjectId)?.GetComponent<MiningAmmoBucket3D>() is {} bucket&&bucket.CollectionSequence!=collection){collection=bucket.CollectionSequence;if(bucket.LastCollected>0){AmmoGain=ammoClock>0?AmmoGain+bucket.LastCollected:bucket.LastCollected;ammoClock=PopupSeconds;}}
   if(op.Credits>previousCredits){CreditGain=creditClock>0?CreditGain+op.Credits-previousCredits:op.Credits-previousCredits;creditClock=PopupSeconds;}else if(op.Credits<previousCredits)creditDisplay=op.Credits;
   previousCredits=op.Credits;creditDisplay+=(op.Credits-creditDisplay)*(1-MathF.Exp(-dt*9));DisplayedCredits=creditClock>0?(int)MathF.Round(creditDisplay):op.Credits;
-  if(op.CompletedRounds>previousRounds){RoundResult=$"OPERATION {op.CompletedRounds:00} COMPLETE  /  +{op.RoundQuota} RAW ORE  /  RIG {op.DrillHealthFraction:P0}";resultClock=RoundResultSeconds;}previousRounds=op.CompletedRounds;
+  if(op.CompletedRounds>previousRounds){resultTitle=op.ExpeditionsEnabled?(op.ExpeditionActive?$"WAVE {op.ExpeditionWave} / {op.WavesPerExpedition} CLEARED":"CONTRACT COMPLETE"):"OPERATION COMPLETE";resultOre=op.ExpeditionsEnabled?op.LastWaveOreSecured:op.RoundQuota;resultLost=op.ExpeditionsEnabled?op.LastWaveOreLost:0;resultRig=op.DrillHealthFraction;RoundResult=$"{resultTitle} / +{resultOre} RAW ORE / RIG {resultRig:P0}";resultClock=RoundResultSeconds;}previousRounds=op.CompletedRounds;
   scanClock-=dt;if(scanClock<=0){scanClock=.25f;enemies=scene.GameObjects.Where(o=>o.ActiveInHierarchy&&o.GetComponent<MiningRaiderPriorities3D>()!=null&&o.GetComponent<HealthComponent>() is {IsDead:false}).ToArray();}
   TickThreats(dt,op);
  }

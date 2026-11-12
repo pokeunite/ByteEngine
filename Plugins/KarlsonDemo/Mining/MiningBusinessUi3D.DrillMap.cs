@@ -36,7 +36,7 @@ public sealed partial class MiningBusinessUi3D
   void Pips(int risk,float x,float y,float unit=15){for(int n=0;n<risk;n++)Q(x+n*(unit+4),y,unit,7,risk==5?new(1,.47f,.12f,1):Accent);}
   c.DrawUiQuad(Vector2.Zero,new(c.TargetWidth,c.TargetHeight),new(0,0,0,.22f));Image("survey-frame-border",0,0,1120,640);
   Image("drill-survey-map",2,84,748,466);Q(2,84,748,466,new(0,0,0,.25f));Q(751,84,367,554,new(.065f,.07f,.07f,.95f));
-  Q(26,20,7,33,Accent);Q(37,20,7,33,Accent);T(op.ExpeditionActive?"CONTRACT IN PROGRESS":"SELECT DRILL SITE",60,13,32,true);T(op.ExpeditionsEnabled?$"{op.WavesPerExpedition} automatic waves / {op.PreparationSeconds:0}s preparation / machines usable in combat":"Choose your risk. Secure your reward.",60,55,17);
+  Q(26,20,7,33,Accent);Q(37,20,7,33,Accent);T(op.ExpeditionActive?"JOB IN PROGRESS":"SELECT DRILL SITE",60,13,32,true);T(op.ExpeditionsEnabled?$"{op.WavesPerExpedition} waves per job / {op.PreparationSeconds:0}s preparation / machines usable in combat":"Choose your risk. Secure your reward.",60,55,17);
   L(1075,20,1093,38,TextColor,2);L(1093,20,1075,38,TextColor,2);L(2,83,1118,83);L(750,83,750,638);
   for(int i=0;i<6;i++)
   {
@@ -56,7 +56,7 @@ public sealed partial class MiningBusinessUi3D
    T("SITE CONDITIONS",772,411,16,true);Image("info",775,441,18,18);T(op.ExpeditionActive?$"Cleared {op.ExpeditionWave}/{op.WavesPerExpedition} / next {op.PreparationRemaining:0}s":chosen.ConditionA,805,441,14);Image("info",775,467,18,18);T(op.ExpeditionsEnabled?"Cyan disruptors arrive from wave 3":chosen.ConditionB,805,467,14);
    T($"Cargo {op.CargoUsed:N0} / {op.CargoCapacity:N0}",772,502,16);Q(772,526,328,5,new(.25f,.27f,.27f,1));Q(772,526,328*Math.Clamp(op.CargoUsed/(float)Math.Max(1,op.CargoCapacity),0,1),5,Accent);
   }
-  var start=W(PrimaryButtonObjectId);bool canStart=start?.Interactable==true;Q(772,544,328,48,canStart?Accent:new(.20f,.21f,.19f,1));T(op.ExpeditionActive?$"START EARLY +{op.PendingEarlyBonus}":op.ExpeditionsEnabled?"ACCEPT CONTRACT":"START OPERATION",936,557,21,true,UiAnchor.TopCenter,canStart?new(.05f,.05f,.04f,1):MenuMuted);
+  var start=W(PrimaryButtonObjectId);bool canStart=start?.Interactable==true;Q(772,544,328,48,canStart?Accent:new(.20f,.21f,.19f,1));T(op.ExpeditionActive?$"START EARLY +{op.PendingEarlyBonus}":op.ExpeditionsEnabled?$"ACCEPT {op.WavesPerExpedition}-WAVE JOB":"START OPERATION",936,557,21,true,UiAnchor.TopCenter,canStart?new(.05f,.05f,.04f,1):MenuMuted);
   string warning=Feedback.Length>0?Feedback:wave==null?"Choose a valid site":(long)op.CargoUsed+wave.Ore>op.CargoCapacity?"Not enough cargo space for this reward":!op.ExpeditionsEnabled&&op.RefiningAmount>0&&!op.QueueRefineryBatches?"Finish refining before launching":op.ExpeditionActive?"Countdown continues while this panel is open":"Esc Back / Enter Accept";T(warning.Length>45?warning[..42]+"...":warning,936,606,13,false,UiAnchor.TopCenter,canStart?TextColor:Accent);
   T($"DRILL OUTPUT +{op.DrillLevel*op.OrePerDrillLevel} ORE",22,570,13);var upgrade=W(Row0ButtonObjectId);bool buy=upgrade?.Interactable==true;Q(210,562,160,32,buy?new(.23f,.23f,.17f,1):new(.1f,.11f,.1f,1));T(op.IsUpgradeMaxed(MiningUpgrade.Drill)?"MAX LEVEL":$"UPGRADE {op.Cost(MiningUpgrade.Drill):N0} cr",290,569,13,true,UiAnchor.TopCenter,buy?Accent:MenuMuted);T($"{op.Contracts.Count} SITES / SELECT A SURVEY SECTOR",728,570,12,false,UiAnchor.TopRight);
   int first=Math.Max(0,Math.Min(SurveySector-2,SurveySectorCount-5));int shown=Math.Min(5,SurveySectorCount);float tabWidth=710f/shown;

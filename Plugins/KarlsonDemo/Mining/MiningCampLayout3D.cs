@@ -27,7 +27,7 @@ public sealed partial class MiningCampLayout3D:Component
  public string SaveSlot{get;set;}="mining-camp-layout-v1.json";
  public AssetReference Font{get;set;}=AssetReference.Empty;
  public bool IsEditing{get;private set;}
- public bool CanEdit=>initialized&&Op?.Phase==MiningPhase.Preparation&&Ui?.Screen==MiningScreen.None;
+ public bool CanEdit=>initialized&&Op?.CanUseIndustry==true&&Ui?.Screen==MiningScreen.None;
  public Guid SelectedObjectId{get;private set;}
  public Vector3 PreviewPosition{get;private set;}
  public float PreviewYaw{get;private set;}
@@ -48,7 +48,7 @@ public sealed partial class MiningCampLayout3D:Component
  public bool ToggleEdit(){if(IsEditing){ExitEdit();return true;}return EnterEdit();}
  public bool EnterEdit()
  {
-  if(!CanEdit){Status="Arrange the camp between operations, with menus closed.";return false;}
+  if(!CanEdit){Status="Close other menus before arranging the camp.";return false;}
   Planner?.Cancel();var player=GameObject;
   if(player.GetComponent<PlayerController3D>() is {} control){restoreControl=control.Enabled;control.Enabled=false;}
   if(player.GetComponent<MiningThirdPerson3D>() is {} view){restoreView=view.Enabled;view.Enabled=false;}
@@ -86,7 +86,7 @@ public sealed partial class MiningCampLayout3D:Component
  protected override void OnUpdate()
  {
   if(!initialized){if(++warmup<3)return;initialized=true;if(PersistProgress)LoadLayout();}
-  if(IsEditing&&(Op?.Phase!=MiningPhase.Preparation||Ui?.Screen!=MiningScreen.None))ExitEdit();
+  if(IsEditing&&(Op?.CanUseIndustry!=true||Ui?.Screen!=MiningScreen.None))ExitEdit();
   if(Input.IsKeyPressed(EditKey)&&Ui?.Screen==MiningScreen.None)ToggleEdit();
   UpdateButton();
   if(!IsEditing)return;

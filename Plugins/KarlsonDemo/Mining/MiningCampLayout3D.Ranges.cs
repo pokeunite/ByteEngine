@@ -11,7 +11,8 @@ public sealed partial class MiningCampLayout3D
  void DrawDefenceRanges(RenderContext c)
  {
   if(!ShowDefenceRanges||editCamera?.GetComponent<Camera3D>() is not {} camera)return;
-  foreach(var root in Objects)
+  var hovered=PointerGround(out var ground)?Pick(ground)?.Id:Guid.Empty;
+  foreach(var root in Objects.Where(o=>o.Id==SelectedObjectId||o.Id==hovered))
   {
    if(root.GetComponent<MiningDefense3D>() is not {} d||d.Spent||d.Kind==MiningDefenseKind.SupplyCache)continue;
    bool selected=SelectedObjectId==root.Id;Vector3 p=selected?PreviewPosition:root.Transform.WorldPosition;float yaw=selected?PreviewYaw:Yaw(root);

@@ -76,7 +76,7 @@
   {
     "Id": "mine",
     "Name": "Tripwire licence",
-    "Description": "Unlock one mine. Normal detonations re-arm next operation.",
+    "Description": "Unlock one mine kit and mine purchases in Field R&D. Discharged mines stay placed; recharge for 10 refined ore.",
     "Cost": 150,
     "Prerequisites": [
       "charter"
@@ -95,7 +95,7 @@
   {
     "Id": "sentry",
     "Name": "Sentry licence",
-    "Description": "Unlock one sentry; destructible, 20 refined ore to replace.",
+    "Description": "Unlock one sentry kit and additional kits in Field R&D for 55 refined ore each. Destroyed sentries cost 20 refined ore to replace.",
     "Cost": 150,
     "Prerequisites": [
       "shotgun"
@@ -435,78 +435,303 @@
     "Y": 65
   },
   {
-    "Id": "pistol-handling",
-    "Name": "Pistol field handling",
-    "Description": "Each rank: +2 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
-    "Cost": 120,
+    "Id": "pistol-reload",
+    "Name": "Pistol quick reload",
+    "Description": "Each rank increases reload speed by 15%. Applies only to this gun.",
+    "Cost": 60,
+    "Prerequisites": [
+      "charter"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      60,
+      90,
+      130
+    ],
+    "Branch": "Pistol",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "pistol-magazine",
+    "Name": "Pistol extended magazine",
+    "Description": "Each rank adds 2 rounds to the magazine. Applies only to this gun.",
+    "Cost": 70,
+    "Prerequisites": [
+      "charter"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 2,
+    "MaxRank": 3,
+    "RankCosts": [
+      70,
+      105,
+      150
+    ],
+    "Branch": "Pistol",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "pistol-damage",
+    "Name": "Pistol stopping power",
+    "Description": "Each rank increases damage per pellet or bullet by 12%. Applies only to this gun.",
+    "Cost": 80,
+    "Prerequisites": [
+      "charter"
+    ],
+    "Effect": 0,
+    "Amount": 12,
+    "Stat": "WeaponDamagePct",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      80,
+      120,
+      175
+    ],
+    "Branch": "Pistol",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "pistol-accuracy",
+    "Name": "Pistol accuracy",
+    "Description": "Each rank increases base accuracy by 20%. Applies only to this gun.",
+    "Cost": 50,
     "Prerequisites": [
       "charter"
     ],
     "Effect": 0,
     "Amount": 20,
     "Stat": "HandlingAccuracyPct",
-    "ReloadSpeedBonus": 0.15,
-    "MagazineBonus": 2,
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
     "MaxRank": 3,
     "RankCosts": [
-      120,
-      200,
-      320
+      50,
+      80,
+      120
     ],
     "Branch": "Pistol",
     "MinimumRound": 0,
     "Available": true,
-    "X": 160,
-    "Y": 720
+    "X": 0,
+    "Y": 0
   },
   {
-    "Id": "rifle-handling",
-    "Name": "Rifle field handling",
-    "Description": "Each rank: +4 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
-    "Cost": 120,
+    "Id": "rifle-reload",
+    "Name": "Rifle quick reload",
+    "Description": "Each rank increases reload speed by 15%. Applies only to this gun.",
+    "Cost": 60,
+    "Prerequisites": [
+      "ar"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      60,
+      90,
+      130
+    ],
+    "Branch": "Rifle",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "rifle-magazine",
+    "Name": "Rifle extended magazine",
+    "Description": "Each rank adds 4 rounds to the magazine. Applies only to this gun.",
+    "Cost": 70,
+    "Prerequisites": [
+      "ar"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 4,
+    "MaxRank": 3,
+    "RankCosts": [
+      70,
+      105,
+      150
+    ],
+    "Branch": "Rifle",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "rifle-damage",
+    "Name": "Rifle stopping power",
+    "Description": "Each rank increases damage per pellet or bullet by 12%. Applies only to this gun.",
+    "Cost": 80,
+    "Prerequisites": [
+      "ar"
+    ],
+    "Effect": 0,
+    "Amount": 12,
+    "Stat": "WeaponDamagePct",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      80,
+      120,
+      175
+    ],
+    "Branch": "Rifle",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "rifle-accuracy",
+    "Name": "Rifle accuracy",
+    "Description": "Each rank increases base accuracy by 20%. Applies only to this gun.",
+    "Cost": 50,
     "Prerequisites": [
       "ar"
     ],
     "Effect": 0,
     "Amount": 20,
     "Stat": "HandlingAccuracyPct",
-    "ReloadSpeedBonus": 0.15,
-    "MagazineBonus": 4,
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
     "MaxRank": 3,
     "RankCosts": [
-      120,
-      200,
-      320
+      50,
+      80,
+      120
     ],
     "Branch": "Rifle",
     "MinimumRound": 0,
     "Available": true,
-    "X": 420,
-    "Y": 720
+    "X": 0,
+    "Y": 0
   },
   {
-    "Id": "shotgun-handling",
-    "Name": "Shotgun field handling",
-    "Description": "Each rank: +1 magazine capacity, +15% reload speed and +20% base accuracy. Applies only to this weapon family; three ranks.",
-    "Cost": 120,
+    "Id": "shotgun-reload",
+    "Name": "Shotgun quick reload",
+    "Description": "Each rank increases reload speed by 15%. Applies only to this gun.",
+    "Cost": 60,
+    "Prerequisites": [
+      "shotgun"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0.15,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      60,
+      90,
+      130
+    ],
+    "Branch": "Shotgun",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "shotgun-magazine",
+    "Name": "Shotgun extended magazine",
+    "Description": "Each rank adds 1 rounds to the magazine. Applies only to this gun.",
+    "Cost": 70,
+    "Prerequisites": [
+      "shotgun"
+    ],
+    "Effect": 0,
+    "Amount": 0,
+    "Stat": "",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 1,
+    "MaxRank": 3,
+    "RankCosts": [
+      70,
+      105,
+      150
+    ],
+    "Branch": "Shotgun",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "shotgun-damage",
+    "Name": "Shotgun stopping power",
+    "Description": "Each rank increases damage per pellet or bullet by 12%. Applies only to this gun.",
+    "Cost": 80,
+    "Prerequisites": [
+      "shotgun"
+    ],
+    "Effect": 0,
+    "Amount": 12,
+    "Stat": "WeaponDamagePct",
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
+    "MaxRank": 3,
+    "RankCosts": [
+      80,
+      120,
+      175
+    ],
+    "Branch": "Shotgun",
+    "MinimumRound": 0,
+    "Available": true,
+    "X": 0,
+    "Y": 0
+  },
+  {
+    "Id": "shotgun-accuracy",
+    "Name": "Shotgun accuracy",
+    "Description": "Each rank increases base accuracy by 20%. Applies only to this gun.",
+    "Cost": 50,
     "Prerequisites": [
       "shotgun"
     ],
     "Effect": 0,
     "Amount": 20,
     "Stat": "HandlingAccuracyPct",
-    "ReloadSpeedBonus": 0.15,
-    "MagazineBonus": 1,
+    "ReloadSpeedBonus": 0,
+    "MagazineBonus": 0,
     "MaxRank": 3,
     "RankCosts": [
-      120,
-      200,
-      320
+      50,
+      80,
+      120
     ],
     "Branch": "Shotgun",
     "MinimumRound": 0,
     "Available": true,
-    "X": 680,
-    "Y": 720
+    "X": 0,
+    "Y": 0
   }
 ]

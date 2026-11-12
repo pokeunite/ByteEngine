@@ -144,6 +144,8 @@ public sealed partial class SkeletalMeshRenderer : Component
     public float AnimationUpdateInterval { get; set; }
     /// <summary>Reduce distant visual sampling while keeping playback clocks and queried bones current.</summary>
     public bool AutomaticAnimationLod {get;set;}=true;
+    /// <summary>Reduce sampling of distant looping poses once many renderers share the model.</summary>
+    public bool CrowdSamplingLod { get; set; }
     private float EffectiveAnimationInterval(){
         float interval=Math.Max(0,AnimationUpdateInterval);
         if(!AutomaticAnimationLod||_lightRagdollActive||_recoveryDuration>0||_hitReaction>.001f||GameObject.Scene?.ActiveCamera is not {} camera)return interval;
@@ -153,6 +155,8 @@ public sealed partial class SkeletalMeshRenderer : Component
         foreach(var mesh in _runtimeMeshes)radius=Math.Max(radius,mesh.Mesh.LocalBounds.Size.Length()*.5f);
         radius*=Math.Max(.001f,Vector3.Abs(Transform.WorldScale).Length()/MathF.Sqrt(3));
         float relativeDistance=distance/Math.Max(.5f,radius);
+        if (CrowdSamplingLod && Loop && CrowdEligible && crowdPool is { Users: >= 32 } && relativeDistance > 15)
+            interval = Math.Max(interval, relativeDistance > 35 ? 1f / 10 : 1f / 15);
         return Math.Max(interval,relativeDistance>120?1f/15:relativeDistance>50?1f/30:0);
     }
     /// <summary>Batch animation and post-physics IK changes into one pose evaluation.
@@ -602,7 +606,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                 liveWorldMatrix,
                 ResolveRenderQueue(effectiveMaterial),
                 true,
-                true,
+                CastShadows,
                 true);
         }
     }

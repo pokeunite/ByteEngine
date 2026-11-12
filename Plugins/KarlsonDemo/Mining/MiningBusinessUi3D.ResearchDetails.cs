@@ -4,16 +4,17 @@ namespace KarlsonDemo.Plugin;
 public sealed partial class MiningBusinessUi3D
 {
  int descriptionScroll;
+ int ResearchDetailRows=>Math.Max(3,(int)((mapHeight-540)/23));
  public string[] ResearchDescriptionLines(string description)
  {
   var result=new List<string>();string line="";
-  foreach(string word in description.Split(' ',StringSplitOptions.RemoveEmptyEntries)){if(line.Length>0&&line.Length+word.Length+1>45){result.Add(line);line="";}line+=(line.Length>0?" ":"")+word;}
+  foreach(string word in description.Split(' ',StringSplitOptions.RemoveEmptyEntries)){if(line.Length>0&&line.Length+word.Length+1>32){result.Add(line);line="";}line+=(line.Length>0?" ":"")+word;}
   if(line.Length>0)result.Add(line);return result.ToArray();
  }
  void ScrollResearchDescription(Vector2 mouse,float wheel)
  {
-  if(mouse.X<30||mouse.X>600||mouse.Y<575||mouse.Y>630||Trade?.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is not {} chosen)return;
-  descriptionScroll=Math.Clamp(descriptionScroll-(int)MathF.Sign(wheel),0,Math.Max(0,ResearchDescriptionLines(Trade!.ResearchBenefit(chosen)).Length-3));
+  if(mouse.X<mapWidth+28||mouse.X>mapWidth+332||mouse.Y<320||mouse.Y>mapHeight-130||Trade?.Research.FirstOrDefault(n=>n.Id==SelectedResearchId) is not {} chosen)return;
+  descriptionScroll=Math.Clamp(descriptionScroll-(int)MathF.Sign(wheel),0,Math.Max(0,ResearchDescriptionLines(Trade!.ResearchBenefit(chosen)).Length-ResearchDetailRows));
  }
  void DrawResearchDescription(BusinessPainter p,string description)
  {

@@ -191,7 +191,7 @@ public sealed partial class MiningOperation3D:Component
  bool StartRefineryBatch(bool quietWhenEmpty=false)
  {
   int available=Math.Min(RawOre,RefineryLoadRemaining);if(available<=0)return quietWhenEmpty?false:Reject("No unreserved raw ore to refine.");
-  int input=Math.Min(available,RefineryBatchSizeAt(RefineryLevel));int output=(int)Math.Clamp(Math.Floor(input*(double)RefineryYieldMultiplier+refineryYieldRemainder),0,1000000000);if((long)CargoUsed-input+output>CargoCapacity)return Reject("Make room in the cargo hold before refining.");
+  int input=Math.Min(available,RefineryBatchSizeAt(RefineryLevel));int output=(int)Math.Clamp(Math.Floor(input*(double)RefineryYieldMultiplier+refineryYieldRemainder),0,1000000000);// Refining converts existing cargo; yield bonuses may temporarily exceed capacity. New extraction and purchases remain capacity-limited.
   refiningNextRemainder=Math.Clamp(input*(double)RefineryYieldMultiplier+refineryYieldRemainder-output,0,.999999);RefiningAmount=input;RefiningOutput=output;RefiningRemaining=RefiningTotalSeconds=RefineryDuration*(refineryAutoRun?Math.Clamp(AutomaticRefineryTimeMultiplier,1,3):1);Message=$"Refining {RefiningAmount} ore...";return true;
  }
  public bool SellCargo()

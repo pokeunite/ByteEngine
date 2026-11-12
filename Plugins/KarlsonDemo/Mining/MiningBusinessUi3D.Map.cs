@@ -33,23 +33,23 @@ public sealed partial class MiningBusinessUi3D
    foreach(var branch in group){float span=Span(branch)*100;Visit(branch,side*175,cursor+span/2,side,1);cursor+=span;}
   }
  }
- Vector2 NodePoint(CompanyUpgrade n)=>new Vector2(mapWidth*.5f,300)+(mapPositions.GetValueOrDefault(n.Id))*ResearchZoom+ResearchPan;
- bool NodeVisible(Vector2 p)=>p.X>52&&p.X<mapWidth-52&&p.Y>158&&p.Y<430;
+ Vector2 NodePoint(CompanyUpgrade n)=>new Vector2(mapWidth*.5f,(132+mapHeight-70)*.5f)+(mapPositions.GetValueOrDefault(n.Id))*ResearchZoom+ResearchPan;
+ bool NodeVisible(Vector2 p)=>p.X>52&&p.X<mapWidth-52&&p.Y>158&&p.Y<mapHeight-94;
  float NodeRadius=>30*Math.Clamp(ResearchZoom,.7f,1.15f);
  void UpdateMapInput()
  {
   if(Screen!=MiningScreen.Research)return;
-  var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));var bounds=CompactBounds(size.X/s,size.Y/s);mapWidth=Screen==MiningScreen.Research?610:bounds.Width;mapHeight=bounds.Height;
+  var size=Input.GameViewSize;float s=Math.Max(.01f,Math.Min(size.X/1280,size.Y/720));var bounds=CompactBounds(size.X/s,size.Y/s);mapWidth=Screen==MiningScreen.Research?bounds.Width-360:bounds.Width;mapHeight=bounds.Height;
   if(Trade is {} trade)PrepareResearchMap(trade);
-  var mouse=Input.GameViewMousePosition/s-new Vector2(bounds.X,bounds.Y);bool over=mouse.X>28&&mouse.X<mapWidth-28&&mouse.Y>135&&mouse.Y<460;
+  var mouse=Input.GameViewMousePosition/s-new Vector2(bounds.X,bounds.Y);bool over=mouse.X>28&&mouse.X<mapWidth-28&&mouse.Y>135&&mouse.Y<mapHeight-70;
   ScrollResearchDescription(mouse,Input.Snapshot.MouseWheel);
   bool pan=over&&Input.IsMouseButtonDownForUi(MouseButton.Right);
   if(pan&&wasPanning)ResearchPan+=mouse-lastMapPointer;
   if(over&&Math.Abs(Input.Snapshot.MouseWheel)>.001f)
-  {float old=ResearchZoom;ResearchZoom=Math.Clamp(old+Input.Snapshot.MouseWheel*.08f,.45f,1.5f);var center=new Vector2(mapWidth*.5f,300);ResearchPan=mouse-center-(mouse-center-ResearchPan)*(ResearchZoom/old);}
+  {float old=ResearchZoom;ResearchZoom=Math.Clamp(old+Input.Snapshot.MouseWheel*.08f,.45f,1.5f);var center=new Vector2(mapWidth*.5f,(132+mapHeight-70)*.5f);ResearchPan=mouse-center-(mouse-center-ResearchPan)*(ResearchZoom/old);}
   ResearchPan=Vector2.Clamp(ResearchPan,new(-5000,-5000),new(5000,5000));lastMapPointer=mouse;wasPanning=pan;
  }
- string ResearchIcon(CompanyUpgrade n)=>n.Name.Contains("Scatter",StringComparison.OrdinalIgnoreCase)?"scatter":n.Id is "company" or "charter"?"company":n.Branch=="Rifle"?"rifle":n.Branch=="Shotgun"?"shotgun":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
+ string ResearchIcon(CompanyUpgrade n)=>n.Id.EndsWith("-reload")?"speed":n.Id.EndsWith("-magazine")?"ammo":n.Id.EndsWith("-accuracy")?"gear":n.Name.Contains("Scatter",StringComparison.OrdinalIgnoreCase)?"scatter":n.Id is "company" or "charter"?"company":n.Branch=="Rifle"?"rifle":n.Branch=="Shotgun"?"shotgun":n.Id.StartsWith("arms")||n.Branch=="Pistol"?"pistol":n.Id.StartsWith("industry")||n.Branch=="Base"?"drill":n.Branch=="Health"||n.Id.StartsWith("survival")?"health":n.Branch=="Market"?"market":n.Branch=="Ammo"?"ammo":n.Branch=="Mines"?"mine":n.Branch=="Artillery"?"mortar":n.Branch=="Defence"?"turret":n.Stat.Contains("Speed")?"speed":n.Branch=="Supply"?"crate":"gear";
  void DrawResearchIcon(RenderContext c,CompanyUpgrade n,Vector2 p,float size,float scale,Vector4 color)
  {
   if(!AnimationRuntimeAssets.TryGet(out var assets)||assets==null)return;

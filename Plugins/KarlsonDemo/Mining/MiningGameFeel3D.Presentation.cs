@@ -67,6 +67,14 @@ public sealed partial class MiningGameFeel3D
   }
   if(AmmoGainPopup&&ammoClock>0){Q(20,h-205,285,30,new(.04f,.05f,.06f,.94f));T($"+{AmmoGain} RESERVE AMMO",32,h-199,17,gold);}
   if(CreditGainPopup&&creditClock>0){Q(20,250,280,30,new(.04f,.05f,.06f,.94f));T($"+{CreditGain:N0} CREDITS RECEIVED",30,256,17,gold);}
-  if(RoundResults&&Player?.GetComponent<MiningDefensePlanner3D>()?.BuildMode!=true&&resultClock>0&&Op?.OverclockAvailable!=true&&Op?.IsOverclockActive!=true){Q(w/2-270,h-159,540,50,new(.04f,.05f,.06f,.95f));T(RoundResult,w/2,h-153,16,gold,UiAnchor.TopCenter);T("Refine your ore or return to the company tent",w/2,h-130,15,white,UiAnchor.TopCenter);}
+  if(RoundResults&&Player?.GetComponent<MiningDefensePlanner3D>()?.BuildMode!=true&&resultClock>0&&Op?.Phase==MiningPhase.Preparation&&Op?.OverclockAvailable!=true&&Op?.IsOverclockActive!=true){
+   float x=w/2-188,y=92;
+   SupportUiArt.Panel(c,s,x,y,376,94);
+   SupportUiArt.Q(c,s,x,y+14,3,66,gold);
+   SupportUiArt.T(c,s,resultTitle,x+188,y+12,20,true,gold,UiAnchor.TopCenter);
+   SupportUiArt.Image(c,s,"raw-ore",x+58,y+41,24,24);
+   SupportUiArt.T(c,s,$"+{resultOre:N0} raw ore secured",x+92,y+42,19,true);
+   SupportUiArt.T(c,s,resultLost>0?$"Cargo full / {resultLost:N0} ore left behind":$"Drill integrity {resultRig:P0}",x+188,y+72,13,false,SupportUiArt.Muted,UiAnchor.TopCenter);
+  }
  }
 }

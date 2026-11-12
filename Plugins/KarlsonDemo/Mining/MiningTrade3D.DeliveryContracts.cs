@@ -39,7 +39,7 @@ public sealed partial class MiningOperation3D
  [Browsable(false)]public int DeliveryContractsCompleted{get;private set;}
  public bool AcceptOreContract(OreDeliveryContract order)
  {
-  Initialize();if(!order.Valid||ActiveDeliveryContract!=null||PendingMarketSale!=null||Phase!=MiningPhase.Preparation||TargetWon||TargetExpired)return false;
+  Initialize();if(!order.Valid||ActiveDeliveryContract!=null||PendingMarketSale!=null||!CanUseIndustry||TargetWon||TargetExpired)return false;
   ActiveDeliveryContract=order;SaveProgress();return true;
  }
 }

@@ -35,9 +35,11 @@ public sealed partial class Scene
     {
         if(_physicsRegistryDirty||_physicsTransformOwners.Contains(owner))InvalidateQueryBounds();
     }
+    public TimeSpan PhysicsRegistryRebuildTime { get; private set; }
     private void RefreshPhysicsRegistry()
     {
         if(!_physicsRegistryDirty)return;
+        long rebuildStart=System.Diagnostics.Stopwatch.GetTimestamp();
         _physicsColliders.Clear();_physicsBodies.Clear();_physicsConstraints.Clear();_physicsTransformOwners.Clear();_queryTransformColliders.Clear();
         foreach(var obj in _gameObjects)
             for(int i=0;i<obj.Components.Count;i++)
@@ -48,5 +50,6 @@ public sealed partial class Scene
                 if(component is IPhysicsConstraint3D)_physicsConstraints.Add(component);
             }
         _physicsRegistryDirty=false;
+        PhysicsRegistryRebuildTime+=System.Diagnostics.Stopwatch.GetElapsedTime(rebuildStart);
     }
 }

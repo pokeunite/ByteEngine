@@ -4,6 +4,7 @@ using ByteEngine.Core.AI;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Navigation;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Physics;
 namespace KarlsonDemo.Plugin;
 public sealed partial class MiningOperation3D
 {
@@ -56,6 +57,11 @@ public sealed partial class MiningOperation3D
    enemyProgress[enemy.Id]=(position,still);
    var target=GameObject.Scene!.FindGameObject(enemy.GetComponent<SimpleEnemyAI3D>()?.TargetId??DrillObjectId);
    var points=SpawnPoints();if(points.Length==0)continue;
+   // Flat navigation paths can pull roots below the visible terrain. Project back
+   // onto a nearby solid floor, ignoring this spider, before testing progress.
+   if(finite&&GameplayQuery3D.Raycast(GameObject.Scene!,position+Vector3.UnitY*4,-Vector3.UnitY,out var floor,12,enemy,includeTriggers:false)&&floor.Normal.Y>.65f&&floor.GameObject.GetComponent<HealthComponent>()==null&&Math.Abs(floor.Point.Y-position.Y)<3){
+    position.Y=floor.Point.Y+.04f;enemy.Transform.WorldPosition=position;
+   }
    bool invalid=!finite||position.Y<points.Min(p=>p.Transform.WorldPosition.Y)-.35f||position.Y>points.Max(p=>p.Transform.WorldPosition.Y)+30;
    bool far=target!=null&&Vector3.DistanceSquared(position,target.Transform.WorldPosition)>9;
    bool blocked=enemy.GetComponent<NavigationAgent3D>()?.Status==NavigationAgentStatus.Unreachable&&target!=null&&Vector3.DistanceSquared(position,target.Transform.WorldPosition)>9;
@@ -76,7 +82,7 @@ public sealed partial class MiningOperation3D
    var spawn=points.FirstOrDefault(p=>(Player==null||Vector3.DistanceSquared(p.Transform.WorldPosition,Player.Transform.WorldPosition)>144)&&Reachable(p.Transform.WorldPosition));
    if(spawn==null){LastEnemyRecovery="No safe reachable recovery spawn; final enemy remains marked.";continue;}
    bool wasInactive=!enemy.ActiveInHierarchy;if(wasInactive)enemy.SetParent(null,true);
-   enemy.Active=true;if(!TryChooseSpacedSpawn(points,out var recovered))continue;enemy.Transform.WorldPosition=recovered;
+   enemy.Active=true;if(!TryChooseSpacedSpawn([spawn],out var recovered,enemy,Reachable))continue;enemy.Transform.WorldPosition=recovered;
    if(enemy.GetComponent<NavigationAgent3D>() is {} nav){nav.Enabled=true;nav.SetDestination(target?.Transform.WorldPosition??spawn.Transform.WorldPosition);}
    if(enemy.GetComponent<AIBehavior3D>() is {} ai)ai.Enabled=true;
    if(enemy.GetComponent<SimpleEnemyAI3D>() is {} combat)combat.Enabled=true;

@@ -61,17 +61,35 @@ public sealed partial class SkeletalMeshRenderer
    return new Mesh(vertices,indices,true);
  }
 
+ public bool DistantCrowdShadows { get; set; }
+ public bool CastShadows { get; set; } = true;
+ public bool DistantCrowdGeometry { get; set; }
+
  bool SubmitCrowdBatches(ByteEngine.Core.Graphics.RenderContext context,Matrix4x4 world,Material? modelOverride)
  {
   if(modelOverride?.HeightFieldTexture!=null||modelOverride is {BlendMode:not BlendMode3D.Opaque}||!BatchCrowdSubmeshes||!CrowdEligible||crowdDraws==null)return false;
   foreach(var asset in MaterialAssetSlots)if(asset is {IsEmpty:false})return false;
   foreach(var state in _materialOverrides.Values)if(!state.IsEmpty)return false;
   if(modelOverride!=null&&crowdDraws.Any(d=>d.PaletteMaterial!=null))return false;
+  bool distant = DistantCrowdGeometry && context.FrameSink == null &&
+      GameObject.Scene?.ActiveCamera is {} camera &&
+      Vector3.DistanceSquared(world.Translation,camera.Transform.WorldPosition) >= 30 * 30;
+  Mesh? shadow = crowdShadow;
+  if (CastShadows && distant && DistantCrowdShadows && shadow != null && crowdPool != null)
+  {
+      if (!crowdPool.ReducedShadows.TryGetValue(shadow, out var reduced))
+      {
+          reduced = MeshSimplifier.Simplify(shadow, .02f);
+          crowdPool.ReducedShadows.Add(shadow, reduced);
+      }
+      shadow = reduced;
+  }
   bool first=true;
   foreach(var draw in crowdDraws)
   {
    var material=modelOverride??draw.PaletteMaterial??_runtimeMeshes[draw.Slot].Material;
-   context.RenderWorld.SubmitWithShadow(draw.Mesh,material,draw.Placement*world,ResolveRenderQueue(material),true,context.FrameSink!=null||crowdShadow==null||first,true,shadowMesh:context.FrameSink==null&&first?crowdShadow:null,shadowModelMatrix:world);first=false;
+   var geometry = distant && draw.Mesh.IndexData.Length >= 300 ? draw.DistantMesh : draw.Mesh;
+   context.RenderWorld.SubmitWithShadow(geometry,material,draw.Placement*world,ResolveRenderQueue(material),true,CastShadows && (context.FrameSink!=null||shadow==null||first),true,shadowMesh:context.FrameSink==null&&first?shadow:null,shadowModelMatrix:world);first=false;
   }
   return true;
  }

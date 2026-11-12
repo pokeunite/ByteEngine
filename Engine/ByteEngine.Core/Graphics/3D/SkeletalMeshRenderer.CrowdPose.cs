@@ -13,10 +13,15 @@ public sealed partial class SkeletalMeshRenderer
  public bool ShareCrowdPoses{get=>shareCrowdPoses;set{if(shareCrowdPoses!=value){shareCrowdPoses=value;_poseDirty=true;}}}
  public int CrowdPoseFramesPerSecond{get;set;}=20;
  static readonly ConditionalWeakTable<ModelAsset,CrowdPool> CrowdPools=new();
- sealed class CrowdPool{public int Users;public long Hits,Misses,Refused;public readonly Dictionary<(ImportedAnimation Clip,int Frame,int Rate),CrowdPose> Poses=[];public readonly Dictionary<string,Material> FlatMaterials=[];}
+ sealed class CrowdPool{public readonly Dictionary<Mesh,Mesh> ReducedShadows=new();public int Users;public long Hits,Misses,Refused;public readonly Dictionary<(ImportedAnimation Clip,int Frame,int Rate),CrowdPose> Poses=[];public readonly Dictionary<string,Material> FlatMaterials=[];}
  internal object CaptureCrowdState()=>new {model=_model?.Name,users=crowdPool?.Users,poses=crowdPool?.Poses.Count,hits=crowdPool?.Hits,misses=crowdPool?.Misses,refused=crowdPool?.Refused,clips=crowdPool?.Poses.Keys.GroupBy(k=>k.Clip).Select(g=>new{g.Key.Name,g.Key.Duration,frames=g.Count()}).ToArray()};
  sealed record CrowdPose(Matrix4x4[] Globals,Matrix4x4 Root,Mesh[] Meshes,Matrix4x4[] Placement,CrowdDraw[] Draws,Mesh? Shadow);
- sealed record CrowdDraw(Mesh Mesh,Matrix4x4 Placement,int Slot,Material? PaletteMaterial=null);
+ sealed record CrowdDraw(Mesh Mesh,Matrix4x4 Placement,int Slot,Material? PaletteMaterial=null)
+ {
+  private Mesh? distantMesh;
+  public Mesh DistantMesh => distantMesh ??= MeshSimplifier.Simplify(Mesh,.02f);
+  public void DisposeDistantMesh() => distantMesh?.Dispose();
+ }
  CrowdDraw[]? crowdDraws;Mesh? crowdShadow;
  public bool BatchCrowdSubmeshes{get;set;}=true;
  CrowdPool? crowdPool;ModelAsset? crowdModel;
@@ -46,7 +51,7 @@ public sealed partial class SkeletalMeshRenderer
  }
  void ReleaseCrowdPool()
  {
-  if(crowdPool!=null&&--crowdPool.Users==0){foreach(var pose in crowdPool.Poses.Values){foreach(var mesh in pose.Meshes)mesh.Dispose();foreach(var draw in pose.Draws)if(!pose.Meshes.Contains(draw.Mesh))draw.Mesh.Dispose();pose.Shadow?.Dispose();}crowdPool.Poses.Clear();if(crowdModel!=null)CrowdPools.Remove(crowdModel);}
+  if(crowdPool!=null&&--crowdPool.Users==0){foreach(var pose in crowdPool.Poses.Values){foreach(var mesh in pose.Meshes)mesh.Dispose();foreach(var draw in pose.Draws){draw.DisposeDistantMesh();if(!pose.Meshes.Contains(draw.Mesh))draw.Mesh.Dispose();}pose.Shadow?.Dispose();}foreach(var reduced in crowdPool.ReducedShadows.Values) reduced.Dispose();crowdPool.ReducedShadows.Clear();crowdPool.Poses.Clear();if(crowdModel!=null)CrowdPools.Remove(crowdModel);}
   crowdShadow=null;crowdDraws=null;crowdPool=null;crowdModel=null;
  }
 }

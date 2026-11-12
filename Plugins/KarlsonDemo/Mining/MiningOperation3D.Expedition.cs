@@ -16,6 +16,8 @@ public sealed partial class MiningOperation3D
  [Category("Live state")] public int PendingEarlyBonus=>ExpeditionActive&&Phase==MiningPhase.Preparation?(int)Math.Floor((expeditionBase?.Ore??0)*Math.Clamp(EarlyStartMaximumBonus,0,.25f)*Math.Clamp(PreparationRemaining/Math.Max(1,PreparationSeconds),0,1)):0;
  [Category("Live state")] public bool CanUseIndustry=>Phase!=MiningPhase.Failed&&!TargetWon&&!TargetExpired;
  [Category("Live state")] public bool Downtime=>Phase==MiningPhase.Preparation&&!ExpeditionActive;
+ public int LastWaveOreSecured{get;private set;}
+ public int LastWaveOreLost{get;private set;}
  public string ExpeditionName=>expeditionBase?.Name??"";
  MiningWavePreview? expeditionBase;float expeditionSaveClock;ExpeditionState? pendingExpeditionRestore;int pendingRestoreFrames;
  public bool StartOperation()=>ExpeditionsEnabled?ExpeditionActive?StartWaveEarly():BeginExpedition():StartLegacyOperation();
@@ -38,7 +40,7 @@ public sealed partial class MiningOperation3D
   if(SpawnPoints().Length==0){Fail("No spawn points available.");return false;}
   CleanupEnemies();CloseCombatBlockingMenus();ExpeditionWave++;PreparationRemaining=0;ActiveWave=wave with{Ore=Add(wave.Ore,Math.Max(0,bonus))};RoundQuota=ActiveWave.Ore;EnemiesScheduled=wave.Total;EnemiesSpawned=0;ExtractionProgress=0;_spawnClock=0;ResetDirector();Phase=MiningPhase.Drilling;GameObject.GetComponent<MiningTrade3D>()?.ResetReviewedOperation();Message=$"Wave {ExpeditionWave}/{WavesPerExpedition}"+(bonus>0?$" / early start +{bonus} ore":"")+". Machines remain usable.";SaveProgress();return true;
  }
- void CloseCombatBlockingMenus(){foreach(var ui in GameObject.Scene!.GetComponentsSnapshot<MiningBusinessUi3D>())if(ui.Screen is MiningScreen.Drill or MiningScreen.Research or MiningScreen.Account)ui.Close();foreach(var camp in GameObject.Scene.GetComponentsSnapshot<MiningCampLayout3D>())if(camp.IsEditing)camp.ExitEdit();}
+ void CloseCombatBlockingMenus(){foreach(var ui in GameObject.Scene!.GetComponentsSnapshot<MiningBusinessUi3D>())if(ui.Screen is MiningScreen.Drill or MiningScreen.Research or MiningScreen.Account)ui.Close();}
  void TickExpedition(float dt)
  {
   if(pendingExpeditionRestore is {} r&&--pendingRestoreFrames<=0){pendingExpeditionRestore=null;Player?.GetComponent<HealthComponent>()?.SetHealthForExpedition(r.PlayerHealth);if(Drill is {} hp)hp.CurrentHealth=Math.Clamp(r.RigHealth,.1f,hp.MaxHealth);foreach(var ammo in r.Ammo??[])GameObject.Scene?.FindGameObject(ammo.Id)?.GetComponent<WeaponInstance3D>()?.SetAmmo(ammo.Magazine,ammo.Reserve);}
@@ -49,7 +51,7 @@ public sealed partial class MiningOperation3D
  }
  void FinishExpeditionWave()
  {
-  int secured=Math.Min(RoundQuota,Math.Max(0,CargoCapacity-CargoUsed)),lost=RoundQuota-secured;RawOre=Add(RawOre,secured);CompletedRounds++;CleanupEnemies();Phase=MiningPhase.Preparation;
+  int secured=Math.Min(RoundQuota,Math.Max(0,CargoCapacity-CargoUsed)),lost=RoundQuota-secured;LastWaveOreSecured=secured;LastWaveOreLost=lost;RawOre=Add(RawOre,secured);CompletedRounds++;CleanupEnemies();Phase=MiningPhase.Preparation;
   bool done=ExpeditionWave>=Math.Clamp(WavesPerExpedition,1,12);if(done){ExpeditionActive=false;PreparationRemaining=0;HealAfterOperation();Message=$"Contract complete: {ExpeditionName}. Safe camp / sell, research and rearrange.";}else{PreparationRemaining=Math.Clamp(PreparationSeconds,5,180);Message=$"Wave cleared: +{secured} ore. Next wave in {PreparationRemaining:0}s.";}
   if(lost>0)Message+=$" Cargo overflow: {lost} ore lost.";SaveProgress();
  }

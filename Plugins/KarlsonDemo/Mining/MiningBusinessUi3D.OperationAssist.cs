@@ -41,6 +41,7 @@ public sealed partial class MiningBusinessUi3D
    void Line(float ax,float ay,float bx,float by,float thickness=1.5f)=>c.DrawUiLine(new((sx+ax)*scale,(sy+ay)*scale),new((sx+bx)*scale,(sy+by)*scale),thickness*scale,Accent);
    Line(0,-r,r,0);Line(r,0,0,r);Line(0,r,-r,0);Line(-r,0,0,-r);
    Line(0,-r*.42f,0,r*.10f,2);Line(0,r*.40f,0,r*.49f,2);
+   var player=GameObject.Scene!.FindGameObject(op.PlayerObjectId);if(player!=null)c.DrawUiText($"{Vector3.Distance(player.Transform.WorldPosition,position):0}m",BodyFont,(int)(14*scale),new(sx*scale,(sy+r+5)*scale),Accent,UiAnchor.TopCenter);
   }
  }
 }

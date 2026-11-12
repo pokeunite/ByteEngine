@@ -9,6 +9,7 @@ public sealed class MiningSale
  public float Quote{get;set;}public float Seconds{get;set;}=30;public float Age{get;set;}
  public int? CompanyDepositPercent{get;set;}
  public int CompanyDeposit{get;set;}public int CampPayout{get;set;}
+ public int CampBalanceBeforePayment{get;set;}public int CampBalanceAfterPayment{get;set;}public bool PaidDuringCombat{get;set;}
  public int Advantage=>Credits-BaselineCredits;
  public bool Valid=>Id is {Length:32}&&Quantity>0&&Quantity<=1000000&&Credits>=0&&Credits<=1000000000&&BaselineCredits>=0&&BaselineCredits<=1000000000&&float.IsFinite(Quote)&&Quote>=0&&Quote<=1000000&&float.IsFinite(Seconds)&&Seconds>=.1f&&float.IsFinite(Age)&&Age>=0;
 }
@@ -18,7 +19,7 @@ public sealed partial class MiningOperation3D
  [Browsable(false)]public MiningSale? LastMarketSale{get;private set;}
  public bool ReserveMarketSale(bool refined,int quantity,float quote,float guaranteed,bool delivery,float seconds)
  {
-  Initialize();if(PendingMarketSale!=null||Phase!=MiningPhase.Preparation||TargetWon||TargetExpired||quantity<=0||quantity>1000000||!float.IsFinite(quote)||quote<0||quote>1000000||!float.IsFinite(guaranteed)||guaranteed<0||guaranteed>1000000||!float.IsFinite(seconds))return false;
+  Initialize();if(PendingMarketSale!=null||!CanUseIndustry||TargetWon||TargetExpired||quantity<=0||quantity>1000000||!float.IsFinite(quote)||quote<0||quote>1000000||!float.IsFinite(guaranteed)||guaranteed<0||guaranteed>1000000||!float.IsFinite(seconds))return false;
   int available=refined?RefinedOre:Math.Max(0,RawOre-RefiningAmount);if(quantity>available)return false;
   if(delivery&&(ActiveDeliveryContract is not {} order||!refined||quantity!=order.Quantity||Math.Abs(quote-order.UnitPrice)>.001f))return false;
   var sale=new MiningSale{Refined=refined,Guaranteed=delivery,Quantity=quantity,Quote=quote,Credits=SaleTotal(quantity,quote),BaselineCredits=SaleTotal(quantity,guaranteed),Seconds=Math.Clamp(seconds,.1f,3600)};
@@ -30,8 +31,9 @@ public sealed partial class MiningOperation3D
   if(PendingMarketSale is not {} sale||!float.IsFinite(delta)||delta<=0)return;
   sale.Age=Math.Min(sale.Seconds,sale.Age+delta);
   if(sale.Age<sale.Seconds)return;
-  var split=CreditSaleIncome(sale.Credits,sale.CompanyDepositPercent);sale.CompanyDeposit=split.Company;sale.CampPayout=split.Camp;
+  sale.CampBalanceBeforePayment=Credits;sale.PaidDuringCombat=Phase==MiningPhase.Drilling;var split=CreditSaleIncome(sale.Credits,sale.CompanyDepositPercent);sale.CampBalanceAfterPayment=Credits;sale.CompanyDeposit=split.Company;sale.CampPayout=split.Camp;
   LastMarketSale=sale;PendingMarketSale=null;if(sale.Guaranteed)DeliveryContractsCompleted++;
+  Console.WriteLine($"[MiningMarket] Paid {sale.Id}: phase={Phase}, gross={sale.Credits}, camp={split.Camp}, company={split.Company}, balance={sale.CampBalanceBeforePayment}->{Credits}, lockedDeposit={sale.CompanyDepositPercent}%");
   Message=$"Sale paid: {split.Camp:N0} camp / {split.Company:N0} company credits.";SaveProgress();
  }
 }

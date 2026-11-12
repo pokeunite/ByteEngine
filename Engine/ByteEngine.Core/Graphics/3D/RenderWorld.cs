@@ -21,6 +21,11 @@ public sealed class RenderWorld
     private readonly SoftwareOcclusionCuller _occlusion=new();
     public bool EnableOcclusionCulling {get;set;}=true;
     public int OccludedMeshes {get;private set;}
+    // In open views the depth grid can cost several milliseconds while rejecting nothing.
+    // Skipping a probe submits all frustum-visible geometry, so no stale visibility is reused.
+    public bool AdaptiveOcclusion { get; set; }
+    private int emptyOcclusionPasses;
+    private int framesUntilOcclusionProbe;
     public double OcclusionMilliseconds {get;private set;}
     private static readonly Comparison<RenderSubmission> SubmissionComparison=PortableRenderOrdering.Compare;
 
@@ -282,13 +287,18 @@ public sealed class RenderWorld
                 : PointShadowPassResult.None;
 
         OccludedMeshes=0;OcclusionMilliseconds=0;
-        if(EnableOcclusionCulling)
+        if(EnableOcclusionCulling && (!AdaptiveOcclusion || framesUntilOcclusionProbe-- <= 0))
         {
             long occlusionStart=System.Diagnostics.Stopwatch.GetTimestamp();
             _occlusion.Cull(visible,view);
             OccludedMeshes=_occlusion.LastCulledCount;
             OcclusionMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(occlusionStart).TotalMilliseconds;
             culled+=OccludedMeshes;
+            if (AdaptiveOcclusion)
+            {
+                emptyOcclusionPasses = OccludedMeshes == 0 ? Math.Min(5, emptyOcclusionPasses + 1) : 0;
+                framesUntilOcclusionProbe = (1 << emptyOcclusionPasses) - 1;
+            }
         }
         visible.Sort(SubmissionComparison);
 

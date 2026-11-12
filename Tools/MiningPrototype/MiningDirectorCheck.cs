@@ -2,6 +2,8 @@ using System.Numerics;
 using System.Reflection;
 using System.Text.Json;
 using ByteEngine.Core.Gameplay;
+using ByteEngine.Core.Physics;
+using ByteEngine.Core.Characters;
 using ByteEngine.Core;
 using ByteEngine.Core.InputSystem;
 using ByteEngine.Core.Scene;
@@ -34,8 +36,14 @@ internal static class MiningDirectorCheck
   foreach(var e in list.Skip(3).Take(3))e.GetComponent<HealthComponent>()!.Kill();Call(op,"TickDirector",.1f);Check(op.ReleasedEnemies==20,"reinforcement minimum gap prevents an instant refill");Call(op,"TickDirector",3f);Check(op.ReleasedEnemies==24,"final batch is bounded by the selected total");
   hp.CurrentHealth=10;Set(op,"EnemiesScheduled",24);Call(op,"ResetDirector");Call(op,"TickDirector",3f);Check(op.ReleasedEnemies==16,"low player health gives breathing room before reinforcements");hp.CurrentHealth=100;
   var point=scene.CreateGameObject("Front spawn");point.Transform.WorldPosition=new(0,0,-35);point.AddComponent(new MiningSpawnPoint3D{OperationObjectId=owner.Id});
+  var floor=scene.CreateGameObject("Recovery floor");floor.Transform.WorldPosition=new(0,-.5f,-35);floor.AddComponent(new BoxCollider3D{Size=new(30,1,30)});
   var stranded=list.Last();stranded.Transform.WorldPosition=new(0,-40,-20);stranded.Active=false;float health=stranded.GetComponent<HealthComponent>()!.CurrentHealth;Call(op,"TickDirector",1f);
-  Check(stranded.ActiveInHierarchy&&stranded.Transform.WorldPosition==point.Transform.WorldPosition&&stranded.GetComponent<HealthComponent>()!.CurrentHealth==health&&op.StrandedEnemiesRecovered>0,"inactive fallen enemy returns at a safe front spawn without free damage");
+  Check(stranded.ActiveInHierarchy&&Vector3.Distance(stranded.Transform.WorldPosition,point.Transform.WorldPosition+Vector3.UnitY*.04f)<.01f&&stranded.GetComponent<HealthComponent>()!.CurrentHealth==health&&op.StrandedEnemiesRecovered>0,"inactive fallen enemy returns at a safe front spawn without free damage");
+  stranded.Transform.WorldPosition=new(0,-.2f,-35);Call(op,"TickDirector",1f);Check(Math.Abs(stranded.Transform.WorldPosition.Y-.04f)<.01f,"near-surface buried spider projects onto actual floor");
+  op.SetCompanyDepositPercent(0,false);Set(op,"Phase",MiningPhase.Drilling);Set(op,"RefinedOre",5);Check(op.ReserveMarketSale(true,5,2,2,false,1),"new exchange can be placed during combat");op.AdvanceMarketSale(1);Check(op.PendingMarketSale==null,"combat sale completes");Set(op,"Phase",MiningPhase.Preparation);
+  Set(op,"RawOre",op.CargoCapacity);Set(op,"RefinedOre",0);Set(op,"RefineryYieldLevel",10);Check(op.BeginRefining(),"full cargo can begin yield-enhanced refining");
+  op.Tick(op.RefiningRemaining+.01f);Check(op.CargoUsed>op.CargoCapacity&&op.RefinedOre>0,"full cargo refinery completes without losing bonus yield");Check((bool)Call(op,"CompleteAuxiliaryBatch",5)!,"auxiliary refinery also releases output when cargo is full");
+  Set(op,"RefiningAmount",0);Set(op,"RefiningOutput",0);Set(op,"RefiningRemaining",0f);
   foreach(var e in list.ToArray())scene.DestroyGameObject(e);list.Clear();
   Set(op,"ActiveWave",op.PreviewContract(0)!);Set(op,"RoundQuota",18);Set(op,"RawOre",0);Set(op,"Phase",MiningPhase.Drilling);Set(op,"EnemiesScheduled",1);Set(op,"EnemiesSpawned",1);Set(op,"ExtractionProgress",1f);hp.CurrentHealth=20;rig.CurrentHealth=50;op.Tick(.01f);
   Check(op.CompletedRounds==1&&op.RawOre==18&&op.OverclockAvailable,"base operation secures ore and opens optional overclock");
@@ -48,19 +56,6 @@ internal static class MiningDirectorCheck
   Set(op,"Phase",MiningPhase.Drilling);Set(op,"RoundQuota",18);Set(op,"EnemiesScheduled",1);Set(op,"EnemiesSpawned",1);Set(op,"ExtractionProgress",1f);op.Tick(.01f);int secured=op.RawOre;op.StartOverclock();hp.Kill();op.Tick(.01f);
   Check(op.Phase==MiningPhase.Failed&&op.RawOre==secured&&op.CompanyAccountCredits==bank,"failed overclock loses bonus but preserves secured base haul and company deposits");
   var goal=scene.CreateGameObject("Goal test").AddComponent(new MiningOperation3D{PersistProgress=false,PlayerObjectId=player.Id,DrillObjectId=drill.Id,TutorialEnabled=false});goal.Initialize();Set(goal,"Credits",50000);Set(goal,"TargetStarted",true);goal.Tick(.01f);Check(!goal.TargetWon,"large camp wallet alone cannot complete company target");Set(goal,"CompanyAccountCredits",30000);goal.Tick(.01f);Check(goal.TargetWon,"protected company deposits complete the level target");
-  hp.Revive();Set(op,"Phase",MiningPhase.Preparation);var ui=owner.AddComponent(new MiningBusinessUi3D{OperationObjectId=owner.Id,TerminalObjectId=player.Id});ui.Open(MiningScreen.Account);
-  void Frame(Vector2 point,bool down=false,Key? key=null)
-  {
-   var raw=new RawInputSnapshot();if(down)raw.MouseButtonsDown.Add(MouseButton.Left);if(key.HasValue)raw.KeysDown.Add(key.Value);
-   typeof(Input).GetMethod("UpdatePortable",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[raw,true]);typeof(Input).GetMethod("SetGameInputCaptured",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[true]);Input.SetGameViewPointer(point/new Vector2(1280,720),new(1280,720),true);
-   typeof(Time).GetMethod("Update",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[.05d]);
-  }
-  Frame(new(1092,376));Call(ui,"TickCompanyAccountInput",op);Frame(new(1092,376),true);Call(ui,"TickCompanyAccountInput",op);Frame(new(1092,376));Call(ui,"TickCompanyAccountInput",op);Check(op.CompanyDepositPercent==75,"visible account slider maps click/drag to the selected percentage");
-  Frame(new(1092,376),key:Key.Left);Call(ui,"TickCompanyAccountInput",op);Check(op.CompanyDepositPercent==70,"account percentage supports five-percent keyboard steps");
-  Frame(new(940,168));Call(ui,"TickCompanyAccountInput",op);Frame(new(940,168),true);Call(ui,"TickCompanyAccountInput",op);Check(ui.Screen==MiningScreen.Market,"account market tab opens the market directly");
-  Frame(new(1140,128));Call(ui,"TickCompanyAccountInput",op);Frame(new(1140,128),true);Call(ui,"TickCompanyAccountInput",op);Check(ui.Screen==MiningScreen.Account,"market account tab uses the visible tab hit area");
-  ui.Close();Set(op,"RoundQuota",18);Set(op,"Phase",MiningPhase.Drilling);Call(op,"FinishOperationStage");Set(ui,"NearestScreen",MiningScreen.Drill);
-  Frame(new(640,360));Call(ui,"TickOperationAssist",op);Frame(new(640,360),key:Key.E);Call(ui,"TickOperationAssist",op);Frame(new(640,360));Call(ui,"TickOperationAssist",op);
-  Check(ui.Screen==MiningScreen.Drill&&!op.IsOverclockActive&&!op.OverclockAvailable,"tapping interaction opens next operation immediately instead of requiring a bonus decision");ui.Close();
+  // Company-screen interactions have a dedicated current-layout suite: MiningCompanySystemsCheck.
  }
 }
