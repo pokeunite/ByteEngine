@@ -28,6 +28,17 @@ if(Test-Path -LiteralPath $configFile){
  if(!$SourceRoot -and $config.PSObject.Properties['SourceRoot']){$SourceRoot=$config.SourceRoot}
  if(!$ProjectFile -and $config.PSObject.Properties['ProjectFile']){$ProjectFile=$config.ProjectFile}
 }
+# A stale config can point an installed launcher at a deleted worktree or an
+# unrelated project. Only honour paths that actually exist; otherwise fall back
+# to the checkout containing this script.
+if($SourceRoot -and !(Test-Path -LiteralPath (Join-Path $SourceRoot 'ByteEngine.sln'))){
+ Write-Warning "Configured SourceRoot '$SourceRoot' is not a ByteEngine checkout. Using '$PSScriptRoot' instead."
+ $SourceRoot=''
+}
+if($ProjectFile -and !(Test-Path -LiteralPath $ProjectFile)){
+ Write-Warning "Configured ProjectFile '$ProjectFile' does not exist. Ignoring it."
+ $ProjectFile=''
+}
 if(!$SourceRoot){$SourceRoot=$PSScriptRoot}
 if(!$InstallRoot){$InstallRoot=$PSScriptRoot}
 $SourceRoot=[IO.Path]::GetFullPath($SourceRoot)

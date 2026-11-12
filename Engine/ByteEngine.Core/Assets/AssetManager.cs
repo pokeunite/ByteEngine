@@ -20,6 +20,176 @@ public sealed class AssetManager : IDisposable
 
     private readonly Action<string>? _warningSink;
     private readonly Dictionary<Guid, Texture2D> _textures = new();
+    private readonly Dictionary<Guid,long> _textureLastUse = new();
+    private long _textureUseClock;
+
+    /// <summary>
+    /// Soft budget for standalone texture assets. Scene switches call
+    /// <see cref="TrimCaches"/> with the GUIDs the new scene references, which
+    /// evicts every unreferenced texture/model/material instead of growing for
+    /// the lifetime of the editor process.
+    /// </summary>
+    public long TextureCacheBudgetBytes { get; set; } = 768L * 1024 * 1024;
+
+    public readonly record struct AssetCacheStats(
+        int Textures,
+        long TextureBytes,
+        int Models,
+        int Materials,
+        int AnimationProfiles,
+        int VfxEffects);
+
+    public AssetCacheStats CacheStats
+    {
+        get
+        {
+            HashSet<Texture2D> seen = new();
+            long bytes = 0;
+            foreach (Texture2D texture in _textures.Values)
+            {
+                if (seen.Add(texture))
+                {
+                    bytes += (long)texture.Width * texture.Height * 4;
+                }
+            }
+
+            foreach (Texture2D texture in _modelTextures.Values)
+            {
+                if (seen.Add(texture))
+                {
+                    bytes += (long)texture.Width * texture.Height * 4;
+                }
+            }
+
+            return new AssetCacheStats(
+                seen.Count,
+                bytes,
+                _models.Count,
+                _runtimeMaterials.Count + _materialAssets.Count,
+                _animationProfiles.Count,
+                _vfxEffects.Count);
+        }
+    }
+
+    public bool IsOverTextureBudget =>
+        CacheStats.TextureBytes > TextureCacheBudgetBytes;
+
+    /// <summary>
+    /// Releases cached assets that the caller no longer references. Passing the
+    /// GUIDs of the scene being opened makes this safe: objects owned by the new
+    /// scene keep their textures, meshes and materials. Passing null clears the
+    /// whole cache (project close).
+    /// </summary>
+    public int TrimCaches(IReadOnlyCollection<Guid>? keep = null)
+    {
+        HashSet<Guid>? keepSet = keep is null
+            ? null
+            : new HashSet<Guid>(keep);
+
+        bool Keep(Guid id) => keepSet is null || keepSet.Contains(id);
+
+        int released = 0;
+        List<Texture2D> textures = new();
+        List<Mesh> meshes = new();
+
+        foreach (Guid id in _textures.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            textures.Add(_textures[id]);
+            _textures.Remove(id);
+            _textureRevisions.Remove(id);
+            _textureLastUse.Remove(id);
+            released++;
+        }
+
+        foreach (Guid id in _vfxEffects.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _vfxEffects.Remove(id);
+            _vfxRevisions.Remove(id);
+            VfxRevision++;
+            released++;
+        }
+
+        foreach (Guid id in _animationProfiles.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _animationProfiles.Remove(id);
+            _animationProfileRevisions.Remove(id);
+            released++;
+        }
+
+        foreach (Guid id in _runtimeMaterials.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _runtimeMaterials.Remove(id);
+            released++;
+        }
+
+        foreach (Guid id in _materialAssets.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _materialAssets.Remove(id);
+            _materialRevisions.Remove(id);
+            released++;
+        }
+
+        foreach (Guid id in _uiThemes.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _uiThemes.Remove(id);
+            released++;
+        }
+
+        foreach (Guid id in _models.Keys.ToArray())
+        {
+            if (Keep(id)) continue;
+            _models.Remove(id);
+            _modelRevisions.Remove(id);
+            released++;
+        }
+
+        foreach ((Guid Model, string Key) key in _modelMeshes.Keys.ToArray())
+        {
+            if (Keep(key.Model)) continue;
+            meshes.Add(_modelMeshes[key]);
+            _modelMeshes.Remove(key);
+        }
+
+        foreach ((ModelMeshReference Reference, int Level) key in _modelLodMeshes.Keys.ToArray())
+        {
+            if (Keep(key.Reference.Model.Guid)) continue;
+            meshes.Add(_modelLodMeshes[key]);
+            _modelLodMeshes.Remove(key);
+        }
+
+        foreach ((Guid Model, string Key) key in _modelTextures.Keys.ToArray())
+        {
+            if (Keep(key.Model)) continue;
+            textures.Add(_modelTextures[key]);
+            _modelTextures.Remove(key);
+            _modelTextureSources.Remove(key);
+        }
+
+        foreach ((Guid Model, string Key) key in _modelMaterials.Keys.ToArray())
+        {
+            if (Keep(key.Model)) continue;
+            _modelMaterials.Remove(key);
+        }
+
+        foreach (Mesh mesh in meshes.Distinct()) mesh.Dispose();
+        foreach (Texture2D texture in textures.Distinct()) texture.Dispose();
+
+        if (released > 0)
+        {
+            // Let a later growth episode produce a fresh warning.
+            _textureBudgetWarned = false;
+            _budgetCheckPending = false;
+        }
+
+        return released;
+    }
+
     private readonly Dictionary<Guid, ModelAsset> _models = new();
     private readonly Dictionary<Guid, Material> _runtimeMaterials = new();
     private readonly Dictionary<Guid, MaterialAsset> _materialAssets = new();
@@ -56,7 +226,23 @@ public sealed class AssetManager : IDisposable
     public int PendingImports => _imports.PendingCount;
     private HashSet<Guid>? _affectedAssets;
     private void OnAssetsChanged(IReadOnlyCollection<Guid> assets) { if(_affectedAssets==null)_affectedAssets=assets.ToHashSet();else _affectedAssets.UnionWith(assets); }
-    private void PumpImports() => _imports.Pump();
+    private void PumpImports() { _imports.Pump(); ReportTextureBudgetOnce(); }
+
+    private bool _textureBudgetWarned;
+    // Only recompute cache statistics when a texture was actually loaded.
+    // AssetDatabase.Update runs every frame; walking every cached texture there
+    // would turn a diagnostic warning into a per-frame allocation.
+    private bool _budgetCheckPending;
+    private void ReportTextureBudgetOnce()
+    {
+        if (!_budgetCheckPending || _textureBudgetWarned) return;
+        _budgetCheckPending = false;
+        if (!IsOverTextureBudget) return;
+        _textureBudgetWarned = true;
+        AssetCacheStats stats = CacheStats;
+        _warningSink?.Invoke(
+            $"Texture cache uses {stats.TextureBytes / (1024 * 1024)} MB across {stats.Textures} textures (budget {TextureCacheBudgetBytes / (1024 * 1024)} MB). Opening another scene releases unreferenced textures.");
+    }
     private readonly TextureImporter _textureImporter = new();
     private readonly AnimationProfileImporter _animationProfileImporter = new();
     private Texture2D? _missingTexture;
@@ -103,6 +289,7 @@ public sealed class AssetManager : IDisposable
 
         if (_textures.TryGetValue(asset.Guid, out Texture2D? existing))
         {
+            _textureLastUse[asset.Guid] = ++_textureUseClock;
             return existing;
         }
 
@@ -110,7 +297,9 @@ public sealed class AssetManager : IDisposable
         {
             Texture2D texture = _textureImporter.Import(asset);
             _textures[asset.Guid] = texture;
+            _textureLastUse[asset.Guid] = ++_textureUseClock;
             _textureRevisions[asset.Guid] = CaptureRevision(asset);
+            _budgetCheckPending = true;
             return texture;
         }
         catch (Exception exception)
@@ -675,7 +864,7 @@ public sealed class AssetManager : IDisposable
             if(_modelTextures.TryGetValue(sharedKey,out var shared))return shared;
             var encoded=File.ReadAllBytes(CookedModelStore.TexturePath(ProjectRoot,hash));
             if(!string.Equals(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encoded)),hash,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Cooked texture integrity mismatch.");
-            var sharedTexture=Texture2D.FromEncodedBytes(encoded);sharedTexture.EnableWorldSampling();_modelTextures[sharedKey]=sharedTexture;_modelTextureSources[sharedKey]=encoded;return sharedTexture;
+            var sharedTexture=Texture2D.FromEncodedBytes(encoded);sharedTexture.EnableWorldSampling();_modelTextures[sharedKey]=sharedTexture;_modelTextureSources[sharedKey]=encoded;_budgetCheckPending=true;return sharedTexture;
         }
         if(source.EncodedData.Length==0)return null;
         var key = (modelGuid, source.Key);
@@ -689,6 +878,7 @@ public sealed class AssetManager : IDisposable
         texture.EnableWorldSampling();
         _modelTextures[key] = texture;
         _modelTextureSources[key]=source.EncodedData;
+        _budgetCheckPending = true;
         return texture;
     }
 

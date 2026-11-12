@@ -132,6 +132,50 @@ public sealed partial class SkeletalMeshRenderer : Component
     /// <summary>Runtime animation sampling interval; zero evaluates every frame.
     /// Playback time still advances normally. Physical poses and reactions remain immediate.</summary>
     public float AnimationUpdateInterval { get; set; }
+    /// <summary>Reduce distant visual sampling while keeping playback clocks and queried bones current.</summary>
+    public bool AutomaticAnimationLod { get; set; } = true;
+
+    private float EffectiveAnimationInterval()
+    {
+        float interval = Math.Max(0f, AnimationUpdateInterval);
+
+        if (!AutomaticAnimationLod ||
+            _lightRagdollActive ||
+            _recoveryDuration > 0f ||
+            _hitReaction > 0.001f ||
+            GameObject.Scene?.ActiveCamera is not { } camera)
+        {
+            return interval;
+        }
+
+        float distance = Vector3.Distance(
+            Transform.WorldPosition,
+            camera.Transform.WorldPosition);
+
+        // Preserve full-rate close views; larger characters keep full-rate
+        // animation farther away because their silhouette changes more.
+        float radius = 0.5f;
+
+        foreach (RuntimeSkinnedMesh mesh in _runtimeMeshes)
+        {
+            radius = Math.Max(radius, mesh.Mesh.LocalBounds.Size.Length() * 0.5f);
+        }
+
+        radius *= Math.Max(
+            0.001f,
+            Vector3.Abs(Transform.WorldScale).Length() / MathF.Sqrt(3f));
+
+        float relativeDistance = distance / Math.Max(0.5f, radius);
+
+        return Math.Max(
+            interval,
+            relativeDistance > 120f
+                ? 1f / 15f
+                : relativeDistance > 50f
+                    ? 1f / 30f
+                    : 0f);
+    }
+
     /// <summary>Batch animation and post-physics IK changes into one pose evaluation.
     /// Bone queries still resolve immediately; rendering always receives the completed pose.</summary>
     public bool EvaluatePoseAfterPhysics { get; set; }
@@ -364,7 +408,7 @@ public sealed partial class SkeletalMeshRenderer : Component
                  in _runtimeMeshes)
         {
             BoundingBox3D meshBounds =
-                runtime.Mesh.LocalBounds.Transform(
+                (runtime.SharedCrowdMesh ?? runtime.Mesh).LocalBounds.Transform(
                     runtime.MeshToModelMatrix);
 
             if (!meshBounds.IsValid)
@@ -504,8 +548,9 @@ public sealed partial class SkeletalMeshRenderer : Component
             }
 
             _animationPoseElapsed += Math.Max((float)ByteEngine.Core.Time.DeltaTime, 0f);
-            if (finished || AnimationUpdateInterval <= 0f ||
-                _animationPoseElapsed >= AnimationUpdateInterval)
+            float interval = EffectiveAnimationInterval();
+            if (finished || interval <= 0f ||
+                _animationPoseElapsed >= interval)
             {
                 _poseDirty = true;
                 _animationPoseElapsed = 0f;
@@ -546,6 +591,22 @@ public sealed partial class SkeletalMeshRenderer : Component
 
         AnimationRuntimeAssets.TryGet(out AssetManager? materialAssets);
         Material? modelOverride = ModelHierarchyInstance.ResolveMaterialOverride(GameObject);
+        if (SubmitCrowdBatches(context, liveWorldMatrix, modelOverride))
+        {
+            return;
+        }
+
+        /*
+         * Leaving crowd mode can be detected at submit time (for example after
+         * a material slot or mesh-visibility change). Re-evaluate once so the
+         * private vertex buffer and placement are current before the normal
+         * submission path reads them.
+         */
+        if (_poseDirty)
+        {
+            UpdatePoseAndMeshes();
+        }
+
         for (int slotIndex = 0; slotIndex < _runtimeMeshes.Count; slotIndex++)
         {
             RuntimeSkinnedMesh runtime = _runtimeMeshes[slotIndex];
@@ -1041,6 +1102,7 @@ public sealed partial class SkeletalMeshRenderer : Component
     {
         long diagnosticStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _poseDirty = false;
+        _animationPoseElapsed = 0f;
 
         if (_model == null ||
             _skeleton == null ||
@@ -1048,6 +1110,23 @@ public sealed partial class SkeletalMeshRenderer : Component
             _nodes.Length == 0)
         {
             return;
+        }
+
+        EnsureCrowdPool();
+
+        if (TryCrowdPose(out CrowdKey crowdKey, out float crowdTime))
+        {
+            return;
+        }
+
+        bool storeCrowdPose = CrowdEligible;
+        float playbackTime = _currentTime;
+
+        if (storeCrowdPose)
+        {
+            // Sample the quantized frame while keeping the real playback clock
+            // authoritative for gameplay, transitions and later frames.
+            _currentTime = crowdTime;
         }
 
         Matrix4x4[] locals = _lightRagdollActive
@@ -1099,10 +1178,16 @@ public sealed partial class SkeletalMeshRenderer : Component
                 ? runtime.SkinMatrices
                 : runtime.SkinMatrices = new Matrix4x4[_skeleton.Bones.Count];
 
-            for (int boneIndex = 0;
-                 boneIndex < skinMatrices.Length;
-                 boneIndex++)
+            // Only bones referenced by this mesh can deform it. Iterating all
+            // skeleton bones wastes matrix work on shared humanoid rigs.
+            foreach (int boneIndex in runtime.UsedBones)
             {
+                if (boneIndex < 0 ||
+                    boneIndex >= skinMatrices.Length)
+                {
+                    continue;
+                }
+
                 int nodeIndex =
                     _boneNodeIndices[boneIndex];
 
@@ -1166,6 +1251,13 @@ public sealed partial class SkeletalMeshRenderer : Component
         // Followers consume the same completed pose as the skinned mesh.
         // This also covers a clip change or Seek outside Scene.UpdateInternal.
         SkeletalAttachmentService.UpdateForRenderer(this);
+
+        if (storeCrowdPose)
+        {
+            StoreCrowdPose(crowdKey);
+            _currentTime = playbackTime;
+        }
+
         DiagnosticPoseUpdates++;
         DiagnosticPoseTicks += System.Diagnostics.Stopwatch.GetTimestamp() - diagnosticStart;
         if (GameObject.Scene is {} scene)
@@ -1792,6 +1884,7 @@ public sealed partial class SkeletalMeshRenderer : Component
 
     private void DisposeRuntimeMeshes()
     {
+        ReleaseCrowdPool();
         _lightRagdollActive = false;
         _recoveryDuration = 0f;
         _recoveryPose = Array.Empty<Matrix4x4>();
@@ -1828,6 +1921,12 @@ public sealed partial class SkeletalMeshRenderer : Component
 
         public Matrix4x4 MeshToModelMatrix { get; set; } =
             Matrix4x4.Identity;
+
+        /// <summary>
+        /// Non-null while this renderer consumes a shared crowd pose. The
+        /// cached mesh is immutable and disposed by the owning CrowdPool.
+        /// </summary>
+        public Mesh? SharedCrowdMesh { get; set; }
 
         public RuntimeSkinnedMesh(
             ImportedMesh source,

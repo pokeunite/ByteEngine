@@ -364,6 +364,8 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsDrag3D>("PhysicsDrag3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsImpactSensor3D>("PhysicsImpactSensor3D"));
         Register(new MeshCollider3DCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Construction.ImpactParticles3D>("ImpactParticles3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Construction.SwarmRenderer3D>("SwarmRenderer3D"));
         Register(new UiCanvasCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiScrollContainer>("UiScrollContainer"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<UiContainer>("UiContainer"));
@@ -490,6 +492,10 @@ public sealed class ComponentSerializer
 
         _byTypeName[codec.TypeName] =
             codec;
+
+        ComponentTypeRegistry.Register(
+            codec.ComponentType,
+            codec.TypeName);
     }
 
     public string? GetCanonicalTypeName(string name) => _byTypeName.TryGetValue(name, out var codec) ? codec.TypeName : null;
@@ -500,6 +506,7 @@ public sealed class ComponentSerializer
         if (_byTypeName.ContainsKey(alias)) throw new InvalidOperationException($"Component alias '{alias}' is already registered.");
         if (!_byTypeName.TryGetValue(canonical, out var codec)) throw new InvalidOperationException($"Unknown canonical codec '{canonical}'.");
         _byTypeName.Add(alias, codec);
+        ComponentTypeRegistry.RegisterAlias(alias, canonical);
     }
 
     public ComponentData? Serialize(

@@ -1,5 +1,38 @@
 import {qualityProfiles} from './shared-render.js';
 import {waterUniforms,waterVertex,waterFragment} from './water.js';
+
+// Numeric change stamps. The previous implementation built a comma-joined
+// string for every shadow caster every frame; that allocated a new string per
+// material per frame. Hash the same inputs into a Uint32 instead.
+const NO_VALUES=[];
+const floatScratch=new Float32Array(1);
+const floatBits=new Uint32Array(floatScratch.buffer);
+const HASH_OFFSET=2166136261, HASH_PRIME=16777619;
+function mix(hash,value){return Math.imul(hash^(value|0),HASH_PRIME)>>>0;}
+function mixFloat(hash,value){floatScratch[0]=value;return mix(hash,floatBits[0]);}
+function mixArray(hash,values){for(let i=0;i<values.length;i++)hash=mixFloat(hash,values[i]);return hash;}
+function mixString(hash,text){for(let i=0;i<text.length;i++)hash=Math.imul(hash^text.charCodeAt(i),HASH_PRIME)>>>0;return hash;}
+function materialStamp(id,mesh,material,textures){
+    let hash=mix(HASH_OFFSET,id);
+    hash=mix(hash,mesh.revision);
+    hash=mix(hash,material.heightField?textures.get(material.heightField)?.revision||0:0);
+    hash=mixArray(hash,material.heightUv||NO_VALUES);
+    hash=mixFloat(hash,material.heightRange||0);
+    hash=mixFloat(hash,material.heightBias||0);
+    hash=mixFloat(hash,material.cutoff||0);
+    hash=mix(hash,material.texture||0);
+    hash=mix(hash,textures.get(material.texture)?.revision||0);
+    hash=mixArray(hash,material.tiling||NO_VALUES);
+    hash=mixArray(hash,material.offset||NO_VALUES);
+    return hash;
+}
+function projectionStamp(shadow){
+    let hash=mix(HASH_OFFSET,shadow.resolution);
+    const matrix=shadow.matrix;
+    for(let i=0;i<matrix.length;i++)hash=mixFloat(hash,matrix[i]);
+    return hash;
+}
+
 export function normalMatrix(model,output=new Float32Array(9),at=0){
     const a=model[at],b=model[at+1],c=model[at+2],d=model[at+4],e=model[at+5],f=model[at+6],g=model[at+8],h=model[at+9],i=model[at+10];
     if(model[at+3]===0&&model[at+7]===0&&model[at+11]===0&&model[at+15]===1){
@@ -17,10 +50,10 @@ export class ShadowFrameCache {
     constructor(){this.signature=null;this.entries=[];}
     unchanged(data,materials,meshes,textures){
         const s=data.shadow;if(!s){this.signature=null;this.entries.length=0;return false;}
-        const signature=s.resolution+'|'+s.matrix.join(',');let same=this.signature===signature,index=0;
+        const signature=projectionStamp(s);let same=this.signature===signature,index=0;
         for(const c of data.draws){const models=c.shadowInstances;if(!models?.length)continue;
             const m=meshes.get(c.id),d=c.material===undefined?c:materials.get(c.material);if(!m||!d)continue;
-            const stamp=[c.id,m.revision,d.heightField||0,textures.get(d.heightField)?.revision||0,...(d.heightUv||[]),d.heightRange,d.heightBias,d.cutoff,d.texture||0,textures.get(d.texture)?.revision||0,...(d.tiling||[]),...(d.offset||[])].join(',');
+            const stamp=materialStamp(c.id,m,d,textures);
             let e=this.entries[index];let equal=!!e&&e.stamp===stamp&&e.models.length===models.length;
             for(let j=0;equal&&j<models.length;j++)if(e.models[j]!==models[j])equal=false;
             if(!equal){same=false;e={stamp,models:new Float32Array(models)};this.entries[index]=e;}index++;
@@ -31,12 +64,12 @@ export class ShadowFrameCache {
 export class StaticShadowLayerCache {
     constructor(){this.entries=new Map();this.included=new Set();this.projection='';}
     update(data,materials,meshes,textures){
-        const projection=data.shadow.resolution+'|'+data.shadow.matrix.join(',');let dirty=projection!==this.projection;this.projection=projection;
+        const projection=projectionStamp(data.shadow);let dirty=projection!==this.projection;this.projection=projection;
         const next=new Set(),seen=new Set();
         for(let i=0;i<data.draws.length;i++){
             const c=data.draws[i],models=c.shadowInstances,m=meshes.get(c.id),d=c.material===undefined?c:materials.get(c.material);
             if(!models?.length||!m||!d)continue;seen.add(i);
-            const stamp=[c.id,m.revision,d.heightField||0,textures.get(d.heightField)?.revision||0,...(d.heightUv||[]),d.heightRange,d.heightBias,d.cutoff,d.texture||0,textures.get(d.texture)?.revision||0,...(d.tiling||[]),...(d.offset||[])].join(',');
+            const stamp=materialStamp(c.id,m,d,textures);
             let e=this.entries.get(i),same=!!e&&e.stamp===stamp&&e.models.length===models.length;
             for(let j=0;same&&j<models.length;j++)if(e.models[j]!==models[j])same=false;
             if(!e){e={stamp,models:new Float32Array(models),stable:30};this.entries.set(i,e);}
@@ -51,7 +84,7 @@ export class StaticShadowLayerCache {
 }
 // Conservative static shadow atlas. A changed caster immediately returns to the dynamic path.
 export class StaticShadowBatcher {
-    constructor(){this.entries=new Map();this.signature='';this.included=new Set();this.frame=0;}
+    constructor(){this.entries=new Map();this.signature=0;this.included=new Set();this.frame=0;}
     update(draws,materials,meshes){
         this.frame++;this.included.clear();const candidates=[];let vertexCount=0,indexCount=0;
         for(let i=0;i<draws.length;i++){
@@ -68,7 +101,8 @@ export class StaticShadowBatcher {
             vertexCount+=v;indexCount+=n;candidates.push({key,e,m});this.included.add(i);
         }
         for(const [key,e]of this.entries)if(e.seen!==this.frame)this.entries.delete(key);
-        const signature=candidates.map(x=>x.key+':'+x.e.revision).join('|');
+        let signature=HASH_OFFSET;
+        for(const x of candidates){signature=mixString(signature,x.key);signature=mix(signature,x.e.revision);}
         if(signature===this.signature)return {changed:false,included:this.included,count:indexCount};
         this.signature=signature;const vertices=new Float32Array(vertexCount*3),indices=new Uint32Array(indexCount);let vertex=0,index=0;
         for(const {e,m} of candidates){const data=m.cpuVertices;

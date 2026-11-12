@@ -17,6 +17,12 @@ using ByteEngine.Editor.Gizmos;
 using ByteEngine.Editor.Panels;
 using ByteEngine.Tests;
 
+if (args.Length == 1 && (args[0] == "--version" || args[0] == "-v"))
+{
+    Console.WriteLine(ByteEngine.Core.ByteEngineInfo.Version);
+    return;
+}
+
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
 {
@@ -399,6 +405,7 @@ try
     V085ProfessionalEditorTests.Run(root);
     V08CInputActionsTests.Run(root);
     V08DTagsLayersTests.Run(root, database, assets);
+    ComponentRegistryCoverageTests.Run(root);
     Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-d regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }

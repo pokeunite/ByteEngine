@@ -144,5 +144,13 @@ public sealed partial class SkeletalMeshRenderer
                     ? Array.Empty<uint>()
                     : runtime.Source.Indices);
         }
+
+        if (_hiddenMeshKeys.Count > 0)
+        {
+            // Crowd draws are built from complete submeshes. Drop any shared
+            // state immediately so a hidden part cannot reappear through the
+            // crowd cache while the private path rebuilds its index buffer.
+            ClearCrowdSharedState();
+        }
     }
 }

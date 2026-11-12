@@ -9,6 +9,7 @@ using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.VisualLogic;
+using ByteEngine.Core.Serialization;
 
 namespace ByteEngine.Editor;
 
@@ -369,6 +370,36 @@ internal static class ComponentMetadataRegistry
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;
+
+    /// <summary>Serialized component types with no explicit editor metadata entry.</summary>
+    internal static IReadOnlyList<Type> MissingSerializedMetadata() =>
+        ComponentTypeRegistry.RegisteredTypes
+            .Where(type => !Components.ContainsKey(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>Metadata entries whose component type has no serializer codec.</summary>
+    internal static IReadOnlyList<Type> MetadataWithoutSerializer() =>
+        Components.Keys
+            .Where(type =>
+                !type.IsAbstract &&
+                type != typeof(ByteEngine.Core.Serialization.MissingComponent) &&
+                !ComponentTypeRegistry.IsRegistered(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>Concrete engine components in an assembly that cannot be saved.</summary>
+    internal static IReadOnlyList<Type> UnregisteredComponentTypes(
+        System.Reflection.Assembly assembly) =>
+        assembly.GetTypes()
+            .Where(type =>
+                typeof(Component).IsAssignableFrom(type) &&
+                !type.IsAbstract &&
+                !type.ContainsGenericParameters &&
+                type != typeof(ByteEngine.Core.Serialization.MissingComponent) &&
+                !ComponentTypeRegistry.IsRegistered(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
 
     public static ComponentMetadata Get(Type type) => Components.TryGetValue(type, out ComponentMetadata? value)
         ? value

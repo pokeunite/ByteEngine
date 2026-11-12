@@ -92,6 +92,25 @@ try{
     });
     const uiCommands=[],drawCommands=[];
     globalThis.byteEngineWaterDebug=()=>drawCommands.filter(c=>c.water?.surface).map(c=>({level:c.water.column[0],floor:c.water.column[1],flow:c.water.motion[1],channel:c.water.flow[3]>.5}));
+    // Gamepad JSON is rebuilt only when an axis or button value changes.
+    const padScratch=new Float32Array(1),padBits=new Uint32Array(padScratch.buffer);
+    const PAD_HASH=2166136261,PAD_PRIME=16777619;
+    const padMix=(hash,value)=>Math.imul(hash^(value|0),PAD_PRIME)>>>0;
+    const padMixFloat=(hash,value)=>{padScratch[0]=value;return padMix(hash,padBits[0]);};
+    let gamepadPresent=false,gamepadHash=0,gamepadPayload='';
+    function readGamepad(){
+        const pads=navigator.getGamepads?.();if(!pads)return gamepadPayload;
+        let pad=null;for(const candidate of pads)if(candidate?.connected){pad=candidate;break;}
+        if(!pad){if(gamepadPresent){gamepadPresent=false;gamepadPayload='';}return gamepadPayload;}
+        let hash=padMix(PAD_HASH,pad.index);
+        for(let i=0;i<pad.axes.length;i++)hash=padMixFloat(hash,pad.axes[i]);
+        for(let i=0;i<pad.buttons.length;i++)hash=padMixFloat(hash,pad.buttons[i].value);
+        if(!gamepadPresent||hash!==gamepadHash){
+            gamepadPresent=true;gamepadHash=hash;
+            gamepadPayload=JSON.stringify({axes:Array.from(pad.axes),buttons:Array.from(pad.buttons,b=>b.value)});
+        }
+        return gamepadPayload;
+    }
     function frame(now){
         if(stopped){status.hidden=false;return;}
         try{
@@ -99,8 +118,7 @@ try{
             const {width,height,worldWidth,worldHeight,uiWidth,uiHeight}=size;
             if(canvas.width!==worldWidth||canvas.height!==worldHeight){canvas.width=worldWidth;canvas.height=worldHeight;}
             if(overlay.width!==uiWidth||overlay.height!==uiHeight){overlay.width=uiWidth;overlay.height=uiHeight;}
-            const pad=Array.from(navigator.getGamepads?.()||[]).find(p=>p?.connected);
-            const gamepad=pad?JSON.stringify({axes:Array.from(pad.axes),buttons:pad.buttons.map(b=>b.value)}):'';
+            const gamepad=readGamepad();
             const frameStart=performance.now(),intervalMs=now-previous;const payload=game.Frame(document.hidden||!graphicsReady?0:Math.max(0,Math.min(.1,(now-previous)/1000)),width,height,
                 [...new Set([...keys,...keyPulses])].join(','),[...new Set([...buttons,...buttonPulses])].join(','),pointer[0],pointer[1],delta[0],delta[1],wheel,
                 document.activeElement===canvas&&!document.hidden,document.pointerLockElement===canvas,gamepad);
@@ -119,8 +137,9 @@ try{
             presentation.sample(renderer.profile.gpuMs,now,graphics.worldResolution,data.pendingTextures);
             globalThis.byteEnginePresentation={...size,...graphics,adaptiveScale:presentation.factor};
             const renderEnd=performance.now();
-            const allocations=data.textures.filter(t=>t.allocate||!t.partial);
-            if(allocations.length||renderer.profile.uploadMs>8)capture.event('graphics-upload',{durationMs:renderer.profile.uploadMs,meshBytes:renderer.profile.meshUploadBytes,textureBytes:renderer.profile.textureUploadBytes,allocations:allocations.map(t=>({id:t.id,source:t.source,width:t.width,height:t.height,hdr:t.hdr}))});
+            let allocations=null;
+            for(const texture of data.textures)if(texture.allocate||!texture.partial){(allocations??=[]).push(texture);}
+            if((allocations&&allocations.length)||renderer.profile.uploadMs>8)capture.event('graphics-upload',{durationMs:renderer.profile.uploadMs,meshBytes:renderer.profile.meshUploadBytes,textureBytes:renderer.profile.textureUploadBytes,allocations:(allocations||[]).map(t=>({id:t.id,source:t.source,width:t.width,height:t.height,hdr:t.hdr}))});
             byteEnginePerf.frames.push({frameMs:renderEnd-frameStart,managedMs:managedEnd-frameStart,renderMs:renderEnd-managedEnd,intervalMs,loopMs:data.loopMs,draws:data.draws.length,pending:data.pendingTextures});
             if(byteEnginePerf.frames.length>600)byteEnginePerf.frames.shift();
             capture.frame({frameMs:renderEnd-frameStart,managedMs:wasmEnd-frameStart,parseMs:managedEnd-wasmEnd,audioMs:audioEnd-audioStart,renderMs:renderEnd-audioEnd,intervalMs,loopMs:data.loopMs,payloadChars:payload.length,draws:drawCount,uiCommands:uiCount,pending:data.pendingTextures,width,height,worldWidth,worldHeight,uiWidth,uiHeight,quality:graphics.quality,worldResolution:graphics.worldResolution,adaptiveScale:presentation.factor,...renderer.profile},()=>JSON.parse(game.Diagnostics()));

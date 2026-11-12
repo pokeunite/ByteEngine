@@ -173,68 +173,19 @@ public sealed class Material
         PolygonMode = source.PolygonMode;
     }
 
+    /// <summary>
+    /// Creates an independent copy. Delegates to <see cref="CopyFrom"/> so a
+    /// newly added material property cannot be copied by one method and
+    /// silently dropped by the other.
+    /// </summary>
     public Material Clone()
     {
-        return
-            new Material
-            {
-                WetContact0=WetContact0,WetContact1=WetContact1,WetContact2=WetContact2,WetLevels=WetLevels,
-                WaterSurface=WaterSurface,WaterVolume=WaterVolume,WaterColumn=WaterColumn,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterFlow=WaterFlow,WaterImpact=WaterImpact,WaterSize=WaterSize,
-                BaseColor =
-                    BaseColor,
+        var clone =
+            new Material();
 
-                MainTexture =
-                    MainTexture,
+        clone.CopyFrom(
+            this);
 
-                NormalTexture =
-                    NormalTexture,
-                NormalStrength = NormalStrength,
-                HeightFieldTexture=HeightFieldTexture,HeightFieldUvTransform=HeightFieldUvTransform,HeightFieldRange=HeightFieldRange,HeightFieldBias=HeightFieldBias,HeightFieldWorldSize=HeightFieldWorldSize,SandSurface = SandSurface,SandImprintTexture=SandImprintTexture,SandImprintOrigin=SandImprintOrigin,
-                DirectXNormalMap = DirectXNormalMap,
-                MetallicTexture = MetallicTexture,
-                RoughnessTexture = RoughnessTexture,
-                AmbientOcclusionTexture = AmbientOcclusionTexture,
-                AmbientOcclusionStrength = AmbientOcclusionStrength,
-                PackedPbrTexture = PackedPbrTexture,
-                PbrMapMode = PbrMapMode,
-                PackedAoChannel = PackedAoChannel,
-                PackedRoughnessChannel = PackedRoughnessChannel,
-                PackedMetallicChannel = PackedMetallicChannel,
-                EmissionEnabled = EmissionEnabled,
-                EmissionColor = EmissionColor,
-                EmissionIntensity = EmissionIntensity,
-                EmissionTexture = EmissionTexture,
-                UvTiling = UvTiling,
-                UvOffset = UvOffset,
-                Shading = Shading,
-                DecodeColorTexturesSrgb = DecodeColorTexturesSrgb,
-
-                Metallic =
-                    Metallic,
-
-                Roughness =
-                    Roughness,
-
-                BlendMode =
-                    BlendMode,
-
-                AlphaCutoff =
-                    AlphaCutoff,
-
-                DepthTest =
-                    DepthTest,
-
-                DepthWriteMode =
-                    DepthWriteMode,
-
-                CullMode =
-                    CullMode,
-
-                FrontFace =
-                    FrontFace,
-
-                PolygonMode =
-                    PolygonMode
-            };
+        return clone;
     }
 }

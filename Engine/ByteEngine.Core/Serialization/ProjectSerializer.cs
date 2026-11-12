@@ -35,6 +35,27 @@ public sealed class ProjectSerializer
 
             Validate(project);
 
+            if (project.SchemaVersion < 0)
+            {
+                throw new InvalidDataException(
+                    "Project schema version cannot be negative."
+                );
+            }
+
+            if (project.SchemaVersion > ProjectData.CurrentSchemaVersion)
+            {
+                throw new InvalidDataException(
+                    $"Unsupported project schema {project.SchemaVersion}. Update ByteEngine before opening this project."
+                );
+            }
+
+            // Zero is an unversioned legacy project; opening it adopts the
+            // current schema so the next save is explicit.
+            if (project.SchemaVersion == 0)
+            {
+                project.SchemaVersion = ProjectData.CurrentSchemaVersion;
+            }
+
             return project;
         }
         catch (JsonException exception)
@@ -55,6 +76,8 @@ public sealed class ProjectSerializer
         );
 
         Validate(project);
+
+        project.SchemaVersion = ProjectData.CurrentSchemaVersion;
 
         JsonSerialization.WriteAtomic(
             filePath,
