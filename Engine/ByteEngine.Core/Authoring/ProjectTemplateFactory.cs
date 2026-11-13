@@ -4,23 +4,41 @@ using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Scene;
+using RuntimeScene = ByteEngine.Core.Scene.Scene;
 
-namespace ByteEngine.Editor.Panels;
+namespace ByteEngine.Core.Authoring;
 
-internal static class ProjectTemplateFactory
+/// <summary>
+/// Authored starter scenes shared by the editor Project Browser and headless
+/// authoring hosts (MCP). Editor-only templates (Last Stand, Karlson Demo and
+/// ByteArena asset generation) are handled by the editor before calling this
+/// factory; unsupported values still throw so callers cannot silently produce
+/// an incomplete project.
+/// </summary>
+public enum ProjectTemplate
 {
-    public static Scene Create(ProjectTemplate template) => template switch
+    Clean,
+    Starter3D,
+    ByteArena,
+    LastStand,
+    InteractiveSand,
+    KarlsonDemo
+}
+
+public static class ProjectTemplateFactory
+{
+    public static RuntimeScene Create(ProjectTemplate template) => template switch
     {
-        ProjectTemplate.Clean => new Scene("Main"),
+        ProjectTemplate.Clean => new RuntimeScene("Main"),
         ProjectTemplate.Starter3D => CreateStarter3D(),
         ProjectTemplate.ByteArena => CreateByteArena(),
         ProjectTemplate.InteractiveSand => CreateInteractiveSand(),
         _ => throw new ArgumentOutOfRangeException(nameof(template))
     };
 
-    private static Scene CreateInteractiveSand()
+    private static RuntimeScene CreateInteractiveSand()
     {
-        var scene = new Scene("Interactive Sand");
+        var scene = new RuntimeScene("Interactive Sand");
         scene.CreateGameObject("Interactive sand").AddComponent(new InteractiveSand3D());
         var camera=scene.CreateGameObject("Inspection camera").AddComponent(new Camera3D { ActiveGameCamera=true, FieldOfView=52, FarClip=100 });
         camera.Transform.WorldPosition=new(10,9,13);
@@ -35,9 +53,9 @@ internal static class ProjectTemplateFactory
         return scene;
     }
 
-    private static Scene CreateStarter3D()
+    private static RuntimeScene CreateStarter3D()
     {
-        var scene = new Scene("Main");
+        var scene = new RuntimeScene("Main");
 
         GameObject camera = scene.CreateGameObject("Main Camera");
         camera.Transform.LocalPosition = new Vector3(0f, 2f, 6f);
@@ -71,9 +89,9 @@ internal static class ProjectTemplateFactory
         return scene;
     }
 
-    private static Scene CreateByteArena()
+    private static RuntimeScene CreateByteArena()
     {
-        var scene = new Scene("ByteArena");
+        var scene = new RuntimeScene("ByteArena");
 
         GameObject ground = scene.CreateGameObject("Ground");
         ground.Transform.LocalScale = new Vector3(24f, 1f, 24f);

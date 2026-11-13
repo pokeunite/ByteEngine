@@ -2,6 +2,7 @@ using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;

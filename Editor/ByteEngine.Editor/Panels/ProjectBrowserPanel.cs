@@ -1,17 +1,8 @@
 using System.Numerics;
+using ByteEngine.Core.Authoring;
 using ImGuiNET;
 
 namespace ByteEngine.Editor.Panels;
-
-internal enum ProjectTemplate
-{
-    Clean,
-    Starter3D,
-    ByteArena,
-    LastStand,
-    InteractiveSand,
-    KarlsonDemo
-}
 
 internal sealed record NewProjectRequest(string Name, string ParentDirectory, ProjectTemplate Template);
 

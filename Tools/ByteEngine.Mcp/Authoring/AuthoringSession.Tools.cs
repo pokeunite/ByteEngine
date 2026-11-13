@@ -1,9 +1,12 @@
+using System.Numerics;
 using System.Text.Json;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Runtime;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Serialization;
 using ByteEngine.Core.Serialization.SerializationModels;
+using ByteEngine.Core.Variables;
 using ByteEngine.Core.VisualLogic;
 
 namespace ByteEngine.Mcp.Authoring;
@@ -12,14 +15,30 @@ public sealed partial class AuthoringSession
 {
     private object ProjectTool(string op, JsonElement? args)
     {
+        if (op == "templates") return TemplatesTool();
+        if (op == "create") return CreateProjectTool(args);
         if (op == "open")
         {
             Open(Request.Required(args, "path"));
             return new { ok = true, name = Project.Name, path = _projectFile, rev = Rev(_projectFile!), startup_scene = Project.StartupScene };
         }
         if (op == "info")
-            return new { ok = true, name = Project.Name, path = _projectFile, rev = Rev(_projectFile!), startup_scene = Project.StartupScene,
-                asset_directory = Project.AssetDirectory, scene_directory = Project.SceneDirectory };
+            return new
+            {
+                ok = true,
+                name = Project.Name,
+                path = _projectFile,
+                rev = Rev(_projectFile!),
+                startup_scene = Project.StartupScene,
+                asset_directory = Project.AssetDirectory,
+                scene_directory = Project.SceneDirectory,
+                assets = Database.Assets.Count,
+                scenes = Database.Assets.Count(a => a.Type == AssetType.Scene),
+                blueprints = Database.Assets.Count(a => a.Type == AssetType.Blueprint),
+                event_modules = Database.Assets.Count(a => a.Type == AssetType.EventModule),
+                plugins = _plugins?.LoadedPlugins.Count ?? 0,
+                engine_version = Project.EngineVersion
+            };
         if (op == "set_startup_scene")
         {
             CheckRevision(_projectFile!, args);
@@ -30,6 +49,34 @@ public sealed partial class AuthoringSession
             _projects.Save(Project, _projectFile!);
             MarkChanged(_projectFile!);
             return new { ok = true, rev = Rev(_projectFile!), startup_scene = Project.StartupScene };
+        }
+        if (op == "tags")
+            return new { ok = true, items = Project.Classification.Tags.Select(tag => new { tag.Id, tag.Name }).ToArray() };
+        if (op == "layers")
+            return new { ok = true, items = Project.Classification.Layers.Select(layer => new { layer.Index, layer.Name }).ToArray() };
+        if (op == "add_tag")
+        {
+            CheckRevision(_projectFile!, args);
+            string name = Request.Required(args, "name").Trim();
+            if (name.Length == 0) throw new McpFault("INVALID_REQUEST", "Tag name cannot be empty.");
+            var existing = Project.Classification.FindTag(name);
+            if (existing != null) return new { ok = true, tag = new { existing.Id, existing.Name }, rev = Rev(_projectFile!), created = false };
+            var tag = Project.Classification.AddTag(name)
+                ?? throw new McpFault("INVALID_REQUEST", "Tag could not be added.");
+            _projects.Save(Project, _projectFile!);
+            MarkChanged(_projectFile!);
+            return new { ok = true, tag = new { tag.Id, tag.Name }, rev = Rev(_projectFile!), created = true };
+        }
+        if (op == "define_layer")
+        {
+            CheckRevision(_projectFile!, args);
+            int index = Request.Int(args, "index", -1);
+            string name = Request.Required(args, "name").Trim();
+            if (!Project.Classification.DefineLayer(index, name))
+                throw new McpFault("INVALID_REQUEST", "Layer index must be 0..31 and the name must be unique.");
+            _projects.Save(Project, _projectFile!);
+            MarkChanged(_projectFile!);
+            return new { ok = true, layer = new { index, name }, rev = Rev(_projectFile!) };
         }
         throw new McpFault("UNSUPPORTED_CAPABILITY");
     }
@@ -103,9 +150,13 @@ public sealed partial class AuthoringSession
         {
             var a = Asset(Request.Required(args, "asset"));
             return new { ok = true, handle = AssetHandle(a), path = a.ProjectPath, type = a.Type.ToString(),
-                guid = a.Guid, rev = Rev(a.FullPath) };
+                guid = a.Guid, rev = Rev(a.FullPath), detail = AssetDetail(a, args) };
         }
-        throw new McpFault("UNSUPPORTED_CAPABILITY", "Asset import is not exposed until its editor importer can be reused safely.");
+        if (op == "import") return ImportAssetTool(args, folder: false);
+        if (op == "import_folder") return ImportAssetTool(args, folder: true);
+        if (op == "set_import_settings") return SetImportSettingsTool(args);
+        if (op == "reimport") return ReimportAssetTool(args);
+        throw new McpFault("UNSUPPORTED_CAPABILITY");
     }
 
     private object SceneTool(string op, JsonElement? args)
@@ -135,11 +186,19 @@ public sealed partial class AuthoringSession
                 ? scene.FindGameObject(id) : scene.FindGameObject(token);
             if (target == null) throw new McpFault("NOT_FOUND", $"Object '{token}' was not found.");
             return new { ok = true, rev = Rev(asset.FullPath), id = target.Id, target.Name,
-                parent = target.Parent?.Id, target.Active,
+                parent = target.Parent?.Id, target.Active, layer = target.Layer,
+                tags = target.Tags.ToArray(),
                 position = new { x = target.Transform.WorldPosition.X, y = target.Transform.WorldPosition.Y,
                     z = target.Transform.WorldPosition.Z },
+                local_position = new { x = target.Transform.LocalPosition.X, y = target.Transform.LocalPosition.Y,
+                    z = target.Transform.LocalPosition.Z },
+                rotation = new { x = target.Transform.EulerAngles.X, y = target.Transform.EulerAngles.Y,
+                    z = target.Transform.EulerAngles.Z },
                 scale = new { x = target.Transform.WorldScale.X, y = target.Transform.WorldScale.Y,
                     z = target.Transform.WorldScale.Z },
+                local_scale = new { x = target.Transform.LocalScale.X, y = target.Transform.LocalScale.Y,
+                    z = target.Transform.LocalScale.Z },
+                variables = target.Variables.Select(pair => new { name = pair.Key, pair.Value }).ToArray(),
                 components = target.Components.Select(c => Components.Serialize(c)).Where(c => c != null).ToArray() };
         }
         if (op == "attach_module")
@@ -187,7 +246,7 @@ public sealed partial class AuthoringSession
             CheckRevision(asset.FullPath, args);
             var scene = Scenes.Load(asset.FullPath);
             var data = Scenes.Serialize(scene);
-            int count = ApplyObjectEdits(data.GameObjects, Request.Get(args, "edits"));
+            int count = ApplyObjectEdits(data.GameObjects, Request.Get(args, "edits"), data.Variables);
             ValidateHierarchy(data.GameObjects);
             if (!Request.Bool(args, "dry_run"))
             {
@@ -245,6 +304,57 @@ public sealed partial class AuthoringSession
             return new { ok = true, path = Relative(full), model = model.ProjectPath, view = Request.String(args, "view") ?? "tps",
                 objects = 1 + hierarchy.Children.Count, rev = Rev(full), dry_run = Request.Bool(args, "dry_run") };
         }
+        if (op == "extract")
+        {
+            string name = Request.Required(args, "name");
+            string path = Request.String(args, "path") ?? $"{Project.AssetDirectory}/{name}.byteblueprint";
+            string full = Inside(path, ".byteblueprint");
+            CheckRevision(full, args);
+            if (File.Exists(full)) throw new McpFault("ALREADY_EXISTS");
+            AssetRecord sceneAsset = Asset(Request.Required(args, "scene"), AssetType.Scene);
+            var scene = Scenes.Load(sceneAsset.FullPath);
+            string token = Request.Required(args, "object");
+            GameObject? source = Guid.TryParse(token, out Guid sourceId)
+                ? scene.FindGameObject(sourceId) : scene.FindGameObject(token);
+            if (source == null) throw new McpFault("NOT_FOUND", $"Object '{token}' was not found.");
+
+            SceneData sceneData = Scenes.Serialize(scene);
+            var objects = sceneData.GameObjects;
+            var subset = new List<GameObjectData>();
+            void Collect(Guid id)
+            {
+                var node = objects.FirstOrDefault(item => item.Id == id);
+                if (node == null) return;
+                subset.Add(node);
+                foreach (var child in objects.Where(item => item.ParentId == id)) Collect(child.Id);
+            }
+            Collect(source.Id);
+            subset[0].ParentId = null;
+            subset[0].AttachmentOffset = null;
+
+            var blueprint = new BlueprintDefinition
+            {
+                Name = name,
+                Root = subset[0],
+                Children = subset.Skip(1).ToList()
+            };
+            string? kind = Request.String(args, "type");
+            if (kind != null)
+            {
+                if (!Enum.TryParse(kind, true, out BlueprintType parsed))
+                    throw new McpFault("INVALID_REQUEST", "Unknown Blueprint type.");
+                blueprint.Type = parsed;
+            }
+            if (!Request.Bool(args, "dry_run"))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                Blueprints.Save(blueprint, full);
+                Database.Scan();
+                MarkChanged(full);
+            }
+            return new { ok = true, path = Relative(full), objects = subset.Count,
+                rev = Rev(full), dry_run = Request.Bool(args, "dry_run") };
+        }
         AssetRecord asset = Asset(Request.Required(args, "blueprint"), AssetType.Blueprint);
         var bp = Blueprints.Load(asset.FullPath);
         if (op == "inspect")
@@ -265,7 +375,7 @@ public sealed partial class AuthoringSession
             CheckRevision(asset.FullPath, args);
             var objects = new List<GameObjectData> { bp.Root };
             objects.AddRange(bp.Children);
-            int count = ApplyObjectEdits(objects, Request.Get(args, "edits"));
+            int count = ApplyObjectEdits(objects, Request.Get(args, "edits"), bp.Variables);
             if (objects.Count == 0) throw new McpFault("INVALID_REQUEST", "Cannot remove Blueprint root.");
             ValidateHierarchy(objects);
             bp.Root = objects[0];
@@ -380,14 +490,55 @@ public sealed partial class AuthoringSession
 
     private object RuntimeTool(string op, JsonElement? args)
     {
-        if (op != "validate") throw new McpFault("UNSUPPORTED_CAPABILITY", "Build and Play are not enabled in V1.");
-        string full = Inside(Project.StartupScene, ".bytescene");
-        if (!File.Exists(full)) return new { ok = false, code = "MISSING_STARTUP_SCENE", path = Project.StartupScene };
-        var scene = Scenes.Load(full);
-        return new { ok = true, startup_scene = Project.StartupScene, objects = scene.GameObjectCount };
+        if (op != "validate")
+            throw new McpFault("UNSUPPORTED_CAPABILITY", "Use be_export for build and export operations.");
+        var issues = new List<object>();
+        string startupFull = Inside(Project.StartupScene, ".bytescene");
+        bool startupExists = File.Exists(startupFull);
+        if (!startupExists)
+            issues.Add(new { kind = "missing_startup_scene", path = Project.StartupScene, message = "Startup scene does not exist." });
+        int scenes = 0, blueprints = 0, modules = 0, startupObjects = 0;
+        foreach (var asset in Database.Assets.OrderBy(item => item.ProjectPath).ToArray())
+        {
+            try
+            {
+                if (asset.Type == AssetType.Scene)
+                {
+                    var scene = Scenes.Load(asset.FullPath);
+                    scenes++;
+                    if (string.Equals(asset.ProjectPath, Project.StartupScene, StringComparison.OrdinalIgnoreCase))
+                        startupObjects = scene.GameObjectCount;
+                }
+                else if (asset.Type == AssetType.Blueprint)
+                {
+                    Blueprints.Load(asset.FullPath);
+                    blueprints++;
+                }
+                else if (asset.Type == AssetType.EventModule)
+                {
+                    Modules.Load(asset.FullPath);
+                    modules++;
+                }
+            }
+            catch (Exception exception)
+            {
+                issues.Add(new { kind = asset.Type.ToString(), path = asset.ProjectPath, message = exception.Message });
+            }
+        }
+        return new
+        {
+            ok = issues.Count == 0,
+            startup_scene = Project.StartupScene,
+            startup_scene_exists = startupExists,
+            startup_objects = startupObjects,
+            scenes,
+            blueprints,
+            event_modules = modules,
+            issues
+        };
     }
 
-    private int ApplyObjectEdits(List<GameObjectData> objects, JsonElement edits)
+    private int ApplyObjectEdits(List<GameObjectData> objects, JsonElement edits, List<VariableData>? variables = null)
     {
         var temporary = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         int count = 0;
@@ -457,19 +608,148 @@ public sealed partial class AuthoringSession
                 string canonical = Components.GetCanonicalTypeName(type) ?? (FindComponentType(type) is { } registered ? Components.GetSerializedTypeName(registered) : null) ?? type;
                 obj.Components.RemoveAll(c => (Components.GetCanonicalTypeName(c.Type) ?? c.Type).Equals(canonical, StringComparison.OrdinalIgnoreCase));
             }
-            else if (op == "set_position" || op == "set_scale")
+            else if (op == "set_position" || op == "set_scale" || op == "set_rotation")
             {
                 var obj = Find();
-                var vec = new Vector3Data { X = Request.Float(edit, "x"), Y = Request.Float(edit, "y"),
-                    Z = Request.Float(edit, "z", op == "set_scale" ? 1 : 0) };
-                if (op == "set_position") obj.Transform.LocalPosition = vec;
-                else obj.Transform.LocalScale = vec;
+                if (op == "set_rotation")
+                {
+                    obj.Transform.LocalRotation = EulerQuaternion(
+                        Request.Float(edit, "x"), Request.Float(edit, "y"), Request.Float(edit, "z"));
+                }
+                else
+                {
+                    var vec = new Vector3Data { X = Request.Float(edit, "x"), Y = Request.Float(edit, "y"),
+                        Z = Request.Float(edit, "z", op == "set_scale" ? 1 : 0) };
+                    if (op == "set_position") obj.Transform.LocalPosition = vec;
+                    else obj.Transform.LocalScale = vec;
+                }
+            }
+            else if (op == "set_transform")
+            {
+                var obj = Find();
+                JsonElement position = Request.Get(edit, "position");
+                if (position.ValueKind == JsonValueKind.Object) obj.Transform.LocalPosition = ReadVector(position, 0f);
+                JsonElement rotation = Request.Get(edit, "rotation");
+                if (rotation.ValueKind == JsonValueKind.Object)
+                    obj.Transform.LocalRotation = EulerQuaternion(
+                        Request.Float(rotation, "x"), Request.Float(rotation, "y"), Request.Float(rotation, "z"));
+                JsonElement scale = Request.Get(edit, "scale");
+                if (scale.ValueKind == JsonValueKind.Object) obj.Transform.LocalScale = ReadVector(scale, 1f);
+            }
+            else if (op == "duplicate_object")
+            {
+                var source = Find();
+                string? parentToken = Request.String(edit, "parent");
+                var subtree = new List<GameObjectData>();
+                void Collect(GameObjectData node)
+                {
+                    subtree.Add(node);
+                    foreach (var child in objects.Where(o => o.ParentId == node.Id)) Collect(child);
+                }
+                Collect(source);
+                var map = subtree.ToDictionary(o => o.Id, _ => Guid.NewGuid());
+                var clones = new List<GameObjectData>(subtree.Count);
+                foreach (var original in subtree)
+                {
+                    var clone = CloneObject(original);
+                    clone.Id = map[original.Id];
+                    if (original.ParentId is Guid parentId && map.TryGetValue(parentId, out Guid mappedParent))
+                        clone.ParentId = mappedParent;
+                    if (original == source)
+                    {
+                        string? name = Request.String(edit, "name");
+                        if (name != null) clone.Name = name;
+                        if (parentToken != null) clone.ParentId = parentToken == "none" ? null : FindId(parentToken);
+                    }
+                    foreach (var component in clone.Components)
+                        SceneSerializer.RemapObjectReferences(component.Properties, map);
+                    clones.Add(clone);
+                }
+                objects.AddRange(clones);
+                string? alias = Request.String(edit, "as");
+                if (alias != null) temporary[alias] = clones[0].Id;
+            }
+            else if (op == "set_tags")
+            {
+                var obj = Find();
+                if (Request.Bool(edit, "clear"))
+                {
+                    obj.Tags.Clear();
+                }
+                else
+                {
+                    var ids = new List<Guid>();
+                    foreach (var item in Request.Items(Request.Get(edit, "tags")))
+                    {
+                        if (item.ValueKind != JsonValueKind.String) throw new McpFault("INVALID_REQUEST", "Tags must be names or GUIDs.");
+                        string name = item.GetString()!;
+                        var tag = Guid.TryParse(name, out Guid id)
+                            ? Project.Classification.FindTag(id) : Project.Classification.FindTag(name);
+                        if (tag == null)
+                            throw new McpFault("NOT_FOUND", $"Unknown tag '{name}'. Add it with be_project(op:\"add_tag\").");
+                        ids.Add(tag.Id);
+                    }
+                    obj.Tags = ids.Distinct().ToList();
+                }
+            }
+            else if (op == "set_variable")
+            {
+                string name = Request.Required(edit, "name");
+                List<VariableData> scope = target == null
+                    ? variables ?? throw new McpFault("INVALID_REQUEST", "This document has no scene/blueprint variables.")
+                    : Find().Variables;
+                int index = scope.FindIndex(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (Request.Bool(edit, "remove"))
+                {
+                    if (index >= 0) scope.RemoveAt(index);
+                }
+                else if (index >= 0)
+                {
+                    scope[index].Value = ReadVariable(Request.Get(edit, "value"));
+                }
+                else
+                {
+                    scope.Add(new VariableData { Name = name, Value = ReadVariable(Request.Get(edit, "value")) });
+                }
             }
             else throw new McpFault("UNSUPPORTED_CAPABILITY", $"Unknown edit '{op}'.");
             count++;
         }
         return count;
     }
+
+    private static QuaternionData EulerQuaternion(float x, float y, float z)
+    {
+        var rotation = Quaternion.CreateFromYawPitchRoll(
+            y * MathF.PI / 180f, x * MathF.PI / 180f, z * MathF.PI / 180f);
+        return new QuaternionData { X = rotation.X, Y = rotation.Y, Z = rotation.Z, W = rotation.W };
+    }
+
+    private static Vector3Data ReadVector(JsonElement value, float fallback) => new()
+    {
+        X = Request.Float(value, "x", fallback),
+        Y = Request.Float(value, "y", fallback),
+        Z = Request.Float(value, "z", fallback)
+    };
+
+    private static VariableValue ReadVariable(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Number => VariableValue.FromNumber(value.GetDouble()),
+        JsonValueKind.String => VariableValue.FromString(value.GetString()!),
+        JsonValueKind.True => VariableValue.FromBoolean(true),
+        JsonValueKind.False => VariableValue.FromBoolean(false),
+        JsonValueKind.Object when value.TryGetProperty("z", out _) =>
+            VariableValue.FromVector3(new Vector3(Request.Float(value, "x"), Request.Float(value, "y"), Request.Float(value, "z"))),
+        JsonValueKind.Object =>
+            VariableValue.FromVector2(new Vector2(Request.Float(value, "x"), Request.Float(value, "y"))),
+        _ => throw new McpFault("INVALID_REQUEST", "Variable values must be a number, string, boolean, {x,y} or {x,y,z}.")
+    };
+
+    private static readonly JsonSerializerOptions CloneJson = new();
+
+    private static GameObjectData CloneObject(GameObjectData source) =>
+        JsonSerializer.Deserialize<GameObjectData>(
+            JsonSerializer.Serialize(source, CloneJson), CloneJson)!;
 
     private static void ValidateHierarchy(List<GameObjectData> objects)
     {

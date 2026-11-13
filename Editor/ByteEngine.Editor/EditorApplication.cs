@@ -3,6 +3,7 @@ using System.Numerics;
 
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;

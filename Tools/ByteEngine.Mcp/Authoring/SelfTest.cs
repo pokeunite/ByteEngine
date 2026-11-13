@@ -27,6 +27,23 @@ internal static class SelfTest
                 return json;
             }
             Call("project", "open", new { path = file });
+
+            string externalModel = Path.Combine(root, "External.obj");
+            File.WriteAllText(externalModel,
+                "o External\nv 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nvn 0 0 1\nf 1/1/1 2/2/1 3/3/1\n");
+            var importedAsset = Call("asset", "import", new { source = externalModel, dest = "Assets/Models" });
+            string importedPath = importedAsset.GetProperty("imported")[0].GetProperty("path").GetString()!;
+            if (!importedAsset.GetProperty("imported")[0].GetProperty("type").GetString()!.Equals("Model3D"))
+                throw new InvalidOperationException("Model import did not produce a Model3D asset.");
+            var assetDetail = Call("asset", "inspect", new { asset = importedPath });
+            if (assetDetail.GetProperty("detail").GetProperty("model").GetProperty("meshes").GetArrayLength() == 0)
+                throw new InvalidOperationException("Imported model has no sub-meshes.");
+            Call("asset", "set_import_settings", new { asset = importedPath, model = new { import_scale = 0.5f } });
+            var importedInfo = Call("asset", "inspect", new { asset = importedPath, summary_only = true });
+            if (importedInfo.GetProperty("type").GetString() != "Model3D")
+                throw new InvalidOperationException("Asset inspection lost the model type.");
+            Console.WriteLine("Asset import -> model sub-assets -> import settings: PASS");
+
             string? pluginPackage = Environment.GetEnvironmentVariable("BYTEENGINE_TEST_PLUGIN");
             if (!string.IsNullOrWhiteSpace(pluginPackage))
             {
@@ -97,8 +114,45 @@ internal static class SelfTest
                 new { op = "create_object", name = "Muzzle", parent = "$player" },
                 new { op = "set_position", target = "$player", x = 1, y = 2, z = 3 }
             } });
+            var edited = Call("scene", "inspect", new { scene = path });
+            string playerObjectId = edited.GetProperty("objects").EnumerateArray()
+                .First(o => o.GetProperty("name").GetString() == "Player").GetProperty("id").GetString()!;
+            Call("scene", "apply", new { scene = path, expected_rev = edited.GetProperty("rev").GetString(), edits = new object[] {
+                new { op = "set_rotation", target = playerObjectId, x = 0f, y = 90f, z = 0f },
+                new { op = "duplicate_object", target = playerObjectId, name = "PlayerCopy", @as = "$copy" },
+                new { op = "set_variable", name = "Lives", value = 3 },
+                new { op = "set_variable", target = "$copy", name = "Speed", value = 4.5 },
+                new { op = "set_transform", target = "$copy",
+                    position = new { x = 5f, y = 0f, z = 0f }, scale = new { x = 2f, y = 2f, z = 2f } }
+            } });
+            var playerAfter = Call("scene", "inspect_object", new { scene = path, @object = playerObjectId });
+            if (Math.Abs(playerAfter.GetProperty("rotation").GetProperty("y").GetSingle() - 90f) > 1f)
+                throw new InvalidOperationException("Scene rotation edit failed.");
+            var copyAfter = Call("scene", "inspect_object", new { scene = path, @object = "PlayerCopy" });
+            if (copyAfter.GetProperty("local_position").GetProperty("x").GetSingle() != 5f ||
+                copyAfter.GetProperty("local_scale").GetProperty("x").GetSingle() != 2f)
+                throw new InvalidOperationException("Scene transform edit failed.");
+            if (copyAfter.GetProperty("variables").GetArrayLength() != 1)
+                throw new InvalidOperationException("Object variable edit failed.");
+            var projectInfo = Call("project", "info");
+            Call("project", "add_tag", new { name = "Player", expected_rev = projectInfo.GetProperty("rev").GetString() });
+            Call("scene", "apply", new { scene = path,
+                expected_rev = Call("scene", "inspect", new { scene = path }).GetProperty("rev").GetString(),
+                edits = new object[] { new { op = "set_tags", target = playerObjectId, tags = new[] { "Player" } } } });
+            if (Call("scene", "inspect_object", new { scene = path, @object = playerObjectId })
+                .GetProperty("tags").GetArrayLength() != 1)
+                throw new InvalidOperationException("Scene tag edit failed.");
+            Console.WriteLine("Scene rotation, transform, duplicate, variables and tags: PASS");
+
+            var extracted = Call("blueprint", "extract", new { name = "PlayerPrefab", scene = path,
+                @object = playerObjectId, expected_rev = "new" });
+            if (Call("blueprint", "inspect", new { blueprint = extracted.GetProperty("path").GetString() })
+                .GetProperty("children").GetArrayLength() != 1)
+                throw new InvalidOperationException("Blueprint extraction lost child objects.");
+            Console.WriteLine("Blueprint extraction from a scene object: PASS");
+
             var scene = Call("scene", "inspect", new { scene = path });
-            if (scene.GetProperty("total").GetInt32() != 2) throw new InvalidOperationException("Scene persistence failed.");
+            if (scene.GetProperty("total").GetInt32() < 4) throw new InvalidOperationException("Scene persistence failed.");
             Call("blueprint", "create", new { name = "Enemy", expected_rev = "new" });
             var player = Call("blueprint", "create_playable", new {
                 name = "Player", model = "Assets/Test.obj", view = "tps", expected_rev = "new" });
@@ -148,6 +202,21 @@ internal static class SelfTest
             if (Call("blueprint", "inspect", new { blueprint = player.GetProperty("path").GetString() })
                     .GetProperty("event_modules").GetArrayLength() != 1)
                 throw new InvalidOperationException("Event Module attachment failed.");
+            var createdProject = Call("project", "create", new
+            {
+                path = Path.Combine(root, "CreatedGame"),
+                name = "CreatedGame",
+                template = "starter3d",
+                install_fonts = false,
+                install_characters = false
+            });
+            if (createdProject.GetProperty("objects").GetInt32() < 3)
+                throw new InvalidOperationException("Project template creation produced an empty scene.");
+            if (!Call("runtime", "validate").GetProperty("ok").GetBoolean())
+                throw new InvalidOperationException("Created project failed runtime validation.");
+            Call("project", "open", new { path = file });
+            Console.WriteLine("Project template creation and validation: PASS");
+
             Call("runtime", "validate");
             Console.WriteLine("MCP self-test passed: model-to-player Blueprint, scene placement, Event Module attachment, persistence, runtime validation.");
         }

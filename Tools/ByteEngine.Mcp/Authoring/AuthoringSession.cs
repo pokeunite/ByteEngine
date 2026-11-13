@@ -64,6 +64,8 @@ public sealed partial class AuthoringSession : IDisposable
                     "blueprint" => BlueprintTool(op, args),
                     "logic" => LogicTool(op, args),
                     "runtime" => RuntimeTool(op, args),
+                    "export" => ExportTool(op, args),
+                    "editor" => EditorTool(op, args),
                     "changes" => ChangesTool(op, args),
                     _ => throw new McpFault("UNSUPPORTED_CAPABILITY")
                 };
@@ -87,7 +89,13 @@ public sealed partial class AuthoringSession : IDisposable
         string full = Path.GetFullPath(path);
         if (!File.Exists(full)) throw new McpFault("NOT_FOUND", "Project file does not exist.");
         ProjectData project = _projects.Load(full);
-        string root = Path.GetDirectoryName(full)!;
+        Attach(project, full);
+    }
+
+    internal void Attach(ProjectData project, string projectFile)
+    {
+        string full = Path.GetFullPath(projectFile);
+        string root = Path.GetDirectoryName(full) ?? throw new McpFault("INVALID_REQUEST", "The project file needs a parent directory.");
         _plugins?.Dispose();
         _pluginMessages.Clear();
         _plugins = ByteEnginePluginManager.LoadProjectPlugins(root, ByteEnginePluginLoadMode.Editor, _pluginMessages.Add);
@@ -112,6 +120,29 @@ public sealed partial class AuthoringSession : IDisposable
         _scenes = scenes;
         _handles.Clear();
         _changed.Clear();
+    }
+
+    /// <summary>
+    /// Locates the engine checkout so headless authoring can reuse the same
+    /// plugin build targets, starter resources and publish runtimes as the
+    /// editor. Override with BYTEENGINE_ROOT when the server is installed
+    /// outside its build output.
+    /// </summary>
+    internal static string? FindRepositoryRoot()
+    {
+        string? configured = Environment.GetEnvironmentVariable("BYTEENGINE_ROOT");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            string candidate = Path.GetFullPath(configured);
+            if (File.Exists(Path.Combine(candidate, "ByteEngine.sln"))) return candidate;
+        }
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "ByteEngine.sln"))) return directory.FullName;
+            directory = directory.Parent;
+        }
+        return null;
     }
 
     internal string Inside(string relative, string? extension = null)

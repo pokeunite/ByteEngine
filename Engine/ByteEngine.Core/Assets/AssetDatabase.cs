@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ByteEngine.Core.Assets.Importers;
 
 namespace ByteEngine.Core.Assets;
 
@@ -100,7 +101,7 @@ public sealed class AssetDatabase : IDisposable
                     if (previous != null) { _byPath.Remove(projectPath); _byGuid.Remove(previous.Guid); changed.Add(previous.Guid); }
                     continue;
                 }
-                var metadata = ReadOrCreateMetadata(fullPath, DetectType(fullPath));
+                var metadata = ReadOrCreateMetadata(fullPath, DetectAssetType(fullPath));
                 if (_byGuid.TryGetValue(metadata.Guid, out var other) &&
                     !string.Equals(other.ProjectPath, projectPath, StringComparison.OrdinalIgnoreCase))
                 {
@@ -168,7 +169,7 @@ public sealed class AssetDatabase : IDisposable
                 {
                     LastRefreshFileCount++;
                     string projectPath = ToProjectPath(file);
-                    AssetMetadata metadata = ReadOrCreateMetadata(file, DetectType(file));
+                    AssetMetadata metadata = ReadOrCreateMetadata(file, DetectAssetType(file));
 
                     if (newByGuid.TryGetValue(metadata.Guid, out AssetRecord? collision))
                     {
@@ -284,6 +285,22 @@ public sealed class AssetDatabase : IDisposable
         record.Metadata.ModelImporter.ImportScale = Math.Max(importScale, .0001f);
         record.Metadata.ModelImporter.GenerateNormals = generateNormals;
         record.Metadata.ModelImporter.PreferEmbeddedMaterials = preferEmbeddedMaterials;
+        WriteMetadata(record.MetaPath, record.Metadata);
+    }
+
+    /// <summary>
+    /// Replaces the complete persistent model/animation import settings for one
+    /// model asset. Used by headless authoring hosts that expose rig, LOD and
+    /// animation-source options the editor's short overload does not cover.
+    /// </summary>
+    public void SetModelImporterSettings(
+        Guid guid,
+        ModelImporterSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (!TryGetAsset(guid, out AssetRecord? record) || record?.Type != AssetType.Model3D) return;
+        settings.Normalize();
+        record.Metadata.ModelImporter = settings;
         WriteMetadata(record.MetaPath, record.Metadata);
     }
 
@@ -421,7 +438,7 @@ public sealed class AssetDatabase : IDisposable
         path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
 
-    private static AssetType DetectType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    public static AssetType DetectAssetType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".png" => AssetType.Texture2D,
         ".jpg" => AssetType.Texture2D,
