@@ -408,7 +408,7 @@ public sealed partial class Scene
                     RefreshFixedDispatch();
                      int poseCount=_poseDispatch.Count;
                      JobRunner.For(poseCount,i=>{var entry=_poseDispatch[i];if(entry.Body.BodyType!=RigidbodyBodyType3D.Static)entry.Object.Transform.CaptureSimulationPose();});
-                     // pose capture parallelized above
+                    Time.FixedDeltaTime = delta;
                     DispatchFixedUpdate();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;

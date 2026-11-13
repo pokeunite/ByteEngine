@@ -31,14 +31,14 @@ Updated: 2026-11-13
 
 ## In progress
 
-- Crowd performance pass (navigation caching/jitter, retained A* scratch,
-  physics broad-phase split, crowd pose key wrapping). Uncommitted; see
-  `MemoryBank/activeContext.md`.
+- Branch integration and real repeated performance acceptance remain open.
+- Cline navigation/physics/crowd updates are reviewed with correctness fixes; see
+  Docs/Cline-Update-Review-2026-11-13.md for exact checks and branch boundaries.
 
 ## Known gaps
 
-- CPU skinning with per-frame vertex upload is the main crowd ceiling;
-  a vertex-shader bone palette is not implemented.
+- Main uses CPU crowd deformation. Native GPU skinning exists and passes automated
+  main/shadow parity tests on the secondary branch; integration remains open.
 - Crowd sharing opts out for hidden mesh parts, blends, advanced pose layers,
   IK/reactions, physical bone deformation and per-slot material overrides.
 - Root motion and socket followers are still evaluated per renderer on a crowd
@@ -50,4 +50,3 @@ Updated: 2026-11-13
   before enabling it.
 - Importer/rig compatibility still needs per-asset validation.
 - OBJ import is intentionally basic; GLB is the recommended exchange format.
-- `README.md` version string (v0.7) is stale versus `ByteEngineVersion` (0.10.0).

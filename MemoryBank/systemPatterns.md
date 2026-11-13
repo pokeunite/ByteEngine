@@ -23,9 +23,7 @@ Updated: 2026-11-13
 - Components use lifecycle hooks and read `Time.DeltaTime`.
 - Play Mode runs isolated copies of scene, object and global state; Stop discards
   runtime mutations.
-- Fixed-step simulation is opt-in per scene (`Scene.FixedSimulation`). Systems
-  that need determinism tick manually when it is on and no-op when it is off; for
-  example `NavigationAgent3D` only advances inside fixed simulation.
+- Fixed-step simulation is opt-in per scene (`Scene.FixedSimulation`). NavigationAgent3D ticks through OnUpdate in variable simulation and OnFixedUpdate in fixed simulation; callbacks receive the configured fixed delta.
 
 ## Data and asset patterns
 
@@ -56,10 +54,8 @@ Updated: 2026-11-13
   lookups (navigation region) and re-resolve only on invalidation or retry.
 - Pathfinding keeps search scratch on the grid/mesh and clears it per query;
   returned paths stay private copies so one agent cannot mutate another's path.
-- Physics separates broad-phase preparation (`PrepareContacts`, once per
-  substep) from narrow-phase solving (`SolveContacts`, per iteration).
-- Crowd animation shares quantized poses per model, keyed on the frame wrapped to
-  the clip length, so loops reuse cached geometry.
+- Physics separates broad-phase preparation from solving. Candidate reuse is valid only while collider transforms remain unchanged; contacts/joints can invalidate it.
+- Crowd animation shares quantized poses per model. Playback already wraps loop time and clamps one-shot time; do not modulo a terminal one-shot frame.
 - Guards live in `Tests/ByteEngine.Tests/EngineAllocationRegressionTests.cs` and
   `Tests/ByteEngine.Tests/EngineArchitectureBenchmarks.cs`.
 
@@ -82,9 +78,7 @@ Updated: 2026-11-13
 
 ## Known architectural tensions
 
-- CPU skinning and per-frame vertex upload remain the crowd ceiling; a
-  vertex-shader bone palette is the intended fix (needs OpenGL 3.3-compatible
-  path that the browser can mirror).
+- Main uses CPU crowd deformation. The secondary branch has native GPU skinning with tested main and shadow passes; capabilities are branch-specific.
 - Crowd sharing is conservative: hidden mesh parts, blends, IK, physical bones or
   material overrides opt a renderer out.
 - `Scene.AddGameObject` is O(n) per call because of `List.Contains`, so spawning

@@ -52,26 +52,27 @@ Rejected: returning the internal path buffer (aliasing bugs between agents).
 
 ## 2026-11-13 — Split physics broad phase out of the solver loop
 
-Decision: `PhysicsWorld3D.Step` calls `PrepareContacts` once per substep;
-`SolveContacts` only runs narrow-phase work over that candidate set.
+Decision (corrected during review): prepare candidates at substep start and reuse
+them only while collider transforms remain unchanged. Solver position corrections
+and joints require a refresh before the next iteration.
 
 Why: the broad phase (gather colliders, refit both bounds trees, query both trees,
 sort candidates) was re-run once per solver iteration — eight times per substep at
 the default iteration count.
 
-Rejected: lowering iteration count (changes solver quality) or caching per
-iteration (detection results do not change between iterations).
+Rejected: lowering iteration count, or unconditional once-per-substep reuse.
+Detection results can change during an iteration; a solver-created trigger
+overlap is covered by a regression.
 
-## 2026-11-13 — Crowd pose cache keys on the wrapped clip frame
+## 2026-11-13 — Preserve playback-time crowd quantization
 
-Decision: the crowd pose key uses the playback frame modulo the clip's quantized
-frame count, and cached pose meshes upload as static data.
+Decision (corrected during review): keep the quantized playback-time key, and
+upload immutable cached meshes as static data. Playback already wraps loops.
 
-Why: an absolute frame number produced a new key every loop, filling the
-256-entry pool within seconds and silently disabling sharing for the rest of the
-session.
+Why: a second modulo by rounded frame count corrupts non-looping terminal poses
+and fractional clip endings. The unbounded-key failure was not demonstrated.
 
-Rejected: enlarging the pool (delays the failure and wastes memory).
+Rejected: the added frame-count modulo. Pool capacity remains a separate limit.
 
 ---
 
@@ -95,3 +96,21 @@ Rejected: enlarging the pool (delays the failure and wastes memory).
   while authored scene callbacks still assume variable steps.
 - **Tests are a console runner with flag-selected suites**, not xUnit, and hot
   paths assert allocation budgets. Rejected: a test framework migration mid-flight.
+
+- **Performance claims require interleaved repeats and a bootstrap CI.** Two
+  identical baseline runs measured 31.77 ms and 49.97 ms, so a single-run A/B is
+  indistinguishable from drift. Rejected: one run per condition, which is what the
+  2026-11-11 crowd experiments did.
+- **Crowd pose sharing stays opt-in and collapses phases onto a shared clock.**
+  Buckets above one make actors inside a bucket animate in lockstep. Rejected:
+  quantising each actor's own clock, which turns animation into stop-motion, and
+  sharing unconditionally, which fixes arbitrary crowds to one phase.
+- **`Scene.InvalidateQueryBounds` must keep bumping `QueryStructureRevision`.** A
+  bounds-only split breaks collider removal because the incremental refit cannot
+  drop an index entry; `AIQueryOptimizationTests` fails on "disabled collider
+  disappears immediately". Rejected: the one-line split, reverted after the gate
+  caught it.
+- **Crowd instancing needs no new code.** `RenderBatcher` groups on
+  `(Mesh, Material, Shadows)` by mesh reference and `PrepareInstanceStream`
+  instances any batch above one, so shared cached pose meshes instance for free.
+  Rejected: a second instancing path for crowd draws.

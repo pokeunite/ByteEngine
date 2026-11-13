@@ -48,6 +48,9 @@ public sealed partial class PhysicsWorld3D
 
     private readonly List<int> _sweepOrder = new();
     private readonly List<(int First, int Second)> _candidatePairs = new();
+    private bool _contactsPrepared;
+    private bool _staticSolveReused;
+    private readonly List<Matrix4x4> _contactTransforms = new();
     public int LastCandidateCount { get; private set; }
     public double LastStepMilliseconds { get; private set; }
     public double LastColliderGatherMs {get;private set;}
@@ -153,6 +156,14 @@ public sealed partial class PhysicsWorld3D
                 if (body.ContinuousCollision && !body.IsSleeping) SweepBody(scene, body, before);
             }
 
+            /*
+             * Collider gathering and broad-phase candidate generation run once
+             * per substep. They used to run again for every solver iteration,
+             * so one dynamic body turned a single broad-phase build into
+             * SolverIterations builds per substep. Iterations can reuse the
+             * candidate set while no contact correction or joint moves a collider.
+             */
+            PrepareContacts(scene);
             for (int iteration = 0; iteration < iterations; iteration++)
             {
                 SolveContacts(scene);
@@ -258,11 +269,20 @@ public sealed partial class PhysicsWorld3D
         _stepColliders.Clear();
         _previousContacts.Clear();
         _frameContacts.Clear();
+        _contactsPrepared=false;_staticSolveReused=false;
+        _contactTransforms.Clear();
     }
 
-    private void SolveContacts(
+    /// <summary>
+    /// Gathers colliders, refreshes the primitive cache and rebuilds the
+    /// broad-phase candidate set. Called once per substep, before the solver
+    /// iterations reuse the result.
+    /// </summary>
+    private void PrepareContacts(
         RuntimeScene scene)
     {
+        _contactsPrepared = true;
+        _staticSolveReused = false;
         long gatherStart=System.Diagnostics.Stopwatch.GetTimestamp();
         _stepColliders.Clear();
         var registeredColliders=scene.PhysicsColliders;
@@ -301,11 +321,42 @@ public sealed partial class PhysicsWorld3D
         List<ColliderEntry> colliders = _stepColliders;
 
         PreparePrimitiveStates(colliders);
+        _contactTransforms.Clear();
+        foreach (var entry in colliders)
+        {
+            _contactTransforms.Add(entry.Collider.Transform.WorldMatrix);
+        }
         LastColliderCount = colliders.Count;
         var matrix = scene.Classification.CollisionMatrix.LayerMasks;
-        if (TryReuseStaticSolve(colliders, matrix)) return;
+        if (TryReuseStaticSolve(colliders, matrix)) { _staticSolveReused = true; return; }
         BeginStaticSolve(colliders, matrix);
         BuildCandidatePairs(colliders);
+    }
+
+    /// <summary>
+    /// Narrow phase and impulses against the candidate set prepared for this
+    /// substep. Transform changes invalidate the candidate set before reuse.
+    /// </summary>
+    private void SolveContacts(
+        RuntimeScene scene)
+    {
+        bool moved = false;
+        if (_contactsPrepared)
+        {
+            for (int i = 0; i < _stepColliders.Count; i++)
+            {
+                if (_stepColliders[i].Collider.Transform.WorldMatrix != _contactTransforms[i])
+                {
+                    moved = true;
+                    break;
+                }
+            }
+        }
+        // Contact corrections and joints can create new overlaps inside a substep.
+        // Reuse candidates only while the transforms used to generate them remain valid.
+        if (!_contactsPrepared || moved) PrepareContacts(scene);
+        if (_staticSolveReused) return;
+        List<ColliderEntry> colliders = _stepColliders;
         foreach (var candidate in _candidatePairs)
         {
                 ColliderEntry first = colliders[candidate.First];

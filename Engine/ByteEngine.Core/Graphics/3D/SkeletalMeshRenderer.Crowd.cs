@@ -184,6 +184,10 @@ public sealed partial class SkeletalMeshRenderer
         int rate = Math.Clamp(CrowdPoseFramesPerSecond, 8, 30);
         int frame = (int)MathF.Floor(_currentTime * rate);
 
+        // Playback already wraps looping clips and clamps non-looping clips.
+        // Applying a quantized-frame modulo here would wrap the final pose of
+        // a non-looping clip to its first pose and truncate fractional endings.
+
         key = new CrowdKey(
             _currentAnimation!,
             frame,
@@ -239,10 +243,12 @@ public sealed partial class SkeletalMeshRenderer
         {
             RuntimeSkinnedMesh runtime = _runtimeMeshes[i];
 
+            // Cached pose geometry is immutable after this point, so it is
+            // uploaded as static data instead of re-specifying a dynamic hint.
             meshes[i] = new Mesh(
                 runtime.DeformedVertices.ToArray(),
                 runtime.Source.Indices,
-                dynamicVertices: true);
+                dynamicVertices: false);
 
             placement[i] = runtime.MeshToModelMatrix;
             runtime.SharedCrowdMesh = meshes[i];
@@ -386,7 +392,7 @@ public sealed partial class SkeletalMeshRenderer
             }
         }
 
-        return new Mesh(vertices, indices, dynamicVertices: true);
+        return new Mesh(vertices, indices, dynamicVertices: false);
     }
 
     /// <summary>

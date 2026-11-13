@@ -8,13 +8,34 @@ public sealed class NavigationAgent3D : Component
 {
     public bool ShowDebug {get;set;}
     private ByteEngine.Core.Graphics.ThreeD.Mesh? _debugMesh;
-    public Guid RegionObject { get; set; }
+    private Guid _regionObject;
+    /// <summary>Region this agent paths on. Empty resolves the first enabled region in the scene.</summary>
+    public Guid RegionObject
+    {
+        get => _regionObject;
+        set
+        {
+            if (_regionObject == value) return;
+            _regionObject = value;
+            // The cached region belongs to the previous selection.
+            _region = null;
+            _regionOwner = null;
+            _regionRetry = 0f;
+            _version = -1;
+        }
+    }
     public Vector3 Destination { get; set; }
     public bool Moving { get; set; }
     public float Speed { get; set; } = 3;
     public float RepathInterval { get; set; } = .5f;
     public float ArrivalDistance { get; set; } = .15f;
     public int MaximumVisited { get; set; } = 10000;
+    /// <summary>
+    /// Spread repath queries over time instead of letting every agent that was
+    /// spawned in the same wave replan on the same frame. A busy crowd then
+    /// costs one or two A* queries per frame instead of one per agent.
+    /// </summary>
+    public bool StaggerRepaths { get; set; } = true;
     public NavigationAgentStatus Status { get; private set; }
     public IReadOnlyList<Vector3> Path => _path;
     public int PathQueries { get; private set; }
@@ -22,6 +43,9 @@ public sealed class NavigationAgent3D : Component
     private int _index, _version = -1;
     private double _timer;
     private Vector3 _lastDestination;
+    private NavigationRegion3D? _region;
+    private GameObject? _regionOwner;
+    private float _regionRetry;
     public void SetDestination(Vector3 destination) { Destination=destination;Moving=true;_timer=0;_path=Array.Empty<Vector3>();_debugMesh?.Dispose();_debugMesh=null; }
     public void Stop() { Moving=false;Status=NavigationAgentStatus.Idle; }
     protected override void OnUpdate() { if(GameObject.Scene is not {FixedSimulation:true}) Tick((float)Time.DeltaTime); }
@@ -50,7 +74,8 @@ public sealed class NavigationAgent3D : Component
         if(!float.IsFinite(delta)||delta<=0)return;
         if(GameObject.GetComponent<ByteEngine.Core.Physics.Rigidbody3D>() is {BodyType:ByteEngine.Core.Physics.RigidbodyBodyType3D.Dynamic}) return;
         var scene=GameObject.Scene;
-        var region=RegionObject==Guid.Empty ? scene?.GameObjects.Select(o=>o.GetComponent<NavigationRegion3D>()).FirstOrDefault(r=>r is {Enabled:true}) : scene?.FindGameObject(RegionObject)?.GetComponent<NavigationRegion3D>();
+        if(scene==null){Status=NavigationAgentStatus.MissingRegion;return;}
+        var region=ResolveRegion(scene,delta);
         if(region?.Ready!=true){Status=NavigationAgentStatus.MissingRegion;return;}
         _timer-=delta;
         if(_timer<=0 && (_path.Count==0 || Destination!=_lastDestination || _version!=region.BakeVersion))
@@ -58,7 +83,10 @@ public sealed class NavigationAgent3D : Component
             _path=region.FindPath(Transform.WorldPosition,Destination,Math.Clamp(MaximumVisited,1,1_000_000));
             _debugMesh?.Dispose();_debugMesh=null;
             _lastDestination=Destination;_version=region.BakeVersion;_index=0;PathQueries++;
-            _timer=Math.Max(.05f,float.IsFinite(RepathInterval)?RepathInterval:.5f);
+            float interval=Math.Max(.05f,float.IsFinite(RepathInterval)?RepathInterval:.5f);
+            // Jitter the next replan so a crowd never synchronizes again after
+            // its first query. The first query stays immediate.
+            _timer=StaggerRepaths?interval*(.85+.3*Random.Shared.NextSingle()):interval;
             if(_path.Count==0){Status=NavigationAgentStatus.Unreachable;return;}
         }
         if(_path.Count==0)return;
@@ -73,5 +101,51 @@ public sealed class NavigationAgent3D : Component
             if(remaining<=0)break;
         }
         if(_index>=_path.Count){Status=NavigationAgentStatus.Arrived;Moving=false;}
+    }
+    /// <summary>
+    /// Region resolution used to run a LINQ projection and a component scan per
+    /// agent per frame. It is now cached on the agent and only retried when the
+    /// selection changes or a lookup previously failed.
+    /// </summary>
+    private NavigationRegion3D? ResolveRegion(ByteEngine.Core.Scene.Scene scene,float delta)
+    {
+        if (_region is { } cached && _regionOwner is { } owner && cached.Enabled && owner.ActiveInHierarchy &&
+            ReferenceEquals(owner.Scene, scene) &&
+            ReferenceEquals(owner.GetComponent<NavigationRegion3D>(), cached))
+        {
+            return cached;
+        }
+        if(_regionRetry>0f){_regionRetry-=delta;return null;}
+        NavigationRegion3D? found=null;
+        if(_regionObject!=Guid.Empty)
+        {
+            found=scene.FindGameObject(_regionObject)?.GetComponent<NavigationRegion3D>();
+        }
+        else
+        {
+            var objects=scene.GameObjects;
+            for(int i=0;i<objects.Count;i++)
+            {
+                if(!objects[i].ActiveInHierarchy)continue;
+                if(objects[i].GetComponent<NavigationRegion3D>() is {Enabled:true} candidate){found=candidate;break;}
+            }
+        }
+        if (found is not { Enabled: true } || !found.GameObject.ActiveInHierarchy)
+        {
+            found = null;
+        }
+        if (!ReferenceEquals(_region, found))
+        {
+            _version = -1;
+            _timer = 0;
+            _path = Array.Empty<Vector3>();
+            _index = 0;
+            _debugMesh?.Dispose();
+            _debugMesh = null;
+        }
+        _region=found;
+        _regionOwner = found?.GameObject;
+        if(found==null)_regionRetry=.5f;
+        return found;
     }
 }

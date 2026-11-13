@@ -1,57 +1,51 @@
 # Active context
 
-Updated: 2026-11-13 (Memory Bank initialized)
+Updated: 2026-11-13 (Cline update review and regression validation)
 
-## Current focus
+## Maintained source and branch boundary
 
-Crowd performance. Navigation agents, physics broad phase and crowd animation
-caching are being fixed together because a spawned enemy crowd exercises all
-three at once. The work is **uncommitted** on `main` at `2137bf2`.
+Source routing selects the main checkout. Review began at main d91cd2a and
+secondary branch codex/event-sheet-ux-and-engine-updates at e128b7f.
+Branches remain separate; no merge or game export is authorized by this task.
+Main has navigation/physics changes and the editor/registry refactor. The secondary
+branch has multiplayer, native GPU skinning, Hazard Pay and performance tooling.
 
-## Uncommitted changes
+## Reviewed changes
 
-| File | Change |
-| --- | --- |
-| `Engine/ByteEngine.Core/Navigation/NavigationAgent3D.cs` | Region lookup cached and re-resolved only on `RegionObject` change or retry; repath interval jittered (`StaggerRepaths`, ±15%) |
-| `Engine/ByteEngine.Core/Navigation/NavigationGrid.cs` | A* scratch retained per grid, cleared per query |
-| `Engine/ByteEngine.Core/Navigation/NavigationMesh.cs` | Same retained-scratch treatment for the triangle navmesh |
-| `Engine/ByteEngine.Core/Graphics/3D/SkeletalMeshRenderer.Crowd.cs` | Crowd pose key wrapped to the clip's quantized frame count; cached pose meshes uploaded as static data |
-| `Engine/ByteEngine.Core/Physics/PhysicsWorld3D.cs` | Broad-phase candidate generation moved to `PrepareContacts`, called once per substep |
-| `Tests/ByteEngine.Tests/EngineAllocationRegressionTests.cs` | `CheckNavigationAllocation` budget: 4096 bytes/query |
-| `Tests/ByteEngine.Tests/EngineArchitectureBenchmarks.cs` | New navigation/crowd scenarios |
+- Navigation region caching now rejects inactive/disabled/detached regions and
+  resets paths for replacement regions. A* scratch is retained; queries on one
+  grid/mesh must remain serialized. Jitter does not defer first queries.
+- Physics candidate reuse checks world transforms; corrections/joints force a
+  refresh. Unconditional once-per-substep reuse was unsafe.
+- Restored configured fixed delta before component callbacks; custom 20 ms test.
+- Removed added crowd frame modulo; playback already wraps looping clips.
+  Immutable cached pose geometry uploads remain.
+- Secondary adaptive occlusion keeps its prior opt-in default. Packed HDR resolve
+  is opt-in via EnablePackedHdrResolve until real performance/image gates pass.
+- Measurement runner now executes Reps per mode and handles three or more modes.
+- Review details: Docs/Cline-Update-Review-2026-11-13.md.
 
-Untracked:
+## Evidence
 
-- `Docs/EnginePerformance/crowd-animation-pathfinding.md` — diagnosis, before/after
-  measurements and the remaining ceilings. This is the reference for the work.
-- `PublicPvpLobby/`, `TestPublicPvpLobby.mjs` — unrelated to the crowd work;
-  intent not recorded yet.
+Main Release build and named engine, physics, navmesh, browser CPU/editor and
+full regression suites run against current sources; exact commands/results are
+in the review and session log. Raw output stays under .artifacts/cline-review-20261113.
+Secondary Release build, AI queries, post-context transitions, render registry,
+300-bone native GPU skinning, network session/lobby and native WebRTC checks pass.
+Harness dry-run counts pass: 8 per arm/16 total and 4 per mode/12 total.
+There is no real repeated FPS A/B acceptance result, overseas network validation,
+manual game visual review or browser runtime publication in this task.
 
-## Verified state
+## Next steps and limitations
 
-The uncommitted edits have **not** been rebuilt in the session that wrote this
-memory. Before trusting them, run:
-
-```powershell
-dotnet build ByteEngine.sln
-dotnet run --project Tests/ByteEngine.Tests/ByteEngine.Tests.csproj
-dotnet run -c Release --project Tests/ByteEngine.Tests -- --engine-performance .artifacts/engine-performance.json
-```
-
-## Next step
-
-1. Build and run the suite; confirm `CheckNavigationAllocation` and the new
-   benchmark scenarios pass.
-2. Commit the crowd work together with `Docs/EnginePerformance/crowd-animation-pathfinding.md`
-   and the `MemoryBank/` updates.
-3. Then continue with the ceilings named in that doc, in this order: vertex-shader
-   bone palette (removes CPU skinning and per-frame upload), wider crowd
-   eligibility, per-renderer root motion/socket evaluation, batched spawning.
-
-## Open questions
-
-- Is `PublicPvpLobby/` supposed to be committed, and does it belong under
-  `Plugins/`? Nothing in `AGENTS.md` mentions it.
-- `README.md` still advertises "ByteEngine v0.7" while `ByteEngineVersion` is
-  `0.10.0`. Decide whether to make the README version-free or update it.
-- Shadow and skinned-LOD work listed as separate in `README.md` has no owner task.
+- Choose a tested branch integration plan before assuming main contains multiplayer
+  or native GPU skinning. Push both branches separately for backup.
+- Run asset-ready repeated A/B sweeps with build identity, quality and actual raster
+  dimensions. Earlier single-run FPS conclusions remain inside observed drift.
+- Verify stress scene loading before running the new harness. Keep packed HDR off
+  until format/fallback, image parity and performance gates pass.
+- Validate signaling/ICE on real overseas networks; TURN may still be needed.
+- ShareCrowdPoses must be enabled for phase buckets to affect an actor. No gameplay
+  plugin source was changed by this review.
+- PublicPvpLobby is a separate repository; it and TestPublicPvpLobby.mjs stay outside
+  engine commits, as in earlier pushes.
