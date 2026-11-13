@@ -39,6 +39,22 @@
     <ByteEngineOpenALSoftPath>$(NuGetPackageRoot)silk.net.openal.soft.native\1.23.1\runtimes\win-x64\native\soft_oal.dll</ByteEngineOpenALSoftPath>
   </PropertyGroup>
 
+  <!--
+    A framework-dependent build must never keep a private .NET runtime next to
+    it. When coreclr.dll/hostfxr.dll are left behind by an earlier
+    self-contained publish, the apphost treats this folder as the .NET root,
+    finds no shared/ frameworks inside it, and shows the "install .NET" prompt
+    even though the required runtime is installed machine-wide.
+  -->
+  <Target Name="RemoveStraySelfContainedRuntime"
+          AfterTargets="Build"
+          Condition="'$(SelfContained)' != 'true'">
+    <ItemGroup>
+      <ByteEngineStrayRuntime Include="$(TargetDir)coreclr.dll;$(TargetDir)clrjit.dll;$(TargetDir)hostfxr.dll;$(TargetDir)hostpolicy.dll;$(TargetDir)System.Private.CoreLib.dll" />
+    </ItemGroup>
+    <Delete Files="@(ByteEngineStrayRuntime)" />
+  </Target>
+
   <Target Name="CopyByteEngineOpenALSoftAfterBuild"
           AfterTargets="Build"
           Condition="'$(RuntimeIdentifier)' == 'win-x64' and Exists('$(ByteEngineOpenALSoftPath)')">
