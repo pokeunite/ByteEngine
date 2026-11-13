@@ -8,6 +8,33 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        /*
+         * Packaging identity probe.
+         *
+         * Tools/PublishPlayer.ps1 and Rebuild-ByteEngine-And-Refresh-Dist.ps1
+         * launch the published player with --write-runtime-identity <path> to
+         * prove the bundled and loose builds ship the same ByteEngine.Core.
+         * GamePackageExporter validates that same MVID before running an
+         * exported game, so the probe must answer before any window, project
+         * or native dependency is required.
+         */
+        int identityIndex = Array.FindIndex(
+            args,
+            argument => string.Equals(argument, "--write-runtime-identity", StringComparison.OrdinalIgnoreCase));
+        if (identityIndex >= 0 && identityIndex + 1 < args.Length)
+        {
+            string identityPath = Path.GetFullPath(args[identityIndex + 1].Trim('"'));
+            string? identityDirectory = Path.GetDirectoryName(identityPath);
+            if (!string.IsNullOrWhiteSpace(identityDirectory))
+            {
+                Directory.CreateDirectory(identityDirectory);
+            }
+            File.WriteAllText(
+                identityPath,
+                typeof(ByteEngine.Core.ByteEngineApplication).Assembly.ManifestModule.ModuleVersionId.ToString());
+            return 0;
+        }
+
         string logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ByteEngine", "Games", "Logs");
         try { Directory.CreateDirectory(logDirectory); }
