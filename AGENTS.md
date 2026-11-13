@@ -1,5 +1,18 @@
 # Workspace instructions
 
+## Agent memory
+
+Durable cross-session memory lives in `MemoryBank/`. At the start of a task read
+`MemoryBank/activeContext.md` and `MemoryBank/progress.md`; read
+`MemoryBank/systemPatterns.md`, `MemoryBank/techContext.md` and
+`MemoryBank/decisions.md` before changing the areas they describe. Before
+finishing a task that changed files or decisions, refresh `activeContext.md` and
+prepend a dated entry to `sessionLog.md` (and `progress.md` or `decisions.md`
+when applicable). The protocol and trigger phrases ("update memory bank",
+"follow your custom instructions", "catch up") are in
+`.clinerules/memory-bank.md`. Memory files are tracked by git and belong in the
+same commit as the change they describe.
+
 ## User project location
 
 Create new game projects under `C:/Users/codex/Documents`, in a separate named folder for each project. Do not create game projects inside the engine repository. Dune Company is at `C:/Users/codex/Documents/DuneCompany/DuneCompany.byteproject`.
