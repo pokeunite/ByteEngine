@@ -24,6 +24,13 @@ public sealed partial class SkeletalMeshRenderer
  }
  CrowdDraw[]? crowdDraws;Mesh? crowdShadow;
  public bool BatchCrowdSubmeshes{get;set;}=true;
+ /// <summary>Collapses crowd pose keys onto at most this many shared phases. 0 or 1 disables it.
+ /// Actors inside one bucket animate in lockstep, so this is opt-in.</summary>
+ public int CrowdPosePhaseBuckets{get;set;}
+ /// <summary>Process-wide bucket count for benchmarks and content that cannot reach every renderer.</summary>
+ public static int GlobalCrowdPosePhaseBuckets{get;set;}
+ static double crowdClockSeconds;
+ internal static void AdvanceCrowdClock(double seconds){if(double.IsFinite(seconds)&&seconds>0)crowdClockSeconds+=seconds;}
  CrowdPool? crowdPool;ModelAsset? crowdModel;
  bool CrowdEligible=>ShareCrowdPoses&&_hiddenMeshKeys.Count==0&&_model!=null&&_currentAnimation!=null&&!HasAdvancedPose&&_previousAnimation==null&&!_lightRagdollActive&&_recoveryDuration<=0&&_hitReaction<=.001f&&_physicalBoneDeformations.Count==0;
  bool TryCrowdPose(out (ImportedAnimation Clip,int Frame,int Rate) key,out float sampleTime)
@@ -31,7 +38,13 @@ public sealed partial class SkeletalMeshRenderer
   crowdShadow=null;crowdDraws=null;key=default;sampleTime=_currentTime;foreach(var mesh in _runtimeMeshes)mesh.SharedCrowdMesh=null;
   if(!CrowdEligible)return false;
   if(crowdPool==null){crowdModel=_model;crowdPool=CrowdPools.GetValue(_model!,_=>new());crowdPool.Users++;}
-  int rate=Math.Clamp(CrowdPoseFramesPerSecond,8,30);int frame=(int)MathF.Floor(_currentTime*rate);key=(_currentAnimation!,frame,rate);sampleTime=frame/(float)rate;
+  int rate=Math.Clamp(CrowdPoseFramesPerSecond,8,30);float clock=_currentTime;
+  // A shared clock plus a per-renderer phase bucket collapses many actors onto a few cached poses.
+  // Identical cached pose meshes then batch into instanced draws, so this is what turns a crowd of
+  // individually animated characters into a handful of draw calls.
+  int buckets=CrowdPosePhaseBuckets>1?CrowdPosePhaseBuckets:GlobalCrowdPosePhaseBuckets;
+  if(Loop&&buckets>1&&_currentAnimation!.Duration>.001f){float duration=_currentAnimation.Duration;int bucket=(int)((uint)GetHashCode()%(uint)buckets);double phase=(crowdClockSeconds+bucket*(duration/(double)buckets))%duration;if(phase<0)phase+=duration;clock=(float)phase;}
+  int frame=(int)MathF.Floor(clock*rate);key=(_currentAnimation!,frame,rate);sampleTime=frame/(float)rate;
   if(!crowdPool.Poses.TryGetValue(key,out var pose)){crowdPool.Misses++;return false;}crowdPool.Hits++;
   crowdShadow=pose.Shadow;crowdDraws=pose.Draws;_currentPoseGlobals=pose.Globals;_currentRootMotionCorrection=pose.Root;
   for(int i=0;i<_runtimeMeshes.Count;i++){_runtimeMeshes[i].SharedCrowdMesh=pose.Meshes[i];_runtimeMeshes[i].MeshToModelMatrix=pose.Placement[i];}

@@ -23,12 +23,17 @@ public sealed class WebRtcNetworkLink : INetworkLink
     {
         if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("This native networking build supports Windows; use the browser runtime on other platforms");
         if(Interlocked.Increment(ref activeLinks)==1)RtcTools.Preload();
-        peer = new RtcPeerConnection(new RtcPeerConfiguration { IceServers=iceServers ?? [], MaxMessageSize=65536 });
-        peer.OnLocalDescriptionSafe += (_,d)=>Enqueue(()=>Signal?.Invoke(new(d.Type.ToString().ToLowerInvariant(),d.Sdp)));
-        peer.OnCandidateSafe += (_,c)=>Enqueue(()=>Signal?.Invoke(new("candidate",c.Content,c.Mid)));
+        string[] servers = iceServers ?? [];
+        NetworkDiagnostics.Record("WebRTC link created; ICE servers: " + (servers.Length == 0 ? "none (host candidates only)" : string.Join(", ", servers.Select(MaskServer))));
+        peer = new RtcPeerConnection(new RtcPeerConfiguration { IceServers=servers, MaxMessageSize=65536 });
+        peer.OnLocalDescriptionSafe += (_,d)=>{ NetworkDiagnostics.Record("Local "+d.Type+" ("+CountCandidates(d.Sdp)+" candidates inline)"); Enqueue(()=>Signal?.Invoke(new(d.Type.ToString().ToLowerInvariant(),d.Sdp))); };
+        peer.OnCandidateSafe += (_,c)=>{ NetworkDiagnostics.Record("Candidate "+CandidateType(c.Content)); Enqueue(()=>Signal?.Invoke(new("candidate",c.Content,c.Mid))); };
         peer.OnDataChannel += (_,c)=>Bind(c);
-        peer.OnConnectionStateChange += (_,s)=> { if(s.ToString().Contains("FAILED",StringComparison.OrdinalIgnoreCase) || s.ToString().Contains("CLOSED",StringComparison.OrdinalIgnoreCase)) Enqueue(()=>End(s.ToString()??"connection closed")); };
+        peer.OnConnectionStateChange += (_,s)=> { NetworkDiagnostics.Record("Connection state "+s); if(s.ToString().Contains("FAILED",StringComparison.OrdinalIgnoreCase) || s.ToString().Contains("CLOSED",StringComparison.OrdinalIgnoreCase)) Enqueue(()=>End(s.ToString()??"connection closed")); };
     }
+    static string MaskServer(string server) { int at=server.IndexOf('@'); if(at<0) return server; int scheme=server.IndexOf(':')+1; return scheme<=0||scheme>at ? "***@"+server[(at+1)..] : server[..scheme]+"***@"+server[(at+1)..]; }
+    static string CandidateType(string content) { int index=content.IndexOf(" typ ",StringComparison.Ordinal); if(index<0) return "unknown"; int end=content.IndexOf(' ',index+5); return end<0 ? content[(index+5)..] : content[(index+5)..end]; }
+    static int CountCandidates(string? sdp) { if(string.IsNullOrEmpty(sdp)) return 0; int count=0,index=0; while((index=sdp.IndexOf("a=candidate:",index,StringComparison.Ordinal))>=0){count++;index+=12;} return count; }
     void Enqueue(Action action) { if(disposed)return; if(Interlocked.Increment(ref queued)>256){Interlocked.Decrement(ref queued);Interlocked.Exchange(ref overflow,1);return;} incoming.Enqueue(action); }
     void End(string reason) { if(notified)return; notified=true; Disconnected?.Invoke(reason); }
     void Bind(IRtcDataChannel channel)

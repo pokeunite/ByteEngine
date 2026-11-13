@@ -17,7 +17,7 @@ public static class NetworkRuntime
     public static void CloseConnection(int id){if(links.Remove(id,out var link))Session?.CloseLink(link);}
     public static void Start(bool host, NetworkCompatibility compatibility) { Stop(); Session = new(host, compatibility);Session.LinkClosed+=link=>{foreach(var id in links.Where(p=>ReferenceEquals(p.Value,link)).Select(p=>p.Key).ToArray())links.Remove(id);}; }
     public static int OpenConnection(bool offerer) { if (Session == null) throw new InvalidOperationException("Start a session first"); var link = CreateLink?.Invoke() ?? throw new InvalidOperationException("This host has no network transport"); int id = ++nextLink; links.Add(id, link); link.Signal += s => Signal?.Invoke(id, s); try{Session.AddLink(link,offerer);}catch{links.Remove(id);link.Dispose();throw;}return id; }
-    public static void Accept(int connection, NetworkSignal signal) { if (!links.TryGetValue(connection, out var link)) throw new ArgumentException("Unknown connection"); link.Accept(signal); }
+    public static void Accept(int connection, NetworkSignal signal) { if (!links.TryGetValue(connection, out var link)) throw new ArgumentException("Unknown connection"); NetworkDiagnostics.Record("Signal in: " + signal.Kind); Session?.NoteSignal(link); link.Accept(signal); }
     public static void Update(double seconds){try{Session?.Update(seconds);}catch(Exception e){NetworkDiagnostics.Record(e.ToString(),true);Session?.Dispose();}}
     public static void Stop() { Session?.Dispose(); Session = null; links.Clear(); }
 }

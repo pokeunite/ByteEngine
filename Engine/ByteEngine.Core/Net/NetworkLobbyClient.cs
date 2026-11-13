@@ -24,7 +24,9 @@ public sealed class NetworkLobbyClient : IDisposable
     private Action<string>? completion;
     private Action? pendingOperation;
     private bool refreshPending, operationPending, host, disposed;
-    private double timer;
+    private Task<string>? pollRequest, signalRequest;
+    private Action<string>? pollCompletion;
+    private double timer, pollInterval = .1;
     private string room = "";
 
     public IReadOnlyList<LobbyRoom> Rooms { get; private set; } = [];
@@ -120,6 +122,8 @@ public sealed class NetworkLobbyClient : IDisposable
         signals.Enqueue((destination, signal));
     }
 
+    private void Backoff() => pollInterval = Math.Min(Math.Max(pollInterval * 2, .25), 4);
+
     public void Poll(double delta)
     {
         if (disposed) return;
@@ -139,6 +143,21 @@ public sealed class NetworkLobbyClient : IDisposable
                 NetworkDiagnostics.Record("Lobby: " + error.Message, true);
             }
         }
+        if (signalRequest is { IsCompleted: true })
+        {
+            var sent = signalRequest;
+            signalRequest = null;
+            try { sent.GetAwaiter().GetResult(); }
+            catch (Exception error) { NetworkDiagnostics.Record("Signal send: " + error.Message); Backoff(); }
+        }
+        if (pollRequest is { IsCompleted: true })
+        {
+            var polled = pollRequest;
+            var callback = pollCompletion;
+            pollRequest = null; pollCompletion = null;
+            try { callback?.Invoke(polled.GetAwaiter().GetResult()); pollInterval = .1; }
+            catch (Exception error) { Status = error.Message; NetworkDiagnostics.Record("Poll: " + error.Message); Backoff(); }
+        }
         if (request != null) return;
         if (pendingOperation != null)
         {
@@ -157,14 +176,17 @@ public sealed class NetworkLobbyClient : IDisposable
             });
             return;
         }
-        if (room.Length == 0 || timer < .1) return;
-        timer = 0;
-        if (signals.TryDequeue(out var signal))
+        if (room.Length == 0) return;
+        // Independent slots: a candidate upload must never block the poll that delivers the answer.
+        if (signalRequest == null && signals.TryDequeue(out var signal))
         {
-            Call("/signal", new { token, to = signal.Destination, signal = signal.Signal }, _ => { });
-            return;
+            NetworkDiagnostics.Record("Signal out: " + signal.Signal.Kind);
+            signalRequest = Fetch("/signal", new { token, to = signal.Destination, signal = signal.Signal });
         }
-        Call("/poll?token=" + token, null, ProcessMessages);
+        if (pollRequest != null || timer < pollInterval) return;
+        timer = 0;
+        pollRequest = Fetch("/poll?token=" + token, null);
+        pollCompletion = ProcessMessages;
     }
 
     private void ProcessMessages(string text)
@@ -176,6 +198,7 @@ public sealed class NetworkLobbyClient : IDisposable
             string from = message.GetProperty("from").GetString()!;
             if (kind == "join" && host && !connections.ContainsKey(from))
             {
+                NetworkDiagnostics.Record("Peer joined: " + from[..6]);
                 int connection = NetworkRuntime.OpenConnection(true);
                 connections[from] = connection;
                 destinations[connection] = from;
@@ -184,6 +207,7 @@ public sealed class NetworkLobbyClient : IDisposable
                 NetworkRuntime.Accept(connection, message.GetProperty("signal").Deserialize<NetworkSignal>());
             else if (kind == "left" && connections.Remove(from, out int closed))
             {
+                NetworkDiagnostics.Record("Peer left: " + from[..6]);
                 NetworkRuntime.CloseConnection(closed);
                 destinations.Remove(closed);
                 if (!host) room = "";
@@ -205,7 +229,7 @@ public sealed class NetworkLobbyClient : IDisposable
     {
         try
         {
-            if (request != null) { try { await request; } catch { } }
+            foreach (var pending in new[] { request, pollRequest, signalRequest }) if (pending != null) { try { await pending; } catch { } }
             using var response = await http.PostAsync(address + "/leave", new StringContent(JsonSerializer.Serialize(new { token }), Encoding.UTF8, "application/json"));
         }
         catch (Exception error) { NetworkDiagnostics.Record("Lobby leave: " + error.Message); }

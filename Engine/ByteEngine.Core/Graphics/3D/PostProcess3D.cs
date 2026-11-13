@@ -15,6 +15,8 @@ namespace ByteEngine.Core.Graphics.ThreeD;
 public sealed class PostProcess3D
     : IDisposable
 {
+    // Experimental until matched-workload performance and image parity gates pass.
+    public static bool EnablePackedHdrResolve { get; set; }
     private Shader? _shader;
     private Shader? _resolvedAaShader;
 
@@ -30,7 +32,11 @@ public sealed class PostProcess3D
         if (_resolvedTexture != 0 && _resolvedWidth == width && _resolvedHeight == height) return;
         if (_resolvedTexture == 0) { _resolvedTexture = GL.GenTexture(); _resolvedFramebuffer = GL.GenFramebuffer(); }
         GL.BindTexture(TextureTarget.Texture2D, _resolvedTexture);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba16f, width, height, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        // R11G11B10F stores HDR at 4 B/px instead of 8, which halves the 13-tap AA read bandwidth.
+        // Fall back to RGBA16F where the driver rejects the renderable/filterable format.
+        GL.TexImage2D(TextureTarget.Texture2D, 0, EnablePackedHdrResolve ? PixelInternalFormat.R11fG11fB10f : PixelInternalFormat.Rgba16f, width, height, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
+        if (GL.GetError() != ErrorCode.NoError)
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba16f, width, height, 0, PixelFormat.Rgba, PixelType.Float, IntPtr.Zero);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);

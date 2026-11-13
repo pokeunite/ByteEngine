@@ -402,6 +402,7 @@ public sealed partial class Scene
              * destruction is queued until the complete gameplay+physics step
              * has finished.
              */
+            long updateAllocatedEnd = GC.GetAllocatedBytesForCurrentThread();
             long physicsStart = System.Diagnostics.Stopwatch.GetTimestamp();
             int candidates = 0;
             int ticks;
@@ -424,6 +425,7 @@ public sealed partial class Scene
                 ticks = 1;
                 candidates = Physics.LastCandidateCount;
             }
+            long physicsAllocatedEnd = GC.GetAllocatedBytesForCurrentThread();
             long lateStart = System.Diagnostics.Stopwatch.GetTimestamp();
 
             /*
@@ -443,11 +445,12 @@ public sealed partial class Scene
             }
 
             SkeletalAttachmentService.UpdateScene(this);
+            ByteEngine.Core.Graphics.ThreeD.SkeletalMeshRenderer.AdvanceCrowdClock(Time.DeltaTime);
             long end = System.Diagnostics.Stopwatch.GetTimestamp();
             double milliseconds = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
             LastFrameMetrics = new((physicsStart - updateStart) * milliseconds,
                 (lateStart - physicsStart) * milliseconds, (end - lateStart) * milliseconds,
-                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, ticks, candidates) {AnimationMs=AnimationMilliseconds,AnimatedComponents=AnimatedComponentCount};
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, ticks, candidates) {AnimationMs=AnimationMilliseconds,AnimatedComponents=AnimatedComponentCount,UpdateAllocatedBytes=updateAllocatedEnd-allocatedBefore,PhysicsAllocatedBytes=physicsAllocatedEnd-updateAllocatedEnd,LateAllocatedBytes=GC.GetAllocatedBytesForCurrentThread()-physicsAllocatedEnd};
         }
         finally
         {

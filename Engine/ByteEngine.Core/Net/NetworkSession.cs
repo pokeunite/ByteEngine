@@ -83,6 +83,15 @@ public sealed class NetworkSession : IDisposable
         link.Disconnected += reason => Remove(remote, IsHost ? reason : "host left");
         try{link.Start(offerer);}catch{links.Remove(remote);link.Dispose();throw;}
     }
+
+    /// <summary>Signaling progress proves the peer is alive, so the handshake window restarts on every signal.</summary>
+    public void NoteSignal(INetworkLink link)
+    {
+        if (disposed) return;
+        var remote = links.FirstOrDefault(r => ReferenceEquals(r.Link, link));
+        if (remote == null) return;
+        remote.Silence = 0; remote.Age = Math.Min(remote.Age, 0);
+    }
     public void Update(double elapsed)
     {
         Owner(); if (!IsActive) return;
@@ -93,7 +102,8 @@ public sealed class NetworkSession : IDisposable
             r.Link.Poll(); if (!links.Contains(r)) continue; r.Age += elapsed; r.Silence += elapsed;r.InputAge+=elapsed;r.Budget=Math.Min(3,r.Budget+elapsed/FixedDelta); r.RequestWindow += elapsed; if (r.RequestWindow >= 1) { r.RequestWindow = 0; r.RequestCount = 0; }
             if (!r.Accepted && !IsHost && r.Link.IsConnected && r.Age >= 0) { byte[] hello = new byte[100]; hello[0] = 2; hello[1] = 1; identity.CopyTo(hello, 4); if (Send(r, NetworkChannel.Events, hello)) r.Age = -1e6; }
             if (r.Accepted) { r.PingAge += elapsed; if (r.PingAge >= 1) { r.PingAge = 0; ping.Clear(); ping[0] = 10; r.PingStamp = System.Diagnostics.Stopwatch.GetTimestamp(); BinaryPrimitives.WriteInt64LittleEndian(ping[8..], r.PingStamp); Send(r, NetworkChannel.State, ping); } }
-            if ((!r.Accepted && r.Silence > 15) || (r.Accepted && r.Silence > 10)) Remove(r, "connection timed out");
+            // Relayed signaling plus intercontinental ICE routinely needs more than fifteen seconds.
+            if ((!r.Accepted && r.Silence > 60) || (r.Accepted && r.Silence > 10)) Remove(r, "connection timed out");
         }
         PredictionErrorOffset*=MathF.Exp(-12*(float)Math.Min(elapsed,.25));
         accumulator += Math.Min(elapsed, .25); int steps = 0;

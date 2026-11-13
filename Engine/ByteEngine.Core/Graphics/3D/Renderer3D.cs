@@ -269,7 +269,7 @@ public sealed class Renderer3D : IDisposable
         casters.RemoveAll(submission => !shadowFrustum.Intersects(submission.WorldBounds));
 
         var cacheKey = new ShadowDepthCache.Key(lightViewProjection, Vector3.Zero, 0,
-            light.ShadowResolution, GraphicsContextScope.CurrentContextId);
+            ShadowResolution(light.ShadowResolution), GraphicsContextScope.CurrentContextId);
         // The cache already compares the exact light projection and every caster.
         // Camera motion alone cannot invalidate identical depth-map inputs.
         bool useCache = EnableShadowCaching;
@@ -337,7 +337,7 @@ public sealed class Renderer3D : IDisposable
     {
         int previousFramebuffer =
             target.Begin(
-                light.ShadowResolution);
+                ShadowResolution(light.ShadowResolution));
 
         int drawCalls =
             0;
@@ -504,7 +504,7 @@ public sealed class Renderer3D : IDisposable
 
             var cache = _pointDepthCaches[shadowSlot];
             var cacheKey = new ShadowDepthCache.Key(Matrix4x4.Identity, light.Position, light.Range,
-                light.ShadowResolution, GraphicsContextScope.CurrentContextId);
+                ShadowResolution(light.ShadowResolution), GraphicsContextScope.CurrentContextId);
             if (EnableShadowCaching && cache.Matches(cacheKey, casters))
             {
                 var map = _pointShadowMaps[shadowSlot]!;
@@ -542,7 +542,7 @@ public sealed class Renderer3D : IDisposable
 
                 int previousFramebuffer =
                     shadowMap.BeginFace(
-                        light.ShadowResolution,
+                        ShadowResolution(light.ShadowResolution),
                         faceIndex);
 
                 try
@@ -654,6 +654,9 @@ public sealed class Renderer3D : IDisposable
     }
 
     public bool EnableStateBatching{get;set;}=true;
+    /// <summary>Benchmark/diagnostic cap on shadow-map resolution; 0 disables the cap.</summary>
+    public static int ShadowResolutionCap{get;set;}
+    static int ShadowResolution(int requested)=>ShadowResolutionCap>0&&requested>ShadowResolutionCap?ShadowResolutionCap:requested;
     internal bool DiagnosticFlatFragments { get; set; }
     /// <summary>Use a restricted shader for solid lit materials without optional surface features.</summary>
     public bool EnableSolidLitVariants { get; set; } = true;
@@ -1545,7 +1548,7 @@ public sealed class Renderer3D : IDisposable
                 2.0f
             ) /
             Math.Max(
-                light.ShadowResolution,
+                ShadowResolution(light.ShadowResolution),
                 1);
 
         if (worldUnitsPerTexel >
