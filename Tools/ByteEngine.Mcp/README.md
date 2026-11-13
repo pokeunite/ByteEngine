@@ -40,6 +40,30 @@ Run from source: `dotnet run --project Tools/ByteEngine.Mcp/ByteEngine.Mcp.cspro
 Set `BYTEENGINE_ROOT` only when the server binary is outside the checkout; otherwise
 it walks up to the folder containing `ByteEngine.sln`.
 
+## Shell client
+
+`Tools/ByteEngineMcpClient.ps1` drives the published server from any shell or agent
+that cannot host MCP itself. It performs the handshake, keeps one project session per
+invocation and prints each tool's JSON result.
+
+```powershell
+./Tools/ByteEngineMcpClient.ps1 -ListTools
+./Tools/ByteEngineMcpClient.ps1 -Project C:/Users/codex/Documents/MyGame/MyGame.byteproject -Request be_project/info
+./Tools/ByteEngineMcpClient.ps1 -Project C:/Users/codex/Documents/MyGame/MyGame.byteproject `
+    -Request '{"tool":"be_scene","op":"inspect","args":{"scene":"Scenes/Main.bytescene"}}' -Json
+./Tools/ByteEngineMcpClient.ps1 -Project C:/Users/codex/Documents/MyGame/MyGame.byteproject -RequestFile calls.json
+```
+
+- `-Request` accepts a `tool/op` string, a JSON request object, or a JSON array of either.
+- `-RequestFile` takes a JSON array or newline-delimited requests; blank lines and `#` lines are ignored.
+- `-Json` emits one object (`ok`, `protocol`, `server`, `version`, `results[]`) for parsing.
+- Exit code is 0 when every call reports `ok`, 1 when a tool fails (the failure code is printed, for example `CONFLICT` or `PROJECT_NOT_OPEN`), and 2 for startup or protocol failures.
+- Compact handles (`a1`, `b2`) and `expected_rev` tokens only exist inside one invocation, so batch related calls together.
+- `powershell.exe -File` strips quotes from arguments; pass JSON through `-RequestFile`, or call the script directly from a PowerShell session.
+- Object edits accept GUIDs, `root`, or a `$alias` created earlier in the same batch, not object names.
+- Pass `-Exe` to use another server binary and `-Trace` to dump JSON-RPC traffic to stderr.
+
+
 ## First project
 
 1. `be_project(op:"templates")` lists starter scenes.
