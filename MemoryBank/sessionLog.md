@@ -3,7 +3,73 @@
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 
+## 2026-11-14 (tooling) — Markdown→PDF renderer and the review PDF
+
+Changed: added `Tools/MarkdownToPdf.py`, a single-file renderer (Markdown → styled HTML →
+headless Chrome/Edge → PDF) with a CLI for output path, cover title/subtitle, `--no-cover`,
+`--page-size A4|Letter|Legal`, `--image-height`, accent/heading colours, extra `--css`,
+`--browser`, `--keep-html`. Images resolve relative to the Markdown file, and absolute local
+paths (`C:\shots\x.png`, `/home/x.png`), raw `<img>` tags and `file:`/`data:`/`http(s)` sources are
+handled; unresolvable references are listed as warnings instead of failing the run. Wrote the
+user guide `Documentation/Markdown-to-PDF.md` and added the command to `MemoryBank/techContext.md`.
+Also reformatted the research doc's header block into bullets so it prints cleanly, and generated
+`C:\Users\codex\Downloads\GDevelop-EventsEditor-Proposal-2026-11-14.pdf` for review.
+
+Verified: `python Tools\MarkdownToPdf.py Docs\GDevelop-EventsEditor-Research-2026-11-14.md -o
+"%USERPROFILE%\Downloads\GDevelop-EventsEditor-Proposal-2026-11-14.pdf"` → 1,354 KB, 18 pages, A4
+(595×842 pt), 13 embedded images; page renders checked with PyMuPDF at 100 dpi (cover, metadata +
+§0/§1, final page). Absolute-path image test produced a 1-page PDF with the image embedded; a
+Markdown with a missing image still built and printed `Warning: 1 image reference(s) not found`;
+`--help` exits 0 and a missing input file exits non-zero. Temporary test files and render scripts were
+deleted from `%TEMP%`.
+
+Left: the PDF awaits the user's review; the script is reusable for any `Docs/*.md`.
+Requires `python -m pip install markdown` (installed here) and Chrome/Edge; `pypdf` is optional and
+only enables the page-count line.
+
+
+## 2026-11-14 (companion AI v2, smoothing pass) — no more stop-start or facing flips
+
+Changed: after the first v2 build the trainer reported two visual faults — the
+Fire Lizard visibly flipped between "running forward" and "looking back at the
+camera", and all three companions shot past their slot, stopped, waited for the
+distance to grow, then sprinted again. Root causes were all in
+`WildlingFollower3D`:
+
+- The 1.4 m start / 0.6 m stop hysteresis was applied even while the trainer was
+  moving, so at 0.6 m error a companion stopped dead until the error reached
+  1.4 m. It now applies only to a stationary trainer; while the trainer travels
+  the companion holds station at the trainer's own speed.
+- `predictiveLead` (0.2 s) shifted the slot forward by up to 1.2 m against a
+  0.7 m `behind` offset, literally placing slots *ahead* of the trainer. Lead is
+  now clamped to `behind`.
+- No braking: desired speed could exceed what deceleration could shed. Added
+  `arriveLimit = sqrt(2 * deceleration * error)` plus an `overtakeLimit` of
+  `leaderSpeed + clamp(error, 0.6, 3)`.
+- Slot error only updated on the 0.3 s destination refresh, so braking reacted
+  late; it is now recomputed every frame.
+- Facing used `Transform.EulerAngles` per frame and idle-glanced at the trainer
+  at 72 deg/s regardless of angle, so an overtaken companion turned 180 deg to
+  the camera and back. Facing is now quaternion yaw (`Transform.WorldRotation`),
+  follows the route rather than the separation vector, holds for
+  `facingHoldSeconds` after stopping, and idle glances are capped at
+  `idleGlanceMaxAngle` 75 deg at 36 deg/s.
+
+New fields: `faceTurnSpeed` 540, `idleGlanceMaxAngle` 75, `facingHoldSeconds`
+0.6.
+
+Verified: plugin builds clean, installed, scene + the three Blueprints carry all
+28 v2 fields, `be_runtime/validate` issues [].
+
+Left: foot speed still does not match travel speed — the animation profiles have
+`matchPlaybackToSpeed: false` with `runReferenceSpeed` 5.5/5/6, so a 6.6 m/s
+chase slides. Enabling playback matching is a data change, not yet applied.
+
+
+
 ## 2026-11-14 (companion AI v2) — proactive catch-up, state ladder, debug overlay
+*(superseded by the smoothing pass above for speed/facing behaviour)*
+
 
 Changed: rewrote `WildlingFollower3D` to the Companion Exploration AI v2 brief.
 Speed model is now proactive: caps 6.6 normal / 9.0 catch-up, 14 m/s²

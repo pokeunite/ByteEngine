@@ -91,6 +91,15 @@ public sealed class WildlingFollower3D : Component
 
     public float IdleFaceSpeed { get; set; } = 6f;
 
+    /// <summary>Turn rate while travelling (degrees per second).</summary>
+    public float FaceTurnSpeed { get; set; } = 540f;
+
+    /// <summary>Idle glances never turn further than this from the current facing.</summary>
+    public float IdleGlanceMaxAngle { get; set; } = 75f;
+
+    /// <summary>Seconds the travel facing is held after stopping (no instant turn-around).</summary>
+    public float FacingHoldSeconds { get; set; } = .6f;
+
     /// <summary>Current behavior state (Combat, Regroup, Navigate, Accompany, Settle, Observe).</summary>
     public WildlingFollowState State => _state;
 
@@ -118,6 +127,9 @@ public sealed class WildlingFollower3D : Component
     private Vector3 _progressProbe;
     private bool _hasLeaderSample;
     private bool _hasDestination;
+    private bool _facingInitialized;
+    private float _facingYaw;
+    private float _facingHoldRemaining;
     private float _speed;
     private float _desiredSpeed;
     private float _slotError;
@@ -251,30 +263,37 @@ public sealed class WildlingFollower3D : Component
     private void UpdateDestination(GameObject leader)
     {
         _destinationTimer -= Time.DeltaTime;
-        if (_hasDestination && _destinationTimer > 0.0)
+        if (!_hasDestination || _destinationTimer <= 0.0)
         {
-            return;
+            _destinationTimer = .3;
+
+            Vector3 forward = _travel;
+            Vector3 right = Vector3.Cross(forward, Vector3.UnitY);
+            (float side, float behind) = SlotZone();
+
+            // Predictive lead compensates for our own reaction time. It must never
+            // push the slot past the trainer, otherwise companions run in front.
+            float leaderSpeed = _leaderVelocity.Length();
+            float leadDistance = MathF.Min(leaderSpeed * MathF.Max(0f, PredictiveLead), MathF.Max(0f, behind));
+            Vector3 predicted = leader.Transform.WorldPosition;
+            if (leadDistance > .001f && leaderSpeed > .001f)
+            {
+                predicted += _leaderVelocity / leaderSpeed * leadDistance;
+            }
+
+            Vector3 preferred = predicted - forward * behind + right * side;
+
+            if (IsRouteBlocked(predicted, preferred))
+            {
+                preferred = TrailDestination(behind);
+            }
+
+            _destination = preferred;
+            _hasDestination = true;
         }
 
-        _destinationTimer = .3;
-
-        Vector3 forward = _travel;
-        Vector3 right = Vector3.Cross(forward, Vector3.UnitY);
-        (float side, float behind) = SlotZone();
-
-        // Lead the moving trainer slightly so we match pace instead of chasing.
-        Vector3 predicted = leader.Transform.WorldPosition +
-                            _leaderVelocity * MathF.Max(0f, PredictiveLead);
-
-        Vector3 preferred = predicted - forward * behind + right * side;
-
-        if (IsRouteBlocked(predicted, preferred))
-        {
-            preferred = TrailDestination(behind);
-        }
-
-        _destination = preferred;
-        _hasDestination = true;
+        // Re-evaluate every frame (not just when the destination refreshes) so the
+        // braking curve reacts immediately instead of overshooting the slot.
         _slotError = FlatDistance(GameObject!.Transform.WorldPosition, _destination);
     }
 
@@ -420,8 +439,17 @@ public sealed class WildlingFollower3D : Component
             return;
         }
 
-        // Dead-zone hysteresis so companions do not fidget near their slot.
-        if (!_moving && _slotError > MathF.Max(SlotStopError + .05f, SlotStartError))
+        // Dead-zone hysteresis so companions do not fidget near their slot - but only
+        // while the trainer is stationary. A moving slot is a moving target: stopping
+        // at it would produce the "run, stop, wait for distance, run" stutter.
+        float leaderSpeed = _leaderVelocity.Length();
+        bool travelling = leaderSpeed >= MathF.Max(.1f, TravelSpeedThreshold);
+
+        if (travelling)
+        {
+            _moving = true;
+        }
+        else if (!_moving && _slotError > MathF.Max(SlotStopError + .05f, SlotStartError))
         {
             _moving = true;
         }
@@ -452,14 +480,13 @@ public sealed class WildlingFollower3D : Component
         Vector3 toDestination = _destination - position;
         toDestination.Y = 0f;
         float distance = toDestination.Length();
-        if (distance < .05f)
+        if (distance < .01f)
         {
             _moving = false;
             StopMoving();
             return;
         }
 
-        float leaderSpeed = _leaderVelocity.Length();
         bool catchUp = _state is WildlingFollowState.Regroup or WildlingFollowState.Navigate ||
                        _slotError >= CatchUpError ||
                        leaderDistance >= CatchUpError + SettleMaxDistance;
@@ -467,9 +494,25 @@ public sealed class WildlingFollower3D : Component
         float cap = catchUp ? CatchUpSpeedCap : FollowSpeedCap;
         float errorBeyondStop = MathF.Max(0f, _slotError - SlotStopError);
 
-        // Proactive: match the trainer's speed plus a margin that grows with the
-        // formation error, so catch-up starts before falling off camera.
-        _desiredSpeed = MathF.Min(cap, MathF.Max(leaderSpeed, 0f) + errorBeyondStop * 2.2f);
+        // Braking curve: only plan a speed we can shed before reaching the slot, so
+        // companions glide in instead of shooting past it and waiting.
+        float arriveLimit = MathF.Sqrt(2f * MathF.Max(1f, Deceleration) * errorBeyondStop);
+
+        // Overtake guard: outside catch-up, never exceed the trainer's pace by more
+        // than the error requires. This is what stops them running past the player.
+        float overtakeLimit = catchUp
+            ? MathF.Max(CatchUpSpeedCap, leaderSpeed)
+            : leaderSpeed + Math.Clamp(errorBeyondStop, .6f, 3f);
+
+        _desiredSpeed = MathF.Min(cap, MathF.Min(overtakeLimit, arriveLimit));
+
+        // While the trainer travels, hold station: never drop below their pace, or the
+        // party falls behind and has to sprint back.
+        if (travelling)
+        {
+            _desiredSpeed = Math.Clamp(MathF.Max(_desiredSpeed, leaderSpeed), 0f, cap);
+        }
+
         if (_desiredSpeed < .2f)
         {
             _desiredSpeed = 0f;
@@ -484,8 +527,8 @@ public sealed class WildlingFollower3D : Component
             return;
         }
 
-        Vector3 direction = toDestination / distance;
-        direction += Separation(self, team) * MathF.Max(0f, SeparationStrength);
+        Vector3 heading = toDestination / distance;
+        Vector3 direction = heading + Separation(self, team) * MathF.Max(0f, SeparationStrength);
         if (direction.LengthSquared() <= .000001f)
         {
             StopMoving();
@@ -504,7 +547,9 @@ public sealed class WildlingFollower3D : Component
             self.Transform.WorldPosition += direction * _speed * delta;
         }
 
-        FaceDirection(self, direction);
+        // Face the route, not the separation-adjusted vector, so neighbours nudging
+        // each other cannot make the visual heading oscillate.
+        FaceDirection(self, heading, delta);
     }
 
     /// <summary>Small repulsion so companions do not stack or push each other.</summary>
@@ -549,8 +594,28 @@ public sealed class WildlingFollower3D : Component
 
     private void FaceIdle(GameObject self, GameObject leader, float delta)
     {
-        // Attentive idle: a slow glance toward the trainer needs no navigation.
-        FaceSlowly(self, leader.Transform.WorldPosition, delta);
+        // Hold the travel facing briefly after stopping, then allow at most a small
+        // glance toward the trainer. Never a 180° turn-around on the spot.
+        if (_facingHoldRemaining > 0f)
+        {
+            _facingHoldRemaining = MathF.Max(0f, _facingHoldRemaining - delta);
+            return;
+        }
+
+        Vector3 toLeader = leader.Transform.WorldPosition - self.Transform.WorldPosition;
+        toLeader.Y = 0f;
+        if (toLeader.LengthSquared() <= .25f)
+        {
+            return;
+        }
+
+        float difference = ShortestAngle(YawOf(Vector3.Normalize(toLeader)) - CurrentYaw(self));
+        if (MathF.Abs(difference) > Math.Clamp(IdleGlanceMaxAngle, 0f, 170f))
+        {
+            return;
+        }
+
+        Turn(self, difference, MathF.Max(1f, IdleFaceSpeed) * 6f * delta);
     }
 
     private static float FlatDistance(Vector3 a, Vector3 b)
@@ -570,7 +635,7 @@ public sealed class WildlingFollower3D : Component
         return current + MathF.Sign(target - current) * maxDelta;
     }
 
-    private void FaceDirection(GameObject self, Vector3 direction)
+    private void FaceDirection(GameObject self, Vector3 direction, float delta)
     {
         direction.Y = 0f;
         if (direction.LengthSquared() <= .000001f)
@@ -578,39 +643,54 @@ public sealed class WildlingFollower3D : Component
             return;
         }
 
-        direction = Vector3.Normalize(direction);
-        Vector3 euler = self.Transform.EulerAngles;
-        euler.Y = MathF.Atan2(-direction.X, -direction.Z) * 180f / MathF.PI;
-        self.Transform.EulerAngles = euler;
+        float difference = ShortestAngle(YawOf(Vector3.Normalize(direction)) - CurrentYaw(self));
+        Turn(self, difference, MathF.Max(90f, FaceTurnSpeed) * delta);
+        _facingHoldRemaining = MathF.Max(.05f, FacingHoldSeconds);
     }
 
-    private void FaceSlowly(GameObject self, Vector3 target, float delta)
+    /// <summary>Local yaw in degrees, seeded once from the authored facing.</summary>
+    private float CurrentYaw(GameObject self)
     {
-        Vector3 toTarget = target - self.Transform.WorldPosition;
-        toTarget.Y = 0f;
-        if (toTarget.LengthSquared() <= .25f)
+        if (!_facingInitialized)
+        {
+            _facingYaw = YawOf(self.Transform.Forward);
+            _facingInitialized = true;
+        }
+
+        return _facingYaw;
+    }
+
+    /// <summary>
+    /// Rotates about world up only. Uses a quaternion so the Euler round-trip cannot
+    /// introduce pitch/roll drift or per-frame jitter.
+    /// </summary>
+    private void Turn(GameObject self, float difference, float maxStep)
+    {
+        float step = Math.Clamp(difference, -MathF.Abs(maxStep), MathF.Abs(maxStep));
+        if (MathF.Abs(step) < .01f)
         {
             return;
         }
 
-        toTarget = Vector3.Normalize(toTarget);
-        float wanted = MathF.Atan2(-toTarget.X, -toTarget.Z) * 180f / MathF.PI;
-        Vector3 euler = self.Transform.EulerAngles;
-        float difference = wanted - euler.Y;
+        _facingYaw = ShortestAngle(CurrentYaw(self) + step);
+        self.Transform.WorldRotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, _facingYaw * MathF.PI / 180f);
+    }
 
-        while (difference > 180f)
+    private static float YawOf(Vector3 direction) => MathF.Atan2(-direction.X, -direction.Z) * 180f / MathF.PI;
+
+    private static float ShortestAngle(float degrees)
+    {
+        while (degrees > 180f)
         {
-            difference -= 360f;
+            degrees -= 360f;
         }
 
-        while (difference < -180f)
+        while (degrees < -180f)
         {
-            difference += 360f;
+            degrees += 360f;
         }
 
-        float step = MathF.Max(1f, IdleFaceSpeed) * 12f * delta;
-        euler.Y += Math.Clamp(difference, -step, step);
-        self.Transform.EulerAngles = euler;
+        return degrees;
     }
 
     private static bool IsGround(GameObject gameObject)
