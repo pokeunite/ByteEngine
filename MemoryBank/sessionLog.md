@@ -28,7 +28,33 @@ Requires `python -m pip install markdown` (installed here) and Chrome/Edge; `pyp
 only enables the page-count line.
 
 
+## 2026-11-14 (slot rings, stationary freeze) — rings only re-orient while moving
+
+Changed: turning the camera in place yawed the trainer, which swung the ring
+children and dragged all three animals to the new spots. `WildlingSlotMarker3D`
+now owns its own slot frame: on the first simulated frame it captures the
+authored local offset, then rebuilds its world position every frame as
+`playerPosition + rotateY(offset, slotYaw)`. `slotYaw` is frozen while the parent
+moves slower than the new `movingThreshold` (0.6 m/s) and eases toward the
+player's facing over `headingSmoothing` (0.35 s) only while they travel. Because
+the ring no longer moves when the player stands still, the follower — which
+targets the ring's world position — has nothing to chase, so the party holds
+station. Walking off swings the rings around behind the player.
+
+Note the frame is seeded from the parent yaw, so at capture the ring's computed
+position is identical to the plain child transform — no pop when freeze engages
+or releases.
+
+Verified: plugin builds clean and is installed; `be_catalog` shows
+`movingThreshold` / `headingSmoothing`; `be_runtime/validate` 184 objects,
+issues []; ring 1 still parented to the trainer at local z 0.925.
+
+Left: the running editor was started before this build and must reopen the
+project before the freeze can be felt. No in-editor play test from the shell.
+
+
 ## 2026-11-14 (slot rings) — hand-author each wildling's follow point
+
 
 Changed: added `WildlingSlotMarker3D`, a plugin component that draws a flat
 coloured ring and exposes `slotIndex` / `ringColor` / `ringRadius` /

@@ -1,4 +1,5 @@
 using System.Numerics;
+using ByteEngine.Core;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Scene;
@@ -30,8 +31,95 @@ public sealed class WildlingSlotMarker3D : Component
 
     public bool Visible { get; set; } = true;
 
+    /// <summary>
+    /// Parent speed (m/s) at which the slot frame is allowed to re-orient. Below this
+    /// the ring holds its world position, so turning the camera in place never swings
+    /// the rings or drags the animals across the floor.
+    /// </summary>
+    public float MovingThreshold { get; set; } = .6f;
+
+    /// <summary>Seconds used to swing the ring around to a new heading.</summary>
+    public float HeadingSmoothing { get; set; } = .35f;
+
     private static Mesh? _sharedRing;
     private Material? _material;
+
+    // Authored offset captured on the first simulated frame. The runtime scene is a
+    // throwaway copy of the authored one, so writing the transform back here never
+    // touches the values the user set in the editor.
+    private Vector3 _authoredOffset;
+    private Quaternion _authoredRotation;
+    private Vector3 _lastParentPosition;
+    private bool _slotReady;
+    private bool _hasParentSample;
+    private bool _hasSlotYaw;
+    private float _slotYaw;
+
+    protected override void OnStart() => CaptureAuthoredOffset();
+
+    protected override void OnUpdate()
+    {
+        GameObject? parent = GameObject.Parent;
+        if (parent == null)
+        {
+            return;
+        }
+
+        if (!_slotReady)
+        {
+            CaptureAuthoredOffset();
+        }
+
+        float delta = MathF.Max(.0001f, (float)Time.DeltaTime);
+        Vector3 parentPosition = parent.Transform.WorldPosition;
+
+        if (!_hasParentSample)
+        {
+            _lastParentPosition = parentPosition;
+            _hasParentSample = true;
+        }
+
+        Vector3 move = parentPosition - _lastParentPosition;
+        move.Y = 0f;
+        _lastParentPosition = parentPosition;
+        float parentSpeed = move.Length() / delta;
+
+        if (!_hasSlotYaw)
+        {
+            _slotYaw = YawOf(parent.Transform.WorldRotation);
+            _hasSlotYaw = true;
+        }
+
+        // The slot frame only follows the player while they are actually travelling.
+        // Standing still and turning the camera leaves it frozen, which is what keeps
+        // the rings (and therefore the party) put.
+        if (parentSpeed >= MovingThreshold)
+        {
+            float factor = 1f - MathF.Exp(-delta / MathF.Max(.05f, HeadingSmoothing));
+            _slotYaw = LerpAngle(_slotYaw, YawOf(parent.Transform.WorldRotation), factor);
+        }
+
+        Quaternion yaw = Quaternion.CreateFromYawPitchRoll(_slotYaw, 0f, 0f);
+        Transform.WorldPosition = parentPosition + Vector3.Transform(_authoredOffset, yaw);
+        Transform.WorldRotation = Quaternion.Normalize(yaw * _authoredRotation);
+    }
+
+    private void CaptureAuthoredOffset()
+    {
+        _authoredOffset = Transform.LocalPosition;
+        _authoredRotation = Transform.LocalRotation;
+        _slotReady = true;
+    }
+
+    private static float YawOf(Quaternion rotation)
+    {
+        Vector3 forward = Vector3.Transform(-Vector3.UnitZ, rotation);
+        forward.Y = 0f;
+        return forward.LengthSquared() < .000001f ? 0f : MathF.Atan2(-forward.X, -forward.Z);
+    }
+
+    private static float LerpAngle(float from, float to, float factor) =>
+        from + MathF.IEEERemainder(to - from, MathF.Tau) * factor;
 
     protected override void OnRender(RenderContext context)
     {
