@@ -1,6 +1,6 @@
 # Tech context
 
-Updated: 2026-11-13
+Updated: 2026-11-14
 
 ## Stack
 
@@ -32,6 +32,7 @@ Updated: 2026-11-13
 | Sync browser plugin packages | `./Tools/SyncBrowserPluginPackages.ps1 -SourceRoot <path>` |
 | Audit project systems | `./Tools/AuditProjectSystems.ps1` (defaults to DuneCompany and Headwater) |
 | Clean generated output | `./Tools/Clean-Workspace.ps1` (dry run; `-Apply` writes, `-IncludeBinObj`/`-Full` also removes bin and obj) |
+| Render a Markdown doc to PDF | `python Tools/MarkdownToPdf.py Docs/<file>.md -o <out>.pdf` (needs Python + `markdown`; uses installed Chrome/Edge; see `Documentation/Markdown-to-PDF.md`) |
 
 Outputs: editor publish goes to `Dist/ByteEngine` (`Dist/` and the root launcher
 are gitignored); benchmarks and ad-hoc artifacts go under `.artifacts/`.

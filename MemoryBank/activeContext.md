@@ -25,6 +25,12 @@ instruction chips).
 - `Tools/PullGDevelopEventSource.ps1` (retries the sparse checkout; also sets `http.postBuffer` and
   `http.lowSpeedLimit`, which this slow GitHub link needs) and `Tools/PullGDevelopDocImages.ps1`
   (downloads the doc screenshots).
+- `Tools/MarkdownToPdf.py` — Markdown → styled HTML → headless Chrome/Edge → PDF, with cover page,
+  print CSS, and local image resolution (relative to the `.md`, absolute Windows/POSIX paths, raw
+  `<img>` tags). CLI covers output path, title/subtitle, `--no-cover`, page size, image height,
+  accent colours, extra CSS, browser path and `--keep-html`. Guide: `Documentation/Markdown-to-PDF.md`.
+- Review PDF: `C:\Users\codex\Downloads\GDevelop-EventsEditor-Proposal-2026-11-14.pdf` (18 pages, A4,
+  13 embedded screenshots), regenerated from the research doc.
 
 ## Key findings
 
