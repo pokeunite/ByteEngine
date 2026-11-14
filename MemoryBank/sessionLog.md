@@ -28,7 +28,46 @@ Requires `python -m pip install markdown` (installed here) and Chrome/Edge; `pyp
 only enables the page-count line.
 
 
+## 2026-11-14 (slot rings) — hand-author each wildling's follow point
+
+Changed: added `WildlingSlotMarker3D`, a plugin component that draws a flat
+coloured ring and exposes `slotIndex` / `ringColor` / `ringRadius` /
+`groundBias` / `visible`. `WildlingFollower3D` gained a `Marker` formation mode,
+now the default: the companion's destination is the *world position* of the ring
+whose `slotIndex` matches its own slot, refreshed every frame, so moving the ring
+moves the creature immediately. `Line` and `Zones` remain as computed fallbacks
+used when no matching ring exists.
+
+Scene: three ring objects parented to the Trainer — `Slot Ring 1 (Leader, Red)`
+red at local (0, 0, 0.9), `Slot Ring 2 (Green)` green at (1.25, 0, 0.55),
+`Slot Ring 3 (Blue)` blue at (-1.25, 0, 0.55). Fire Lizard/Spriglet/Zappet
+followers set to `Marker` with slotIndex 1/2/3. Blueprints re-extracted.
+
+Why a component instead of a MeshRenderer: `PrimitiveMesh` has no ring, and the
+component renders through `Component.OnRender`, which the editor dispatches via
+`Scene.RenderEditorInternal` — so the same band shows in the scene view and in
+play with no editor changes. The band is an owned 64-segment annulus mesh
+(unit outer, 0.84 inner), emissive, `CullMode.None` (default) so it reads from
+above and below.
+
+Verified: plugin builds clean, installed, `be_runtime/validate` 184 objects /
+3 blueprints / issues [], `be_catalog` lists the component and its properties,
+`be_scene inspect_object` confirms ring parenting, local offsets and colours, and
+all three Blueprints carry `formation: "Marker"`.
+
+Trap (again): install and property application must be separate MCP request
+batches; a `set_component` for a component type introduced by the batch's own
+install is silently dropped.
+
+Left: scene-view picking has no click-to-select path in `SceneViewPanel` —
+selection comes from the hierarchy — so rings must be picked in the object list
+before dragging the gizmo. Rings are children of the trainer, so they inherit
+its facing: a camera turn that yaws the character will swing the rings and the
+party with them. Add a world-locked variant if that proves annoying.
+
+
 ## 2026-11-14 (formation) — horizontal line: 1 centre, 2 right, 3 left
+
 
 Changed: the party now travels in a single horizontal rank instead of the
 species flank zones. `WildlingFollower3D` gained `Formation`

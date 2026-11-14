@@ -50,6 +50,14 @@ public sealed class WildlingsPlugin : IByteEnginePlugin
                 Description: "Exploration follow: stable travel heading, loose slots, hysteresis, catch-up and trail routing.",
                 SearchKeywords: "wildlings follower formation explore trail"));
 
+        context.RegisterSimpleComponent<WildlingSlotMarker3D>(
+            "WildlingSlotMarker3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Slot Maker (Ring)",
+                Category: "Wildlings",
+                Description: "Coloured ground ring parented to the trainer. Drag it in the scene view to author where that wildling follows; the ring's offset is the slot distance.",
+                SearchKeywords: "wildlings formation ring marker slot target follow gizmo"));
+
         context.RegisterSimpleComponent<WildlingStatus3D>(
             "WildlingStatus3D",
             new ByteEnginePluginComponentMetadata(

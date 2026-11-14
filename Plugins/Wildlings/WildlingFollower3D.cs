@@ -23,6 +23,13 @@ public enum WildlingFollowState
 public enum WildlingFormation
 {
     /// <summary>
+    /// Follow the authored ring (WildlingSlotMarker3D) whose SlotIndex matches this
+    /// companion. Move the ring in the scene view to place the creature: the ring's
+    /// world position is the slot, so its offset from the trainer is the distance kept.
+    /// </summary>
+    Marker,
+
+    /// <summary>
     /// Horizontal line abreast: slot 1 in the middle, slot 2 to the right, slot 3 to
     /// the left, all at the same depth. The line is a single rank, so the party reads
     /// as one row when the trainer looks back.
@@ -49,7 +56,7 @@ public sealed class WildlingFollower3D : Component
     public string TeamObjectName { get; set; } = "Wildling Manager";
 
     /// <summary>Formation layout used while the party travels.</summary>
-    public WildlingFormation Formation { get; set; } = WildlingFormation.Line;
+    public WildlingFormation Formation { get; set; } = WildlingFormation.Marker;
 
     /// <summary>
     /// Party slot (1-3) that decides the side of the line. 0 resolves the slot from
@@ -169,6 +176,8 @@ public sealed class WildlingFollower3D : Component
     private double _clock;
     private bool _moving;
     private WildlingFollowState _state = WildlingFollowState.Settle;
+    private WildlingSlotMarker3D? _marker;
+    private int _markerSlot;
 
     private WildlingStats3D? Stats => GameObject?.GetComponent<WildlingStats3D>();
 
@@ -291,6 +300,19 @@ public sealed class WildlingFollower3D : Component
 
     private void UpdateDestination(GameObject leader, TeamManager3D? team)
     {
+        int slot = ResolveSlot(team);
+
+        if (Formation == WildlingFormation.Marker && MarkerTarget(slot) is { } marker)
+        {
+            // The ring is authored in the scene view and parented to the trainer, so its
+            // world position already carries both the distance and the side. Refresh every
+            // frame: dragging the ring in the editor moves the creature immediately.
+            _destination = marker.Transform.WorldPosition;
+            _hasDestination = true;
+            _slotError = FlatDistance(GameObject!.Transform.WorldPosition, _destination);
+            return;
+        }
+
         _destinationTimer -= Time.DeltaTime;
         if (!_hasDestination || _destinationTimer <= 0.0)
         {
@@ -298,7 +320,7 @@ public sealed class WildlingFollower3D : Component
 
             Vector3 forward = _travel;
             Vector3 right = Vector3.Cross(forward, Vector3.UnitY);
-            (float side, float behind) = SlotZone(team);
+            (float side, float behind) = SlotZone(slot);
 
             // Predictive lead compensates for our own reaction time. It must never
             // push the slot past the trainer, otherwise companions run in front.
@@ -326,10 +348,43 @@ public sealed class WildlingFollower3D : Component
         _slotError = FlatDistance(GameObject!.Transform.WorldPosition, _destination);
     }
 
-    private (float Side, float Behind) SlotZone(TeamManager3D? team)
+    /// <summary>
+    /// Ring authored for this slot, cached because the marker does not change at
+    /// runtime. Returns null when the scene has no matching ring, in which case the
+    /// computed formation is used instead.
+    /// </summary>
+    private WildlingSlotMarker3D? MarkerTarget(int slot)
     {
-        int slot = ResolveSlot(team);
+        if (_marker != null && _markerSlot == slot)
+        {
+            return _marker;
+        }
 
+        _markerSlot = slot;
+        _marker = null;
+
+        Scene? scene = GameObject?.Scene;
+        if (scene == null)
+        {
+            return null;
+        }
+
+        foreach (GameObject candidate in scene.GameObjects)
+        {
+            if (candidate.GetComponent<WildlingSlotMarker3D>() is { } marker &&
+                marker.SlotIndex == slot)
+            {
+                _marker = marker;
+                FormationZone = $"Ring {slot}";
+                break;
+            }
+        }
+
+        return _marker;
+    }
+
+    private (float Side, float Behind) SlotZone(int slot)
+    {
         if (Formation == WildlingFormation.Line)
         {
             // Horizontal line abreast: 1 centre, 2 right, 3 left, equal depth.
