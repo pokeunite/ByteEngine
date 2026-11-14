@@ -17,6 +17,11 @@ internal static class EditorPreferences
 
         public float AssetIconScale { get; set; } = 1.0f;
 
+        // Event Sheet "EVENTS" outline visibility: 0 = width-driven (auto),
+        // 1 = always show while it fits, 2 = never show. Persisted so the
+        // choice survives editor restarts and applies to every Event Module.
+        public int EventOutlineMode { get; set; }
+
         // Debug-box visibility is editor UI state, not runtime debug enablement.
         // Keep these true by default so existing preference files (which do not
         // contain these properties yet) retain the current visible behaviour.
@@ -121,6 +126,23 @@ internal static class EditorPreferences
     {
         get => Settings.EditorVSync;
         set { if(Settings.EditorVSync==value)return;Settings.EditorVSync=value;SaveSettings(); }
+    }
+
+    /// <summary>
+    /// Event Sheet "EVENTS" outline visibility.
+    /// 0 = auto (width-driven), 1 = always show while it fits, 2 = never show.
+    /// </summary>
+    public static int EventOutlineMode
+    {
+        get => Math.Clamp(Settings.EventOutlineMode, 0, 2);
+
+        set
+        {
+            int normalized = Math.Clamp(value, 0, 2);
+            if (Settings.EventOutlineMode == normalized) return;
+            Settings.EventOutlineMode = normalized;
+            SaveSettings();
+        }
     }
 
     public static bool ShowFpsCounter

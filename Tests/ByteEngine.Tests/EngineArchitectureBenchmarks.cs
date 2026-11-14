@@ -4,6 +4,7 @@ using System.Text.Json;
 using ByteEngine.Core;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Graphics;
+using ByteEngine.Core.Navigation;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 namespace ByteEngine.Tests;
@@ -49,6 +50,43 @@ internal static class EngineArchitectureBenchmarks
             var scene=new Scene("UI buttons");
             for(int i=0;i<count;i++)scene.CreateGameObject("Button").AddComponent(new UiWidget{Kind=UiWidgetKind.Button});
             Measure("ui-buttons-update-only",count,scene,results);
+        }
+        foreach(int count in new[]{200,400})
+        {
+            // One resting dynamic body keeps the iterative solver active, so the
+            // broad-phase cost of the whole crowd is exercised every iteration.
+            var scene=new Scene("Dynamic body among static colliders");
+            var floor=scene.CreateGameObject("Floor");
+            floor.Transform.LocalPosition=new(0,-.5f,0);floor.Transform.LocalScale=new(200,1,200);
+            floor.AddComponent(new BoxCollider3D());
+            var body=scene.CreateGameObject("Dynamic");
+            body.Transform.LocalPosition=new(0,.45f,0);
+            body.AddComponent(new BoxCollider3D());
+            body.AddComponent(new Rigidbody3D{AllowSleep=false});
+            for(int i=0;i<count;i++)
+            {
+                var obj=scene.CreateGameObject("Wall");
+                obj.Transform.LocalPosition=new(20+(i%20)*2,0,(i/20)*2);
+                obj.AddComponent(new BoxCollider3D());
+            }
+            Measure("dynamic-body-static-crowd",count,scene,results);
+        }
+        foreach(int count in new[]{100,300})
+        {
+            var scene=new Scene("Navigation agents");
+            scene.CreateGameObject("NavRegion").AddComponent(new NavigationRegion3D
+            {
+                Width=64,Height=64,CellSize=1,BakeOnStart=true
+            });
+            scene.LoadInternal();
+            for(int i=0;i<count;i++)
+            {
+                var obj=scene.CreateGameObject("Agent");
+                obj.Transform.LocalPosition=new(i%16*3f,0,i/16*3f);
+                var agent=obj.AddComponent(new NavigationAgent3D{Speed=3,RepathInterval=.5f});
+                agent.SetDestination(new(47,0,47));
+            }
+            Measure("navigation-agents",count,scene,results);
         }
         string path=Path.GetFullPath(output);Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path,JsonSerializer.Serialize(new{capturedUtc=DateTime.UtcNow,framework=System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,logicalProcessors=Environment.ProcessorCount,scope="CPU scene updates only; no rendering, GPU, or game-specific code",warmupFrames=24,measuredFrames=120,results},new JsonSerializerOptions{WriteIndented=true}));

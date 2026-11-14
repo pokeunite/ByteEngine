@@ -1,0 +1,336 @@
+[
+  {
+    "Project": "C:/Users/codex/Documents/DuneCompany",
+    "Source": [
+      {
+        "Plugin": "DesertTerrain",
+        "CanonicalSource": "C:\\Users\\codex\\ByteEngine\\Plugins\\DesertTerrain",
+        "Matches": true,
+        "Differences": []
+      },
+      {
+        "Plugin": "DuneCompany",
+        "CanonicalSource": "C:\\Users\\codex\\ByteEngine\\Plugins\\DuneCompany",
+        "Matches": true,
+        "Differences": []
+      }
+    ],
+    "Packages": [
+      {
+        "Id": "bytebard.desertterrain",
+        "Version": "0.8.11",
+        "MatchesRepository": true,
+        "Installed": "C:\\Users\\codex\\Documents\\DuneCompany\\Plugins\\bytebard.desertterrain.byteplugin",
+        "Repository": "C:\\Users\\codex\\ByteEngine\\PluginLibrary\\DesertTerrain.byteplugin"
+      },
+      {
+        "Id": "bytebard.dunecompany",
+        "Version": "0.27.0",
+        "MatchesRepository": true,
+        "Installed": "C:\\Users\\codex\\Documents\\DuneCompany\\Plugins\\bytebard.dunecompany.byteplugin",
+        "Repository": "C:\\Users\\codex\\ByteEngine\\PluginLibrary\\DuneCompany.byteplugin"
+      }
+    ],
+    "NativeComponents": [
+      {
+        "Type": "Camera3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "DirectionalLight",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "EventModuleComponent",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "MeshRenderer",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "ModelHierarchyInstance",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "PointLight",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "RoutePath3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "SkyEnvironment",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiCanvas",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiContainer",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiText",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiTheme",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiWidget",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      }
+    ],
+    "Status": "Pass"
+  },
+  {
+    "Project": "C:/Users/codex/Documents/Headwater",
+    "Source": [],
+    "Packages": [],
+    "NativeComponents": [
+      {
+        "Type": "AudioSettings",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "AudioSource3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "BlueprintInstance",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "BoxCollider3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "BuoyantBody3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "BuoyantPulley3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "CableRenderer3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "Camera3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "DirectionalLight",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "DockingReceiver3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "EventModuleComponent",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "GraphicsSettings3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "LoadingScreenStyle",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "MechanicalLatch3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "MeshRenderer",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "ModelHierarchyInstance",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "PointerInteraction3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "PointerTarget3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "PrimedSiphon3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "PulleyCableRig3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "Rigidbody3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "RotaryValve3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "SkyEnvironment",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "SluiceActuator3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "TimedChallenge3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiAnimator",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiCanvas",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiInteractionAudio",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiText",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiTheme",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "UiWidget",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterBasin3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterCounterweightBridge3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterCurrentPath3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterDepthField3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterDynamics3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterFlowAudio3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterFlowIndicator3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterFlowPath3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterGate3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterImpact3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterNetwork3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterOcean3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WaterSurface3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      },
+      {
+        "Type": "WetSurfaceContact3D",
+        "SourceExists": true,
+        "AddComponentEntry": true
+      }
+    ],
+    "Status": "Pass"
+  }
+]

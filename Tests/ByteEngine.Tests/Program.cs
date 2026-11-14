@@ -2,6 +2,7 @@ using GoblinScrapper.Construction;
 using System.Numerics;
 using ByteEngine.Core.Assets;
 using ByteEngine.Core.Assets.Importers;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Animation;
 using ByteEngine.Core.Blueprints;
 using ByteEngine.Core.Characters;
@@ -16,6 +17,12 @@ using ByteEngine.Editor;
 using ByteEngine.Editor.Gizmos;
 using ByteEngine.Editor.Panels;
 using ByteEngine.Tests;
+
+if (args.Length == 1 && (args[0] == "--version" || args[0] == "-v"))
+{
+    Console.WriteLine(ByteEngine.Core.ByteEngineInfo.Version);
+    return;
+}
 
 string root = Path.Combine(Path.GetTempPath(), "ByteEngine-v05-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path.Combine(root, "Assets")); Directory.CreateDirectory(Path.Combine(root, "Scenes"));
 try
@@ -301,6 +308,34 @@ try
         return;
     }
 
+    if (args.Contains("--windows-export-single"))
+    {
+        if (args.Length < 2)
+            throw new ArgumentException("Pass the published PlayerRuntime directory.");
+        ByteAssetPackageTests.Run(root);
+        string runtime = SingleExecutableExportTests.PrepareRuntime(root, args[1]);
+        var exported = WindowsGameExportTests.Run(root, runtime);
+        var start = new System.Diagnostics.ProcessStartInfo(exported.Executable) { UseShellExecute = false };
+        start.ArgumentList.Add("--validate");
+        using var bundledPlayer = System.Diagnostics.Process.Start(start)!;
+        if (!bundledPlayer.WaitForExit(60000)) { bundledPlayer.Kill(); throw new Exception("Bundled package validation timed out."); }
+        if (bundledPlayer.ExitCode != 0) throw new Exception("Bundled executable payload validation failed.");
+        Console.WriteLine("Single-executable Windows export (runtime and assets inside the EXE) passed.");
+        return;
+    }
+
+    if (args.Length >= 2 && args[0] == "--plugin-load")
+    {
+        using var session = ByteEngine.Core.Plugins.ByteEnginePluginManager.LoadProjectPlugins(
+            Path.GetFullPath(args[1]),
+            ByteEngine.Core.Plugins.ByteEnginePluginLoadMode.Editor,
+            message => Console.WriteLine("  " + message));
+        Console.WriteLine($"Loaded plugins: {session.LoadedPlugins.Count}");
+        foreach (var loaded in session.LoadedPlugins)
+            Console.WriteLine($"  {loaded.Manifest.Id} v{loaded.Manifest.Version} ({loaded.Instance.GetType().FullName})");
+        return;
+    }
+
     if (args.Contains("--foliage-graphics"))
     {
         FoliageGraphicsTests.Run(root);
@@ -480,6 +515,7 @@ try
     V085ProfessionalEditorTests.Run(root);
     V08CInputActionsTests.Run(root);
     V08DTagsLayersTests.Run(root, database, assets);
+    ComponentRegistryCoverageTests.Run(root);
     Console.WriteLine("ByteEngine tests passed: v0.7 through v0.8-d regressions and Phase 1/2/3 gameplay systems.");
 }
 finally { try { Directory.Delete(root, true); } catch { } }

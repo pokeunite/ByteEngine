@@ -56,17 +56,28 @@ public sealed class NavigationMesh
  {
   if(!float.IsFinite(start.X+start.Y+start.Z+goal.X+goal.Y+goal.Z))return [];
   int first=Nearest(start,out var from),last=Nearest(goal,out var to);if(first<0||last<0||Vector3.Distance(from,start)>2||Vector3.Distance(to,goal)>2)return [];
-  if(first==last)return [from,to];
-  var queue=new PriorityQueue<int,float>();var costs=new Dictionary<int,float>{{first,0}};var parents=new Dictionary<int,(int Previous,Arc Arc)>();var closed=new HashSet<int>();queue.Enqueue(first,0);int visited=0;
-  while(queue.TryDequeue(out int current,out _)&&visited<Math.Clamp(maximumVisited,1,1000000))
+  if(first==last)return new[]{from,to};
+  // Retained scratch: a replan no longer allocates a queue and three
+  // collections. The returned path is a private copy, so agents keep their
+  // own path after another agent replans on the same mesh.
+  _queue.Clear();_costs.Clear();_parents.Clear();_closed.Clear();_arcBuffer.Clear();
+  _queue.Enqueue(first,0);_costs[first]=0;
+  int visited=0;int limit=Math.Clamp(maximumVisited,1,1000000);
+  while(_queue.TryDequeue(out int current,out _)&&visited<limit)
   {
-   if(!closed.Add(current))continue;visited++;if(current==last)
+   if(!_closed.Add(current))continue;visited++;if(current==last)
    {
-    var arcs=new List<Arc>();for(int node=last;node!=first;){var parent=parents[node];arcs.Add(parent.Arc);node=parent.Previous;}arcs.Reverse();var path=new List<Vector3>{from};
-    foreach(var arc in arcs){path.Add(arc.Entry);if(arc.Exit!=arc.Entry)path.Add(arc.Exit);path.Add(_polygons[arc.Target].Center);}path.Add(to);return path;
+    for(int node=last;node!=first;){var parent=_parents[node];_arcBuffer.Add(parent.Arc);node=parent.Previous;}
+    _arcBuffer.Reverse();var path=new List<Vector3>(_arcBuffer.Count*2+3){from};
+    foreach(var arc in _arcBuffer){path.Add(arc.Entry);if(arc.Exit!=arc.Entry)path.Add(arc.Exit);path.Add(_polygons[arc.Target].Center);}path.Add(to);return path;
    }
-   foreach(var arc in _adjacency[current]){float cost=costs[current]+arc.Cost;if(closed.Contains(arc.Target)||cost>=costs.GetValueOrDefault(arc.Target,float.PositiveInfinity))continue;costs[arc.Target]=cost;parents[arc.Target]=(current,arc);queue.Enqueue(arc.Target,cost);}
+   foreach(var arc in _adjacency[current]){float cost=_costs[current]+arc.Cost;if(_closed.Contains(arc.Target)||cost>=_costs.GetValueOrDefault(arc.Target,float.PositiveInfinity))continue;_costs[arc.Target]=cost;_parents[arc.Target]=(current,arc);_queue.Enqueue(arc.Target,cost);}
   }
   return [];
  }
+ private readonly PriorityQueue<int,float> _queue=new();
+ private readonly Dictionary<int,float> _costs=new();
+ private readonly Dictionary<int,(int Previous,Arc Arc)> _parents=new();
+ private readonly HashSet<int> _closed=new();
+ private readonly List<Arc> _arcBuffer=new();
 }

@@ -29,6 +29,7 @@ internal sealed class GameExportPanel
         _output = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "ByteEngine Games");
         _error = string.Empty;
         _result = null;
+        _preview = null;
         IsOpen = true;
     }
 

@@ -8,7 +8,7 @@ Build `Plugins/SpaceScraper/SpaceScraper.Plugin.csproj` or `Plugins/GoblinScrapp
 
 A `.byteplugin` is a ZIP with a root `plugin.json`, its main DLL and genuine private dependency DLLs. Goblin includes BepuPhysics and BepuUtilities. Never package ByteEngine.Core.dll: the running host supplies Core. Use a Core ProjectReference with `Private="false"`. For additional private libraries, add `BytePluginDependencyName` items containing their output DLL filenames before importing the shared target. The packaged files are chosen explicitly, not by copying the entire host output.
 
-Import through Project Settings → Plugins → Import Plugin, then reopen the project. Enable, disable and remove also require reopening; V1 does not hot-reload. The same operations are exposed through MCP `be_plugin` (`list`, `import`, `enable`, `disable`, `remove`). First open the project with `be_project`. After a package operation, call `be_project/open` again before authoring its components. MCP has no game export tool.
+Import through Project Settings → Plugins → Import Plugin, then reopen the project. Enable, disable and remove also require reopening; V1 does not hot-reload. The same operations are exposed through MCP `be_plugin` (`list`, `create`, `build`, `install`/`import`, `update`, `enable`, `disable`, `remove`). `create` scaffolds a buildable plugin under `Plugins/<Name>`, and `build` runs `dotnet build -c Release`, packages through `BytePlugin.targets`, and optionally installs the result. First open the project with `be_project`. After a package operation, call `be_project/open` again before authoring its components. Game export is available through MCP `be_export` but only when explicitly requested.
 
 ## Manifest
 

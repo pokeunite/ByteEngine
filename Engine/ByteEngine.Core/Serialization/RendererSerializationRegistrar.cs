@@ -287,7 +287,7 @@ public static class RendererSerializationRegistrar
                             1.0f)
                 };
 
-            if (!environmentMapReference.IsEmpty)
+            if (!environmentMapReference.IsEmpty && context.LoadGraphicsAssets)
             {
                 environment.SetEnvironmentMapTexture(
                     context.Assets.LoadTexture(

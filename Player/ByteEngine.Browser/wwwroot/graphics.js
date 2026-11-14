@@ -1,3 +1,4 @@
+import {qualityProfiles} from './shared-render.js';
 // World resolution is independent of layout and the full-resolution UI overlay.
 export class BrowserPresentation {
     constructor(){this.factor=1;this.samples=[];this.lastChange=0;this.key='';}

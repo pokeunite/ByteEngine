@@ -90,9 +90,10 @@ internal sealed class Shader3D : IDisposable
     public void Dispose() =>
         _shader.Dispose();
 
-    private const string VertexSource =
+    private static readonly string VertexSource =
         """
         #version 330 core
+        /*BYTE_WATER_SHARED*/
 
         layout(location=3) in vec4 skinIndices;
         layout(location=4) in vec4 skinWeights;
@@ -145,12 +146,7 @@ internal sealed class Shader3D : IDisposable
         out vec2 vUV;
 
         void oceanWave(inout vec3 displacement,inout vec3 tx,inout vec3 tz,vec2 q,vec2 d,float amplitude,float wavelength,float phase){
-            float k=6.2831853/max(.1,wavelength),a=clamp(amplitude,0.,.35/k);
-            float f=k*dot(d,q)-sqrt(9.81*k)*uWaterMotion.x+phase,s=sin(f),c=cos(f),steepness=clamp(uWaterFlow.z,0.,.8);
-            displacement+=vec3(d.x*a*steepness*c,a*s,d.y*a*steepness*c);
-            float slope=a*k*c,horizontal=a*k*steepness*s;
-            tx+=vec3(-d.x*d.x*horizontal,d.x*slope,-d.x*d.y*horizontal);
-            tz+=vec3(-d.x*d.y*horizontal,d.y*slope,-d.y*d.y*horizontal);
+            byteGravityWave(displacement,tx,tz,q,d,amplitude,wavelength,phase,uWaterMotion.x,uWaterFlow.z);
         }
         void main()
         {
@@ -195,11 +191,12 @@ internal sealed class Shader3D : IDisposable
             vUV=aUV;
             gl_Position=uProjection*uView*vec4(vWorldPosition,1.0);
         }
-        """;
+        """.Replace("/*BYTE_WATER_SHARED*/",PortableWaterShader.Source);
 
-    private const string FragmentSource =
+    private static readonly string FragmentSource =
         """
         #version 330 core
+        /*BYTE_WATER_SHARED*/
 
         #define MAX_DIRECTIONAL_LIGHTS 4
         #define MAX_POINT_LIGHTS 8
@@ -985,7 +982,7 @@ internal sealed class Shader3D : IDisposable
                 0.5;
         }
 
-        float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);vec4 h=fract(sin(vec4(dot(i,vec2(127.1,311.7)),dot(i+vec2(1,0),vec2(127.1,311.7)),dot(i+vec2(0,1),vec2(127.1,311.7)),dot(i+vec2(1),vec2(127.1,311.7))))*43758.5453);return mix(mix(h.x,h.y,f.x),mix(h.z,h.w,f.x),f.y);}
+        float waterNoise(vec2 p){return byteWaterNoise(p);}
         // Independent depth-weighted reconstruction: reject foreground neighbours instead
         // of allowing bilinear colour to drag the wall or cargo into the water.
         vec4 waterBackground(vec2 uv,out vec3 point){
@@ -1387,10 +1384,10 @@ internal sealed class Shader3D : IDisposable
                 vec3 sigmaA=max(uWaterAbsorption.rgb,vec3(0)),sigmaS=max(uWaterScattering.rgb,vec3(0));
                 vec3 sigmaT=max(sigmaA+sigmaS,vec3(.000001));
                 vec3 intoWater=refract(-v,n,1./1.333);float pathLength=min(30.,depth/max(.2,abs(intoWater.y)));
-                vec3 transmittance=exp(-sigmaT*pathLength);
+                vec3 transmittance=byteWaterTransmittance(sigmaT,pathLength);
                 vec3 sunDirection=uDirectionalLightCount>0?normalize(-uDirectionalLightDirections[0]):vec3(0,1,0);
                 float g=clamp(uWaterScattering.w,-.8,.8),mu=dot(-intoWater,sunDirection);
-                float phase=(1.-g*g)/(12.56637*pow(max(.05,1.+g*g-2.*g*mu),1.5));
+                float phase=byteWaterPhase(g,mu);
                 vec3 incident=vec3(.055,.075,.095);
                 if(uDirectionalLightCount>0)incident+=uDirectionalLightColors[0]*uDirectionalLightIntensities[0]*phase;
                 vec3 scattered=incident*clamp(sigmaS/sigmaT*(1.-transmittance),vec3(0),vec3(1));
@@ -1508,5 +1505,5 @@ internal sealed class Shader3D : IDisposable
                         vec3(0.0)),
                     base.a);
         }
-        """;
+        """.Replace("/*BYTE_WATER_SHARED*/",PortableWaterShader.Source);
 }

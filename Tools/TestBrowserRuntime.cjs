@@ -1,4 +1,4 @@
-﻿// Automated runtime check: no editor interaction or visible browser window.
+// Automated runtime check: no editor interaction or visible browser window.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -11,6 +11,7 @@ import { dotnet } from './_framework/dotnet.js';
 import { loadContent } from './content.js';
 import { BrowserRenderer } from './renderer.js';
 import { BrowserAudio } from './audio.js';
+import { decodeUiPacket,decodeDrawPacket } from './frame-wire.js';
 try {
  const renderer=new BrowserRenderer(document.querySelector('#game'),document.querySelector('#ui'));
  const runtime=await dotnet.create(),config=runtime.getConfig();
@@ -22,6 +23,8 @@ try {
  const frames=[];let sound=false;
  for(let i=0;i<20;i++){
   const data=JSON.parse(game.Frame(.05,640,480,'','',.5,.5,0,0,0,true,false,''));
+  if(data.uiBuffer>=0)data.ui=decodeUiPacket(game.ReadBuffer(data.uiBuffer),data.uiCount);
+  if(data.drawBuffer>=0)data.draws=decodeDrawPacket(game.ReadBuffer(data.drawBuffer));
   audio.commands(data.audio);renderer.draw(data,640,480);
   if(renderer.gl.getError()!==renderer.gl.NO_ERROR)throw new Error('WebGL error');
   if(data.audio.some(c=>c.kind==='play'))sound=true;

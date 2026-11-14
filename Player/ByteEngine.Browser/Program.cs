@@ -478,7 +478,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
         if(_retainedPackets.Count>_draws.Count)_retainedPackets.RemoveRange(_draws.Count,_retainedPackets.Count-_draws.Count);
         if(_retainedSkins.Count>_draws.Count)_retainedSkins.RemoveRange(_draws.Count,_retainedSkins.Count-_draws.Count);
     }
-    private BrowserDrawCommand ReuseDraw(int slot,int id,int material,int dataBuffer,bool shadowOnly,bool skinned,int skinBuffer,bool receiveShadows,BrowserWater? water)
+    private BrowserDrawCommand ReuseDraw(int slot,int id,int material,int dataBuffer,bool shadowOnly,bool skinned,int skinBuffer,bool receiveShadows,BrowserWaterParameters? water)
     {
         var command=slot<_drawPool.Count?_drawPool[slot]:new BrowserDrawCommand();
         if(slot==_drawPool.Count)_drawPool.Add(command);
@@ -590,7 +590,7 @@ internal sealed class BrowserFrameSink : IRenderFrameSink
             ReadOnlySpan<byte> skinBytes=draw.Mesh.GpuSkinning is {} palette?System.Runtime.InteropServices.MemoryMarshal.AsBytes(palette.Bones.AsSpan()):ReadOnlySpan<byte>.Empty;
             int skinBuffer=RetainPacket(_retainedSkins,slot,skinBytes);
             _draws.Add(ReuseDraw(slot, cached.Id, materialId, drawBuffer, pass==1, !skinBytes.IsEmpty, skinBuffer, draw.ReceiveShadows,
-                m.WaterSurface||m.WaterVolume?new BrowserWater{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null));
+                m.WaterSurface||m.WaterVolume?new BrowserWaterParameters{surface=m.WaterSurface,reflections=m.WaterReflections,depthTexture=Texture(m.WaterDepthTexture),size=[m.WaterSize.X,m.WaterSize.Y],column=V4(m.WaterColumn),motion=V4(m.WaterMotion),flow=V4(m.WaterFlow),impact=V4(m.WaterImpact),wake=V4(m.WaterWake),absorption=V4(m.WaterAbsorption),scattering=V4(m.WaterScattering),style=V4(m.WaterStyle),waves=V4(m.WaterOceanWaves),depthRect=V4(m.WaterDepthRect),depthSettings=V4(m.WaterDepthSettings)}:null));
             ProfileEnd("matrix packets",stage);
         }
     }

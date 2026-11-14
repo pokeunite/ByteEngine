@@ -177,69 +177,25 @@ public sealed class Material
         PolygonMode = source.PolygonMode;
     }
 
+    public IEnumerable<Texture2D> Textures()
+    {
+        if (MainTexture != null) yield return MainTexture;
+        if (NormalTexture != null) yield return NormalTexture;
+        if (HeightFieldTexture != null) yield return HeightFieldTexture;
+        if (WaterDepthTexture != null) yield return WaterDepthTexture;
+        if (SandImprintTexture != null) yield return SandImprintTexture;
+        if (MetallicTexture != null) yield return MetallicTexture;
+        if (RoughnessTexture != null) yield return RoughnessTexture;
+        if (AmbientOcclusionTexture != null) yield return AmbientOcclusionTexture;
+        if (PackedPbrTexture != null) yield return PackedPbrTexture;
+        if (EmissionTexture != null) yield return EmissionTexture;
+    }
+
+
     public Material Clone()
     {
-        return
-            new Material
-            {
-                SolidColorPalette=SolidColorPalette,
-                WetContact0=WetContact0,WetContact1=WetContact1,WetContact2=WetContact2,WetLevels=WetLevels,
-                WaterSurface=WaterSurface,WaterVolume=WaterVolume,WaterColumn=WaterColumn,WaterMotion=WaterMotion,WaterWake=WaterWake,WaterFlow=WaterFlow,WaterImpact=WaterImpact,WaterSize=WaterSize,
-                BaseColor =
-                    BaseColor,
-
-                MainTexture =
-                    MainTexture,
-
-                NormalTexture =
-                    NormalTexture,
-                NormalStrength = NormalStrength,
-                HeightFieldTexture=HeightFieldTexture,HeightFieldUvTransform=HeightFieldUvTransform,HeightFieldRange=HeightFieldRange,HeightFieldBias=HeightFieldBias,HeightFieldWorldSize=HeightFieldWorldSize,SandSurface = SandSurface,SandImprintTexture=SandImprintTexture,SandImprintOrigin=SandImprintOrigin,
-                DirectXNormalMap = DirectXNormalMap,
-                MetallicTexture = MetallicTexture,
-                RoughnessTexture = RoughnessTexture,
-                AmbientOcclusionTexture = AmbientOcclusionTexture,
-                AmbientOcclusionStrength = AmbientOcclusionStrength,
-                PackedPbrTexture = PackedPbrTexture,
-                PbrMapMode = PbrMapMode,
-                PackedAoChannel = PackedAoChannel,
-                PackedRoughnessChannel = PackedRoughnessChannel,
-                PackedMetallicChannel = PackedMetallicChannel,
-                EmissionEnabled = EmissionEnabled,
-                EmissionColor = EmissionColor,
-                EmissionIntensity = EmissionIntensity,
-                EmissionTexture = EmissionTexture,
-                UvTiling = UvTiling,
-                UvOffset = UvOffset,
-                Shading = Shading,
-                DecodeColorTexturesSrgb = DecodeColorTexturesSrgb,
-
-                Metallic =
-                    Metallic,
-
-                Roughness =
-                    Roughness,
-
-                BlendMode =
-                    BlendMode,
-
-                AlphaCutoff =
-                    AlphaCutoff,
-
-                DepthTest =
-                    DepthTest,
-
-                DepthWriteMode =
-                    DepthWriteMode,
-
-                CullMode =
-                    CullMode,
-
-                FrontFace =
-                    FrontFace,
-
-                PolygonMode =
-                    PolygonMode
-            };
+        var clone = new Material();
+        clone.CopyFrom(this);
+        return clone;
     }
 }

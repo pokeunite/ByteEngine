@@ -14,12 +14,17 @@ layout.ini
 
 /.artifacts/
 /Backups/
+/UpdateBackups/
 /artifacts/
 /Tools/Inspection/
 /output/goblin-scraper/
 /output/video-wheel/
 **/node_modules/
 **/__pycache__/
+
+# Installed launcher state and root-level release archives are machine-specific.
+/.byteengine-build-source.json
+/*.tar.gz
 
 # Local design studies and generated diagnostic work (tracked references remain tracked).
 /output/

@@ -1,6 +1,6 @@
 using ByteEngine.Core.Net;
 using System.Collections.Concurrent;
-internal sealed record BrowserNetworkCommand(int id,string kind,int channel=0,int buffer=-1,bool offerer=false,NetworkSignal? signal=null);
+
 internal sealed class BrowserNetworkLink : INetworkLink
 {
     internal static readonly Dictionary<int,BrowserNetworkLink> Links=[];

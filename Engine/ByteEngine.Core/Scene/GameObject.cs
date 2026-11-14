@@ -13,6 +13,8 @@ public sealed class GameObject
     private readonly HashSet<Guid> _tags = new();
     private int _layer;
     private bool _started;
+    internal bool NeedsFixedUpdate => !_started || _hasFixedCallbacks;
+    private readonly Dictionary<string,Component?> _namedComponents = new(StringComparer.OrdinalIgnoreCase);
     private Scene? _scene;
     private bool _hasUpdateCallbacks, _hasLateCallbacks, _hasFixedCallbacks, _hasRenderCallbacks;
     private Component[]? _renderOrderProviders;
@@ -33,6 +35,7 @@ public sealed class GameObject
     private void InvalidateComponentCaches()
     {
         if(_componentLookupSlots!=null)Array.Clear(_componentLookupSlots);
+        _namedComponents.Clear();
         _updateSchedule = null;
         _lateSchedule = _fixedSchedule = [];
         _scheduledOrders = [];
@@ -52,7 +55,8 @@ public sealed class GameObject
     }
 
     public Guid Id { get; private set; }
-    public string Name { get; set; }
+    private string _name = string.Empty;
+    public string Name { get => _name; set { if (_name == value) return; _name = value; _scene?.InvalidateObjectLookup(); } }
     private bool _active=true;
     public bool Active {get=>_active;set{if(_active==value)return;_active=value;_scene?.NotifyPhysicsActiveChanged(this);}}
     public bool ActiveInHierarchy => Active && (Parent?.ActiveInHierarchy ?? true);
@@ -256,6 +260,15 @@ public sealed class GameObject
             if (_components[i] is T match) { result = match; break; }
         slots[slot]=new LookupSlot{Key=key,Value=result};
         return result;
+    }
+
+    internal Component? FindComponentByName(string? name)
+    {
+        if(string.IsNullOrWhiteSpace(name))return null;
+        if(_namedComponents.TryGetValue(name,out var cached))return cached;
+        Component? found=null;
+        foreach(var component in _components){var type=component.GetType();if(type.Name.Equals(name,StringComparison.OrdinalIgnoreCase)||type.FullName?.Equals(name,StringComparison.OrdinalIgnoreCase)==true){found=component;break;}}
+        if(_namedComponents.Count>=128)_namedComponents.Clear();_namedComponents[name]=found;return found;
     }
 
     public bool TryGetComponent<T>(out T? component)

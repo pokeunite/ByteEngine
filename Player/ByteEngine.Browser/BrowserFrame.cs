@@ -1,3 +1,4 @@
+using ByteEngine.Core.Graphics.ThreeD;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +14,7 @@ internal sealed class BrowserFrame
     public BrowserShadow? shadow { get; set; }
     public float exposure { get; set; } = 1;
     public int pendingTextures { get; set; }
+    public int sceneRevision { get; set; }
     public double loopMs { get; set; }
     public ByteEngine.Core.Diagnostics.RuntimeFrameMetrics sceneMetrics {get;set;}
     public double inputMs {get;set;}
@@ -32,6 +34,8 @@ internal sealed class BrowserFrame
     public List<BrowserMeshUpload> uploads { get; set; } = [];
     public List<BrowserTextureUpload> textures { get; set; } = [];
     public List<BrowserDrawCommand> draws { get; set; } = [];
+    public int drawBuffer { get; set; } = -1;
+    public int drawCount { get; set; }
     public List<BrowserDraw> materials { get; set; } = [];
     public int[] deadMaterials { get; set; } = [];
     public int uiBuffer { get; set; } = -1;
@@ -143,34 +147,19 @@ internal sealed class BrowserDraw
 
 internal sealed class BrowserDrawCommand
 {
+    public float[] model {get;set;}=[];
+    public float[] wet {get;set;}=[];
+    public float[] instances {get;set;}=[];
+    public float[] shadowInstances {get;set;}=[];
     public int packetSlot {get;set;}=-1;
     public bool shadowOnly {get;set;}
     public bool skinned {get;set;}
     public int skinBuffer {get;set;}=-1;
-    public BrowserWater? water {get;set;}
+    public BrowserWaterParameters? water {get;set;}
     public bool receiveShadows { get; set; }
     public int id { get; set; }
     public int material { get; set; }
     public int dataBuffer { get; set; }
-}
-
-internal sealed class BrowserWater
-{
- public bool surface {get;set;}
- public bool reflections {get;set;}
- public int depthTexture {get;set;}
- public float[] size {get;set;}=[];
- public float[] column {get;set;}=[];
- public float[] motion {get;set;}=[];
- public float[] flow {get;set;}=[];
- public float[] impact {get;set;}=[];
- public float[] wake {get;set;}=[];
- public float[] absorption {get;set;}=[];
- public float[] scattering {get;set;}=[];
- public float[] style {get;set;}=[];
- public float[] waves {get;set;}=[];
- public float[] depthRect {get;set;}=[];
- public float[] depthSettings {get;set;}=[];
 }
 
 internal sealed class BrowserUi

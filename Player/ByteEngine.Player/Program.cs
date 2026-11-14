@@ -8,7 +8,32 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        ByteEngine.Core.Net.NetworkRuntime.CreateLink=()=>new ByteEngine.Network.Native.WebRtcNetworkLink(ByteEngine.Core.Net.NetworkRuntime.IceServers);
+        /*
+         * Packaging identity probe.
+         *
+         * Tools/PublishPlayer.ps1 and Rebuild-ByteEngine-And-Refresh-Dist.ps1
+         * launch the published player with --write-runtime-identity <path> to
+         * prove the bundled and loose builds ship the same ByteEngine.Core.
+         * GamePackageExporter validates that same MVID before running an
+         * exported game, so the probe must answer before any window, project
+         * or native dependency is required.
+         */
+        int identityIndex = Array.FindIndex(
+            args,
+            argument => string.Equals(argument, "--write-runtime-identity", StringComparison.OrdinalIgnoreCase));
+        if (identityIndex >= 0 && identityIndex + 1 < args.Length)
+        {
+            string identityPath = Path.GetFullPath(args[identityIndex + 1].Trim('"'));
+            string? identityDirectory = Path.GetDirectoryName(identityPath);
+            if (!string.IsNullOrWhiteSpace(identityDirectory))
+            {
+                Directory.CreateDirectory(identityDirectory);
+            }
+            File.WriteAllText(
+                identityPath,
+                typeof(ByteEngine.Core.ByteEngineApplication).Assembly.ManifestModule.ModuleVersionId.ToString());
+            return 0;
+        }
 
         string logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ByteEngine", "Games", "Logs");
@@ -24,6 +49,7 @@ internal static class Program
         using var writer = new DiagnosticWriter();
         Console.SetOut(writer);
         Console.SetError(writer);
+        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Enabled=args.Contains("--trace-events",StringComparer.OrdinalIgnoreCase);
         bool smokeTest=args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
         bool validate = args.Contains("--validate", StringComparer.OrdinalIgnoreCase);
         using var splash = smokeTest || validate || args.Contains("--write-runtime-identity") ? null : new StartupSplash();
@@ -45,12 +71,26 @@ internal static class Program
                 }
                 catch (Exception error) when (error is DllNotFoundException or BadImageFormatException)
                 {
-                    throw new InvalidOperationException(
-                        $"Native game dependency could not load: {library}. Keep the entire game folder together. " +
-                        "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
+                    /*
+                     * Single-file exports extract bundled native libraries into a
+                     * host-managed folder instead of the executable directory, so
+                     * the fully qualified load above fails there while the
+                     * default search path still resolves the library.
+                     */
+                    try
+                    {
+                        nint handle = NativeLibrary.Load(library);
+                        NativeLibrary.Free(handle);
+                    }
+                    catch (Exception nested) when (nested is DllNotFoundException or BadImageFormatException)
+                    {
+                        throw new InvalidOperationException(
+                            $"Native game dependency could not load: {library}. Keep the entire game folder together. " +
+                            "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
+                    }
                 }
             }
-            string gameDirectory=SingleExecutablePackage.Prepare(Environment.ProcessPath!)??AppContext.BaseDirectory;
+            string gameDirectory=SingleExecutablePackage.Prepare(Environment.ProcessPath!) ?? AppContext.BaseDirectory;
             if(string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(gameDirectory)),"Runtime",StringComparison.OrdinalIgnoreCase))
                 gameDirectory=Directory.GetParent(Path.TrimEndingDirectorySeparator(gameDirectory))!.FullName;
             if (validate) GamePackageExporter.ValidatePackage(gameDirectory);

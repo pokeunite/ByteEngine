@@ -42,6 +42,7 @@ public sealed class PortableGameLoop : IDisposable
         LastUpdateMilliseconds=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
         LastRenderMilliseconds=0;LastRenderAllocatedBytes=0;
         if (Scenes.ActiveScene is not { } scene) return;
+        long renderStart = System.Diagnostics.Stopwatch.GetTimestamp();
         var context = new RenderContext(_renderer2D, _renderer3D, scene, width, height,
             camera3D: scene.ActiveCamera, prepareEnvironmentLighting3D: false,
             renderShadows3D: false, frameSink: sink, renderWorld: _renderWorld);

@@ -339,14 +339,16 @@ public sealed class ComponentSerializer
         string projectRoot,
         AssetDatabase assetDatabase,
         AssetManager assets,
-        Action<string>? warningSink = null)
+        Action<string>? warningSink = null,
+        bool loadGraphicsAssets = true)
     {
         _context =
             new ComponentSerializationContext(
                 projectRoot,
                 assetDatabase,
                 assets,
-                warningSink
+                warningSink,
+                loadGraphicsAssets
             );
 
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Net.NetworkSettings>("NetworkSettings"));
@@ -382,6 +384,8 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsDrag3D>("PhysicsDrag3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.PhysicsImpactSensor3D>("PhysicsImpactSensor3D"));
         Register(new MeshCollider3DCodec());
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Construction.ImpactParticles3D>("ImpactParticles3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Construction.SwarmRenderer3D>("SwarmRenderer3D"));
         Register(new UiCanvasCodec());
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<CharacterMotionDebugHud3D>("CharacterMotionDebugHud3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<TopDownController3D>("TopDownController3D"));
@@ -470,6 +474,9 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WetSurfaceContact3D>("WetSurfaceContact3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.PulleyCableRig3D>("PulleyCableRig3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DockingReceiver3D>("DockingReceiver3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.MechanicalLatch3D>("MechanicalLatch3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.PrimedSiphon3D>("PrimedSiphon3D"));
+        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.Hydraulics.WaterCounterweightBridge3D>("WaterCounterweightBridge3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.TimedChallenge3D>("TimedChallenge3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.PointerInteraction3D>("PointerInteraction3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Graphics.GraphicsSettings3D>("GraphicsSettings3D"));
@@ -515,6 +522,10 @@ public sealed class ComponentSerializer
 
         _byTypeName[codec.TypeName] =
             codec;
+
+        ComponentTypeRegistry.Register(
+            codec.ComponentType,
+            codec.TypeName);
     }
 
     public string? GetCanonicalTypeName(string name) => _byTypeName.TryGetValue(name, out var codec) ? codec.TypeName : null;
@@ -525,6 +536,7 @@ public sealed class ComponentSerializer
         if (_byTypeName.ContainsKey(alias)) throw new InvalidOperationException($"Component alias '{alias}' is already registered.");
         if (!_byTypeName.TryGetValue(canonical, out var codec)) throw new InvalidOperationException($"Unknown canonical codec '{canonical}'.");
         _byTypeName.Add(alias, codec);
+        ComponentTypeRegistry.RegisterAlias(alias, canonical);
     }
 
     public ComponentData? Serialize(
@@ -566,7 +578,7 @@ public sealed class ComponentSerializer
                 $"Missing component '{data.Type}' is inactive; its authored data is preserved."
             );
 
-            return new MissingComponent(data);
+            return new MissingComponent(data, "Component codec is not registered.");
         }
 
         try
@@ -588,7 +600,7 @@ public sealed class ComponentSerializer
                 $"Could not deserialize component '{data.Type}': {exception.Message}. The component was preserved as an inactive missing component."
             );
 
-            return new MissingComponent(data);
+            return new MissingComponent(data, exception.ToString());
         }
     }
 
@@ -712,7 +724,7 @@ public sealed class ComponentSerializer
                 );
 
             Texture2D? texture =
-                reference.IsEmpty
+                (reference.IsEmpty || !context.LoadGraphicsAssets)
                     ? null
                     : context.Assets.LoadTexture(
                         reference
@@ -1518,6 +1530,7 @@ public sealed class ComponentSerializer
                 ["maximumLagDistance"] = boom.MaximumLagDistance,
                 ["maxLagTimeStep"] = boom.MaxLagTimeStep,
                 ["shoulderOffset"] = boom.ShoulderOffset,
+                ["handoffSeconds"] = boom.HandoffSeconds,
                 ["enableCameraCollision"] = boom.EnableCameraCollision,
                 ["collisionRadius"] = boom.CollisionRadius,
                 ["collisionReturnSpeed"] = boom.CollisionReturnSpeed,
@@ -1554,6 +1567,7 @@ public sealed class ComponentSerializer
                 MaximumLagDistance = Float(data, "maximumLagDistance", 1.5f),
                 MaxLagTimeStep = Float(data, "maxLagTimeStep", 1f / 60f),
                 ShoulderOffset = Float(data, "shoulderOffset", 0f),
+                HandoffSeconds = Float(data, "handoffSeconds", .4f),
                 EnableCameraCollision = data.Properties["enableCameraCollision"]?.GetValue<bool>() ?? false,
                 CollisionRadius = Float(data, "collisionRadius", .2f),
                 CollisionReturnSpeed = Float(data, "collisionReturnSpeed", 8f),

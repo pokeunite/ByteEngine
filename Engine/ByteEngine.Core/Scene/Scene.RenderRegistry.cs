@@ -32,8 +32,10 @@ public sealed partial class Scene
     internal IReadOnlyList<SkyEnvironment> Environments { get { RefreshRenderRegistry(); return _environments; } }
     internal IReadOnlyList<DirectionalLight> DirectionalLights { get { RefreshRenderRegistry(); return _directionalLights; } }
     internal IReadOnlyList<PointLight> PointLights { get { RefreshRenderRegistry(); return _pointLights; } }
+    private int _componentRegistryVersion;
     internal void InvalidateComponentRegistries(Component? changed=null,bool physics=true,IReadOnlyList<Component>? membership=null)
     {
+        _componentRegistryVersion++;
         InvalidateRenderMembership();
         InvalidateComponentSnapshots(changed,membership);
         if(physics&&(changed==null||AffectsPhysics(changed)))InvalidatePhysicsRegistry();

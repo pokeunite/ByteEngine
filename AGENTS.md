@@ -1,8 +1,17 @@
 # Workspace instructions
 
-## VFX asset sourcing
+## Agent memory
 
-Use https://www.particlefx.studio/effects as the first source whenever looking for VFX assets. The user selected it as their preferred VFX library on 2026-11-03. Prefer its free effects; consult other sources if the library does not have a suitable effect.
+Durable cross-session memory lives in `MemoryBank/`. At the start of a task read
+`MemoryBank/activeContext.md` and `MemoryBank/progress.md`; read
+`MemoryBank/systemPatterns.md`, `MemoryBank/techContext.md` and
+`MemoryBank/decisions.md` before changing the areas they describe. Before
+finishing a task that changed files or decisions, refresh `activeContext.md` and
+prepend a dated entry to `sessionLog.md` (and `progress.md` or `decisions.md`
+when applicable). The protocol and trigger phrases ("update memory bank",
+"follow your custom instructions", "catch up") are in
+`.clinerules/memory-bank.md`. Memory files are tracked by git and belong in the
+same commit as the change they describe.
 
 ## User project location
 
@@ -14,6 +23,25 @@ The FPS template working project is `C:/Users/codex/Documents/fps template/fps t
 
 Edit game scenes/assets in `C:/Users/codex/Documents/DuneCompany`. Keep canonical plugin source in this engine repository under `Plugins/DuneCompany`; synchronize the built package to the project Plugins and PluginLibrary and the engine PluginLibrary. Keep project PluginSource synchronized. Do not export games unless the user explicitly authorizes exporting again.
 
-When changing gameplay plugin code, increment its plugin version and synchronize the desktop package and project PluginSource. Normal development targets Windows: do not automatically rebuild the browser runtime. The user approved this faster workflow on 2026-11-01. The active Hazard Pay project is `C:/Users/codex/Documents/palclone`; its canonical plugin is `Plugins/KarlsonDemo`.
+When changing Dune Company plugin code, increment its plugin version and refresh the statically linked browser runtime with `Tools/PublishBrowser.ps1`; updating the desktop package alone does not update web gameplay. Keep the bundled Dist and Debug editor BrowserRuntime copies synchronized. Rebuilding the browser runtime is not a game export.
 
-Refresh the statically linked browser runtime only when the user requests a web runtime refresh or web build, using `Rebuild-ByteEngine-And-Refresh-Dist.ps1 -BrowserOnly` (or `-IncludeBrowser` for a complete rebuild). At that time synchronize Dist and Debug/Release BrowserRuntime copies. A desktop plugin update intentionally leaves web gameplay stale until this explicit refresh. Rebuilding a runtime is not a game export; exporting still requires explicit authorization.
+## Repository hygiene
+
+- `Dist/ByteEngine/BrowserRuntime` is the canonical web runtime. After publishing, run `Tools/Sync-BrowserRuntime.ps1` to mirror it into the editor `bin/Debug` and `bin/Release` output folders. `-Check` reports drift without copying.
+- `Tools/Clean-Workspace.ps1` reports generated build output and caches. It is a dry run unless `-Apply` is passed; `-Full` also removes `bin` and `obj`. Authored projects and sample content are never touched.
+- Engine version comes from `ByteEngineVersion` in the root `Directory.Build.props`. Do not add a second hard-coded version.
+- New C# follows the root `.editorconfig`: four-space indentation, Allman braces, file-scoped namespaces, System usings first, and a 240-column review limit.
+
+## Canonical source and Hazard Pay
+
+The sole maintained source is C:/Users/codex/ByteEngine on main. Verify
+.byteengine-build-source.json before editing or publishing. Do not republish
+from historical worktrees or recreate a separate ByteEngine-Palclone engine.
+Hazard Pay is C:/Users/codex/Documents/palclone; canonical gameplay source is
+Plugins/KarlsonDemo. Preserve project assets and saves. Rebuild/install the
+Windows plugin and synchronize project PluginSource after gameplay changes.
+Windows development is the default; browser refresh remains opt-in through
+-BrowserOnly or -IncludeBrowser. Do not export a game without fresh explicit
+user authorization. Rebuilding editor/player runtimes is not a game export.
+Use https://www.particlefx.studio/effects first when sourcing VFX assets.
+Backups and UpdateBackups are recovery history, not disposable build caches.

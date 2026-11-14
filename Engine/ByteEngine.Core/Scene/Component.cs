@@ -19,6 +19,9 @@ public abstract class Component
         bool renderOrder=type.GetProperty(nameof(RenderOrder))?.GetMethod?.DeclaringType!=typeof(Component);
         return new(Overrides(nameof(OnUpdate)), Overrides(nameof(OnLateUpdate)), Overrides(nameof(OnFixedUpdate)),render,renderOrder,contacts);
     });
+    internal bool ImplementsUpdate => HasUpdateCallback;
+    internal bool ImplementsLateUpdate => HasLateUpdateCallback;
+    internal bool ImplementsFixedUpdate => HasFixedUpdateCallback;
     internal bool HasUpdateCallback => RuntimeCallbacks.Update;
     internal bool HasLateUpdateCallback => RuntimeCallbacks.Late;
     internal bool HasFixedUpdateCallback => RuntimeCallbacks.Fixed;
@@ -89,6 +92,7 @@ public abstract class Component
             StartInternal();
         }
 
+        using var runtimeTiming = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled ? ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Update") : default;
         var profiler = _gameObject?.Scene?.ComponentProfiler;
         if (profiler is not { Enabled: true }) { OnUpdate(); return; }
         var start = profiler.Begin(this);
@@ -107,6 +111,7 @@ public abstract class Component
             StartInternal();
         }
 
+        using var runtimeTiming = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled ? ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"LateUpdate") : default;
         var profiler = _gameObject?.Scene?.ComponentProfiler;
         if (profiler is not { Enabled: true }) { OnLateUpdate(); return; }
         var start = profiler.Begin(this);
@@ -117,6 +122,7 @@ public abstract class Component
     {
         if (!Enabled) return;
         if (!_started) StartInternal();
+        using var runtimeTiming = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled ? ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"FixedUpdate") : default;
         var profiler = _gameObject?.Scene?.ComponentProfiler;
         if (profiler is not { Enabled: true }) { OnFixedUpdate(); return; }
         var start = profiler.Begin(this);
@@ -139,6 +145,7 @@ public abstract class Component
             StartInternal();
         }
 
+        using var runtimeTiming = ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Enabled ? ByteEngine.Core.Diagnostics.RuntimeComponentProfiler.Measure(this,"Render") : default;
         var profiler = _gameObject?.Scene?.ComponentProfiler;
         if (profiler is not { Enabled: true }) { OnRender(context); return; }
         var start = profiler.Begin(this);

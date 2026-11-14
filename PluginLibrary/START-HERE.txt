@@ -1,0 +1,20 @@
+REUSING BYTEENGINE PLUGINS
+
+In the editor, open Project Settings > Plugins > Import Plugin.
+Choose a .byteplugin file here, then reopen the project.
+Find the registered components in Add Component and edit their Inspector settings.
+Use Event Sheets to read component state and change writable tuning properties.
+
+Canonical plugin source lives in the engine repository's Plugins folder.
+Game scenes, assets and blueprints belong in the game's own Documents folder.
+The source/package check is Tools/AuditProjectSystems.ps1 in the repository.
+The PDF guide is Docs/ByteEngine-Systems-Audit-and-Reuse-Guide.pdf.
+
+PLATFORMS
+These packages are installable desktop plugins. Browser builds require plugin code
+to be linked into the browser runtime; importing a package alone is insufficient.
+The current browser runtime links DesertTerrain and DuneCompany. Downhill and the
+historical FPS/construction plugins are not currently advertised as browser-ready.
+
+Downhill 0.4.0 source was recovered from Legends Road before that project was
+deleted at the user's request. The project itself has not been restored.

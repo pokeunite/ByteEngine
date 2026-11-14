@@ -14,6 +14,7 @@ internal sealed class StandaloneGame : ByteEngineApplication
     private Action? _firstFrame;
     private IDisposable? displayLease;
     private readonly System.Diagnostics.Stopwatch _smokeTimer=new();
+    private IDisposable? _displayLease;
     protected override bool CloseOnEscape => false;
 
     public StandaloneGame(GameProjectRuntime project, bool smokeTest = false, bool validateOnly = false, Action? firstFrame = null)
@@ -30,9 +31,9 @@ internal sealed class StandaloneGame : ByteEngineApplication
 
     protected override void OnEngineStart()
     {
-        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Enabled = false;
-        ByteEngine.Core.VisualLogic.VisualLogicDebugTrace.Clear();
-        if(!_smokeTest&&!_validateOnly)displayLease=GameWindowDisplay.Attach(ApplyDisplayMode,_project.Project.Window.StartFullscreen?GameWindowMode.Fullscreen:GameWindowMode.Windowed);
+        // Plugins drive windowed/borderless/fullscreen through Core; the host owns the window.
+        if (!_smokeTest && !_validateOnly)
+            _displayLease = GameWindowDisplay.Attach(ApplyDisplayMode, GameWindowMode.Windowed);
         foreach (var variable in _project.Project.GlobalVariables)
             Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
         var currentPath=_project.Project.StartupScene;
@@ -107,18 +108,36 @@ internal sealed class StandaloneGame : ByteEngineApplication
 
     private void ApplyDisplayMode(GameWindowMode mode)
     {
-        var monitor=OpenTK.Windowing.Desktop.Monitors.GetMonitorFromWindow(this);var area=monitor.ClientArea;
-        if(mode==GameWindowMode.Fullscreen){WindowState=OpenTK.Windowing.Common.WindowState.Fullscreen;return;}
-        WindowState=OpenTK.Windowing.Common.WindowState.Normal;
-        WindowBorder=mode==GameWindowMode.Borderless?OpenTK.Windowing.Common.WindowBorder.Hidden:OpenTK.Windowing.Common.WindowBorder.Resizable;
-        if(mode==GameWindowMode.Borderless){ClientSize=area.Size;Location=area.Min;}
-        else{ClientSize=new(Math.Min(_project.Project.Window.Width,Math.Max(640,area.Size.X-80)),Math.Min(_project.Project.Window.Height,Math.Max(480,area.Size.Y-100)));CenterWindow();}
+        var monitor = OpenTK.Windowing.Desktop.Monitors.GetMonitorFromWindow(this);
+        var area = monitor.ClientArea;
+        if (mode == GameWindowMode.Fullscreen)
+        {
+            WindowState = OpenTK.Windowing.Common.WindowState.Fullscreen;
+            return;
+        }
+
+        WindowState = OpenTK.Windowing.Common.WindowState.Normal;
+        WindowBorder = mode == GameWindowMode.Borderless
+            ? OpenTK.Windowing.Common.WindowBorder.Hidden
+            : OpenTK.Windowing.Common.WindowBorder.Resizable;
+        if (mode == GameWindowMode.Borderless)
+        {
+            ClientSize = area.Size;
+            Location = area.Min;
+        }
+        else
+        {
+            ClientSize = new(
+                Math.Min(_project.Project.Window.Width, Math.Max(640, area.Size.X - 80)),
+                Math.Min(_project.Project.Window.Height, Math.Max(480, area.Size.Y - 100)));
+            CenterWindow();
+        }
     }
+
     protected override void OnEngineShutdown()
     {
-        networkLobby?.Dispose();ByteEngine.Core.Net.NetworkRuntime.Stop();
-
-        displayLease?.Dispose();displayLease=null;
+        _displayLease?.Dispose();
+        _displayLease = null;
         ReleaseGameInput();
         // Release GPU assets while the window still owns its live graphics context.
         _project.Dispose();

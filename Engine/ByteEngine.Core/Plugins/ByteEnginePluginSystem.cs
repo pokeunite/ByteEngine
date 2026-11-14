@@ -82,6 +82,7 @@ public static class ByteEnginePluginRegistry
         public readonly Dictionary<string, string> Aliases = new(StringComparer.OrdinalIgnoreCase);
     }
 
+    internal static void SetDisplayName(string id,string name){lock(Sync){if(ByPlugin.TryGetValue(id,out var registration))registration.DisplayName=name;}}
     private static int _revision;
     public static int Revision => System.Threading.Volatile.Read(ref _revision);
     private static readonly object Sync = new();
@@ -107,23 +108,39 @@ public static class ByteEnginePluginRegistry
             ByPlugin[id].Actions.Add(action);
         }
     }
-    internal static void SetDisplayName(string id,string name)
-    {lock(Sync) {ByPlugin[id].DisplayName=name;System.Threading.Interlocked.Increment(ref _revision);}}
-
-    public static string GetVisualLogicMenuPath(string instructionId,string category,string? component,string? menuGroup)
+    /// <summary>
+    /// Returns the menu path for a plugin-contributed Event Sheet node, grouped
+    /// under its plugin and, when possible, its target object type.
+    /// </summary>
+    public static string GetVisualLogicMenuPath(string instructionId, string category, string? component, string? menuGroup)
     {
-        lock(Sync)
+        lock (Sync)
         {
-            foreach(var pair in ByPlugin)
+            foreach (var pair in ByPlugin)
             {
-                var plugin=pair.Value;
-                if(!plugin.Actions.Any(a=>a.Id==instructionId)&&!plugin.Conditions.Any(c=>c.Id==instructionId))continue;
-                string? objectName=plugin.Components.FirstOrDefault(c=>c.Codec.TypeName==component || c.Codec.TypeName.EndsWith("."+component,StringComparison.Ordinal))?.Metadata.DisplayName;
-                return "Plugins / "+(plugin.DisplayName??pair.Key)+" / "+(menuGroup??objectName??category);
+                var plugin = pair.Value;
+                if (!plugin.Actions.Any(a => a.Id == instructionId) &&
+                    !plugin.Conditions.Any(c => c.Id == instructionId))
+                {
+                    continue;
+                }
+
+                string? objectName = null;
+                if (!string.IsNullOrWhiteSpace(component))
+                {
+                    objectName = plugin.Components
+                        .FirstOrDefault(c => c.Codec.TypeName == component ||
+                                             c.Codec.TypeName.EndsWith("." + component, StringComparison.Ordinal))
+                        ?.Metadata.DisplayName;
+                }
+
+                return "Plugins / " + (plugin.DisplayName ?? pair.Key) + " / " + (menuGroup ?? objectName ?? category);
             }
+
             return category;
         }
     }
+
     internal static void RegisterCondition(string id, VisualConditionDefinition condition)
     {
         lock (Sync)
@@ -755,9 +772,18 @@ public static class ByteEnginePluginManager
         {
             // ByteEngine.Core must always resolve from the host/default context so
             // plugin Component/IComponentCodec identity matches the running engine.
+            //
+            // Bind the host Core explicitly instead of returning null. Plugins are
+            // compiled against the Core assembly version current when the package
+            // was built; returning null hands the bind to the default context,
+            // which refuses a plugin built against an older assembly version
+            // (for example 0.9 -> 0.10). The plugin then loses its entry type and
+            // every one of its components, with only "entry point was not found"
+            // in the log. Returning the loaded Core keeps type identity with the
+            // engine while letting older plugin packages keep working.
             string coreName = typeof(IByteEnginePlugin).Assembly.GetName().Name ?? "ByteEngine.Core";
             if (string.Equals(assemblyName.Name, coreName, StringComparison.OrdinalIgnoreCase))
-                return null;
+                return typeof(IByteEnginePlugin).Assembly;
 
             if (assemblyName.Name != null && _dependencies.TryGetValue(assemblyName.Name, out var dependency))
                 return dependency;

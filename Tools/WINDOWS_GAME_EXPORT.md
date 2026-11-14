@@ -5,7 +5,9 @@
 3. Select the saved **Startup Scene** and choose an export folder.
 4. Click **Export Windows Game** and wait for completion.
 5. Open the export folder and launch the executable named after your project.
-6. Zip the **entire build folder** when sharing it. Do not send only the EXE.
+6. Zip the **entire build folder** when sharing it. When the installed runtime ships a
+   bundled player (the default), that folder is one executable plus notices: the .NET
+   runtime, native libraries and every asset are inside the EXE.
 
 The build is a standalone Windows x64 game, not the editor. It includes the .NET
 runtime, native engine libraries, all saved Assets/Scenes, their GUID metadata,
@@ -13,9 +15,24 @@ and model-owned sockets/animation libraries. Fonts, materials, UI, animation,
 audio, input maps, global variables, Event Sheets and runtime Blueprint spawning
 use the engine's existing serialization and runtime systems.
 
-The root contains the game launcher and Game.bytepak. Managed/native libraries
-and the self-contained .NET player live under Runtime/. Keep that folder together.
-The Open Frame engine icon and animated loading window are embedded in the player.
+The export has two layouts, chosen automatically from the installed `PlayerRuntime`:
+
+- **Single executable (default).** When `PlayerRuntime\Bundled\ByteEngine.Player.exe`
+  exists, the exporter copies that self-contained player, appends `Game.bytepak` to it
+  behind a fixed footer, and deletes the loose package. The build folder contains the
+  executable, `game-package.json`, `README.txt` and the attribution notices — no
+  `Runtime/` folder and no `Game.bytepak`. On first launch the player verifies the
+  payload SHA-256 and extracts it to
+  `%LOCALAPPDATA%\ByteEngine\Games\Bundled\<sha256>`.
+- **Folder fallback.** Without a bundled player the older layout is kept: the launcher
+  renamed after the game in the root, `Game.bytepak` beside it, and the self-contained
+  player with native libraries under `Runtime/`. Keep that folder together.
+
+Both layouts are covered by `GamePackageExporter.ValidatePackage`; the bundled
+executable is hashed as a whole, so a modified payload fails validation. The bundled
+player writes its Core build identity to `Bundled\core-mvid.txt` at publish time and
+the exporter refuses to package when that identity differs from the running editor —
+refresh `PlayerRuntime` with `Tools/PublishPlayer.ps1` after changing engine code.
 
 Each new export receives its own save identity: fresh builds start fresh, while
 reopening the same build keeps its progress. Editor saves remain project-local.

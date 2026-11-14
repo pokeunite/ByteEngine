@@ -101,6 +101,8 @@ public sealed class EventRuleDefinition
     public bool EditorOutlineCollapsed { get; set; }
     public string EditorHeaderColor { get; set; } = string.Empty;
 
+
+
     public bool Enabled { get; set; } =
         true;
 
@@ -212,6 +214,7 @@ public sealed class EventGraphGroupDefinition
 
     public string Title { get; set; } =
         "Comment";
+
 
     // Collapsed groups are a visual editor affordance, not callable functions.
     public bool Collapsed { get; set; }

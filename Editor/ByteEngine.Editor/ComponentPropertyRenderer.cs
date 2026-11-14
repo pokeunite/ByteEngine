@@ -251,6 +251,18 @@ internal static class ComponentPropertyRenderer
         if (component is FirstPersonCamera3D fps)
             DrawFirstPersonFraming(fps, context, begin, changed, end);
 
+        /*
+         * Authored camera framing must be visible before Play. Applying the
+         * boom pose on every inspector draw keeps the scene and game views in
+         * sync with yaw/pitch/arm-length edits instead of only reacting at
+         * runtime. Skipped while playing so the live rig stays authoritative.
+         */
+        if (component is CameraBoom3D boomPreview &&
+            EditorState.Active is { Mode: EditorMode.Edit })
+        {
+            boomPreview.ApplyAuthoringPose();
+        }
+
         if(component is ModelHierarchyInstance graphicsModel && project!=null)
         {
             if(ImGui.Button("Check Model Graphics"))
@@ -634,6 +646,36 @@ internal static class ComponentPropertyRenderer
                 string blendName = before?.ToString() ?? string.Empty;
                 edited = DrawAnimationBlendSpaceSelector(component, project, label, blendPicker, ref blendName);
                 after = blendName;
+            }
+            else if (descriptor.Property.PropertyType == typeof(string) &&
+                     descriptor.Property.IsDefined(
+                         typeof(ByteEngine.Core.Authoring.SceneObjectPickerAttribute), inherit: true))
+            {
+                string objectName = before?.ToString() ?? string.Empty;
+                string preview = string.IsNullOrWhiteSpace(objectName) ? "None" : objectName;
+
+                if (ImGui.BeginCombo(label, preview))
+                {
+                    if (ImGui.Selectable("None", string.IsNullOrWhiteSpace(objectName)))
+                    {
+                        after = string.Empty;
+                        edited = true;
+                    }
+
+                    if (component.GameObject.Scene is { } pickerScene)
+                    {
+                        foreach (GameObject candidate in pickerScene.GameObjects)
+                        {
+                            if (ImGui.Selectable(candidate.Name + "##" + candidate.Id, candidate.Name == objectName))
+                            {
+                                after = candidate.Name;
+                                edited = true;
+                            }
+                        }
+                    }
+
+                    ImGui.EndCombo();
+                }
             }
             else if (descriptor.Property.PropertyType == typeof(string) &&
                      descriptor.Property.IsDefined(typeof(AnimationActionPickerAttribute), inherit: true))

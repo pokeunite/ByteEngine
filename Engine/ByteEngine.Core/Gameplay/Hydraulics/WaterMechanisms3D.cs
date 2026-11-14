@@ -53,6 +53,7 @@ public sealed class BuoyantPulley3D : Component
     {
         var scene=GameObject.Scene!;var input=scene.FindGameObject(FloatName);var load=scene.FindGameObject(LoadName);
         if(input?.GetComponent<Rigidbody3D>() is not {} body||load==null)return;
+        if(load.GetComponent<MechanicalLatch3D>() is {Latched:true}){TravelSpeed=0;return;}
         body.AddForce(new(0,-Math.Max(0,LoadMass)*9.81f*Math.Abs(Ratio),0));
         if(LimitInputTravel&&Ratio>0&&input.Transform.WorldPosition.Y>RestHeight+MaximumTravel/Ratio){var stopped=input.Transform.WorldPosition;stopped.Y=RestHeight+MaximumTravel/Ratio;input.Transform.WorldPosition=stopped;var velocity=body.Velocity;velocity.Y=Math.Min(0,velocity.Y);body.Velocity=velocity;}
         float next=Math.Clamp((input.Transform.WorldPosition.Y-RestHeight)*Ratio,0,MaximumTravel);

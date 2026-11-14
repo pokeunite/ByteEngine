@@ -1,12 +1,63 @@
 # Progress
 
-Updated: 2026-11-13.
+Updated: 2026-11-13
 
-Validated: native GPU skinning main/shadow parity, multi-context resolved post,
-render registry and AI query invalidation; codec/session/four-peer/lobby recovery;
-three local native WebRTC checks. Performance harness schedules and synthetic
-bootstrap gate pass.
+## Works
 
-Pending: controlled real FPS comparisons, overseas signaling/ICE/TURN validation,
-packed HDR format/fallback parity, branch integration with main. Phase buckets,
-shadow cap and packed HDR stay opt-in. See Docs/Cline-Update-Review-2026-11-13.md.
+- Editor shell, Project Browser and templates (Clean Project, 3D Starter,
+  ByteArena, Last Stand, Interactive Sand).
+- Model pipeline: FBX/OBJ/GLB import with node hierarchy, sub-assets, reimport,
+  scale normalization and per-instance markers.
+- Rendering: indexed geometry, PBR-style shading, shadows, instancing, static
+  mesh LODs, water and terrain.
+- Editor tooling: scene view navigation/gizmos, Game View, UI authoring with
+  resolution previews, profiling by viewport/pass.
+- Headless authoring: `Tools/ByteEngine.Mcp` creates projects from shared Core
+  templates, imports assets and reads model sub-assets/import settings, batch-edits
+  scenes/Blueprints/Event Modules, scaffolds/builds/installs plugins, validates the
+  whole project and exports on explicit request.
+- Characters: `CharacterController3D` (acceleration, air control, slope limits,
+  step tolerance, coyote time, buffered jumps), capsule collider, animation
+  controller, skeletons, sockets, blending, crowd pose sharing.
+- Blueprints and variants with three-way inheritance; ByteGraph `.byteevents`
+  logic with tracing and Play-mode hot reload.
+- Variables across Global/Scene/Self/Component scopes with persistent GUID refs
+  and writable nested fields.
+- Navigation: grid and triangle-navmesh baking with clearance/slope constraints,
+  links, debug paths, agent path following.
+- Physics: rigid bodies, box/capsule/heightfield/static-mesh/convex-hull
+  colliders, BVH acceleration, angular contacts, sleeping, swept collision,
+  distance/hinge joints, plus the separate construction-vehicle solver.
+- Audio: master/music/sfx/ui buses, ducking, voice priorities, bounded native
+  WAV/Ogg streaming; browser uses media playback.
+- Runtime: Windows player publish, WebGL2 browser runtime with crash reporting,
+  plugin loading and browser plugin package sync.
+- Windows game export: single executable (self-contained player + appended `Game.bytepak` payload,
+  SHA-256 verified extraction to `%LOCALAPPDATA%\ByteEngine\Games\Bundled`), with the older
+  `Runtime/` + loose package layout as fallback; `--windows-export-single` covers it end to end.
+
+## In progress
+
+- Branch integration and real repeated performance acceptance remain open.
+- Cline navigation/physics/crowd updates are reviewed with correctness fixes; see
+  Docs/Cline-Update-Review-2026-11-13.md for exact checks and branch boundaries.
+
+## Known gaps
+
+- Main uses CPU crowd deformation. Native GPU skinning exists and passes automated
+  main/shadow parity tests on the secondary branch; integration remains open.
+- Crowd sharing opts out for hidden mesh parts, blends, advanced pose layers,
+  IK/reactions, physical bone deformation and per-slot material overrides.
+- Root motion and socket followers are still evaluated per renderer on a crowd
+  pose hit.
+- Batched spawning is missing: `AddGameObject` is O(n) per call, so mass spawning
+  is quadratic.
+- Dynamic avoidance and skinned LOD generation are separate, unfinished work.
+- Fixed-step simulation is opt-in for compatibility; scene callbacks must migrate
+  before enabling it.
+- Importer/rig compatibility still needs per-asset validation.
+- OBJ import is intentionally basic; GLB is the recommended exchange format.
+- MCP has no headless Play, input injection, screenshots or undo; visual checks use
+  the editor or browser harnesses.
+
+- Engine lines are split: main lacks the branch gameplay layer (TopDownController3D, TopDownCamera3D, DashAbility3D, CombatFeedback3D, CharacterMotionDebugHud3D, ICharacterDebugSource, CombatDamageReceipt plus branch-only members on AnimationController, HealthComponent, Scene, RenderContext and CharacterController3D). palclone is published from the branch as C:\Users\codex\ByteEngine-Palclone until the lines are merged.

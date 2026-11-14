@@ -9,6 +9,7 @@ using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
 using ByteEngine.Core.VisualLogic;
+using ByteEngine.Core.Serialization;
 
 namespace ByteEngine.Editor;
 
@@ -134,6 +135,9 @@ internal static class ComponentMetadataRegistry
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterImpact3D)] = new("Water Impact Foam", "Rendering", "Foam and spray driven by arriving water rather than valve commands.", "water foam spray splash impact"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.SluiceActuator3D)] = new("Screw Sluice Actuator", "Physics", "Finite screw travel, measured aperture and linked handwheel driven by an Event Sheet scene variable.", "water gate screw valve animation"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.RotaryValve3D)] = new("Rotary Water Diverter", "Physics", "Rate-limited rotary selector with an at-target condition for native Event Sheets.", "water fork diverter valve"),
+        [typeof(ByteEngine.Core.Gameplay.Hydraulics.MechanicalLatch3D)] = new("Mechanical Latch", "Physics", "Commanded locking pin with an Event Sheet eligibility condition. Holds compatible pulley and ballast mechanisms.", "pin gate latch lock"),
+        [typeof(ByteEngine.Core.Gameplay.Hydraulics.PrimedSiphon3D)] = new("Primed Siphon", "Physics", "Starts conserved Water Gate flow at the priming line and stops when air reaches the intake.", "water siphon prime hysteresis"),
+        [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterCounterweightBridge3D)] = new("Water Counterweight Bridge", "Physics", "Damped drawbridge driven by finite ballast water mass, with an alignment range and optional Mechanical Latch.", "water ballast bridge counterweight"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.FlowRotor3D)] = new("Flow Rotor", "Physics", "Rotate a wheel or shaft using measured water throughput.", "water pulley wheel rotor"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterGate3D)] = new("Water Gate / Pump", "Physics", "Gravity sluice or recovery pump between finite basins.", "water valve sluice pump"),
         [typeof(ByteEngine.Core.Gameplay.Hydraulics.WaterNetwork3D)] = new("Water Network", "Physics", "Conserves water across connected basins and computes head-driven flow.", "water fluid simulation"),
@@ -405,6 +409,36 @@ internal static class ComponentMetadataRegistry
     };
 
     public static IReadOnlyCollection<Type> RegisteredTypes => Components.Keys;
+
+    /// <summary>Serialized component types with no explicit editor metadata entry.</summary>
+    internal static IReadOnlyList<Type> MissingSerializedMetadata() =>
+        ComponentTypeRegistry.RegisteredTypes
+            .Where(type => !Components.ContainsKey(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>Metadata entries whose component type has no serializer codec.</summary>
+    internal static IReadOnlyList<Type> MetadataWithoutSerializer() =>
+        Components.Keys
+            .Where(type =>
+                !type.IsAbstract &&
+                type != typeof(ByteEngine.Core.Serialization.MissingComponent) &&
+                !ComponentTypeRegistry.IsRegistered(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>Concrete engine components in an assembly that cannot be saved.</summary>
+    internal static IReadOnlyList<Type> UnregisteredComponentTypes(
+        System.Reflection.Assembly assembly) =>
+        assembly.GetTypes()
+            .Where(type =>
+                typeof(Component).IsAssignableFrom(type) &&
+                !type.IsAbstract &&
+                !type.ContainsGenericParameters &&
+                type != typeof(ByteEngine.Core.Serialization.MissingComponent) &&
+                !ComponentTypeRegistry.IsRegistered(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
 
     public static ComponentMetadata Get(Type type) => Components.TryGetValue(type, out ComponentMetadata? value)
         ? value

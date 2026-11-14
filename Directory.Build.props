@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    Single source of truth for the engine version.
+
+    Change ByteEngineVersion here and every project (Core, Editor, Player,
+    Browser, tests, plugins and tools) receives the same assembly version.
+    ByteEngineInfo.Version reads the generated AssemblyInformationalVersion,
+    so UI titles, project files, crash reports and plugin manifest checks all
+    agree without a second hard-coded string.
+  -->
+  <PropertyGroup>
+    <ByteEngineVersion>0.10.0</ByteEngineVersion>
+    <Version>$(ByteEngineVersion)</Version>
+    <AssemblyVersion>$(ByteEngineVersion).0</AssemblyVersion>
+    <FileVersion>$(ByteEngineVersion).0</FileVersion>
+    <!-- Keep the informational version clean so Version.Parse never sees a +sha suffix. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+</Project>

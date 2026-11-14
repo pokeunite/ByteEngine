@@ -3,6 +3,7 @@ using System.Numerics;
 
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Characters;
@@ -1621,6 +1622,10 @@ public sealed class EditorApplication
             scene
         );
 
+        TrimAssetCacheForScene(
+            context.Assets,
+            scene);
+
         _projectContext =
             context;
 
@@ -1688,6 +1693,10 @@ public sealed class EditorApplication
             scene
         );
 
+        TrimAssetCacheForScene(
+            _projectContext.Assets,
+            scene);
+
         _state =
             new EditorState
             {
@@ -1751,6 +1760,10 @@ public sealed class EditorApplication
             Scenes.SetEditorScene(
                 scene
             );
+
+            TrimAssetCacheForScene(
+                _projectContext.Assets,
+                scene);
 
             _state =
                 new EditorState
@@ -1825,6 +1838,9 @@ public sealed class EditorApplication
                 _projectContext,
                 scene);
         Scenes.SetEditorScene(scene);
+        TrimAssetCacheForScene(
+            _projectContext.Assets,
+            scene);
         _state = new EditorState
         {
             EditorScene = scene,
@@ -1846,6 +1862,92 @@ public sealed class EditorApplication
         InitializeUndo(_state, _projectContext, true);
         RegisterSceneDocument();
         _log.Info($"Opened scene '{asset.ProjectPath}'.");
+    }
+
+    /// <summary>
+    /// Releases cached assets that the scene being opened does not reference.
+    /// Runs after Blueprint synchronization so instantiated Blueprint models and
+    /// materials are included in the keep set.
+    /// </summary>
+    private void TrimAssetCacheForScene(AssetManager assets, Scene scene)
+    {
+        try
+        {
+            HashSet<Guid> keep = CollectAssetGuids(scene);
+            int released = assets.TrimCaches(keep);
+            if (released > 0)
+            {
+                AssetManager.AssetCacheStats stats = assets.CacheStats;
+                _log.Info(
+                    $"Asset cache released {released} unused asset(s) for '{scene.Name}'. " +
+                    $"Now {stats.Textures} textures ({stats.TextureBytes / (1024 * 1024)} MB), {stats.Models} models.");
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Warning($"Asset cache trim skipped: {exception.Message}");
+        }
+    }
+
+    private static HashSet<Guid> CollectAssetGuids(Scene scene)
+    {
+        HashSet<Guid> keep = new();
+
+        foreach (GameObject gameObject in scene.GameObjects)
+        {
+            foreach (ByteEngine.Core.Scene.Component component in gameObject.Components)
+            {
+                foreach (System.Reflection.PropertyInfo property in component
+                             .GetType()
+                             .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+                {
+                    if (property.GetIndexParameters().Length != 0 || property.GetMethod == null)
+                    {
+                        continue;
+                    }
+
+                    object? value;
+                    try
+                    {
+                        value = property.GetValue(component);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    CollectAssetValue(value, keep);
+                }
+            }
+        }
+
+        return keep;
+    }
+
+    private static void CollectAssetValue(object? value, HashSet<Guid> keep)
+    {
+        switch (value)
+        {
+            case AssetReference reference when reference.Guid != Guid.Empty:
+                keep.Add(reference.Guid);
+                return;
+
+            case ModelMeshReference mesh when mesh.Model.Guid != Guid.Empty:
+                keep.Add(mesh.Model.Guid);
+                return;
+
+            case ModelMaterialReference material when material.Model.Guid != Guid.Empty:
+                keep.Add(material.Model.Guid);
+                return;
+
+            case System.Collections.IEnumerable items when value is not string:
+                foreach (object? item in items)
+                {
+                    CollectAssetValue(item, keep);
+                }
+
+                return;
+        }
     }
 
     private bool SaveScene()
@@ -2123,6 +2225,13 @@ public sealed class EditorApplication
         Scenes.SetEditorScene(
             _state.EditorScene
         );
+
+        if (_projectContext != null)
+        {
+            TrimAssetCacheForScene(
+                _projectContext.Assets,
+                _state.EditorScene);
+        }
 
         _state.RuntimeScene =
             null;

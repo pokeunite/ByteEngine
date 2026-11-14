@@ -14,11 +14,15 @@ public sealed class ComponentSerializationContext
 
     public Action<string>? WarningSink { get; }
 
+    /// <summary>False for headless authoring: preserve references without creating GPU resources.</summary>
+    public bool LoadGraphicsAssets { get; }
+
     public ComponentSerializationContext(
         string projectRoot,
         AssetDatabase assetDatabase,
         AssetManager assets,
-        Action<string>? warningSink)
+        Action<string>? warningSink,
+        bool loadGraphicsAssets = true)
     {
         ProjectRoot =
             Path.GetFullPath(
@@ -28,6 +32,7 @@ public sealed class ComponentSerializationContext
         Assets = assets;
         AssetDatabase = assetDatabase;
         WarningSink = warningSink;
+        LoadGraphicsAssets = loadGraphicsAssets;
     }
 }
 

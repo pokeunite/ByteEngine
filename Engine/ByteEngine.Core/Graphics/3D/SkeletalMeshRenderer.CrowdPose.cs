@@ -62,6 +62,7 @@ public sealed partial class SkeletalMeshRenderer
   crowdShadow=!OperatingSystem.IsBrowser()&&_runtimeMeshes.All(m=>m.Material.BlendMode==BlendMode3D.Opaque&&m.Material.HeightFieldTexture==null)&&placements.All(m=>m.GetDeterminant()>.000001f)?MergeCrowdGeometry(meshes,placements,Enumerable.Range(0,meshes.Length).ToArray()):null;
   crowdPool.Poses[key]=new(_currentPoseGlobals.ToArray(),_currentRootMotionCorrection,meshes,placements,crowdDraws,crowdShadow);
  }
+ void ClearCrowdSharedState(){crowdDraws=null;crowdShadow=null;foreach(var runtime in _runtimeMeshes)runtime.SharedCrowdMesh=null;_poseDirty=true;}
  void ReleaseCrowdPool()
  {
   if(crowdPool!=null&&--crowdPool.Users==0){foreach(var pose in crowdPool.Poses.Values){foreach(var mesh in pose.Meshes)mesh.Dispose();foreach(var draw in pose.Draws){draw.DisposeDistantMesh();if(!pose.Meshes.Contains(draw.Mesh))draw.Mesh.Dispose();}pose.Shadow?.Dispose();}foreach(var reduced in crowdPool.ReducedShadows.Values) reduced.Dispose();crowdPool.ReducedShadows.Clear();crowdPool.Poses.Clear();if(crowdModel!=null)CrowdPools.Remove(crowdModel);}

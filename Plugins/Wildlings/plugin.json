@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "studio.wildlings",
+  "name": "Wildlings",
+  "version": "0.1.0",
+  "assembly": "Wildlings.Plugin.dll",
+  "entryPoint": "Wildlings.WildlingsPlugin",
+  "editor": true,
+  "runtime": true,
+  "minimumEngineVersion": "0.10.0",
+  "dependencies": []
+}

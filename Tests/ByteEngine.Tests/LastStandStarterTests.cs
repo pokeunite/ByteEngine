@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics.ThreeD;
 using ByteEngine.Core.Runtime;

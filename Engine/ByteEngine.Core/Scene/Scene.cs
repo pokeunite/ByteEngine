@@ -26,7 +26,7 @@ public sealed partial class Scene
         new();
     private Dictionary<Guid,GameObject>? _objectLookup;
     private readonly HashSet<Guid> _duplicateObjectIds=new();
-    private void InvalidateObjectLookupOrder(){if(_duplicateObjectIds.Count>0)_objectLookup=null;}
+    private void InvalidateObjectLookupOrder(){InvalidateObjectLookup();if(_duplicateObjectIds.Count>0)_objectLookup=null;}
 
     private readonly HashSet<GameObject> _pendingDestroy =
         new();
@@ -166,6 +166,7 @@ public sealed partial class Scene
         InvalidateComponentRegistries(physics:gameObject.Components.Any(AffectsPhysics),membership:gameObject.Components);
         _gameObjects.Add(
             gameObject);
+        InvalidateObjectLookup();
         if(_objectLookup!=null&&!_objectLookup.TryAdd(gameObject.Id,gameObject))_duplicateObjectIds.Add(gameObject.Id);
 
         gameObject.AttachToScene(
@@ -202,6 +203,7 @@ public sealed partial class Scene
         InvalidateComponentRegistries(physics:_physicsRegistryDirty||_physicsTransformOwners.Contains(gameObject),membership:gameObject.Components);
         InvalidateObjectLookupOrder();
         _gameObjects.Remove(gameObject);
+        InvalidateObjectLookup();
 
         int insertAfter =
             _gameObjects.IndexOf(parent);
@@ -287,8 +289,11 @@ public sealed partial class Scene
         return DestroyGameObjectImmediate(gameObject);
     }
 
-    public GameObject? FindGameObject(string name) =>
-        _gameObjects.FirstOrDefault(item => item.Name == name);
+    public GameObject? FindGameObject(string name)
+    {
+        if (name is null) return _gameObjects.FirstOrDefault(item => item.Name is null);
+        RefreshObjectLookup(); return _firstObjectByName.GetValueOrDefault(name);
+    }
 
     public GameObject? FindGameObject(Guid id)
     {
@@ -410,11 +415,11 @@ public sealed partial class Scene
             {
                 ticks = SimulationClock.Advance(Time.DeltaTime, delta =>
                 {
-                    foreach (var gameObject in frameObjects)
-                        if (gameObject.GetComponent<Rigidbody3D>() is { BodyType: not RigidbodyBodyType3D.Static }) gameObject.Transform.CaptureSimulationPose();
+                    RefreshFixedDispatch();
+                    int poseCount = _poseDispatch.Count;
+                    ByteEngine.Core.Runtime.JobRunner.For(poseCount, i => { var entry = _poseDispatch[i]; if (entry.Body.BodyType != RigidbodyBodyType3D.Static) entry.Object.Transform.CaptureSimulationPose(); });
                     Time.FixedDeltaTime = delta;
-                    foreach (var gameObject in frameObjects)
-                        if (_pendingDestroy.Count==0 || !_pendingDestroy.Contains(gameObject)) gameObject.FixedUpdateInternal();
+                    DispatchFixedUpdate();
                     Physics.Step(this, (float)delta);
                     candidates += Physics.LastCandidateCount;
                 });
@@ -533,6 +538,7 @@ public sealed partial class Scene
 
         InvalidateComponentRegistries(physics:gameObject.Components.Any(AffectsPhysics),membership:gameObject.Components);
         _gameObjects.Remove(gameObject);
+        InvalidateObjectLookup();
 
         UnregisterClassification(gameObject);
         if(_objectLookup!=null&&_objectLookup.TryGetValue(gameObject.Id,out var found)&&ReferenceEquals(found,gameObject)){

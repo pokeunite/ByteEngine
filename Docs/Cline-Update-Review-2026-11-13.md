@@ -61,6 +61,8 @@ checks. Neither validates overseas networks or TURN provisioning.
 Harness dry runs pass two modes with eight repetitions each (16 total), and
 three modes with four repetitions each (12 total). This checks scheduling, not
 FPS. No real repeated A/B sweep ran; previous single-run timings remain noisy.
+The paired bootstrap also passes a synthetic, known 10% effect. Synthetic data
+validates the statistics implementation and is not engine speedup evidence.
 
 Initial secondary builds hit generated-file access errors. The successful build
 uses `-m:1 -nr:false -p:UseSharedCompilation=false`, avoiding reused build/compiler

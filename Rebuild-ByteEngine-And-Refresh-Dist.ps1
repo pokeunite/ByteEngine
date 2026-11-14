@@ -100,13 +100,16 @@ try{
  $buildBrowser=$IncludeBrowser -and !$SkipBrowser
  Write-Host "Building current source: $SourceRoot"
  Write-Host "Installing editor and export runtimes: $InstallRoot"
- Build 'Plugins/KarlsonDemo/KarlsonDemo.Plugin.csproj' 'Release'
- $package=Join-Path $SourceRoot 'artifacts/plugins/KarlsonDemo.byteplugin'
  $library=Join-Path $SourceRoot 'PluginLibrary';New-Item -ItemType Directory -Path $library -Force | Out-Null
- CopyPluginPackage $package (Join-Path $library 'KarlsonDemo.byteplugin')
- Build 'Editor/ByteEngine.Editor/ByteEngine.Editor.csproj' 'Debug'
- & (Join-Path $SourceRoot 'Tools/PublishPlayer.ps1') -Configuration Debug
- if($LASTEXITCODE-ne 0){throw 'Debug player refresh failed.'}
+ # Every shipped plugin must be built against this same canonical Core.
+ foreach($pluginDir in Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'Plugins') -Directory){
+  foreach($pluginProject in Get-ChildItem -LiteralPath $pluginDir.FullName -File -Filter '*.csproj'){
+   Build ($pluginProject.FullName.Substring($SourceRoot.TrimEnd('\','/').Length+1)) 'Release'
+   $built=Join-Path $SourceRoot ('artifacts/plugins/'+$pluginDir.Name+'.byteplugin')
+   if(Test-Path -LiteralPath $built){CopyPluginPackage $built (Join-Path $library ([IO.Path]::GetFileName($built)))}
+  }
+ }
+ $package=Join-Path $SourceRoot 'artifacts/plugins/KarlsonDemo.byteplugin'
  & (Join-Path $SourceRoot 'Tools/PublishEditor.ps1') -Configuration $BuildConfiguration -SkipBrowser:(!$buildBrowser) -IncludeBrowser:$buildBrowser
  if($LASTEXITCODE-ne 0){throw 'Editor distribution refresh failed.'}
  # Publish the selected distribution and preserve its correctly paired player runtime.
@@ -122,6 +125,9 @@ try{
  if($ProjectFile){
   if(!(Test-Path -LiteralPath $ProjectFile)){throw "Project not found: $ProjectFile"}
   $gameRoot=Split-Path -Parent ([IO.Path]::GetFullPath($ProjectFile))
+  $sourcePlugin=Join-Path $SourceRoot 'Plugins/KarlsonDemo'
+  $editable=Join-Path $gameRoot 'PluginSource/KarlsonDemo'
+  foreach($file in Get-ChildItem -LiteralPath $sourcePlugin -Recurse -File){$relative=$file.FullName.Substring($sourcePlugin.TrimEnd('\','/').Length+1);if($relative-match '(^|[\\/])(bin|obj)([\\/]|$)'){continue};$destination=Join-Path $editable $relative;New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force|Out-Null;Copy-Item -LiteralPath $file.FullName -Destination $destination -Force}
   foreach($name in @('Plugins','PluginLibrary')){$to=Join-Path $gameRoot $name;New-Item -ItemType Directory -Path $to -Force | Out-Null;CopyPluginPackage $package (Join-Path $to 'KarlsonDemo.byteplugin')}
  }
  if($buildBrowser){& (Join-Path $SourceRoot 'Tools/SyncBrowserPluginPackages.ps1') -SourceRoot $SourceRoot -InstallRoot $InstallRoot -ProjectFile $ProjectFile}

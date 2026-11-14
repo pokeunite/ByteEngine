@@ -21,12 +21,17 @@ public sealed record VisualArgumentDefinition(string Name, string DisplayName, V
 
 public sealed class VisualConditionDefinition
 {
-    public string? MenuGroup { get; init; }
-    public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
     public required string DisplayName { get; init; }
     public string? TargetComponent { get; init; }
+
+    /// <summary>Optional menu grouping override used by the Event Sheet picker.</summary>
+    public string? MenuGroup { get; init; }
+
+    /// <summary>Optional sentence shown in the Event Sheet, e.g. "Show {source}'s health on {target}".</summary>
+    public string? SentenceTemplate { get; init; }
+
     public IReadOnlyList<VisualArgumentDefinition> Arguments { get; init; } = Array.Empty<VisualArgumentDefinition>();
 
     public required Func<
@@ -38,12 +43,17 @@ public sealed class VisualConditionDefinition
 
 public sealed class VisualActionDefinition
 {
-    public string? MenuGroup { get; init; }
-    public string? SentenceTemplate { get; init; }
     public required string Id { get; init; }
     public required string Category { get; init; }
     public required string DisplayName { get; init; }
     public string? TargetComponent { get; init; }
+
+    /// <summary>Optional menu grouping override used by the Event Sheet picker.</summary>
+    public string? MenuGroup { get; init; }
+
+    /// <summary>Optional sentence shown in the Event Sheet, e.g. "Show {source}'s health on {target}".</summary>
+    public string? SentenceTemplate { get; init; }
+
     public IReadOnlyList<VisualArgumentDefinition> Arguments { get; init; } = Array.Empty<VisualArgumentDefinition>();
 
     public required Action<

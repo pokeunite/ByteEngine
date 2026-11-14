@@ -1,6 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;

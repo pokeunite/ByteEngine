@@ -5,6 +5,11 @@ namespace ByteEngine.Core.Serialization.SerializationModels;
 
 public sealed class ProjectData
 {
+    public const int CurrentSchemaVersion = 1;
+
+    // Zero denotes an unversioned legacy project and is migrated on load.
+    public int SchemaVersion { get; set; }
+
     public string Name { get; set; } =
         "Untitled";
 
