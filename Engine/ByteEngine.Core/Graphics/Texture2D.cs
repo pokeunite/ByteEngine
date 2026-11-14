@@ -26,6 +26,9 @@ public sealed class Texture2D
 
     private bool _disposed;
 
+    /// <summary>True once the GPU handle and CPU pixels were released.</summary>
+    public bool IsDisposed => _disposed;
+
     public int Width { get; private set; }
 
     public int Height { get; private set; }

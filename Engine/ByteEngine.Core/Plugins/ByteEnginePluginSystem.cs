@@ -761,9 +761,18 @@ public static class ByteEnginePluginManager
         {
             // ByteEngine.Core must always resolve from the host/default context so
             // plugin Component/IComponentCodec identity matches the running engine.
+            //
+            // Bind the host Core explicitly instead of returning null. Plugins are
+            // compiled against the Core assembly version current when the package
+            // was built; returning null hands the bind to the default context,
+            // which refuses a plugin built against an older assembly version
+            // (for example 0.9 -> 0.10). The plugin then loses its entry type and
+            // every one of its components, with only "entry point was not found"
+            // in the log. Returning the loaded Core keeps type identity with the
+            // engine while letting older plugin packages keep working.
             string coreName = typeof(IByteEnginePlugin).Assembly.GetName().Name ?? "ByteEngine.Core";
             if (string.Equals(assemblyName.Name, coreName, StringComparison.OrdinalIgnoreCase))
-                return null;
+                return typeof(IByteEnginePlugin).Assembly;
 
             if (assemblyName.Name != null && _dependencies.TryGetValue(assemblyName.Name, out var dependency))
                 return dependency;

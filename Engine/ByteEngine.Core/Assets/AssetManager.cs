@@ -88,13 +88,31 @@ public sealed class AssetManager : IDisposable
 
         bool Keep(Guid id) => keepSet is null || keepSet.Contains(id);
 
+        /*
+         * Materials that survive this trim still hold Texture2D objects. Without
+         * accounting for them, a scene-switch or Play-stop trim disposes a texture
+         * whose cache entry was evicted while the kept material keeps drawing it,
+         * and the next frame throws ObjectDisposedException from the sampler.
+         */
+        HashSet<Texture2D> referenced = new();
+        foreach (KeyValuePair<Guid, Material> material in _runtimeMaterials)
+        {
+            if (!Keep(material.Key)) continue;
+            foreach (Texture2D texture in material.Value.Textures()) referenced.Add(texture);
+        }
+        foreach (KeyValuePair<(Guid Model, string Key), Material> material in _modelMaterials)
+        {
+            if (!Keep(material.Key.Model)) continue;
+            foreach (Texture2D texture in material.Value.Textures()) referenced.Add(texture);
+        }
+
         int released = 0;
         List<Texture2D> textures = new();
         List<Mesh> meshes = new();
 
         foreach (Guid id in _textures.Keys.ToArray())
         {
-            if (Keep(id)) continue;
+            if (Keep(id) || referenced.Contains(_textures[id])) continue;
             textures.Add(_textures[id]);
             _textures.Remove(id);
             _textureRevisions.Remove(id);
@@ -178,7 +196,11 @@ public sealed class AssetManager : IDisposable
         }
 
         foreach (Mesh mesh in meshes.Distinct()) mesh.Dispose();
-        foreach (Texture2D texture in textures.Distinct()) texture.Dispose();
+        // Defensive: never dispose a texture that a surviving cache slot still owns.
+        HashSet<Texture2D> stillCached = new(_textures.Values);
+        stillCached.UnionWith(_modelTextures.Values);
+        foreach (Texture2D texture in textures.Distinct())
+            if (!stillCached.Contains(texture)) texture.Dispose();
 
         if (released > 0)
         {

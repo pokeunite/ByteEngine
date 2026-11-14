@@ -3,6 +3,149 @@
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 
+## 2026-11-14 (stabilization 2) — `main` is the single working engine again
+
+User deprioritized palclone, so the goal became: one engine, all `main` updates, no crashes.
+
+Changed:
+- **Play-stop crash fixed.** `AssetManager.TrimCaches` evicted textures that surviving materials still
+  reference, so the first frame after stopping Play threw `ObjectDisposedException: Texture2D`
+  (`MaterialTextureSampling.Bind`). `Material.Textures()` now enumerates all ten texture slots;
+  `TrimCaches` keeps referenced cache entries, never disposes a texture that is still cached, and
+  `MaterialTextureSampling.Bind` skips a disposed texture as a last-resort guard
+  (`Texture2D.IsDisposed` added).
+- **Window-display API on main.** Added `Runtime/GameWindowDisplay.cs` (`GameWindowMode` +
+  `Attach/Request/Mode/Available`) and the standalone player host wiring, so plugins that expose a
+  graphics page have the API they compile against.
+- **Plugin loader** keeps the host-Core binding from the previous entry.
+- **History repair:** concurrent commit `0a1e9a8` had swept temporary registrations for branch-only
+  components; `65c04a5` removes them (only that file).
+
+Verified:
+- `dotnet build ByteEngine.sln` → 0 errors.
+- Default console suite → `ByteEngine tests passed: v0.7 through v0.8-d regressions and Phase 1/2/3
+  gameplay systems.`
+- `Tools/PublishEditor.ps1` (Release) refreshed `Dist/ByteEngine`: editor + Core 17:26, bundled player
+  17:28, loose and bundled Core hashes identical.
+- Opened `Documents\wildlings\wildlings.byteproject` with the published Dist editor: log shows
+  `Loaded ByteEngine plugin 'Wildlings' (studio.wildlings) v0.1.0` and `plugins=1`, with no missing
+  components, unknown visual logic or exceptions.
+- `--windows-export-single "…\Dist\ByteEngine\PlayerRuntime"` again prints
+  `Single-executable Windows export (runtime and assets inside the EXE) passed.`
+
+Left: palclone still needs the branch-only gameplay layer and stays on the archived
+`C:\Users\codex\ByteEngine-Palclone` build; no merge is planned unless requested. A full merge of
+`codex/event-sheet-ux-and-engine-updates` into `main` would touch ~60 files with conflicts and is only
+worth doing if that gameplay layer is wanted again.
+
+
+## 2026-11-14 (stabilization) — palclone restored on the branch engine; engine lines are split
+
+Root cause of "everything broke": `palclone` (and its `KarlsonDemo.byteplugin` v3.93.0, built 11/11) was
+authored against the `codex/event-sheet-ux-and-engine-updates` engine. `main` does not contain that
+gameplay layer, so the plugin entry type failed to load and the project opened with `plugins=0`:
+every plugin component vanished (weapons/shooting, animation HUD, top-down controls, dash, combat
+feedback, audio cues). The audio engine itself was healthy — the log shows OpenAL device creation and
+buffer uploads succeeding. Republishing `main` into `Dist` is what surfaced the mismatch.
+
+Evidence: with branch Core the same plugin DLL reports `types-loadable=True`; with main Core it fails
+with missing `GameWindowMode`, `ICharacterDebugSource`, `CombatDamageReceipt`. Porting the seven
+branch gameplay components into `main` produced 22 compile errors against branch-only extensions
+(`AnimationController.CurrentTurn`, `HealthComponent.LastHitKind`, `Scene.GetComponentsSnapshot`,
+`RenderContext.QueueUiLine`, `CharacterController3D.HasBurstMotion`, `DamageRegion3D`), so that
+experiment was reverted.
+
+Changed: rebuilt and published the existing branch worktree
+`C:\Users\codex\.codex\worktrees\52af\ByteEngine` and copied its `Dist\ByteEngine` to
+`C:\Users\codex\ByteEngine-Palclone` (503 MB) for palclone. On `main` kept the plugin-loader fix
+(`ProjectPluginLoadContext` now binds the host Core explicitly instead of returning null, so older
+plugin packages stop losing their entry type), added `GameWindowDisplay`/`GameWindowMode` and wired
+the standalone player to it, and made the native probe fall back to a bare-name load. Also repaired a
+concurrent commit: `0a1e9a8` captured the temporary component registrations, `65c04a5` removes them;
+`main` builds with 0 errors again.
+
+Verified: launched `ByteEngine-Palclone\ByteEngine.Editor.exe` with
+`Documents\palclone\palclone.byteproject`; the fresh log
+(`palclone\Logs\crash-20261114-170256-11916.txt`) contains
+`Loaded ByteEngine plugin 'Modular Weapon Gameplay' (bytebard.karlsondemo) v3.93.0` and
+`project initialization complete; plugins=1`, with no missing-component or unknown-visual-logic
+warnings and no exceptions.
+
+Left: the two lines still need a real reconciliation (merge branch gameplay + main event sheet/export
+work). Until then, do not republish the palclone distribution from `main`; and the `Texture2D`
+disposed crash seen after stopping Play in the main build is still open.
+
+
+## 2026-11-14 (camera) — smooth handoff between trainer and Wildlings
+
+Changed: switching subjects cut between four independent cameras, so the view
+teleported and the incoming boom snapped its yaw to the new character's facing.
+`CameraBoom3D` now owns a handoff: `BeginHandoff(previous)` captures the outgoing
+boom's live focus, effective arm, shoulder offset and world rotation, seeds the
+incoming `PlayerController3D.ControlYaw/ControlPitch` from that rotation (heading
+preserved, no snap), and `UpdateRig` blends `focus`, `armLength` and
+`shoulderOffset` from those captured values to this boom's own over
+`HandoffSeconds` (new field, default 0.4, `0` = snap) with a smoothstep. The hand
+-written `CameraBoom3D` codec gained `handoffSeconds`; without that the property
+was silently dropped on save and the blend fell back to its default. The rig
+computed, and the sphere-cast collision now probes, the *blended* focus, so
+walls/characters pull the arm in during the transition instead of flying through
+them. `_effectivePivot` is what a mid-blend switch reads, so retargeting starts
+from what is on screen rather than stacking.
+
+`TeamManager3D.ApplyControl` resolves one target boom, disables the others
+*before* enabling it (never two active cameras in a frame) and calls
+`BeginHandoff` with the previously active boom.
+
+Scene framing: trainer `pitch` 60 -> 18 (60 was at the clamp and framed almost
+straight down); Fire Lizard `armLength` 2.8 -> 3.4, `pivotHeight` 0.95 -> 0.85,
+`pitch` 14 -> 16 so the short creature is aimed at body height with more ground
+in frame; Spriglet/Zappet untouched. All four cameras carry `handoffSeconds` 0.4.
+
+Verified: engine and plugin build clean; editor + MCP republished from source;
+`be_runtime/validate` 184 objects / 3 blueprints / issues []; scene file carries
+`handoffSeconds` on all four booms; Blueprints re-extracted. No play test from
+the shell.
+
+Left: not playtested — the acceptance list (switch near walls, rapid toggle,
+mouse orbit during blend) needs a human at the keyboard. `Tools/PublishPlayer.ps1`
+failed its launcher step in this shell (vswhere/rc), unrelated to the camera work
+and owned by the export change.
+
+## 2026-11-14 (export) — single-executable Windows export restored
+
+
+
+Changed: `main` had lost the one-exe packaging that only existed on
+`codex/event-sheet-ux-and-engine-updates` (`3a1f8d9`, `c80a1d3`). `GamePackageExporter` copied a
+`Runtime/` folder and left `Game.bytepak` loose, and `Player/Program.cs` never read an appended
+payload — even though `Tools/PublishPlayer.ps1` still builds `PlayerRuntime/Bundled` and
+`Rebuild-ByteEngine-And-Refresh-Dist.ps1` still identity-checks it. Ported:
+`Engine/ByteEngine.Core/Runtime/SingleExecutablePackage.cs` (append, 64-byte footer, SHA-256 cache
+extraction with publication mutex), the exporter's bundled branch (identity from
+`Bundled/core-mvid.txt`, copy bundled player, append package, delete loose package, hash the EXE,
+mode-specific README), and `SingleExecutablePackage.Prepare(Environment.ProcessPath!)` in the player.
+Also fixed the failure the bundle exposed: `Player/ByteEngine.Player/ByteEngine.Player.csproj` now
+publishes OpenAL Soft as `Content`/`Link=openal32.dll`, because the post-publish copy is not bundled
+and the one-exe game died with `Native game dependency could not load: openal32.dll`; the native probe
+falls back to a bare-name load for single-file extraction. `WindowsGameExportTests` now handles both
+layouts and payload tampering; added `--windows-export-single <PlayerRuntime>` with
+`SingleExecutableExportTests.PrepareRuntime` (slim identity-aligned runtime) to validate the exported
+EXE end to end. Docs/panel text updated (`Tools/WINDOWS_GAME_EXPORT.md`, `GameExportPanel`).
+
+Verified: `dotnet build ByteEngine.sln` 0 errors; `Tools/PublishPlayer.ps1` and
+`Tools/PublishEditor.ps1` (Release) refreshed `Dist/ByteEngine` and printed "Matching Release Windows
+player and editor core refreshed"; loose and bundled players report the same Core MVID
+(`e801fdb5-bc0e-4d43-a347-c838bd30b88d`); `dotnet run -c Release --project Tests/ByteEngine.Tests --
+--windows-export-single "…\Dist\ByteEngine\PlayerRuntime"` printed "Single-executable Windows export
+(runtime and assets inside the EXE) passed." (fixture export → one EXE, no `Runtime/`, no
+`Game.bytepak`, tampered payload rejected, exported EXE `--validate` exit 0).
+
+Left: restart the editor from `Dist/ByteEngine` and export again — the build folder should contain one
+`<Game>.exe` plus `game-package.json`, `README.txt` and notices. The old folder layout still works when
+a bundled player is missing. No user project was exported during this work.
+
+
 ## 2026-11-14 (tooling) — Markdown→PDF renderer and the review PDF
 
 Changed: added `Tools/MarkdownToPdf.py`, a single-file renderer (Markdown → styled HTML →

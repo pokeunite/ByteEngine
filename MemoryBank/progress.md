@@ -32,6 +32,9 @@ Updated: 2026-11-13
   WAV/Ogg streaming; browser uses media playback.
 - Runtime: Windows player publish, WebGL2 browser runtime with crash reporting,
   plugin loading and browser plugin package sync.
+- Windows game export: single executable (self-contained player + appended `Game.bytepak` payload,
+  SHA-256 verified extraction to `%LOCALAPPDATA%\ByteEngine\Games\Bundled`), with the older
+  `Runtime/` + loose package layout as fallback; `--windows-export-single` covers it end to end.
 
 ## In progress
 
@@ -56,3 +59,6 @@ Updated: 2026-11-13
 - OBJ import is intentionally basic; GLB is the recommended exchange format.
 - MCP has no headless Play, input injection, screenshots or undo; visual checks use
   the editor or browser harnesses.
+
+- Engine lines are split: main lacks the branch gameplay layer (TopDownController3D, TopDownCamera3D, DashAbility3D, CombatFeedback3D, CharacterMotionDebugHud3D, ICharacterDebugSource, CombatDamageReceipt plus branch-only members on AnimationController, HealthComponent, Scene, RenderContext and CharacterController3D). palclone is published from the branch as C:\Users\codex\ByteEngine-Palclone until the lines are merged.
+

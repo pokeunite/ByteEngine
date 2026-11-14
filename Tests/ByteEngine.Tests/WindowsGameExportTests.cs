@@ -97,13 +97,23 @@ internal static class WindowsGameExportTests
         }
         string output = Path.Combine(root, "Exported Games");
         var result = GamePackageExporter.Export(projectFile, runtime, output, project.StartupScene);
+        bool bundled = false;
+        using (var probe = File.OpenRead(result.Executable))
+            bundled = SingleExecutablePackage.TryRead(probe, out _);
+        bool loosePackage = File.Exists(Path.Combine(result.Directory, ByteAssetPackage.FileName));
         if (!File.Exists(result.Executable) || File.Exists(Path.Combine(result.Directory, "ByteEngine.Editor.dll")) ||
             File.Exists(Path.Combine(result.Directory, "BUILD-INCOMPLETE.txt")) ||
-            !File.Exists(Path.Combine(result.Directory, ByteAssetPackage.FileName)) ||
             Directory.Exists(Path.Combine(result.Directory, "Content")))
             throw new Exception("Standalone package must contain player and runtime socket metadata, not editor.");
+        if (!bundled && !loosePackage)
+            throw new Exception("Windows export must contain Game.bytepak or a bundled executable payload.");
+        if (bundled && (loosePackage || Directory.Exists(Path.Combine(result.Directory, "Runtime"))))
+            throw new Exception("Single-executable export must not ship a loose runtime folder or package.");
         GamePackageExporter.ValidatePackage(result.Directory);
-        using var contentSession = new GameContentSession(result.Directory);
+        string gameDirectory = bundled
+            ? SingleExecutablePackage.Prepare(result.Executable, Path.Combine(root, "Bundled Cache")) ?? result.Directory
+            : result.Directory;
+        using var contentSession = new GameContentSession(gameDirectory);
         string content = Path.GetDirectoryName(contentSession.ProjectFile)!;
         if (pluginPackage != null)
         {
@@ -141,14 +151,41 @@ internal static class WindowsGameExportTests
         ExpectFailure(() => GamePackageExporter.Export(projectFile, runtime,
             Path.Combine(projectRoot, "Assets", "Builds"), project.StartupScene));
         ExpectFailure(() => GamePackageExporter.Export(projectFile, runtime, output, "Scenes/Missing.bytescene"));
-        string packageFile = Path.Combine(result.Directory, ByteAssetPackage.FileName);
-        byte[] originalPackage = File.ReadAllBytes(packageFile);
-        byte[] corruptPackage = originalPackage.ToArray();
-        corruptPackage[^1] ^= 0xff;
-        File.WriteAllBytes(packageFile, corruptPackage);
-        ExpectFailure(() => GamePackageExporter.ValidatePackage(result.Directory));
-        // Restore only this test-created package so the real-runtime --validate smoke can use it.
-        File.WriteAllBytes(packageFile, originalPackage);
+        if (loosePackage)
+        {
+            string packageFile = Path.Combine(result.Directory, ByteAssetPackage.FileName);
+            byte[] originalPackage = File.ReadAllBytes(packageFile);
+            byte[] corruptPackage = originalPackage.ToArray();
+            corruptPackage[^1] ^= 0xff;
+            File.WriteAllBytes(packageFile, corruptPackage);
+            ExpectFailure(() => GamePackageExporter.ValidatePackage(result.Directory));
+            // Restore only this test-created package so the real-runtime --validate smoke can use it.
+            File.WriteAllBytes(packageFile, originalPackage);
+        }
+        else
+        {
+            // The bundle hash covers the executable, so a flipped payload byte must fail validation.
+            SingleExecutablePackage.Payload payload;
+            using (var probe = File.OpenRead(result.Executable))
+                if (!SingleExecutablePackage.TryRead(probe, out payload))
+                    throw new Exception("Bundled payload footer is missing.");
+            using (var stream = new FileStream(result.Executable, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                stream.Position = payload.Offset;
+                int original = stream.ReadByte();
+                stream.Position = payload.Offset;
+                stream.WriteByte((byte)(original ^ 0xff));
+            }
+            ExpectFailure(() => GamePackageExporter.ValidatePackage(result.Directory));
+            using (var stream = new FileStream(result.Executable, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                stream.Position = payload.Offset;
+                int corrupt = stream.ReadByte();
+                stream.Position = payload.Offset;
+                stream.WriteByte((byte)(corrupt ^ 0xff));
+            }
+            GamePackageExporter.ValidatePackage(result.Directory);
+        }
         contentSession.Dispose();
         if (Directory.Exists(content))
         {

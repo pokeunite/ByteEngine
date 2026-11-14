@@ -133,3 +133,16 @@ Rejected: the added frame-count modulo. Pool capacity remains a separate limit.
   `(Mesh, Material, Shadows)` by mesh reference and `PrepareInstanceStream`
   instances any batch above one, so shared cached pose meshes instance for free.
   Rejected: a second instancing path for crowd draws.
+
+- **Windows game exports are a single executable whenever PlayerRuntime\Bundled\ByteEngine.Player.exe exists.** The exporter copies that player, appends Game.bytepak behind a 64-byte footer (SingleExecutablePackage), deletes the loose package and hashes the whole EXE in game-package.json. The folder layout (Runtime/ + loose Game.bytepak) remains only as the fallback. Reason: players must receive one file; Tools/PublishPlayer.ps1 and Rebuild-ByteEngine-And-Refresh-Dist.ps1 already build and identity-check the bundled player. Rejected: keeping folder-only exports (the regression this fixed).
+
+- **openal32.dll is a publish Content item in Player\ByteEngine.Player\ByteEngine.Player.csproj.** A post-publish copy alone lands outside the single-file bundle, so the exported EXE failed with Native game dependency could not load: openal32.dll. Rejected: weakening the native probe or shipping the DLL loose beside the EXE.
+
+
+- **Never publish a distribution across engine lines without loading the project's plugins against it first.** palclone + KarlsonDemo.byteplugin v3.93.0 were built for codex/event-sheet-ux-and-engine-updates; publishing main into Dist dropped every plugin component with only Plugin entry point ... was not found in the log. Rejected: treating plugin load failure as an editor bug and republishing again.
+
+- **Plugin load must bind the host ByteEngine.Core explicitly.** Returning null from ProjectPluginLoadContext.Load delegates the bind to the default context, which rejects a plugin compiled against an older Core assembly version. The loader now returns the loaded Core assembly so type identity stays with the running engine. Rejected: rebuilding every plugin on every engine bump.
+
+
+- **Asset-cache trimming keeps textures referenced by surviving materials.** TrimCaches(keep) evicted a texture whose material was still in the editor scene (or a kept model material), so the first frame after Play stopped threw ObjectDisposedException: Texture2D. Material.Textures() now feeds a referenced set that both protects cache entries and blocks disposal; MaterialTextureSampling.Bind also skips a disposed texture as a last-resort guard. Rejected: only guarding the sampler, which hides missing textures instead of keeping them alive.
+

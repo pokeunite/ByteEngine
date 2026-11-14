@@ -76,11 +76,29 @@ public sealed class Material
     public float EmissionIntensity { get; set; } = 1f;
 
     public Texture2D? EmissionTexture { get; set; }
-
     public Vector2 UvTiling { get; set; } = Vector2.One;
     public Vector2 UvOffset { get; set; }
     public MaterialShadingMode Shading { get; set; } = MaterialShadingMode.Lit;
     public bool DecodeColorTexturesSrgb { get; set; }
+
+    /// <summary>
+    /// Every texture slot this material currently holds. Asset-cache trimming uses
+    /// this so a material that stays alive never loses a texture it still samples.
+    /// </summary>
+    public IEnumerable<Texture2D> Textures()
+    {
+        if (MainTexture != null) yield return MainTexture;
+        if (NormalTexture != null) yield return NormalTexture;
+        if (HeightFieldTexture != null) yield return HeightFieldTexture;
+        if (WaterDepthTexture != null) yield return WaterDepthTexture;
+        if (SandImprintTexture != null) yield return SandImprintTexture;
+        if (MetallicTexture != null) yield return MetallicTexture;
+        if (RoughnessTexture != null) yield return RoughnessTexture;
+        if (AmbientOcclusionTexture != null) yield return AmbientOcclusionTexture;
+        if (PackedPbrTexture != null) yield return PackedPbrTexture;
+        if (EmissionTexture != null) yield return EmissionTexture;
+    }
+
 
     public float Metallic { get; set; }
 

@@ -66,12 +66,26 @@ internal static class Program
                 }
                 catch (Exception error) when (error is DllNotFoundException or BadImageFormatException)
                 {
-                    throw new InvalidOperationException(
-                        $"Native game dependency could not load: {library}. Keep the entire game folder together. " +
-                        "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
+                    /*
+                     * Single-file exports extract bundled native libraries into a
+                     * host-managed folder instead of the executable directory, so
+                     * the fully qualified load above fails there while the
+                     * default search path still resolves the library.
+                     */
+                    try
+                    {
+                        nint handle = NativeLibrary.Load(library);
+                        NativeLibrary.Free(handle);
+                    }
+                    catch (Exception nested) when (nested is DllNotFoundException or BadImageFormatException)
+                    {
+                        throw new InvalidOperationException(
+                            $"Native game dependency could not load: {library}. Keep the entire game folder together. " +
+                            "Install or repair the Microsoft Visual C++ x64 Redistributable using the link supplied with the game, then retry.", error);
+                    }
                 }
             }
-            string gameDirectory=AppContext.BaseDirectory;
+            string gameDirectory=SingleExecutablePackage.Prepare(Environment.ProcessPath!) ?? AppContext.BaseDirectory;
             if(string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(gameDirectory)),"Runtime",StringComparison.OrdinalIgnoreCase))
                 gameDirectory=Directory.GetParent(Path.TrimEndingDirectorySeparator(gameDirectory))!.FullName;
             if (validate) GamePackageExporter.ValidatePackage(gameDirectory);

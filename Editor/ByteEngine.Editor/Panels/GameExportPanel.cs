@@ -85,7 +85,7 @@ internal sealed class GameExportPanel
             ImGui.TextWrapped(_quality==0?"Fast: native ocean and water optics; no screen reflections or sun shadows. Best for weaker devices.":_quality==1?"Balanced: 1024 sun shadows, 10 water reflection steps, edge smoothing, up to 1080p in Auto.":"High: 2048 sun shadows, 20 water reflection steps, edge smoothing, up to 1440p in Auto.");
             ImGui.TextWrapped("Ocean, rocks and gameplay are retained at every quality. Texture size affects download size and GPU memory; it never removes scenery. UI stays at full window resolution. In-game preferences can override the defaults.");
         }
-        ImGui.TextWrapped(_web ? "Water optics and ocean waves use the native material settings. Desktop environment lighting and some post effects still differ. Models and textures are prepared during export. Test the exported site on the target browser." : "Microsoft Visual C++ x64 runtime and a compatible graphics driver are required. An official prerequisite link is included. A new dated build folder is created here. Existing builds are never overwritten. Saved assets and scenes are compressed into Game.bytepak.");
+        ImGui.TextWrapped(_web ? "Water optics and ocean waves use the native material settings. Desktop environment lighting and some post effects still differ. Models and textures are prepared during export. Test the exported site on the target browser." : "Microsoft Visual C++ x64 runtime and a compatible graphics driver are required. An official prerequisite link is included. A new dated build folder is created here. Existing builds are never overwritten. Saved assets and scenes are packed with the runtime; when a bundled player is installed the export is a single executable.");
         ImGui.EndDisabled();
         if (dirty) ImGui.TextWrapped("Save the scene and all open asset documents before exporting.");
         if (playing) ImGui.TextWrapped("Stop Play mode before exporting.");
@@ -121,7 +121,7 @@ internal sealed class GameExportPanel
                 ImGui.SameLine();if(ImGui.Button("Preview in browser"))try{_preview?.Dispose();_preview=new WebExportPreview(Path.Combine(_result.Directory,"site"));string quality=new[]{"Fast","Balanced","High"}[_quality];Process.Start(new ProcessStartInfo(_preview.Url+"?previewQuality="+quality){UseShellExecute=true});}catch(Exception ex){_error="Browser preview failed: "+ex.Message;}
                 ImGui.TextWrapped("Preview uses the selected Default quality above, so you can compare Fast / Balanced / High without exporting again. It cannot restore texture detail removed by the selected export size.");
             }
-            ImGui.TextWrapped(_web ? "Upload the generated ZIP as an HTML game on itch.io. To test locally, serve the site folder over HTTP. Click the game to activate input/audio; Escape releases the mouse." : "Zip and share the entire build folder, not just the executable. Test the build on another Windows x64 PC before distributing it.");
+            ImGui.TextWrapped(_web ? "Upload the generated ZIP as an HTML game on itch.io. To test locally, serve the site folder over HTTP. Click the game to activate input/audio; Escape releases the mouse." : "The build folder holds the game executable with its assets inside when a bundled player is installed. Keep the notices with it and test on another Windows x64 PC before distributing.");
         }
         ImGui.End();
     }

@@ -20,6 +20,10 @@ internal sealed class MaterialTextureSampling : IDisposable
 
     public void Bind(Texture2D texture, int slot)
     {
+        // A material can outlive an evicted cache entry if a caller disposed it
+        // outside TrimCaches; skip binding instead of crashing the frame.
+        if (texture.IsDisposed)
+            return;
         // Only rendering requires a GL context; Material setters are pure data.
         texture.Bind(slot);
         SamplingState state = States.GetValue(texture, static _ => new SamplingState());
