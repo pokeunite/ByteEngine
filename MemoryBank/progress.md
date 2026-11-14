@@ -61,3 +61,7 @@ Updated: 2026-11-13
   the editor or browser harnesses.
 
 - Engine lines are split: main lacks the branch gameplay layer (TopDownController3D, TopDownCamera3D, DashAbility3D, CombatFeedback3D, CharacterMotionDebugHud3D, ICharacterDebugSource, CombatDamageReceipt plus branch-only members on AnimationController, HealthComponent, Scene, RenderContext and CharacterController3D). palclone is published from the branch as C:\Users\codex\ByteEngine-Palclone until the lines are merged.
+
+## 2026-11-14 — Hazard Pay restored on canonical main
+
+Completed consolidation, plugin synchronization, installed Windows runtime identity/startup and native gameplay validation. See the HTML repair report. Historical branches, obsolete installs and raw evidence are archived intact outside canonical source.

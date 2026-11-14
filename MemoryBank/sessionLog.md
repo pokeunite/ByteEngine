@@ -3,6 +3,10 @@
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 
+## 2026-11-14 — main/Hazard Pay consolidation and distribution repair
+
+Merged divergent main and Hazard Pay engine histories; preserved latest Wildlings/research work before integration. Fixed headless sky loading, missing-component diagnostics, shared dispatch/lookup integration and Windows fullscreen startup. Built KarlsonDemo 3.94.0 against Core 0.10.0, synchronized project package/source, published matching Windows editor/loose/bundled player and MCP. Passed solution/regression/MCP/native field/company/player/editor checks; raw evidence archived outside source. Retired duplicate installs/Debug/browser artifacts; preserved all history/assets/saves. Browser refresh, exports and push were not performed. See Documentation/Hazard-Pay-Engine-Repair.html and activeContext.md.
+
 ## 2026-11-14 (stabilization 2) — `main` is the single working engine again
 
 User deprioritized palclone, so the goal became: one engine, all `main` updates, no crashes.

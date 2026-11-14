@@ -1,19 +1,13 @@
 # Active context
 
-Updated: 2026-11-14 — Hazard Pay engine consolidation
+Updated: 2026-11-14 — consolidated engine and Hazard Pay repaired
 
-## Maintained source and distribution
-
-- Canonical source: `C:/Users/codex/ByteEngine`, branch `main`.
-- Integration branch `codex/hazard-pay-main-consolidation` combines main's engine/export/editor work with the Hazard Pay engine/gameplay history. Promote it only after validation; retire the old separate palclone editor after publishing.
-- Active game: `C:/Users/codex/Documents/palclone/palclone.byteproject` (Hazard Pay).
-- Canonical gameplay source: `Plugins/KarlsonDemo`; version 3.94.0, minimum engine 0.10.0.
-- Windows-first: publishing is not a game export. Browser runtime refresh and game exports remain opt-in.
-
-## Repair evidence
-
-Original fault: main Core was incompatible with the project's newer 3.93 plugin (missing GameWindowMode, ICharacterDebugSource, CombatDamageReceipt and other gameplay APIs). Combined Core compiles and native field/company checks pass. Headless runtime validation now checks missing plugin components in scenes and blueprints; it preserves sky references without requiring OpenGL. Full regression and distribution identity checks are recorded in the consolidation handoff/report.
-
-## Current work
-
-Finish final solution/regression checks, promote main, publish matching Windows editor/player/plugin packages, retire duplicate generated installs and preserve recovery history. Do not delete game assets/saves or authored source during cleanup.
+- Maintained source: `C:/Users/codex/ByteEngine`, branch `main`. Never publish from the retired 52af integration workspace or recreate ByteEngine-Palclone.
+- Active game: `C:/Users/codex/Documents/palclone/palclone.byteproject` (Hazard Pay). Engine 0.10.0; canonical plugin `Plugins/KarlsonDemo` v3.94.0.
+- Main engine/export/editor/network updates and the Hazard Pay gameplay history are integrated. Project Plugins, PluginLibrary and PluginSource match canonical source/package.
+- Run `Rebuild-ByteEngine-And-Refresh-Dist.ps1` from canonical root for Windows. `-VerifyOnly` checks editor/loose/bundled Core identity. MSBuild workers must not be reused across restricted sessions/checkouts.
+- Windows-only workflow: old browser runtimes archived; explicit `-BrowserOnly` refresh required before web export. No game exports or Git push performed in this session.
+- Evidence/recovery: `C:/Users/codex/Documents/testing/ByteEngine-Recovery-20261114`. Includes complete Git branch archive, raw checks and old installs/backups. Do not delete authored assets or saves.
+- Verification: solution build 0 errors; default/engine-optimization/physics/integration/web CPU tests; MCP self-test/missing-component regression; native Hazard Pay field/company checks; installed editor normal open/close; player fullscreen/windowed/borderless; runtime identity match; project validation 4 scenes/8 blueprints/14 event modules/3890 startup objects/no missing components.
+- Known non-startup warnings: unavailable models in old tree-study scenes, retained for user recovery. No new FPS claims.
+- Full report: `Documentation/Hazard-Pay-Engine-Repair.html`.

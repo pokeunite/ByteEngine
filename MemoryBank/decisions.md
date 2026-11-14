@@ -3,6 +3,10 @@
 Append-only. Newest first. One entry per choice that would be expensive to
 rediscover. Record what was decided, why, and what was rejected.
 
+## 2026-11-14 — one canonical engine supports Hazard Pay
+
+Integrate both histories into main instead of maintaining a separate palclone engine. Canonical root is C:/Users/codex/ByteEngine; distribution and project plugins are rebuilt together. Archive stale browser runtimes instead of presenting them as compatible with the consolidated Core; explicit browser refresh remains required. Preserve all branch history and retired artifacts outside the active source tree. Headless authoring preserves graphics references without GPU uploads and reports missing runtime components as validation failures.
+
 ## 2026-11-13 — MCP wraps shared Core authoring, not editor automation
 
 Decision: `Tools/ByteEngine.Mcp` edits projects through `ProjectSerializer`,
