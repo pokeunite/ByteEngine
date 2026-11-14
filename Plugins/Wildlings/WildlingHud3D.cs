@@ -28,9 +28,13 @@ public sealed class WildlingHud3D : Component
 
     public bool ShowControls { get; set; } = true;
 
+    /// <summary>Shows each follower's state, zone, follow error and speed (v2 debug aid).</summary>
+    public bool ShowFollowerDebug { get; set; }
+
     private UiText? _partyText;
     private UiText? _actionText;
     private UiText? _hintText;
+    private UiText? _debugText;
     private double _refreshRemaining;
 
     protected override void OnStart() => EnsureUi();
@@ -47,6 +51,7 @@ public sealed class WildlingHud3D : Component
         EnsureUi();
         RefreshParty();
         RefreshActions();
+        RefreshFollowerDebug();
     }
 
     private void EnsureUi()
@@ -77,6 +82,7 @@ public sealed class WildlingHud3D : Component
         _partyText = CreateLine(scene, canvasObject, "Party HUD", new Vector2(24f, 18f));
         _actionText = CreateLine(scene, canvasObject, "Action HUD", new Vector2(24f, 96f));
         _hintText = CreateLine(scene, canvasObject, "Hint HUD", new Vector2(24f, 148f));
+        _debugText = CreateLine(scene, canvasObject, "Follower HUD", new Vector2(24f, 210f));
 
         if (_hintText != null)
         {
@@ -150,6 +156,49 @@ public sealed class WildlingHud3D : Component
         }
 
         _partyText.Text = builder.ToString().TrimEnd();
+    }
+
+    private void RefreshFollowerDebug()
+    {
+        if (_debugText == null)
+        {
+            return;
+        }
+
+        if (!ShowFollowerDebug)
+        {
+            _debugText.Text = string.Empty;
+            _debugText.Visible = false;
+            return;
+        }
+
+        _debugText.Visible = true;
+        _debugText.FontSize = Math.Max(9, FontSize - 6);
+        _debugText.Color = new Vector4(.62f, .9f, 1f, .95f);
+
+        TeamManager3D? team = string.IsNullOrWhiteSpace(TeamObjectName)
+            ? null
+            : GameObject?.Scene?.FindGameObject(TeamObjectName)?.GetComponent<TeamManager3D>();
+
+        if (team == null)
+        {
+            _debugText.Text = "follower debug: no team";
+            return;
+        }
+
+        StringBuilder builder = new();
+
+        foreach (GameObject member in team.Members())
+        {
+            if (member.GetComponent<WildlingFollower3D>() is not { } follower)
+            {
+                continue;
+            }
+
+            builder.AppendLine($"{member.Name}: {follower.DebugSnapshot}");
+        }
+
+        _debugText.Text = builder.ToString().TrimEnd();
     }
 
     private void RefreshActions()

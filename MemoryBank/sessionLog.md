@@ -3,6 +3,53 @@
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 
+## 2026-11-14 (companion AI v2) — proactive catch-up, state ladder, debug overlay
+
+Changed: rewrote `WildlingFollower3D` to the Companion Exploration AI v2 brief.
+Speed model is now proactive: caps 6.6 normal / 9.0 catch-up, 14 m/s²
+acceleration, 18 m/s² deceleration, 0.2 s predictive lead, and desired speed
+`min(cap, trainerSpeed + (error - 0.6) * 2.2)` so companions outrun a sprinting
+trainer instead of trailing behind. Slot hysteresis moved to 1.4 m start / 0.6 m
+stop with catch-up at 3 m and urgent regroup at 6 m. Added the deterministic
+state ladder `Combat > Regroup > Navigate > Accompany > Settle > Observe` with
+dwell, settle retention (stay put when 1.5-4 m from the trainer), settle
+cooldown, separation steering (1.2 m radius), 0.5 m timestamped breadcrumbs in a
+40-point ring buffer with 8 s lifetime, no-progress detection at 1.3 s, and an
+attentive idle glance. `WildlingHud3D` gained `ShowFollowerDebug`, which prints
+each companion's zone, state, follow error and desired/actual speed.
+
+Verified: plugin builds with 0 errors; installed and validated in the wildlings
+project (181 objects, 3 blueprints, 1 event module, issues []); `be_catalog`
+reports every v2 default (6.6/9.0 caps, 1.4/0.6 hysteresis, 0.5 m trail, 1.2 m
+separation); scene and the three Wildling Blueprints carry the new fields.
+
+Left: no in-editor play test from the shell. Personality actions (tail swish,
+hop, spark) still need clips; observation currently reuses the idle glance.
+
+
+## 2026-11-14 (event sheet UX) — GDevelop events-editor research, no engine changes
+
+Changed: pulled GDevelop's events system for reference. `D:\ue4 sources\gdevelop source` is a sparse
+blob-filtered clone (`--depth 1 --filter=blob:none --sparse`) of rev `a643996`, carrying
+`Core/GDCore/{Events,Project,IDE/Events,Extensions}` and
+`newIDE/app/src/{EventsSheet,InstructionOrExpression}`; `Tools/PullGDevelopEventSource.ps1` re-applies
+the checkout with retries (plain `git clone` stalls on this slow link, and promisor fetches need
+`http.postBuffer`/`http.lowSpeedLimit`). `Tools/PullGDevelopDocImages.ps1` downloads the 51 screenshots
+in `Docs/Research/GDevelopEventsEditor-2026-11-14/`. New write-up
+`Docs/GDevelop-EventsEditor-Research-2026-11-14.md`: GDevelop's one-view/two-column/sentence-per-row
+anatomy, its `BaseEvent`/`StandardEvent`/`Instruction` list model, comparison with our panel
+(`EventWorkspacePanel*` = 12,542 lines, VisualLogic = 6,159), and an 8-step proposal (drop the
+Event sheet/Graph switch from the default UI, plain rows with a 10 px handle instead of cards,
+clickable sentence parameters in popovers, sub-condition rendering for `logic.and/or/not`, labelled
+sub-lists for `flow.branch`, search strip, keyboard pass).
+
+Verified: all 13 image links in the doc resolve; `git -C "D:\ue4 sources\gdevelop source" log -1` shows
+`a643996` and 150 files are checked out under `newIDE/app/src/EventsSheet`. No build was run; no
+engine, editor or project code was modified.
+
+Left: no implementation started and no option chosen yet — §9 of the doc lists the open questions
+(graph removal, real `Else` event, `DisplayName` visibility, inline vs popover argument editors).
+
 ## 2026-11-14 (exploration) — camera authoring preview, object pickers, v0.3 followers
 
 Changed: `CameraBoom3D` gained `ApplyAuthoringPose()` (applies authored
