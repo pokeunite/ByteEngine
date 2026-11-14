@@ -28,7 +28,37 @@ Requires `python -m pip install markdown` (installed here) and Chrome/Edge; `pyp
 only enables the page-count line.
 
 
+## 2026-11-14 (formation) — horizontal line: 1 centre, 2 right, 3 left
+
+Changed: the party now travels in a single horizontal rank instead of the
+species flank zones. `WildlingFollower3D` gained `Formation`
+(`Line` default / `Zones` legacy), `SlotIndex`, `LineSpacing` 1.7 and
+`LineBehind` 1.6. Slot 1 sits in the middle, slot 2 to the right, slot 3 to the
+left, all at equal depth. Slot index resolves automatically from
+`TeamManager3D.Resolve(1..3)` so the rank keeps team order; an explicit 1-3 pins
+a side. Sides use `cross(travel, up)`, so the rank is tied to real travel
+direction, not camera yaw.
+
+Scene: Fire Lizard slot 1, Spriglet slot 2, Zappet slot 3, formation Line,
+spacing 1.7, behind 1.6. Blueprints re-extracted with the same values.
+
+Verified: plugin builds clean, installed, `be_runtime/validate` issues [],
+`be_scene inspect_object` confirms all three slot indices in the saved scene and
+`"slotIndex"` present in each of the three Blueprints.
+
+Trap found: `be_plugin update` and `be_scene apply set_component` in the *same*
+MCP request batch silently drops properties added in that same build — the
+process still has the previous plugin schema loaded, so `formation` /
+`slotIndex` / `lineSpacing` / `lineBehind` were written as absent and the
+response echoed defaults. Install in one call, then apply in a *later* call.
+
+Left: no Play-mode test from the shell. Watch the rank collapse in doorways —
+the blocked-route fallback still uses the trail point, so a narrow doorway
+queues the three in single file and they re-form afterwards.
+
+
 ## 2026-11-14 (companion AI v2, smoothing pass) — no more stop-start or facing flips
+
 
 Changed: after the first v2 build the trainer reported two visual faults — the
 Fire Lizard visibly flipped between "running forward" and "looking back at the

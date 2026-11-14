@@ -19,6 +19,20 @@ public enum WildlingFollowState
     Observe
 }
 
+/// <summary>How the travelling party arranges itself behind the trainer.</summary>
+public enum WildlingFormation
+{
+    /// <summary>
+    /// Horizontal line abreast: slot 1 in the middle, slot 2 to the right, slot 3 to
+    /// the left, all at the same depth. The line is a single rank, so the party reads
+    /// as one row when the trainer looks back.
+    /// </summary>
+    Line,
+
+    /// <summary>Legacy per-species zones (Fire Lizard left, Spriglet right, Zappet rear).</summary>
+    Zones
+}
+
 /// <summary>
 /// Companion exploration AI v2.0.
 ///
@@ -33,6 +47,21 @@ public sealed class WildlingFollower3D : Component
     /// <summary>Scene object name that owns TeamManager3D.</summary>
     [SceneObjectPicker]
     public string TeamObjectName { get; set; } = "Wildling Manager";
+
+    /// <summary>Formation layout used while the party travels.</summary>
+    public WildlingFormation Formation { get; set; } = WildlingFormation.Line;
+
+    /// <summary>
+    /// Party slot (1-3) that decides the side of the line. 0 resolves the slot from
+    /// TeamManager3D's slot names, so members follow their team order automatically.
+    /// </summary>
+    public int SlotIndex { get; set; }
+
+    /// <summary>Lateral gap between neighbouring companions in the line, in metres.</summary>
+    public float LineSpacing { get; set; } = 1.7f;
+
+    /// <summary>Depth of the whole line behind the trainer, in metres.</summary>
+    public float LineBehind { get; set; } = 1.6f;
 
     /// <summary>Side offset override in metres (0 = use the species zone).</summary>
     public float SideOffset { get; set; }
@@ -184,7 +213,7 @@ public sealed class WildlingFollower3D : Component
 
         UpdateLeaderSample(leader, delta);
         UpdateTrail(leader);
-        UpdateDestination(leader);
+        UpdateDestination(leader, team);
         UpdateState(leader, delta);
         UpdateMotion(self, team, leader, delta);
     }
@@ -260,7 +289,7 @@ public sealed class WildlingFollower3D : Component
         }
     }
 
-    private void UpdateDestination(GameObject leader)
+    private void UpdateDestination(GameObject leader, TeamManager3D? team)
     {
         _destinationTimer -= Time.DeltaTime;
         if (!_hasDestination || _destinationTimer <= 0.0)
@@ -269,7 +298,7 @@ public sealed class WildlingFollower3D : Component
 
             Vector3 forward = _travel;
             Vector3 right = Vector3.Cross(forward, Vector3.UnitY);
-            (float side, float behind) = SlotZone();
+            (float side, float behind) = SlotZone(team);
 
             // Predictive lead compensates for our own reaction time. It must never
             // push the slot past the trainer, otherwise companions run in front.
@@ -297,8 +326,27 @@ public sealed class WildlingFollower3D : Component
         _slotError = FlatDistance(GameObject!.Transform.WorldPosition, _destination);
     }
 
-    private (float Side, float Behind) SlotZone()
+    private (float Side, float Behind) SlotZone(TeamManager3D? team)
     {
+        int slot = ResolveSlot(team);
+
+        if (Formation == WildlingFormation.Line)
+        {
+            // Horizontal line abreast: 1 centre, 2 right, 3 left, equal depth.
+            float spacing = MathF.Max(.4f, LineSpacing);
+            (string lineZone, float lineSide) = slot switch
+            {
+                2 => ("Line right", spacing),
+                3 => ("Line left", -spacing),
+                _ => ("Line centre", 0f)
+            };
+
+            FormationZone = lineZone;
+            return (
+                SideOffset != 0f ? SideOffset : lineSide,
+                BehindOffset != 0f ? BehindOffset : MathF.Max(0f, LineBehind));
+        }
+
         (string zone, float side, float behind) = Stats?.Definition.Id switch
         {
             WildlingSpeciesDatabase.SprigletId => ("Right flank", 1.8f, .7f),
@@ -309,6 +357,35 @@ public sealed class WildlingFollower3D : Component
 
         FormationZone = zone;
         return (SideOffset != 0f ? SideOffset : side, BehindOffset != 0f ? BehindOffset : behind);
+    }
+
+    /// <summary>
+    /// Party slot for this companion. An explicit <see cref="SlotIndex"/> wins;
+    /// otherwise the member's position in TeamManager3D's slot list is used, so the
+    /// line keeps its authored order (1 = Fire Lizard, 2 = Spriglet, 3 = Zappet).
+    /// </summary>
+    private int ResolveSlot(TeamManager3D? team)
+    {
+        if (SlotIndex is >= 1 and <= 3)
+        {
+            return SlotIndex;
+        }
+
+        GameObject? self = GameObject;
+        if (team == null || self == null)
+        {
+            return 0;
+        }
+
+        for (int slot = 1; slot <= 3; slot++)
+        {
+            if (ReferenceEquals(team.Resolve(slot), self))
+            {
+                return slot;
+            }
+        }
+
+        return 0;
     }
 
     private bool IsRouteBlocked(Vector3 from, Vector3 to)
