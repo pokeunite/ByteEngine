@@ -98,6 +98,12 @@ public sealed class EventRuleDefinition
     // Editor-only outline presentation; does not affect event execution.
     public bool EditorOutlineCollapsed { get; set; }
 
+    /// <summary>Optional function-style name shown by the Event Sheet instead of DisplayName.</summary>
+    public string FunctionName { get; set; } = string.Empty;
+
+    /// <summary>Event Sheet header tint (ARGB hex or empty for the default palette colour).</summary>
+    public string EditorHeaderColor { get; set; } = string.Empty;
+
     public bool Enabled { get; set; } =
         true;
 
@@ -208,6 +214,9 @@ public sealed class EventGraphGroupDefinition
 
     public string Title { get; set; } =
         "Comment";
+
+    /// <summary>True when this group is shown as a sheet section instead of a graph box.</summary>
+    public bool SheetGroup { get; set; }
 
     // Collapsed groups are a visual editor affordance, not callable functions.
     public bool Collapsed { get; set; }

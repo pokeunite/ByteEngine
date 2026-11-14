@@ -13,6 +13,9 @@ namespace ByteEngine.Core.VisualLogic;
 
 public sealed record VisualArgumentDefinition(string Name, string DisplayName, VariableValue DefaultValue)
 {
+    /// <summary>True when the argument names a scene object (the sheet shows an object picker).</summary>
+    public bool IsObjectReference { get; init; }
+
     public EventValue CreateDefault() => new() { Constant = DefaultValue.Clone() };
 }
 
@@ -22,6 +25,13 @@ public sealed class VisualConditionDefinition
     public required string Category { get; init; }
     public required string DisplayName { get; init; }
     public string? TargetComponent { get; init; }
+
+    /// <summary>Optional menu grouping override used by the Event Sheet picker.</summary>
+    public string? MenuGroup { get; init; }
+
+    /// <summary>Optional sentence shown in the Event Sheet, e.g. "Show {source}'s health on {target}".</summary>
+    public string? SentenceTemplate { get; init; }
+
     public IReadOnlyList<VisualArgumentDefinition> Arguments { get; init; } = Array.Empty<VisualArgumentDefinition>();
 
     public required Func<
@@ -37,6 +47,13 @@ public sealed class VisualActionDefinition
     public required string Category { get; init; }
     public required string DisplayName { get; init; }
     public string? TargetComponent { get; init; }
+
+    /// <summary>Optional menu grouping override used by the Event Sheet picker.</summary>
+    public string? MenuGroup { get; init; }
+
+    /// <summary>Optional sentence shown in the Event Sheet, e.g. "Show {source}'s health on {target}".</summary>
+    public string? SentenceTemplate { get; init; }
+
     public IReadOnlyList<VisualArgumentDefinition> Arguments { get; init; } = Array.Empty<VisualArgumentDefinition>();
 
     public required Action<

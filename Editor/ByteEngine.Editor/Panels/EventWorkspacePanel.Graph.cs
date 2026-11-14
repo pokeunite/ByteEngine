@@ -18,12 +18,32 @@ internal sealed partial class EventWorkspacePanel
 {
     private void DrawGraphWorkspace(EditorState? state)
     {
-        DrawGraphTabs();
+        DrawViewSwitch();
+        if (_showEventGraph) DrawGraphTabs();
+
         float availableWidth = ImGui.GetContentRegionAvail().X;
+
+        /*
+         * EVENTS list visibility: width driven by default (760 px), with the
+         * persisted "Events" toolbar control able to force it on or off.
+         */
+        bool outlineModeAllows = EditorPreferences.EventOutlineMode switch
+        {
+            1 => true,
+            2 => false,
+            _ => availableWidth >= 760.0f
+        };
+        bool showOutline = _showSheetOutline && outlineModeAllows && availableWidth >= 640.0f;
+        float outlineWidth = showOutline
+            ? Math.Clamp(availableWidth * 0.22f, 160.0f, 210.0f)
+            : 0.0f;
+
+        // The centre view keeps at least 320 px; the details pane yields first.
+        bool detailsAllowed = _showEventGraph || _showSheetDetails;
         float detailsWidth = MathF.Min(380.0f, MathF.Max(300.0f, availableWidth * 0.30f));
-        bool showDetails = availableWidth >= 720.0f;
-        bool showOutline = availableWidth >= 1050.0f;
-        float outlineWidth = showOutline ? 210.0f : 0.0f;
+        bool showDetails = detailsAllowed &&
+                           availableWidth >= 720.0f &&
+                           availableWidth - outlineWidth - detailsWidth - (showOutline ? 16.0f : 8.0f) >= 320.0f;
 
         if (showOutline)
         {
@@ -47,7 +67,15 @@ internal sealed partial class EventWorkspacePanel
                 ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         }
 
-        DrawGraphCanvas(state);
+        if (_showEventGraph)
+        {
+            DrawGraphCanvas(state);
+        }
+        else
+        {
+            DrawEventSheet(state);
+        }
+
         ImGui.EndChild();
 
         if (showDetails)
@@ -61,8 +89,70 @@ internal sealed partial class EventWorkspacePanel
         }
     }
 
+    /// <summary>Event Sheet / Graph switch plus the per-view options popup.</summary>
+    private void DrawViewSwitch()
+    {
+        Vector4 active = new(.16f, .30f, .42f, 1);
+        Vector4 idle = new(.10f, .12f, .14f, 1);
+
+        ImGui.PushStyleColor(ImGuiCol.Button, !_showEventGraph ? active : idle);
+        if (ImGui.Button("Event sheet"))
+        {
+            _showEventGraph = false;
+        }
+
+        ImGui.PopStyleColor();
+        ImGui.SameLine();
+
+        ImGui.PushStyleColor(ImGuiCol.Button, _showEventGraph ? active : idle);
+        if (ImGui.Button("Graph"))
+        {
+            _showEventGraph = true;
+        }
+
+        ImGui.PopStyleColor();
+        ImGui.SameLine();
+
+        if (ImGui.Button("View options"))
+        {
+            ImGui.OpenPopup("SheetViewOptions");
+        }
+
+        if (ImGui.BeginPopup("SheetViewOptions"))
+        {
+            bool outline = EditorPreferences.EventOutlineMode != 2;
+            if (ImGui.Checkbox("Events list", ref outline))
+            {
+                EditorPreferences.EventOutlineMode = outline ? 0 : 2;
+            }
+
+            ImGui.Checkbox("Details", ref _showSheetDetails);
+            ImGui.Checkbox("Module settings", ref _sheetShowModuleSettings);
+
+            bool live = VisualLogicDebugTrace.Enabled;
+            if (ImGui.Checkbox("Live feedback during play", ref live))
+            {
+                VisualLogicDebugTrace.Enabled = live;
+                if (!live)
+                {
+                    VisualLogicDebugTrace.Clear();
+                }
+            }
+
+            ImGui.EndPopup();
+        }
+
+        ImGui.Spacing();
+    }
+
     private void DrawGraphOutline(float width)
     {
+        if (!_showEventGraph)
+        {
+            DrawSheetOutline(width);
+            return;
+        }
+
         ImGui.BeginChild("##EventGraphOutline", new Vector2(width, 0.0f),
             ImGuiChildFlags.Borders);
         ImGui.SeparatorText("EVENTS");
@@ -261,6 +351,16 @@ internal sealed partial class EventWorkspacePanel
         ImGui.EndChild();
     }
 
+    private static string EventsOutlineLabel() => EditorPreferences.EventOutlineMode switch
+    {
+        1 => "Events On",
+        2 => "Events Off",
+        _ => "Events Auto"
+    };
+
+    private static void CycleEventsOutlineMode() =>
+        EditorPreferences.EventOutlineMode = (EditorPreferences.EventOutlineMode + 1) % 3;
+
     private void DrawDocumentToolbar(
         EditorLog log)
     {
@@ -296,7 +396,7 @@ internal sealed partial class EventWorkspacePanel
             CollapseSelectedGraphNodes();
         ImGui.EndDisabled();
 
-        if (!layout.CollapseSecondary)
+        if (!layout.CollapseSecondary && _showEventGraph)
         {
             EditorUi.ToolbarSeparator();
             if (EditorUi.ToolbarButton("Arrange", "Auto-arrange graph"))
@@ -310,50 +410,68 @@ internal sealed partial class EventWorkspacePanel
             if (EditorUi.ToolbarButton("Frame", "Frame graph")) _requestFrameGraph = true;
         }
 
-        EditorUi.ToolbarSeparator();
-        if (EditorUi.ToolbarButton("-", "Zoom out")) _graphCanvas.SetZoom(_graphCanvas.Zoom - .1f);
-        ImGui.SameLine();
-        ImGui.TextColored(EditorTheme.TextSecondary, $"{_graphCanvas.Zoom * 100f:0}%");
-        ImGui.SameLine();
-        if (EditorUi.ToolbarButton("+", "Zoom in")) _graphCanvas.SetZoom(_graphCanvas.Zoom + .1f);
-
-        ImGui.SameLine();
-        if (EditorUi.ToolbarButton("View", "Graph view settings")) _viewSettings.Begin(GetNodeScale());
-        if (_viewSettings.ConsumeOpenRequest()) ImGui.OpenPopup("View##ByteGraphViewSettings");
-        if (ImGui.BeginPopup("View##ByteGraphViewSettings"))
+        if (!layout.CollapseSecondary)
         {
-            _viewSettings.MarkVisible();
-            float nodeScalePercent = _viewSettings.NodeScale * 100f;
-            ImGui.SetNextItemWidth(190f);
-            if (ImGui.SliderFloat("Node Scale##ByteGraphView", ref nodeScalePercent,
-                    ByteGraphViewSettingsState.MinimumNodeScale * 100f,
-                    ByteGraphViewSettingsState.MaximumNodeScale * 100f, "%.0f%%"))
-            {
-                _viewSettings.SetNodeScale(nodeScalePercent / 100f);
-                _module!.EditorNodeScale = _viewSettings.NodeScale;
-                _dirty = true;
-            }
-            if (EditorUi.SecondaryButton("Reset View")) _graphCanvas.ResetView();
-            ImGui.EndPopup();
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton(EventsOutlineLabel(),
+                    "EVENTS list: auto (760 px) / always (needs 640 px) / never. Persisted per user."))
+                CycleEventsOutlineMode();
         }
-        else
+
+        if (_showEventGraph)
         {
-            _viewSettings.RecoverWhenNotVisible();
+            EditorUi.ToolbarSeparator();
+            if (EditorUi.ToolbarButton("-", "Zoom out")) _graphCanvas.SetZoom(_graphCanvas.Zoom - .1f);
+            ImGui.SameLine();
+            ImGui.TextColored(EditorTheme.TextSecondary, $"{_graphCanvas.Zoom * 100f:0}%");
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("+", "Zoom in")) _graphCanvas.SetZoom(_graphCanvas.Zoom + .1f);
+
+            ImGui.SameLine();
+            if (EditorUi.ToolbarButton("View", "Graph view settings")) _viewSettings.Begin(GetNodeScale());
+            if (_viewSettings.ConsumeOpenRequest()) ImGui.OpenPopup("View##ByteGraphViewSettings");
+            if (ImGui.BeginPopup("View##ByteGraphViewSettings"))
+            {
+                _viewSettings.MarkVisible();
+                float nodeScalePercent = _viewSettings.NodeScale * 100f;
+                ImGui.SetNextItemWidth(190f);
+                if (ImGui.SliderFloat("Node Scale##ByteGraphView", ref nodeScalePercent,
+                        ByteGraphViewSettingsState.MinimumNodeScale * 100f,
+                        ByteGraphViewSettingsState.MaximumNodeScale * 100f, "%.0f%%"))
+                {
+                    _viewSettings.SetNodeScale(nodeScalePercent / 100f);
+                    _module!.EditorNodeScale = _viewSettings.NodeScale;
+                    _dirty = true;
+                }
+                if (EditorUi.SecondaryButton("Reset View")) _graphCanvas.ResetView();
+                ImGui.EndPopup();
+            }
+            else
+            {
+                _viewSettings.RecoverWhenNotVisible();
+            }
         }
 
         ImGui.SameLine();
         if (EditorUi.ToolbarButton("...", "More graph actions")) ImGui.OpenPopup("More##ByteGraphToolbarMore");
         if (ImGui.BeginPopup("More##ByteGraphToolbarMore"))
         {
-            if (layout.CollapseSecondary && ImGui.MenuItem("Arrange"))
+            if (layout.CollapseSecondary && _showEventGraph && ImGui.MenuItem("Arrange"))
             {
                 RecordHistory("Auto Arrange Graph");
                 AutoArrangeGraph();
                 _requestFrameGraph = true;
                 _dirty = true;
             }
-            if (layout.CollapseSecondary && ImGui.MenuItem("Frame")) _requestFrameGraph = true;
+            if (layout.CollapseSecondary && _showEventGraph && ImGui.MenuItem("Frame")) _requestFrameGraph = true;
             if (layout.CollapseSecondary) ImGui.Separator();
+            if (ImGui.MenuItem("Events: Auto", "", EditorPreferences.EventOutlineMode == 0))
+                EditorPreferences.EventOutlineMode = 0;
+            if (ImGui.MenuItem("Events: Always", "", EditorPreferences.EventOutlineMode == 1))
+                EditorPreferences.EventOutlineMode = 1;
+            if (ImGui.MenuItem("Events: Never", "", EditorPreferences.EventOutlineMode == 2))
+                EditorPreferences.EventOutlineMode = 2;
+            ImGui.Separator();
             if (ImGui.MenuItem("Reset View")) _graphCanvas.ResetView();
             ImGui.BeginDisabled(_selectedGraphNodes.Count == 0);
             if (ImGui.MenuItem("Delete")) DeleteSelectedGraphNodes();

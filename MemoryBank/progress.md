@@ -12,6 +12,10 @@ Updated: 2026-11-13
   mesh LODs, water and terrain.
 - Editor tooling: scene view navigation/gizmos, Game View, UI authoring with
   resolution previews, profiling by viewport/pass.
+- Headless authoring: `Tools/ByteEngine.Mcp` creates projects from shared Core
+  templates, imports assets and reads model sub-assets/import settings, batch-edits
+  scenes/Blueprints/Event Modules, scaffolds/builds/installs plugins, validates the
+  whole project and exports on explicit request.
 - Characters: `CharacterController3D` (acceleration, air control, slope limits,
   step tolerance, coyote time, buffered jumps), capsule collider, animation
   controller, skeletons, sockets, blending, crowd pose sharing.
@@ -50,3 +54,5 @@ Updated: 2026-11-13
   before enabling it.
 - Importer/rig compatibility still needs per-asset validation.
 - OBJ import is intentionally basic; GLB is the recommended exchange format.
+- MCP has no headless Play, input injection, screenshots or undo; visual checks use
+  the editor or browser harnesses.

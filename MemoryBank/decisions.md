@@ -3,6 +3,25 @@
 Append-only. Newest first. One entry per choice that would be expensive to
 rediscover. Record what was decided, why, and what was rejected.
 
+## 2026-11-13 — MCP wraps shared Core authoring, not editor automation
+
+Decision: `Tools/ByteEngine.Mcp` edits projects through `ProjectSerializer`,
+`AssetDatabase`/`AssetManager`, `SceneSerializer`, `BlueprintSerializer`,
+`EventModuleSerializer`, the shared `ByteEngine.Core.Authoring.ProjectTemplateFactory`,
+`BytePlugin.targets` and the runtime exporters. Starter scenes moved into Core so
+the editor and MCP cannot drift. MCP always installs into the same project package
+folders the editor reads.
+
+Why: agents need deterministic, reviewable edits with revision tokens. UI mouse
+automation and duplicated template/import code would drift and be unsafe. The only
+process MCP starts is `dotnet build` for plugin source, with node reuse disabled
+(`-nodeReuse:false`, `MSBUILDDISABLENODEREUSE=1`, closed stdin, event-based output)
+because reused MSBuild nodes otherwise keep the stdio pipes open and the call hangs.
+
+Rejected: referencing `ByteEngine.Editor` from the MCP host (net9.0-windows, ImGui,
+OpenTK, editor-only asset factories); duplicating starter scenes inside the MCP;
+shelling out to the editor for imports; running exports implicitly.
+
 ## 2026-11-13 — Keep agent memory in a tracked `MemoryBank/` folder
 
 Decision: durable cross-session state lives in `MemoryBank/`, loaded through

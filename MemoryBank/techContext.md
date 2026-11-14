@@ -25,6 +25,7 @@ Updated: 2026-11-13
 | Read the engine version | `dotnet run --project Tests/ByteEngine.Tests -- --version` |
 | Benchmarks | `dotnet run -c Release --project Tests/ByteEngine.Tests -- --engine-performance .artifacts/engine-performance.json` |
 | Publish editor | `./Tools/PublishEditor.ps1` (`-Configuration Debug\|Release`, `-SkipBrowser`, `-IncludeBrowser`) |
+| Publish the MCP authoring server | `./Tools/PublishMcp.ps1` (writes `Dist/ByteEngine-MCP`) |
 | Publish browser runtime | `./Tools/PublishBrowser.ps1` (`-Configuration Debug\|Release`, default Release) |
 | Mirror browser runtime into editor bins | `./Tools/Sync-BrowserRuntime.ps1` (`-Check` for drift only) |
 | Publish Windows player | `./Tools/PublishPlayer.ps1` (`-Configuration`, `-DistributionDirectory`) |
@@ -61,6 +62,9 @@ are gitignored); benchmarks and ad-hoc artifacts go under `.artifacts/`.
   `Designs/` and `tmp/` are gitignored generated or local-only content.
 - Authored `.byteproject` files are outside the repository; `AGENTS.md` lists the
   canonical locations and the plugin synchronization rules for each.
+- The MCP authoring server is registered in `~/.codex/config.toml` and
+  `~/.cline/data/settings/cline_mcp_settings.json`; republish with
+  `Tools/PublishMcp.ps1` after changing its tools.
 
 ## Third-party and native caveats
 

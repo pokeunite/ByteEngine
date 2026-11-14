@@ -105,6 +105,39 @@ public static class ByteEnginePluginRegistry
             ByPlugin[id].Actions.Add(action);
         }
     }
+    /// <summary>
+    /// Returns the menu path for a plugin-contributed Event Sheet node, grouped
+    /// under its plugin and, when possible, its target object type.
+    /// </summary>
+    public static string GetVisualLogicMenuPath(string instructionId, string category, string? component, string? menuGroup)
+    {
+        lock (Sync)
+        {
+            foreach (var pair in ByPlugin)
+            {
+                var plugin = pair.Value;
+                if (!plugin.Actions.Any(a => a.Id == instructionId) &&
+                    !plugin.Conditions.Any(c => c.Id == instructionId))
+                {
+                    continue;
+                }
+
+                string? objectName = null;
+                if (!string.IsNullOrWhiteSpace(component))
+                {
+                    objectName = plugin.Components
+                        .FirstOrDefault(c => c.Codec.TypeName == component ||
+                                             c.Codec.TypeName.EndsWith("." + component, StringComparison.Ordinal))
+                        ?.Metadata.DisplayName;
+                }
+
+                return "Plugins / " + pair.Key + " / " + (menuGroup ?? objectName ?? category);
+            }
+
+            return category;
+        }
+    }
+
     internal static void RegisterCondition(string id, VisualConditionDefinition condition)
     {
         lock (Sync)

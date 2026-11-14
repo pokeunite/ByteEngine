@@ -14,6 +14,7 @@ Updated: 2026-11-13
 | `Sandbox`, `Example`, `Samples` | Small engine-side harness content. |
 | `Plugins/<Game>` | Canonical gameplay plugin source; built packages land in `PluginLibrary`. |
 | `Tools/*.ps1`, `Tools/*.cjs` | Build, publish, sync, audit, clean and browser smoke tests. |
+| `Tools/ByteEngine.Mcp` | Stdio MCP authoring host: 11 domain tools over Core serializers, shared project templates, plugin build targets and exporters. Published to `Dist/ByteEngine-MCP`. |
 | `Tests/ByteEngine.Tests` | Custom console test runner (not xUnit); flag-selected suites and diagnostics. |
 
 ## Core object model
@@ -47,6 +48,8 @@ Updated: 2026-11-13
   `bin/Release` output; `-Check` reports drift only.
 - Plugin packages declare `schemaVersion`, `version` and `minimumEngineVersion`
   in `plugin.json`.
+- MCP mutations validate revisions and have a `--self-test`; plugin builds must use
+  `-nodeReuse:false` with node reuse disabled so stdio pipes close on exit.
 
 ## Performance patterns already enforced
 

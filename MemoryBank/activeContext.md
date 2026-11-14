@@ -1,51 +1,50 @@
 # Active context
 
-Updated: 2026-11-13 (Cline update review and regression validation)
+Updated: 2026-11-13 (ByteEngine MCP authoring server v2)
 
-## Maintained source and branch boundary
+## Current focus
 
-Source routing selects the main checkout. Review began at main d91cd2a and
-secondary branch codex/event-sheet-ux-and-engine-updates at e128b7f.
-Branches remain separate; no merge or game export is authorized by this task.
-Main has navigation/physics changes and the editor/registry refactor. The secondary
-branch has multiplayer, native GPU skinning, Hazard Pay and performance tooling.
+Agent-driven game authoring through `Tools/ByteEngine.Mcp`. The server is published
+to `Dist/ByteEngine-MCP` by `Tools/PublishMcp.ps1` and registered in Codex
+(`~/.codex/config.toml`) and Cline (`~/.cline/data/settings/cline_mcp_settings.json`).
+Next: choose the first game project under `Documents`, create it with
+`be_project(create)`, and build gameplay from engine components first, plugins second.
 
-## Reviewed changes
+## What changed
 
-- Navigation region caching now rejects inactive/disabled/detached regions and
-  resets paths for replacement regions. A* scratch is retained; queries on one
-  grid/mesh must remain serialized. Jitter does not defer first queries.
-- Physics candidate reuse checks world transforms; corrections/joints force a
-  refresh. Unconditional once-per-substep reuse was unsafe.
-- Restored configured fixed delta before component callbacks; custom 20 ms test.
-- Removed added crowd frame modulo; playback already wraps looping clips.
-  Immutable cached pose geometry uploads remain.
-- Secondary adaptive occlusion keeps its prior opt-in default. Packed HDR resolve
-  is opt-in via EnablePackedHdrResolve until real performance/image gates pass.
-- Measurement runner now executes Reps per mode and handles three or more modes.
-- Review details: Docs/Cline-Update-Review-2026-11-13.md.
+- MCP now covers project templates/creation, asset import and model sub-asset
+  inspection, import settings/reimport, scene transform/duplicate/tags/variables,
+  Blueprint extraction, plugin scaffold/build/install/update, whole-project
+  validation, Windows/Web export plus web analysis, and editor launch.
+- Starter scenes moved to `Engine/ByteEngine.Core/Authoring/ProjectTemplateFactory.cs`
+  (`ByteEngine.Core.Authoring.ProjectTemplate`) so the editor and MCP create
+  identical projects. Editor and test usings were updated; the editor-only
+  ByteArena/Last Stand/Karlson asset generation stays in the editor.
+- `AssetDatabase` exposes `DetectAssetType` and a full
+  `SetModelImporterSettings(Guid, ModelImporterSettings)`.
+- Plugin build runs `dotnet build -c Release -nodeReuse:false` with node reuse
+  disabled, stdin closed and output read through events. Without that, reused
+  MSBuild nodes kept the pipes open and the MCP call never returned.
+- `Tools/ByteEngine.Mcp/README.md` documents every operation;
+  `Docs/PLUGIN-AUTHORING.md` no longer claims MCP cannot export.
 
-## Evidence
+## Verification
 
-Main Release build and named engine, physics, navmesh, browser CPU/editor and
-full regression suites run against current sources; exact commands/results are
-in the review and session log. Raw output stays under .artifacts/cline-review-20261113.
-Secondary Release build, AI queries, post-context transitions, render registry,
-300-bone native GPU skinning, network session/lobby and native WebRTC checks pass.
-Harness dry-run counts pass: 8 per arm/16 total and 4 per mode/12 total.
-There is no real repeated FPS A/B acceptance result, overseas network validation,
-manual game visual review or browser runtime publication in this task.
+- `dotnet build ByteEngine.sln` succeeds (final incremental build, 0 warnings/errors).
+- Default test suite passed: "ByteEngine tests passed: v0.7 through v0.8-d
+  regressions and Phase 1/2/3 gameplay systems."
+- Published `ByteEngine.Mcp.exe --self-test` passes project creation, asset import,
+  sub-asset inspection/settings, scene rotation/transform/duplicate/tags/variables,
+  Blueprint extraction, playable placement, Event Module attach and validation.
+- Stdio handshake lists all 11 `be_*` tools.
+- Disposable plugin smoke test: scaffold -> build (10.7 s) -> install -> reopen ->
+  `be_catalog` resolves `smoke.mcp.McpSmokeSystem3D`. Sources and package cleaned.
 
-## Next steps and limitations
+## Limitations and next steps
 
-- Choose a tested branch integration plan before assuming main contains multiplayer
-  or native GPU skinning. Push both branches separately for backup.
-- Run asset-ready repeated A/B sweeps with build identity, quality and actual raster
-  dimensions. Earlier single-run FPS conclusions remain inside observed drift.
-- Verify stress scene loading before running the new harness. Keep packed HDR off
-  until format/fallback, image parity and performance gates pass.
-- Validate signaling/ICE on real overseas networks; TURN may still be needed.
-- ShareCrowdPoses must be enabled for phase buckets to affect an actor. No gameplay
-  plugin source was changed by this review.
-- PublicPvpLobby is a separate repository; it and TestPublicPvpLobby.mjs stay outside
-  engine commits, as in earlier pushes.
+- No headless Play, input injection or screenshots. Use `be_editor(op:"open")` for
+  Play/visual checks and the `Tools/TestBrowser*.cjs` harnesses for web rendering.
+- Editor-only templates (ByteArena assets, Last Stand, Karlson Demo) still require
+  the Project Browser; MCP returns `EDITOR_REQUIRED`.
+- Exports need matching published runtimes and are never run automatically.
+- Compressed model/audio formats and plugin hot reload remain editor/runtime work.
