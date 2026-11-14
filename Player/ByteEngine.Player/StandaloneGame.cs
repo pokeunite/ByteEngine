@@ -12,7 +12,6 @@ internal sealed class StandaloneGame : ByteEngineApplication
     private readonly bool _validateOnly;
     private int _smokeFrames;
     private Action? _firstFrame;
-    private IDisposable? displayLease;
     private readonly System.Diagnostics.Stopwatch _smokeTimer=new();
     private IDisposable? _displayLease;
     protected override bool CloseOnEscape => false;
@@ -33,7 +32,7 @@ internal sealed class StandaloneGame : ByteEngineApplication
     {
         // Plugins drive windowed/borderless/fullscreen through Core; the host owns the window.
         if (!_smokeTest && !_validateOnly)
-            _displayLease = GameWindowDisplay.Attach(ApplyDisplayMode, GameWindowMode.Windowed);
+            _displayLease = GameWindowDisplay.Attach(ApplyDisplayMode, _project.Project.Window.StartFullscreen ? GameWindowMode.Fullscreen : GameWindowMode.Windowed);
         foreach (var variable in _project.Project.GlobalVariables)
             Scenes.GlobalVariables.Set(variable.Name, variable.Value.Clone());
         var currentPath=_project.Project.StartupScene;
