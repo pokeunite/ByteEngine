@@ -32,7 +32,29 @@ When changing Dune Company plugin code, increment its plugin version and refresh
 - Engine version comes from `ByteEngineVersion` in the root `Directory.Build.props`. Do not add a second hard-coded version.
 - New C# follows the root `.editorconfig`: four-space indentation, Allman braces, file-scoped namespaces, System usings first, and a 240-column review limit.
 
+## Cline workflow (2026-11-14)
+
+Use this sequence for every task in this repository.
+
+1. Work in `C:\Users\codex\ByteEngine` only. Never hand-edit `Dist/`, recovery folders
+   (`Backups/`, `UpdateBackups/`) or the retired integration worktree
+   (`C:\Users\codex\.codex\worktrees\52af\ByteEngine`). `Dist/` changes only through the publish
+   scripts.
+2. One coding assistant at a time in this folder. Do not run a second agent against the same tree.
+3. Read `AGENTS.md` and `MemoryBank/activeContext.md` + `progress.md` before editing; read
+   `systemPatterns.md`, `techContext.md` and `decisions.md` for the areas being changed.
+4. Make one coherent change, test it, then commit it. Do not bundle unrelated edits.
+5. Optimisation claims require before/after measurements, not reasoning alone.
+6. After a change is accepted: rebuild with
+   `powershell -ep bypass -file .\Rebuild-ByteEngine-And-Refresh-Dist.ps1`, then push.
+
+Boundaries: engine code lives in this repository. Hazard Pay scenes, assets and saves live in
+`C:\Users\codex\Documents\palclone`; game work there never moves engine code into the project.
+
+
+
 ## Canonical source and Hazard Pay
+
 
 The sole maintained source is C:/Users/codex/ByteEngine on main. Verify
 .byteengine-build-source.json before editing or publishing. Do not republish

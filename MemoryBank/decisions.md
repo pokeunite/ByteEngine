@@ -149,3 +149,6 @@ Rejected: the added frame-count modulo. Pool capacity remains a separate limit.
 
 
 - **Asset-cache trimming keeps textures referenced by surviving materials.** TrimCaches(keep) evicted a texture whose material was still in the editor scene (or a kept model material), so the first frame after Play stopped threw ObjectDisposedException: Texture2D. Material.Textures() now feeds a referenced set that both protects cache entries and blocks disposal; MaterialTextureSampling.Bind also skips a disposed texture as a last-resort guard. Rejected: only guarding the sampler, which hides missing textures instead of keeping them alive.
+
+- **Cline workflow is fixed by AGENTS.md (2026-11-14).** One assistant per checkout, work only in C:\Users\codex\ByteEngine, never hand-edit Dist/, Backups/, UpdateBackups/ or the retired 52af worktree, one coherent change per commit with a test, before/after measurements for performance work, then Rebuild-ByteEngine-And-Refresh-Dist.ps1 and push. Engine code stays here; Hazard Pay scenes/assets stay in Documents\palclone. Rejected: ad-hoc publishing or parallel agents against the same tree, which is how the 11/14 palclone break and the swept-up temporary commit happened.
+
