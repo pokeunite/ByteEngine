@@ -59,6 +59,18 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     private float _smoothedBoomYaw;
     private float _smoothedBoomPitch;
 
+    // ---- Camera handoff (trainer <-> Wildling switches) ----
+    private float _handoffSeconds = .4f;
+    private float _handoffRemaining;
+    private float _handoffDuration = .4f;
+    private Vector3 _handoffFromFocus;
+    private float _handoffFromArmLength;
+    private float _handoffFromShoulderOffset;
+    private bool _handoffPending;
+    private Vector3 _effectivePivot;
+    private float _effectiveArmLength;
+    private float _effectiveShoulderOffset;
+
     /*
      * TPS-D near-owner protection.
      *
@@ -158,10 +170,115 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float ActualArmLength => _actualLength;
     public override int UpdateOrder => -200;
 
+    /// <summary>
+    /// Seconds used to blend this camera in when it takes over from another
+    /// subject. 0 disables the blend and snaps instead.
+    /// </summary>
+    public float HandoffSeconds
+    {
+        get => _handoffSeconds;
+        set => _handoffSeconds = MathF.Max(0f, Finite(value));
+    }
+
+    /// <summary>True while a handoff blend is still running.</summary>
+    public bool IsHandoffActive => _handoffRemaining > 0f;
+
+    /// <summary>
+    /// Focus point the camera is currently framing. During a handoff this is the
+    /// blended value, so a second switch mid-blend retargets from what is on screen.
+    /// </summary>
+    public Vector3 FocusPosition => _rigInitialized
+        ? _effectivePivot
+        : (AttachedGameObject?.Transform.WorldPosition ?? Vector3.Zero) + Vector3.UnitY * PivotHeight;
+
+    /// <summary>Current world rotation of the camera this boom drives.</summary>
+    public Quaternion ViewRotation => _cameraObject?.Transform.WorldRotation ??
+        LookRotation(CalculateViewForward(_desiredBoomYaw, _desiredBoomPitch));
+
+    /// <summary>Arm length actually in use (handoff-blended and collision-adjusted).</summary>
+    public float EffectiveArmLength => _rigInitialized ? _effectiveArmLength : ArmLength;
+
+    /// <summary>Shoulder offset actually in use.</summary>
+    public float EffectiveShoulderOffset => _rigInitialized ? _effectiveShoulderOffset : ShoulderOffset;
+
     protected override void OnStart()
     {
+        // A handoff already seeded the control angles and the blend state; snapping
+        // here would undo it on the first activation of a character's camera.
+        if (_handoffPending)
+        {
+            _rigInitialized = true;
+            return;
+        }
+
         SeedControlAnglesFromAuthoring();
         UpdateRig(true);
+    }
+
+    /// <summary>
+    /// Takes over the view from <paramref name="previous"/>: the focus travels from
+    /// the previous subject to this boom's pivot over <see cref="HandoffSeconds"/>
+    /// while the current view heading is preserved. Pass null for an instant snap
+    /// (first activation).
+    /// </summary>
+    public void BeginHandoff(CameraBoom3D? previous)
+    {
+        if (previous == null || ReferenceEquals(previous, this) || HandoffSeconds <= 0f)
+        {
+            _handoffRemaining = 0f;
+            _handoffPending = false;
+            return;
+        }
+
+        Quaternion fromRotation = previous.ViewRotation;
+        SeedControlAnglesFromView(fromRotation);
+
+        _handoffFromFocus = previous.FocusPosition;
+        _handoffFromArmLength = previous.EffectiveArmLength;
+        _handoffFromShoulderOffset = previous.EffectiveShoulderOffset;
+        _handoffDuration = MathF.Max(.01f, HandoffSeconds);
+        _handoffRemaining = _handoffDuration;
+        _handoffPending = true;
+
+        // Start from the live state so the first frame is continuous with the
+        // camera that was on screen a moment ago.
+        _rigInitialized = true;
+        _actualLength = _handoffFromArmLength;
+        _smoothedBoomYaw = _desiredBoomYaw;
+        _smoothedBoomPitch = _desiredBoomPitch;
+        _effectivePivot = _handoffFromFocus;
+        _effectiveArmLength = _handoffFromArmLength;
+        _effectiveShoulderOffset = _handoffFromShoulderOffset;
+    }
+
+    /// <summary>
+    /// Keeps the current view direction on a switch: the incoming character's camera
+    /// adopts the outgoing camera's yaw/pitch instead of snapping to its own facing.
+    /// </summary>
+    private void SeedControlAnglesFromView(Quaternion viewRotation)
+    {
+        Vector3 forward = Vector3.Transform(-Vector3.UnitZ, viewRotation);
+        if (forward.LengthSquared() < .000001f)
+        {
+            return;
+        }
+
+        forward = Vector3.Normalize(forward);
+        float yaw = MathF.Atan2(forward.X, -forward.Z) * 180f / MathF.PI;
+        float pitch = -MathF.Asin(Math.Clamp(forward.Y, -1f, 1f)) * 180f / MathF.PI;
+
+        _desiredBoomYaw = yaw;
+        _desiredBoomPitch = Math.Clamp(pitch, MinPitch, MaxPitch);
+        _smoothedBoomYaw = _desiredBoomYaw;
+        _smoothedBoomPitch = _desiredBoomPitch;
+
+        if (!UseControlRotation || AttachedGameObject?.GetComponent<PlayerController3D>() is not { } controller)
+        {
+            return;
+        }
+
+        controller.ControlYaw = yaw;
+        controller.ControlPitch = Math.Clamp(pitch, MinPitch, MaxPitch);
     }
 
     /// <summary>
@@ -371,7 +488,39 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
          * Resolve framing around the FINAL follow pivot. Shoulder offset is a
          * socket/framing offset; it does not change what direction the camera
          * is looking.
+         *
+         * A handoff blends the focus, arm length and shoulder offset from the camera
+         * that was on screen a moment ago. Collision below still runs every frame on
+         * the blended result, so walls and characters are respected mid-transition.
          */
+        Vector3 focus = _smoothedPivot;
+        float armLength = ArmLength;
+        float shoulderAmount = ShoulderOffset;
+
+        if (immediate)
+        {
+            _handoffRemaining = 0f;
+            _handoffPending = false;
+        }
+        else if (_handoffRemaining > 0f)
+        {
+            _handoffRemaining = MathF.Max(0f, _handoffRemaining - deltaTime);
+            float progress = 1f - _handoffRemaining / MathF.Max(.0001f, _handoffDuration);
+            float eased = progress * progress * (3f - 2f * progress);
+            focus = Vector3.Lerp(_handoffFromFocus, _smoothedPivot, eased);
+            armLength = Lerp(_handoffFromArmLength, ArmLength, eased);
+            shoulderAmount = Lerp(_handoffFromShoulderOffset, ShoulderOffset, eased);
+
+            if (_handoffRemaining <= 0f)
+            {
+                _handoffPending = false;
+            }
+        }
+
+        _effectivePivot = focus;
+        _effectiveArmLength = armLength;
+        _effectiveShoulderOffset = shoulderAmount;
+
         Vector3 right =
             CalculateCameraRight(
                 _smoothedBoomYaw);
@@ -380,18 +529,18 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             CalculateOrbitVector(
                 _smoothedBoomYaw,
                 _smoothedBoomPitch,
-                ArmLength);
+                armLength);
 
         Vector3 shoulderOffset =
             right *
-            ShoulderOffset;
+            shoulderAmount;
 
         Vector3 fullOffset =
             orbitOffset +
             shoulderOffset;
 
         _desiredSocketPosition =
-            _smoothedPivot +
+            focus +
             fullOffset;
 
         float desiredLength =
@@ -404,7 +553,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             desiredLength > .0001f &&
             GameplayQuery3D.SphereCast(
                 scene,
-                _smoothedPivot,
+                focus,
                 fullOffset,
                 CollisionRadius,
                 out RaycastHit3D hit,
@@ -454,7 +603,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         }
 
         Vector3 direction = desiredLength > .0001f ? Vector3.Normalize(fullOffset) : Vector3.Zero;
-        _actualSocketPosition = _smoothedPivot + direction * _actualLength;
+        _actualSocketPosition = focus + direction * _actualLength;
         _cameraObject.Transform.WorldPosition = _actualSocketPosition;
 
         /*
@@ -630,6 +779,11 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         writer.Add("ArmLength", ArmLength);
         writer.Add("PivotHeight", PivotHeight);
         writer.Add("ShoulderOffset", ShoulderOffset);
+        writer.Add("Handoff.Active", IsHandoffActive);
+        writer.Add("Handoff.Seconds", HandoffSeconds);
+        writer.Add("Handoff.FromFocus", _handoffFromFocus);
+        writer.Add("Handoff.EffectiveArm", _effectiveArmLength);
+        writer.Add("Focus", _effectivePivot);
         writer.Add("StableFollow.DefaultPositionLag", false);
         writer.Add("StableFollow.DefaultRotationLag", false);
         writer.Add("ViewForward", CalculateViewForward(_smoothedBoomYaw, _smoothedBoomPitch));

@@ -61,6 +61,7 @@ public sealed class TeamManager3D : Component
     private float _combatExitRemaining;
     private double _hostileScanRemaining;
     private bool _hostilesNearby;
+    private CameraBoom3D? _activeBoom;
 
     public bool InCombat { get; private set; }
 
@@ -294,6 +295,9 @@ public sealed class TeamManager3D : Component
 
         bool exploring = !InCombat;
 
+        List<CameraBoom3D> booms = new(4);
+        CameraBoom3D? targetBoom = null;
+
         for (int index = 1; index <= 3; index++)
         {
             GameObject? member = Resolve(index);
@@ -324,13 +328,50 @@ public sealed class TeamManager3D : Component
                 member.GetComponent<WildlingStats3D>()?.ApplyMoveSpeedOnly();
             }
 
-            ApplyCamera(scene, member.GetComponent<CameraBoom3D>(), controlled);
+            if (member.GetComponent<CameraBoom3D>() is { } memberBoom)
+            {
+                booms.Add(memberBoom);
+                if (controlled)
+                {
+                    targetBoom = memberBoom;
+                }
+            }
         }
 
         if (Trainer is { } trainer)
         {
             SetEnabled<PlayerController3D>(trainer, exploring);
-            ApplyCamera(scene, trainer.GetComponent<CameraBoom3D>(), exploring);
+            if (trainer.GetComponent<CameraBoom3D>() is { } trainerBoom)
+            {
+                booms.Add(trainerBoom);
+                if (exploring)
+                {
+                    targetBoom = trainerBoom;
+                }
+            }
+        }
+
+        // Disable first, then enable, so a frame never resolves two active cameras.
+        foreach (CameraBoom3D boom in booms)
+        {
+            if (!ReferenceEquals(boom, targetBoom))
+            {
+                ApplyCamera(scene, boom, false);
+            }
+        }
+
+        if (targetBoom != null)
+        {
+            ApplyCamera(scene, targetBoom, true);
+        }
+
+        // Hand the view over smoothly: the incoming camera keeps the current heading
+        // and blends its focus from wherever the outgoing camera was looking.
+        if (!ReferenceEquals(_activeBoom, targetBoom))
+        {
+            CameraBoom3D? previous = _activeBoom;
+            _activeBoom = targetBoom;
+            targetBoom?.BeginHandoff(previous);
         }
     }
 
