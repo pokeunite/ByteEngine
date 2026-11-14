@@ -1,16 +1,18 @@
 param([string]$Configuration = "Release", [string]$DistributionDirectory = "")
 $ErrorActionPreference = "Stop"
+# Do not reuse a worker created by another checkout or restricted build session.
+$env:MSBUILDDISABLENODEREUSE = "1"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot "Player\ByteEngine.Player\ByteEngine.Player.csproj"
 $output = Join-Path $repositoryRoot (".artifacts\player-publish\" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 try {
-dotnet publish $project -c $Configuration -r win-x64 --self-contained true -o $output -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
+dotnet publish $project -m:1 -nodeReuse:false -c $Configuration -r win-x64 --self-contained true -o $output -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Windows player publish failed." }
 $bundleOutput=Join-Path $output 'Bundled'
 # Bundle the exact binaries just published. Rebuilding with single-file global
 # properties can produce a different Core MVID from the loose player/editor.
-dotnet publish $project -c $Configuration -r win-x64 --self-contained true --no-build -o $bundleOutput -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
+dotnet publish $project -m:1 -nodeReuse:false -c $Configuration -r win-x64 --self-contained true --no-build -o $bundleOutput -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Bundled Windows player publish failed." }
 $bundleExe=Join-Path $bundleOutput 'ByteEngine.Player.exe'
 $identity=Join-Path $bundleOutput 'core-mvid.txt'

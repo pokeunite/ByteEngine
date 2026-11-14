@@ -3,6 +3,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Do not reuse a worker created by another checkout or restricted build session.
+$env:MSBUILDDISABLENODEREUSE = "1"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot "Tools\ByteEngine.Mcp\ByteEngine.Mcp.csproj"
@@ -23,7 +25,7 @@ if (Test-Path -LiteralPath $resolvedOutput)
 
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 
-dotnet publish $project -c $Configuration -o $resolvedOutput --nologo
+dotnet publish $project -m:1 -nodeReuse:false -c $Configuration -o $resolvedOutput --nologo
 if ($LASTEXITCODE -ne 0)
 {
     throw "ByteEngine MCP publish failed."

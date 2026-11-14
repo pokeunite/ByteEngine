@@ -37,3 +37,6 @@ layout.ini
 # Retained local plugin backups are not release packages.
 /PluginLibrary/*.byteplugin.previous-*
 /PluginLibrary/*.byteplugin.before-*
+
+# Independent lobby repository; it has its own history and deployment.
+/PublicPvpLobby/

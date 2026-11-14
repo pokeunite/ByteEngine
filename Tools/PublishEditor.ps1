@@ -5,6 +5,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Do not reuse a worker created by another checkout or restricted build session.
+$env:MSBUILDDISABLENODEREUSE = "1"
 
 $toolsDirectory = $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $toolsDirectory
@@ -46,7 +48,7 @@ New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 # Keep the editor as a normal self-contained folder. ByteEngine loads FBX models
 # through managed and native Assimp assemblies; collapsing those files into a
 # single executable changes runtime loading behavior and caused meshes to vanish.
-dotnet publish $project `
+dotnet publish $project -m:1 -nodeReuse:false `
     -c $Configuration `
     -r win-x64 `
     --self-contained true `
