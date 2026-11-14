@@ -55,6 +55,13 @@ public sealed class TeamManager3D : Component
 
     public bool ToggleCombatWithKey { get; set; } = true;
 
+    /// <summary>
+    /// True once the player used the manual combat key. A manual toggle owns the
+    /// mode: the automatic entry/exit timer stops fighting it, so combat (and slot
+    /// switching) stays on until the player toggles again.
+    /// </summary>
+    public bool ManualCombatOverride { get; private set; }
+
     private float _cooldownRemaining;
     private float _protectionRemaining;
     private GameObject? _protectedMember;
@@ -115,22 +122,29 @@ public sealed class TeamManager3D : Component
 
         if (ToggleCombatWithKey && Input.IsGameInputCaptured && Input.IsKeyPressed(Key.T))
         {
+            ManualCombatOverride = true;
             SetCombat(!InCombat);
         }
 
-        if (SwitchWithNumberKeys && InCombat && Input.IsGameInputCaptured)
+        if (SwitchWithNumberKeys && Input.IsGameInputCaptured)
         {
-            if (Input.IsKeyPressed(Key.D1))
+            int requested =
+                Input.IsKeyPressed(Key.D1) ? 1 :
+                Input.IsKeyPressed(Key.D2) ? 2 :
+                Input.IsKeyPressed(Key.D3) ? 3 : 0;
+
+            if (requested != 0)
             {
-                RequestSwitch(1);
-            }
-            else if (Input.IsKeyPressed(Key.D2))
-            {
-                RequestSwitch(2);
-            }
-            else if (Input.IsKeyPressed(Key.D3))
-            {
-                RequestSwitch(3);
+                // Development convenience: a slot key always answers. Switching is a
+                // combat action, so outside combat the key takes command first instead
+                // of silently doing nothing.
+                if (!InCombat)
+                {
+                    ManualCombatOverride = true;
+                    SetCombat(true);
+                }
+
+                RequestSwitch(requested);
             }
         }
 
@@ -221,6 +235,13 @@ public sealed class TeamManager3D : Component
     private void UpdateAutoCombat(float delta)
     {
         if (!AutoCombat)
+        {
+            return;
+        }
+
+        // Once the player has used the manual toggle, the mode is theirs: the timer
+        // must not drop combat four seconds later while they are still testing.
+        if (ManualCombatOverride)
         {
             return;
         }

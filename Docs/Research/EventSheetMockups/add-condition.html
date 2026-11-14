@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add condition popover</title>
+<style>
+  :root{--bg:#14181d;--panel:#1c2229;--line:#2c343d;--text:#d7dee6;--dim:#8b98a5;--faint:#66727e;
+        --cond:#4fa8e8;--act:#f39c4f;--sel:#23384a;--hover:#242c35}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#0d1014;font-family:"Segoe UI",system-ui,sans-serif;color:var(--text)}
+  .app{width:1120px;height:700px;background:var(--bg);position:relative;overflow:hidden}
+  .titlebar{height:32px;background:#171c22;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;gap:8px;font-size:12px;color:var(--dim)}
+  .title{color:var(--text);font-weight:600}
+  .ghost-sheet{padding:16px 18px;opacity:.75}
+  .row{display:flex;align-items:center;font-size:13px;padding:3px 4px;border-radius:4px;height:26px}
+  .mark{width:2px;height:15px;border-radius:1px;margin-right:8px;background:var(--cond)}
+  .mark.a{background:var(--act)}
+  .obj{font-weight:600;color:#dbe9f6}
+  .obj .ico{display:inline-block;width:9px;height:9px;border-radius:50%;background:#7fb2d8;margin-right:5px;vertical-align:1px}
+  .num{color:#9cd67f}
+  .key{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 5px;border:1px solid #46545f;border-bottom-width:2px;border-radius:4px;background:#252d35;font-size:11.5px;font-weight:600}
+  .add{display:inline-flex;align-items:center;gap:6px;color:var(--faint);font-size:12px;padding:3px 6px;border-radius:4px;height:24px}
+  .add.target{color:#cfe4f5;background:var(--sel);outline:1px solid #3d6c90}
+  .here{margin-left:8px;font-size:10.5px;color:#9fc2dc;border:1px solid #34536b;border-radius:8px;padding:1px 7px}
+  .popover{position:absolute;left:300px;top:132px;width:660px;background:var(--panel);border:1px solid #39434e;
+           border-radius:9px;box-shadow:0 18px 48px rgba(0,0,0,.55);overflow:hidden}
+  .search{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line)}
+  .lens{width:12px;height:12px;border:1.6px solid #8b98a5;border-radius:50%;position:relative;flex:none}
+  .lens::after{content:"";position:absolute;width:6px;height:1.6px;background:#8b98a5;transform:rotate(45deg);right:-5px;bottom:-1px}
+  .q{flex:1;font-size:14px}
+  .caret{display:inline-block;width:1px;height:15px;background:#9fc2dc;margin-left:2px;vertical-align:-2px}
+  .kbd{font-size:10.5px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .tabs{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12px}
+  .tab{padding:3px 9px;border-radius:12px;color:var(--dim);white-space:nowrap}
+  .tab.on{background:#2a4a63;color:#e6f2fb}
+  .tabs .dotb{font-size:9px;vertical-align:1px;margin-right:4px}
+  .list{padding:6px 6px 4px}
+  .sect{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:8px 8px 4px}
+  .item{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:6px;font-size:13px;height:32px}
+  .item.sel{background:var(--sel);outline:1px solid #3a6a8e}
+  .item .ic{width:17px;height:17px;border-radius:3px;background:#2f3b46;border:1px solid #3d4a56;flex:none;
+            display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:600;color:#9fb2c2}
+  .item .s{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .cat{font-size:11px;color:var(--faint);flex:none}
+  .item .enter{font-size:10.5px;color:#9fc2dc;border:1px solid #34536b;border-radius:4px;padding:1px 5px;flex:none}
+  .ph{color:#a9c6dd;background:rgba(79,168,232,.12);border:1px dashed #4a7391;border-radius:3px;padding:0 3px}
+  .foot{display:flex;align-items:center;gap:14px;padding:8px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+  .foot .right{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><span class="title">Convoy systems</span><span>Events</span><span style="margin-left:auto">Convoy.byteevents</span></div>
+
+  <div class="ghost-sheet">
+    <div class="row"><span class="mark"></span><span>Key <span class="key">W</span> is held</span></div>
+    <div class="row"><span class="mark"></span><span><span class="obj"><span class="ico"></span>Truck</span>'s speed is above <span class="num">2</span></span></div>
+    <div class="add target"><span>+</span> Add condition <span class="here">inserts here</span></div>
+    <div class="row"><span class="mark a"></span><span>Set <span class="obj"><span class="ico"></span>Truck</span>'s velocity to <span class="num">0</span>, <span class="num">0</span>, <span class="num">4</span></span></div>
+    <div class="row"><span class="mark a"></span><span>Spin <span class="obj"><span class="ico"></span>Truck</span>'s wheels at <span class="num">0.6</span> &times; speed</span></div>
+  </div>
+
+  <div class="popover">
+    <div class="search">
+      <span class="lens"></span>
+      <span class="q">key<span class="caret"></span></span>
+      <span class="kbd">Esc</span>
+    </div>
+    <div class="tabs">
+      <span class="tab on">Everything</span>
+      <span class="tab"><span class="dotb">&bull;</span>This object: Truck</span>
+      <span class="tab">Input</span>
+      <span class="tab">Recent</span>
+    </div>
+
+    <div class="list">
+      <div class="sect">Best matches</div>
+      <div class="item sel">
+        <span class="ic">K</span>
+        <span class="s">Key <span class="ph">key</span> is pressed</span>
+        <span class="cat">Input</span>
+        <span class="enter">Enter</span>
+      </div>
+      <div class="item">
+        <span class="ic">K</span>
+        <span class="s">Key <span class="ph">key</span> is held</span>
+        <span class="cat">Input</span>
+      </div>
+      <div class="item">
+        <span class="ic">K</span>
+        <span class="s">Key <span class="ph">key</span> is released</span>
+        <span class="cat">Input</span>
+      </div>
+      <div class="item">
+        <span class="ic">A</span>
+        <span class="s">Input action <span class="ph">action</span> is down</span>
+        <span class="cat">Input actions</span>
+      </div>
+
+      <div class="sect">Recent</div>
+      <div class="item">
+        <span class="ic">O</span>
+        <span class="s">Distance from <span class="ph">Truck</span> to <span class="ph">Player</span> is below <span class="ph">6</span></span>
+        <span class="cat">Truck</span>
+      </div>
+      <div class="item">
+        <span class="ic">O</span>
+        <span class="s"><span class="ph">Truck</span> is inside trigger <span class="ph">"safe_zone"</span></span>
+        <span class="cat">Truck</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span>Up/Down move</span><span>Enter add</span><span>Tab object first</span>
+      <span class="right">Values stay as placeholders until you pick them</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+
