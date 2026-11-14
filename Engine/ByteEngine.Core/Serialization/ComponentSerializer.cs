@@ -354,14 +354,6 @@ public sealed class ComponentSerializer
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.RopeWinch3D>("RopeWinch3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Physics.HingeJoint3D>("HingeJoint3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationLink3D>("NavigationLink3D"));
-        // Gameplay components that shipped on the Karlson/Hazard Pay line. Project
-        // scenes and the KarlsonDemo plugin serialize these type names, so they must
-        // stay registered even though no new template places them.
-        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.CharacterMotionDebugHud3D>("CharacterMotionDebugHud3D"));
-        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.TopDownController3D>("TopDownController3D"));
-        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.TopDownCamera3D>("TopDownCamera3D"));
-        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.CombatFeedback3D>("CombatFeedback3D"));
-        Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Gameplay.DashAbility3D>("DashAbility3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationRegion3D>("NavigationRegion3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<ByteEngine.Core.Navigation.NavigationAgent3D>("NavigationAgent3D"));
         Register(new ByteEngine.Core.Plugins.ReflectionPluginComponentCodec<MeshLodGroup>("MeshLodGroup"));
