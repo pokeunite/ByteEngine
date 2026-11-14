@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 
@@ -15,6 +16,7 @@ namespace Wildlings;
 public sealed class TrainerFollower3D : Component
 {
     /// <summary>Scene object name that owns TeamManager3D.</summary>
+    [SceneObjectPicker]
     public string TeamObjectName { get; set; } = "Wildling Manager";
 
     /// <summary>Distance the trainer tries to keep from the fighting creature.</summary>

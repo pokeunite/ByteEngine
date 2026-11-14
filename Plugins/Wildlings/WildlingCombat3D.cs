@@ -1,6 +1,7 @@
 using System.Numerics;
 using ByteEngine.Core;
 using ByteEngine.Core.Animation;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
@@ -32,6 +33,7 @@ public sealed class WildlingCombat3D : Component
     public Vector3 MuzzleOffset { get; set; } = new(0f, .95f, .35f);
 
     /// <summary>Scene object name that owns TeamManager3D. No raw GUID in the inspector.</summary>
+    [SceneObjectPicker]
     public string TeamObjectName { get; set; } = "Wildling Manager";
 
     /// <summary>Animation profile action played on every shot. Empty disables it.</summary>

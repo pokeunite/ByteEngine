@@ -3,6 +3,36 @@
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 
+## 2026-11-14 (exploration) — camera authoring preview, object pickers, v0.3 followers
+
+Changed: `CameraBoom3D` gained `ApplyAuthoringPose()` (applies authored
+yaw/pitch/arm/pivot to its camera object) plus `SeedControlAnglesFromAuthoring()`
+so authored angles become the PlayerController3D starting orientation;
+`ComponentPropertyRenderer` calls the preview while editing in `EditorMode.Edit`,
+which is what makes yaw/pitch/arm changes visible in the scene and game views
+before Play. Added `SceneObjectPickerAttribute` (`ByteEngine.Core.Authoring`) and
+a renderer branch that draws a scene-object dropdown for attributed string
+properties, then applied it to the Wildlings name fields. Replaced the plugin's
+`WildlingCompanion3D` with `WildlingFollower3D`: stable travel-heading slots
+(1.8 m left/right, Zappet 1.8 m back), 1.8 m start / 0.7 m settle hysteresis,
+5.0 / 7.0 m/s follow and catch-up, 0.3 s destination refresh, 0.4 s heading
+smoothing, 0.4 m breadcrumb trail with blocked-route fallback, idle settle with a
+slow head turn, and combat hand-off through `WildlingCombat3D.CombatEnabled`.
+`WildlingStats3D.ApplyMoveSpeedOnly()` restored after follower catch-up speeds.
+
+Verified: editor and plugin build with 0 errors; editor published to
+`Dist/ByteEngine` (byte scan finds `ApplyAuthoringPose` and
+`SceneObjectPickerAttribute`); the wildlings project validates with 181 objects,
+3 blueprints, 1 event module and no issues; scene re-read shows arm 6.5 / pivot
+2.5 / pitch 20 on the trainer boom, `WildlingFollower3D` on all three Wildlings
+and zero `WildlingCompanion3D` left; Blueprints re-extracted against the new
+components.
+
+Left: no in-editor visual check from the shell. Idle personality actions (tail
+sway, hops) still need animation clips; navigation uses the breadcrumb trail
+rather than a navmesh path query.
+
+
 ## 2026-11-14 (event sheet) — restored the GDevelop-style Event Sheet view on main
 
 Changed: the sheet view (`Event sheet` / `Graph` switch) only existed on the

@@ -42,13 +42,13 @@ public sealed class WildlingsPlugin : IByteEnginePlugin
                 Description: "Basic attack, species special and utility with cooldowns for player or AI control.",
                 SearchKeywords: "wildlings combat ability firebolt special cooldown"));
 
-        context.RegisterSimpleComponent<WildlingCompanion3D>(
-            "WildlingCompanion3D",
+        context.RegisterSimpleComponent<WildlingFollower3D>(
+            "WildlingFollower3D",
             new ByteEnginePluginComponentMetadata(
-                DisplayName: "Wildling Companion 3D",
+                DisplayName: "Wildling Follower 3D",
                 Category: "Wildlings",
-                Description: "Formation and spacing AI for party members the player does not control.",
-                SearchKeywords: "wildlings companion ai formation follow"));
+                Description: "Exploration follow: stable travel heading, loose slots, hysteresis, catch-up and trail routing.",
+                SearchKeywords: "wildlings follower formation explore trail"));
 
         context.RegisterSimpleComponent<WildlingStatus3D>(
             "WildlingStatus3D",

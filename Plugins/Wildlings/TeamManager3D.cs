@@ -1,5 +1,6 @@
 using System.Numerics;
 using ByteEngine.Core;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
@@ -18,13 +19,17 @@ namespace Wildlings;
 public sealed class TeamManager3D : Component
 {
     /// <summary>Scene object name of party slot 1. Names keep the inspector readable.</summary>
+    [SceneObjectPicker]
     public string SlotOneName { get; set; } = "Fire Lizard";
 
+    [SceneObjectPicker]
     public string SlotTwoName { get; set; } = "Spriglet";
 
+    [SceneObjectPicker]
     public string SlotThreeName { get; set; } = "Zappet";
 
     /// <summary>Scene object name of the trainer the player drives outside combat.</summary>
+    [SceneObjectPicker]
     public string TrainerObjectName { get; set; } = "Trainer";
 
     public int ActiveSlot { get; set; } = 1;
@@ -307,9 +312,16 @@ public sealed class TeamManager3D : Component
                 combat.CombatEnabled = !exploring;
             }
 
-            if (member.GetComponent<WildlingCompanion3D>() is { } companion)
+            if (member.GetComponent<WildlingFollower3D>() is { } follower)
             {
-                companion.Enabled = !controlled;
+                follower.Enabled = !controlled;
+            }
+
+            if (controlled)
+            {
+                // The follower temporarily raises MoveSpeed for catch-up; taking
+                // control restores the species speed without touching HP.
+                member.GetComponent<WildlingStats3D>()?.ApplyMoveSpeedOnly();
             }
 
             ApplyCamera(scene, member.GetComponent<CameraBoom3D>(), controlled);

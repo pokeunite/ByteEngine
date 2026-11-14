@@ -158,7 +158,11 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     public float ActualArmLength => _actualLength;
     public override int UpdateOrder => -200;
 
-    protected override void OnStart() => UpdateRig(true);
+    protected override void OnStart()
+    {
+        SeedControlAnglesFromAuthoring();
+        UpdateRig(true);
+    }
 
     /// <summary>
     /// The camera boom follows in the scene-wide late-update phase so it sees
@@ -167,6 +171,30 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
     protected override void OnLateUpdate() => UpdateRig(false);
 
     public void SnapToSocket() => UpdateRig(true);
+
+    /// <summary>
+    /// Editor preview: places the camera from the authored yaw, pitch, arm
+    /// length and pivot, ignoring control rotation and collision. This is what
+    /// makes the inspector values visible in the scene and game views while not
+    /// playing.
+    /// </summary>
+    public void ApplyAuthoringPose() => UpdateRig(true, useAuthoredAngles: true);
+
+    /// <summary>
+    /// The authored yaw/pitch are the camera's starting orientation, so a
+    /// PlayerController3D takes over from the boom's values instead of resetting
+    /// the view to its own defaults.
+    /// </summary>
+    private void SeedControlAnglesFromAuthoring()
+    {
+        if (!UseControlRotation || AttachedGameObject?.GetComponent<PlayerController3D>() is not { } controller)
+        {
+            return;
+        }
+
+        controller.ControlYaw = Yaw;
+        controller.ControlPitch = Math.Clamp(Pitch, MinPitch, MaxPitch);
+    }
 
     public static Vector3 CalculateOrbitVector(float yawDegrees, float pitchDegrees, float armLength)
     {
@@ -250,7 +278,7 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
             ? 1
             : Math.Clamp((int)MathF.Ceiling(deltaTime / Math.Max(maxStep, .001f)), 1, 32);
 
-    private void UpdateRig(bool immediate)
+    private void UpdateRig(bool immediate, bool useAuthoredAngles = false)
     {
         // A dedicated FPS view owns its camera; never let a legacy boom compete.
         if (AttachedGameObject?.GetComponent<FirstPersonCamera3D>() is { Enabled: true } fps &&
@@ -262,8 +290,11 @@ public sealed class CameraBoom3D : Component, IRuntimeDiagnosticSource
         if (_cameraObject == null || camera == null) return;
 
         PlayerController3D? player = UseControlRotation ? root.GetComponent<PlayerController3D>() : null;
-        _desiredBoomYaw = player?.ControlYaw ?? Yaw;
-        _desiredBoomPitch = Math.Clamp(player?.ControlPitch ?? Pitch, MinPitch, MaxPitch);
+        _desiredBoomYaw = !useAuthoredAngles && UseControlRotation ? player?.ControlYaw ?? Yaw : Yaw;
+        _desiredBoomPitch = Math.Clamp(
+            !useAuthoredAngles && UseControlRotation ? player?.ControlPitch ?? Pitch : Pitch,
+            MinPitch,
+            MaxPitch);
 
         Vector3 desiredPivot = root.Transform.WorldPosition + Vector3.UnitY * PivotHeight;
         if (!FirstPerson) _fpsAnchorInitialized = false;

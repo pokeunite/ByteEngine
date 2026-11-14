@@ -55,6 +55,12 @@ public sealed class WildlingStats3D : Component
             health.CurrentHealth = MaxHealth;
         }
 
+        ApplyMoveSpeedOnly();
+    }
+
+    /// <summary>Restores only the locomotion speed, leaving current HP untouched.</summary>
+    public void ApplyMoveSpeedOnly()
+    {
         if (Motor is { } motor)
         {
             motor.MoveSpeed = MoveSpeed;

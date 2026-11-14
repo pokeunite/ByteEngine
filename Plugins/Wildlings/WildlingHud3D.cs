@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text;
 using ByteEngine.Core;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Authoring;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Graphics;
 using ByteEngine.Core.Scene;
@@ -20,6 +21,7 @@ public sealed class WildlingHud3D : Component
         "Assets/Fonts/ByteEngine/PublicPixel.ttf");
 
     /// <summary>Scene object name that owns TeamManager3D.</summary>
+    [SceneObjectPicker]
     public string TeamObjectName { get; set; } = "Wildling Manager";
 
     public int FontSize { get; set; } = 16;
