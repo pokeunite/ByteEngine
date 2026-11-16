@@ -570,7 +570,7 @@ public static class GameplayQuery3D
              parent =
                  parent.Parent)
         {
-            if (ReferenceEquals(
+            if (parent.Id == secondIgnoredId || ReferenceEquals(
                     parent,
                     ignore))
             {

@@ -1,5 +1,11 @@
 # Active context
 
+## 2026-11-16 — Hand-emitter projectile ownership
+
+Canonical source C:/Users/codex/ByteEngine. ProjectileLauncher3D now attributes a child muzzle's shot to its nearest HealthComponent/CharacterController3D ancestor (standalone emitters retain their own identity). GameplayQuery3D excludes child colliders of the secondary ignored owner as well as the owner itself. This prevents the moving Monsters & Magic player and hand hitboxes from destroying their own projectiles.
+
+Evidence in C:/Users/codex/Documents/monsters and magic/tools: projectile-owner-check.log and hud-final-runtime-check.log cover spawn inside the owner capsule, a child hitbox, player speeds 0/10/16, unchanged owner HP and exact enemy damage; existing navigation/animation checks still pass. Native OpenGL renders of the game HUD at 1280x720, 1920x1080, 1280x800 and 1920x810, plus low HP/mana, pass bounds and GL checks (game-hud-render-final.log, hud-qa/). Project assets/events implement the supplied-font HUD; game-specific changes remain outside the engine repository. Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser completed; VerifyOnly confirms paired editor/player runtime. No browser rebuild, game export, or push. Preserve unrelated Wildlings changes.
+
 ## 2026-11-16 — Navigation object pickers and Monsters & Magic repair
 
 Canonical source verified at C:/Users/codex/ByteEngine. NavigationRegion3D.SurfaceObject now has a MeshCollider3D-filtered SceneObjectReference picker and a tooltip explaining that Grid mode needs no surface. NavigationAgent3D.RegionObject now filters its picker to navigation regions. Uses the existing shared Inspector picker; no GUID/serialization changes.

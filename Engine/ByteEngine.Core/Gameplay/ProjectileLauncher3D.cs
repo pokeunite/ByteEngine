@@ -289,8 +289,19 @@ public sealed class ProjectileLauncher3D : Component
                 });
         }
 
-        projectile.OwnerId =
-            shooter.Id;
+        // Hand sockets and child weapon objects are emitters, not damage owners.
+        // Ignore the character that carries the emitter, including its hitboxes.
+        GameObject owner = shooter;
+        for (GameObject? ancestor = shooter; ancestor != null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.GetComponent<HealthComponent>() != null ||
+                ancestor.GetComponent<ByteEngine.Core.Characters.CharacterController3D>() != null)
+            {
+                owner = ancestor;
+                break;
+            }
+        }
+        projectile.OwnerId = owner.Id;
 
         projectile.Damage =
             Damage;
