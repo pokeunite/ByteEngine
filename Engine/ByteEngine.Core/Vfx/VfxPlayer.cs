@@ -182,6 +182,16 @@ public sealed class VfxPlayer : Component
                     else if(s.RenderMode==VfxRenderMode.EmitterPlane){basisRight=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitX,emitter));basisUp=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY,emitter));}
                     float cos=MathF.Cos(p.Rotation),sin=MathF.Sin(p.Rotation);a=(basisRight*cos+basisUp*sin)*size*.5f;c=(-basisRight*sin+basisUp*cos)*size*.5f;
                 }
+                else if (s.RenderMode == VfxRenderMode.TravelAligned)
+                {
+                    // The source image points along +U. Keep that axis in the actual
+                    // flight direction, facing the camera around that axis only.
+                    Vector3 travel = velocity.LengthSquared() > .00001f ? velocity :
+                        Vector3.TransformNormal(-Vector3.UnitZ, emitter);
+                    var axes = ResolveTravelAxes(travel, camera - center, up, right);
+                    a = axes.Right * size * .5f;
+                    c = axes.Up * size * .5f;
+                }
                 else if(s.RenderMode==VfxRenderMode.Stretched && velocity.LengthSquared()>.00001f)
                 { c=Vector3.Normalize(velocity)*(size+velocity.Length()*s.Stretch)*.5f; a=Side(c,center-camera,right)*size*.5f; }
                 else if(s.RenderMode is VfxRenderMode.Trail or VfxRenderMode.Beam)
@@ -202,6 +212,22 @@ public sealed class VfxPlayer : Component
             context.RenderWorld.Submit(b.Mesh,b.Material,Matrix4x4.Identity,RenderQueue3D.Transparent,frustumCulling:true,castShadows:false,receiveShadows:false);
         }
     }
+    internal static (Vector3 Right, Vector3 Up) ResolveTravelAxes(
+        Vector3 travel, Vector3 toCamera, Vector3 cameraUp, Vector3 cameraRight)
+    {
+        Vector3 axis = travel.LengthSquared() > .000001f ? Vector3.Normalize(travel) : -Vector3.UnitZ;
+        Vector3 perpendicular = Vector3.Cross(toCamera, axis);
+        if (perpendicular.LengthSquared() < .000001f)
+            perpendicular = cameraUp - axis * Vector3.Dot(cameraUp, axis);
+        if (perpendicular.LengthSquared() < .000001f)
+            perpendicular = cameraRight - axis * Vector3.Dot(cameraRight, axis);
+        if (perpendicular.LengthSquared() < .000001f)
+            perpendicular = Vector3.Cross(axis, Math.Abs(axis.Y) < .9f ? Vector3.UnitY : Vector3.UnitX);
+        perpendicular = Vector3.Normalize(perpendicular);
+        if (Vector3.Dot(perpendicular, cameraUp) < 0) perpendicular = -perpendicular;
+        return (axis, perpendicular);
+    }
+
     private static Vector3 Side(Vector3 direction,Vector3 view,Vector3 fallback)
     { var side=Vector3.Cross(direction,view); return side.LengthSquared()<.000001f ? fallback : Vector3.Normalize(side); }
     private static void Vertex(float[] v,int n,Vector3 p,float u,float w)

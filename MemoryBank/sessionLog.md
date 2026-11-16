@@ -1,5 +1,13 @@
 # Session log
 
+## 2026-11-16 — Directional projectile flipbooks
+
+Canonical source C:/Users/codex/ByteEngine verified. Added opt-in VfxRenderMode.TravelAligned (appended enum value; existing modes unchanged). VfxPlayer aligns the sprite +U axis with particle velocity, or emitter -Z for stationary local-space projectile visuals, and rotates the card around that axis toward the camera. ResolveTravelAxes handles head-on/vertical/reverse and degenerate views with finite orthonormal bases. Inspector VFX render-mode selector discovers the enum automatically.
+
+Monsters & Magic presets in its own Assets/VFX/Fireball now pair the travel-aligned body with a camera-facing animated head, avoiding head-on disappearance. Four particles total budget, at most two per layer. User's Anime Blueprint Effect Size=7.9 preserved; QA overrides size1 at runtime only. Both animations and same owner/damage/speed/radius/lifetime retained. User video was reviewed through native WindowsVideoReader, sampled1-16seconds; 20second seek exceeded the clip. No video upload.
+
+Validation: Release tests build0errors; --vfx passes1317checks, including40direction/view cases and JSON roundtrip. Project source-core facing test passes and both layered presets loop600ticks without gaps. Refreshed Windows editor/player through Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser. Native150frame QA passes; inspected head-on, horizontal and vertical captures in game project tools/fireball-vfx/qa. Exact logs in game tools/travel-vfx-build.log, travel-vfx-suite.log, fireball-facing-check.log, travel-vfx-native-check.log and travel-vfx-editor-refresh.log. No browser build/export/push. Preserve unrelated Wildlings edits. Detailed per-hand steps use exact Inspector labels in FIREBALL_VFX_GUIDE.md in game project.
+
 ## 2026-11-16 — Recorder quality presets and full-resolution Game View capture
 
 Canonical source/source-routing verified at C:/Users/codex/ByteEngine. Recorder settings in both editor and Windows player now persist Low (720p/4 Mbps), Standard (1080p/12 Mbps), High (1080p/25 Mbps, default) and Ultra (1080p/50 Mbps). Missing/invalid quality values migrate to High; folder/audio options remain intact. Profiles are snapshotted per session. Native H.264 encoder parameters explicitly set CBR and mean bitrate via SetInputMediaType, in addition to the output media type bitrate. Settings are disabled until recording/saving stops.

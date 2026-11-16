@@ -18,6 +18,23 @@ internal static class VfxTests
     { if(!condition) throw new Exception("VFX: "+message); _checks++; }
     public static void Run(string root)
     {
+        foreach (var direction in new[] { Vector3.UnitX, -Vector3.UnitX, Vector3.UnitY, -Vector3.UnitY,
+                     Vector3.UnitZ, -Vector3.UnitZ, Vector3.Normalize(new Vector3(1, 1, -2)), Vector3.Zero })
+        foreach (var view in new[] { Vector3.UnitZ, -Vector3.UnitZ, Vector3.UnitX, Vector3.UnitY,
+                     Vector3.Normalize(new Vector3(.000001f, 0, 1)) })
+        {
+            var axes = VfxPlayer.ResolveTravelAxes(direction, view, Vector3.UnitY, Vector3.UnitX);
+            Check(float.IsFinite(axes.Right.X + axes.Right.Y + axes.Right.Z + axes.Up.X + axes.Up.Y + axes.Up.Z), "finite travel-facing basis");
+            Check(Math.Abs(axes.Right.Length() - 1) < .0001f && Math.Abs(axes.Up.Length() - 1) < .0001f &&
+                Math.Abs(Vector3.Dot(axes.Right, axes.Up)) < .0001f, "orthonormal travel-facing basis");
+            if (direction != Vector3.Zero) Check(Vector3.Dot(axes.Right, Vector3.Normalize(direction)) > .9999f, "head follows travel, including reverse/vertical flight");
+        }
+        var aligned = VfxPresets.Create(VfxPreset.Fireball);
+        aligned.Layers[0].RenderMode = VfxRenderMode.TravelAligned;
+        string alignedPath = Path.Combine(root, "Assets", "TravelAligned.bvfx");
+        VfxEffectSerializer.Save(alignedPath, aligned);
+        Check(VfxEffectSerializer.Load(alignedPath).Layers[0].RenderMode == VfxRenderMode.TravelAligned, "travel-aligned mode asset round trip");
+
         foreach(var preset in Enum.GetValues<VfxPreset>())
         {
             var effect=VfxPresets.Create(preset);
