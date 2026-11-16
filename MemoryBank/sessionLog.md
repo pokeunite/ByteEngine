@@ -1,5 +1,9 @@
 # Session log
 
+## 2026-11-16 — Restore event picker search and mouse-button dropdown
+
+Reconnected the condition/action popup search helper and routed built-in mouse arguments to the existing dropdown before generic metadata fields. Release tests build succeeded and dotnet Tests/ByteEngine.Tests/bin/Release/net9.0-windows/win-x64/ByteEngine.Tests.dll --event-authoring-controls passed both search popups and all three mouse-condition dropdowns while preserving existing values. Raw logs .artifacts/event-authoring-fix/. Windows distribution refresh pending.
+
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
 

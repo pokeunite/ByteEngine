@@ -20,6 +20,13 @@ internal sealed partial class EventWorkspacePanel
         VisualInstruction instruction,
         EditorState? state)
     {
+        // Built-in mouse metadata describes a string, but authoring uses the supported button choices.
+        if (instruction.Id is "input.mouseHeld" or "input.mousePressed" or "input.mouseReleased")
+        {
+            DrawMouseButtonArgument(instruction, "button", "Mouse Button", MouseButton.Left);
+            return;
+        }
+
         var pluginArguments = _registry.GetArguments(instruction.Id);
         if (instruction.Id.StartsWith("vfx.", StringComparison.Ordinal))
         {
@@ -90,16 +97,6 @@ internal sealed partial class EventWorkspacePanel
             case "time.timerRunning":
                 DrawValueArgument(instruction, "name", "Timer Name", VariableType.String,
                     EventValue.String("Timer"), state, false);
-                break;
-
-            case "input.mouseHeld":
-            case "input.mousePressed":
-            case "input.mouseReleased":
-                DrawMouseButtonArgument(
-                    instruction,
-                    "button",
-                    "Mouse Button",
-                    MouseButton.Left);
                 break;
 
             case "logic.and":

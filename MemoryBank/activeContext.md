@@ -1,5 +1,9 @@
 # Active context
 
+## 2026-11-16 — Event authoring controls
+
+Condition/action popup search is restored through the existing shared search helper. Built-in mouse Held/Pressed/Released arguments use the enum dropdown before generic registry metadata rendering. Release build and --event-authoring-controls pass with real ImGui popup checks. Windows distribution refresh pending. Evidence is .artifacts/event-authoring-fix/. Preserve unrelated existing working-tree changes.
+
 Updated: 2026-11-14 — consolidated engine and Hazard Pay repaired
 
 - Maintained source: `C:/Users/codex/ByteEngine`, branch `main`. Never publish from the retired 52af integration workspace or recreate ByteEngine-Palclone.

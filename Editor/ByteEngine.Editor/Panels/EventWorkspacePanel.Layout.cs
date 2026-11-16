@@ -736,6 +736,12 @@ internal sealed partial class EventWorkspacePanel
 
         ImGui.Separator();
 
+        if (DrawInstructionSearch(rule, true))
+        {
+            ImGui.EndPopup();
+            return;
+        }
+
         if (ImGui.BeginMenu(
                 "Mouse"))
         {
@@ -870,6 +876,12 @@ internal sealed partial class EventWorkspacePanel
             "ADD ACTION");
 
         ImGui.Separator();
+
+        if (DrawInstructionSearch(rule, false))
+        {
+            ImGui.EndPopup();
+            return;
+        }
 
         if (ImGui.BeginMenu(
                 "Flow"))

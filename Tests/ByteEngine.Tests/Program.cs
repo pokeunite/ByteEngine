@@ -85,6 +85,7 @@ try
 
     if(args.Length==3&&args[0]=="--mining-explosion-preview"){MiningExplosionPreview.Run(args[1],args[2]);return;}
     if(args.Contains("--screenshots")){ScreenshotTests.Run();return;}
+    if (args.Contains("--event-authoring-controls")) { EventAuthoringControlsTests.Run(); return; }
     if(args.Contains("--event-lookups")){EventLookupTests.Run();return;}
     if(args.Contains("--dispatch-performance")){DispatchPerformanceTests.Run();return;}
     if(args.Contains("--animation-optimization")){AnimationOptimizationTests.Run();return;}
@@ -537,4 +538,5 @@ static void WriteTriangleGltf(string path)
     """.Replace("__DATA__", data);
     File.WriteAllText(path, json);
 }
+
 
