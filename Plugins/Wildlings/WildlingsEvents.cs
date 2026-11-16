@@ -156,6 +156,65 @@ internal static class WildlingsEvents
             }
         });
 
+        context.RegisterAction(new VisualActionDefinition
+        {
+            Id = Prefix + "creature.fireBasic",
+            Category = "Wildlings",
+            DisplayName = "Fire Ranged Attack",
+            TargetComponent = nameof(WildlingStats3D),
+            Arguments = [target],
+            Execute = (i, e) =>
+            {
+                Creature(i, e)?.TryFireBasic();
+            }
+        });
+
+        context.RegisterAction(new VisualActionDefinition
+        {
+            Id = Prefix + "creature.fireSpecial",
+            Category = "Wildlings",
+            DisplayName = "Fire Ranged Special",
+            TargetComponent = nameof(WildlingStats3D),
+            Arguments = [target],
+            Execute = (i, e) =>
+            {
+                Creature(i, e)?.TryFireSpecial();
+            }
+        });
+
+        context.RegisterAction(new VisualActionDefinition
+        {
+            Id = Prefix + "creature.meleeAttack",
+            Category = "Wildlings",
+            DisplayName = "Melee Thrust (Tackle)",
+            TargetComponent = nameof(WildlingStats3D),
+            Arguments = [target],
+            Execute = (i, e) =>
+            {
+                Creature(i, e)?.TryMelee();
+            }
+        });
+
+        context.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = Prefix + "creature.hasTarget",
+            Category = "Wildlings",
+            DisplayName = "Creature Has A Target",
+            TargetComponent = nameof(WildlingStats3D),
+            Arguments = [target],
+            Evaluate = (i, e) => Creature(i, e) is { CurrentTarget: not null }
+        });
+
+        context.RegisterCondition(new VisualConditionDefinition
+        {
+            Id = Prefix + "creature.meleeReady",
+            Category = "Wildlings",
+            DisplayName = "Creature Melee Is Ready",
+            TargetComponent = nameof(WildlingStats3D),
+            Arguments = [target],
+            Evaluate = (i, e) => Creature(i, e) is { MeleeCooldownRemaining: <= 0f }
+        });
+
         context.RegisterCondition(new VisualConditionDefinition
         {
             Id = Prefix + "creature.speciesIs",
@@ -163,8 +222,8 @@ internal static class WildlingsEvents
             DisplayName = "Creature Species Is",
             TargetComponent = nameof(WildlingStats3D),
             Arguments = [target, species],
-            Evaluate = (i, e) => Resolve(i, e)?.GetComponent<WildlingStats3D>() is { } stats &&
-                                 string.Equals(stats.Species,
+            Evaluate = (i, e) => CreatureStats(i, e) is { } conditionStats &&
+                                 string.Equals(conditionStats.Species,
                                      EventValueResolver.GetString(i, "species", e, WildlingSpeciesDatabase.FireLizardId),
                                      StringComparison.OrdinalIgnoreCase)
         });
@@ -176,8 +235,37 @@ internal static class WildlingsEvents
             DisplayName = "Creature Is On Companion AI",
             TargetComponent = nameof(WildlingStats3D),
             Arguments = [target],
-            Evaluate = (i, e) => Resolve(i, e)?.GetComponent<WildlingCombat3D>() is { AiControlled: true }
+            Evaluate = (i, e) => Creature(i, e) is { AiControlled: true }
         });
+    }
+
+    /// <summary>
+    /// Combat component the instruction points at. Falls back to the team's active
+    /// member so a rule can be attached anywhere (the manager, the HUD, a scene
+    /// object) and still command whoever the player currently controls.
+    /// </summary>
+    private static WildlingCombat3D? Creature(VisualInstruction instruction, EventExecutionContext context)
+    {
+        if (Resolve(instruction, context)?.GetComponent<WildlingCombat3D>() is { } direct)
+        {
+            return direct;
+        }
+
+        return Team(instruction, context)?.ActiveMember?.GetComponent<WildlingCombat3D>();
+    }
+
+    /// <summary>
+    /// Stats component the instruction points at, with the same team fallback as
+    /// <see cref="Creature"/>, so species conditions work when the rule sits on the manager.
+    /// </summary>
+    private static WildlingStats3D? CreatureStats(VisualInstruction instruction, EventExecutionContext context)
+    {
+        if (Resolve(instruction, context)?.GetComponent<WildlingStats3D>() is { } direct)
+        {
+            return direct;
+        }
+
+        return Team(instruction, context)?.ActiveMember?.GetComponent<WildlingStats3D>();
     }
 
     private static VisualArgumentDefinition Arg(string name, VariableValue value) =>

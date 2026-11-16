@@ -56,6 +56,17 @@ public sealed class TeamManager3D : Component
     public bool ToggleCombatWithKey { get; set; } = true;
 
     /// <summary>
+    /// Screen-space offset of the aiming reticle, in pixels, from screen centre.
+    /// Positive Y is downward, so a negative value lifts the reticle and flatten the
+    /// shot ray — that is what keeps bolts off the floor on a pitched-down camera.
+    /// WildlingCombat3D aims through this exact point.
+    /// </summary>
+    public Vector2 CrosshairOffset { get; set; } = new(0f, -48f);
+
+    /// <summary>Draws the reticle while playing.</summary>
+    public bool ShowCrosshair { get; set; } = true;
+
+    /// <summary>
     /// True once the player used the manual combat key. A manual toggle owns the
     /// mode: the automatic entry/exit timer stops fighting it, so combat (and slot
     /// switching) stays on until the player toggles again.

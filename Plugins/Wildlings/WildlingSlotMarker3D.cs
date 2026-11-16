@@ -155,7 +155,8 @@ public sealed class WildlingSlotMarker3D : Component
             RenderQueue3D.Opaque,
             true,
             false,
-            false);
+            false,
+            knownWorldBounds: null);
     }
 
     /// <summary>Flat annulus in the XZ plane, eight floats per vertex (position, normal, uv).</summary>

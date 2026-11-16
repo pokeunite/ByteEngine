@@ -1,5 +1,13 @@
 # Session log
 
+## 2026-11-16 — Wildlings, UI artwork and plugin packages
+
+Wildlings gameplay is contained in Plugins/Wildlings, plugin version 0.4.4. Release build passes; PluginLibrary/Wildlings.byteplugin matches DLL SHA256 7e407eee66ab01db724b22f332ab8c9b5c57b01846175ff36b5111caf75181dc. This task verifies compilation and package identity; gameplay playthrough is unverified.
+
+UiWidget normal/hover/pressed artwork, Inspector fields and serialization are committed with EngineFoundationTests coverage. Release test build and --engine-foundations pass state precedence, reference roundtrip and legacy fallback. All ten requested PluginLibrary package archives were audited. Evidence .artifacts/git-gameplay-update/.
+
+Windows distribution refresh stopped because ByteEngine is open. Source build and installed Core hashes differ. Close/save the editor before running Rebuild-ByteEngine-And-Refresh-Dist.ps1 again. Git publishing is authorized by the user.
+
 ## 2026-11-16 — MCP context gathering
 
 Added Tools/ByteEngine.Mcp workflow help, filtered/paged object queries, asset pagination and bounded read-only batching. Release build: exit 0, no warnings/errors. Full --self-test and stdio client be_catalog/help: exit 0. Evidence: .artifacts/mcp-efficiency-build.log, mcp-efficiency-self-test.log, mcp-efficiency-protocol.json. Synthetic 160-object inspection: 15768 bytes; one camera match: 173 bytes. Payload comparison only, no billed-token claim. Activation pending: disconnect running Dist MCP processes, run Tools/PublishMcp.ps1, reconnect. No game export, browser refresh or whole-engine publication. Unrelated working-tree changes are preserved.
@@ -11,6 +19,10 @@ Reconnected the condition/action popup search helper and routed built-in mouse a
 
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.
+
+## 2026-11-14 — Wildlings plugin API rebuild
+
+Wildlings 0.1.0 crashed on its first slot-marker render because its precompiled RenderWorld.Submit call had seven parameters while current Core has eight. User requested updating the plugin, so removed the proposed engine compatibility overload, made the current bounds argument explicit, bumped plugin to 0.1.1, rebuilt and installed into wildlings/Plugins with original package backed up. Build: 0 errors, one existing nullable warning. All 391 plugin methods JIT against the installed Core; real editor startup loaded 0.1.1 and opened Wildlings, remaining alive past 20 seconds without logged exceptions. Evidence: .artifacts/wildlings-compat. No runtime publish, export, browser refresh or visual/gameplay verification.
 
 ## 2026-11-14 — main/Hazard Pay consolidation and distribution repair
 

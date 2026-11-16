@@ -58,6 +58,94 @@ public sealed class WildlingsPlugin : IByteEnginePlugin
                 Description: "Coloured ground ring parented to the trainer. Drag it in the scene view to author where that wildling follows; the ring's offset is the slot distance.",
                 SearchKeywords: "wildlings formation ring marker slot target follow gizmo"));
 
+        context.RegisterSimpleComponent<WildlingArenaSpawner3D>(
+            "WildlingArenaSpawner3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Arena Spawner 3D",
+                Category: "Wildlings",
+                Description: "Survivors enemy feed: spawns chase-and-touch hostiles around the controlled creature up to a cap.",
+                SearchKeywords: "wildlings survivors arena spawn enemies waves"));
+
+        context.RegisterSimpleComponent<WildlingRun3D>(
+            "WildlingRun3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Run Director 3D",
+                Category: "Wildlings",
+                Description: "Survivors run clock, kill credit, experience/level progression and the fail state.",
+                SearchKeywords: "wildlings survivors run timer level xp kills"));
+
+        context.RegisterSimpleComponent<WildlingExperienceOrb3D>(
+            "WildlingExperienceOrb3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling XP Orb 3D",
+                Category: "Wildlings",
+                Description: "Experience pickup: homes in on the player when close and grants run XP on contact.",
+                SearchKeywords: "wildlings xp orb pickup magnet experience"));
+
+        context.RegisterSimpleComponent<WildlingLevelUpDraft3D>(
+            "WildlingLevelUpDraft3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Level-Up Draft 3D",
+                Category: "Wildlings",
+                Description: "Pauses the world on level-up and shows the authored upgrade cards to pick from.",
+                SearchKeywords: "wildlings level up draft cards pause upgrade"));
+
+        context.RegisterSimpleComponent<WildlingUpgradeCard3D>(
+            "WildlingUpgradeCard3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Upgrade Card 3D",
+                Category: "Wildlings",
+                Description: "Authored draft card: title, description, effect numbers and the text objects that show it.",
+                SearchKeywords: "wildlings upgrade card draft stats"));
+
+        context.RegisterSimpleComponent<WildlingDodge3D>(
+            "WildlingDodge3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Dodge 3D",
+                Category: "Wildlings",
+                Description: "Burst dodge with i-frames: key, distance, duration and cooldown are all properties.",
+                SearchKeywords: "wildlings dodge dash roll iframe movement"));
+
+        context.RegisterSimpleComponent<WildlingProfile3D>(
+            "WildlingProfile3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Profile 3D",
+                Category: "Wildlings",
+                Description: "Persistent profile: coins, essence, owned creatures and run history saved as JSON.",
+                SearchKeywords: "wildlings profile save coins essence collection"));
+
+        context.RegisterSimpleComponent<WildlingSanctuary3D>(
+            "WildlingSanctuary3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Sanctuary 3D",
+                Category: "Wildlings",
+                Description: "Menu-driven hub: shows the profile, freezes the arena and starts a fresh run on a key.",
+                SearchKeywords: "wildlings sanctuary hub menu start run coins profile"));
+
+        context.RegisterSimpleComponent<WildlingBond3D>(
+            "WildlingBond3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Bond 3D",
+                Category: "Wildlings",
+                Description: "Capture window: a weakened nearby creature can be bonded for species essence.",
+                SearchKeywords: "wildlings bond capture essence recruit weakened"));
+
+        context.RegisterSimpleComponent<WildlingEnemyDefinition3D>(
+            "WildlingEnemyDefinition3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Enemy Kind 3D",
+                Category: "Wildlings",
+                Description: "Authored enemy kind: stats, colour, species identity and essence value for the arena spawner.",
+                SearchKeywords: "wildlings enemy kind definition stats species"));
+
+        context.RegisterSimpleComponent<WildlingEnemy3D>(
+            "WildlingEnemy3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Enemy Identity 3D",
+                Category: "Wildlings",
+                Description: "Runtime identity on a spawned hostile, used by capture.",
+                SearchKeywords: "wildlings enemy identity species capture"));
+
         context.RegisterSimpleComponent<WildlingStatus3D>(
             "WildlingStatus3D",
             new ByteEnginePluginComponentMetadata(
@@ -73,6 +161,14 @@ public sealed class WildlingsPlugin : IByteEnginePlugin
                 Category: "Wildlings",
                 Description: "Party HP, ability cooldowns and control reminder overlay.",
                 SearchKeywords: "wildlings hud ui party health cooldown"));
+
+        context.RegisterSimpleComponent<WildlingDamagePopup3D>(
+            "WildlingDamagePopup3D",
+            new ByteEnginePluginComponentMetadata(
+                DisplayName: "Wildling Damage Popup 3D",
+                Category: "Wildlings",
+                Description: "Floating damage numbers: pooled authored UiText objects driven by HealthComponent damage events.",
+                SearchKeywords: "wildlings damage popup floating numbers combat feedback"));
 
         WildlingsEvents.Register(context);
     }

@@ -1,9 +1,11 @@
 using System.Numerics;
 using ByteEngine.Core;
+using ByteEngine.Core.Assets;
 using ByteEngine.Core.Characters;
 using ByteEngine.Core.Gameplay;
 using ByteEngine.Core.Physics;
 using ByteEngine.Core.Scene;
+using ByteEngine.Core.Vfx;
 
 namespace Wildlings;
 
@@ -56,6 +58,17 @@ public sealed class WildlingProjectile3D : Component
     public float ChainRange { get; set; } = 3f;
 
     public float ChainDamage { get; set; }
+
+    /// <summary>Burst played where the shot lands. Authored asset when set, preset otherwise.</summary>
+    public VfxPreset ImpactPreset { get; set; } = VfxPreset.Impact;
+
+    public AssetReference ImpactEffect { get; set; } = AssetReference.Empty;
+
+    public bool ImpactEnabled { get; set; } = true;
+
+    public float ImpactSize { get; set; } = 1f;
+
+    public Vector4 ImpactTint { get; set; } = Vector4.One;
 
     protected override void OnUpdate()
     {
@@ -122,8 +135,34 @@ public sealed class WildlingProjectile3D : Component
         projectile.Transform.WorldPosition = origin + displacement;
     }
 
+    /// <summary>Burst at the hit point; DestroyWhenFinished plus a lifetime cap cleans it up.</summary>
+    private void SpawnImpact(Scene scene, Vector3 point)
+    {
+        if (!ImpactEnabled)
+        {
+            return;
+        }
+
+        GameObject burst = scene.CreateGameObject("Shot impact");
+        burst.Transform.WorldPosition = point;
+
+        burst.AddComponent(new VfxPlayer
+        {
+            Effect = ImpactEffect,
+            Preset = ImpactPreset,
+            PlayOnStart = true,
+            Size = MathF.Max(.1f, ImpactSize),
+            Tint = ImpactTint,
+            DestroyWhenFinished = true
+        });
+
+        burst.AddComponent(new LifetimeComponent { LifetimeSeconds = 1.2f });
+    }
+
     private void ResolveImpact(Scene scene, GameObject projectile, Vector3 point, GameObject hitObject)
     {
+        SpawnImpact(scene, point);
+
         GameObject? primary = FindHealthOwner(hitObject);
         if (primary != null)
         {
