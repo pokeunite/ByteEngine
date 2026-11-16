@@ -143,7 +143,12 @@ internal sealed class GameViewPanel : IDisposable
                 1,
                 4096);
 
-        if (!_matchWindowResolution)
+        if (recorder?.IsActive == true)
+        {
+            var profile = recorder.RecordingProfile;
+            (renderWidth, renderHeight) = profile.Fit(projectWidth, projectHeight);
+        }
+        else if (!_matchWindowResolution)
         {
             float scale = Math.Min(1f, Math.Min(1280f / renderWidth, 720f / renderHeight));
             renderWidth = Math.Max(1, (int)MathF.Round(renderWidth * scale));
@@ -162,11 +167,18 @@ internal sealed class GameViewPanel : IDisposable
 
         if (recorder != null) _videoCapture.Capture(recorder, _framebuffer.DisplayFramebuffer, renderWidth, renderHeight);
 
-        Vector2 imageMin =
-            ImGui.GetCursorScreenPos();
-
         Vector2 displaySize =
             available;
+
+        if (recorder?.IsActive == true)
+        {
+            float fit = Math.Min(available.X / renderWidth, available.Y / renderHeight);
+            displaySize = new Vector2(renderWidth, renderHeight) * fit;
+            ImGui.SetCursorScreenPos(ImGui.GetCursorScreenPos() + (available - displaySize) * .5f);
+        }
+
+        Vector2 imageMin =
+            ImGui.GetCursorScreenPos();
 
         Vector2 imageMax =
             imageMin +

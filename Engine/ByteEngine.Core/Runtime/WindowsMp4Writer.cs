@@ -16,7 +16,7 @@ internal sealed unsafe class WindowsMp4Writer : IDisposable
     private long _audioFrames;
     private readonly byte[] _silence = new byte[4800 * 4];
 
-    internal WindowsMp4Writer(string path, int width, int height, int fps, bool audio = true)
+    internal WindowsMp4Writer(string path, int width, int height, int fps, bool audio = true, int bitrate = 25_000_000)
     {
         _length = checked(width * height * 4);
         try
@@ -26,24 +26,28 @@ internal sealed unsafe class WindowsMp4Writer : IDisposable
             Check(MFStartup(0x20070, 0));
             _mfStarted = true;
             Check(MFCreateSinkWriterFromURL(path, 0, 0, out _writer));
-            nint output = 0, input = 0;
+            nint output = 0, input = 0, encoding = 0;
             try
             {
                 Check(MFCreateMediaType(out output));
                 Configure(output, width, height, fps, new Guid("34363248-0000-0010-8000-00aa00389b71"));
-                Set32(output, new("20332624-fb0d-4d9e-bd0d-cbf6786c102e"), (uint)Math.Clamp(width * (long)height * 5, 1_000_000, 20_000_000));
+                Set32(output, new("20332624-fb0d-4d9e-bd0d-cbf6786c102e"), (uint)Math.Clamp(bitrate, 1_000_000, 50_000_000));
                 uint stream;
                 Check(((delegate* unmanaged[Stdcall]<nint, nint, uint*, int>)V(_writer)[3])(_writer, output, &stream));
                 _stream = stream;
                 Check(MFCreateMediaType(out input));
                 Configure(input, width, height, fps, new Guid("00000016-0000-0010-8000-00aa00389b71"));
                 Set32(input, new("644b4e48-1e02-4516-b0eb-c01ca9d49ac6"), (uint)(width * 4));
-                Check(((delegate* unmanaged[Stdcall]<nint, uint, nint, nint, int>)V(_writer)[4])(_writer, _stream, input, 0));
+                Check(MFCreateAttributes(out encoding, 2));
+                Set32(encoding, new("1c0608e9-370c-4710-8a58-cb6181c42423"), 0); // Explicit constant bitrate rate control.
+                Set32(encoding, new("f7222374-2144-4815-b550-a37f8e12ee52"), (uint)Math.Clamp(bitrate, 1_000_000, 50_000_000));
+                Check(((delegate* unmanaged[Stdcall]<nint, uint, nint, nint, int>)V(_writer)[4])(_writer, _stream, input, encoding));
                 if (audio) ConfigureAudio();
                 Check(((delegate* unmanaged[Stdcall]<nint, int>)V(_writer)[5])(_writer));
             }
             finally
             {
+                Release(encoding);
                 Release(input);
                 Release(output);
             }
@@ -170,6 +174,7 @@ internal sealed unsafe class WindowsMp4Writer : IDisposable
     [DllImport("mfplat.dll")] private static extern int MFStartup(uint version, uint flags);
     [DllImport("mfplat.dll")] private static extern int MFShutdown();
     [DllImport("mfplat.dll")] private static extern int MFCreateMediaType(out nint type);
+    [DllImport("mfplat.dll")] private static extern int MFCreateAttributes(out nint attributes, uint count);
     [DllImport("mfplat.dll")] private static extern int MFCreateMemoryBuffer(int size, out nint buffer);
     [DllImport("mfplat.dll")] private static extern int MFCreateSample(out nint sample);
     [DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode)] private static extern int MFCreateSinkWriterFromURL(string path, nint stream, nint attributes, out nint writer);

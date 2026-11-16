@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ByteEngine.Core.Runtime;
 
@@ -7,6 +8,13 @@ public sealed class VideoRecorderSettings
 {
     public string OutputDirectory { get; set; } = DefaultOutputDirectory;
     public bool IncludeAudio { get; set; } = true;
+    private VideoRecordingQuality _quality = VideoRecordingQuality.High;
+    public VideoRecordingQuality Quality
+    {
+        get => _quality;
+        set => _quality = Enum.IsDefined(value) ? value : VideoRecordingQuality.High;
+    }
+    [JsonIgnore] public VideoRecordingProfile Profile => VideoRecordingProfile.For(Quality);
     public static string DefaultOutputDirectory
     {
         get
@@ -42,7 +50,7 @@ public sealed class VideoRecorderSettings
             using (File.Create(probe)) { }
             File.Delete(probe);
             Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
-            var next = new VideoRecorderSettings { OutputDirectory = path, IncludeAudio = IncludeAudio };
+            var next = new VideoRecorderSettings { OutputDirectory = path, IncludeAudio = IncludeAudio, Quality = Quality };
             string temporary = settingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(next));
             File.Move(temporary, settingsPath, overwrite: true);

@@ -1,5 +1,16 @@
 # Session log
 
+## 2026-11-16 — Recorder quality presets and full-resolution Game View capture
+
+Canonical source/source-routing verified at C:/Users/codex/ByteEngine. Recorder settings in both editor and Windows player now persist Low (720p/4 Mbps), Standard (1080p/12 Mbps), High (1080p/25 Mbps, default) and Ultra (1080p/50 Mbps). Missing/invalid quality values migrate to High; folder/audio options remain intact. Profiles are snapshotted per session. Native H.264 encoder parameters explicitly set CBR and mean bitrate via SetInputMediaType, in addition to the output media type bitrate. Settings are disabled until recording/saving stops.
+
+Root quality issue also included the editor's normal 720p/small-panel render target. While recording, Game View now renders at project output resolution fitted to the chosen preset, independently of panel size; the preview fits that aspect ratio and input/overlays use the fitted image bounds. Normal preview behavior returns afterward. Player capture follows window resolution, capped by the same preset. Sources are never artificially upscaled.
+
+Release tests/player builds pass. --video-recorder passes saved presets, legacy/invalid preference handling, actual H.264 encoding at every preset, complete decode and quality comparison, existing audio/sync/resize/error/shutdown checks, and native Game View recording at 1920x1080 (High) / 1280x720 (Low) inside a 700x500 panel. A 640x360, 60-frame moving grayscale detail fixture produced decoded MSE Low=3798.378736472801, High=46.807123046875 (19.09 dB PSNR gain). Synthetic encoding-quality evidence only, not gameplay/FPS measurements. The initial eight-frame bitrate-only comparison showed no difference; explicit encoder controls and a longer fixture validate the final change. Editor and player quality selectors visually inspected. Logs, comparison, four clips and screenshots preserved in .artifacts/video-quality/.
+
+Windows editor/player refreshed through Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser; -VerifyOnly confirms paired editor/loose/bundled Core identity, and SHA256 checks match installed editor to Release source output and editor/player Core files. Evidence: refresh.log, verify.log and identity.json in .artifacts/video-quality/. Preserved pre-existing Wildlings edits and plugin_build logs; the focused existing publish script avoided building that unfinished plugin. No browser rebuild or game export.
+
+
 ## 2026-11-16 — Built-in Windows video/audio recorder
 
 Maintained source C:/Users/codex/ByteEngine on main; source routing verified. F9 toggles recording and Shift+F9 opens settings in the editor and Windows player. Editor Recorder menu/panel controls Game View capture; selecting Start opens Game View and hiding it stops recording. Windows player records the final game window before its recording-status overlay. Future Windows exports inherit it from the player runtime; no game was exported.

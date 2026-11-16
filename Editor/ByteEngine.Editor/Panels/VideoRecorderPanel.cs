@@ -11,6 +11,7 @@ internal sealed class VideoRecorderPanel
 {
     internal bool IsOpen;
     private string _error = string.Empty;
+    private static readonly string[] QualityLabels = Enum.GetValues<VideoRecordingQuality>().Select(value => VideoRecordingProfile.For(value).Label).ToArray();
 
     internal void DrawMenu(VideoRecorder recorder, Action toggle)
     {
@@ -24,7 +25,7 @@ internal sealed class VideoRecorderPanel
     internal void Draw(VideoRecorder recorder, Action toggle)
     {
         if (!IsOpen) return;
-        ImGui.SetNextWindowSize(new(640, 390), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new(640, 450), ImGuiCond.FirstUseEver);
         bool visible = ImGui.Begin("Video Recorder", ref IsOpen);
         if (visible)
         {
@@ -35,6 +36,15 @@ internal sealed class VideoRecorderPanel
             ImGui.Text("Output folder");
             ImGui.TextWrapped(recorder.Settings.OutputDirectory);
             ImGui.BeginDisabled(recorder.IsActive || recorder.State == VideoRecorderState.Saving);
+            int quality = (int)recorder.Settings.Quality;
+            ImGui.SetNextItemWidth(330);
+            if (ImGui.Combo("Video quality", ref quality, QualityLabels, QualityLabels.Length))
+            {
+                var previous = recorder.Settings.Quality;
+                recorder.Settings.Quality = (VideoRecordingQuality)quality;
+                if (!recorder.Settings.TrySave(recorder.Settings.OutputDirectory, out _error)) recorder.Settings.Quality = previous;
+            }
+            ImGui.TextWrapped("Higher quality uses more space. Game View records at project output resolution, capped by the preset, even when the panel is small.");
             bool audio = recorder.Settings.IncludeAudio;
             if (ImGui.Checkbox("Record playback audio (AAC)", ref audio))
             {

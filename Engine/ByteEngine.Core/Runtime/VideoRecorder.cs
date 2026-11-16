@@ -22,6 +22,7 @@ public sealed class VideoRecorder : IDisposable
         internal long StopTime;
         internal readonly long QpcStart = (long)(Stopwatch.GetTimestamp() * (double)TimeSpan.TicksPerSecond / Stopwatch.Frequency);
         internal bool Audio;
+        internal VideoRecordingProfile Profile;
     }
 
     public const int FramesPerSecond = 30;
@@ -38,6 +39,7 @@ public sealed class VideoRecorder : IDisposable
     public int Height => _session?.Height ?? 0;
     public long DroppedFrames { get; private set; }
     public TimeSpan Elapsed => _session?.Clock.Elapsed ?? TimeSpan.Zero;
+    public VideoRecordingProfile RecordingProfile => IsActive && State != VideoRecorderState.WaitingForFrame && _session != null ? _session.Profile : Settings.Profile;
 
     public void Toggle()
     {
@@ -54,8 +56,9 @@ public sealed class VideoRecorder : IDisposable
         if (!IsActive || sourceWidth < 2 || sourceHeight < 2) return false;
         if (State == VideoRecorderState.WaitingForFrame)
         {
-            double scale = Math.Min(1, Math.Min(1920d / sourceWidth, 1080d / sourceHeight));
-            try { Start(Math.Max(2, (int)(sourceWidth * scale) & ~1), Math.Max(2, (int)(sourceHeight * scale) & ~1)); }
+            var profile = Settings.Profile;
+            var size = profile.Fit(sourceWidth, sourceHeight);
+            try { Start(size.Width, size.Height); }
             catch (Exception e) { Fail("Cannot start recording: " + e.Message); return false; }
         }
         var session = _session;
@@ -75,7 +78,7 @@ public sealed class VideoRecorder : IDisposable
         if (_session?.Work.IsCompleted == false) throw new InvalidOperationException("A recording is still being saved.");
         _session?.Frames.Dispose();
         string path = Path.Combine(Settings.OutputDirectory, $"ByteEngine-{DateTime.Now:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid().ToString("N")[..6]}.mp4");
-        var session = new Session { Path = path, Width = width, Height = height, Audio = Settings.IncludeAudio };
+        var session = new Session { Path = path, Width = width, Height = height, Audio = Settings.IncludeAudio, Profile = Settings.Profile };
         _session = session;
         LastFile = path;
         DroppedFrames = 0;
@@ -142,7 +145,7 @@ public sealed class VideoRecorder : IDisposable
         {
             Directory.CreateDirectory(Path.GetDirectoryName(session.Path)!);
             using var audio = session.Audio ? new WindowsPlaybackCapture() : null;
-            using var writer = new WindowsMp4Writer(session.Path, session.Width, session.Height, FramesPerSecond, session.Audio);
+            using var writer = new WindowsMp4Writer(session.Path, session.Width, session.Height, FramesPerSecond, session.Audio, session.Profile.Bitrate);
             void DrainAudio()
             {
                 if (origin < 0 || audio == null) return;
