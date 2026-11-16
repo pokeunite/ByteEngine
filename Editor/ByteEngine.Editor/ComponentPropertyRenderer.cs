@@ -1265,6 +1265,9 @@ internal static class ComponentPropertyRenderer
         if (component is ByteEngine.Core.AI.AIBehavior3D && propertyName == nameof(ByteEngine.Core.AI.AIBehavior3D.Behavior)) return AssetType.AIBehavior;
         if (component is ByteEngine.Core.Vfx.VfxPlayer && propertyName == nameof(ByteEngine.Core.Vfx.VfxPlayer.Effect))
             return AssetType.VfxEffect;
+        if (component is Projectile3D && propertyName == nameof(Projectile3D.ImpactEffect) ||
+            component is ProjectileLauncher3D && propertyName == nameof(ProjectileLauncher3D.ReleaseEffect))
+            return AssetType.VfxEffect;
         if (component is WaveSpawner3D && propertyName == nameof(WaveSpawner3D.EnemyBlueprint))
             return AssetType.Blueprint;
         if (component is ByteEngine.Core.Blueprints.BlueprintInstance) return AssetType.Blueprint;

@@ -1751,7 +1751,10 @@ public sealed class ComponentSerializer
                 ["radius"] = projectile.Radius,
                 ["destroyOnHit"] = projectile.DestroyOnHit,
                 ["ownerId"] = projectile.OwnerId.ToString(),
-                ["collisionMask"] = projectile.CollisionMask.Bits
+                ["collisionMask"] = projectile.CollisionMask.Bits,
+                ["impactEffect"] = new JsonObject { ["guid"] = projectile.ImpactEffect.Guid.ToString(), ["path"] = projectile.ImpactEffect.CachedProjectPath },
+                ["impactSize"] = projectile.ImpactSize,
+                ["letEffectsFadeOnHit"] = projectile.LetEffectsFadeOnHit
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -1762,6 +1765,9 @@ public sealed class ComponentSerializer
                 Velocity = Vector3(data.Properties["velocity"], System.Numerics.Vector3.Zero),
                 Damage = Float(data, "damage", 10f),
                 Radius = Float(data, "radius", .05f),
+                ImpactEffect = ReadAssetReference(data.Properties["impactEffect"]),
+                ImpactSize = Float(data, "impactSize", 1),
+                LetEffectsFadeOnHit = data.Properties["letEffectsFadeOnHit"]?.GetValue<bool>() ?? false,
                 DestroyOnHit = data.Properties["destroyOnHit"]?.GetValue<bool>() ?? true,
                 OwnerId = ownerId,
                 CollisionMask = ByteEngine.Core.Classification.LayerMask.FromBits(
@@ -1784,7 +1790,9 @@ public sealed class ComponentSerializer
                 ["projectileSpeed"] = launcher.ProjectileSpeed,
                 ["damage"] = launcher.Damage,
                 ["fireCooldown"] = launcher.FireCooldown,
-                ["muzzleOffset"] = Array(launcher.MuzzleOffset)
+                ["muzzleOffset"] = Array(launcher.MuzzleOffset),
+                ["releaseEffect"] = new JsonObject { ["guid"] = launcher.ReleaseEffect.Guid.ToString(), ["path"] = launcher.ReleaseEffect.CachedProjectPath },
+                ["releaseSize"] = launcher.ReleaseSize
             });
         }
         public Component Deserialize(ComponentData data, ComponentSerializationContext context)
@@ -1796,6 +1804,8 @@ public sealed class ComponentSerializer
             return new ProjectileLauncher3D
             {
                 ProjectileBlueprint = reference,
+                ReleaseEffect = ReadAssetReference(data.Properties["releaseEffect"]),
+                ReleaseSize = Float(data, "releaseSize", 1),
                 ProjectileSpeed = Float(data, "projectileSpeed", 30f),
                 Damage = Float(data, "damage", 10f),
                 FireCooldown = Float(data, "fireCooldown", .2f),

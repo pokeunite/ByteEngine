@@ -20,6 +20,7 @@ internal sealed class Shader3D : IDisposable
             "uUseHeightField", "uUseTexture", "uUseNormalTexture", "uUseMetallicTexture", "uUseRoughnessTexture",
             "uUseAoTexture", "uUsePackedPbrTexture", "uUseEmissionTexture", "uEmissionEnabled", "uUnlit" })
             source = source.Replace("uniform int " + name + ";", "const int " + name + "=0;", StringComparison.Ordinal);
+        source = source.Replace("uniform vec4 uVfxSurface;", "const vec4 uVfxSurface=vec4(0);", StringComparison.Ordinal);
         return source.Replace("uniform vec4 uWetContact0,uWetContact1,uWetContact2,uWetLevels;",
             "const vec4 uWetContact0=vec4(0),uWetContact1=vec4(0),uWetContact2=vec4(0),uWetLevels=vec4(0);", StringComparison.Ordinal);
     }
@@ -208,6 +209,7 @@ internal sealed class Shader3D : IDisposable
         out vec4 FragColor;
 
         uniform vec4 uBaseColor;
+        uniform vec4 uVfxSurface;
         uniform int uBaseColorPaletteCount;
         uniform vec4 uBaseColorPalette[16];
         uniform float uMetallicFactor;
@@ -1054,6 +1056,19 @@ internal sealed class Shader3D : IDisposable
                     : vec3(1.0);
                 emission=uEmissionColor*emissionMap*
                     max(uEmissionIntensity,0.0);
+            }
+            if(uVfxSurface.x>0.0)
+            {
+                vec2 uv=fract(vUV*uVfxSurface.zw);
+                float t=uVfxSurface.y;
+                float field=0.5+0.5*sin(uv.x*25.132741+t*8.0+2.0*sin(uv.y*12.566371-t*5.0))*sin(uv.y*18.849556+t*7.0);
+                float facing=clamp(dot(normalize(vNormal),normalize(uCameraPosition-vWorldPosition)),0.0,1.0);
+                float volume=0.12+0.88*pow(facing,0.8);
+                vec3 color=base.rgb;
+                float heat=smoothstep(0.4,0.92,field)*pow(facing,0.6);
+                vec3 glow=mix(color*0.12,mix(color,vec3(1.0),0.5)*2.8,heat)*volume;
+                base.rgb=mix(base.rgb,color*(0.18+0.82*field)*volume,uVfxSurface.x);
+                emission=mix(emission,glow,uVfxSurface.x);
             }
             if(uUnlit==1)
             {

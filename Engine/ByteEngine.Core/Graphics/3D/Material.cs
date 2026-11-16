@@ -14,6 +14,7 @@ public sealed class Material
     // Generated opaque crowd geometry encodes a flat colour slot in UV.x.
     // Immutable, renderer-owned palette; ordinary authored materials keep null.
     internal Vector4[]? SolidColorPalette {get;set;}
+    internal Vector4 VfxSurface { get; set; }
 
     public Vector4 BaseColor { get; set; } =
         Vector4.One;
@@ -159,6 +160,7 @@ public sealed class Material
         PackedRoughnessChannel = source.PackedRoughnessChannel;
         PackedMetallicChannel = source.PackedMetallicChannel;
         EmissionEnabled = source.EmissionEnabled;
+        VfxSurface = source.VfxSurface;
         EmissionColor = source.EmissionColor;
         EmissionIntensity = source.EmissionIntensity;
         EmissionTexture = source.EmissionTexture;

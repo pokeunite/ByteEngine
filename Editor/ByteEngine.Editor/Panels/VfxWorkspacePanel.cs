@@ -23,6 +23,9 @@ internal sealed class VfxWorkspacePanel : IDisposable
     private VfxEffect _draft=new();
     private Scene? _scene;
     private VfxPlayer? _player;
+    private GameObject? _referenceSurface;
+    private Mesh? _referenceMesh;
+    private bool _showReferenceSurface = true;
     private int _selected,_historyIndex;
     private bool _dirty,_restart=true,_playing=true,_repeat=true,_closePrompt,_historyPending;
     private double _lastTime;
@@ -97,6 +100,7 @@ internal sealed class VfxWorkspacePanel : IDisposable
         ImGui.TextUnformatted("LIVE PREVIEW"); ImGui.SameLine();
         if(ImGui.Button("Frame")) { _distance=6; PositionCamera(); }
         if(ImGui.Checkbox("Moving emitter",ref _moveEmitter)) _restart=true;
+        ImGui.SameLine(); ImGui.Checkbox("Reference floor", ref _showReferenceSurface);
         if(_moveEmitter) ImGui.SliderFloat("Motion radius",ref _motionRadius,.1f,5,"%.1f m");
         DrawPreview(renderer,renderer3D,windowWidth,windowHeight);
         ImGui.TextDisabled("Left drag: orbit  |  Wheel: zoom");
@@ -129,6 +133,30 @@ internal sealed class VfxWorkspacePanel : IDisposable
         Float("Emission duration (s)",_draft.Duration,.01f,120,v=>_draft.Duration=v);
         Int("Total particle budget",_draft.ParticleBudget,1,8192,v=>_draft.ParticleBudget=v);
         ImGui.TextDisabled("Repeat preview does not change in-game looping.");
+        if (ImGui.CollapsingHeader("One-shot sound"))
+        {
+            if (_project != null && ImGui.BeginCombo("Sound asset", _draft.OneShotSound.CachedProjectPath ?? "None"))
+            {
+                if (ImGui.Selectable("None", _draft.OneShotSound.IsEmpty)) { _draft.OneShotSound = AssetReference.Empty; Changed(); }
+                foreach (var asset in _project.AssetDatabase.Assets.Where(asset => asset.Type == AssetType.AudioClip))
+                    if (ImGui.Selectable(asset.ProjectPath, asset.Guid == _draft.OneShotSound.Guid))
+                    { _draft.OneShotSound = new(asset.Guid, asset.ProjectPath); Changed(); }
+                ImGui.EndCombo();
+            }
+            Float("Sound volume", _draft.SoundVolume, 0, 1, value => _draft.SoundVolume = value);
+            ImGui.TextWrapped("Played by pooled one-shot spawns such as projectile release and impact effects.");
+        }
+        if (ImGui.CollapsingHeader("Effect light"))
+        {
+            var light = _draft.Light;
+            Bool("Emit point light", light.Enabled, value => light.Enabled = value);
+            var lightColor = light.Color;
+            if (ImGui.ColorEdit3("Light color", ref lightColor)) { light.Color = lightColor; Changed(); }
+            Float("Light intensity", light.Intensity, 0, 32, value => light.Intensity = value);
+            Float("Light range (m)", light.Range, .05f, 30, value => light.Range = value);
+            Curve("Light intensity over life", light.IntensityOverLife, value => light.IntensityOverLife = value ?? VfxCurve.Linear(1, 0), 4);
+            ImGui.TextWrapped("One shadow-free light per effect; nearest four VFX lights per view, within the engine's eight-light budget.");
+        }
         if(_draft.Layers.Count==0) { ImGui.TextWrapped("Add a layer to start."); return; }
         _selected=Math.Clamp(_selected,0,_draft.Layers.Count-1); var p=_draft.Layers[_selected];
         ImGui.Separator(); ImGui.TextUnformatted("SELECTED LAYER");
@@ -137,6 +165,16 @@ internal sealed class VfxWorkspacePanel : IDisposable
         if(ImGui.CollapsingHeader("Look",ImGuiTreeNodeFlags.DefaultOpen))
         {
             EnumEdit("Render as",p.RenderMode,v=>p.RenderMode=v); EnumEdit("Sprite shape",p.Sprite,v=>p.Sprite=v);
+            if (p.RenderMode == VfxRenderMode.Mesh)
+            {
+                EnumEdit("Mesh geometry", p.MeshShape, value => p.MeshShape = value);
+                Vector("Mesh scale", p.MeshScale, value => p.MeshScale = value);
+                Float("Mesh deformation", p.MeshDeformation, 0, .45f, value => p.MeshDeformation = value);
+                Float("Mesh pulse", p.MeshPulse, 0, .5f, value => p.MeshPulse = value);
+                Float("Mesh emission", p.MeshEmission, 0, 8, value => p.MeshEmission = value);
+                Float("Mesh surface flow", p.MeshSurfaceFlow, 0, 1, value => p.MeshSurfaceFlow = value);
+                ImGui.TextWrapped("Lit 3D geometry with animated deformation. Mesh layers reserve at most 64 particles.");
+            }
             Bool("Glow / additive",p.Additive,v=>p.Additive=v);
             Float("Brightness",p.Brightness,0,16,v=>p.Brightness=v);
             Vector4 color=p.StartColor; if(ImGui.ColorEdit4("Start color",ref color)) { p.StartColor=color; Changed(); }
@@ -301,6 +339,15 @@ internal sealed class VfxWorkspacePanel : IDisposable
         if(_project==null) return;
         _scene??=new Scene("VFX Preview",_project.Project.Classification);
         _player??=_scene.CreateGameObject("Effect").AddComponent(new VfxPlayer { PlayOnStart=false });
+        if (_referenceSurface == null)
+        {
+            _referenceMesh = PrimitiveMesh.Create(PrimitiveMeshType.Cube);
+            _referenceSurface = _scene.CreateGameObject("Reference floor");
+            _referenceSurface.Transform.LocalPosition = new(0, -.65f, 0);
+            _referenceSurface.Transform.LocalScale = new(10, .1f, 10);
+            _referenceSurface.AddComponent(new MeshRenderer { Mesh = _referenceMesh, Material = new Material { BaseColor = new(.2f, .22f, .25f, 1) } });
+        }
+        _referenceSurface.Active = _showReferenceSurface;
         double now=_clock.Elapsed.TotalSeconds; float dt=(float)Math.Clamp(now-_lastTime,0,.1); _lastTime=now;
         try
         {
@@ -360,6 +407,6 @@ internal sealed class VfxWorkspacePanel : IDisposable
     public void Dispose()
     {
         if(_scene!=null) { _scene.UnloadInternal(); foreach(var obj in _scene.GameObjects.ToArray()) _scene.DestroyGameObject(obj); }
-        _scene=null; _player=null; _framebuffer.Dispose(); Close();
+        _scene=null; _player=null; _referenceSurface=null; _referenceMesh?.Dispose(); _referenceMesh=null; _framebuffer.Dispose(); Close();
     }
 }

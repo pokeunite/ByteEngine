@@ -58,11 +58,35 @@ public sealed class VfxPlayer : Component
         public readonly Material Material=new() { Shading=MaterialShadingMode.Unlit, CullMode=CullMode3D.None, DepthWriteMode=DepthWriteMode3D.Disabled };
         public VfxAtlas.Lease? Atlas;
         public int PreviousCount;
-        public Batch(int capacity)
+        public readonly float[]? Template;
+        public readonly int VerticesPerParticle = 4, IndicesPerParticle = 6;
+        public Batch(int capacity, VfxLayer settings)
         {
-            Vertices=new float[capacity*32]; Depths=new float[capacity]; Order=new int[capacity];
-            var indices=new uint[capacity*6];
-            for(int i=0;i<capacity;i++) { uint v=(uint)i*4; int n=i*6; indices[n]=v; indices[n+1]=v+1; indices[n+2]=v+2; indices[n+3]=v; indices[n+4]=v+2; indices[n+5]=v+3; }
+            uint[] templateIndices = [0, 1, 2, 0, 2, 3];
+            if (settings.RenderMode == VfxRenderMode.Mesh)
+            {
+                using var primitive = PrimitiveMesh.Create(settings.MeshShape);
+                Template = primitive.VertexData.ToArray();
+                templateIndices = primitive.IndexData.ToArray();
+                // Legacy primitives were normally double-sided. Normalize winding against their
+                // authored normals before using back-face culling on a solid particle core.
+                for (int n = 0; n < templateIndices.Length; n += 3)
+                {
+                    int a = (int)templateIndices[n] * 8, b = (int)templateIndices[n + 1] * 8, c = (int)templateIndices[n + 2] * 8;
+                    Vector3 Position(int at) => new(Template[at], Template[at + 1], Template[at + 2]);
+                    Vector3 Normal(int at) => new(Template[at + 3], Template[at + 4], Template[at + 5]);
+                    if (Vector3.Dot(Vector3.Cross(Position(b) - Position(a), Position(c) - Position(a)), Normal(a) + Normal(b) + Normal(c)) < 0)
+                        (templateIndices[n + 1], templateIndices[n + 2]) = (templateIndices[n + 2], templateIndices[n + 1]);
+                }
+                VerticesPerParticle = Template.Length / 8;
+                IndicesPerParticle = templateIndices.Length;
+                Material.Shading = MaterialShadingMode.Lit;
+                Material.CullMode = CullMode3D.Back;
+            }
+            Vertices=new float[capacity*VerticesPerParticle*8]; Depths=new float[capacity]; Order=new int[capacity];
+            var indices=new uint[capacity*IndicesPerParticle];
+            for (int i = 0; i < capacity; i++)
+                for (int n = 0; n < IndicesPerParticle; n++) indices[i * IndicesPerParticle + n] = templateIndices[n] + (uint)(i * VerticesPerParticle);
             Mesh=new Mesh(Vertices,indices,dynamicVertices:true);
         }
         public void Dispose() { Mesh.Dispose(); Atlas?.Dispose(); }
@@ -71,7 +95,7 @@ public sealed class VfxPlayer : Component
     {
         Release(); _beamTarget=null; _simulation=new(definition,Seed); _loaded=Effect; _loadedPreset=Preset; _loadedSeed=Seed;
         _batches=new Batch[_simulation.Layers.Length];
-        for(int i=0;i<_batches.Length;i++) _batches[i]=new(_simulation.Layers[i].Particles.Length);
+        for(int i=0;i<_batches.Length;i++) _batches[i]=new(_simulation.Layers[i].Particles.Length, _simulation.Layers[i].Settings);
         Status="Ready";
     }
     private bool Ensure()
@@ -114,6 +138,7 @@ public sealed class VfxPlayer : Component
         _simulation!.Advance(dt*PlaybackSpeed,Emitter,Intensity);
         if(DestroyWhenFinished && HasPlayed && !IsPlaying && AttachedGameObject?.Scene is {} scene)
         {
+            if (ReturnToPool != null && GameObject.GetComponent<ByteEngine.Core.Audio.AudioSource3D>() is { IsPlaying: true }) return;
             if(ReturnToPool!=null) ReturnToPool(this);
             else scene.DestroyGameObject(GameObject);
         }
@@ -154,6 +179,15 @@ public sealed class VfxPlayer : Component
                 b.Material.BlendMode=s.Additive ? BlendMode3D.Additive : BlendMode3D.AlphaBlend;
             }
             b.Material.BaseColor=new Vector4(new Vector3(Tint.X,Tint.Y,Tint.Z)*(Brightness*s.Brightness),Tint.W);
+            if (s.RenderMode == VfxRenderMode.Mesh)
+            {
+                b.Material.EmissionEnabled = s.MeshEmission > 0;
+                b.Material.EmissionColor = new Vector3(Tint.X, Tint.Y, Tint.Z);
+                b.Material.EmissionIntensity = s.MeshEmission * Brightness * s.Brightness;
+                b.Material.EmissionTexture = b.Material.MainTexture;
+                b.Material.VfxSurface = new(s.MeshSurfaceFlow, _simulation.Elapsed, b.Atlas!.Layout.Columns, b.Atlas.Layout.Rows);
+                b.Material.Roughness = .55f;
+            }
             int drawCount=0;
             for(int i=0;i<layer.Count;i++)
             {
@@ -174,12 +208,25 @@ public sealed class VfxPlayer : Component
                 size*=s.SizeOverLife?.Evaluate(age)??1;
                 Vector3 center=p.Position, previous=p.PreviousPosition, velocity=p.Velocity;
                 if(s.LocalSpace) { center=Vector3.Transform(center,emitter); previous=Vector3.Transform(previous,emitter); velocity=Vector3.TransformNormal(velocity,emitter); }
+                if (s.RenderMode == VfxRenderMode.Mesh)
+                {
+                    var bounds = FillMesh(b, i, p, s, center, size, age, s.LocalSpace ? Transform.WorldRotation : p.Orientation);
+                    minimum = Vector3.Min(minimum, bounds.Minimum);
+                    maximum = Vector3.Max(maximum, bounds.Maximum);
+                    continue;
+                }
                 Vector3 a=right*size*.5f,c=up*size*.5f;
-                if(s.RenderMode is VfxRenderMode.Billboard or VfxRenderMode.Horizontal or VfxRenderMode.EmitterPlane)
+                if(s.RenderMode is VfxRenderMode.Billboard or VfxRenderMode.Horizontal or VfxRenderMode.EmitterPlane or VfxRenderMode.SurfacePlane)
                 {
                     var basisRight=right;var basisUp=up;
                     if(s.RenderMode==VfxRenderMode.Horizontal){basisRight=Vector3.UnitX;basisUp=-Vector3.UnitZ;}
                     else if(s.RenderMode==VfxRenderMode.EmitterPlane){basisRight=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitX,emitter));basisUp=Vector3.Normalize(Vector3.TransformNormal(Vector3.UnitY,emitter));}
+                    else if (s.RenderMode == VfxRenderMode.SurfacePlane)
+                    {
+                        var orientation = s.LocalSpace ? Transform.WorldRotation : p.Orientation;
+                        basisRight = Vector3.Transform(Vector3.UnitX, orientation);
+                        basisUp = -Vector3.Transform(Vector3.UnitZ, orientation);
+                    }
                     float cos=MathF.Cos(p.Rotation),sin=MathF.Sin(p.Rotation);a=(basisRight*cos+basisUp*sin)*size*.5f;c=(-basisRight*sin+basisUp*cos)*size*.5f;
                 }
                 else if (s.RenderMode == VfxRenderMode.TravelAligned)
@@ -206,11 +253,48 @@ public sealed class VfxPlayer : Component
                 Vertex(b.Vertices,i*32,center-a-c,u0,v0); Vertex(b.Vertices,i*32+8,center+a-c,u1,v0);
                 Vertex(b.Vertices,i*32+16,center+a+c,u1,v1); Vertex(b.Vertices,i*32+24,center-a+c,u0,v1);
             }
-            if(b.PreviousCount>drawCount) Array.Clear(b.Vertices,drawCount*32,(b.PreviousCount-drawCount)*32);
+            if(b.PreviousCount>drawCount) Array.Clear(b.Vertices,drawCount*b.VerticesPerParticle*8,(b.PreviousCount-drawCount)*b.VerticesPerParticle*8);
             b.PreviousCount=drawCount; b.Mesh.UpdateVertices(b.Vertices,updateBounds:false,knownBounds:new BoundingBox3D(minimum,maximum));
-            b.Mesh.SetDrawIndexCount(drawCount*6); RenderedParticles+=drawCount;
+            b.Mesh.SetDrawIndexCount(drawCount*b.IndicesPerParticle); RenderedParticles+=drawCount;
             context.RenderWorld.Submit(b.Mesh,b.Material,Matrix4x4.Identity,RenderQueue3D.Transparent,frustumCulling:true,castShadows:false,receiveShadows:false);
         }
+    }
+    private static BoundingBox3D FillMesh(Batch batch, int index, VfxParticle particle, VfxLayer layer, Vector3 center, float size, float age, Quaternion rotation)
+    {
+        Vector3 minimum = new(float.PositiveInfinity), maximum = new(float.NegativeInfinity);
+        var uv = batch.Atlas!.Layout.Uv(age);
+        float pulse = 1 + layer.MeshPulse * MathF.Sin(particle.Age * 12 + particle.Sequence);
+        var spin = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, particle.Rotation);
+        rotation = Quaternion.Normalize(spin * rotation);
+        for (int vertex = 0; vertex < batch.VerticesPerParticle; vertex++)
+        {
+            int source = vertex * 8, at = (index * batch.VerticesPerParticle + vertex) * 8;
+            var template = batch.Template!;
+            var local = new Vector3(template[source], template[source + 1], template[source + 2]);
+            float noise = MathF.Sin(local.X * 11 + particle.Age * 8) * MathF.Sin(local.Y * 13 - particle.Age * 7) * MathF.Sin(local.Z * 17 + particle.Age * 6);
+            Vector3 point = center + Vector3.Transform(local * layer.MeshScale * (size * pulse * (1 + noise * layer.MeshDeformation)), rotation);
+            Vector3 normal = Vector3.Normalize(Vector3.Transform(new Vector3(template[source + 3], template[source + 4], template[source + 5]) / layer.MeshScale, rotation));
+            minimum = Vector3.Min(minimum, point); maximum = Vector3.Max(maximum, point);
+            batch.Vertices[at] = point.X; batch.Vertices[at + 1] = point.Y; batch.Vertices[at + 2] = point.Z;
+            batch.Vertices[at + 3] = normal.X; batch.Vertices[at + 4] = normal.Y; batch.Vertices[at + 5] = normal.Z;
+            batch.Vertices[at + 6] = uv.X + template[source + 6] * (uv.Z - uv.X);
+            batch.Vertices[at + 7] = uv.Y + template[source + 7] * (uv.W - uv.Y);
+        }
+        return new(minimum, maximum);
+    }
+
+    internal bool TryGetEffectLight(out RenderPointLight3D light)
+    {
+        light = default;
+        if (!Enabled || AttachedGameObject?.ActiveInHierarchy != true || _simulation == null || !IsPlaying || ActiveParticles == 0) return false;
+        var effect = _simulation.Effect;
+        if (effect.Loop && !_simulation.IsEmitting) return false;
+        if (!effect.Light.Enabled) return false;
+        float time = effect.Loop ? _simulation.Elapsed % effect.Duration : _simulation.Elapsed;
+        float intensity = effect.Light.Intensity * Intensity * effect.Light.IntensityOverLife.Evaluate(Math.Clamp(time / effect.Duration, 0, 1));
+        if (intensity <= .001f) return false;
+        light = new(Transform.WorldPosition, effect.Light.Color, intensity, effect.Light.Range, false, 0, 0, 0, 0);
+        return true;
     }
     internal static (Vector3 Right, Vector3 Up) ResolveTravelAxes(
         Vector3 travel, Vector3 toCamera, Vector3 cameraUp, Vector3 cameraRight)

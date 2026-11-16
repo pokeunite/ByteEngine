@@ -19,6 +19,8 @@ public sealed partial class Scene
     private readonly List<SkyEnvironment> _environments = new();
     private readonly List<DirectionalLight> _directionalLights = new();
     private readonly List<PointLight> _pointLights = new();
+    private readonly List<ByteEngine.Core.Vfx.VfxPlayer> _vfxPlayers = new();
+    internal IReadOnlyList<ByteEngine.Core.Vfx.VfxPlayer> VfxPlayers { get { RefreshRenderRegistry(); return _vfxPlayers; } }
     private readonly List<ByteEngine.Core.Navigation.NavigationRegion3D> _navigationRegions=new();
     private bool _hasSimulationRates;
     internal bool HasSimulationRates {get{RefreshRenderRegistry();return _hasSimulationRates;}}
@@ -40,7 +42,7 @@ public sealed partial class Scene
         InvalidateComponentSnapshots(changed,membership);
         if(physics&&(changed==null||AffectsPhysics(changed)))InvalidatePhysicsRegistry();
         else if(changed is ByteEngine.Core.Characters.CharacterController3D||membership?.Any(c=>c is ByteEngine.Core.Characters.CharacterController3D)==true||changed==null&&membership==null)AIRegistryRevision++;
-        static bool RenderMember(Component c)=>c is SkyEnvironment or DirectionalLight or PointLight or ByteEngine.Core.Navigation.NavigationRegion3D or SimulationRate3D;
+        static bool RenderMember(Component c)=>c is SkyEnvironment or DirectionalLight or PointLight or ByteEngine.Core.Vfx.VfxPlayer or ByteEngine.Core.Navigation.NavigationRegion3D or SimulationRate3D;
         bool all=changed==null&&membership==null;
         _renderRegistryDirty |= all||changed!=null&&RenderMember(changed)||membership?.Any(RenderMember)==true;
         _cameraRegistryDirty |= all||changed is Camera3D||membership?.Any(c=>c is Camera3D)==true;
@@ -49,12 +51,14 @@ public sealed partial class Scene
     {
         if (!_renderRegistryDirty) return;
         _environments.Clear(); _directionalLights.Clear(); _pointLights.Clear();_navigationRegions.Clear();
+        _vfxPlayers.Clear();
         _hasSimulationRates=false;
         foreach (var item in _gameObjects)
             foreach (var component in item.Components)
                 if (component is SkyEnvironment sky) _environments.Add(sky);
                 else if (component is DirectionalLight sun) _directionalLights.Add(sun);
                 else if (component is PointLight point) _pointLights.Add(point);
+                else if (component is ByteEngine.Core.Vfx.VfxPlayer vfx) _vfxPlayers.Add(vfx);
                 else if (component is ByteEngine.Core.Navigation.NavigationRegion3D region && ReferenceEquals(item.GetComponent<ByteEngine.Core.Navigation.NavigationRegion3D>(),region)) _navigationRegions.Add(region);
                 else if (component is SimulationRate3D) _hasSimulationRates=true;
         _renderRegistryDirty = false;

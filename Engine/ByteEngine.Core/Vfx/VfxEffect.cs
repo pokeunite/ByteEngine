@@ -2,12 +2,13 @@ using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ByteEngine.Core.Assets;
+using ByteEngine.Core.Graphics.ThreeD;
 
 namespace ByteEngine.Core.Vfx;
 
-public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot, Fireball, WaterBolt, LightningStrike, ClawSlash, HealingPulse, PoisonCloud, IceBurst, Shield }
+public enum VfxPreset { Sparks, Fire, Smoke, Explosion, MuzzleFlash, Rain, Snow, Magic, Dust, Trail, Beam, Impact, Portal, Heal, Footstep, EnergyShot, Fireball, WaterBolt, LightningStrike, ClawSlash, HealingPulse, PoisonCloud, IceBurst, Shield, Firebolt, FireboltRelease, FireboltImpact }
 public enum VfxShape { Point, Sphere, Box, Cone, Ring }
-public enum VfxRenderMode { Billboard, Stretched, Trail, Beam, Horizontal, EmitterPlane, TravelAligned }
+public enum VfxRenderMode { Billboard, Stretched, Trail, Beam, Horizontal, EmitterPlane, TravelAligned, Mesh, SurfacePlane }
 public enum VfxSprite { SoftDisc, Spark, Ring, Solid, Smoke, Flame, Star, Arc, Lightning, Ripple, ToonPuff }
 
 /// <summary>Portable, versioned effect. Layers share a bounded per-instance budget.</summary>
@@ -19,11 +20,18 @@ public sealed class VfxEffect
     public float Duration { get; set; } = 1;
     public int ParticleBudget { get; set; } = 1024;
     public List<VfxLayer> Layers { get; set; } = new();
+    public VfxLightSettings Light { get; set; } = new();
+    public AssetReference OneShotSound { get; set; } = AssetReference.Empty;
+    public float SoundVolume { get; set; } = .7f;
     public void Validate()
     {
         if (Version != 1) throw new InvalidDataException("Unsupported VFX version.");
         Name = string.IsNullOrWhiteSpace(Name) ? "New Effect" : Name;
         Duration = Safe(Duration, 1, .01f, 120);
+        Light ??= new();
+        Light.Validate();
+        OneShotSound ??= AssetReference.Empty;
+        SoundVolume = Safe(SoundVolume, .7f, 0, 1);
         ParticleBudget = Math.Clamp(ParticleBudget, 1, 8192);
         Layers ??= new();
         if (Layers.Count > 8) throw new InvalidDataException("An effect supports up to eight layers.");
@@ -33,12 +41,36 @@ public sealed class VfxEffect
     internal static Vector3 Finite(Vector3 v, Vector3 fallback) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z) ? v : fallback;
 }
 
+public sealed class VfxLightSettings
+{
+    public bool Enabled { get; set; }
+    public Vector3 Color { get; set; } = new(1, .35f, .06f);
+    public float Intensity { get; set; } = 3;
+    public float Range { get; set; } = 3;
+    public VfxCurve IntensityOverLife { get; set; } = VfxCurve.Linear(1, 0);
+
+    internal void Validate()
+    {
+        Color = Vector3.Clamp(VfxEffect.Finite(Color, Vector3.One), Vector3.Zero, Vector3.One);
+        Intensity = VfxEffect.Safe(Intensity, 3, 0, 32);
+        Range = VfxEffect.Safe(Range, 3, .05f, 30);
+        IntensityOverLife ??= VfxCurve.Linear(1, 0);
+        IntensityOverLife.Validate(1);
+    }
+}
+
 public sealed class VfxLayer
 {
     public string Name { get; set; } = "Particles";
     public bool Enabled { get; set; } = true;
     public VfxShape Shape { get; set; }
     public VfxRenderMode RenderMode { get; set; }
+    public PrimitiveMeshType MeshShape { get; set; } = PrimitiveMeshType.Sphere;
+    public Vector3 MeshScale { get; set; } = Vector3.One;
+    public float MeshDeformation { get; set; } = .12f;
+    public float MeshPulse { get; set; } = .08f;
+    public float MeshEmission { get; set; } = .5f;
+    public float MeshSurfaceFlow { get; set; }
     public VfxSprite Sprite { get; set; }
     public bool Additive { get; set; } = true;
     public bool LocalSpace { get; set; }
@@ -91,6 +123,13 @@ public sealed class VfxLayer
         Name = string.IsNullOrWhiteSpace(Name) ? "Particles" : Name;
         if (!Enum.IsDefined(Shape) || !Enum.IsDefined(RenderMode) || !Enum.IsDefined(Sprite)) throw new InvalidDataException("Invalid VFX mode.");
         MaxParticles = Math.Clamp(MaxParticles, 1, 8192); Burst = Math.Clamp(Burst, 0, 8192);
+        if (!Enum.IsDefined(MeshShape)) MeshShape = PrimitiveMeshType.Sphere;
+        if (RenderMode == VfxRenderMode.Mesh) MaxParticles = Math.Min(MaxParticles, 64);
+        MeshScale = Vector3.Clamp(VfxEffect.Finite(MeshScale, Vector3.One), new(.01f), new(10));
+        MeshDeformation = VfxEffect.Safe(MeshDeformation, .12f, 0, .45f);
+        MeshPulse = VfxEffect.Safe(MeshPulse, .08f, 0, .5f);
+        MeshEmission = VfxEffect.Safe(MeshEmission, .5f, 0, 8);
+        MeshSurfaceFlow = VfxEffect.Safe(MeshSurfaceFlow, 0, 0, 1);
         Rate = VfxEffect.Safe(Rate, 40, 0, 10000); Delay = VfxEffect.Safe(Delay, 0, 0, 120);
         Lifetime = VfxEffect.Safe(Lifetime, .8f, .02f, 120); LifetimeVariation = VfxEffect.Safe(LifetimeVariation, .2f, 0, .95f);
         Speed = VfxEffect.Safe(Speed, 3, 0, 1000); SpeedVariation = VfxEffect.Safe(SpeedVariation, .3f, 0, 1);
@@ -146,6 +185,7 @@ public static class VfxPresets
 {
     public static VfxEffect Create(VfxPreset preset)
     {
+        if (preset >= VfxPreset.Firebolt) return VfxFireboltPresets.Create(preset);
         if (preset >= VfxPreset.Fireball) return VfxAttackPresets.Create(preset);
         var effect = new VfxEffect { Name = preset.ToString(), Loop = preset is VfxPreset.Fire or VfxPreset.Smoke or VfxPreset.Rain or VfxPreset.Snow or VfxPreset.Magic or VfxPreset.Trail or VfxPreset.Beam };
         var p = new VfxLayer { Name = preset.ToString() }; effect.Layers.Add(p);

@@ -663,7 +663,7 @@ public sealed class Renderer3D : IDisposable
     internal bool? DiagnosticSolidLit { get; set; }
     private Shader3D? _solidLitShader;
     private static bool SolidLitEligible(Material m) => m.Shading == ByteEngine.Core.Assets.MaterialShadingMode.Lit &&
-        !m.WaterSurface && !m.WaterVolume && !m.SandSurface && m.HeightFieldTexture == null && m.WetLevels.W <= 0 &&
+        !m.WaterSurface && !m.WaterVolume && !m.SandSurface && m.HeightFieldTexture == null && m.WetLevels.W <= 0 && m.VfxSurface.X <= 0 &&
         m.MainTexture == null && m.NormalTexture == null && m.MetallicTexture == null && m.RoughnessTexture == null &&
         m.AmbientOcclusionTexture == null && m.PackedPbrTexture == null && !m.EmissionEnabled;
 
@@ -901,6 +901,7 @@ public sealed class Renderer3D : IDisposable
         _shader.SetFloat("uNormalYSign", material.DirectXNormalMap ? -1f : 1f);
         _shader.SetFloat("uAoStrength", material.AmbientOcclusionStrength);
         _shader.SetInt("uUnlit", material.Shading == ByteEngine.Core.Assets.MaterialShadingMode.Unlit ? 1 : 0);
+        _shader.SetVector4("uVfxSurface", material.VfxSurface);
         _shader.SetInt("uDecodeColorSrgb", material.DecodeColorTexturesSrgb ? 1 : 0);
         _shader.SetInt("uEmissionEnabled", material.EmissionEnabled ? 1 : 0);
         _shader.SetVector3("uEmissionColor", material.EmissionColor);

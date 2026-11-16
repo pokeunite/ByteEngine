@@ -5,6 +5,8 @@ using ByteEngine.Core.Characters;
 using ByteEngine.Core.Scene;
 using RuntimeScene = ByteEngine.Core.Scene.Scene;
 using ByteEngine.Core.Classification;
+using ByteEngine.Core.Assets;
+using ByteEngine.Core.Vfx;
 
 namespace ByteEngine.Core.Gameplay;
 
@@ -21,6 +23,10 @@ public sealed class Projectile3D : Component
     public bool DestroyOnHit { get; set; } = true;
     public Guid OwnerId { get; set; }
     public LayerMask CollisionMask { get; set; } = LayerMask.All;
+    public AssetReference ImpactEffect { get; set; } = AssetReference.Empty;
+    private float _impactSize = 1;
+    public float ImpactSize { get => _impactSize; set => _impactSize = VfxEffect.Safe(value, 1, .01f, 100); }
+    public bool LetEffectsFadeOnHit { get; set; }
     public event Action<RaycastHit3D>? Hit;
     public event Action<CombatDamageReceipt>? DamageApplied;
 
@@ -85,11 +91,30 @@ public sealed class Projectile3D : Component
                 Math.Clamp(Damage / 25f, .1f, 3f));
             if(CombatDamageReceipt.Apply(hit.GameObject,Damage,Velocity) is {} receipt)DamageApplied?.Invoke(receipt);
             Hit?.Invoke(hit);
-            if (DestroyOnHit) scene.DestroyGameObject(projectile);
+            VfxRuntime.Spawn(scene, ImpactEffect, hit.Point + hit.Normal * .015f, VfxSpawnPool.AlignUp(hit.Normal), ImpactSize);
+            if (DestroyOnHit)
+            {
+                if (LetEffectsFadeOnHit) ReleaseEffects(projectile);
+                scene.DestroyGameObject(projectile);
+            }
             else { Velocity = Vector3.Zero; _stopped = true; }
             return;
         }
         projectile.Transform.WorldPosition = origin + displacement;
+    }
+
+    private static void ReleaseEffects(GameObject owner)
+    {
+        foreach (var child in owner.Children.ToArray())
+        {
+            if (child.GetComponent<VfxPlayer>() is { } player)
+            {
+                child.SetParent(null, true);
+                player.Stop();
+                player.DestroyWhenFinished = true;
+            }
+            else ReleaseEffects(child);
+        }
     }
 
     private static string LayerName(RuntimeScene scene, int layer) =>

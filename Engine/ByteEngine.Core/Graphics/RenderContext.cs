@@ -277,14 +277,29 @@ public sealed class RenderContext
         int directionalCount=0,pointCount=0;
         foreach(var light in Scene.DirectionalLights)if(light.Enabled&&light.GameObject.ActiveInHierarchy)directionalCount++;
         foreach(var light in Scene.PointLights)if(light.Enabled&&light.GameObject.ActiveInHierarchy)pointCount++;
-        if(directionalCount==0&&pointCount==0)
+        Span<RenderPointLight3D> effectLights = stackalloc RenderPointLight3D[4];
+        Span<float> effectDistances = stackalloc float[4];
+        int effectCount = 0, submittedEffects = 0;
+        var cameraPosition = view?.CameraPosition ?? Vector3.Zero;
+        foreach (var player in Scene.VfxPlayers)
+        {
+            if (!player.TryGetEffectLight(out var light)) continue;
+            submittedEffects++;
+            float distance = Vector3.DistanceSquared(light.Position, cameraPosition);
+            int at = effectCount;
+            while (at > 0 && distance < effectDistances[at - 1]) at--;
+            if (at >= 4) continue;
+            for (int n = Math.Min(effectCount, 3); n > at; n--) { effectLights[n] = effectLights[n - 1]; effectDistances[n] = effectDistances[n - 1]; }
+            effectLights[at] = light; effectDistances[at] = distance; effectCount = Math.Min(4, effectCount + 1);
+        }
+        if(directionalCount==0&&pointCount==0&&effectCount==0)
         {
             var fallback=RenderLighting3D.Default;
             return RenderLighting3D.OwnSnapshot(fallback.DirectionalLights.ToArray(),Array.Empty<RenderPointLight3D>(),
                 environment.OverrideAmbient?environment.AmbientIntensity:fallback.AmbientIntensity,0,0,environment.Look.PointShadowLimit);
         }
         var suns=directionalCount==0?Array.Empty<RenderDirectionalLight3D>():new RenderDirectionalLight3D[Math.Min(directionalCount,RenderLighting3D.MaxDirectionalLights)];
-        var lamps=pointCount==0?Array.Empty<RenderPointLight3D>():new RenderPointLight3D[Math.Min(pointCount,RenderLighting3D.MaxPointLights)];
+        var lamps=pointCount+effectCount==0?Array.Empty<RenderPointLight3D>():new RenderPointLight3D[Math.Min(pointCount+effectCount,RenderLighting3D.MaxPointLights)];
         int used=0;float ambient=0;
         foreach(var light in Scene.DirectionalLights)
         {
@@ -296,7 +311,7 @@ public sealed class RenderContext
         }
         // Bounded stable insertion avoids sorting/allocating a list of every scene light.
         Span<float> distances=stackalloc float[RenderLighting3D.MaxPointLights];
-        used=0;var cameraPosition=view?.CameraPosition??Vector3.Zero;
+        used=0;
         foreach(var light in Scene.PointLights)
         {
             if(!light.Enabled||!light.GameObject.ActiveInHierarchy)continue;
@@ -309,8 +324,22 @@ public sealed class RenderContext
                 light.CastShadows&&environment.Look.PointShadowLimit>0,Math.Min(light.ShadowResolution,environment.Look.ShadowResolutionCap),light.ShadowBias,light.ShadowStrength,light.ShadowSoftness);
             used=Math.Min(used+1,lamps.Length);
         }
+        for (int n = 0; n < effectCount; n++)
+        {
+            var light = effectLights[n];
+            float distance = effectDistances[n]; int at = used;
+            while (at > 0 && distance < distances[at - 1]) at--;
+            if (at >= lamps.Length) continue;
+            for (int i = Math.Min(used, lamps.Length - 1); i > at; i--) { lamps[i] = lamps[i - 1]; distances[i] = distances[i - 1]; }
+            lamps[at] = light; distances[at] = distance; used = Math.Min(used + 1, lamps.Length);
+        }
+        if (directionalCount == 0 && pointCount == 0)
+        {
+            suns = RenderLighting3D.Default.DirectionalLights.ToArray();
+            ambient = RenderLighting3D.Default.AmbientIntensity;
+        }
         return RenderLighting3D.OwnSnapshot(suns,lamps,environment.OverrideAmbient?environment.AmbientIntensity:suns.Length>0?Math.Clamp(ambient,0,4):.05f,
-            directionalCount,pointCount,environment.Look.PointShadowLimit);
+            directionalCount,pointCount+submittedEffects,environment.Look.PointShadowLimit);
     }
 
     internal void Begin3DFrame()

@@ -165,6 +165,7 @@ try
     if(args.Contains("--graphics")) { GraphicsQualityTests.Run(root); return; }
     if(args.Contains("--graphics-render")) { GraphicsQualityRenderTests.Run(); return; }
     if(args.Length>=2&&args[0]=="--dune-physics"){DuneLandPhysicsTests.Run(args[1],args.Contains("--browser-physics")?40:0);return;}
+    if (args.Contains("--vfx-depth")) { try { VfxDepthTests.Run(root); } catch (Exception error) { Console.Error.WriteLine(error); Environment.ExitCode = 1; } return; }
     if(args.Contains("--vfx")) { VfxTests.Run(root); return; }
     if(args.Contains("--vfx-render")) { VfxRenderTests.Run(root); return; }
     if(args.Contains("--vfx-gallery")) { VfxGallery.Run(); return; }

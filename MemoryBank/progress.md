@@ -1,8 +1,10 @@
 # Progress
 
-Updated: 2026-11-16
+Updated: 2026-11-17
 
 ## Works
+
+- Mesh/surface-plane VFX, bounded effect lights, pooled release/impact audio and fading trails; Monsters & Magic Firebolt configured and native-validated (2026-11-17).
 
 - Windows editor/player MP4 recorder: F9 start/stop, Shift+F9 settings, user Videos
   output default, optional WASAPI playback audio, H.264/AAC encoding, selectable

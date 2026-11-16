@@ -1,5 +1,13 @@
 # Active context
 
+## 2026-11-17 — Mesh VFX and Firebolt reference spell
+
+Maintained C:/Users/codex/ByteEngine/source routing verified. Added opt-in primitive Mesh and SurfacePlane VFX modes; deforming/pulsing lit mesh batches, animated surface flow, editable effect lights (nearest four unshadowed within eight total), spatial one-shot sounds, pooled VfxRuntime.Spawn, launcher release and surface-aligned projectile impact assets. Optional hit cleanup detaches/drains trails and stops their lights. VFX workspace exposes settings and reference floor. Existing enum values/default paths preserved. Documentation/VFX-Depth-and-Spell-Feedback.md describes controls/limits.
+
+Monsters & Magic project Assets/VFX/Firebolt and Assets/Attacks/Firebolt now provide editable cast/flight/impact layers and original procedural WAVs. Only Main Muzzle L/R visual references changed; gameplay owner, damage, speed, radius, cooldown and mana preserved. Anime/Shooting assets untouched; scene backup tools/vfx-depth/Main.before-firebolt.bytescene.bak, project FIREBOLT_VFX_GUIDE.md. Project changes live outside engine git.
+
+Validation: Release tests build 0 errors; --vfx-depth, --vfx (1370 checks, zero-allocation simulation), --vfx-render and --shader-portability passed. Native GL covers head/side/20 effects, mesh depth, cap, collision alignment, pool reuse and tail cleanup. Published Windows editor/player via Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser; root updater -VerifyOnly passed matching installed runtimes. Native real-project 150-frame QA passed both launchers, native loaded audio, flight/impact and fallback checks; inspected screenshots. QA-only shots held longer than normal lifetime to capture slow diagnostic frames; gameplay settings unchanged. Logs/screenshots/harnesses .artifacts/vfx-depth/. No FPS claim, browser refresh or game export. Not volumetric fire, soft particles or decals. Preserve unrelated Wildlings work.
+
 ## 2026-11-16 — Directional projectile flipbooks
 
 Canonical source C:/Users/codex/ByteEngine verified. Added opt-in VfxRenderMode.TravelAligned (appended enum value; existing modes unchanged). VfxPlayer aligns the sprite +U axis with particle velocity, or emitter -Z for stationary local-space projectile visuals, and rotates the card around that axis toward the camera. ResolveTravelAxes handles head-on/vertical/reverse and degenerate views with finite orthonormal bases. Inspector VFX render-mode selector discovers the enum automatically.

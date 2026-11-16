@@ -38,6 +38,9 @@ public sealed class ProjectileLauncher3D : Component
     }
 
     public Vector3 MuzzleOffset { get; set; }
+    public AssetReference ReleaseEffect { get; set; } = AssetReference.Empty;
+    private float _releaseSize = 1;
+    public float ReleaseSize { get => _releaseSize; set => _releaseSize = ByteEngine.Core.Vfx.VfxEffect.Safe(value, 1, .01f, 100); }
 
     public bool CanFire =>
         _cooldownRemaining <=
@@ -177,7 +180,10 @@ public sealed class ProjectileLauncher3D : Component
                                 blueprintProjectile.DestroyOnHit,
 
                             CollisionMask =
-                                blueprintProjectile.CollisionMask
+                                blueprintProjectile.CollisionMask,
+                            ImpactEffect = blueprintProjectile.ImpactEffect,
+                            ImpactSize = blueprintProjectile.ImpactSize,
+                            LetEffectsFadeOnHit = blueprintProjectile.LetEffectsFadeOnHit
                         });
 
             /*
@@ -312,6 +318,8 @@ public sealed class ProjectileLauncher3D : Component
 
         _cooldownRemaining =
             FireCooldown;
+
+        ByteEngine.Core.Vfx.VfxRuntime.Spawn(scene, ReleaseEffect, muzzle, root.Transform.WorldRotation, ReleaseSize);
 
         Camera3D? camera =
             scene.ActiveCamera;

@@ -43,6 +43,14 @@ internal sealed class VfxSpawnPool
         player.Transform.WorldRotation=rotation; player.Size=size; player.Intensity=1; player.PlaybackSpeed=1;
         player.Tint=Vector4.One;player.Brightness=1;
         player.ClearBeamTarget(); player.Play();
+        if (!definition.OneShotSound.IsEmpty)
+        {
+            var audio = player.GameObject.GetComponent<ByteEngine.Core.Audio.AudioSource3D>() ??
+                player.GameObject.AddComponent(new ByteEngine.Core.Audio.AudioSource3D { PlayOnStart = false, Spatial = true });
+            audio.Stop(); audio.Loop = false; audio.ClipReference = definition.OneShotSound; audio.Volume = definition.SoundVolume;
+            if (ByteEngine.Core.Audio.AudioRuntimeAssets.TryLoadClip(audio, definition.OneShotSound,
+                ByteEngine.Core.Diagnostics.RuntimeDiagnostics.OutputSink)) audio.Play();
+        }
         return player;
     }
     private void Return(VfxPlayer player)
@@ -51,6 +59,7 @@ internal sealed class VfxSpawnPool
         if(scene==null) return;
         if(player.GameObject.IsAttached) SkeletalAttachmentService.Detach(player.GameObject,true);
         player.GameObject.SetParent(null,true); player.GameObject.Active=false; player.Stop(true);
+        player.GameObject.GetComponent<ByteEngine.Core.Audio.AudioSource3D>()?.Stop();
         int idle=0,capacity=0;
         foreach(var slot in _slots)
             if(slot.Player.AttachedScene()==scene && !slot.Player.GameObject.Active) { idle++; capacity+=slot.Player.ParticleCapacity; }

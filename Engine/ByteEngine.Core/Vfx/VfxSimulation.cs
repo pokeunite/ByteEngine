@@ -5,6 +5,7 @@ namespace ByteEngine.Core.Vfx;
 public struct VfxParticle
 {
     public Vector3 Position, PreviousPosition, Velocity;
+    public Quaternion Orientation;
     public float Age, Lifetime, SizeFactor, Rotation;
     public long Sequence;
 }
@@ -162,9 +163,13 @@ public sealed class VfxSimulation
             Vector3 position=offset+s.Offset;
             Vector3 velocity=direction*s.Speed*(1+(Rand()*2-1)*s.SpeedVariation);
             if(!s.LocalSpace) { position=Vector3.Transform(position,emitter); velocity=Vector3.TransformNormal(velocity,emitter); }
+            var orientation = Quaternion.Identity;
+            if (!s.LocalSpace && s.RenderMode is VfxRenderMode.Mesh or VfxRenderMode.SurfacePlane)
+                Matrix4x4.Decompose(emitter, out _, out orientation, out _);
             layer.Particles[layer.Count++]=new VfxParticle
             {
                 Position=position, PreviousPosition=layer.HasLastSpawn && Vector3.DistanceSquared(position,layer.LastSpawn)<=s.TrailBreakDistance*s.TrailBreakDistance ? layer.LastSpawn : position, Velocity=velocity,
+                Orientation = orientation,
                 Lifetime=s.Lifetime*(1+(Rand()*2-1)*s.LifetimeVariation), SizeFactor=1+(Rand()*2-1)*s.SizeVariation,
                 Rotation=s.RandomRotation && s.RenderMode is VfxRenderMode.Billboard or VfxRenderMode.Horizontal or VfxRenderMode.EmitterPlane ? Rand()*MathF.Tau : 0, Sequence=++_sequence
             };
