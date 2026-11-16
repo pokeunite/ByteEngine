@@ -172,7 +172,8 @@ internal static class ComponentPropertyRenderer
     private static bool ShowUiWidgetProperty(UiWidget widget, string name) =>
         name switch
         {
-            nameof(UiWidget.ImageReference) => widget.Kind == UiWidgetKind.Image,
+            nameof(UiWidget.ImageReference) or nameof(UiWidget.HoverImageReference) or
+                nameof(UiWidget.PressedImageReference) => widget.Kind is UiWidgetKind.Image or UiWidgetKind.Button,
             nameof(UiWidget.FillColor) or nameof(UiWidget.Value) or
                 nameof(UiWidget.Maximum) => widget.Kind is UiWidgetKind.ProgressBar or UiWidgetKind.Slider or UiWidgetKind.SegmentedBar,
             nameof(UiWidget.SegmentCount) or nameof(UiWidget.SegmentAngleDegrees) or

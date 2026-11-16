@@ -24,6 +24,37 @@ internal static class EngineFoundationTests
   var grid=new ByteEngine.Core.Navigation.NavigationGrid(7,7);for(int z=0;z<6;z++)grid.SetCell(3,z,true);var route=grid.FindPath(new(.5f,0,.5f),new(6.5f,0,.5f));Check(route.Count>0&&route.Any(point=>point.Z>=6),"Navigation crossed blocked wall");grid.SetCell(3,6,true);Check(grid.FindPath(new(.5f,0,.5f),new(6.5f,0,.5f)).Count==0,"Unreachable path returned");var corner=new ByteEngine.Core.Navigation.NavigationGrid(2,2);corner.SetCell(1,0,true);corner.SetCell(0,1,true);Check(corner.FindPath(new(.5f,0,.5f),new(1.5f,0,1.5f)).Count==0,"Diagonal cuts obstacle corner");
   var lod=new ByteEngine.Core.Graphics.ThreeD.MeshLodGroup();Check(lod.SelectLevel(10)==0&&lod.SelectLevel(30)==1&&lod.SelectLevel(100)==2,"LOD thresholds");lod.CullDistance=150;Check(lod.SelectLevel(151)==-1,"LOD cull");
   var palette=canvas.AddComponent(new UiTheme());aw.ThemeKey="primary";Check(UiTheme.Find(a)==palette&&palette.Background("primary",true,false,false)==palette.Primary,"Inherited theme");Check(palette.Background("primary",false,true,false)==palette.Disabled,"Disabled theme");var widgetCopy=(UiWidget)serializer.Deserialize(serializer.Serialize(aw)!)!;Check(widgetCopy.ThemeKey=="primary","Widget theme serialization");
+  CheckButtonArtwork(serializer);
   Console.WriteLine("PASS fixed cadence at 30/60/144 FPS, bounded catch-up, responsive row/column/grid, visibility/scaling, bus gains/mute/serialization, incremental file refresh/delete, 5,000 sparse collider broadphase, obstacle-aware A* and no corner cutting, LOD selection/cull, inherited themes.");
  }
+    private static void CheckButtonArtwork(ComponentSerializer serializer)
+    {
+        var normal = new AssetReference(Guid.NewGuid(), "Assets/button-normal.png");
+        var hover = new AssetReference(Guid.NewGuid(), "Assets/button-hover.png");
+        var pressed = new AssetReference(Guid.NewGuid(), "Assets/button-pressed.png");
+        var button = new UiWidget
+        {
+            Kind = UiWidgetKind.Button,
+            ImageReference = normal,
+            HoverImageReference = hover,
+            PressedImageReference = pressed
+        };
+        if (button.ResolveStateImage(false, false) != normal ||
+            button.ResolveStateImage(true, false) != hover || button.ResolveStateImage(true, true) != pressed)
+            throw new Exception("Button artwork state precedence changed");
+        var data = serializer.Serialize(button)!;
+        var restored = (UiWidget)serializer.Deserialize(data)!;
+        if (restored.ImageReference != normal || restored.HoverImageReference != hover || restored.PressedImageReference != pressed)
+            throw new Exception("Button artwork references did not survive serialization");
+        data.Properties.Remove("hoverImage");
+        data.Properties.Remove("pressedImage");
+        var legacy = (UiWidget)serializer.Deserialize(data)!;
+        if (!legacy.HoverImageReference.IsEmpty || !legacy.PressedImageReference.IsEmpty || legacy.ResolveStateImage(true, true) != normal)
+            throw new Exception("Legacy button artwork fallback changed");
+        restored.PressedImageReference = AssetReference.Empty;
+        if (restored.ResolveStateImage(true, true) != hover)
+            throw new Exception("Missing pressed artwork did not fall back to hover artwork");
+        Console.WriteLine("PASS button artwork states, asset-reference roundtrip and legacy fallback");
+    }
+
 }

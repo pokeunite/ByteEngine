@@ -23,6 +23,10 @@ public sealed class UiWidget : Component
     public Vector4 DisabledColor { get; set; } = new(.16f, .16f, .16f, .6f);
     public Vector4 FillColor { get; set; } = new(.25f, .7f, .35f, 1f);
     public AssetReference ImageReference { get; set; } = AssetReference.Empty;
+    /// <summary>Art shown while the pointer is over an Image/Button widget. Empty falls back to <see cref="ImageReference"/>.</summary>
+    public AssetReference HoverImageReference { get; set; } = AssetReference.Empty;
+    /// <summary>Art shown while the pointer is held down on an Image/Button widget. Empty falls back to the hover/normal art.</summary>
+    public AssetReference PressedImageReference { get; set; } = AssetReference.Empty;
     public string Label { get; set; } = "Button";
     public string LabelKey { get; set; } = string.Empty;
     public int FontSize { get; set; } = 22;
@@ -67,6 +71,11 @@ public sealed class UiWidget : Component
             screenPoint.X < rect.Position.X + rect.Size.X &&
             screenPoint.Y < rect.Position.Y + rect.Size.Y;
     }
+
+    /// <summary>State art for Image/Button widgets: pressed, then hover, then the normal image.</summary>
+    public AssetReference ResolveStateImage(bool hovered, bool pressed) =>
+        pressed && !PressedImageReference.IsEmpty ? PressedImageReference :
+        hovered && !HoverImageReference.IsEmpty ? HoverImageReference : ImageReference;
 
     public bool IsHovered =>
         Enabled && GameObject.ActiveInHierarchy && Kind is UiWidgetKind.Button or UiWidgetKind.Slider && Visible && Interactable &&
@@ -132,7 +141,12 @@ public sealed class UiWidget : Component
             Rounded(context,new(trackPosition.X+trackSize.X*fraction-radius,rect.Position.Y+(rect.Size.Y-diameter)/2),new(diameter),FillColor,radius);
             context.QueueUiClip(null);return;
         }
-        if (Kind != UiWidgetKind.Image || ImageReference.IsEmpty)
+        bool pointerPressed = Kind is UiWidgetKind.Button or UiWidgetKind.Slider && IsHovered && Input.IsMouseButtonDownForUi(MouseButton.Left);
+        AssetReference art = Kind is UiWidgetKind.Image or UiWidgetKind.Button
+            ? ResolveStateImage(IsHovered, pointerPressed) : AssetReference.Empty;
+        AssetManager? artAssets = null;
+        bool drawsArt = !art.IsEmpty && AnimationRuntimeAssets.TryGet(out artAssets) && artAssets != null;
+        if (!drawsArt)
             Rounded(context,rect.Position,rect.Size,background,CornerRadius*rect.Scale);
         if (Kind == UiWidgetKind.SegmentedBar)
         {
@@ -174,16 +188,17 @@ public sealed class UiWidget : Component
                 else context.QueueUiQuad(fill.Position,fill.Size,FillColor with {W=FillColor.W*opacity});
             }
         }
-        else if (Kind == UiWidgetKind.Image && !ImageReference.IsEmpty &&
-            AnimationRuntimeAssets.TryGet(out AssetManager? assets) && assets != null)
+        else if (drawsArt && Kind is (UiWidgetKind.Image or UiWidgetKind.Button))
         {
-            context.QueueUiImage(assets.LoadTexture(ImageReference), rect.Position,
-                rect.Size, Color with { W = Color.W * opacity });
+            Vector4 tint = Kind == UiWidgetKind.Button && !Interactable ? DisabledColor : Color;
+            context.QueueUiImage(artAssets!.LoadTexture(art), rect.Position,
+                rect.Size, tint with { W = tint.W * opacity });
         }
         else if (Kind == UiWidgetKind.Button)
         {
             if(ContextHighlighted)context.QueueUiQuad(rect.Position+new Vector2(0,CornerRadius*rect.Scale),new Vector2(4*rect.Scale,Math.Max(0,rect.Size.Y-2*CornerRadius*rect.Scale)),(theme?.AccentColor??FillColor) with{W=opacity});
             string label=UiLocalization.Translate(GameObject,LabelKey,Label);
+            if(string.IsNullOrEmpty(label)){context.QueueUiClip(null);return;}
             string? font=FontRuntime.ResolvePath(FontReference);
             int size=Math.Max(8,(int)(FontSize*rect.Scale));
             if(AutoFitLabel)
