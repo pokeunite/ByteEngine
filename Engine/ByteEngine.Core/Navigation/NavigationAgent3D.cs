@@ -13,6 +13,7 @@ public sealed class NavigationAgent3D : Component
     private ByteEngine.Core.Graphics.ThreeD.Mesh? _debugMesh;
     private Guid _regionObject;
     /// <summary>Region this agent paths on. Empty resolves the first enabled region in the scene.</summary>
+    [SceneObjectReference(typeof(NavigationRegion3D))]
     public Guid RegionObject
     {
         get => _regionObject;

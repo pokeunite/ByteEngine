@@ -8,6 +8,8 @@ public enum NavigationBakeMode { Grid, MeshSurface }
 public sealed class NavigationRegion3D : Component
 {
     public NavigationBakeMode BakeMode {get;set;}
+    [SceneObjectReference(typeof(ByteEngine.Core.Characters.MeshCollider3D))]
+    [System.ComponentModel.Description("Mesh Surface mode only: choose an object with a MeshCollider3D. Grid mode uses the region origin and dimensions; no surface is required.")]
     public Guid SurfaceObject {get;set;}
     public NavigationMesh? Mesh {get;private set;}
     public bool Ready=>Grid!=null||Mesh!=null;

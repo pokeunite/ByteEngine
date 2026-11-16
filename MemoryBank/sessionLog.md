@@ -1,5 +1,11 @@
 # Session log
 
+## 2026-11-16 — Navigation object pickers and Monsters & Magic repair
+
+Canonical source verified at C:/Users/codex/ByteEngine. NavigationRegion3D.SurfaceObject now has a MeshCollider3D-filtered SceneObjectReference picker and a tooltip explaining that Grid mode needs no surface. NavigationAgent3D.RegionObject now filters its picker to navigation regions. Uses the existing shared Inspector picker; no GUID/serialization changes.
+
+Monsters & Magic game assets remain in C:/Users/codex/Documents/monsters and magic. Repaired missing agents, region origin, supported capsule silhouettes, arms-only casting profile and shared cooldown-gated animation/projectile rules through project-local tools and ByteEngine MCP. Project harness tools/CombatCheck passes actual 1880-cell bake, all six agent paths, real-model repeated casts while moving/standing, exact projectile count and blocked cooldown repeats. Raw evidence: tools/combat-runtime-check.log and tools/combat-repair.log in the game project. Windows editor/player refreshed through Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser; no browser rebuild, export or Git push. Preserve unrelated Wildlings work.
+
 ## 2026-11-16 — Scene UI selection and hierarchy icons
 
 Canonical source: C:/Users/codex/ByteEngine, verified against .byteengine-build-source.json. Scene View now has an Edit UI toggle and shares a UiSelectionTool with UI Authoring. Text/widgets use actual canvas/text layout and scroll clipping, topmost picking, selected/hover outlines, Alt-click overlap cycling, Ctrl multi-selection, scale-aware offset dragging, Escape cancellation and one object-delta undo transaction. Selected widget ancestors move children once. World transforms and anchors are preserved. UiContainer-managed widget placement remains container-controlled and is explained by a hover tooltip; move the container or change its layout settings instead.
