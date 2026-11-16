@@ -1,5 +1,14 @@
 # Active context
 
+## 2026-11-16 — Scene UI selection and hierarchy icons
+
+Canonical source: C:/Users/codex/ByteEngine, verified against .byteengine-build-source.json. Scene View now has an Edit UI toggle and shares a UiSelectionTool with UI Authoring. Text/widgets use actual canvas/text layout and scroll clipping, topmost picking, selected/hover outlines, Alt-click overlap cycling, Ctrl multi-selection, scale-aware offset dragging, Escape cancellation and one object-delta undo transaction. Selected widget ancestors move children once. World transforms and anchors are preserved. UiContainer-managed widget placement remains container-controlled and is explained by a hover tooltip; move the container or change its layout settings instead.
+
+Hierarchy uses native vector type icons (mesh, sprite, canvas, text, panels, images, buttons, sliders, progress, camera, light, audio and generic objects) and expands the selected object's ancestors when selection changes. No generated raster icon dependencies. UiText shares layout calculation between runtime rendering and editor hit bounds.
+
+Validation: Release tests build passes; --ui-scene-editing, --ui-text and --engine-foundations pass. Native ImGui mouse checks cover text picking, dragging and overlap cycling. Bounds, canvas scaling, hidden ancestors, scroll clipping, parent/child selection, undo/redo and cancel checks pass. Actual GL preview and hierarchy screenshot visually inspected at .artifacts/ui-scene-editing/selection-and-icons.png; raw logs in the same folder. Existing warnings include unavailable NuGet vulnerability metadata. Windows distribution refreshed successfully with Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser; the standard full updater was deliberately stopped before distribution publishing when concurrent Wildlings source edits appeared. Only its three generated package changes were reverted, preserving the unfinished plugin work. -VerifyOnly confirms matching editor/player Core and bundled player identity, and installed editor DLL matches the Release source output. Evidence: editor-refresh.log, verify.log and identity.json in .artifacts/ui-scene-editing/. No browser rebuild or game export.
+
+
 ## 2026-11-16 — Wildlings, UI artwork and plugin packages
 
 Wildlings gameplay is contained in Plugins/Wildlings, plugin version 0.4.4. Release build passes; PluginLibrary/Wildlings.byteplugin matches DLL SHA256 7e407eee66ab01db724b22f332ab8c9b5c57b01846175ff36b5111caf75181dc. This task verifies compilation and package identity; gameplay playthrough is unverified.

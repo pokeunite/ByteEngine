@@ -85,6 +85,7 @@ try
 
     if(args.Length==3&&args[0]=="--mining-explosion-preview"){MiningExplosionPreview.Run(args[1],args[2]);return;}
     if(args.Contains("--screenshots")){ScreenshotTests.Run();return;}
+    if (args.Contains("--ui-scene-editing")) { UiSceneEditingTests.Run(root); return; }
     if (args.Contains("--event-authoring-controls")) { EventAuthoringControlsTests.Run(); return; }
     if(args.Contains("--event-lookups")){EventLookupTests.Run();return;}
     if(args.Contains("--dispatch-performance")){DispatchPerformanceTests.Run();return;}

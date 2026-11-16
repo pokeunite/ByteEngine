@@ -1,8 +1,11 @@
 # Progress
 
-Updated: 2026-11-13
+Updated: 2026-11-16
 
 ## Works
+
+- Scene UI text/widget picking and offset dragging with undo/redo, overlap cycling,
+  hierarchy reveal and component-type hierarchy icons (2026-11-16).
 
 - Editor shell, Project Browser and templates (Clean Project, 3D Starter,
   ByteArena, Last Stand, Interactive Sand).

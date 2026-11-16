@@ -11,6 +11,8 @@ internal sealed class HierarchyPanel
     private bool _focusRename;
     private string _search = string.Empty;
     private readonly HashSet<GameObject> _searchBranches = new();
+    private readonly HashSet<GameObject> _selectionAncestors = new();
+    private GameObject? _lastSelectedObject;
     public bool IsOpen { get; set; } = true;
 
     public void Draw(
@@ -27,6 +29,14 @@ internal sealed class HierarchyPanel
         bool visible = ImGui.Begin("Hierarchy", ref isOpen);
         IsOpen = isOpen;
         if (!visible) { ImGui.End(); return; }
+
+        _selectionAncestors.Clear();
+        if (!ReferenceEquals(_lastSelectedObject, state.SelectedObject))
+        {
+            _lastSelectedObject = state.SelectedObject;
+            for (var parent = state.SelectedObject?.Parent; parent != null; parent = parent.Parent)
+                _selectionAncestors.Add(parent);
+        }
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, EditorTheme.PanelRaised);
 
@@ -205,11 +215,11 @@ internal sealed class HierarchyPanel
                 4.0f,
                 4.0f));
 
-        if (_search.Trim().Length > 0)
+        if (_search.Trim().Length > 0 || _selectionAncestors.Contains(gameObject))
             ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         bool open =
             ImGui.TreeNodeEx(
-                $"  {gameObject.Name}##{gameObject.Id}",
+                $"     {gameObject.Name}##{gameObject.Id}",
                 flags);
 
         Vector2 rowMinimum =
@@ -218,29 +228,9 @@ internal sealed class HierarchyPanel
         Vector2 rowMaximum =
             ImGui.GetItemRectMax();
 
-        if (ImGui.IsItemVisible()) ImGui.GetWindowDrawList()
-            .AddCircleFilled(
-                new Vector2(
-                    rowMinimum.X +
-                    18.0f,
-                    (
-                        rowMinimum.Y +
-                        rowMaximum.Y
-                    ) *
-                    0.5f),
-                3.0f,
-                ImGui.GetColorU32(
-                    gameObject.Active
-                        ? new Vector4(
-                            0.38f,
-                            0.72f,
-                            1.0f,
-                            1.0f)
-                        : new Vector4(
-                            0.42f,
-                            0.45f,
-                            0.50f,
-                            1.0f)));
+        if (ImGui.IsItemVisible())
+            HierarchyObjectIcons.Draw(gameObject,
+                new Vector2(rowMinimum.X + ImGui.GetTreeNodeToLabelSpacing(), (rowMinimum.Y + rowMaximum.Y - 14) * .5f), 14);
 
         ImGui.PopStyleVar();
 

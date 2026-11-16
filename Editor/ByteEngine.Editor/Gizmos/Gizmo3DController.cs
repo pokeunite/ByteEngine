@@ -28,10 +28,10 @@ internal sealed class Gizmo3DController
 
     public void DrawToolbar() => _interaction.DrawToolbar();
 
-    public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered, Vector2 minimum, Vector2 size)
+    public void UpdateAndDraw(EditorState state, EditorCamera3D camera, bool hovered, Vector2 minimum, Vector2 size, bool showGizmo = true)
     {
         if (state.Mode != EditorMode.Edit) return;
-        if (_interaction.Update(state.SelectedObject, camera, hovered, minimum, size,
+        if (showGizmo && _interaction.Update(state.SelectedObject, camera, hovered, minimum, size,
             () => state.Undo?.BeginTransformGesture(state, $"{Mode} Object 3D"),
             state.MarkDirty, () => state.Undo?.CommitGesture(state))) return;
         if (!hovered || !ImGui.IsMouseClicked(ImGuiMouseButton.Left)) return;

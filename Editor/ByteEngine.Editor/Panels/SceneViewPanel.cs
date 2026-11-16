@@ -18,6 +18,9 @@ internal sealed class SceneViewPanel : IDisposable
     private readonly SceneFramebuffer _framebuffer =
         new();
 
+    private readonly UiSelectionTool _uiSelection = new();
+    private bool _editUi = true;
+
     private readonly GizmoController _gizmo =
         new();
 
@@ -151,7 +154,7 @@ internal sealed class SceneViewPanel : IDisposable
                 ref isOpen,
                 ImGuiWindowFlags.NoScrollbar |
                 ImGuiWindowFlags.NoScrollWithMouse |
-                (_gizmo3D.OwnsMouse ? ImGuiWindowFlags.NoMove : ImGuiWindowFlags.None)
+                ((_gizmo3D.OwnsMouse || _uiSelection.OwnsMouse) ? ImGuiWindowFlags.NoMove : ImGuiWindowFlags.None)
             );
 
         IsOpen =
@@ -179,6 +182,7 @@ internal sealed class SceneViewPanel : IDisposable
         if (!visible)
         {
             _terrainSculpt.EndStroke(state);
+            _uiSelection.Finish(state);
             ImGui.End();
 
             return;
@@ -365,6 +369,8 @@ internal sealed class SceneViewPanel : IDisposable
             ImGui.EndDragDropTarget();
         }
 
+        bool uiOwnsMouse = _editUi && _uiSelection.Draw(state, minimum, viewportSize, viewportSize, hovered, renderer.MeasureText);
+        if (!_editUi) _uiSelection.Finish(state);
         if (_is3D)
         {
             DrawColliderOutlines(
@@ -373,30 +379,31 @@ internal sealed class SceneViewPanel : IDisposable
                 viewportSize
             );
 
-            if (!_terrainSculpt.Update(state, hovered, minimum, viewportSize) && !_foliagePaint.Update(state, hovered, minimum, viewportSize)) _gizmo3D.UpdateAndDraw(
+            if (!uiOwnsMouse && !_terrainSculpt.Update(state, hovered, minimum, viewportSize) && !_foliagePaint.Update(state, hovered, minimum, viewportSize)) _gizmo3D.UpdateAndDraw(
                 state,
                 state.Camera3D,
                 hovered,
                 minimum,
-                viewportSize
+                viewportSize,
+                showGizmo: !UiSelectionTool.IsUiObject(state.SelectedObject)
             );
             HandleCamera3DInput(state, hovered && !_gizmo3D.OwnsMouse);
         }
-        else
+        else if (!uiOwnsMouse)
         {
             HandleCameraInput(
                 state,
                 hovered
             );
 
-            _gizmo.Update(
+            if (!UiSelectionTool.IsUiObject(state.SelectedObject)) _gizmo.Update(
                 state,
                 hovered,
                 minimum,
                 viewportSize
             );
 
-            _gizmo.Draw(
+            if (!UiSelectionTool.IsUiObject(state.SelectedObject)) _gizmo.Draw(
                 state,
                 minimum,
                 viewportSize
@@ -556,8 +563,11 @@ internal sealed class SceneViewPanel : IDisposable
         });
 
         EditorUi.EndToolbar();
+        ImGui.Checkbox("Edit UI", ref _editUi);
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Select and drag UI elements. Alt-click cycles overlaps. Turn off to pick the scene behind UI.");
         if (_is3D)
         {
+            ImGui.SameLine();
             ImGui.SetNextItemWidth(125);
             ImGui.Combo("Colliders", ref _colliderDisplay, "Hidden\0Selected\0All\0");
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Collision outlines for debugging. Hidden avoids the scene-wide overlay.");
