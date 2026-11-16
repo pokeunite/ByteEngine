@@ -39,6 +39,8 @@ internal sealed class SceneFramebuffer
     public nint TextureId =>
         _displayTexture;
 
+    internal int DisplayFramebuffer => _displayFramebuffer;
+
     internal bool TryGetEditorModelWorldBounds(
         Scene scene, GameObject modelRoot, out BoundingBox3D bounds)
     {

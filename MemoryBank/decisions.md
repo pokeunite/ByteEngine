@@ -3,6 +3,10 @@
 Append-only. Newest first. One entry per choice that would be expensive to
 rediscover. Record what was decided, why, and what was rejected.
 
+## 2026-11-16 — Native Windows recording without an encoder executable
+
+Use Media Foundation sink writing for MP4/H.264/AAC and WASAPI shared loopback for playback audio. Native ABI calls are confined to WindowsMp4Writer and WindowsPlaybackCapture; a real encode/decode test checks them against Windows. Core enables unsafe blocks for the small verified COM vtable adapter. No new NuGet/native redistributable, bundled FFmpeg, microphone access or per-game hardcoded capture component. Capture the final LDR Game View/window; store local user preferences separately from exports. The current feature is Windows-only. A bounded producer queue and worker encoder limit queued frame memory; timestamped held images and silence maintain stream progress when rendering/playback pauses. Calibration handles demonstrably invalid future device timestamps.
+
 ## 2026-11-14 — one canonical engine supports Hazard Pay
 
 Integrate both histories into main instead of maintaining a separate palclone engine. Canonical root is C:/Users/codex/ByteEngine; distribution and project plugins are rebuilt together. Archive stale browser runtimes instead of presenting them as compatible with the consolidated Core; explicit browser refresh remains required. Preserve all branch history and retired artifacts outside the active source tree. Headless authoring preserves graphics references without GPU uploads and reports missing runtime components as validation failures.

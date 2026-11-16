@@ -10,6 +10,7 @@ namespace ByteEngine.Editor.Panels;
 internal sealed class GameViewPanel : IDisposable
 {
     private readonly SceneFramebuffer _framebuffer = new();
+    private readonly VideoFrameCapture _videoCapture = new();
     private bool _focusRequested;
     private bool _pointerAimInputCaptured;
     private bool _matchWindowResolution;
@@ -32,7 +33,8 @@ internal sealed class GameViewPanel : IDisposable
         int windowWidth,
         int windowHeight,
         Action<bool> captureInput,
-        Action releaseInput)
+        Action releaseInput,
+        ByteEngine.Core.Runtime.VideoRecorder? recorder = null)
     {
         bool isOpen = IsOpen;
 
@@ -90,6 +92,11 @@ internal sealed class GameViewPanel : IDisposable
                 : "Runtime game camera"));
 
         ImGui.Checkbox("Match window resolution", ref _matchWindowResolution);
+        if (recorder != null)
+        {
+            if (recorder.IsActive) ImGui.TextColored(new(1, .3f, .3f, 1), $"REC {recorder.Elapsed:mm\\:ss} | F9: stop | Shift+F9: settings");
+            else ImGui.TextWrapped(recorder.Message);
+        }
 
         if (state.Mode == EditorMode.Play)
         {
@@ -152,6 +159,8 @@ internal sealed class GameViewPanel : IDisposable
             renderHeight,
             windowWidth,
             windowHeight);
+
+        if (recorder != null) _videoCapture.Capture(recorder, _framebuffer.DisplayFramebuffer, renderWidth, renderHeight);
 
         Vector2 imageMin =
             ImGui.GetCursorScreenPos();
@@ -425,6 +434,7 @@ internal sealed class GameViewPanel : IDisposable
 
     public void Dispose()
     {
+        _videoCapture.Dispose();
         _framebuffer.Dispose();
     }
 }

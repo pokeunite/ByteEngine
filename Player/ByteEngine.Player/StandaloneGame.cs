@@ -15,6 +15,35 @@ internal sealed class StandaloneGame : ByteEngineApplication
     private readonly System.Diagnostics.Stopwatch _smokeTimer=new();
     private IDisposable? _displayLease;
     protected override bool CloseOnEscape => false;
+    private string _recorderMessage = string.Empty;
+    private DateTime _recorderNoticeUntil = DateTime.UtcNow.AddSeconds(10);
+
+    protected override void ShowVideoRecorderSettings()
+    {
+        bool captured = IsGameInputCaptured;
+        bool grabbed = CursorState == OpenTK.Windowing.Common.CursorState.Grabbed;
+        ReleaseGameInput();
+        using (var dialog = new VideoRecorderDialog(Recorder)) dialog.ShowDialog();
+        if (captured) CaptureGameInput(grabbed);
+    }
+
+    protected override void DrawVideoRecorderOverlay()
+    {
+        if (_smokeTest || _validateOnly) return;
+        if (_recorderMessage != Recorder.Message)
+        {
+            _recorderMessage = Recorder.Message;
+            _recorderNoticeUntil = DateTime.UtcNow.AddSeconds(10);
+        }
+        if (!Recorder.IsActive && Recorder.State != VideoRecorderState.Saving && DateTime.UtcNow > _recorderNoticeUntil) return;
+        BeginScreenOverlay();
+        string message = Recorder.IsActive
+            ? $"REC {Recorder.Elapsed:mm\\:ss} | F9: stop | Shift+F9: settings"
+            : Recorder.Message;
+        float width = Math.Max(100, Math.Min(WindowWidth - 24, 900));
+        Renderer.DrawQuad(new System.Numerics.Vector2(12 + width / 2, 34), new(width, 44), new(.03f, .04f, .06f, .9f));
+        Renderer.DrawText(message, null, 18, new(20, 21), new(1, .8f, .8f, 1), width - 16);
+    }
 
     public StandaloneGame(GameProjectRuntime project, bool smokeTest = false, bool validateOnly = false, Action? firstFrame = null)
         : base(project.Project.Window.Width, project.Project.Window.Height, project.Project.Name)

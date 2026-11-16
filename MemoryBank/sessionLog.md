@@ -1,5 +1,18 @@
 # Session log
 
+## 2026-11-16 — Built-in Windows video/audio recorder
+
+Maintained source C:/Users/codex/ByteEngine on main; source routing verified. F9 toggles recording and Shift+F9 opens settings in the editor and Windows player. Editor Recorder menu/panel controls Game View capture; selecting Start opens Game View and hiding it stops recording. Windows player records the final game window before its recording-status overlay. Future Windows exports inherit it from the player runtime; no game was exported.
+
+VideoRecorder/VideoFrameCapture use a fixed even-sized LDR capture target up to 1920x1080, 30 fps capture scheduling, pooled BGRA frames, three queued frames and a dedicated encoding thread. Resize letterboxes into the original dimensions; GL framebuffer, read/draw buffer, pixel-pack and scissor state is restored. Held images advance while rendering pauses so video/audio streams keep progressing. Stop and normal shutdown drain/finalize the MP4; encoder/filesystem errors surface as visible status. Encoder uses native Windows Media Foundation H.264/AAC, no external executable/package. Windows N may require the Media Feature Pack.
+
+Audio is enabled by default: WASAPI loopback of the default Windows playback device at recording start (48 kHz stereo AAC, 192 kb/s). Includes other apps' playback, no microphone. Silence fills endpoint gaps. An observed virtual-device QPC timestamp about 450 ms in the future is calibrated against first packet receipt to prevent dropping all playback samples; valid device timestamps retain their original clock. Audio can be disabled in settings. Default output follows the Windows Videos known folder; validated folder/audio preferences live in LocalApplicationData/ByteEngine/Recorder/settings.json, outside projects/exports.
+
+Release tests build and --video-recorder, --ui-scene-editing, --engine-foundations pass. Recorder suite encodes and decodes real H.264/AAC via Windows APIs, checks colour/orientation, monotonic video timestamps, captured quiet tone, A/V duration within 200 ms including AAC padding, an 800 ms render pause, resize letterboxing, window back-buffer/video-only capture, pixel-pack restoration, cancel/restart/shutdown saving, bad-folder errors and preference persistence. Editor settings GL image and Windows player dialog bitmap visually inspected. Raw logs, MP4s, quiet tone and screenshots: .artifacts/video-recorder/. No FPS improvement claim; capture has render/readback overhead.
+
+Windows editor/player refreshed successfully through Tools/PublishEditor.ps1 -Configuration Release -SkipBrowser. -VerifyOnly confirms editor/loose/bundled Core pairing; SHA256 checks confirm installed editor DLL matches the Release source output and editor/player Core files match. Evidence: refresh.log, verify.log and identity.json in .artifacts/video-recorder/. Preserved pre-existing Plugins/Wildlings edits/new hub ambience source and plugin_build logs. Full updater would build that unfinished plugin, so the existing focused publish script was used as in the preceding UI update. Browser not rebuilt. No game export.
+
+
 ## 2026-11-16 — Hand-emitter projectile ownership
 
 Canonical source C:/Users/codex/ByteEngine. ProjectileLauncher3D now attributes a child muzzle's shot to its nearest HealthComponent/CharacterController3D ancestor (standalone emitters retain their own identity). GameplayQuery3D excludes child colliders of the secondary ignored owner as well as the owner itself. This prevents the moving Monsters & Magic player and hand hitboxes from destroying their own projectiles.

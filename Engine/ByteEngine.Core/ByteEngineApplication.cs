@@ -21,6 +21,13 @@ public class ByteEngineApplication : GameWindow
     public Renderer3D Renderer3D { get; }
 
     public SceneManager Scenes { get; }
+    public Runtime.VideoRecorder Recorder { get; } = new();
+    private readonly VideoFrameCapture _videoCapture = new();
+    protected virtual bool RecordWindowFrames => true;
+    protected virtual void ToggleVideoRecording() => Recorder.Toggle();
+    protected virtual void ShowVideoRecorderSettings() { }
+    protected virtual void DrawVideoRecorderOverlay() { }
+    protected void BeginScreenOverlay() => Renderer.BeginUi();
 
     private readonly RuntimePostProcessTarget3D _runtimePostProcessTarget =
         new();
@@ -165,6 +172,13 @@ public class ByteEngineApplication : GameWindow
             MouseState,
             JoystickStates
         );
+
+        if (IsFocused && KeyboardState.IsKeyPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.F9))
+        {
+            if (KeyboardState.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.LeftShift) ||
+                KeyboardState.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.RightShift)) ShowVideoRecorderSettings();
+            else ToggleVideoRecording();
+        }
 
         if (UseWholeWindowForUiInput)
         {
@@ -333,6 +347,9 @@ public class ByteEngineApplication : GameWindow
         DiagnosticFrameEnd?.Invoke();
         OnEngineRender();
 
+        if (RecordWindowFrames) _videoCapture.Capture(Recorder, 0, FramebufferSize.X, FramebufferSize.Y);
+        DrawVideoRecorderOverlay();
+
         if (Runtime.GameScreenshots.BeginCapture())
         {
             try
@@ -388,6 +405,8 @@ public class ByteEngineApplication : GameWindow
 
     protected override void OnUnload()
     {
+        Recorder.Dispose();
+        _videoCapture.Dispose();
         ByteEngine.Core.Diagnostics.SurfacePerformanceDiagnostics.DisposeGpu();
         Scenes.ShutdownInternal();
 

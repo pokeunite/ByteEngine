@@ -4,6 +4,9 @@ Updated: 2026-11-16
 
 ## Works
 
+- Windows editor/player MP4 recorder: F9 start/stop, Shift+F9 settings, user Videos
+  output default, optional WASAPI playback audio and H.264/AAC encoding (2026-11-16).
+
 - Scene UI text/widget picking and offset dragging with undo/redo, overlap cycling,
   hierarchy reveal and component-type hierarchy icons (2026-11-16).
 

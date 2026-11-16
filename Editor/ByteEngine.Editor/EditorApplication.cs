@@ -23,6 +23,20 @@ public sealed class EditorApplication
     : ByteEngineApplication
 {
     protected override bool UseWholeWindowForUiInput => false;
+    protected override bool RecordWindowFrames => false;
+    private readonly VideoRecorderPanel _videoRecorderPanel = new();
+    protected override void ShowVideoRecorderSettings() => _videoRecorderPanel.IsOpen = true;
+    protected override void ToggleVideoRecording()
+    {
+        if (_state == null)
+        {
+            Recorder.Fail("Open a project to record Game View.");
+            _videoRecorderPanel.IsOpen = true;
+            return;
+        }
+        if (!Recorder.IsActive) _gameView.RequestFocus();
+        Recorder.Toggle();
+    }
     private readonly string? _startupProjectFile;
 
     private readonly EditorLog _log =
@@ -177,6 +191,7 @@ public sealed class EditorApplication
         }
 
         DrawUnsavedChangesPopup();
+        _videoRecorderPanel.Draw(Recorder, ToggleVideoRecording);
         if (_projectContext != null) _gameExport.Draw(_projectContext, HasUnsavedChanges,
             _state?.Mode != EditorMode.Edit, _log);
         UpdateWindowTitle();
@@ -337,8 +352,9 @@ public sealed class EditorApplication
         {
             using var panelProfile = EditorFrameProfile.Measure("Game viewport");
             _gameView.Draw(_state, Renderer, Renderer3D, FramebufferSize.X, FramebufferSize.Y,
-                grabCursor => CaptureGameInput(grabCursor), ReleaseGameInput);
+                grabCursor => CaptureGameInput(grabCursor), ReleaseGameInput, Recorder);
         }
+        if ((!_gameView.IsOpen || !_gameView.IsVisible) && Recorder.IsActive) _ = Recorder.StopAsync();
 
         // Draw background bottom-workspace tabs first. Assets is drawn last
         // so its one-shot startup focus request is not immediately stolen by
@@ -417,6 +433,7 @@ public sealed class EditorApplication
         }
 
         DrawPreferencesMenu();
+        _videoRecorderPanel.DrawMenu(Recorder, ToggleVideoRecording);
 
         if (_state != null)
         {
