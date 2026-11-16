@@ -1,8 +1,13 @@
 # Session log
 
+## 2026-11-16 — MCP context gathering
+
+Added Tools/ByteEngine.Mcp workflow help, filtered/paged object queries, asset pagination and bounded read-only batching. Release build: exit 0, no warnings/errors. Full --self-test and stdio client be_catalog/help: exit 0. Evidence: .artifacts/mcp-efficiency-build.log, mcp-efficiency-self-test.log, mcp-efficiency-protocol.json. Synthetic 160-object inspection: 15768 bytes; one camera match: 173 bytes. Payload comparison only, no billed-token claim. Activation pending: disconnect running Dist MCP processes, run Tools/PublishMcp.ps1, reconnect. No game export, browser refresh or whole-engine publication. Unrelated working-tree changes are preserved.
+
+
 ## 2026-11-16 — Restore event picker search and mouse-button dropdown
 
-Reconnected the condition/action popup search helper and routed built-in mouse arguments to the existing dropdown before generic metadata fields. Release tests build succeeded and dotnet Tests/ByteEngine.Tests/bin/Release/net9.0-windows/win-x64/ByteEngine.Tests.dll --event-authoring-controls passed both search popups and all three mouse-condition dropdowns while preserving existing values. Raw logs .artifacts/event-authoring-fix/. Windows distribution refresh pending.
+Reconnected the condition/action popup search helper and routed built-in mouse arguments to the existing dropdown before generic metadata fields. Release tests build succeeded and dotnet Tests/ByteEngine.Tests/bin/Release/net9.0-windows/win-x64/ByteEngine.Tests.dll --event-authoring-controls passed both search popups and all three mouse-condition dropdowns while preserving existing values. Raw logs .artifacts/event-authoring-fix/. Windows distribution refresh succeeded and -VerifyOnly confirmed matching editor/player runtimes. Installed editor DLL matches the Release build.
 
 Newest first. One entry per work session or hand-off. Keep each entry short:
 what changed, what was verified, what is left.

@@ -5,7 +5,7 @@ using ModelContextProtocol.Server;
 
 namespace ByteEngine.Mcp.Mcp;
 
-/// <summary>Nine compact domain tools; semantic operation details live in AuthoringSession.</summary>
+/// <summary>Compact domain tools; semantic operation details live in AuthoringSession.</summary>
 [McpServerToolType]
 public sealed class ByteTools(AuthoringSession session)
 {
@@ -15,16 +15,16 @@ public sealed class ByteTools(AuthoringSession session)
     [McpServerTool(Name = "be_plugin"), Description("List, scaffold, build, install, update, enable, disable, or remove project plugins.")]
     public string Plugin(string op, JsonElement? args = null) => Call("plugin", op, args);
 
-    [McpServerTool(Name = "be_project"), Description("Create, open, inspect, tag, or configure the active ByteEngine project.")]
+    [McpServerTool(Name = "be_project"), Description("Create, open, inspect or configure a project. batch_read: {requests:[{tool,op,args}]} combines up to 16 independent read-only calls.")]
     public string Project(string op, JsonElement? args = null) => Call("project", op, args);
 
-    [McpServerTool(Name = "be_catalog"), Description("Inspect engine component, logic, tag, layer, and asset-type capabilities.")]
+    [McpServerTool(Name = "be_catalog"), Description("Discover capabilities. Start with help {topic:overview|scenes|gameplay|debugging}; components {search,limit}, component {name}, actions/conditions {search,limit}.")]
     public string Catalog(string op, JsonElement? args = null) => Call("catalog", op, args);
 
     [McpServerTool(Name = "be_asset"), Description("Import files, inspect model sub-assets, change import settings, reimport, or find assets.")]
     public string Asset(string op, JsonElement? args = null) => Call("asset", op, args);
 
-    [McpServerTool(Name = "be_scene"), Description("List, inspect, create, or batch-edit scenes (transform, duplicate, tags, variables, components).")]
+    [McpServerTool(Name = "be_scene"), Description("List, inspect, create or batch-edit scenes. find_objects {scene,search?,component?,offset?,limit?} returns compact matches; inspect_object {scene,object} returns chosen properties.")]
     public string Scene(string op, JsonElement? args = null) => Call("scene", op, args);
 
     [McpServerTool(Name = "be_blueprint"), Description("List, inspect, extract from a scene, create, or batch-edit Blueprints.")]

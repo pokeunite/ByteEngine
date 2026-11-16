@@ -1,8 +1,16 @@
 # Active context
 
+## 2026-11-16 — MCP focused context queries
+
+- Tools/ByteEngine.Mcp adds catalog/help (overview/scenes/gameplay/debugging), scene/find_objects (name/component filters, stable ID pagination), asset/find pagination and project/batch_read (1–16 allowlisted reads, per-request errors).
+- Release MCP build passed; full --self-test and stdio client help passed. Evidence: .artifacts/mcp-efficiency-build.log, mcp-efficiency-self-test.log, mcp-efficiency-protocol.json.
+- Synthetic 160-object inspection: 15768 UTF-8 bytes; one camera match: 173 bytes. Payload comparison only; no billing/token or gameplay performance claim.
+- Activation pending: three running published MCP processes retain the old binary. Publish with Tools/PublishMcp.ps1 after disconnecting them, then reconnect. No export, browser refresh or whole-editor publish performed; unrelated engine/plugin edits remain in the checkout.
+
+
 ## 2026-11-16 — Event authoring controls
 
-Condition/action popup search is restored through the existing shared search helper. Built-in mouse Held/Pressed/Released arguments use the enum dropdown before generic registry metadata rendering. Release build and --event-authoring-controls pass with real ImGui popup checks. Windows distribution refresh pending. Evidence is .artifacts/event-authoring-fix/. Preserve unrelated existing working-tree changes.
+Condition/action popup search is restored through the existing shared search helper. Built-in mouse Held/Pressed/Released arguments use the enum dropdown before generic registry metadata rendering. Release build and --event-authoring-controls pass with real ImGui popup checks. Windows distribution refresh succeeded and -VerifyOnly confirmed matching editor/player runtimes. Installed editor DLL matches the Release build. Evidence is .artifacts/event-authoring-fix/. Preserve unrelated existing working-tree changes.
 
 Updated: 2026-11-14 — consolidated engine and Hazard Pay repaired
 

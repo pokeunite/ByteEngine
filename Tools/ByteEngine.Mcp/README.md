@@ -64,7 +64,45 @@ invocation and prints each tool's JSON result.
 - Pass `-Exe` to use another server binary and `-Trace` to dump JSON-RPC traffic to stderr.
 
 
-## First project
+## Efficient context gathering
+
+Start with `be_catalog(op:"help")`; topics `scenes`, `gameplay`, and `debugging`
+return focused recipes without reading engine source. Help works before opening a project.
+
+Use `be_scene(op:"find_objects", args:{"scene":"Scenes/Main.bytescene",
+"search":"enemy","component":"HealthComponent","limit":20,"offset":0})`
+for compact object IDs and component names. Name substring matching ignores case;
+component names, full names and codec aliases resolve through the active catalog.
+Filters combine with AND. Results sort by object ID; `total` counts matches and
+`next_offset` is absent on the last page. Limits default to 20 and cap at 100.
+Use the returned `rev` with edits and inspect individual IDs for full properties.
+Revisions can change between pages: restart pagination if they do.
+
+`be_asset/find` also supports `offset` and `next_offset`, sorted by path.
+
+Combine independent reads in one call:
+
+```json
+{"op":"batch_read","args":{"requests":[
+  {"tool":"be_project","op":"info"},
+  {"tool":"be_plugin","op":"list"},
+  {"tool":"be_changes","op":"status"}
+]}}
+```
+
+Send that request to `be_project`. The batch accepts 1–16 read-only requests;
+all operations are checked before execution. Results stay in request order,
+individual failures do not stop subsequent reads, and outer `ok` is false if any
+read fails. Mutations, builds, validation, exports, editor launches and nested
+batches are excluded. This reduces round trips; it does not compress the same
+results or create an atomic snapshot of external file changes. Use focused queries
+to reduce response size. Existing `scene/apply` handles batches of mutations.
+
+These tools do not replace C# implementation, runtime tests or visual verification.
+The self-test reports a synthetic response-byte comparison; this is not a measure
+of Codex billing or real workload token savings.
+
+## First project workflow
 
 1. `be_project(op:"templates")` lists starter scenes.
 2. `be_project(op:"create", args:{"path":"C:/Users/codex/Documents/MyGame","name":"MyGame","template":"starter3d"})`

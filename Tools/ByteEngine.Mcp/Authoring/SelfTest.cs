@@ -4,7 +4,7 @@ using ByteEngine.Core.Serialization.SerializationModels;
 
 namespace ByteEngine.Mcp.Authoring;
 
-internal static class SelfTest
+internal static partial class SelfTest
 {
     public static Task RunAsync()
     {
@@ -27,6 +27,7 @@ internal static class SelfTest
                 return json;
             }
             Call("project", "open", new { path = file });
+            CheckQueries(session);
 
             string externalModel = Path.Combine(root, "External.obj");
             File.WriteAllText(externalModel,

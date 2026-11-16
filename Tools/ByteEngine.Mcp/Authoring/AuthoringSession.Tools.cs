@@ -15,6 +15,7 @@ public sealed partial class AuthoringSession
 {
     private object ProjectTool(string op, JsonElement? args)
     {
+        if (op == "batch_read") return BatchRead(args);
         if (op == "templates") return TemplatesTool();
         if (op == "create") return CreateProjectTool(args);
         if (op == "open")
@@ -94,6 +95,7 @@ public sealed partial class AuthoringSession
 
     private object CatalogTool(string op, JsonElement? args)
     {
+        if (op == "help") return WorkflowHelp(args);
         string search = Request.String(args, "search") ?? "";
         int limit = Math.Clamp(Request.Int(args, "limit", 20), 1, 100);
         if (op == "components")
@@ -141,9 +143,12 @@ public sealed partial class AuthoringSession
             string search = Request.String(args, "search") ?? "";
             string? type = Request.String(args, "type");
             int limit = Math.Clamp(Request.Int(args, "limit", 20), 1, 100);
+            int offset = Math.Max(0, Request.Int(args, "offset"));
             var matches = Database.Assets.Where(a => a.ProjectPath.Contains(search, StringComparison.OrdinalIgnoreCase) &&
                 (type == null || a.Type.ToString().Equals(type, StringComparison.OrdinalIgnoreCase))).ToArray();
-            return new { ok = true, total = matches.Length, items = matches.Take(limit)
+            return new { ok = true, total = matches.Length, offset,
+                next_offset = (long)offset + limit < matches.Length ? (int?)(offset + limit) : null,
+                items = matches.OrderBy(a => a.ProjectPath, StringComparer.OrdinalIgnoreCase).Skip(offset).Take(limit)
                 .Select(a => new { handle = AssetHandle(a), path = a.ProjectPath, type = a.Type.ToString(), guid = a.Guid }).ToArray() };
         }
         if (op == "inspect")
@@ -178,6 +183,7 @@ public sealed partial class AuthoringSession
             return new { ok = true, path = Relative(full), rev = Rev(full) };
         }
         AssetRecord asset = Asset(Request.Required(args, "scene"), AssetType.Scene);
+        if (op == "find_objects") return FindSceneObjects(asset, args);
         if (op == "inspect_object")
         {
             var scene = Scenes.Load(asset.FullPath);
